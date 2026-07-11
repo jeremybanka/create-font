@@ -1,0 +1,31 @@
+{
+	"name": "trigraph",
+	"version": "0.0.0",
+	"description": "A rigorously typed logical SFNT IR for OpenType variable TrueType fonts",
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"scripts": {
+		"build": "vp pack",
+		"test": "vp test"
+	},
+	"devDependencies": {
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

@@ -1,0 +1,18 @@
+{
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "dprint.dprint",
+	"dprint.path": "node_modules/.bin/dprint",
+	"dprint.verbose": true,
+	"editor.codeActionsOnSave": { "source.fixAll.oxc": "explicit" },
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"json.schemaDownload.trustedDomains": {
+		"https://dprint.dev": true,
+		"https://docs.renovatebot.com/": true
+	},
+	"json.schemas": [
+		{
+			"fileMatch": ["**/.changeset/config.json"],
+			"url": "https://unpkg.com/@changesets/config@3.0.3/schema.json"
+		}
+	]
+}

@@ -1,0 +1,10 @@
+{
+	"recommendations": [
+		"dprint.dprint",
+		"github.vscode-github-actions",
+		"oxc.oxc-vscode",
+		"redhat.vscode-yaml",
+		"tamasfe.even-better-toml",
+		"yoavbls.pretty-ts-errors"
+	]
+}
