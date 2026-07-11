@@ -1,0 +1,2545 @@
+import { Silo, type TimelineManageable } from "atom.io"
+import {
+	ingestVariableFont,
+	TRIGRAPH_FORMAT,
+	TRIGRAPH_IR_VERSION,
+	type CharacterMapEntrySource,
+	type GlyphVariationSource,
+	type NamedInstanceSource,
+	type PointSource,
+	type SimpleGlyphSource,
+	type VariableFontSource,
+	type VariationAxisSource,
+	type VariationRegionSource,
+} from "trigraph"
+
+import {
+	collectProjectionResults,
+	deepFreeze,
+	duplicateValueErrors,
+	projectRoundedInteger,
+	projectionError,
+	projectionFailure,
+	projectionSuccess,
+	projectionWarning,
+} from "./projection.ts"
+import {
+	TRIGRAPH_EDITOR_FORMAT,
+	TRIGRAPH_EDITOR_VERSION,
+	type AxisId,
+	type ContourId,
+	type EditorAxisMapEntrySource,
+	type EditorCmapEntrySource,
+	type EditorFontSource,
+	type EditorGlyphSource,
+	type EditorMasterSource,
+	type FontCompilation,
+	type GlyphId,
+	type InstanceId,
+	type MasterId,
+	type PointId,
+	type ProjectionError,
+	type ProjectionResult,
+	type ProjectionWarning,
+} from "./types.ts"
+import {
+	buildMasterScalarMatrix,
+	normalizeEditorLocation,
+	quantizeF2Dot14,
+	quantizeFixed16Dot16,
+	solveMasterDeltaVectors,
+	type MasterScalarMatrix,
+	type NormalizedTagLocation,
+} from "./variation-model.ts"
+
+const MIN_FIXED = -32_768
+const MAX_FIXED = 32_767 + 65_535 / 65_536
+const MIN_GLYPH_COORDINATE = -16_384
+const MAX_GLYPH_COORDINATE = 16_383
+const MIN_INT16 = -32_768
+const MAX_INT16 = 32_767
+const MAX_UINT16 = 65_535
+
+export type MasterAxisKey = readonly [masterId: MasterId, axisId: AxisId]
+export type InstanceAxisKey = readonly [instanceId: InstanceId, axisId: AxisId]
+export type GlyphContourKey = readonly [glyphId: GlyphId, contourId: ContourId]
+export type GlyphPointKey = readonly [glyphId: GlyphId, pointId: PointId]
+export type LayerKey = readonly [masterId: MasterId, glyphId: GlyphId]
+export type LayerPointKey = readonly [
+	masterId: MasterId,
+	glyphId: GlyphId,
+	pointId: PointId,
+]
+
+interface AxisState {
+	readonly tag: string
+	readonly name: string
+	readonly min: number
+	readonly default: number
+	readonly max: number
+	readonly hidden: boolean
+	readonly map: readonly EditorAxisMapEntrySource[] | null
+}
+
+interface MasterState {
+	readonly kind: EditorMasterSource["kind"]
+	readonly name: string
+	readonly supportKind: "non-intermediate" | "intermediate"
+}
+
+interface InstanceState {
+	readonly name: string
+	readonly postScriptName: string | null
+	readonly elidable: boolean
+}
+
+interface GlyphState {
+	readonly name: string
+	readonly export: boolean
+	readonly overlap: boolean
+}
+
+interface GlyphEditorState {
+	readonly note: string
+	readonly color: string | null
+}
+
+interface PointState {
+	readonly onCurve: boolean
+}
+
+interface PointEditorState {
+	readonly smooth: boolean
+}
+
+export interface CompiledGlyphLayer {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly contours: readonly (readonly PointSource[])[]
+	readonly flattenedPoints: readonly PointSource[]
+	readonly advanceWidth: number
+	readonly leftSideBearing: number
+	readonly xMin: number
+}
+
+export interface VariationModelProjection {
+	readonly masterIds: readonly MasterId[]
+	readonly normalizedLocations: readonly NormalizedTagLocation[]
+	readonly regions: readonly VariationRegionSource[]
+	readonly scalarMatrix: MasterScalarMatrix
+}
+
+export interface MovePointInput {
+	readonly pointId: PointId
+	readonly x: number
+	readonly y: number
+}
+
+export interface MovePointsInput {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly points: readonly MovePointInput[]
+}
+
+export interface InsertPointInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly at?: number
+	readonly point: {
+		readonly id: PointId
+		readonly onCurve: boolean
+		readonly smooth?: boolean
+	}
+	readonly coordinates: readonly {
+		readonly masterId: MasterId
+		readonly x: number
+		readonly y: number
+	}[]
+}
+
+export interface CreateFontEditorStateOptions {
+	/** Stable namespace for every atom.io resource belonging to this document. */
+	readonly key: string
+	readonly isProduction?: boolean
+}
+
+function resultWithWarnings<Value>(
+	result: ProjectionResult<Value>,
+	warnings: readonly ProjectionWarning[],
+): ProjectionResult<Value> {
+	return result.ok
+		? projectionSuccess(result.value, [...warnings, ...result.warnings])
+		: projectionFailure(result.errors, [...warnings, ...result.warnings])
+}
+
+function projectFixed(
+	value: number | null,
+	path: string,
+	entityId?: AxisId,
+): ProjectionResult<number> {
+	if (
+		value === null ||
+		!Number.isFinite(value) ||
+		value < MIN_FIXED ||
+		value > MAX_FIXED
+	) {
+		return projectionFailure([
+			projectionError(
+				"number.fixed_range",
+				path,
+				"Expected a finite value in the signed Fixed16.16 domain.",
+				entityId,
+			),
+		])
+	}
+	const quantized = quantizeFixed16Dot16(value)
+	const warnings =
+		quantized === value
+			? []
+			: [
+					projectionWarning(
+						"number.fixed_quantized",
+						path,
+						`Editor value ${value} was quantized to Fixed16.16 value ${quantized}.`,
+						entityId,
+					),
+				]
+	return projectionSuccess(quantized, warnings)
+}
+
+function projectAxisMapValue(
+	value: number,
+	path: string,
+	entityId: AxisId,
+): ProjectionResult<number> {
+	if (!Number.isFinite(value) || value < -1 || value > 1) {
+		return projectionFailure([
+			projectionError(
+				"number.f2dot14_range",
+				path,
+				"Expected a finite normalized coordinate in [-1, 1].",
+				entityId,
+			),
+		])
+	}
+	const quantized = quantizeF2Dot14(value)
+	const warnings =
+		quantized === value
+			? []
+			: [
+					projectionWarning(
+						"number.f2dot14_quantized",
+						path,
+						`Editor value ${value} was quantized to F2Dot14 value ${quantized}.`,
+						entityId,
+					),
+				]
+	return projectionSuccess(quantized, warnings)
+}
+
+function xMinOf(points: readonly PointSource[]): number {
+	let minimum = 0
+	let hasPoint = false
+	for (const point of points) {
+		minimum = hasPoint ? Math.min(minimum, point.x) : point.x
+		hasPoint = true
+	}
+	return minimum
+}
+
+function assertUnique<Value extends string | number>(
+	values: readonly Value[],
+	label: string,
+): void {
+	if (new Set(values).size !== values.length) {
+		throw new TypeError(`${label} must contain unique values.`)
+	}
+}
+
+function assertKnownLocationAxes(
+	location: Readonly<Record<string, number | undefined>>,
+	axisIds: ReadonlySet<AxisId>,
+	label: string,
+): void {
+	for (const axisId of Object.keys(location)) {
+		if (!axisIds.has(axisId as AxisId)) {
+			throw new TypeError(`${label} refers to unknown axis ${axisId}.`)
+		}
+	}
+}
+
+function validateEditorSourceStructure(source: EditorFontSource): void {
+	if (source.format !== TRIGRAPH_EDITOR_FORMAT) {
+		throw new TypeError(`Expected editor format ${TRIGRAPH_EDITOR_FORMAT}.`)
+	}
+	if (source.editorVersion !== TRIGRAPH_EDITOR_VERSION) {
+		throw new TypeError(`Expected editor version ${TRIGRAPH_EDITOR_VERSION}.`)
+	}
+	assertUnique(
+		source.axes.map((axis) => axis.id),
+		"Axis IDs",
+	)
+	assertUnique(
+		source.masters.map((master) => master.id),
+		"Master IDs",
+	)
+	assertUnique(
+		source.instances.map((instance) => instance.id),
+		"Instance IDs",
+	)
+	assertUnique(
+		source.glyphs.map((glyph) => glyph.id),
+		"Glyph IDs",
+	)
+	assertUnique(
+		source.cmap.map((entry) => entry.codePoint),
+		"Cmap code points",
+	)
+
+	const axisIds = new Set(source.axes.map((axis) => axis.id))
+	const masterIds = new Set(source.masters.map((master) => master.id))
+	const glyphIds = new Set(source.glyphs.map((glyph) => glyph.id))
+	const defaultMasters = source.masters.filter(
+		(master) => master.kind === "default",
+	)
+	if (
+		defaultMasters.length !== 1 ||
+		defaultMasters[0]?.id !== source.defaultMasterId
+	) {
+		throw new TypeError(
+			"Exactly one default master must match defaultMasterId.",
+		)
+	}
+
+	for (const master of source.masters) {
+		if (master.kind !== "source") continue
+		assertKnownLocationAxes(
+			master.location,
+			axisIds,
+			`Master ${master.id} location`,
+		)
+		if (master.support.kind === "intermediate") {
+			assertKnownLocationAxes(
+				master.support.start,
+				axisIds,
+				`Master ${master.id} support start`,
+			)
+			assertKnownLocationAxes(
+				master.support.end,
+				axisIds,
+				`Master ${master.id} support end`,
+			)
+		}
+	}
+	for (const instance of source.instances) {
+		assertKnownLocationAxes(
+			instance.coordinates,
+			axisIds,
+			`Instance ${instance.id} coordinates`,
+		)
+	}
+
+	const contourIds = new Set<ContourId>()
+	const pointIds = new Set<PointId>()
+	for (const glyph of source.glyphs) {
+		assertUnique(
+			glyph.contours.map((contour) => contour.id),
+			`Contour IDs in glyph ${glyph.id}`,
+		)
+		assertUnique(
+			glyph.layers.map((layer) => layer.masterId),
+			`Layer master IDs in glyph ${glyph.id}`,
+		)
+		const glyphPointIds = new Set<PointId>()
+		for (const contour of glyph.contours) {
+			if (contourIds.has(contour.id)) {
+				throw new TypeError(`Contour ID ${contour.id} is not globally unique.`)
+			}
+			contourIds.add(contour.id)
+			assertUnique(
+				contour.points.map((point) => point.id),
+				`Point IDs in contour ${contour.id}`,
+			)
+			for (const point of contour.points) {
+				if (pointIds.has(point.id)) {
+					throw new TypeError(`Point ID ${point.id} is not globally unique.`)
+				}
+				pointIds.add(point.id)
+				glyphPointIds.add(point.id)
+			}
+		}
+		for (const layer of glyph.layers) {
+			if (!masterIds.has(layer.masterId)) {
+				throw new TypeError(
+					`Glyph ${glyph.id} layer refers to unknown master ${layer.masterId}.`,
+				)
+			}
+			assertUnique(
+				layer.points.map((point) => point.pointId),
+				`Layer point IDs in ${glyph.id}/${layer.masterId}`,
+			)
+			for (const point of layer.points) {
+				if (!glyphPointIds.has(point.pointId)) {
+					throw new TypeError(
+						`Glyph ${glyph.id} layer refers to unknown point ${point.pointId}.`,
+					)
+				}
+			}
+		}
+	}
+	for (const entry of source.cmap) {
+		if (!Number.isInteger(entry.codePoint)) {
+			throw new TypeError("Cmap code points must be integers.")
+		}
+		if (!glyphIds.has(entry.glyphId)) {
+			throw new TypeError(
+				`Cmap entry refers to unknown glyph ${entry.glyphId}.`,
+			)
+		}
+	}
+}
+
+/**
+ * Creates one isolated, editor-document state graph. No implicit atom.io store
+ * is touched; every token and operation belongs to the returned Silo.
+ */
+export function createFontEditorState(options: CreateFontEditorStateOptions) {
+	if (options.key.trim().length === 0) {
+		throw new TypeError("A font editor state namespace cannot be empty.")
+	}
+	const silo = new Silo({
+		name: options.key,
+		lifespan: "ephemeral",
+		isProduction: options.isProduction ?? false,
+	})
+	const key = (suffix: string): string => `${options.key}/${suffix}`
+
+	const metadataAtom = silo.atom<EditorFontSource["metadata"] | null>({
+		key: key("metadata"),
+		default: null,
+	})
+	const namesAtom = silo.atom<EditorFontSource["names"] | null>({
+		key: key("names"),
+		default: null,
+	})
+	const metricsAtom = silo.atom<EditorFontSource["metrics"] | null>({
+		key: key("metrics"),
+		default: null,
+	})
+	const styleAtom = silo.atom<EditorFontSource["style"] | null>({
+		key: key("style"),
+		default: null,
+	})
+
+	const axisIdsAtom = silo.atom<readonly AxisId[]>({
+		key: key("axisIds"),
+		default: Object.freeze([]),
+	})
+	const masterIdsAtom = silo.atom<readonly MasterId[]>({
+		key: key("masterIds"),
+		default: Object.freeze([]),
+	})
+	const defaultMasterIdAtom = silo.atom<MasterId | null>({
+		key: key("defaultMasterId"),
+		default: null,
+	})
+	const instanceIdsAtom = silo.atom<readonly InstanceId[]>({
+		key: key("instanceIds"),
+		default: Object.freeze([]),
+	})
+	const glyphIdsAtom = silo.atom<readonly GlyphId[]>({
+		key: key("glyphIds"),
+		default: Object.freeze([]),
+	})
+	const cmapCodePointsAtom = silo.atom<readonly number[]>({
+		key: key("cmapCodePoints"),
+		default: Object.freeze([]),
+	})
+
+	const axisAtoms = silo.atomFamily<AxisState | null, AxisId>({
+		key: key("axis"),
+		default: null,
+	})
+	const masterAtoms = silo.atomFamily<MasterState | null, MasterId>({
+		key: key("master"),
+		default: null,
+	})
+	const masterCoordinateAtoms = silo.atomFamily<number | null, MasterAxisKey>({
+		key: key("masterCoordinate"),
+		default: null,
+	})
+	const masterSupportStartAtoms = silo.atomFamily<number | null, MasterAxisKey>(
+		{ key: key("masterSupportStart"), default: null },
+	)
+	const masterSupportEndAtoms = silo.atomFamily<number | null, MasterAxisKey>({
+		key: key("masterSupportEnd"),
+		default: null,
+	})
+	const instanceAtoms = silo.atomFamily<InstanceState | null, InstanceId>({
+		key: key("instance"),
+		default: null,
+	})
+	const instanceCoordinateAtoms = silo.atomFamily<
+		number | null,
+		InstanceAxisKey
+	>({ key: key("instanceCoordinate"), default: null })
+	const glyphAtoms = silo.atomFamily<GlyphState | null, GlyphId>({
+		key: key("glyph"),
+		default: null,
+	})
+	const glyphEditorAtoms = silo.atomFamily<GlyphEditorState | null, GlyphId>({
+		key: key("glyphEditor"),
+		default: null,
+	})
+	const glyphContourIdsAtoms = silo.atomFamily<
+		readonly ContourId[] | null,
+		GlyphId
+	>({ key: key("glyphContourIds"), default: null })
+	const contourPointIdsAtoms = silo.atomFamily<
+		readonly PointId[] | null,
+		GlyphContourKey
+	>({ key: key("contourPointIds"), default: null })
+	const pointAtoms = silo.atomFamily<PointState | null, GlyphPointKey>({
+		key: key("point"),
+		default: null,
+	})
+	const pointEditorAtoms = silo.atomFamily<
+		PointEditorState | null,
+		GlyphPointKey
+	>({
+		key: key("pointEditor"),
+		default: null,
+	})
+	const glyphLayerMasterIdsAtoms = silo.atomFamily<
+		readonly MasterId[] | null,
+		GlyphId
+	>({ key: key("glyphLayerMasterIds"), default: null })
+	const advanceWidthAtoms = silo.atomFamily<number | null, LayerKey>({
+		key: key("advanceWidth"),
+		default: null,
+	})
+	const leftSideBearingAtoms = silo.atomFamily<number | null, LayerKey>({
+		key: key("leftSideBearing"),
+		default: null,
+	})
+	const pointXAtoms = silo.atomFamily<number | null, LayerPointKey>({
+		key: key("pointX"),
+		default: null,
+	})
+	const pointYAtoms = silo.atomFamily<number | null, LayerPointKey>({
+		key: key("pointY"),
+		default: null,
+	})
+	const cmapGlyphAtoms = silo.atomFamily<GlyphId | null, number>({
+		key: key("cmapGlyph"),
+		default: null,
+	})
+
+	const axisSourceSelectors = silo.selectorFamily<
+		ProjectionResult<VariationAxisSource>,
+		AxisId
+	>({
+		key: key("axisSource"),
+		get:
+			(axisId) =>
+			({ get }) => {
+				const state = get(axisAtoms, axisId)
+				const path = `$.axes[${axisId}]`
+				if (state === null) {
+					return projectionFailure([
+						projectionError(
+							"entity.missing",
+							path,
+							`Axis ${JSON.stringify(axisId)} has no state.`,
+							axisId,
+						),
+					])
+				}
+				const min = projectFixed(state.min, `${path}.min`, axisId)
+				const defaultValue = projectFixed(
+					state.default,
+					`${path}.default`,
+					axisId,
+				)
+				const max = projectFixed(state.max, `${path}.max`, axisId)
+				const errors: ProjectionError[] = []
+				const warnings: ProjectionWarning[] = []
+				for (const result of [min, defaultValue, max]) {
+					warnings.push(...result.warnings)
+					if (!result.ok) errors.push(...result.errors)
+				}
+				const map: { from: number; to: number }[] = []
+				if (state.map !== null) {
+					for (let index = 0; index < state.map.length; index += 1) {
+						const entry = state.map[index]
+						if (entry === undefined) continue
+						const from = projectAxisMapValue(
+							entry.from,
+							`${path}.map[${index}].from`,
+							axisId,
+						)
+						const to = projectAxisMapValue(
+							entry.to,
+							`${path}.map[${index}].to`,
+							axisId,
+						)
+						warnings.push(...from.warnings, ...to.warnings)
+						if (!from.ok) errors.push(...from.errors)
+						if (!to.ok) errors.push(...to.errors)
+						if (from.ok && to.ok) map.push({ from: from.value, to: to.value })
+					}
+				}
+				if (errors.length > 0) return projectionFailure(errors, warnings)
+				if (!min.ok || !defaultValue.ok || !max.ok) {
+					throw new Error("Projection result bookkeeping failed.")
+				}
+				return projectionSuccess(
+					{
+						tag: state.tag,
+						name: state.name,
+						min: min.value,
+						default: defaultValue.value,
+						max: max.value,
+						hidden: state.hidden,
+						...(state.map === null ? {} : { map }),
+					},
+					warnings,
+				)
+			},
+	})
+
+	const axesSourceSelector = silo.selector<
+		ProjectionResult<readonly VariationAxisSource[]>
+	>({
+		key: key("axesSource"),
+		get: ({ get }) => {
+			const axisIds = get(axisIdsAtom)
+			const indexErrors = duplicateValueErrors(axisIds, "$.axisIds")
+			const collected = collectProjectionResults(
+				axisIds.map((axisId) => get(axisSourceSelectors, axisId)),
+			)
+			const errors = [...indexErrors]
+			if (!collected.ok) errors.push(...collected.errors)
+			const axes = collected.ok ? collected.value : []
+			const tagIndexes = new Map<string, number>()
+			for (let index = 0; index < axes.length; index += 1) {
+				const axis = axes[index]
+				if (axis === undefined) continue
+				const previous = tagIndexes.get(axis.tag)
+				if (previous !== undefined) {
+					errors.push(
+						projectionError(
+							"axis.duplicate_tag",
+							`$.axes[${index}].tag`,
+							`Axis tag ${JSON.stringify(axis.tag)} duplicates axis index ${previous}.`,
+							axisIds[index],
+						),
+					)
+				} else tagIndexes.set(axis.tag, index)
+			}
+			return errors.length > 0
+				? projectionFailure(errors, collected.warnings)
+				: projectionSuccess(axes, collected.warnings)
+		},
+	})
+
+	const masterUserLocationSelectors = silo.selectorFamily<
+		ProjectionResult<Readonly<Record<string, number>>>,
+		MasterId
+	>({
+		key: key("masterUserLocation"),
+		get:
+			(masterId) =>
+			({ get }) => {
+				const master = get(masterAtoms, masterId)
+				const axesResult = get(axesSourceSelector)
+				if (master === null) {
+					return projectionFailure([
+						projectionError(
+							"entity.missing",
+							`$.masters[${masterId}]`,
+							`Master ${JSON.stringify(masterId)} has no state.`,
+							masterId,
+						),
+					])
+				}
+				if (!axesResult.ok) return axesResult
+				const axisIds = get(axisIdsAtom)
+				const location: Record<string, number> = {}
+				const errors: ProjectionError[] = []
+				const warnings = [...axesResult.warnings]
+				for (let index = 0; index < axesResult.value.length; index += 1) {
+					const axis = axesResult.value[index]
+					const axisId = axisIds[index]
+					if (axis === undefined || axisId === undefined) continue
+					const raw =
+						master.kind === "default"
+							? axis.default
+							: get(masterCoordinateAtoms, [masterId, axisId])
+					const projected =
+						raw === null
+							? projectionFailure<number>([
+									projectionError(
+										"location.missing",
+										`$.masters[${masterId}].location.${axisId}`,
+										`Master location is missing axis ${JSON.stringify(axisId)}.`,
+										masterId,
+									),
+								])
+							: projectFixed(
+									raw,
+									`$.masters[${masterId}].location.${axisId}`,
+									axisId,
+								)
+					warnings.push(...projected.warnings)
+					if (!projected.ok) {
+						errors.push(...projected.errors)
+						continue
+					}
+					if (projected.value < axis.min || projected.value > axis.max) {
+						errors.push(
+							projectionError(
+								"location.range",
+								`$.masters[${masterId}].location.${axisId}`,
+								`Coordinate ${projected.value} is outside [${axis.min}, ${axis.max}].`,
+								masterId,
+							),
+						)
+					} else location[axisId] = projected.value
+				}
+				return errors.length > 0
+					? projectionFailure(errors, warnings)
+					: projectionSuccess(Object.freeze(location), warnings)
+			},
+	})
+
+	const masterRegionSelectors = silo.selectorFamily<
+		ProjectionResult<VariationRegionSource>,
+		MasterId
+	>({
+		key: key("masterRegion"),
+		get:
+			(masterId) =>
+			({ get }) => {
+				const master = get(masterAtoms, masterId)
+				if (master === null) {
+					return projectionFailure([
+						projectionError(
+							"entity.missing",
+							`$.masters[${masterId}]`,
+							`Master ${JSON.stringify(masterId)} has no state.`,
+							masterId,
+						),
+					])
+				}
+				if (master.kind === "default") {
+					return projectionFailure([
+						projectionError(
+							"master.default_has_no_region",
+							`$.masters[${masterId}]`,
+							"The default master does not project to a gvar region.",
+							masterId,
+						),
+					])
+				}
+				const axesResult = get(axesSourceSelector)
+				const peakUser = get(masterUserLocationSelectors, masterId)
+				const errors: ProjectionError[] = []
+				const warnings: ProjectionWarning[] = []
+				for (const result of [axesResult, peakUser]) {
+					warnings.push(...result.warnings)
+					if (!result.ok) errors.push(...result.errors)
+				}
+				if (!axesResult.ok || !peakUser.ok) {
+					return projectionFailure(errors, warnings)
+				}
+				const peak = normalizeEditorLocation(
+					get(axisIdsAtom).map((axisId, index) => ({
+						id: axisId,
+						...(axesResult.value[index] as VariationAxisSource),
+					})),
+					peakUser.value,
+					`$.masters[${masterId}].location`,
+				)
+				warnings.push(...peak.warnings)
+				if (!peak.ok) return projectionFailure(peak.errors, warnings)
+				if (master.supportKind === "non-intermediate") {
+					return projectionSuccess({ peak: peak.value }, warnings)
+				}
+
+				const axisIds = get(axisIdsAtom)
+				const startUser: Record<string, number> = {}
+				const endUser: Record<string, number> = {}
+				for (const axisId of axisIds) {
+					const startPath = `$.masters[${masterId}].support.start.${axisId}`
+					const endPath = `$.masters[${masterId}].support.end.${axisId}`
+					const start = projectFixed(
+						get(masterSupportStartAtoms, [masterId, axisId]),
+						startPath,
+						axisId,
+					)
+					const end = projectFixed(
+						get(masterSupportEndAtoms, [masterId, axisId]),
+						endPath,
+						axisId,
+					)
+					warnings.push(...start.warnings, ...end.warnings)
+					if (start.ok) startUser[axisId] = start.value
+					else errors.push(...start.errors)
+					if (end.ok) endUser[axisId] = end.value
+					else errors.push(...end.errors)
+				}
+				if (errors.length > 0) return projectionFailure(errors, warnings)
+				const editorAxes = axisIds.map((axisId, index) => ({
+					id: axisId,
+					...(axesResult.value[index] as VariationAxisSource),
+				}))
+				const start = normalizeEditorLocation(
+					editorAxes,
+					startUser,
+					`$.masters[${masterId}].support.start`,
+				)
+				const end = normalizeEditorLocation(
+					editorAxes,
+					endUser,
+					`$.masters[${masterId}].support.end`,
+				)
+				warnings.push(...start.warnings, ...end.warnings)
+				if (!start.ok) errors.push(...start.errors)
+				if (!end.ok) errors.push(...end.errors)
+				return errors.length > 0 || !start.ok || !end.ok
+					? projectionFailure(errors, warnings)
+					: projectionSuccess(
+							{ peak: peak.value, start: start.value, end: end.value },
+							warnings,
+						)
+			},
+	})
+
+	const variationModelSelector = silo.selector<
+		ProjectionResult<VariationModelProjection>
+	>({
+		key: key("variationModel"),
+		get: ({ get }) => {
+			const masterIds = get(masterIdsAtom)
+			const defaultMasterId = get(defaultMasterIdAtom)
+			const errors = [...duplicateValueErrors(masterIds, "$.masterIds")]
+			const warnings: ProjectionWarning[] = []
+			if (defaultMasterId === null || !masterIds.includes(defaultMasterId)) {
+				errors.push(
+					projectionError(
+						"master.default_missing",
+						"$.defaultMasterId",
+						"The default master must identify an indexed master.",
+						defaultMasterId ?? undefined,
+					),
+				)
+			}
+			if (defaultMasterId !== null) {
+				const state = get(masterAtoms, defaultMasterId)
+				if (state === null || state.kind !== "default") {
+					errors.push(
+						projectionError(
+							"master.default_kind",
+							"$.defaultMasterId",
+							"The designated default master must have kind 'default'.",
+							defaultMasterId,
+						),
+					)
+				}
+			}
+			const sourceMasterIds = masterIds.filter((id) => id !== defaultMasterId)
+			const regions: VariationRegionSource[] = []
+			const locations: NormalizedTagLocation[] = []
+			for (const masterId of sourceMasterIds) {
+				const state = get(masterAtoms, masterId)
+				if (state === null || state.kind !== "source") {
+					errors.push(
+						projectionError(
+							"master.source_kind",
+							`$.masters[${masterId}]`,
+							"Every nondefault master must have kind 'source'.",
+							masterId,
+						),
+					)
+					continue
+				}
+				const region = get(masterRegionSelectors, masterId)
+				warnings.push(...region.warnings)
+				if (!region.ok) errors.push(...region.errors)
+				else {
+					regions.push(region.value)
+					locations.push(region.value.peak)
+				}
+			}
+			if (errors.length > 0) return projectionFailure(errors, warnings)
+			const matrix = buildMasterScalarMatrix(locations, regions, "$.masters")
+			if (!matrix.ok) {
+				return projectionFailure(matrix.errors, [
+					...warnings,
+					...matrix.warnings,
+				])
+			}
+			return projectionSuccess(
+				{
+					masterIds: sourceMasterIds,
+					normalizedLocations: locations,
+					regions,
+					scalarMatrix: matrix.value,
+				},
+				[...warnings, ...matrix.warnings],
+			)
+		},
+	})
+
+	const instanceSourceSelectors = silo.selectorFamily<
+		ProjectionResult<NamedInstanceSource>,
+		InstanceId
+	>({
+		key: key("instanceSource"),
+		get:
+			(instanceId) =>
+			({ get }) => {
+				const state = get(instanceAtoms, instanceId)
+				const axes = get(axesSourceSelector)
+				if (state === null) {
+					return projectionFailure([
+						projectionError(
+							"entity.missing",
+							`$.instances[${instanceId}]`,
+							`Instance ${JSON.stringify(instanceId)} has no state.`,
+							instanceId,
+						),
+					])
+				}
+				if (!axes.ok) return axes
+				const axisIds = get(axisIdsAtom)
+				const coordinates: Record<string, number> = {}
+				const errors: ProjectionError[] = []
+				const warnings = [...axes.warnings]
+				for (let index = 0; index < axes.value.length; index += 1) {
+					const axis = axes.value[index]
+					const axisId = axisIds[index]
+					if (axis === undefined || axisId === undefined) continue
+					const projected = projectFixed(
+						get(instanceCoordinateAtoms, [instanceId, axisId]),
+						`$.instances[${instanceId}].coordinates.${axisId}`,
+						axisId,
+					)
+					warnings.push(...projected.warnings)
+					if (!projected.ok) {
+						errors.push(...projected.errors)
+						continue
+					}
+					if (projected.value < axis.min || projected.value > axis.max) {
+						errors.push(
+							projectionError(
+								"location.range",
+								`$.instances[${instanceId}].coordinates.${axisId}`,
+								`Coordinate ${projected.value} is outside [${axis.min}, ${axis.max}].`,
+								instanceId,
+							),
+						)
+					} else coordinates[axis.tag] = projected.value
+				}
+				return errors.length > 0
+					? projectionFailure(errors, warnings)
+					: projectionSuccess(
+							{
+								name: state.name,
+								coordinates,
+								...(state.postScriptName === null
+									? {}
+									: { postScriptName: state.postScriptName }),
+								...(state.elidable ? { elidable: true } : {}),
+							},
+							warnings,
+						)
+			},
+	})
+
+	const instancesSourceSelector = silo.selector<
+		ProjectionResult<readonly NamedInstanceSource[]>
+	>({
+		key: key("instancesSource"),
+		get: ({ get }) => {
+			const ids = get(instanceIdsAtom)
+			const result = collectProjectionResults(
+				ids.map((instanceId) => get(instanceSourceSelectors, instanceId)),
+			)
+			const duplicates = duplicateValueErrors(ids, "$.instanceIds")
+			if (duplicates.length === 0) return result
+			return result.ok
+				? projectionFailure(duplicates, result.warnings)
+				: projectionFailure([...duplicates, ...result.errors], result.warnings)
+		},
+	})
+
+	const glyphLayerSelectors = silo.selectorFamily<
+		ProjectionResult<CompiledGlyphLayer>,
+		LayerKey
+	>({
+		key: key("glyphLayer"),
+		get:
+			([masterId, glyphId]) =>
+			({ get }) => {
+				const path = `$.glyphs[${glyphId}].layers[${masterId}]`
+				const glyph = get(glyphAtoms, glyphId)
+				const master = get(masterAtoms, masterId)
+				const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId)
+				const contourIds = get(glyphContourIdsAtoms, glyphId)
+				const errors: ProjectionError[] = []
+				const warnings: ProjectionWarning[] = []
+				if (glyph === null) {
+					errors.push(
+						projectionError(
+							"entity.missing",
+							`$.glyphs[${glyphId}]`,
+							"Glyph state is missing.",
+							glyphId,
+						),
+					)
+				}
+				if (master === null) {
+					errors.push(
+						projectionError(
+							"entity.missing",
+							`$.masters[${masterId}]`,
+							"Master state is missing.",
+							masterId,
+						),
+					)
+				}
+				if (layerMasterIds === null || !layerMasterIds.includes(masterId)) {
+					errors.push(
+						projectionError(
+							"layer.missing",
+							path,
+							"Glyph has no layer for this master.",
+							glyphId,
+						),
+					)
+				}
+				if (contourIds === null) {
+					errors.push(
+						projectionError(
+							"topology.missing",
+							`$.glyphs[${glyphId}].contours`,
+							"Glyph contour topology is missing.",
+							glyphId,
+						),
+					)
+				}
+				if (layerMasterIds !== null) {
+					errors.push(
+						...duplicateValueErrors(
+							layerMasterIds,
+							`$.glyphs[${glyphId}].layerMasterIds`,
+							"layer.duplicate_master",
+						),
+					)
+				}
+				if (contourIds !== null) {
+					errors.push(
+						...duplicateValueErrors(
+							contourIds,
+							`$.glyphs[${glyphId}].contourIds`,
+							"topology.duplicate_contour",
+						),
+					)
+				}
+
+				const advanceWidth = projectRoundedInteger(
+					get(advanceWidthAtoms, [masterId, glyphId]),
+					0,
+					MAX_UINT16,
+					`${path}.advanceWidth`,
+					glyphId,
+				)
+				const leftSideBearing = projectRoundedInteger(
+					get(leftSideBearingAtoms, [masterId, glyphId]),
+					MIN_INT16,
+					MAX_INT16,
+					`${path}.leftSideBearing`,
+					glyphId,
+				)
+				warnings.push(...advanceWidth.warnings, ...leftSideBearing.warnings)
+				if (!advanceWidth.ok) errors.push(...advanceWidth.errors)
+				if (!leftSideBearing.ok) errors.push(...leftSideBearing.errors)
+
+				const contours: PointSource[][] = []
+				const flattenedPoints: PointSource[] = []
+				const seenPointIds = new Set<PointId>()
+				for (const contourId of contourIds ?? []) {
+					const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+					if (pointIds === null) {
+						errors.push(
+							projectionError(
+								"topology.missing",
+								`$.glyphs[${glyphId}].contours[${contourId}]`,
+								"Contour point index is missing.",
+								contourId,
+							),
+						)
+						continue
+					}
+					errors.push(
+						...duplicateValueErrors(
+							pointIds,
+							`$.glyphs[${glyphId}].contours[${contourId}].pointIds`,
+							"topology.duplicate_point",
+						),
+					)
+					const contour: PointSource[] = []
+					for (const pointId of pointIds) {
+						if (seenPointIds.has(pointId)) {
+							errors.push(
+								projectionError(
+									"topology.duplicate_point",
+									`$.glyphs[${glyphId}].points[${pointId}]`,
+									"A point ID may occur only once in a glyph topology.",
+									pointId,
+								),
+							)
+						} else seenPointIds.add(pointId)
+						const topology = get(pointAtoms, [glyphId, pointId])
+						if (topology === null) {
+							errors.push(
+								projectionError(
+									"topology.missing",
+									`$.glyphs[${glyphId}].points[${pointId}]`,
+									"Point topology is missing.",
+									pointId,
+								),
+							)
+							continue
+						}
+						const x = projectRoundedInteger(
+							get(pointXAtoms, [masterId, glyphId, pointId]),
+							MIN_GLYPH_COORDINATE,
+							MAX_GLYPH_COORDINATE,
+							`${path}.points[${pointId}].x`,
+							pointId,
+						)
+						const y = projectRoundedInteger(
+							get(pointYAtoms, [masterId, glyphId, pointId]),
+							MIN_GLYPH_COORDINATE,
+							MAX_GLYPH_COORDINATE,
+							`${path}.points[${pointId}].y`,
+							pointId,
+						)
+						warnings.push(...x.warnings, ...y.warnings)
+						if (!x.ok) errors.push(...x.errors)
+						if (!y.ok) errors.push(...y.errors)
+						if (!x.ok || !y.ok) continue
+						const point = { x: x.value, y: y.value, onCurve: topology.onCurve }
+						contour.push(point)
+						flattenedPoints.push(point)
+					}
+					contours.push(contour)
+				}
+				if (errors.length > 0 || !advanceWidth.ok || !leftSideBearing.ok) {
+					return projectionFailure(errors, warnings)
+				}
+				return projectionSuccess(
+					{
+						masterId,
+						glyphId,
+						contours,
+						flattenedPoints,
+						advanceWidth: advanceWidth.value,
+						leftSideBearing: leftSideBearing.value,
+						xMin: xMinOf(flattenedPoints),
+					},
+					warnings,
+				)
+			},
+	})
+
+	const glyphVariationSelectors = silo.selectorFamily<
+		ProjectionResult<readonly GlyphVariationSource[]>,
+		GlyphId
+	>({
+		key: key("glyphVariations"),
+		get:
+			(glyphId) =>
+			({ get }) => {
+				const model = get(variationModelSelector)
+				const defaultMasterId = get(defaultMasterIdAtom)
+				if (!model.ok) return model
+				if (defaultMasterId === null) {
+					return projectionFailure([
+						projectionError(
+							"master.default_missing",
+							"$.defaultMasterId",
+							"A default master is required for glyph projection.",
+						),
+					])
+				}
+				const defaultLayer = get(glyphLayerSelectors, [
+					defaultMasterId,
+					glyphId,
+				])
+				const sourceLayers = model.value.masterIds.map((masterId) =>
+					get(glyphLayerSelectors, [masterId, glyphId]),
+				)
+				const collectedLayers = collectProjectionResults(sourceLayers)
+				const warnings = [
+					...model.warnings,
+					...defaultLayer.warnings,
+					...collectedLayers.warnings,
+				]
+				const errors: ProjectionError[] = []
+				if (!defaultLayer.ok) errors.push(...defaultLayer.errors)
+				if (!collectedLayers.ok) errors.push(...collectedLayers.errors)
+				if (!defaultLayer.ok || !collectedLayers.ok) {
+					return projectionFailure(errors, warnings)
+				}
+
+				const componentCount = defaultLayer.value.flattenedPoints.length * 2 + 4
+				const rawVectors = Array.from(
+					{ length: componentCount },
+					() => [] as number[],
+				)
+				for (const layer of collectedLayers.value) {
+					if (
+						layer.flattenedPoints.length !==
+						defaultLayer.value.flattenedPoints.length
+					) {
+						errors.push(
+							projectionError(
+								"topology.incompatible",
+								`$.glyphs[${glyphId}].layers[${layer.masterId}]`,
+								"Every master layer must use the shared point topology.",
+								glyphId,
+							),
+						)
+						continue
+					}
+					for (
+						let pointIndex = 0;
+						pointIndex < defaultLayer.value.flattenedPoints.length;
+						pointIndex += 1
+					) {
+						const basePoint = defaultLayer.value.flattenedPoints[pointIndex]
+						const sourcePoint = layer.flattenedPoints[pointIndex]
+						if (basePoint === undefined || sourcePoint === undefined) continue
+						rawVectors[pointIndex * 2]?.push(sourcePoint.x - basePoint.x)
+						rawVectors[pointIndex * 2 + 1]?.push(sourcePoint.y - basePoint.y)
+					}
+					const baseOrigin =
+						defaultLayer.value.xMin - defaultLayer.value.leftSideBearing
+					const sourceOrigin = layer.xMin - layer.leftSideBearing
+					const phantomOffset = defaultLayer.value.flattenedPoints.length * 2
+					rawVectors[phantomOffset]?.push(sourceOrigin - baseOrigin)
+					rawVectors[phantomOffset + 1]?.push(
+						sourceOrigin +
+							layer.advanceWidth -
+							(baseOrigin + defaultLayer.value.advanceWidth),
+					)
+					rawVectors[phantomOffset + 2]?.push(0)
+					rawVectors[phantomOffset + 3]?.push(0)
+				}
+				if (errors.length > 0) return projectionFailure(errors, warnings)
+				const solved = solveMasterDeltaVectors(
+					model.value.scalarMatrix,
+					rawVectors,
+					`$.glyphs[${glyphId}].variations`,
+				)
+				if (!solved.ok) {
+					return projectionFailure(solved.errors, [
+						...warnings,
+						...solved.warnings,
+					])
+				}
+
+				const pointCount = defaultLayer.value.flattenedPoints.length
+				const phantomOffset = pointCount * 2
+				const variations = model.value.masterIds.map((_, tupleIndex) => ({
+					region: model.value.regions[tupleIndex] as VariationRegionSource,
+					deltas: {
+						points: Array.from({ length: pointCount }, (__, pointIndex) => ({
+							x: solved.value[pointIndex * 2]?.[tupleIndex] ?? 0,
+							y: solved.value[pointIndex * 2 + 1]?.[tupleIndex] ?? 0,
+						})),
+						phantom: {
+							left: solved.value[phantomOffset]?.[tupleIndex] ?? 0,
+							right: solved.value[phantomOffset + 1]?.[tupleIndex] ?? 0,
+							top: solved.value[phantomOffset + 2]?.[tupleIndex] ?? 0,
+							bottom: solved.value[phantomOffset + 3]?.[tupleIndex] ?? 0,
+						},
+					},
+				}))
+				return projectionSuccess(variations, warnings)
+			},
+	})
+
+	const glyphSourceSelectors = silo.selectorFamily<
+		ProjectionResult<SimpleGlyphSource>,
+		GlyphId
+	>({
+		key: key("glyphSource"),
+		get:
+			(glyphId) =>
+			({ get }) => {
+				const glyph = get(glyphAtoms, glyphId)
+				const defaultMasterId = get(defaultMasterIdAtom)
+				if (glyph === null) {
+					return projectionFailure([
+						projectionError(
+							"entity.missing",
+							`$.glyphs[${glyphId}]`,
+							"Glyph state is missing.",
+							glyphId,
+						),
+					])
+				}
+				if (defaultMasterId === null) {
+					return projectionFailure([
+						projectionError(
+							"master.default_missing",
+							"$.defaultMasterId",
+							"A default master is required for glyph projection.",
+						),
+					])
+				}
+				const layer = get(glyphLayerSelectors, [defaultMasterId, glyphId])
+				const variations = get(glyphVariationSelectors, glyphId)
+				const warnings = [...layer.warnings, ...variations.warnings]
+				const errors: ProjectionError[] = []
+				if (!layer.ok) errors.push(...layer.errors)
+				if (!variations.ok) errors.push(...variations.errors)
+				if (!layer.ok || !variations.ok) {
+					return projectionFailure(errors, warnings)
+				}
+				return projectionSuccess(
+					{
+						kind: "simple",
+						name: glyph.name,
+						advanceWidth: layer.value.advanceWidth,
+						leftSideBearing: layer.value.leftSideBearing,
+						contours: layer.value.contours,
+						variations: variations.value,
+						...(glyph.overlap ? { overlap: true } : {}),
+					},
+					warnings,
+				)
+			},
+	})
+
+	const exportedGlyphIdsSelector = silo.selector<
+		ProjectionResult<readonly GlyphId[]>
+	>({
+		key: key("exportedGlyphIds"),
+		get: ({ get }) => {
+			const ids = get(glyphIdsAtom)
+			const errors = [...duplicateValueErrors(ids, "$.glyphIds")]
+			const exported: GlyphId[] = []
+			for (const glyphId of ids) {
+				const glyph = get(glyphAtoms, glyphId)
+				if (glyph === null) {
+					errors.push(
+						projectionError(
+							"entity.missing",
+							`$.glyphs[${glyphId}]`,
+							"Indexed glyph state is missing.",
+							glyphId,
+						),
+					)
+				} else if (glyph.export) exported.push(glyphId)
+			}
+			if (exported.length === 0) {
+				errors.push(
+					projectionError(
+						"glyph.none_exported",
+						"$.glyphs",
+						"At least one glyph must be marked for export.",
+					),
+				)
+			}
+			return errors.length > 0
+				? projectionFailure(errors)
+				: projectionSuccess(exported)
+		},
+	})
+
+	const glyphsSourceSelector = silo.selector<
+		ProjectionResult<readonly SimpleGlyphSource[]>
+	>({
+		key: key("glyphsSource"),
+		get: ({ get }) => {
+			const ids = get(exportedGlyphIdsSelector)
+			if (!ids.ok) return ids
+			return resultWithWarnings(
+				collectProjectionResults(
+					ids.value.map((glyphId) => get(glyphSourceSelectors, glyphId)),
+				),
+				ids.warnings,
+			)
+		},
+	})
+
+	const cmapEntrySelectors = silo.selectorFamily<
+		ProjectionResult<CharacterMapEntrySource>,
+		number
+	>({
+		key: key("cmapEntry"),
+		get:
+			(codePoint) =>
+			({ get }) => {
+				const glyphId = get(cmapGlyphAtoms, codePoint)
+				const glyphIds = get(exportedGlyphIdsSelector)
+				const errors: ProjectionError[] = []
+				if (
+					!Number.isInteger(codePoint) ||
+					codePoint < 0 ||
+					codePoint > 0x10ffff ||
+					(codePoint >= 0xd800 && codePoint <= 0xdfff)
+				) {
+					errors.push(
+						projectionError(
+							"cmap.invalid_scalar",
+							`$.cmap[${codePoint}]`,
+							"Character-map keys must be Unicode scalar values.",
+						),
+					)
+				}
+				if (glyphId === null) {
+					errors.push(
+						projectionError(
+							"cmap.missing_glyph",
+							`$.cmap[${codePoint}]`,
+							"Character-map entry has no glyph ID.",
+						),
+					)
+				}
+				if (!glyphIds.ok) errors.push(...glyphIds.errors)
+				const glyph =
+					glyphId === null || !glyphIds.ok
+						? -1
+						: glyphIds.value.indexOf(glyphId)
+				if (glyphId !== null && glyph === -1) {
+					errors.push(
+						projectionError(
+							"cmap.unexported_glyph",
+							`$.cmap[${codePoint}].glyphId`,
+							`Character map refers to non-exported glyph ${JSON.stringify(glyphId)}.`,
+							glyphId,
+						),
+					)
+				}
+				return errors.length > 0
+					? projectionFailure(errors, glyphIds.warnings)
+					: projectionSuccess({ codePoint, glyph }, glyphIds.warnings)
+			},
+	})
+
+	const cmapSourceSelector = silo.selector<
+		ProjectionResult<readonly CharacterMapEntrySource[]>
+	>({
+		key: key("cmapSource"),
+		get: ({ get }) => {
+			const codePoints = get(cmapCodePointsAtom)
+			const result = collectProjectionResults(
+				codePoints.map((codePoint) => get(cmapEntrySelectors, codePoint)),
+			)
+			const duplicates = duplicateValueErrors(codePoints, "$.cmapCodePoints")
+			if (duplicates.length === 0) return result
+			return result.ok
+				? projectionFailure(duplicates, result.warnings)
+				: projectionFailure([...duplicates, ...result.errors], result.warnings)
+		},
+	})
+
+	const metadataSourceSelector = silo.selector<
+		ProjectionResult<VariableFontSource["metadata"]>
+	>({
+		key: key("metadataSource"),
+		get: ({ get }) => {
+			const metadata = get(metadataAtom)
+			if (metadata === null) {
+				return projectionFailure([
+					projectionError(
+						"document.missing_section",
+						"$.metadata",
+						"Font metadata is missing.",
+					),
+				])
+			}
+			const unitsPerEm = projectRoundedInteger(
+				metadata.unitsPerEm,
+				0,
+				MAX_UINT16,
+				"$.metadata.unitsPerEm",
+			)
+			const revision = projectFixed(
+				metadata.fontRevision,
+				"$.metadata.fontRevision",
+			)
+			const lowestPpem = projectRoundedInteger(
+				metadata.lowestPpem,
+				0,
+				MAX_UINT16,
+				"$.metadata.lowestPpem",
+			)
+			const warnings = [
+				...unitsPerEm.warnings,
+				...revision.warnings,
+				...lowestPpem.warnings,
+			]
+			const errors: ProjectionError[] = []
+			if (!unitsPerEm.ok) errors.push(...unitsPerEm.errors)
+			if (!revision.ok) errors.push(...revision.errors)
+			if (!lowestPpem.ok) errors.push(...lowestPpem.errors)
+			if (!unitsPerEm.ok || !revision.ok || !lowestPpem.ok) {
+				return projectionFailure(errors, warnings)
+			}
+			return projectionSuccess(
+				{
+					...metadata,
+					unitsPerEm: unitsPerEm.value,
+					fontRevision: revision.value,
+					lowestPpem: lowestPpem.value,
+				},
+				warnings,
+			)
+		},
+	})
+
+	const metricsSourceSelector = silo.selector<
+		ProjectionResult<VariableFontSource["metrics"]>
+	>({
+		key: key("metricsSource"),
+		get: ({ get }) => {
+			const metrics = get(metricsAtom)
+			if (metrics === null) {
+				return projectionFailure([
+					projectionError(
+						"document.missing_section",
+						"$.metrics",
+						"Font metrics are missing.",
+					),
+				])
+			}
+			const signedFields = [
+				"ascender",
+				"descender",
+				"lineGap",
+				"xHeight",
+				"capHeight",
+				"underlinePosition",
+				"underlineThickness",
+			] as const
+			const unsignedFields = ["winAscent", "winDescent"] as const
+			const projected: Record<string, number> = {}
+			const errors: ProjectionError[] = []
+			const warnings: ProjectionWarning[] = []
+			for (const field of signedFields) {
+				const result = projectRoundedInteger(
+					metrics[field],
+					MIN_INT16,
+					MAX_INT16,
+					`$.metrics.${field}`,
+				)
+				warnings.push(...result.warnings)
+				if (result.ok) projected[field] = result.value
+				else errors.push(...result.errors)
+			}
+			for (const field of unsignedFields) {
+				const result = projectRoundedInteger(
+					metrics[field],
+					0,
+					MAX_UINT16,
+					`$.metrics.${field}`,
+				)
+				warnings.push(...result.warnings)
+				if (result.ok) projected[field] = result.value
+				else errors.push(...result.errors)
+			}
+			if (errors.length > 0) return projectionFailure(errors, warnings)
+			const value = (field: keyof typeof metrics): number => {
+				const result = projected[field]
+				if (result === undefined) {
+					throw new Error(`Metric projection omitted ${field}.`)
+				}
+				return result
+			}
+			return projectionSuccess(
+				{
+					ascender: value("ascender"),
+					descender: value("descender"),
+					lineGap: value("lineGap"),
+					winAscent: value("winAscent"),
+					winDescent: value("winDescent"),
+					xHeight: value("xHeight"),
+					capHeight: value("capHeight"),
+					underlinePosition: value("underlinePosition"),
+					underlineThickness: value("underlineThickness"),
+				},
+				warnings,
+			)
+		},
+	})
+
+	const styleSourceSelector = silo.selector<
+		ProjectionResult<VariableFontSource["style"]>
+	>({
+		key: key("styleSource"),
+		get: ({ get }) => {
+			const style = get(styleAtom)
+			if (style === null) {
+				return projectionFailure([
+					projectionError(
+						"document.missing_section",
+						"$.style",
+						"Font style is missing.",
+					),
+				])
+			}
+			const weightClass = projectRoundedInteger(
+				style.weightClass,
+				0,
+				MAX_UINT16,
+				"$.style.weightClass",
+			)
+			const widthClass = projectRoundedInteger(
+				style.widthClass,
+				0,
+				MAX_UINT16,
+				"$.style.widthClass",
+			)
+			const italicAngle = projectFixed(style.italicAngle, "$.style.italicAngle")
+			const warnings = [
+				...weightClass.warnings,
+				...widthClass.warnings,
+				...italicAngle.warnings,
+			]
+			const errors: ProjectionError[] = []
+			if (!weightClass.ok) errors.push(...weightClass.errors)
+			if (!widthClass.ok) errors.push(...widthClass.errors)
+			if (!italicAngle.ok) errors.push(...italicAngle.errors)
+			if (!weightClass.ok || !widthClass.ok || !italicAngle.ok) {
+				return projectionFailure(errors, warnings)
+			}
+			return projectionSuccess(
+				{
+					...style,
+					weightClass: weightClass.value,
+					widthClass: widthClass.value,
+					italicAngle: italicAngle.value,
+				},
+				warnings,
+			)
+		},
+	})
+
+	const namesSourceSelector = silo.selector<
+		ProjectionResult<VariableFontSource["names"]>
+	>({
+		key: key("namesSource"),
+		get: ({ get }) => {
+			const names = get(namesAtom)
+			return names === null
+				? projectionFailure([
+						projectionError(
+							"document.missing_section",
+							"$.names",
+							"Font names are missing.",
+						),
+					])
+				: projectionSuccess(names)
+		},
+	})
+
+	const editorStructureSelector = silo.selector<ProjectionResult<true>>({
+		key: key("editorStructure"),
+		get: ({ get }) => {
+			const glyphIds = get(glyphIdsAtom)
+			const masterIds = new Set(get(masterIdsAtom))
+			const errors: ProjectionError[] = [
+				...duplicateValueErrors(glyphIds, "$.glyphIds"),
+			]
+			const globalContourIds = new Set<ContourId>()
+			const globalPointIds = new Set<PointId>()
+			for (const glyphId of glyphIds) {
+				const contourIds = get(glyphContourIdsAtoms, glyphId)
+				const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId)
+				if (contourIds === null) {
+					errors.push(
+						projectionError(
+							"topology.missing",
+							`$.glyphs[${glyphId}].contours`,
+							"Glyph contour index is missing.",
+							glyphId,
+						),
+					)
+				} else {
+					errors.push(
+						...duplicateValueErrors(
+							contourIds,
+							`$.glyphs[${glyphId}].contourIds`,
+							"topology.duplicate_contour",
+						),
+					)
+					for (const contourId of contourIds) {
+						if (globalContourIds.has(contourId)) {
+							errors.push(
+								projectionError(
+									"topology.duplicate_contour",
+									`$.glyphs[${glyphId}].contours[${contourId}]`,
+									"Contour IDs must be unique across the editor document.",
+									contourId,
+								),
+							)
+						} else globalContourIds.add(contourId)
+						const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+						if (pointIds === null) {
+							errors.push(
+								projectionError(
+									"topology.missing",
+									`$.glyphs[${glyphId}].contours[${contourId}]`,
+									"Contour point index is missing.",
+									contourId,
+								),
+							)
+							continue
+						}
+						errors.push(
+							...duplicateValueErrors(
+								pointIds,
+								`$.glyphs[${glyphId}].contours[${contourId}].pointIds`,
+								"topology.duplicate_point",
+							),
+						)
+						for (const pointId of pointIds) {
+							if (globalPointIds.has(pointId)) {
+								errors.push(
+									projectionError(
+										"topology.duplicate_point",
+										`$.glyphs[${glyphId}].points[${pointId}]`,
+										"Point IDs must be unique across the editor document.",
+										pointId,
+									),
+								)
+							} else globalPointIds.add(pointId)
+							if (get(pointAtoms, [glyphId, pointId]) === null) {
+								errors.push(
+									projectionError(
+										"topology.missing",
+										`$.glyphs[${glyphId}].points[${pointId}]`,
+										"Point topology state is missing.",
+										pointId,
+									),
+								)
+							}
+						}
+					}
+				}
+				if (layerMasterIds === null) {
+					errors.push(
+						projectionError(
+							"layer.index_missing",
+							`$.glyphs[${glyphId}].layerMasterIds`,
+							"Glyph layer index is missing.",
+							glyphId,
+						),
+					)
+					continue
+				}
+				errors.push(
+					...duplicateValueErrors(
+						layerMasterIds,
+						`$.glyphs[${glyphId}].layerMasterIds`,
+						"layer.duplicate_master",
+					),
+				)
+				for (const masterId of layerMasterIds) {
+					if (!masterIds.has(masterId)) {
+						errors.push(
+							projectionError(
+								"layer.unknown_master",
+								`$.glyphs[${glyphId}].layers[${masterId}]`,
+								"Glyph layer refers to an unindexed master.",
+								masterId,
+							),
+						)
+					}
+				}
+			}
+			return errors.length > 0
+				? projectionFailure(errors)
+				: projectionSuccess(true)
+		},
+	})
+
+	const fontSourceSelector = silo.selector<
+		ProjectionResult<VariableFontSource>
+	>({
+		key: key("fontSource"),
+		get: ({ get }) => {
+			const structure = get(editorStructureSelector)
+			const metadata = get(metadataSourceSelector)
+			const names = get(namesSourceSelector)
+			const metrics = get(metricsSourceSelector)
+			const style = get(styleSourceSelector)
+			const axes = get(axesSourceSelector)
+			const instances = get(instancesSourceSelector)
+			const glyphs = get(glyphsSourceSelector)
+			const cmap = get(cmapSourceSelector)
+			const results = [
+				structure,
+				metadata,
+				names,
+				metrics,
+				style,
+				axes,
+				instances,
+				glyphs,
+				cmap,
+			] as const
+			const errors: ProjectionError[] = []
+			const warnings: ProjectionWarning[] = []
+			for (const result of results) {
+				warnings.push(...result.warnings)
+				if (!result.ok) errors.push(...result.errors)
+			}
+			if (errors.length > 0) return projectionFailure(errors, warnings)
+			if (
+				!structure.ok ||
+				!metadata.ok ||
+				!names.ok ||
+				!metrics.ok ||
+				!style.ok ||
+				!axes.ok ||
+				!instances.ok ||
+				!glyphs.ok ||
+				!cmap.ok
+			) {
+				throw new Error("Projection result bookkeeping failed.")
+			}
+			return projectionSuccess(
+				{
+					format: TRIGRAPH_FORMAT,
+					irVersion: TRIGRAPH_IR_VERSION,
+					metadata: metadata.value,
+					names: names.value,
+					metrics: metrics.value,
+					style: style.value,
+					axes: axes.value,
+					instances: instances.value,
+					glyphs: glyphs.value,
+					cmap: cmap.value,
+				},
+				warnings,
+			)
+		},
+	})
+
+	const fontCompilationSelector = silo.selector<FontCompilation>({
+		key: key("fontCompilation"),
+		get: ({ get }) => {
+			const projected = get(fontSourceSelector)
+			if (!projected.ok) {
+				return deepFreeze({
+					ok: false,
+					stage: "projection-failed",
+					projectionErrors: projected.errors,
+					projectionWarnings: projected.warnings,
+				} as const)
+			}
+			const ingested = ingestVariableFont(projected.value)
+			if (!ingested.ok) {
+				return deepFreeze({
+					ok: false,
+					stage: "ingestion-failed",
+					source: projected.value,
+					projectionWarnings: projected.warnings,
+					ingestionErrors: ingested.errors,
+					ingestionWarnings: ingested.warnings,
+				} as const)
+			}
+			return deepFreeze({
+				ok: true,
+				stage: "compiled",
+				source: projected.value,
+				font: ingested.value,
+				projectionWarnings: projected.warnings,
+				ingestionWarnings: ingested.warnings,
+			} as const)
+		},
+	})
+
+	const editorSourceSelector = silo.selector<EditorFontSource | null>({
+		key: key("editorSource"),
+		get: ({ get }) => {
+			if (!get(editorStructureSelector).ok) return null
+			const metadata = get(metadataAtom)
+			const names = get(namesAtom)
+			const metrics = get(metricsAtom)
+			const style = get(styleAtom)
+			const defaultMasterId = get(defaultMasterIdAtom)
+			if (
+				metadata === null ||
+				names === null ||
+				metrics === null ||
+				style === null ||
+				defaultMasterId === null
+			)
+				return null
+
+			const axisIds = get(axisIdsAtom)
+			const axes: EditorFontSource["axes"][number][] = []
+			for (const axisId of axisIds) {
+				const axis = get(axisAtoms, axisId)
+				if (axis === null) return null
+				axes.push({
+					id: axisId,
+					tag: axis.tag,
+					name: axis.name,
+					min: axis.min,
+					default: axis.default,
+					max: axis.max,
+					...(axis.hidden ? { hidden: true } : {}),
+					...(axis.map === null ? {} : { map: axis.map }),
+				})
+			}
+
+			const masterIds = get(masterIdsAtom)
+			const masters: EditorMasterSource[] = []
+			for (const masterId of masterIds) {
+				const master = get(masterAtoms, masterId)
+				if (master === null) return null
+				if (master.kind === "default") {
+					masters.push({ id: masterId, kind: "default", name: master.name })
+					continue
+				}
+				const location: Partial<Record<AxisId, number>> = {}
+				for (const axisId of axisIds) {
+					const coordinate = get(masterCoordinateAtoms, [masterId, axisId])
+					if (coordinate !== null) location[axisId] = coordinate
+				}
+				if (master.supportKind === "non-intermediate") {
+					masters.push({
+						id: masterId,
+						kind: "source",
+						name: master.name,
+						location,
+						support: { kind: "non-intermediate" },
+					})
+					continue
+				}
+				const start: Partial<Record<AxisId, number>> = {}
+				const end: Partial<Record<AxisId, number>> = {}
+				for (const axisId of axisIds) {
+					const startCoordinate = get(masterSupportStartAtoms, [
+						masterId,
+						axisId,
+					])
+					const endCoordinate = get(masterSupportEndAtoms, [masterId, axisId])
+					if (startCoordinate !== null) start[axisId] = startCoordinate
+					if (endCoordinate !== null) end[axisId] = endCoordinate
+				}
+				masters.push({
+					id: masterId,
+					kind: "source",
+					name: master.name,
+					location,
+					support: { kind: "intermediate", start, end },
+				})
+			}
+
+			const instances: EditorFontSource["instances"][number][] = []
+			for (const instanceId of get(instanceIdsAtom)) {
+				const instance = get(instanceAtoms, instanceId)
+				if (instance === null) return null
+				const coordinates: Partial<Record<AxisId, number>> = {}
+				for (const axisId of axisIds) {
+					const coordinate = get(instanceCoordinateAtoms, [instanceId, axisId])
+					if (coordinate !== null) coordinates[axisId] = coordinate
+				}
+				instances.push({
+					id: instanceId,
+					name: instance.name,
+					coordinates,
+					...(instance.postScriptName === null
+						? {}
+						: { postScriptName: instance.postScriptName }),
+					...(instance.elidable ? { elidable: true } : {}),
+				})
+			}
+
+			const glyphs: EditorGlyphSource[] = []
+			for (const glyphId of get(glyphIdsAtom)) {
+				const glyph = get(glyphAtoms, glyphId)
+				const glyphEditor = get(glyphEditorAtoms, glyphId)
+				const contourIds = get(glyphContourIdsAtoms, glyphId)
+				const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId)
+				if (
+					glyph === null ||
+					glyphEditor === null ||
+					contourIds === null ||
+					layerMasterIds === null
+				) {
+					return null
+				}
+				const contours: EditorGlyphSource["contours"][number][] = []
+				const orderedPointIds: PointId[] = []
+				for (const contourId of contourIds) {
+					const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+					if (pointIds === null) return null
+					const points: EditorGlyphSource["contours"][number]["points"][number][] =
+						[]
+					for (const pointId of pointIds) {
+						const point = get(pointAtoms, [glyphId, pointId])
+						const pointEditor = get(pointEditorAtoms, [glyphId, pointId])
+						if (point === null || pointEditor === null) return null
+						orderedPointIds.push(pointId)
+						points.push({
+							id: pointId,
+							onCurve: point.onCurve,
+							...(pointEditor.smooth ? { smooth: true } : {}),
+						})
+					}
+					contours.push({ id: contourId, points })
+				}
+				const layers: EditorGlyphSource["layers"][number][] = []
+				for (const masterId of layerMasterIds) {
+					const points: EditorGlyphSource["layers"][number]["points"][number][] =
+						[]
+					for (const pointId of orderedPointIds) {
+						const x = get(pointXAtoms, [masterId, glyphId, pointId])
+						const y = get(pointYAtoms, [masterId, glyphId, pointId])
+						if ((x === null) !== (y === null)) return null
+						if (x !== null && y !== null) points.push({ pointId, x, y })
+					}
+					const advanceWidth = get(advanceWidthAtoms, [masterId, glyphId])
+					const leftSideBearing = get(leftSideBearingAtoms, [masterId, glyphId])
+					if (advanceWidth === null || leftSideBearing === null) return null
+					layers.push({ masterId, advanceWidth, leftSideBearing, points })
+				}
+				glyphs.push({
+					id: glyphId,
+					name: glyph.name,
+					export: glyph.export,
+					...(glyphEditor.note.length === 0 ? {} : { note: glyphEditor.note }),
+					...(glyphEditor.color === null ? {} : { color: glyphEditor.color }),
+					...(glyph.overlap ? { overlap: true } : {}),
+					contours,
+					layers,
+				})
+			}
+
+			const cmap: EditorCmapEntrySource[] = []
+			for (const codePoint of get(cmapCodePointsAtom)) {
+				const glyphId = get(cmapGlyphAtoms, codePoint)
+				if (glyphId === null) return null
+				cmap.push({ codePoint, glyphId })
+			}
+			return deepFreeze({
+				format: TRIGRAPH_EDITOR_FORMAT,
+				editorVersion: TRIGRAPH_EDITOR_VERSION,
+				metadata,
+				names,
+				metrics,
+				style,
+				axes,
+				masters,
+				defaultMasterId,
+				instances,
+				glyphs,
+				cmap,
+			})
+		},
+	})
+
+	const replaceFontTransaction = silo.transaction<
+		(source: EditorFontSource) => void
+	>({
+		key: key("replaceFont"),
+		do: ({ get, set }, source) => {
+			validateEditorSourceStructure(source)
+
+			const oldAxisIds = get(axisIdsAtom)
+			const oldMasterIds = get(masterIdsAtom)
+			const oldInstanceIds = get(instanceIdsAtom)
+			const oldGlyphIds = get(glyphIdsAtom)
+			const oldCodePoints = get(cmapCodePointsAtom)
+			// Keep family members allocated for the Silo's document lifetime. Setting
+			// tombstones preserves atom.io dependency edges and evicts every derived
+			// family cache; disposing atoms here would strand cached selectors.
+			for (const axisId of oldAxisIds) {
+				set(axisAtoms, axisId, null)
+			}
+			for (const masterId of oldMasterIds) {
+				set(masterAtoms, masterId, null)
+				for (const axisId of oldAxisIds) {
+					set(masterCoordinateAtoms, [masterId, axisId], null)
+					set(masterSupportStartAtoms, [masterId, axisId], null)
+					set(masterSupportEndAtoms, [masterId, axisId], null)
+				}
+			}
+			for (const instanceId of oldInstanceIds) {
+				set(instanceAtoms, instanceId, null)
+				for (const axisId of oldAxisIds) {
+					set(instanceCoordinateAtoms, [instanceId, axisId], null)
+				}
+			}
+			for (const glyphId of oldGlyphIds) {
+				const contourIds = get(glyphContourIdsAtoms, glyphId) ?? []
+				const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId) ?? []
+				const pointIds: PointId[] = []
+				for (const contourId of contourIds) {
+					const contourPoints =
+						get(contourPointIdsAtoms, [glyphId, contourId]) ?? []
+					pointIds.push(...contourPoints)
+					for (const pointId of contourPoints) {
+						set(pointAtoms, [glyphId, pointId], null)
+						set(pointEditorAtoms, [glyphId, pointId], null)
+					}
+					set(contourPointIdsAtoms, [glyphId, contourId], null)
+				}
+				for (const masterId of layerMasterIds) {
+					set(advanceWidthAtoms, [masterId, glyphId], null)
+					set(leftSideBearingAtoms, [masterId, glyphId], null)
+					for (const pointId of pointIds) {
+						set(pointXAtoms, [masterId, glyphId, pointId], null)
+						set(pointYAtoms, [masterId, glyphId, pointId], null)
+					}
+				}
+				set(glyphAtoms, glyphId, null)
+				set(glyphEditorAtoms, glyphId, null)
+				set(glyphContourIdsAtoms, glyphId, null)
+				set(glyphLayerMasterIdsAtoms, glyphId, null)
+			}
+			for (const codePoint of oldCodePoints) {
+				set(cmapGlyphAtoms, codePoint, null)
+			}
+
+			set(metadataAtom, deepFreeze({ ...source.metadata }))
+			set(namesAtom, deepFreeze({ ...source.names }))
+			set(metricsAtom, deepFreeze({ ...source.metrics }))
+			set(styleAtom, deepFreeze({ ...source.style }))
+			set(axisIdsAtom, deepFreeze(source.axes.map((axis) => axis.id)))
+			set(masterIdsAtom, deepFreeze(source.masters.map((master) => master.id)))
+			set(defaultMasterIdAtom, source.defaultMasterId)
+			set(
+				instanceIdsAtom,
+				deepFreeze(source.instances.map((instance) => instance.id)),
+			)
+			set(glyphIdsAtom, deepFreeze(source.glyphs.map((glyph) => glyph.id)))
+			set(
+				cmapCodePointsAtom,
+				deepFreeze(source.cmap.map((entry) => entry.codePoint)),
+			)
+
+			for (const axis of source.axes) {
+				set(
+					axisAtoms,
+					axis.id,
+					deepFreeze({
+						tag: axis.tag,
+						name: axis.name,
+						min: axis.min,
+						default: axis.default,
+						max: axis.max,
+						hidden: axis.hidden ?? false,
+						map:
+							axis.map === undefined
+								? null
+								: axis.map.map((entry) => ({ ...entry })),
+					}),
+				)
+			}
+			for (const master of source.masters) {
+				set(
+					masterAtoms,
+					master.id,
+					deepFreeze({
+						kind: master.kind,
+						name: master.name,
+						supportKind:
+							master.kind === "source"
+								? master.support.kind
+								: "non-intermediate",
+					}),
+				)
+				for (const axis of source.axes) {
+					set(
+						masterCoordinateAtoms,
+						[master.id, axis.id],
+						master.kind === "source"
+							? (master.location[axis.id] ?? null)
+							: null,
+					)
+					set(
+						masterSupportStartAtoms,
+						[master.id, axis.id],
+						master.kind === "source" && master.support.kind === "intermediate"
+							? (master.support.start[axis.id] ?? null)
+							: null,
+					)
+					set(
+						masterSupportEndAtoms,
+						[master.id, axis.id],
+						master.kind === "source" && master.support.kind === "intermediate"
+							? (master.support.end[axis.id] ?? null)
+							: null,
+					)
+				}
+			}
+			for (const instance of source.instances) {
+				set(
+					instanceAtoms,
+					instance.id,
+					deepFreeze({
+						name: instance.name,
+						postScriptName: instance.postScriptName ?? null,
+						elidable: instance.elidable ?? false,
+					}),
+				)
+				for (const axis of source.axes) {
+					set(
+						instanceCoordinateAtoms,
+						[instance.id, axis.id],
+						instance.coordinates[axis.id] ?? null,
+					)
+				}
+			}
+			for (const glyph of source.glyphs) {
+				set(
+					glyphAtoms,
+					glyph.id,
+					deepFreeze({
+						name: glyph.name,
+						export: glyph.export,
+						overlap: glyph.overlap ?? false,
+					}),
+				)
+				set(
+					glyphEditorAtoms,
+					glyph.id,
+					deepFreeze({
+						note: glyph.note ?? "",
+						color: glyph.color ?? null,
+					}),
+				)
+				set(
+					glyphContourIdsAtoms,
+					glyph.id,
+					deepFreeze(glyph.contours.map((contour) => contour.id)),
+				)
+				for (const contour of glyph.contours) {
+					set(
+						contourPointIdsAtoms,
+						[glyph.id, contour.id],
+						deepFreeze(contour.points.map((point) => point.id)),
+					)
+					for (const point of contour.points) {
+						set(
+							pointAtoms,
+							[glyph.id, point.id],
+							deepFreeze({
+								onCurve: point.onCurve,
+							}),
+						)
+						set(
+							pointEditorAtoms,
+							[glyph.id, point.id],
+							deepFreeze({ smooth: point.smooth ?? false }),
+						)
+					}
+				}
+				set(
+					glyphLayerMasterIdsAtoms,
+					glyph.id,
+					deepFreeze(glyph.layers.map((layer) => layer.masterId)),
+				)
+				const glyphPointIds = glyph.contours.flatMap((contour) =>
+					contour.points.map((point) => point.id),
+				)
+				for (const layer of glyph.layers) {
+					set(advanceWidthAtoms, [layer.masterId, glyph.id], layer.advanceWidth)
+					set(
+						leftSideBearingAtoms,
+						[layer.masterId, glyph.id],
+						layer.leftSideBearing,
+					)
+					const coordinates = new Map(
+						layer.points.map((point) => [point.pointId, point] as const),
+					)
+					for (const pointId of glyphPointIds) {
+						const point = coordinates.get(pointId)
+						set(
+							pointXAtoms,
+							[layer.masterId, glyph.id, pointId],
+							point?.x ?? null,
+						)
+						set(
+							pointYAtoms,
+							[layer.masterId, glyph.id, pointId],
+							point?.y ?? null,
+						)
+					}
+				}
+			}
+			for (const entry of source.cmap) {
+				set(cmapGlyphAtoms, entry.codePoint, entry.glyphId)
+			}
+		},
+	})
+
+	const movePointsTransaction = silo.transaction<
+		(input: MovePointsInput) => void
+	>({
+		key: key("movePoints"),
+		do: ({ get, set }, input) => {
+			const glyph = get(glyphAtoms, input.glyphId)
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (glyph === null || layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			if (!layerMasterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			assertUnique(
+				input.points.map((point) => point.pointId),
+				"Moved point IDs",
+			)
+			for (const point of input.points) {
+				if (get(pointAtoms, [input.glyphId, point.pointId]) === null) {
+					throw new TypeError(
+						`Unknown point ${point.pointId} in glyph ${input.glyphId}.`,
+					)
+				}
+				if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+					throw new TypeError("Point coordinates must be finite numbers.")
+				}
+			}
+			for (const point of input.points) {
+				set(
+					pointXAtoms,
+					[input.masterId, input.glyphId, point.pointId],
+					point.x,
+				)
+				set(
+					pointYAtoms,
+					[input.masterId, input.glyphId, point.pointId],
+					point.y,
+				)
+			}
+		},
+	})
+
+	const insertPointTransaction = silo.transaction<
+		(input: InsertPointInput) => void
+	>({
+		key: key("insertPoint"),
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || layerMasterIds === null) {
+				throw new TypeError(
+					`Unknown contour ${input.contourId} in glyph ${input.glyphId}.`,
+				)
+			}
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					if (
+						(get(contourPointIdsAtoms, [glyphId, contourId]) ?? []).includes(
+							input.point.id,
+						)
+					)
+						throw new TypeError(`Point ID ${input.point.id} is already in use.`)
+				}
+			}
+			const at = input.at ?? pointIds.length
+			if (!Number.isInteger(at) || at < 0 || at > pointIds.length) {
+				throw new RangeError("Point insertion index is outside the contour.")
+			}
+			assertUnique(
+				input.coordinates.map((coordinate) => coordinate.masterId),
+				"Inserted point coordinate master IDs",
+			)
+			const coordinateIds = new Set(
+				input.coordinates.map((coordinate) => coordinate.masterId),
+			)
+			if (
+				coordinateIds.size !== layerMasterIds.length ||
+				layerMasterIds.some((masterId) => !coordinateIds.has(masterId))
+			) {
+				throw new TypeError(
+					"A new point requires coordinates for every glyph layer.",
+				)
+			}
+			for (const coordinate of input.coordinates) {
+				if (!Number.isFinite(coordinate.x) || !Number.isFinite(coordinate.y)) {
+					throw new TypeError("Point coordinates must be finite numbers.")
+				}
+			}
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze([
+					...pointIds.slice(0, at),
+					input.point.id,
+					...pointIds.slice(at),
+				]),
+			)
+			set(
+				pointAtoms,
+				[input.glyphId, input.point.id],
+				deepFreeze({ onCurve: input.point.onCurve }),
+			)
+			set(
+				pointEditorAtoms,
+				[input.glyphId, input.point.id],
+				deepFreeze({ smooth: input.point.smooth ?? false }),
+			)
+			for (const coordinate of input.coordinates) {
+				set(
+					pointXAtoms,
+					[coordinate.masterId, input.glyphId, input.point.id],
+					coordinate.x,
+				)
+				set(
+					pointYAtoms,
+					[coordinate.masterId, input.glyphId, input.point.id],
+					coordinate.y,
+				)
+			}
+		},
+	})
+
+	const historyScope: TimelineManageable[] = [
+		metadataAtom,
+		namesAtom,
+		metricsAtom,
+		styleAtom,
+		axisIdsAtom,
+		masterIdsAtom,
+		defaultMasterIdAtom,
+		instanceIdsAtom,
+		glyphIdsAtom,
+		cmapCodePointsAtom,
+		axisAtoms,
+		masterAtoms,
+		masterCoordinateAtoms,
+		masterSupportStartAtoms,
+		masterSupportEndAtoms,
+		instanceAtoms,
+		instanceCoordinateAtoms,
+		glyphAtoms,
+		glyphEditorAtoms,
+		glyphContourIdsAtoms,
+		contourPointIdsAtoms,
+		pointAtoms,
+		pointEditorAtoms,
+		glyphLayerMasterIdsAtoms,
+		advanceWidthAtoms,
+		leftSideBearingAtoms,
+		pointXAtoms,
+		pointYAtoms,
+		cmapGlyphAtoms,
+	]
+	const history = silo.timeline({ key: key("history"), scope: historyScope })
+	const runReplaceFont = silo.runTransaction(replaceFontTransaction)
+	const runMovePoints = silo.runTransaction(movePointsTransaction)
+	const runInsertPoint = silo.runTransaction(insertPointTransaction)
+
+	return {
+		silo,
+		atoms: {
+			metadata: metadataAtom,
+			names: namesAtom,
+			metrics: metricsAtom,
+			style: styleAtom,
+			axisIds: axisIdsAtom,
+			masterIds: masterIdsAtom,
+			defaultMasterId: defaultMasterIdAtom,
+			instanceIds: instanceIdsAtom,
+			glyphIds: glyphIdsAtom,
+			cmapCodePoints: cmapCodePointsAtom,
+			axis: axisAtoms,
+			master: masterAtoms,
+			masterCoordinate: masterCoordinateAtoms,
+			masterSupportStart: masterSupportStartAtoms,
+			masterSupportEnd: masterSupportEndAtoms,
+			instance: instanceAtoms,
+			instanceCoordinate: instanceCoordinateAtoms,
+			glyph: glyphAtoms,
+			glyphEditor: glyphEditorAtoms,
+			glyphContourIds: glyphContourIdsAtoms,
+			contourPointIds: contourPointIdsAtoms,
+			point: pointAtoms,
+			pointEditor: pointEditorAtoms,
+			glyphLayerMasterIds: glyphLayerMasterIdsAtoms,
+			advanceWidth: advanceWidthAtoms,
+			leftSideBearing: leftSideBearingAtoms,
+			pointX: pointXAtoms,
+			pointY: pointYAtoms,
+			cmapGlyph: cmapGlyphAtoms,
+		},
+		selectors: {
+			editorSource: editorSourceSelector,
+			editorStructure: editorStructureSelector,
+			axisSource: axisSourceSelectors,
+			axesSource: axesSourceSelector,
+			masterUserLocation: masterUserLocationSelectors,
+			masterRegion: masterRegionSelectors,
+			variationModel: variationModelSelector,
+			instanceSource: instanceSourceSelectors,
+			instancesSource: instancesSourceSelector,
+			glyphLayer: glyphLayerSelectors,
+			glyphVariations: glyphVariationSelectors,
+			glyphSource: glyphSourceSelectors,
+			exportedGlyphIds: exportedGlyphIdsSelector,
+			glyphsSource: glyphsSourceSelector,
+			cmapEntry: cmapEntrySelectors,
+			cmapSource: cmapSourceSelector,
+			metadataSource: metadataSourceSelector,
+			namesSource: namesSourceSelector,
+			metricsSource: metricsSourceSelector,
+			styleSource: styleSourceSelector,
+			fontSource: fontSourceSelector,
+			compilation: fontCompilationSelector,
+		},
+		transactions: {
+			replaceFont: replaceFontTransaction,
+			movePoints: movePointsTransaction,
+			insertPoint: insertPointTransaction,
+		},
+		history,
+		actions: {
+			load(source: EditorFontSource): void {
+				runReplaceFont(source)
+				silo.clearTimeline(history)
+			},
+			movePoints(input: MovePointsInput): void {
+				runMovePoints(input)
+			},
+			insertPoint(input: InsertPointInput): void {
+				runInsertPoint(input)
+			},
+		},
+		read: {
+			editorSource: (): EditorFontSource | null =>
+				silo.getState(editorSourceSelector),
+			glyphLayer: (masterId: MasterId, glyphId: GlyphId) =>
+				silo.getState(glyphLayerSelectors, [masterId, glyphId]),
+			glyphSource: (glyphId: GlyphId) =>
+				silo.getState(glyphSourceSelectors, glyphId),
+			variationModel: () => silo.getState(variationModelSelector),
+			fontSource: () => silo.getState(fontSourceSelector),
+			compilation: (): FontCompilation =>
+				silo.getState(fontCompilationSelector),
+		},
+		undo: (): void => silo.undo(history),
+		redo: (): void => silo.redo(history),
+		clearHistory: (): void => silo.clearTimeline(history),
+	}
+}

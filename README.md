@@ -1,6 +1,7 @@
 # Trigraph
 
-A TypeScript logical-SFNT intermediate representation for rigorously validated
-OpenType variable TrueType fonts.
+A TypeScript toolchain for rigorously modeled OpenType variable TrueType fonts.
 
-See the [package documentation](packages/trigraph/README.md).
+- [`trigraph`](packages/trigraph/README.md) is the validated, logical-SFNT IR.
+- [`@trigraph/states`](packages/states/README.md) is the atom.io editor model
+  that incrementally projects into that IR.

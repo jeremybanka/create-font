@@ -24,6 +24,7 @@ jobs:
       - run: pnpm run check
       - run: pnpm run build
       - run: node --input-type=module --eval 'await import("./packages/trigraph/dist/index.mjs")'
+      - run: node --input-type=module --eval 'await import("./packages/states/dist/index.mjs")'
 
   Dprint:
     runs-on: ubuntu-latest

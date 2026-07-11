@@ -1,0 +1,35 @@
+{
+	"name": "@trigraph/states",
+	"version": "0.0.0",
+	"description": "Atom.io state and compilation model for variable-font editors",
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"atom.io": "0.49.7",
+		"trigraph": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

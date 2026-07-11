@@ -3,15 +3,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "vp run --filter trigraph --fail-if-no-match build",
+		"build": "vp run --filter trigraph --filter @trigraph/states --fail-if-no-match build",
 		"change": "changeset",
-		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages/trigraph && tsc --noEmit",
+		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages && tsc --noEmit",
 		"fmt": "dprint fmt",
 		"fmt:check": "dprint check",
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter trigraph --fail-if-no-match test"
+		"test": "vp run --filter trigraph --filter @trigraph/states --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.0",

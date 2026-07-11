@@ -15,3 +15,4 @@ runs:
         --frozen-lockfile
         --filter trigraph-workspace
         --filter trigraph
+        --filter @trigraph/states
