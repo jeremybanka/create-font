@@ -6,8 +6,14 @@ import {
 	oGlyphId,
 	weightAxisId,
 } from "../src/demo-font.ts"
+import { previewHandleDrag } from "../src/curve-editing.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { contourToPath, resolveVariableGlyph } from "../src/geometry.ts"
+import {
+	contourStartDirection,
+	contourToPath,
+	editorContourToPath,
+	resolveVariableGlyph,
+} from "../src/geometry.ts"
 
 describe("editor workspace", () => {
 	it("evaluates the geometric O between the Razor and Black masters", () => {
@@ -67,6 +73,7 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "O")
 		const before = workspace.font.silo.getState(workspace.ui.previewRun)
+		const layerBefore = workspace.font.silo.getState(workspace.ui.activeLayer)
 		const notdefPoint = workspace.document.glyphs.find(
 			(glyph) => glyph.id === notdefGlyphId,
 		)?.contours[0]?.points[0]?.id
@@ -80,6 +87,9 @@ describe("editor workspace", () => {
 		})
 
 		expect(workspace.font.silo.getState(workspace.ui.previewRun)).toBe(before)
+		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toBe(
+			layerBefore,
+		)
 	})
 
 	it("writes valid closed quadratic SVG paths", () => {
@@ -92,6 +102,58 @@ describe("editor workspace", () => {
 		expect(path).toMatch(/^M 500 820/)
 		expect(path).toContain("Q 920 820 920 400")
 		expect(path).toMatch(/Z$/)
+	})
+
+	it("derives contour direction from the first distinct node", () => {
+		expect(
+			contourStartDirection([
+				{ x: 10, y: 20 },
+				{ x: 10, y: 20 },
+				{ x: 10, y: 30 },
+			]),
+		).toEqual({ x: 10, y: 20, angle: 90 })
+		expect(contourStartDirection([])).toBeNull()
+	})
+
+	it("writes node-owned handles as closed cubic paths", () => {
+		const path = editorContourToPath([
+			{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
+			{ x: 40, y: 40, incoming: { x: 0, y: -20 } },
+		])
+
+		expect(path).toBe("M 0 0 C 20 0 40 20 40 40 L 0 0 Z")
+		expect(
+			contourStartDirection([
+				{ x: 10, y: 20, outgoing: { x: -5, y: 5 } },
+				{ x: 20, y: 20 },
+			]),
+		).toEqual({ x: 10, y: 20, angle: 135 })
+	})
+
+	it("previews soft handles as one line and hard handles independently", () => {
+		const node = {
+			pointId: "point:test" as const,
+			mode: "soft" as const,
+			x: 0,
+			y: 0,
+			incoming: { x: -10, y: 0 },
+			outgoing: { x: 20, y: 0 },
+		}
+		expect(previewHandleDrag(node, "incoming", { x: 0, y: 10 })).toEqual({
+			...node,
+			incoming: { x: 0, y: 10 },
+			outgoing: { x: 0, y: -20 },
+		})
+		expect(
+			previewHandleDrag({ ...node, mode: "hard" }, "incoming", {
+				x: 0,
+				y: 10,
+			}),
+		).toEqual({
+			...node,
+			mode: "hard",
+			incoming: { x: 0, y: 10 },
+		})
 	})
 
 	it("derives sidebearing from the resolved xMin and left phantom origin", () => {

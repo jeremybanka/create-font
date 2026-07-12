@@ -134,7 +134,7 @@ describe("font editor state", () => {
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(440)
+		).toBe(400)
 
 		editor.redo()
 		expect(
@@ -146,6 +146,183 @@ describe("font editor state", () => {
 		).toBe(700)
 	})
 
+	it("keeps relative handles anchored when their owning node moves", () => {
+		const editor = createLoadedEditor("test/anchored-handles")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!before.ok) throw new Error("Fixture layer node did not project.")
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId, x: before.value.x + 125, y: before.value.y - 75 }],
+		})
+
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!after.ok) throw new Error("Moved layer node did not project.")
+		expect(after.value.incoming).toEqual(before.value.incoming)
+		expect(after.value.outgoing).toEqual(before.value.outgoing)
+		expect(after.value.x).toBe(before.value.x + 125)
+		expect(after.value.y).toBe(before.value.y - 75)
+	})
+
+	it("moves soft handles as one line while preserving the opposite length", () => {
+		const editor = createLoadedEditor("test/soft-handles")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!before.ok || before.value.incoming === undefined) {
+			throw new Error("Fixture incoming handle is missing.")
+		}
+		const oppositeLength = Math.hypot(
+			before.value.incoming.x,
+			before.value.incoming.y,
+		)
+
+		editor.actions.moveHandle({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			handle: "outgoing",
+			vector: { x: 0, y: 200 },
+		})
+
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!after.ok) throw new Error("Edited layer node did not project.")
+		expect(after.value.outgoing).toEqual({ x: 0, y: 200 })
+		expect(after.value.incoming?.x).toBeCloseTo(0)
+		expect(after.value.incoming?.y).toBeCloseTo(-oppositeLength)
+		expect(
+			Math.hypot(after.value.incoming?.x ?? 0, after.value.incoming?.y ?? 0),
+		).toBeCloseTo(oppositeLength)
+	})
+
+	it("keeps hard handles independent and softens every master atomically", () => {
+		const editor = createLoadedEditor("test/hard-handles")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "hard" })
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "outgoing",
+				vector: null,
+			})
+			const hard = editor.read.layerNode(masterId, oGlyphId, pointId)
+			if (!hard.ok) throw new Error("Hard layer node did not project.")
+			expect(hard.value.mode).toBe("hard")
+			expect(hard.value.incoming).toBeDefined()
+			expect(hard.value.outgoing).toBeUndefined()
+		}
+
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const soft = editor.read.layerNode(masterId, oGlyphId, pointId)
+			if (
+				!soft.ok ||
+				soft.value.incoming === undefined ||
+				soft.value.outgoing === undefined
+			) {
+				throw new Error("Soft layer node handles are missing.")
+			}
+			expect(soft.value.mode).toBe("soft")
+			expect(soft.value.outgoing.x).toBe(-soft.value.incoming.x)
+			expect(soft.value.outgoing.y).toBe(-soft.value.incoming.y)
+		}
+	})
+
+	it("diagnoses a raw one-sided soft handle instead of serializing it", () => {
+		const editor = createLoadedEditor("test/raw-soft-invariant")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		const atomKey = [blackMasterId, oGlyphId, pointId] as const
+		editor.silo.setState(editor.atoms.outgoingHandleX, atomKey, null)
+		editor.silo.setState(editor.atoms.outgoingHandleY, atomKey, null)
+
+		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		expect(node.ok).toBe(false)
+		if (!node.ok) {
+			expect(node.errors).toContainEqual(
+				expect.objectContaining({ code: "curve.soft_handle_pair" }),
+			)
+		}
+		expect(editor.read.editorSource()).toBeNull()
+		expect(editor.read.compilation().stage).toBe("projection-failed")
+	})
+
+	it("coordinates cubic-to-quadratic subdivision topology across masters", () => {
+		const editor = createLoadedEditor("test/cubic-plan")
+		const source = makeGeometricOEditorFont()
+		const contour = source.glyphs[1]?.contours[0]
+		const pointId = contour?.points[0]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "hard" })
+		editor.actions.moveHandle({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			handle: "outgoing",
+			vector: { x: 700, y: -900 },
+		})
+
+		const plan = editor.silo.getState(editor.selectors.curveSegmentPlan, [
+			oGlyphId,
+			contour.id,
+			0,
+		])
+		expect(plan.ok).toBe(true)
+		if (!plan.ok) return
+		expect(plan.value.subdivisionDepth).toBeGreaterThan(0)
+		expect(plan.value.maximumError).toBeLessThanOrEqual(0.5)
+		const razor = editor.read.glyphLayer(razorMasterId, oGlyphId)
+		const black = editor.read.glyphLayer(blackMasterId, oGlyphId)
+		expect(razor.ok).toBe(true)
+		expect(black.ok).toBe(true)
+		if (!razor.ok || !black.ok) return
+		expect(razor.value.flattenedPoints).toHaveLength(
+			black.value.flattenedPoints.length,
+		)
+		expect(editor.read.compilation().stage).toBe("compiled")
+	})
+
+	it("reports a typed projection error when the fixed curve bound cannot fit", () => {
+		const editor = createLoadedEditor("test/cubic-limit")
+		const source = makeGeometricOEditorFont()
+		const contour = source.glyphs[1]?.contours[0]
+		const pointId = contour?.points[0]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "hard" })
+		editor.actions.moveHandle({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			handle: "outgoing",
+			vector: { x: 1_000_000_000_000, y: 0 },
+		})
+
+		const plan = editor.silo.getState(editor.selectors.curveSegmentPlan, [
+			oGlyphId,
+			contour.id,
+			0,
+		])
+		expect(plan.ok).toBe(false)
+		if (plan.ok) return
+		expect(plan.errors).toContainEqual(
+			expect.objectContaining({ code: "curve.approximation_limit" }),
+		)
+	})
+
 	it("inserts one shared point with coordinates in every layer", () => {
 		const editor = createLoadedEditor("test/insert")
 		const contourId = makeGeometricOEditorFont().glyphs[1]?.contours[0]?.id
@@ -155,7 +332,7 @@ describe("font editor state", () => {
 			glyphId: oGlyphId,
 			contourId,
 			at: 1,
-			point: { id: "point:glyph:O:inserted", onCurve: true },
+			point: { id: "point:glyph:O:inserted", mode: "hard" },
 			coordinates: [
 				{ masterId: razorMasterId, x: 700, y: 800 },
 				{ masterId: blackMasterId, x: 700, y: 800 },
@@ -256,7 +433,7 @@ describe("font editor state", () => {
 		const layer = glyph?.layers.find(
 			(candidate) => candidate.masterId === blackMasterId,
 		)
-		const point = layer?.points[8]
+		const point = layer?.points[4]
 		if (point === undefined) throw new Error("Replacement point is missing.")
 		Object.assign(point, { y: 400 })
 
@@ -336,16 +513,9 @@ describe("font editor state", () => {
 		const editor = createLoadedEditor("test/editor-only")
 		const glyphBefore = editor.read.glyphSource(oGlyphId)
 		const layerBefore = editor.read.glyphLayer(blackMasterId, oGlyphId)
-		const pointId =
-			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
-		if (pointId === undefined) throw new Error("Fixture point is missing.")
-
 		editor.silo.setState(editor.atoms.glyphEditor, oGlyphId, {
 			note: "Selected for review",
 			color: "#ff00ff",
-		})
-		editor.silo.setState(editor.atoms.pointEditor, [oGlyphId, pointId], {
-			smooth: true,
 		})
 
 		expect(editor.read.glyphSource(oGlyphId)).toBe(glyphBefore)

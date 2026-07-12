@@ -2,6 +2,7 @@ import {
 	createFontEditorState,
 	type AxisId,
 	type EditorFontSource,
+	type EditorLayerNode,
 	type EditorLocationSource,
 	type GlyphId,
 	type InstanceId,
@@ -12,8 +13,13 @@ import {
 import { makeDemoFont } from "./demo-font.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 
-type FontState = ReturnType<typeof createFontEditorState>
-type GlyphLayerProjection = ReturnType<FontState["read"]["glyphLayer"]>
+export interface EditorCanvasLayer {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly contours: readonly (readonly EditorLayerNode[])[]
+	readonly advanceWidth: number
+	readonly leftSideBearing: number
+}
 
 export interface PreviewRunGlyph {
 	readonly character: string
@@ -78,10 +84,48 @@ export function createEditorWorkspace(
 			),
 	})
 
-	const activeLayer = font.silo.selector<GlyphLayerProjection>({
+	const activeLayer = font.silo.selector<EditorCanvasLayer | null>({
 		key: key("activeLayer"),
-		get: ({ get }) =>
-			get(font.selectors.glyphLayer, [get(activeMasterId), get(activeGlyphId)]),
+		get: ({ get }) => {
+			const masterId = get(activeMasterId)
+			const glyphId = get(activeGlyphId)
+			const contourIds = get(font.atoms.glyphContourIds, glyphId)
+			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
+			const leftSideBearing = get(font.atoms.leftSideBearing, [
+				masterId,
+				glyphId,
+			])
+			if (
+				contourIds === null ||
+				advanceWidth === null ||
+				leftSideBearing === null
+			) {
+				return null
+			}
+			const contours: (readonly EditorLayerNode[])[] = []
+			for (const contourId of contourIds) {
+				const pointIds = get(font.atoms.contourPointIds, [glyphId, contourId])
+				if (pointIds === null) return null
+				const contour: EditorLayerNode[] = []
+				for (const pointId of pointIds) {
+					const node = get(font.selectors.layerNode, [
+						masterId,
+						glyphId,
+						pointId,
+					])
+					if (!node.ok) return null
+					contour.push(node.value)
+				}
+				contours.push(Object.freeze(contour))
+			}
+			return Object.freeze({
+				masterId,
+				glyphId,
+				contours: Object.freeze(contours),
+				advanceWidth,
+				leftSideBearing,
+			})
+		},
 	})
 	const previewRun = font.silo.selector<readonly PreviewRunGlyph[]>({
 		key: key("previewRun"),

@@ -48,13 +48,6 @@ function geometricOWithEveryEditorField(): EditorFontSource {
 			note: glyphIndex === 0 ? "Required fallback glyph" : "Geometric O",
 			color: glyphIndex === 0 ? "#777" : "oklch(55% 0.22 25)",
 			overlap: true,
-			contours: glyph.contours.map((contour) => ({
-				...contour,
-				points: contour.points.map((point) => ({
-					...point,
-					smooth: true,
-				})),
-			})),
 		})),
 	}
 }
@@ -88,7 +81,11 @@ describe("@trigraph/source", () => {
 			"glyph:O",
 		])
 		expect(decoded.value.glyphs[1]?.note).toBe("Geometric O")
-		expect(decoded.value.glyphs[1]?.contours[0]?.points[0]?.smooth).toBe(true)
+		expect(decoded.value.glyphs[1]?.contours[0]?.points[0]?.mode).toBe("soft")
+		expect(decoded.value.glyphs[1]?.layers[0]?.points[0]?.incoming).toEqual({
+			x: -266.6666666666667,
+			y: 0,
+		})
 		expect(decoded.value.metadata.createdAt).toBe(-1n)
 		expect(decoded.value.metadata.modifiedAt).toBe(18_446_744_073_709_551_615n)
 	})
@@ -98,7 +95,7 @@ describe("@trigraph/source", () => {
 		expect(file.ok).toBe(true)
 		if (!file.ok) return
 		expect(file.value.format).toBe("trigraph.editor")
-		expect(file.value.editorVersion).toBe(1)
+		expect(file.value.editorVersion).toBe(2)
 		expect(file.value).not.toHaveProperty("document")
 		expect(file.value).not.toHaveProperty("sourceVersion")
 		expect(file.value.metadata.createdAt).toBe("-1")
@@ -154,13 +151,6 @@ describe("@trigraph/source", () => {
 				note: "",
 				color: "",
 				overlap: false,
-				contours: glyph.contours.map((contour) => ({
-					...contour,
-					points: contour.points.map((point) => ({
-						...point,
-						smooth: false,
-					})),
-				})),
 				layers: glyph.layers.map((layer) => ({
 					...layer,
 					points: [...layer.points].reverse(),
@@ -188,9 +178,7 @@ describe("@trigraph/source", () => {
 		expect(decoded.value.glyphs[0]).not.toHaveProperty("note")
 		expect(decoded.value.glyphs[0]).not.toHaveProperty("overlap")
 		expect(decoded.value.glyphs[0]?.color).toBe("")
-		expect(decoded.value.glyphs[0]?.contours[0]?.points[0]).not.toHaveProperty(
-			"smooth",
-		)
+		expect(decoded.value.glyphs[0]?.contours[0]?.points[0]?.mode).toBe("soft")
 		const topologyOrder = decoded.value.glyphs[0]?.contours.flatMap((contour) =>
 			contour.points.map((point) => point.id),
 		)
@@ -403,11 +391,43 @@ describe("@trigraph/source", () => {
 			"source.unknown_property",
 			"$.surprise",
 		)
-		const future = { ...file.value, editorVersion: 2 }
+		const future = { ...file.value, editorVersion: 3 }
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(future)),
 			"source.version",
 			"$.editorVersion",
+		)
+		const legacy = { ...file.value, editorVersion: 1 }
+		expectFailure(
+			decodeEditorFontSource(JSON.stringify(legacy)),
+			"source.version",
+			"$.editorVersion",
+		)
+	})
+
+	test("enforces the two-sided collinear invariant for soft nodes", () => {
+		const file = toEditorFontFile(makeGeometricOEditorFont())
+		if (!file.ok) throw new Error("fixture did not convert")
+		const oneSided = mutableFile(file.value)
+		const oneSidedPoint = oneSided.glyphs[0]?.layers[0]?.points[0]
+		if (oneSidedPoint === undefined) throw new Error("fixture node is missing")
+		delete oneSidedPoint.outgoing
+		expectFailure(
+			decodeEditorFontSource(JSON.stringify(oneSided)),
+			"source.handle",
+			"$.glyphs[0].layers[0].points[0]",
+		)
+
+		const bent = mutableFile(file.value)
+		const bentPoint = bent.glyphs[0]?.layers[0]?.points[0]
+		if (bentPoint?.outgoing === undefined) {
+			throw new Error("fixture outgoing handle is missing")
+		}
+		bentPoint.outgoing.y = 100
+		expectFailure(
+			decodeEditorFontSource(JSON.stringify(bent)),
+			"source.handle",
+			"$.glyphs[0].layers[0].points[0]",
 		)
 	})
 

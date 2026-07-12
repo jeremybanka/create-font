@@ -3,13 +3,14 @@
 `@trigraph/source` is the deterministic file boundary for
 [`@trigraph/states`](../states/README.md). A file represents one complete
 `EditorFontSource` snapshot: the JSON root is the state document itself, with
-the existing `format: "trigraph.editor"` and `editorVersion: 1` discriminants.
+the existing `format: "trigraph.editor"` and `editorVersion: 2` discriminants.
 There is no second envelope and no file-only identity layer.
 
 That direct correspondence is important for a future server-backed editor.
 Stable IDs, author ordering, shared topology, master layers, locations, cmap
-references, and editor-only note, color, and smooth-point fields all cross the
-boundary in the same form emitted by the state graph. Decoding returns the
+references, relative incoming/outgoing handles, soft/hard node modes, and
+editor-only note and color fields all cross the boundary in the same form
+emitted by the state graph. Decoding returns the
 public type that can be passed to `createFontEditorState().actions.load`.
 
 ## The one JSON adaptation
@@ -80,19 +81,22 @@ Thus the same state snapshot has exactly one encoded representation, useful
 for content hashes, optimistic concurrency, diffs, and server-side caching.
 
 The state graph intentionally erases some explicit defaults. Canonical source
-does the same: `hidden: false`, `elidable: false`, `overlap: false`,
-`smooth: false`, and `note: ""` are omitted. Distinctions retained by state are
+does the same: `hidden: false`, `elidable: false`, `overlap: false`, and
+`note: ""` are omitted. Distinctions retained by state are
 retained here too, including an empty color string, an empty axis map, and an
 empty PostScript name. Consequently, encoding a source before and after
 `load(source) -> read.editorSource()` produces identical bytes.
 
 ## Validation boundary
 
-Version 1 is a closed schema. The decoder rejects invalid syntax, duplicate
-object keys, prototype-sensitive keys, unknown properties, missing or wrongly
-typed fields, non-finite in-memory numbers, noncanonical timestamp strings,
-wrong ID kinds, duplicate identities, dangling references, and topology that
-cannot be loaded into the state graph. Diagnostics have stable codes and
+Version 2 is a closed schema. Version 1 is rejected explicitly rather than
+silently reinterpreted because node/handle ownership changed at the wire
+boundary. The decoder rejects invalid syntax, duplicate object keys,
+prototype-sensitive keys, unknown properties, missing or wrongly typed fields,
+non-finite in-memory numbers, noncanonical timestamp strings, wrong ID kinds,
+duplicate identities, dangling references, invalid one-sided or non-collinear
+soft-node handles, and topology that cannot be loaded into the state graph.
+Diagnostics have stable codes and
 JSONPath-like paths. Lexical key inspection is iterative, and array inspection
 walks actual own entries rather than trusting or iterating a hostile declared
 length, so untrusted depth and sparse inputs fail as data instead of exhausting

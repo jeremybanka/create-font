@@ -58,18 +58,41 @@ const contourId = (glyphId: GlyphId, name: string): ContourId =>
 
 const topologyPoint = (glyphId: GlyphId, index: number) => ({
 	id: pointId(glyphId, index),
-	onCurve: index % 2 === 0,
+	mode: "soft" as const,
 })
 
-const layerPoint = (
-	glyphId: GlyphId,
-	index: number,
-	coordinate: { readonly x: number; readonly y: number },
+const handleVector = (
+	node: { readonly x: number; readonly y: number },
+	quadraticControl: { readonly x: number; readonly y: number },
 ) => ({
-	pointId: pointId(glyphId, index),
-	x: coordinate.x,
-	y: coordinate.y,
+	x: (2 * (quadraticControl.x - node.x)) / 3,
+	y: (2 * (quadraticControl.y - node.y)) / 3,
 })
+
+const layerContour = (
+	glyphId: GlyphId,
+	offset: number,
+	coordinates: readonly { readonly x: number; readonly y: number }[],
+) =>
+	[0, 2, 4, 6].map((index) => {
+		const coordinate = coordinates[offset + index]
+		const incomingControl = coordinates[offset + ((index + 7) % 8)]
+		const outgoingControl = coordinates[offset + ((index + 1) % 8)]
+		if (
+			coordinate === undefined ||
+			incomingControl === undefined ||
+			outgoingControl === undefined
+		) {
+			throw new Error("Geometric O fixture coordinates are incomplete.")
+		}
+		return {
+			pointId: pointId(glyphId, offset + index),
+			x: coordinate.x,
+			y: coordinate.y,
+			incoming: handleVector(coordinate, incomingControl),
+			outgoing: handleVector(coordinate, outgoingControl),
+		}
+	})
 
 const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 	id,
@@ -78,13 +101,11 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 	contours: [
 		{
 			id: contourId(id, "outer"),
-			points: Array.from({ length: 8 }, (_, index) => topologyPoint(id, index)),
+			points: [0, 2, 4, 6].map((index) => topologyPoint(id, index)),
 		},
 		{
 			id: contourId(id, "counter"),
-			points: Array.from({ length: 8 }, (_, index) =>
-				topologyPoint(id, index + 8),
-			),
+			points: [8, 10, 12, 14].map((index) => topologyPoint(id, index)),
 		},
 	],
 	layers: [
@@ -92,17 +113,19 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 			masterId: razorMasterId,
 			advanceWidth: 1_000,
 			leftSideBearing: 100,
-			points: razorCoordinates.map((coordinate, index) =>
-				layerPoint(id, index, coordinate),
-			),
+			points: [
+				...layerContour(id, 0, razorCoordinates),
+				...layerContour(id, 8, razorCoordinates),
+			],
 		},
 		{
 			masterId: blackMasterId,
 			advanceWidth: 1_000,
 			leftSideBearing: 100,
-			points: blackCoordinates.map((coordinate, index) =>
-				layerPoint(id, index, coordinate),
-			),
+			points: [
+				...layerContour(id, 0, blackCoordinates),
+				...layerContour(id, 8, blackCoordinates),
+			],
 		},
 	],
 })
@@ -110,7 +133,7 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 export function makeGeometricOEditorFont(): EditorFontSource {
 	return {
 		format: "trigraph.editor",
-		editorVersion: 1,
+		editorVersion: 2,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

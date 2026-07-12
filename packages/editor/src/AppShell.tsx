@@ -107,7 +107,7 @@ export function AppShell({ workspace }: AppShellProps) {
 					<span>{master?.name ?? "—"}</span>
 				</active-context>
 				<keyboard-help>
-					[ ] select · Arrow keys nudge · Shift ×10 · ⌘Z undo
+					[ ] select · Drag handles · Arrow keys nudge · Shift ×10 · ⌘Z undo
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>

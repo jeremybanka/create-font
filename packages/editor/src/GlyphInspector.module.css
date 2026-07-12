@@ -75,17 +75,67 @@ glyph-inspector.class {
 			}
 		}
 
+		> selection-details {
+			display: grid;
+			gap: 14px;
+
+			> dl {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 9px 12px;
+				margin: 0;
+				font-size: 11px;
+
+				> dt {
+					color: var(--ink-muted);
+				}
+
+				> dd {
+					margin: 0;
+					font-weight: 570;
+					font-variant-numeric: tabular-nums;
+					color: var(--ink);
+				}
+			}
+
+			> node-mode {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				padding: 2px;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: var(--paper);
+
+				> button {
+					min-height: 26px;
+					border: 0;
+					border-radius: 4px;
+					background: transparent;
+					color: var(--ink-muted);
+					font-size: 10px;
+					font-weight: 680;
+					cursor: pointer;
+
+					&[aria-pressed="true"] {
+						background: var(--selected);
+						color: var(--ink);
+						box-shadow: 0 0 0 1px var(--line-selected);
+					}
+				}
+			}
+		}
+
 		> validity-card {
 			display: grid;
 			gap: 4px;
 			padding: 12px;
-			border: 1px solid #d9c4bd;
+			border: 1px solid var(--line-invalid);
 			border-radius: 7px;
-			background: #f6e9e4;
+			background: var(--surface-invalid);
 
 			&[data-state="valid"] {
-				border-color: #c9d7c7;
-				background: #edf3eb;
+				border-color: var(--line-valid);
+				background: var(--surface-valid);
 			}
 
 			> strong {

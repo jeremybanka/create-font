@@ -12,8 +12,8 @@ app-shell.class {
 		align-items: center;
 		padding: 0 18px;
 		border-bottom: 1px solid var(--line-strong);
-		background: #eeede8;
-		box-shadow: 0 1px 3px rgb(38 35 29 / 5%);
+		background: var(--surface-header);
+		box-shadow: 0 1px 3px var(--shadow-subtle);
 		z-index: 2;
 
 		> brand-lockup {
@@ -34,7 +34,7 @@ app-shell.class {
 					width: 5px;
 					height: 15px;
 					border-radius: 5px;
-					background: #f1eee7;
+					background: var(--ink-inverse);
 
 					&:nth-child(2) {
 						height: 10px;
@@ -142,7 +142,7 @@ app-shell.class {
 		align-items: center;
 		padding: 0 12px;
 		border-top: 1px solid var(--line-strong);
-		background: #e9e7e1;
+		background: var(--surface-footer);
 		font-size: 9px;
 		color: var(--ink-muted);
 

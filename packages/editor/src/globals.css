@@ -6,21 +6,84 @@
 		BlinkMacSystemFont,
 		"Segoe UI",
 		sans-serif;
-	--paper: #f4f3ef;
-	--panel: #eeede8;
-	--hover: #e7e5df;
-	--selected: #eee0da;
-	--line: #d9d6ce;
-	--line-strong: #cbc7bd;
-	--ink: #1c1b17;
-	--ink-muted: #69665f;
-	--ink-faint: #969187;
-	--accent: #ce5d3d;
-	--success: #62865c;
-	--warning: #c07843;
+	--paper: #1c1d1a;
+	--panel: #171815;
+	--hover: #282925;
+	--selected: #382821;
+	--line: #30312c;
+	--line-strong: #3b3c36;
+	--ink: #efeee8;
+	--ink-muted: #aaa79f;
+	--ink-faint: #76756f;
+	--ink-inverse: #1b1c19;
+	--accent: #e17352;
+	--success: #80a077;
+	--warning: #d18a55;
+	--surface-header: #20211e;
+	--surface-footer: #171815;
+	--surface-invalid: #32221e;
+	--surface-valid: #202d1f;
+	--line-selected: #6a4438;
+	--line-glyph-selected: #75483a;
+	--line-invalid: #70493e;
+	--line-valid: #405b3e;
+	--master-mark: #efeee8;
+	--shadow-subtle: rgb(0 0 0 / 32%);
+	--canvas-surface: #111210;
+	--canvas-outline: #ebe9e2;
+	--canvas-guide-strong: #807d74;
+	--canvas-guide-mid: #373832;
+	--canvas-guide-soft: #282925;
+	--canvas-handle-line: #76736b;
+	--canvas-node-fill: #111210;
+	--canvas-node-stroke: #efeee8;
+	--canvas-accent: #e17352;
+	--preview-guide: #353630;
+	--preview-ink: #efeee8;
+	color-scheme: dark;
 	font-family: var(--ui-font);
 	font-synthesis: none;
 	text-rendering: optimizelegibility;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--paper: #f4f3ef;
+		--panel: #eeede8;
+		--hover: #e7e5df;
+		--selected: #eee0da;
+		--line: #d9d6ce;
+		--line-strong: #cbc7bd;
+		--ink: #1c1b17;
+		--ink-muted: #69665f;
+		--ink-faint: #969187;
+		--ink-inverse: #f1eee7;
+		--accent: #ce5d3d;
+		--success: #62865c;
+		--warning: #c07843;
+		--surface-header: #eeede8;
+		--surface-footer: #e9e7e1;
+		--surface-invalid: #f6e9e4;
+		--surface-valid: #edf3eb;
+		--line-selected: #d8c3b9;
+		--line-glyph-selected: #d7bbb0;
+		--line-invalid: #d9c4bd;
+		--line-valid: #c9d7c7;
+		--master-mark: #181713;
+		--shadow-subtle: rgb(38 35 29 / 5%);
+		--canvas-surface: #f8f7f3;
+		--canvas-outline: #191814;
+		--canvas-guide-strong: #9e9a91;
+		--canvas-guide-mid: #cfcac1;
+		--canvas-guide-soft: #e3dfd7;
+		--canvas-handle-line: #b9b4aa;
+		--canvas-node-fill: #faf9f5;
+		--canvas-node-stroke: #171713;
+		--canvas-accent: #ce5d3d;
+		--preview-guide: #dad7cf;
+		--preview-ink: #171713;
+		color-scheme: light;
+	}
 }
 
 * {
@@ -39,6 +102,7 @@ body,
 body {
 	overflow: auto;
 	background: var(--paper);
+	color: var(--ink);
 }
 
 button,

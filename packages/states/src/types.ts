@@ -10,7 +10,7 @@ import type {
 } from "trigraph"
 
 export const TRIGRAPH_EDITOR_FORMAT = "trigraph.editor" as const
-export const TRIGRAPH_EDITOR_VERSION = 1 as const
+export const TRIGRAPH_EDITOR_VERSION = 2 as const
 
 /** Stable, serialization-safe identifiers scoped by editor entity kind. */
 export type AxisId = `axis:${string}`
@@ -96,15 +96,27 @@ export interface EditorInstanceSource {
 	readonly elidable?: boolean
 }
 
+export type EditorNodeMode = "soft" | "hard"
+export type EditorHandleKind = "incoming" | "outgoing"
+
+/** A handle endpoint expressed as a vector relative to its owning node. */
+export interface EditorHandleVectorSource {
+	readonly x: number
+	readonly y: number
+}
+
 /**
- * Topological point data shared by every master. Coordinates deliberately do
- * not live here: they are supplied by the corresponding glyph layer.
+ * Topological node data shared by every master. Coordinates and handle
+ * vectors deliberately do not live here: they are supplied by the
+ * corresponding glyph layer.
  */
 export interface EditorPointSource {
 	readonly id: PointId
-	readonly onCurve: boolean
-	/** Editor handle behavior; it is not projected into the low-level IR. */
-	readonly smooth?: boolean
+	/**
+	 * Soft nodes keep their two handles collinear when edited. Hard nodes allow
+	 * independent or one-sided handles.
+	 */
+	readonly mode: EditorNodeMode
 }
 
 export interface EditorContourSource {
@@ -116,6 +128,10 @@ export interface EditorLayerPointSource {
 	readonly pointId: PointId
 	readonly x: number
 	readonly y: number
+	/** Relative vector from the node to the preceding cubic control point. */
+	readonly incoming?: EditorHandleVectorSource
+	/** Relative vector from the node to the following cubic control point. */
+	readonly outgoing?: EditorHandleVectorSource
 }
 
 /** Coordinates and horizontal metrics for one glyph at one master. */
@@ -136,7 +152,7 @@ export interface EditorGlyphSource {
 	/** Editor-only color label expressed as a CSS color string. */
 	readonly color?: string
 	readonly overlap?: boolean
-	/** Shared contour and point topology, in export order. */
+	/** Shared contour and node topology, in export order. */
 	readonly contours: readonly EditorContourSource[]
 	/** At most one layer per master; projection verifies complete coverage. */
 	readonly layers: readonly EditorGlyphLayerSource[]

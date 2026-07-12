@@ -17,14 +17,18 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
 	const pointIds =
+		layer?.contours.flatMap((contour) =>
+			contour.map((point) => point.pointId),
+		) ??
 		glyph?.contours.flatMap((contour) =>
 			contour.points.map((point) => point.id),
-		) ?? []
+		) ??
+		[]
 	const selectedIndex =
 		selectedPointId === null ? -1 : pointIds.indexOf(selectedPointId)
 	const selectedPoint =
-		layer.ok && selectedIndex >= 0
-			? layer.value.flattenedPoints[selectedIndex]
+		layer !== null && selectedIndex >= 0
+			? layer.contours.flat().find((point) => point.pointId === selectedPointId)
 			: undefined
 	const projectionIssueCount = compilation.ok
 		? compilation.projectionWarnings.length +
@@ -51,9 +55,9 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					<dt>Master</dt>
 					<dd>{master?.name ?? "—"}</dd>
 					<dt>Advance</dt>
-					<dd>{layer.ok ? layer.value.advanceWidth : "—"}</dd>
+					<dd>{layer?.advanceWidth ?? "—"}</dd>
 					<dt>LSB</dt>
-					<dd>{layer.ok ? layer.value.leftSideBearing : "—"}</dd>
+					<dd>{layer?.leftSideBearing ?? "—"}</dd>
 					<dt>Contours</dt>
 					<dd>{glyph?.contours.length ?? 0}</dd>
 					<dt>Points</dt>
@@ -68,16 +72,56 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 				{selectedPoint === undefined ? (
 					<p>Select an outline node to inspect its coordinates.</p>
 				) : (
-					<dl>
-						<dt>Node</dt>
-						<dd>#{selectedIndex + 1}</dd>
-						<dt>X</dt>
-						<dd>{selectedPoint.x}</dd>
-						<dt>Y</dt>
-						<dd>{selectedPoint.y}</dd>
-						<dt>Type</dt>
-						<dd>{selectedPoint.onCurve ? "On-curve" : "Off-curve"}</dd>
-					</dl>
+					<selection-details>
+						<dl>
+							<dt>Node</dt>
+							<dd>#{selectedIndex + 1}</dd>
+							<dt>X</dt>
+							<dd>{selectedPoint.x}</dd>
+							<dt>Y</dt>
+							<dd>{selectedPoint.y}</dd>
+							<dt>Incoming</dt>
+							<dd>
+								{selectedPoint.incoming === undefined
+									? "—"
+									: `${Math.round(selectedPoint.incoming.x)}, ${Math.round(selectedPoint.incoming.y)}`}
+							</dd>
+							<dt>Outgoing</dt>
+							<dd>
+								{selectedPoint.outgoing === undefined
+									? "—"
+									: `${Math.round(selectedPoint.outgoing.x)}, ${Math.round(selectedPoint.outgoing.y)}`}
+							</dd>
+						</dl>
+						<node-mode role="group" aria-label="Node mode">
+							<button
+								type="button"
+								aria-pressed={selectedPoint.mode === "soft"}
+								onClick={() =>
+									workspace.font.actions.setNodeMode({
+										glyphId: activeGlyphId,
+										pointId: selectedPoint.pointId,
+										mode: "soft",
+									})
+								}
+							>
+								Soft
+							</button>
+							<button
+								type="button"
+								aria-pressed={selectedPoint.mode === "hard"}
+								onClick={() =>
+									workspace.font.actions.setNodeMode({
+										glyphId: activeGlyphId,
+										pointId: selectedPoint.pointId,
+										mode: "hard",
+									})
+								}
+							>
+								Hard
+							</button>
+						</node-mode>
+					</selection-details>
 				)}
 			</inspector-section>
 

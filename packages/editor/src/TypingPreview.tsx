@@ -3,6 +3,7 @@ import { contoursToPath } from "./geometry.ts"
 import { Group, Layer, Line, Path, Stage } from "./react-konva.ts"
 import { useI, useO } from "./state-hooks.ts"
 import css from "./TypingPreview.module.css"
+import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 
 export interface TypingPreviewProps {
@@ -15,6 +16,7 @@ export function TypingPreview({ workspace }: TypingPreviewProps) {
 	const setText = useI(workspace.ui.previewText)
 	const run = useO(workspace.ui.previewRun)
 	const location = useO(workspace.ui.previewLocation)
+	const theme = useCanvasTheme()
 	const { ref, width, height } = useElementSize<HTMLElement>()
 	const totalAdvance = Math.max(
 		1,
@@ -75,7 +77,7 @@ export function TypingPreview({ workspace }: TypingPreviewProps) {
 					<Layer>
 						<Line
 							points={[20, baseline, width - 20, baseline]}
-							stroke="#dad7cf"
+							stroke={theme.previewGuide}
 							strokeWidth={1}
 						/>
 						<Group x={originX} y={baseline} scaleX={scale} scaleY={-scale}>
@@ -87,8 +89,7 @@ export function TypingPreview({ workspace }: TypingPreviewProps) {
 										key={`${index}:${item.character}`}
 										x={x}
 										data={contoursToPath(item.glyph.contours)}
-										fill="#171713"
-										fillRule="evenodd"
+										fill={theme.previewInk}
 									/>
 								)
 							})}

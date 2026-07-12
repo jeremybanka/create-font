@@ -2,6 +2,7 @@ import {
 	normalizeEditorLocation,
 	regionScalar,
 	type EditorAxisSource,
+	type EditorHandleVectorSource,
 	type GlyphId,
 	type PointId,
 } from "@trigraph/states"
@@ -11,6 +12,19 @@ export interface OutlinePoint {
 	readonly x: number
 	readonly y: number
 	readonly onCurve: boolean
+}
+
+export interface ContourStartDirection {
+	readonly angle: number
+	readonly x: number
+	readonly y: number
+}
+
+export interface EditorOutlineNode {
+	readonly x: number
+	readonly y: number
+	readonly incoming?: EditorHandleVectorSource
+	readonly outgoing?: EditorHandleVectorSource
 }
 
 export interface ResolvedGlyph {
@@ -53,6 +67,74 @@ const midpoint = (a: OutlinePoint, b: OutlinePoint): OutlinePoint => ({
 	y: (a.y + b.y) / 2,
 	onCurve: true,
 })
+
+/** Locates the first node and the first non-zero tangent in contour order. */
+export function contourStartDirection(
+	contour: readonly EditorOutlineNode[],
+): ContourStartDirection | null {
+	const first = contour[0]
+	if (first === undefined) return null
+	if (
+		first.outgoing !== undefined &&
+		(first.outgoing.x !== 0 || first.outgoing.y !== 0)
+	) {
+		return {
+			x: first.x,
+			y: first.y,
+			angle: (Math.atan2(first.outgoing.y, first.outgoing.x) * 180) / Math.PI,
+		}
+	}
+	for (let index = 1; index < contour.length; index += 1) {
+		const next = contour[index]
+		if (next === undefined) continue
+		const deltaX = next.x - first.x
+		const deltaY = next.y - first.y
+		if (deltaX === 0 && deltaY === 0) continue
+		return {
+			x: first.x,
+			y: first.y,
+			angle: (Math.atan2(deltaY, deltaX) * 180) / Math.PI,
+		}
+	}
+	return null
+}
+
+/** Writes a closed editor contour using node-owned cubic handles. */
+export function editorContourToPath(
+	contour: readonly EditorOutlineNode[],
+): string {
+	const start = contour[0]
+	if (start === undefined) return ""
+	const commands = [`M ${format(start.x)} ${format(start.y)}`]
+	for (let index = 0; index < contour.length; index += 1) {
+		const from = contour[index]
+		const to = contour[(index + 1) % contour.length]
+		if (from === undefined || to === undefined) continue
+		if (from.outgoing === undefined && to.incoming === undefined) {
+			commands.push(`L ${format(to.x)} ${format(to.y)}`)
+			continue
+		}
+		const firstControl = {
+			x: from.x + (from.outgoing?.x ?? 0),
+			y: from.y + (from.outgoing?.y ?? 0),
+		}
+		const secondControl = {
+			x: to.x + (to.incoming?.x ?? 0),
+			y: to.y + (to.incoming?.y ?? 0),
+		}
+		commands.push(
+			`C ${format(firstControl.x)} ${format(firstControl.y)} ${format(secondControl.x)} ${format(secondControl.y)} ${format(to.x)} ${format(to.y)}`,
+		)
+	}
+	commands.push("Z")
+	return commands.join(" ")
+}
+
+export function editorContoursToPath(
+	contours: readonly (readonly EditorOutlineNode[])[],
+): string {
+	return contours.map(editorContourToPath).filter(Boolean).join(" ")
+}
 
 /** Converts a closed TrueType quadratic contour into SVG path commands. */
 export function contourToPath(contour: readonly OutlinePoint[]): string {

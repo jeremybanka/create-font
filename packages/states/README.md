@@ -33,17 +33,26 @@ The principal entities are:
 - one default master plus source masters, including optional intermediate
   support regions;
 - named instances keyed by stable axis IDs;
-- glyph records containing export intent and editor-only note, color, and
-  smooth-point metadata;
-- one ordered contour/point topology per glyph, shared by every master;
-- one coordinate-and-metrics layer per glyph and master;
+- glyph records containing export intent and editor-only note and color;
+- one ordered contour/node topology per glyph, with `soft` or `hard` editing
+  behavior shared by every master;
+- one coordinate, relative incoming/outgoing handle, and metrics layer per
+  glyph and master;
 - a character map from Unicode code points to stable glyph IDs.
 
-Sharing topology is an important constraint. A point's identity, contour
-membership, order, and on-curve state live once; only its `x` and `y`
-coordinates vary by master. A structural point edit can therefore update every
-layer atomically, and lowering never has to guess whether master contours
-correspond.
+Sharing topology is an important constraint. A node's identity, contour
+membership, order, and soft/hard behavior live once; its `x` and `y`
+coordinates and optional handles vary by master. Handles are vectors relative
+to their owning node, so moving a node carries its handles without rewriting
+them. A structural node edit can therefore update every layer atomically, and
+lowering never has to guess whether master contours correspond.
+
+Soft nodes require either two handles or no handles in every layer. Their
+handles lie on opposite rays of one line. Moving either handle rotates the
+other while preserving its length; removing one removes both. Changing a hard
+node to soft mirrors a missing handle or uses the incoming handle as the
+reference direction when both exist. Hard nodes permit independent and
+one-sided handles.
 
 ## Atom graph
 
@@ -54,24 +63,26 @@ IDs remain isolated.
 
 Independent editor facts are atoms. Ordered ID indexes are small atoms, and
 entities, coordinates, metrics, and mappings live in keyed atom families. In
-particular, layer point `x` and `y` values are separate hot atoms so dragging a
-point does not replace an entire glyph or master. Notes, color labels, and
-smooth-point preferences are also separated from export-bearing atoms, so
-editor-only changes do not invalidate glyph lowering.
+particular, layer node `x` and `y` values and each handle component are separate
+hot atoms, so dragging a node or handle does not replace an entire glyph or
+master. Notes and color labels are also separated from export-bearing atoms,
+so annotation changes do not invalidate glyph lowering.
 
 Selectors form a lowering graph rather than one monolithic compiler:
 
 1. axis selectors quantize user-space values and validate axis maps;
 2. master selectors normalize locations and build OpenType support regions;
 3. the variation-model selector builds the master scalar matrix;
-4. layer selectors combine shared topology with one master's coordinates and
-   metrics;
-5. glyph selectors solve source-master differences into complete `gvar`
+4. segment-plan selectors choose one cubic-to-quadratic subdivision depth from
+   the worst approximation bound across every master;
+5. layer selectors combine shared topology with one master's coordinates,
+   handles, and metrics, following the shared segment plan;
+6. glyph selectors solve source-master differences into complete `gvar`
    tuples, including horizontal phantom-point deltas;
-6. instance and character-map selectors replace stable editor IDs with axis
+7. instance and character-map selectors replace stable editor IDs with axis
    tags and numeric glyph IDs;
-7. the font-source selector composes those pieces into `VariableFontSource`;
-8. the compilation selector passes that source through `ingestVariableFont`.
+8. the font-source selector composes those pieces into `VariableFontSource`;
+9. the compilation selector passes that source through `ingestVariableFont`.
 
 This decomposition lets an editor subscribe close to the work being shown. A
 glyph view can read a layer or glyph projection without recompiling unrelated
@@ -80,6 +91,22 @@ glyphs; export can read the final composition of the same selectors.
 Multi-master deltas are solved against the scalar contributions of all source
 regions. They are not assumed to be independent differences from the default
 master, which would be incorrect when supports overlap.
+
+### Cubic editing over a quadratic IR
+
+The editor model owns ordinary cubic Bézier handles, while trigraph v1 targets
+TrueType quadratic outlines. Lowering is deterministic and coordinated across
+masters. Each cubic subcurve is approximated by
+`Q = (3(C1 + C2) - P0 - P3) / 4`; the distance between its two interior
+controls and the degree-raised quadratic controls gives a convex-hull error
+bound. Every segment selects one power-of-two subdivision depth that satisfies
+a 0.5 font-unit bound for all masters, up to a fixed depth of 8. Each layer
+then emits the same on/off-curve topology. A straight layer in a segment that
+is curved elsewhere emits midpoint controls under that shared plan.
+
+If malformed coordinates or the subdivision limit prevent a bounded result,
+projection returns a typed error. It never silently changes tolerance or lets
+masters choose incompatible point counts.
 
 ## Projection and compilation
 
@@ -118,8 +145,9 @@ font-format invariant that the composed source violates.
 ## Editing semantics
 
 Structural operations are synchronous atom.io transactions. Inserting a shared
-point, loading a document, and moving several coordinates must either update the
-complete affected structure or make no change. Persistent editor atoms
+node, loading a document, moving several coordinates, dragging a handle, and
+changing node mode must either update the complete affected structure or make
+no change. Persistent editor atoms
 participate in the document timeline, while projections remain derived state.
 Undo, redo, and history clearing are bound to the document's own `Silo`.
 
@@ -177,13 +205,14 @@ reordering, serialization, and collaborative edits.
 ## Scope
 
 The state model currently targets the same deliberately narrow profile as
-trigraph v1: one TrueType-flavored variable font with simple quadratic glyphs,
-horizontal metrics, complete point deltas, and a Unicode character map. It does
+trigraph v1: one TrueType-flavored variable font with high-level cubic editing,
+bounded quadratic projection, horizontal metrics, complete point deltas, and a
+Unicode character map. It does
 not model binary table layout. Composite glyphs, hinting, OpenType Layout,
 vertical metrics, color, CFF/CFF2, sparse IUP deltas, and binary serialization
 belong to future profiles or other layers.
 
-Editor-only fields such as notes, color labels, and smooth-handle behavior are
-never projected into the IR. Conversely, low-level facts such as glyph IDs,
+Editor-only fields such as notes, color labels, and soft/hard handle behavior
+are never projected into the IR. Conversely, low-level facts such as glyph IDs,
 complete tuple deltas, normalized tag-keyed regions, and phantom-point metric
 deltas are derived rather than edited directly.

@@ -8,6 +8,7 @@ import type {
 	EditorFontSource,
 	EditorGlyphLayerSource,
 	EditorGlyphSource,
+	EditorHandleVectorSource,
 	EditorInstanceSource,
 	EditorLayerPointSource,
 	EditorLocationSource,
@@ -802,13 +803,21 @@ function parsePoint(
 	context: ValidationContext,
 ): EditorPointSource {
 	const record = objectValue(value, path, context)
-	if (record === null) return { id: "point:", onCurve: false }
-	checkShape(record, ["id", "onCurve", "smooth"], path, context)
-	const smooth = optionalBoolean(record, "smooth", path, context)
+	if (record === null) return { id: "point:", mode: "hard" }
+	checkShape(record, ["id", "mode"], path, context)
+	const modeValue = requiredString(record, "mode", path, context)
+	const mode = modeValue === "soft" || modeValue === "hard" ? modeValue : "hard"
+	if (modeValue !== "soft" && modeValue !== "hard") {
+		add(
+			context,
+			"source.string",
+			`${path}.mode`,
+			'Expected node mode "soft" or "hard".',
+		)
+	}
 	return {
 		id: requiredId<PointId>(record, "id", "point:", path, context),
-		onCurve: requiredBoolean(record, "onCurve", path, context),
-		...(smooth === undefined ? {} : { smooth }),
+		mode,
 	}
 }
 
@@ -837,11 +846,33 @@ function parseLayerPoint(
 ): EditorLayerPointSource {
 	const record = objectValue(value, path, context)
 	if (record === null) return { pointId: "point:", x: 0, y: 0 }
-	checkShape(record, ["pointId", "x", "y"], path, context)
+	checkShape(
+		record,
+		["pointId", "x", "y", "incoming", "outgoing"],
+		path,
+		context,
+	)
+	const parseHandle = (
+		key: "incoming" | "outgoing",
+	): EditorHandleVectorSource | undefined => {
+		if (!Object.hasOwn(record, key)) return undefined
+		const handlePath = `${path}.${key}`
+		const handle = objectValue(record[key], handlePath, context)
+		if (handle === null) return { x: 0, y: 0 }
+		checkShape(handle, ["x", "y"], handlePath, context)
+		return {
+			x: requiredNumber(handle, "x", handlePath, context),
+			y: requiredNumber(handle, "y", handlePath, context),
+		}
+	}
+	const incoming = parseHandle("incoming")
+	const outgoing = parseHandle("outgoing")
 	return {
 		pointId: requiredId<PointId>(record, "pointId", "point:", path, context),
 		x: requiredNumber(record, "x", path, context),
 		y: requiredNumber(record, "y", path, context),
+		...(incoming === undefined ? {} : { incoming }),
+		...(outgoing === undefined ? {} : { outgoing }),
 	}
 }
 
@@ -1136,6 +1167,19 @@ function diagnoseLocationReferences(
 	}
 }
 
+function handlesShareOppositeRay(
+	incoming: EditorHandleVectorSource,
+	outgoing: EditorHandleVectorSource,
+): boolean {
+	const scale = Math.max(
+		1,
+		Math.hypot(incoming.x, incoming.y) * Math.hypot(outgoing.x, outgoing.y),
+	)
+	const cross = incoming.x * outgoing.y - incoming.y * outgoing.x
+	const dot = incoming.x * outgoing.x + incoming.y * outgoing.y
+	return Math.abs(cross) <= Number.EPSILON * 32 * scale && dot <= 0
+}
+
 function diagnoseStructure(
 	source: EditorFontSource,
 	context: ValidationContext,
@@ -1240,6 +1284,7 @@ function diagnoseStructure(
 		if (glyph === undefined) continue
 		const glyphPath = `$.glyphs[${glyphIndex}]`
 		const glyphPointIds = new Set<PointId>()
+		const glyphPoints = new Map<PointId, EditorPointSource>()
 		for (
 			let contourIndex = 0;
 			contourIndex < glyph.contours.length;
@@ -1275,6 +1320,7 @@ function diagnoseStructure(
 				}
 				pointIds.add(point.id)
 				glyphPointIds.add(point.id)
+				glyphPoints.set(point.id, point)
 			}
 		}
 
@@ -1318,6 +1364,30 @@ function diagnoseStructure(
 						"source.reference",
 						`${layerPath}.points[${pointIndex}].pointId`,
 						`Unknown glyph point reference ${JSON.stringify(point.pointId)}.`,
+					)
+				}
+				if (point === undefined) continue
+				const topology = glyphPoints.get(point.pointId)
+				if (topology?.mode !== "soft") continue
+				if ((point.incoming === undefined) !== (point.outgoing === undefined)) {
+					add(
+						context,
+						"source.handle",
+						`${layerPath}.points[${pointIndex}]`,
+						"A soft node requires both handles or neither handle in every layer.",
+					)
+					continue
+				}
+				if (
+					point.incoming !== undefined &&
+					point.outgoing !== undefined &&
+					!handlesShareOppositeRay(point.incoming, point.outgoing)
+				) {
+					add(
+						context,
+						"source.handle",
+						`${layerPath}.points[${pointIndex}]`,
+						"A soft node's handles must be collinear and point in opposite directions.",
 					)
 				}
 			}
@@ -1377,8 +1447,7 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 					id: contour.id,
 					points: contour.points.map((point) => ({
 						id: point.id,
-						onCurve: point.onCurve,
-						...(point.smooth ? { smooth: true } : {}),
+						mode: point.mode,
 					})),
 				})),
 				layers: glyph.layers.map((layer) => {
@@ -1391,7 +1460,21 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 						leftSideBearing: layer.leftSideBearing,
 						points: pointIds.flatMap((pointId) => {
 							const point = pointsById.get(pointId)
-							return point === undefined ? [] : [point]
+							return point === undefined
+								? []
+								: [
+										{
+											pointId: point.pointId,
+											x: point.x,
+											y: point.y,
+											...(point.incoming === undefined
+												? {}
+												: { incoming: point.incoming }),
+											...(point.outgoing === undefined
+												? {}
+												: { outgoing: point.outgoing }),
+										},
+									]
 						}),
 					}
 				}),

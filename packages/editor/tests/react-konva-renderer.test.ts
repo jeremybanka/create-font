@@ -53,4 +53,40 @@ describe("react-konva renderer boundary", () => {
 		renderer.updateContainer(null, root, null)
 		expect(container.getChildren()).toHaveLength(0)
 	})
+
+	it("keeps a dragged node mounted when its keyed selection ring appears", () => {
+		const container = new Konva.Group()
+		const root = renderer.createContainer(container, 0, false, null)
+		const point = React.createElement("Circle", {
+			key: "point:one",
+			id: "point",
+			draggable: true,
+		})
+
+		renderer.updateContainer(
+			React.createElement("Group", null, point),
+			root,
+			null,
+		)
+		const mountedPoint = container.findOne("#point")
+
+		renderer.updateContainer(
+			React.createElement(
+				"Group",
+				null,
+				React.createElement("Circle", {
+					key: "selection:one",
+					id: "selection",
+					listening: false,
+				}),
+				point,
+			),
+			root,
+			null,
+		)
+
+		expect(container.findOne("#point")).toBe(mountedPoint)
+		expect(container.findOne("#point")?.draggable()).toBe(true)
+		renderer.updateContainer(null, root, null)
+	})
 })

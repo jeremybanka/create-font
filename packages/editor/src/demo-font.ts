@@ -53,9 +53,43 @@ const pointId = (glyphId: GlyphId, index: number): PointId =>
 const contourId = (glyphId: GlyphId, name: string): ContourId =>
 	`contour:${glyphId}:${name}`
 
+interface Coordinate {
+	readonly x: number
+	readonly y: number
+}
+
+/** Degree-elevates the fixture's quadratic controls into node-owned cubics. */
+function cubicNodes(
+	glyphId: GlyphId,
+	coordinates: readonly Coordinate[],
+	pointOffset: number,
+) {
+	return coordinates.flatMap((coordinate, index) => {
+		if (index % 2 !== 0) return []
+		const incomingControl =
+			coordinates[(index - 1 + coordinates.length) % coordinates.length]
+		const outgoingControl = coordinates[(index + 1) % coordinates.length]
+		if (incomingControl === undefined || outgoingControl === undefined)
+			return []
+		return [
+			{
+				pointId: pointId(glyphId, pointOffset + index),
+				x: coordinate.x,
+				y: coordinate.y,
+				incoming: {
+					x: (2 * (incomingControl.x - coordinate.x)) / 3,
+					y: (2 * (incomingControl.y - coordinate.y)) / 3,
+				},
+				outgoing: {
+					x: (2 * (outgoingControl.x - coordinate.x)) / 3,
+					y: (2 * (outgoingControl.y - coordinate.y)) / 3,
+				},
+			},
+		]
+	})
+}
+
 function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
-	const razorCoordinates = [...outerCoordinates, ...razorCounterCoordinates]
-	const blackCoordinates = [...outerCoordinates, ...blackCounterCoordinates]
 	return {
 		id,
 		name,
@@ -64,18 +98,16 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 		contours: [
 			{
 				id: contourId(id, "outer"),
-				points: Array.from({ length: 8 }, (_, index) => ({
-					id: pointId(id, index),
-					onCurve: index % 2 === 0,
-					smooth: true,
+				points: Array.from({ length: 4 }, (_, index) => ({
+					id: pointId(id, index * 2),
+					mode: "soft" as const,
 				})),
 			},
 			{
 				id: contourId(id, "counter"),
-				points: Array.from({ length: 8 }, (_, index) => ({
-					id: pointId(id, index + 8),
-					onCurve: index % 2 === 0,
-					smooth: true,
+				points: Array.from({ length: 4 }, (_, index) => ({
+					id: pointId(id, index * 2 + 8),
+					mode: "soft" as const,
 				})),
 			},
 		],
@@ -84,19 +116,19 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 				masterId: razorMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: razorCoordinates.map((coordinate, index) => ({
-					pointId: pointId(id, index),
-					...coordinate,
-				})),
+				points: [
+					...cubicNodes(id, outerCoordinates, 0),
+					...cubicNodes(id, razorCounterCoordinates, 8),
+				],
 			},
 			{
 				masterId: blackMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: blackCoordinates.map((coordinate, index) => ({
-					pointId: pointId(id, index),
-					...coordinate,
-				})),
+				points: [
+					...cubicNodes(id, outerCoordinates, 0),
+					...cubicNodes(id, blackCounterCoordinates, 8),
+				],
 			},
 		],
 	}
@@ -105,7 +137,7 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 export function makeDemoFont(): EditorFontSource {
 	return {
 		format: "trigraph.editor",
-		editorVersion: 1,
+		editorVersion: 2,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

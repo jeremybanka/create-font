@@ -29,10 +29,12 @@ maps to `O`; every other character in the preview visibly exercises `.notdef`.
 
 ## State flow
 
-The edit canvas subscribes to the active `glyphLayer` selector, so it always
-shows one editable source master. Dragging keeps a temporary visual coordinate
-locally, then commits one `movePoints` transaction on pointer release. That
-keeps a full drag to one undo step. Arrow keys commit one- or ten-unit nudges.
+The edit canvas composes the active layer from granular `layerNode` selectors,
+so it reads the high-level cubic source rather than a lowered quadratic
+outline. Nodes own relative incoming and outgoing handles. Dragging keeps a
+temporary node or handle position locally, then commits one `movePoints` or
+`moveHandle` transaction on pointer release. That keeps a full drag to one undo
+step. Arrow keys commit one- or ten-unit nudges.
 
 The typing preview subscribes to solved `glyphSource` projections. It
 normalizes the current user-space location, evaluates every OpenType support
@@ -72,7 +74,12 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
   design space.
 - Choose a master to edit its concrete layer; choose an instance to move the
   preview to that named location.
-- Choose `.notdef` or `O`, then select and drag any on- or off-curve node.
+- Choose `.notdef` or `O`, then drag a node or either of its anchored Bézier
+  handles in one gesture.
+- Switch a selected node between Soft (collinear handles) and Hard (independent
+  or one-sided handles) in the inspector.
+- Editor contours are intentionally unfilled. The triangular first node marks
+  each contour's direction.
 - Focus the canvas and use bracket keys to traverse nodes, then arrow keys to
   nudge the selection. Hold Shift for ten font units.
 - Use the toolbar, Command-Z / Shift-Command-Z, or Control-Z equivalents for
@@ -82,3 +89,5 @@ The layout hides the inspector first on narrower screens, then turns the left
 navigator into a horizontal strip. Native controls retain keyboard focus
 styles, the canvas exposes an application label and instructions, status is
 communicated with text as well as color, and all icon-only buttons have names.
+The dark palette is the default token set; a system light-mode preference
+activates the original light palette, including both Konva canvases.
