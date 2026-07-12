@@ -17,7 +17,7 @@ jobs:
   VitePlus:
     name: Vite Plus
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
@@ -25,10 +25,12 @@ jobs:
       - run: pnpm run build
       - run: node --input-type=module --eval 'await import("./packages/trigraph/dist/index.mjs")'
       - run: node --input-type=module --eval 'await import("./packages/states/dist/index.mjs")'
+      - run: node --input-type=module --eval 'await import("./packages/source/dist/index.mjs")'
+      - run: pnpm run test
 
   Dprint:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup

@@ -10,11 +10,17 @@
 		"moduleResolution": "NodeNext",
 		"noEmit": true,
 		"noUncheckedIndexedAccess": true,
+		"paths": {
+			"@trigraph/source": ["./packages/source/src/index.ts"],
+			"@trigraph/states": ["./packages/states/src/index.ts"],
+			"trigraph": ["./packages/trigraph/src/index.ts"]
+		},
 		"rootDir": ".",
 		"skipLibCheck": true,
 		"strict": true,
 		"target": "ES2024",
 		"types": []
 	},
-	"include": ["**/*.ts", "*.d.ts"]
+	"include": ["**/*.ts", "*.d.ts"],
+	"exclude": ["packages/editor"]
 }

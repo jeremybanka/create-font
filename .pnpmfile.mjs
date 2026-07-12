@@ -1,11 +1,17 @@
-const TYPESCRIPT_FOR_VITE_PLUS_CORE = "6.0.3"
+const TYPESCRIPT_FOR_LEGACY_TOOLING = "6.0.3"
 
-// Vite+ core's declaration bundler reads the TypeScript compiler API that
-// TypeScript 7 no longer exposes from the package root. Remove this once Vite+
-// supports TypeScript 7 for declaration generation.
+// A few tools still read the TypeScript 6 compiler API that TypeScript 7 no
+// longer exposes in the same shape. Keep their compiler private so the
+// workspace itself remains checked by TypeScript 7. Remove entries as those
+// tools gain native TypeScript 7 support.
+const TYPESCRIPT_6_CONSUMERS = new Set([
+	"@typescript-eslint/parser",
+	"@typescript-eslint/typescript-estree",
+	"@voidzero-dev/vite-plus-core",
+])
+
 const needsTypescript6 = (packageJson) =>
-	packageJson.name === "@voidzero-dev/vite-plus-core" &&
-	packageJson.version?.startsWith("0.2.") === true &&
+	TYPESCRIPT_6_CONSUMERS.has(packageJson.name) &&
 	packageJson.peerDependencies?.typescript !== undefined
 
 export const hooks = {
@@ -15,7 +21,7 @@ export const hooks = {
 			delete packageJson.peerDependenciesMeta?.typescript
 			packageJson.dependencies = {
 				...packageJson.dependencies,
-				typescript: TYPESCRIPT_FOR_VITE_PLUS_CORE,
+				typescript: TYPESCRIPT_FOR_LEGACY_TOOLING,
 			}
 		}
 

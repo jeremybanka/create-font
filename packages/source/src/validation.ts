@@ -1,0 +1,1425 @@
+import type {
+	AxisId,
+	ContourId,
+	EditorAxisMapEntrySource,
+	EditorAxisSource,
+	EditorCmapEntrySource,
+	EditorContourSource,
+	EditorFontSource,
+	EditorGlyphLayerSource,
+	EditorGlyphSource,
+	EditorInstanceSource,
+	EditorLayerPointSource,
+	EditorLocationSource,
+	EditorMasterSource,
+	EditorMasterSupportSource,
+	EditorPointSource,
+	GlyphId,
+	InstanceId,
+	MasterId,
+	PointId,
+} from "@trigraph/states"
+
+import { diagnostic, failure, success } from "./result.ts"
+import {
+	TRIGRAPH_EDITOR_FORMAT,
+	TRIGRAPH_EDITOR_VERSION,
+	type SourceDiagnostic,
+	type SourceResult,
+} from "./types.ts"
+
+type TimestampMode = "file" | "state"
+type SafeRecord = Readonly<Record<string, unknown>>
+
+const ABSENT = Symbol("absent")
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"])
+
+interface ValidationContext {
+	readonly errors: SourceDiagnostic[]
+}
+
+function add(
+	context: ValidationContext,
+	code: SourceDiagnostic["code"],
+	path: string,
+	message: string,
+): void {
+	context.errors.push(diagnostic(code, path, message))
+}
+
+function propertyPath(parent: string, key: string): string {
+	return !UNSAFE_KEYS.has(key) && /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key)
+		? `${parent}.${key}`
+		: `${parent}[${JSON.stringify(key)}]`
+}
+
+function objectValue(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): SafeRecord | null {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		add(context, "source.object", path, "Expected a plain JSON object.")
+		return null
+	}
+	const prototype = Object.getPrototypeOf(value)
+	if (prototype !== Object.prototype && prototype !== null) {
+		add(
+			context,
+			"source.object",
+			path,
+			"Expected an object with the ordinary or null prototype.",
+		)
+		return null
+	}
+
+	const normalized = Object.create(null) as Record<string, unknown>
+	for (const key of Reflect.ownKeys(value)) {
+		if (typeof key !== "string") {
+			add(
+				context,
+				"source.unknown_property",
+				path,
+				"Symbol properties cannot be represented in a source file.",
+			)
+			continue
+		}
+		const keyPath = propertyPath(path, key)
+		if (UNSAFE_KEYS.has(key)) {
+			add(
+				context,
+				"json.unsafe_key",
+				keyPath,
+				`Object property ${JSON.stringify(key)} is not safe source data.`,
+			)
+		}
+		const descriptor = Object.getOwnPropertyDescriptor(value, key)
+		if (
+			descriptor === undefined ||
+			!("value" in descriptor) ||
+			!descriptor.enumerable
+		) {
+			add(
+				context,
+				"source.object",
+				keyPath,
+				"Source properties must be enumerable data properties.",
+			)
+			continue
+		}
+		normalized[key] = descriptor.value
+	}
+	return normalized
+}
+
+function arrayValue(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): readonly unknown[] | null {
+	if (!Array.isArray(value)) {
+		add(context, "source.array", path, "Expected a JSON array.")
+		return null
+	}
+	if (Object.getPrototypeOf(value) !== Array.prototype) {
+		add(
+			context,
+			"source.array",
+			path,
+			"Expected an array with the ordinary Array prototype.",
+		)
+		return null
+	}
+	const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length")
+	if (
+		lengthDescriptor === undefined ||
+		!("value" in lengthDescriptor) ||
+		typeof lengthDescriptor.value !== "number" ||
+		!Number.isInteger(lengthDescriptor.value) ||
+		lengthDescriptor.value < 0 ||
+		lengthDescriptor.value > 0xffff_ffff
+	) {
+		add(context, "source.array", path, "Array length is not a valid uint32.")
+		return null
+	}
+	const length = lengthDescriptor.value
+	const indexedEntries: { readonly index: number; readonly value: unknown }[] =
+		[]
+	for (const key of Reflect.ownKeys(value)) {
+		if (key === "length") continue
+		if (typeof key === "string" && /^(?:0|[1-9][0-9]*)$/u.test(key)) {
+			const index = Number(key)
+			if (index >= length || index >= 0xffff_ffff) {
+				add(
+					context,
+					"source.unknown_property",
+					propertyPath(path, key),
+					"Array index lies outside its declared length.",
+				)
+				continue
+			}
+			const descriptor = Object.getOwnPropertyDescriptor(value, key)
+			if (
+				descriptor === undefined ||
+				!("value" in descriptor) ||
+				!descriptor.enumerable
+			) {
+				add(
+					context,
+					"source.array",
+					`${path}[${index}]`,
+					"Array entries must be enumerable data properties.",
+				)
+				continue
+			}
+			indexedEntries.push({ index, value: descriptor.value })
+			continue
+		}
+		add(
+			context,
+			"source.unknown_property",
+			path,
+			"Source arrays cannot carry named or symbol properties.",
+		)
+	}
+	if (indexedEntries.length !== length) {
+		add(
+			context,
+			"source.array",
+			path,
+			`Source arrays must be dense; length is ${length} but ${indexedEntries.length} indexed entries exist.`,
+		)
+		return null
+	}
+	indexedEntries.sort((left, right) => left.index - right.index)
+	for (let index = 0; index < indexedEntries.length; index += 1) {
+		if (indexedEntries[index]?.index !== index) {
+			add(
+				context,
+				"source.array",
+				path,
+				"Source arrays must use contiguous zero-based indexes.",
+			)
+			return null
+		}
+	}
+	return indexedEntries.map((entry) => entry.value)
+}
+
+function checkShape(
+	record: SafeRecord,
+	allowed: readonly string[],
+	path: string,
+	context: ValidationContext,
+): void {
+	const allowedKeys = new Set(allowed)
+	for (const key of Object.keys(record)) {
+		if (!allowedKeys.has(key)) {
+			add(
+				context,
+				"source.unknown_property",
+				propertyPath(path, key),
+				`Unknown property ${JSON.stringify(key)}.`,
+			)
+		}
+	}
+}
+
+function requiredField(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): unknown | typeof ABSENT {
+	if (!Object.hasOwn(record, key)) {
+		add(
+			context,
+			"source.missing_property",
+			propertyPath(path, key),
+			`Missing required property ${JSON.stringify(key)}.`,
+		)
+		return ABSENT
+	}
+	return record[key]
+}
+
+function stringValue(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): string {
+	if (typeof value !== "string") {
+		add(context, "source.string", path, "Expected a string.")
+		return ""
+	}
+	return value
+}
+
+function requiredString(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): string {
+	const keyPath = propertyPath(path, key)
+	const value = requiredField(record, key, path, context)
+	return value === ABSENT ? "" : stringValue(value, keyPath, context)
+}
+
+function optionalString(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): string | undefined {
+	if (!Object.hasOwn(record, key)) return undefined
+	return stringValue(record[key], propertyPath(path, key), context)
+}
+
+function numberValue(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		add(context, "source.number", path, "Expected a finite number.")
+		return 0
+	}
+	return value
+}
+
+function requiredNumber(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): number {
+	const keyPath = propertyPath(path, key)
+	const value = requiredField(record, key, path, context)
+	return value === ABSENT ? 0 : numberValue(value, keyPath, context)
+}
+
+function booleanValue(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): boolean {
+	if (typeof value !== "boolean") {
+		add(context, "source.boolean", path, "Expected a boolean.")
+		return false
+	}
+	return value
+}
+
+function requiredBoolean(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): boolean {
+	const keyPath = propertyPath(path, key)
+	const value = requiredField(record, key, path, context)
+	return value === ABSENT ? false : booleanValue(value, keyPath, context)
+}
+
+function optionalBoolean(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): boolean | undefined {
+	if (!Object.hasOwn(record, key)) return undefined
+	return booleanValue(record[key], propertyPath(path, key), context)
+}
+
+function idValue<Id extends string>(
+	value: unknown,
+	prefix: string,
+	path: string,
+	context: ValidationContext,
+): Id {
+	const id = stringValue(value, path, context)
+	if (!id.startsWith(prefix)) {
+		add(
+			context,
+			"source.id",
+			path,
+			`Expected an identifier beginning with ${JSON.stringify(prefix)}.`,
+		)
+	}
+	return id as Id
+}
+
+function requiredId<Id extends string>(
+	record: SafeRecord,
+	key: string,
+	prefix: string,
+	path: string,
+	context: ValidationContext,
+): Id {
+	const keyPath = propertyPath(path, key)
+	const value = requiredField(record, key, path, context)
+	return value === ABSENT
+		? (prefix as Id)
+		: idValue<Id>(value, prefix, keyPath, context)
+}
+
+function requiredArray(
+	record: SafeRecord,
+	key: string,
+	path: string,
+	context: ValidationContext,
+): readonly unknown[] | null {
+	const value = requiredField(record, key, path, context)
+	return value === ABSENT
+		? null
+		: arrayValue(value, propertyPath(path, key), context)
+}
+
+function optionalTimestamp(
+	record: SafeRecord,
+	key: "createdAt" | "modifiedAt",
+	path: string,
+	mode: TimestampMode,
+	context: ValidationContext,
+): bigint | undefined {
+	if (!Object.hasOwn(record, key)) return undefined
+	const keyPath = propertyPath(path, key)
+	const value = record[key]
+	if (mode === "state") {
+		if (typeof value !== "bigint") {
+			add(
+				context,
+				"source.timestamp",
+				keyPath,
+				"Expected an in-memory bigint timestamp.",
+			)
+			return 0n
+		}
+		return value
+	}
+	if (typeof value !== "string" || !/^(?:0|-?[1-9][0-9]*)$/u.test(value)) {
+		add(
+			context,
+			"source.timestamp",
+			keyPath,
+			"Expected a canonical base-ten bigint string.",
+		)
+		return 0n
+	}
+	return BigInt(value)
+}
+
+function parseMetadata(
+	value: unknown,
+	path: string,
+	mode: TimestampMode,
+	context: ValidationContext,
+): EditorFontSource["metadata"] {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return { unitsPerEm: 0, fontRevision: 0, vendorId: "", lowestPpem: 0 }
+	}
+	checkShape(
+		record,
+		[
+			"unitsPerEm",
+			"fontRevision",
+			"vendorId",
+			"lowestPpem",
+			"createdAt",
+			"modifiedAt",
+		],
+		path,
+		context,
+	)
+	const createdAt = optionalTimestamp(record, "createdAt", path, mode, context)
+	const modifiedAt = optionalTimestamp(
+		record,
+		"modifiedAt",
+		path,
+		mode,
+		context,
+	)
+	return {
+		unitsPerEm: requiredNumber(record, "unitsPerEm", path, context),
+		fontRevision: requiredNumber(record, "fontRevision", path, context),
+		vendorId: requiredString(record, "vendorId", path, context),
+		lowestPpem: requiredNumber(record, "lowestPpem", path, context),
+		...(createdAt === undefined ? {} : { createdAt }),
+		...(modifiedAt === undefined ? {} : { modifiedAt }),
+	}
+}
+
+function parseNames(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorFontSource["names"] {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			family: "",
+			subfamily: "",
+			uniqueId: "",
+			fullName: "",
+			version: "",
+			postScriptName: "",
+			typographicFamily: "",
+			typographicSubfamily: "",
+		}
+	}
+	checkShape(
+		record,
+		[
+			"family",
+			"subfamily",
+			"uniqueId",
+			"fullName",
+			"version",
+			"postScriptName",
+			"typographicFamily",
+			"typographicSubfamily",
+		],
+		path,
+		context,
+	)
+	return {
+		family: requiredString(record, "family", path, context),
+		subfamily: requiredString(record, "subfamily", path, context),
+		uniqueId: requiredString(record, "uniqueId", path, context),
+		fullName: requiredString(record, "fullName", path, context),
+		version: requiredString(record, "version", path, context),
+		postScriptName: requiredString(record, "postScriptName", path, context),
+		typographicFamily: requiredString(
+			record,
+			"typographicFamily",
+			path,
+			context,
+		),
+		typographicSubfamily: requiredString(
+			record,
+			"typographicSubfamily",
+			path,
+			context,
+		),
+	}
+}
+
+function parseMetrics(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorFontSource["metrics"] {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			ascender: 0,
+			descender: 0,
+			lineGap: 0,
+			winAscent: 0,
+			winDescent: 0,
+			xHeight: 0,
+			capHeight: 0,
+			underlinePosition: 0,
+			underlineThickness: 0,
+		}
+	}
+	checkShape(
+		record,
+		[
+			"ascender",
+			"descender",
+			"lineGap",
+			"winAscent",
+			"winDescent",
+			"xHeight",
+			"capHeight",
+			"underlinePosition",
+			"underlineThickness",
+		],
+		path,
+		context,
+	)
+	return {
+		ascender: requiredNumber(record, "ascender", path, context),
+		descender: requiredNumber(record, "descender", path, context),
+		lineGap: requiredNumber(record, "lineGap", path, context),
+		winAscent: requiredNumber(record, "winAscent", path, context),
+		winDescent: requiredNumber(record, "winDescent", path, context),
+		xHeight: requiredNumber(record, "xHeight", path, context),
+		capHeight: requiredNumber(record, "capHeight", path, context),
+		underlinePosition: requiredNumber(
+			record,
+			"underlinePosition",
+			path,
+			context,
+		),
+		underlineThickness: requiredNumber(
+			record,
+			"underlineThickness",
+			path,
+			context,
+		),
+	}
+}
+
+function parseStyle(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorFontSource["style"] {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			weightClass: 0,
+			widthClass: 0,
+			italic: false,
+			bold: false,
+			oblique: false,
+			italicAngle: 0,
+		}
+	}
+	checkShape(
+		record,
+		["weightClass", "widthClass", "italic", "bold", "oblique", "italicAngle"],
+		path,
+		context,
+	)
+	return {
+		weightClass: requiredNumber(record, "weightClass", path, context),
+		widthClass: requiredNumber(record, "widthClass", path, context),
+		italic: requiredBoolean(record, "italic", path, context),
+		bold: requiredBoolean(record, "bold", path, context),
+		oblique: requiredBoolean(record, "oblique", path, context),
+		italicAngle: requiredNumber(record, "italicAngle", path, context),
+	}
+}
+
+function parseAxisMapEntry(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorAxisMapEntrySource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { from: 0, to: 0 }
+	checkShape(record, ["from", "to"], path, context)
+	return {
+		from: requiredNumber(record, "from", path, context),
+		to: requiredNumber(record, "to", path, context),
+	}
+}
+
+function parseAxis(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorAxisSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			id: "axis:",
+			tag: "",
+			name: "",
+			min: 0,
+			default: 0,
+			max: 0,
+		}
+	}
+	checkShape(
+		record,
+		["id", "tag", "name", "min", "default", "max", "hidden", "map"],
+		path,
+		context,
+	)
+	const hidden = optionalBoolean(record, "hidden", path, context)
+	let map: readonly EditorAxisMapEntrySource[] | undefined
+	if (Object.hasOwn(record, "map")) {
+		const items = arrayValue(record.map, `${path}.map`, context)
+		map =
+			items?.map((entry, index) =>
+				parseAxisMapEntry(entry, `${path}.map[${index}]`, context),
+			) ?? []
+	}
+	return {
+		id: requiredId<AxisId>(record, "id", "axis:", path, context),
+		tag: requiredString(record, "tag", path, context),
+		name: requiredString(record, "name", path, context),
+		min: requiredNumber(record, "min", path, context),
+		default: requiredNumber(record, "default", path, context),
+		max: requiredNumber(record, "max", path, context),
+		...(hidden === undefined ? {} : { hidden }),
+		...(map === undefined ? {} : { map }),
+	}
+}
+
+function parseLocation(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorLocationSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return {}
+	const location: Partial<Record<AxisId, number>> = {}
+	for (const key of Object.keys(record)) {
+		const keyPath = propertyPath(path, key)
+		const axisId = idValue<AxisId>(key, "axis:", keyPath, context)
+		location[axisId] = numberValue(record[key], keyPath, context)
+	}
+	return location
+}
+
+function parseSupport(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorMasterSupportSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { kind: "non-intermediate" }
+	const kind = requiredString(record, "kind", path, context)
+	if (kind === "non-intermediate") {
+		checkShape(record, ["kind"], path, context)
+		return { kind }
+	}
+	if (kind === "intermediate") {
+		checkShape(record, ["kind", "start", "end"], path, context)
+		const startValue = requiredField(record, "start", path, context)
+		const endValue = requiredField(record, "end", path, context)
+		return {
+			kind,
+			start: parseLocation(
+				startValue === ABSENT ? {} : startValue,
+				`${path}.start`,
+				context,
+			),
+			end: parseLocation(
+				endValue === ABSENT ? {} : endValue,
+				`${path}.end`,
+				context,
+			),
+		}
+	}
+	add(
+		context,
+		"source.string",
+		`${path}.kind`,
+		'Expected "non-intermediate" or "intermediate".',
+	)
+	checkShape(record, ["kind", "start", "end"], path, context)
+	return { kind: "non-intermediate" }
+}
+
+function parseMaster(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorMasterSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return { id: "master:", kind: "default", name: "" }
+	}
+	const kind = requiredString(record, "kind", path, context)
+	const id = requiredId<MasterId>(record, "id", "master:", path, context)
+	const name = requiredString(record, "name", path, context)
+	if (kind === "default") {
+		checkShape(record, ["id", "kind", "name"], path, context)
+		return { id, kind, name }
+	}
+	if (kind === "source") {
+		checkShape(
+			record,
+			["id", "kind", "name", "location", "support"],
+			path,
+			context,
+		)
+		const locationValue = requiredField(record, "location", path, context)
+		const supportValue = requiredField(record, "support", path, context)
+		return {
+			id,
+			kind,
+			name,
+			location: parseLocation(
+				locationValue === ABSENT ? {} : locationValue,
+				`${path}.location`,
+				context,
+			),
+			support: parseSupport(
+				supportValue === ABSENT ? { kind: "non-intermediate" } : supportValue,
+				`${path}.support`,
+				context,
+			),
+		}
+	}
+	add(
+		context,
+		"source.string",
+		`${path}.kind`,
+		'Expected master kind "default" or "source".',
+	)
+	checkShape(
+		record,
+		["id", "kind", "name", "location", "support"],
+		path,
+		context,
+	)
+	return { id, kind: "default", name }
+}
+
+function parseInstance(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorInstanceSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return { id: "instance:", name: "", coordinates: {} }
+	}
+	checkShape(
+		record,
+		["id", "name", "coordinates", "postScriptName", "elidable"],
+		path,
+		context,
+	)
+	const coordinatesValue = requiredField(record, "coordinates", path, context)
+	const postScriptName = optionalString(record, "postScriptName", path, context)
+	const elidable = optionalBoolean(record, "elidable", path, context)
+	return {
+		id: requiredId<InstanceId>(record, "id", "instance:", path, context),
+		name: requiredString(record, "name", path, context),
+		coordinates: parseLocation(
+			coordinatesValue === ABSENT ? {} : coordinatesValue,
+			`${path}.coordinates`,
+			context,
+		),
+		...(postScriptName === undefined ? {} : { postScriptName }),
+		...(elidable === undefined ? {} : { elidable }),
+	}
+}
+
+function parsePoint(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorPointSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { id: "point:", onCurve: false }
+	checkShape(record, ["id", "onCurve", "smooth"], path, context)
+	const smooth = optionalBoolean(record, "smooth", path, context)
+	return {
+		id: requiredId<PointId>(record, "id", "point:", path, context),
+		onCurve: requiredBoolean(record, "onCurve", path, context),
+		...(smooth === undefined ? {} : { smooth }),
+	}
+}
+
+function parseContour(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorContourSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { id: "contour:", points: [] }
+	checkShape(record, ["id", "points"], path, context)
+	const points = requiredArray(record, "points", path, context)
+	return {
+		id: requiredId<ContourId>(record, "id", "contour:", path, context),
+		points:
+			points?.map((point, index) =>
+				parsePoint(point, `${path}.points[${index}]`, context),
+			) ?? [],
+	}
+}
+
+function parseLayerPoint(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorLayerPointSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { pointId: "point:", x: 0, y: 0 }
+	checkShape(record, ["pointId", "x", "y"], path, context)
+	return {
+		pointId: requiredId<PointId>(record, "pointId", "point:", path, context),
+		x: requiredNumber(record, "x", path, context),
+		y: requiredNumber(record, "y", path, context),
+	}
+}
+
+function parseLayer(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorGlyphLayerSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			masterId: "master:",
+			advanceWidth: 0,
+			leftSideBearing: 0,
+			points: [],
+		}
+	}
+	checkShape(
+		record,
+		["masterId", "advanceWidth", "leftSideBearing", "points"],
+		path,
+		context,
+	)
+	const points = requiredArray(record, "points", path, context)
+	return {
+		masterId: requiredId<MasterId>(
+			record,
+			"masterId",
+			"master:",
+			path,
+			context,
+		),
+		advanceWidth: requiredNumber(record, "advanceWidth", path, context),
+		leftSideBearing: requiredNumber(record, "leftSideBearing", path, context),
+		points:
+			points?.map((point, index) =>
+				parseLayerPoint(point, `${path}.points[${index}]`, context),
+			) ?? [],
+	}
+}
+
+function parseGlyph(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorGlyphSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			id: "glyph:",
+			name: "",
+			export: false,
+			contours: [],
+			layers: [],
+		}
+	}
+	checkShape(
+		record,
+		["id", "name", "export", "note", "color", "overlap", "contours", "layers"],
+		path,
+		context,
+	)
+	const note = optionalString(record, "note", path, context)
+	const color = optionalString(record, "color", path, context)
+	const overlap = optionalBoolean(record, "overlap", path, context)
+	const contours = requiredArray(record, "contours", path, context)
+	const layers = requiredArray(record, "layers", path, context)
+	return {
+		id: requiredId<GlyphId>(record, "id", "glyph:", path, context),
+		name: requiredString(record, "name", path, context),
+		export: requiredBoolean(record, "export", path, context),
+		...(note === undefined ? {} : { note }),
+		...(color === undefined ? {} : { color }),
+		...(overlap === undefined ? {} : { overlap }),
+		contours:
+			contours?.map((contour, index) =>
+				parseContour(contour, `${path}.contours[${index}]`, context),
+			) ?? [],
+		layers:
+			layers?.map((layer, index) =>
+				parseLayer(layer, `${path}.layers[${index}]`, context),
+			) ?? [],
+	}
+}
+
+function parseCmapEntry(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorCmapEntrySource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { codePoint: 0, glyphId: "glyph:" }
+	checkShape(record, ["codePoint", "glyphId"], path, context)
+	const codePoint = requiredNumber(record, "codePoint", path, context)
+	if (!Number.isInteger(codePoint)) {
+		add(
+			context,
+			"source.cmap_code_point",
+			`${path}.codePoint`,
+			"Cmap code points must be integers.",
+		)
+	}
+	return {
+		codePoint,
+		glyphId: requiredId<GlyphId>(record, "glyphId", "glyph:", path, context),
+	}
+}
+
+function parseRoot(
+	value: unknown,
+	mode: TimestampMode,
+	context: ValidationContext,
+): EditorFontSource {
+	const record = objectValue(value, "$", context)
+	if (record === null) {
+		return {
+			format: TRIGRAPH_EDITOR_FORMAT,
+			editorVersion: TRIGRAPH_EDITOR_VERSION,
+			metadata: {
+				unitsPerEm: 0,
+				fontRevision: 0,
+				vendorId: "",
+				lowestPpem: 0,
+			},
+			names: {
+				family: "",
+				subfamily: "",
+				uniqueId: "",
+				fullName: "",
+				version: "",
+				postScriptName: "",
+				typographicFamily: "",
+				typographicSubfamily: "",
+			},
+			metrics: {
+				ascender: 0,
+				descender: 0,
+				lineGap: 0,
+				winAscent: 0,
+				winDescent: 0,
+				xHeight: 0,
+				capHeight: 0,
+				underlinePosition: 0,
+				underlineThickness: 0,
+			},
+			style: {
+				weightClass: 0,
+				widthClass: 0,
+				italic: false,
+				bold: false,
+				oblique: false,
+				italicAngle: 0,
+			},
+			axes: [],
+			masters: [],
+			defaultMasterId: "master:",
+			instances: [],
+			glyphs: [],
+			cmap: [],
+		}
+	}
+	checkShape(
+		record,
+		[
+			"format",
+			"editorVersion",
+			"metadata",
+			"names",
+			"metrics",
+			"style",
+			"axes",
+			"masters",
+			"defaultMasterId",
+			"instances",
+			"glyphs",
+			"cmap",
+		],
+		"$",
+		context,
+	)
+	const format = requiredString(record, "format", "$", context)
+	if (format !== TRIGRAPH_EDITOR_FORMAT) {
+		add(
+			context,
+			"source.format",
+			"$.format",
+			`Expected source format ${JSON.stringify(TRIGRAPH_EDITOR_FORMAT)}.`,
+		)
+	}
+	const editorVersion = requiredNumber(record, "editorVersion", "$", context)
+	if (editorVersion !== TRIGRAPH_EDITOR_VERSION) {
+		add(
+			context,
+			"source.version",
+			"$.editorVersion",
+			`Unsupported editor source version ${JSON.stringify(editorVersion)}.`,
+		)
+	}
+
+	const metadata = requiredField(record, "metadata", "$", context)
+	const names = requiredField(record, "names", "$", context)
+	const metrics = requiredField(record, "metrics", "$", context)
+	const style = requiredField(record, "style", "$", context)
+	const axes = requiredArray(record, "axes", "$", context)
+	const masters = requiredArray(record, "masters", "$", context)
+	const instances = requiredArray(record, "instances", "$", context)
+	const glyphs = requiredArray(record, "glyphs", "$", context)
+	const cmap = requiredArray(record, "cmap", "$", context)
+	return {
+		format: TRIGRAPH_EDITOR_FORMAT,
+		editorVersion: TRIGRAPH_EDITOR_VERSION,
+		metadata: parseMetadata(
+			metadata === ABSENT ? {} : metadata,
+			"$.metadata",
+			mode,
+			context,
+		),
+		names: parseNames(names === ABSENT ? {} : names, "$.names", context),
+		metrics: parseMetrics(
+			metrics === ABSENT ? {} : metrics,
+			"$.metrics",
+			context,
+		),
+		style: parseStyle(style === ABSENT ? {} : style, "$.style", context),
+		axes:
+			axes?.map((axis, index) =>
+				parseAxis(axis, `$.axes[${index}]`, context),
+			) ?? [],
+		masters:
+			masters?.map((master, index) =>
+				parseMaster(master, `$.masters[${index}]`, context),
+			) ?? [],
+		defaultMasterId: requiredId<MasterId>(
+			record,
+			"defaultMasterId",
+			"master:",
+			"$",
+			context,
+		),
+		instances:
+			instances?.map((instance, index) =>
+				parseInstance(instance, `$.instances[${index}]`, context),
+			) ?? [],
+		glyphs:
+			glyphs?.map((glyph, index) =>
+				parseGlyph(glyph, `$.glyphs[${index}]`, context),
+			) ?? [],
+		cmap:
+			cmap?.map((entry, index) =>
+				parseCmapEntry(entry, `$.cmap[${index}]`, context),
+			) ?? [],
+	}
+}
+
+function diagnoseDuplicates<Value>(
+	values: readonly Value[],
+	pathOf: (index: number) => string,
+	label: string,
+	context: ValidationContext,
+): void {
+	const seen = new Set<Value>()
+	for (let index = 0; index < values.length; index += 1) {
+		const value = values[index]
+		if (value === undefined) continue
+		if (seen.has(value)) {
+			add(
+				context,
+				"source.duplicate",
+				pathOf(index),
+				`Duplicate ${label} ${JSON.stringify(value)}.`,
+			)
+		}
+		seen.add(value)
+	}
+}
+
+function diagnoseLocationReferences(
+	location: EditorLocationSource,
+	path: string,
+	axisIds: ReadonlySet<AxisId>,
+	context: ValidationContext,
+): void {
+	for (const axisId of Object.keys(location) as AxisId[]) {
+		if (!axisIds.has(axisId)) {
+			add(
+				context,
+				"source.reference",
+				propertyPath(path, axisId),
+				`Unknown axis reference ${JSON.stringify(axisId)}.`,
+			)
+		}
+	}
+}
+
+function diagnoseStructure(
+	source: EditorFontSource,
+	context: ValidationContext,
+): void {
+	diagnoseDuplicates(
+		source.axes.map((axis) => axis.id),
+		(index) => `$.axes[${index}].id`,
+		"axis ID",
+		context,
+	)
+	diagnoseDuplicates(
+		source.masters.map((master) => master.id),
+		(index) => `$.masters[${index}].id`,
+		"master ID",
+		context,
+	)
+	diagnoseDuplicates(
+		source.instances.map((instance) => instance.id),
+		(index) => `$.instances[${index}].id`,
+		"instance ID",
+		context,
+	)
+	diagnoseDuplicates(
+		source.glyphs.map((glyph) => glyph.id),
+		(index) => `$.glyphs[${index}].id`,
+		"glyph ID",
+		context,
+	)
+	diagnoseDuplicates(
+		source.cmap.map((entry) => entry.codePoint),
+		(index) => `$.cmap[${index}].codePoint`,
+		"cmap code point",
+		context,
+	)
+
+	const axisIds = new Set(source.axes.map((axis) => axis.id))
+	const masterIds = new Set(source.masters.map((master) => master.id))
+	const glyphIds = new Set(source.glyphs.map((glyph) => glyph.id))
+	const defaultMasters = source.masters.filter(
+		(master) => master.kind === "default",
+	)
+	if (
+		defaultMasters.length !== 1 ||
+		defaultMasters[0]?.id !== source.defaultMasterId
+	) {
+		add(
+			context,
+			"source.default_master",
+			"$.defaultMasterId",
+			"Exactly one default master must match defaultMasterId.",
+		)
+	}
+
+	for (
+		let masterIndex = 0;
+		masterIndex < source.masters.length;
+		masterIndex += 1
+	) {
+		const master = source.masters[masterIndex]
+		if (master?.kind !== "source") continue
+		const masterPath = `$.masters[${masterIndex}]`
+		diagnoseLocationReferences(
+			master.location,
+			`${masterPath}.location`,
+			axisIds,
+			context,
+		)
+		if (master.support.kind === "intermediate") {
+			diagnoseLocationReferences(
+				master.support.start,
+				`${masterPath}.support.start`,
+				axisIds,
+				context,
+			)
+			diagnoseLocationReferences(
+				master.support.end,
+				`${masterPath}.support.end`,
+				axisIds,
+				context,
+			)
+		}
+	}
+	for (
+		let instanceIndex = 0;
+		instanceIndex < source.instances.length;
+		instanceIndex += 1
+	) {
+		const instance = source.instances[instanceIndex]
+		if (instance === undefined) continue
+		diagnoseLocationReferences(
+			instance.coordinates,
+			`$.instances[${instanceIndex}].coordinates`,
+			axisIds,
+			context,
+		)
+	}
+
+	const contourIds = new Set<ContourId>()
+	const pointIds = new Set<PointId>()
+	for (let glyphIndex = 0; glyphIndex < source.glyphs.length; glyphIndex += 1) {
+		const glyph = source.glyphs[glyphIndex]
+		if (glyph === undefined) continue
+		const glyphPath = `$.glyphs[${glyphIndex}]`
+		const glyphPointIds = new Set<PointId>()
+		for (
+			let contourIndex = 0;
+			contourIndex < glyph.contours.length;
+			contourIndex += 1
+		) {
+			const contour = glyph.contours[contourIndex]
+			if (contour === undefined) continue
+			const contourPath = `${glyphPath}.contours[${contourIndex}]`
+			if (contourIds.has(contour.id)) {
+				add(
+					context,
+					"source.duplicate",
+					`${contourPath}.id`,
+					`Contour ID ${JSON.stringify(contour.id)} must be globally unique.`,
+				)
+			}
+			contourIds.add(contour.id)
+			for (
+				let pointIndex = 0;
+				pointIndex < contour.points.length;
+				pointIndex += 1
+			) {
+				const point = contour.points[pointIndex]
+				if (point === undefined) continue
+				const pointPath = `${contourPath}.points[${pointIndex}].id`
+				if (pointIds.has(point.id)) {
+					add(
+						context,
+						"source.duplicate",
+						pointPath,
+						`Point ID ${JSON.stringify(point.id)} must be globally unique.`,
+					)
+				}
+				pointIds.add(point.id)
+				glyphPointIds.add(point.id)
+			}
+		}
+
+		diagnoseDuplicates(
+			glyph.layers.map((layer) => layer.masterId),
+			(index) => `${glyphPath}.layers[${index}].masterId`,
+			"glyph-layer master ID",
+			context,
+		)
+		for (
+			let layerIndex = 0;
+			layerIndex < glyph.layers.length;
+			layerIndex += 1
+		) {
+			const layer = glyph.layers[layerIndex]
+			if (layer === undefined) continue
+			const layerPath = `${glyphPath}.layers[${layerIndex}]`
+			if (!masterIds.has(layer.masterId)) {
+				add(
+					context,
+					"source.reference",
+					`${layerPath}.masterId`,
+					`Unknown master reference ${JSON.stringify(layer.masterId)}.`,
+				)
+			}
+			diagnoseDuplicates(
+				layer.points.map((point) => point.pointId),
+				(index) => `${layerPath}.points[${index}].pointId`,
+				"layer point ID",
+				context,
+			)
+			for (
+				let pointIndex = 0;
+				pointIndex < layer.points.length;
+				pointIndex += 1
+			) {
+				const point = layer.points[pointIndex]
+				if (point !== undefined && !glyphPointIds.has(point.pointId)) {
+					add(
+						context,
+						"source.reference",
+						`${layerPath}.points[${pointIndex}].pointId`,
+						`Unknown glyph point reference ${JSON.stringify(point.pointId)}.`,
+					)
+				}
+			}
+		}
+	}
+
+	for (let index = 0; index < source.cmap.length; index += 1) {
+		const entry = source.cmap[index]
+		if (entry !== undefined && !glyphIds.has(entry.glyphId)) {
+			add(
+				context,
+				"source.reference",
+				`$.cmap[${index}].glyphId`,
+				`Unknown glyph reference ${JSON.stringify(entry.glyphId)}.`,
+			)
+		}
+	}
+}
+
+/** Match the snapshot emitted by load(source) -> editorSourceSelector. */
+function normalizeStateSource(source: EditorFontSource): EditorFontSource {
+	return {
+		...source,
+		axes: source.axes.map((axis) => ({
+			id: axis.id,
+			tag: axis.tag,
+			name: axis.name,
+			min: axis.min,
+			default: axis.default,
+			max: axis.max,
+			...(axis.hidden ? { hidden: true } : {}),
+			...(axis.map === undefined ? {} : { map: axis.map }),
+		})),
+		instances: source.instances.map((instance) => ({
+			id: instance.id,
+			name: instance.name,
+			coordinates: instance.coordinates,
+			...(instance.postScriptName === undefined
+				? {}
+				: { postScriptName: instance.postScriptName }),
+			...(instance.elidable ? { elidable: true } : {}),
+		})),
+		glyphs: source.glyphs.map((glyph) => {
+			const pointIds = glyph.contours.flatMap((contour) =>
+				contour.points.map((point) => point.id),
+			)
+			return {
+				id: glyph.id,
+				name: glyph.name,
+				export: glyph.export,
+				...(glyph.note === undefined || glyph.note.length === 0
+					? {}
+					: { note: glyph.note }),
+				...(glyph.color === undefined ? {} : { color: glyph.color }),
+				...(glyph.overlap ? { overlap: true } : {}),
+				contours: glyph.contours.map((contour) => ({
+					id: contour.id,
+					points: contour.points.map((point) => ({
+						id: point.id,
+						onCurve: point.onCurve,
+						...(point.smooth ? { smooth: true } : {}),
+					})),
+				})),
+				layers: glyph.layers.map((layer) => {
+					const pointsById = new Map(
+						layer.points.map((point) => [point.pointId, point]),
+					)
+					return {
+						masterId: layer.masterId,
+						advanceWidth: layer.advanceWidth,
+						leftSideBearing: layer.leftSideBearing,
+						points: pointIds.flatMap((pointId) => {
+							const point = pointsById.get(pointId)
+							return point === undefined ? [] : [point]
+						}),
+					}
+				}),
+			}
+		}),
+	}
+}
+
+export function validateSourceValue(
+	value: unknown,
+	mode: TimestampMode,
+): SourceResult<EditorFontSource> {
+	const context: ValidationContext = { errors: [] }
+	let source: EditorFontSource
+	try {
+		source = parseRoot(value, mode, context)
+		if (context.errors.length === 0) {
+			diagnoseStructure(source, context)
+			if (context.errors.length === 0) source = normalizeStateSource(source)
+		}
+	} catch {
+		add(
+			context,
+			"source.object",
+			"$",
+			"Source data could not be inspected safely.",
+		)
+		return failure(context.errors)
+	}
+	return context.errors.length === 0 ? success(source) : failure(context.errors)
+}

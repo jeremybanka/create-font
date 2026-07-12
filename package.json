@@ -3,15 +3,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "vp run --filter trigraph --filter @trigraph/states --fail-if-no-match build",
+		"build": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/editor --fail-if-no-match build",
 		"change": "changeset",
-		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages && tsc --noEmit",
+		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages && tsc --noEmit && pnpm peers check && agents validate && vp run --filter @trigraph/editor --fail-if-no-match check",
 		"fmt": "dprint fmt",
 		"fmt:check": "dprint check",
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter trigraph --filter @trigraph/states --fail-if-no-match test"
+		"test": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/editor --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.0",
@@ -20,6 +20,7 @@
 		"@dprint/markdown": "0.22.1",
 		"@dprint/oxc": "0.28.0",
 		"@dprint/toml": "0.7.0",
+		"agents.yaml": "0.2.2",
 		"dprint": "0.55.1",
 		"dprint-plugin-malva": "0.16.0",
 		"dprint-plugin-markup": "0.27.3",

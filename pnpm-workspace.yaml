@@ -2,11 +2,14 @@ packages:
   - packages/*
 
 allowBuilds:
+  "@vscode/vsce-sign": false
   dprint: true
+  keytar: false
 
 blockExoticSubdeps: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - lasertag@0.4.3
   - typescript@7.0.2
   - "@typescript/typescript-aix-ppc64@7.0.2"
   - "@typescript/typescript-darwin-arm64@7.0.2"
@@ -34,6 +37,7 @@ peerDependencyRules:
     - vite
     - vitest
   allowedVersions:
+    "lasertag>@types/react": 18.3.23
     typescript: ^5.0.0 || ^6.0.0 || ^7.0.0
     vite: "*"
     vitest: "*"

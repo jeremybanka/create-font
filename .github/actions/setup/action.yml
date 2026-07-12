@@ -16,3 +16,5 @@ runs:
         --filter trigraph-workspace
         --filter trigraph
         --filter @trigraph/states
+        --filter @trigraph/source
+        --filter @trigraph/editor
