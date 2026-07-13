@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
 	ariaKeyShortcut,
@@ -71,6 +71,22 @@ describe("editor tools and hotkeys", () => {
 			"Z",
 		])
 		expect(ariaKeyShortcut(TOOLS.REDO.hotkey, true)).toBe("Meta+Shift+Z")
+	})
+
+	it("delegates history commands to the controls returned by useTL", () => {
+		const undo = vi.fn()
+		const redo = vi.fn()
+		const context = {
+			activeGlyphId: "unused",
+			workspace: null,
+			history: { at: 1, length: 2, undo, redo, clear: vi.fn() },
+		} as unknown as Parameters<(typeof TOOLS)["UNDO"]["do"]>[0]
+
+		TOOLS.UNDO.do(context)
+		TOOLS.REDO.do(context)
+
+		expect(undo).toHaveBeenCalledOnce()
+		expect(redo).toHaveBeenCalledOnce()
 	})
 
 	it("prefers user-agent client hints and falls back to navigator.platform", () => {

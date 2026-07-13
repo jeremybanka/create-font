@@ -4,7 +4,7 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-pnpmfileChecksum: sha256-zhJZN+/U+MVelIkBSiMDh7p5BPGQGzn2N5wiK4192RQ=
+pnpmfileChecksum: sha256-hAyRQs0SpbgeyjW0/UaSCS9j5QNGwv0sDSlzVeFEb98=
 
 importers:
 
@@ -59,8 +59,8 @@ importers:
         specifier: workspace:*
         version: link:../states
       atom.io:
-        specifier: 0.49.7
-        version: 0.49.7(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1))
+        specifier: 0.49.8
+        version: 0.49.8(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1))
       preact:
         specifier: 10.29.7
         version: 10.29.7
@@ -113,8 +113,8 @@ importers:
   packages/states:
     dependencies:
       atom.io:
-        specifier: 0.49.7
-        version: 0.49.7(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1))
+        specifier: 0.49.8
+        version: 0.49.8(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1))
       trigraph:
         specifier: workspace:*
         version: link:../trigraph
@@ -1511,6 +1511,41 @@ packages:
 
   atom.io@0.49.7:
     resolution: {integrity: sha512-cCHmL9jP0EmW6cK3scBoaXLKQfWbSOsk5Ef106xyq9x3RyhIeOEBJK333tGC1XO3v53B0EUjUcXEd2snOKnZbw==}
+    peerDependencies:
+      '@floating-ui/react': '>=0.25.0'
+      '@floating-ui/react-dom': '>=2.0.0'
+      '@testing-library/react': '>=14.0.0'
+      '@typescript-eslint/parser': '>=8.0.0'
+      eslint: '>=9.0.0'
+      happy-dom: '>=17.4.4'
+      motion: '>=11.0.0'
+      socket.io: '>=4.0.0'
+      socket.io-client: '>=4.0.0'
+      solid-js: ^1.9.0
+    peerDependenciesMeta:
+      '@floating-ui/react':
+        optional: true
+      '@floating-ui/react-dom':
+        optional: true
+      '@testing-library/react':
+        optional: true
+      '@typescript-eslint/parser':
+        optional: true
+      eslint:
+        optional: true
+      happy-dom:
+        optional: true
+      motion:
+        optional: true
+      socket.io:
+        optional: true
+      socket.io-client:
+        optional: true
+      solid-js:
+        optional: true
+
+  atom.io@0.49.8:
+    resolution: {integrity: sha512-pCZoKZjeHAmffuckgryad1Xq4qTwXvcVfzSn7F2JPn0mheZUpbSymBM8sJkkSGeDtqTSs4QTmpIpRWtdqeWpeQ==}
     peerDependencies:
       '@floating-ui/react': '>=0.25.0'
       '@floating-ui/react-dom': '>=2.0.0'
@@ -4557,6 +4592,11 @@ snapshots:
   asynckit@0.4.0: {}
 
   atom.io@0.49.7(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1)):
+    optionalDependencies:
+      '@typescript-eslint/parser': 8.62.1(eslint@10.6.0(jiti@2.6.1))
+      eslint: 10.6.0(jiti@2.6.1)
+
+  atom.io@0.49.8(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.6.1)))(eslint@10.6.0(jiti@2.6.1)):
     optionalDependencies:
       '@typescript-eslint/parser': 8.62.1(eslint@10.6.0(jiti@2.6.1))
       eslint: 10.6.0(jiti@2.6.1)

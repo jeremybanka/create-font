@@ -14,14 +14,14 @@ const needsTypescript6 = (packageJson) =>
 	TYPESCRIPT_6_CONSUMERS.has(packageJson.name) &&
 	packageJson.peerDependencies?.typescript !== undefined
 
-// The state-engine entrypoint is framework-neutral. Its React adapter lives at
-// atom.io/react, which this workspace does not consume, so do not auto-install
-// React merely to satisfy that optional adapter peer.
-const omitUnusedReactAdapter = (packageJson) => packageJson.name === "atom.io"
+// The editor consumes atom.io/react through the Vite Preact-compat alias. Do not
+// install React merely to satisfy that optional adapter peer.
+const omitReactPeerForPreactCompat = (packageJson) =>
+	packageJson.name === "atom.io"
 
 export const hooks = {
 	readPackage(packageJson) {
-		if (omitUnusedReactAdapter(packageJson)) {
+		if (omitReactPeerForPreactCompat(packageJson)) {
 			delete packageJson.peerDependencies?.react
 			delete packageJson.peerDependenciesMeta?.react
 		}

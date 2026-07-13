@@ -2,7 +2,7 @@ import type { GlyphId } from "@trigraph/states"
 import { useEffect } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
-import type { TimelinePosition } from "./state-hooks.ts"
+import type { TimelineMeta } from "./state-hooks.ts"
 
 type Alphabetical =
 	| "a"
@@ -46,7 +46,7 @@ export type ToolStatus = "active" | "disabled" | "ready"
 export interface ToolContext {
 	readonly workspace: EditorWorkspace
 	readonly activeGlyphId: GlyphId
-	readonly history: TimelinePosition
+	readonly history: TimelineMeta
 }
 
 export interface Tool {
@@ -65,7 +65,7 @@ export const TOOLS = {
 		hotkey: { key: "z", mod: true },
 		icon: "↶",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
-		do: ({ activeGlyphId, workspace }) => workspace.font.undo(activeGlyphId),
+		do: ({ history }) => history.undo(),
 	},
 	REDO: {
 		id: "redo",
@@ -74,7 +74,7 @@ export const TOOLS = {
 		icon: "↷",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
-		do: ({ activeGlyphId, workspace }) => workspace.font.redo(activeGlyphId),
+		do: ({ history }) => history.redo(),
 	},
 } as const satisfies Record<string, Tool>
 
