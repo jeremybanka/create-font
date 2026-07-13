@@ -1,5 +1,14 @@
 import type { EditorHandleKind, GlyphId, PointId } from "@trigraph/states"
-import type { KonvaEventObject } from "konva/lib/Node"
+import {
+	Circle,
+	Group,
+	type KonvaEventObject,
+	Layer,
+	Line,
+	Path,
+	Rect,
+	Stage,
+} from "@trigraph/preact-konva"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
@@ -16,7 +25,6 @@ import {
 	selectionKey,
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
-import { Circle, Group, Layer, Line, Path, Rect, Stage } from "./react-konva.ts"
 import { useI, useO } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"

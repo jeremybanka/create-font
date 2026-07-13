@@ -11,6 +11,7 @@
 		"noEmit": true,
 		"noUncheckedIndexedAccess": true,
 		"paths": {
+			"@trigraph/preact-konva": ["./packages/preact-konva/src/index.ts"],
 			"@trigraph/source": ["./packages/source/src/index.ts"],
 			"@trigraph/states": ["./packages/states/src/index.ts"],
 			"trigraph": ["./packages/trigraph/src/index.ts"]
@@ -22,5 +23,5 @@
 		"types": []
 	},
 	"include": ["**/*.ts", "*.d.ts"],
-	"exclude": ["packages/editor"]
+	"exclude": ["packages/editor", "packages/preact-konva"]
 }

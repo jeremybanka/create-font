@@ -1,6 +1,5 @@
 version: 1
 documents:
-  - path: ./docs/dependencies/react-konva/AGENTS.md
   - path: ./node_modules/agents.yaml/AGENTS.md
     description: A CLI for discovering and curating agent-readable documentation in agents.yaml.
   - path: ./node_modules/vite-plus/AGENTS.md

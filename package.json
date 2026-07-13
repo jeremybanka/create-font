@@ -3,15 +3,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/editor --fail-if-no-match build",
+		"build": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/preact-konva --filter @trigraph/editor --fail-if-no-match build",
 		"change": "changeset",
-		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages && tsc --noEmit && pnpm peers check && agents validate && vp run --filter @trigraph/editor --fail-if-no-match check",
+		"check": "vp check --no-fmt .pnpmfile.mjs vite.config.ts packages && tsc --noEmit && pnpm peers check && agents validate && vp run --filter @trigraph/preact-konva --filter @trigraph/editor --fail-if-no-match check",
 		"fmt": "dprint fmt",
 		"fmt:check": "dprint check",
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/editor --fail-if-no-match test"
+		"test": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/preact-konva --filter @trigraph/editor --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.0",

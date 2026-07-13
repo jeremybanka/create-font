@@ -14,8 +14,18 @@ const needsTypescript6 = (packageJson) =>
 	TYPESCRIPT_6_CONSUMERS.has(packageJson.name) &&
 	packageJson.peerDependencies?.typescript !== undefined
 
+// The state-engine entrypoint is framework-neutral. Its React adapter lives at
+// atom.io/react, which this workspace does not consume, so do not auto-install
+// React merely to satisfy that optional adapter peer.
+const omitUnusedReactAdapter = (packageJson) => packageJson.name === "atom.io"
+
 export const hooks = {
 	readPackage(packageJson) {
+		if (omitUnusedReactAdapter(packageJson)) {
+			delete packageJson.peerDependencies?.react
+			delete packageJson.peerDependenciesMeta?.react
+		}
+
 		if (needsTypescript6(packageJson)) {
 			delete packageJson.peerDependencies.typescript
 			delete packageJson.peerDependenciesMeta?.typescript

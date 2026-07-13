@@ -12,18 +12,13 @@
 		"test": "vp test"
 	},
 	"dependencies": {
+		"@trigraph/preact-konva": "workspace:*",
 		"@trigraph/states": "workspace:*",
 		"atom.io": "0.49.7",
-		"konva": "10.3.0",
-		"preact": "10.29.7",
-		"react": "18.3.1",
-		"react-dom": "18.3.1",
-		"react-konva": "18.2.16"
+		"preact": "10.29.7"
 	},
 	"devDependencies": {
 		"@preact/preset-vite": "2.10.5",
-		"@types/react": "18.3.23",
-		"@types/react-dom": "18.3.7",
 		"@typescript-eslint/parser": "8.62.1",
 		"eslint": "10.6.0",
 		"jiti": "2.6.1",
