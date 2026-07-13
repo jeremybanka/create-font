@@ -547,6 +547,71 @@ describe("font editor state", () => {
 		).toBe(true)
 	})
 
+	it.each([
+		["outgoing", 0, [1, 2, 3, 0]],
+		["incoming", 0, [0, 1, 2, 3]],
+	] as const)(
+		"breaks a deleted %s handle's segment and clears both loose ends",
+		(handle, selectedIndex, expectedIndexes) => {
+			const editor = createLoadedEditor(`test/delete-${handle}-handle-open`)
+			const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+			const pointId = contour?.points[selectedIndex]?.id
+			if (contour === undefined || pointId === undefined) {
+				throw new Error("Fixture contour is missing.")
+			}
+
+			editor.actions.deleteSelection({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointIds: [],
+				handles: [{ pointId, handle }],
+				breakPaths: true,
+			})
+
+			const remaining = editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			])
+			expect(remaining).toEqual(
+				expectedIndexes.map((index) => contour.points[index]?.id),
+			)
+			expect(
+				editor.silo.getState(editor.atoms.contourClosed, [
+					oGlyphId,
+					contour.id,
+				]),
+			).toBe(false)
+			const firstPointId = remaining?.[0]
+			const lastPointId = remaining?.at(-1)
+			if (firstPointId === undefined || lastPointId === undefined) {
+				throw new Error("Broken path endpoints are missing.")
+			}
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				const first = editor.read.layerNode(masterId, oGlyphId, firstPointId)
+				const last = editor.read.layerNode(masterId, oGlyphId, lastPointId)
+				if (!first.ok || !last.ok) {
+					throw new Error("Broken endpoints did not project.")
+				}
+				expect(first.value.incoming).toBeUndefined()
+				expect(last.value.outgoing).toBeUndefined()
+			}
+
+			editor.undo(oGlyphId)
+			expect(
+				editor.silo.getState(editor.atoms.contourPointIds, [
+					oGlyphId,
+					contour.id,
+				]),
+			).toEqual(contour.points.map((point) => point.id))
+			expect(
+				editor.silo.getState(editor.atoms.contourClosed, [
+					oGlyphId,
+					contour.id,
+				]),
+			).toBe(true)
+		},
+	)
+
 	it("splits disjoint deleted regions into separate open contours", () => {
 		const editor = createLoadedEditor("test/delete-disjoint-regions")
 		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]

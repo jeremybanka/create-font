@@ -27,6 +27,11 @@ export interface EditorOutlineNode {
 	readonly outgoing?: EditorHandleVectorSource
 }
 
+export interface UnitVector {
+	readonly x: number
+	readonly y: number
+}
+
 export interface ResolvedGlyph {
 	readonly glyphId: GlyphId
 	readonly name: string
@@ -97,6 +102,54 @@ export function contourStartDirection(
 		}
 	}
 	return null
+}
+
+/** Returns the unit normal at either endpoint of an open editor contour. */
+export function contourEndpointNormal(
+	contour: readonly EditorOutlineNode[],
+	pointIndex: number,
+	closed: boolean,
+): UnitVector | null {
+	if (
+		closed ||
+		contour.length < 2 ||
+		(pointIndex !== 0 && pointIndex !== contour.length - 1)
+	) {
+		return null
+	}
+	const point = contour[pointIndex]
+	const adjacent = contour[pointIndex === 0 ? 1 : pointIndex - 1]
+	if (point === undefined || adjacent === undefined) return null
+	const candidates =
+		pointIndex === 0
+			? [
+					point.outgoing,
+					{
+						x: adjacent.x + (adjacent.incoming?.x ?? 0) - point.x,
+						y: adjacent.y + (adjacent.incoming?.y ?? 0) - point.y,
+					},
+					{ x: adjacent.x - point.x, y: adjacent.y - point.y },
+				]
+			: [
+					point.incoming,
+					{
+						x: adjacent.x + (adjacent.outgoing?.x ?? 0) - point.x,
+						y: adjacent.y + (adjacent.outgoing?.y ?? 0) - point.y,
+					},
+					{ x: adjacent.x - point.x, y: adjacent.y - point.y },
+				]
+	const tangent = candidates.find(
+		(candidate) =>
+			candidate !== undefined && (candidate.x !== 0 || candidate.y !== 0),
+	)
+	if (tangent === undefined) return null
+	const length = Math.hypot(tangent.x, tangent.y)
+	const normalX = -tangent.y / length
+	const normalY = tangent.x / length
+	return {
+		x: Object.is(normalX, -0) ? 0 : normalX,
+		y: Object.is(normalY, -0) ? 0 : normalY,
+	}
 }
 
 /** Writes an editor contour using node-owned cubic handles. */

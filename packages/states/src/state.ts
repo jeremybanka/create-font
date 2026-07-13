@@ -202,25 +202,46 @@ function splitContourId(glyphId: GlyphId, firstPointId: PointId): ContourId {
 function remainingPointRuns(
 	pointIds: readonly PointId[],
 	deleted: ReadonlySet<PointId>,
+	brokenSegmentStarts: ReadonlySet<PointId>,
 	closed: boolean,
 ): readonly (readonly PointId[])[] {
-	if (!pointIds.some((pointId) => deleted.has(pointId))) return [pointIds]
-	if (pointIds.every((pointId) => deleted.has(pointId))) return []
-	let ordered = pointIds
-	if (closed) {
-		const deletedIndex = pointIds.findIndex((pointId) => deleted.has(pointId))
-		const start = (deletedIndex + 1) % pointIds.length
-		ordered = [...pointIds.slice(start), ...pointIds.slice(0, start)]
+	const hasNextSegment = (index: number): boolean => {
+		const nextIndex = index + 1
+		if (!closed && nextIndex === pointIds.length) return false
+		const startPointId = pointIds[index]
+		const endPointId = pointIds[nextIndex % pointIds.length]
+		return (
+			startPointId !== undefined &&
+			endPointId !== undefined &&
+			!deleted.has(startPointId) &&
+			!deleted.has(endPointId) &&
+			!brokenSegmentStarts.has(startPointId)
+		)
+	}
+	const starts = pointIds.flatMap((pointId, index) => {
+		if (deleted.has(pointId)) return []
+		if (!closed && index === 0) return [index]
+		const previousIndex = (index + pointIds.length - 1) % pointIds.length
+		return hasNextSegment(previousIndex) ? [] : [index]
+	})
+	if (starts.length === 0) {
+		const remaining = pointIds.filter((pointId) => !deleted.has(pointId))
+		return remaining.length > 0 ? [remaining] : []
 	}
 	const runs: PointId[][] = []
-	let current: PointId[] = []
-	for (const pointId of ordered) {
-		if (deleted.has(pointId)) {
-			if (current.length > 0) runs.push(current)
-			current = []
-		} else current.push(pointId)
+	for (const start of starts) {
+		const run: PointId[] = []
+		let index = start
+		while (true) {
+			const pointId = pointIds[index]
+			if (pointId === undefined || deleted.has(pointId)) break
+			run.push(pointId)
+			if (!hasNextSegment(index)) break
+			index = (index + 1) % pointIds.length
+			if (index === start) break
+		}
+		if (run.length > 0) runs.push(run)
 	}
-	if (current.length > 0) runs.push(current)
 	return runs
 }
 
@@ -345,7 +366,11 @@ export interface DeleteSelectionInput {
 		readonly pointId: PointId
 		readonly handle: EditorHandleKind
 	}[]
-	/** Break affected paths into open pieces instead of reconnecting them. */
+	/**
+	 * Break affected paths into open pieces instead of reconnecting them. A
+	 * selected incoming handle breaks the preceding segment; an outgoing handle
+	 * breaks the following segment.
+	 */
 	readonly breakPaths?: boolean
 }
 
@@ -3494,6 +3519,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			}
 
 			const handled = new Set<string>()
+			const breakHandles: {
+				readonly pointId: PointId
+				readonly handle: EditorHandleKind
+			}[] = []
 			for (const selection of input.handles) {
 				if (deleted.has(selection.pointId)) continue
 				const selectionKey = `${selection.pointId}/${selection.handle}`
@@ -3504,6 +3533,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						`Unknown point ${selection.pointId} in glyph ${input.glyphId}.`,
 					)
 				}
+				if (input.breakPaths) breakHandles.push(selection)
 				const atomKey: LayerPointKey = [
 					input.masterId,
 					input.glyphId,
@@ -3530,7 +3560,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				)
 			}
 
-			if (deleted.size === 0) return
+			if (deleted.size === 0 && breakHandles.length === 0) return
 			const nextContourIds: ContourId[] = []
 			const knownContourIds = new Set(contourIds)
 			for (const contourId of contourIds) {
@@ -3544,12 +3574,34 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const contourDeleted = new Set(
 					pointIds.filter((pointId) => deleted.has(pointId)),
 				)
-				if (contourDeleted.size === 0) {
+				const brokenSegmentStarts = new Set<PointId>()
+				for (const selection of breakHandles) {
+					const pointIndex: number = pointIds.indexOf(selection.pointId)
+					if (pointIndex === -1) continue
+					const startIndex: number =
+						selection.handle === "outgoing" ? pointIndex : pointIndex - 1
+					if (
+						!closed &&
+						(startIndex < 0 || startIndex >= pointIds.length - 1)
+					) {
+						continue
+					}
+					const wrappedStartIndex =
+						(startIndex + pointIds.length) % pointIds.length
+					const startPointId = pointIds[wrappedStartIndex]
+					if (startPointId !== undefined) brokenSegmentStarts.add(startPointId)
+				}
+				if (contourDeleted.size === 0 && brokenSegmentStarts.size === 0) {
 					nextContourIds.push(contourId)
 					continue
 				}
 				const runs = input.breakPaths
-					? remainingPointRuns(pointIds, contourDeleted, closed)
+					? remainingPointRuns(
+							pointIds,
+							contourDeleted,
+							brokenSegmentStarts,
+							closed,
+						)
 					: [pointIds.filter((pointId) => !contourDeleted.has(pointId))]
 				const nonEmptyRuns = runs.filter((run) => run.length > 0)
 				if (nonEmptyRuns.length === 0) {

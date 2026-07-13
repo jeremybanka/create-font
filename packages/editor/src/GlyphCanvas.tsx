@@ -20,6 +20,7 @@ import {
 } from "./curve-editing.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
+	contourEndpointNormal,
 	contoursToPath,
 	contourStartDirection,
 	editorContoursToPath,
@@ -289,7 +290,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
 				if (event.key === "Escape" && editingTextIndex !== null) {
@@ -733,6 +734,17 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															</Group>
 														))}
 														{contour.nodes.map((point, pointIndex) => {
+															const isPathEndpoint =
+																!contour.closed &&
+																(pointIndex === 0 ||
+																	pointIndex === contour.nodes.length - 1)
+															const endpointNormal = isPathEndpoint
+																? (contourEndpointNormal(
+																		contour.nodes,
+																		pointIndex,
+																		contour.closed,
+																	) ?? { x: 0, y: 1 })
+																: null
 															const nodeTarget: EditorSelectionTarget = {
 																kind: "node",
 																pointId: point.pointId,
@@ -935,7 +947,21 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																			listening={false}
 																		/>
 																	) : null}
-																	{point.mode === "soft" ? (
+																	{endpointNormal !== null ? (
+																		<Line
+																			key={`point:${point.pointId}`}
+																			{...nodeProps}
+																			points={[
+																				-endpointNormal.x * 6 * inverseScale,
+																				-endpointNormal.y * 6 * inverseScale,
+																				endpointNormal.x * 6 * inverseScale,
+																				endpointNormal.y * 6 * inverseScale,
+																			]}
+																			strokeWidth={2 * inverseScale}
+																			hitStrokeWidth={12 * inverseScale}
+																			lineCap="round"
+																		/>
+																	) : point.mode === "soft" ? (
 																		<Circle
 																			key={`point:${point.pointId}`}
 																			{...nodeProps}
@@ -1014,7 +1040,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				outline. Press Escape to return to typing. Drag an empty area to
 				box-select controls; press Command or Control+A to select all, and
 				Delete to remove the selection. Hold Option or Alt while deleting nodes
-				to break paths open.
+				to break paths open, or while deleting a handle to remove its adjoining
+				segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{editingTextIndex === null

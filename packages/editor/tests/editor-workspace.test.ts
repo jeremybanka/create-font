@@ -17,6 +17,7 @@ import {
 	type EditorWorkspace,
 } from "../src/editor-workspace.ts"
 import {
+	contourEndpointNormal,
 	contourStartDirection,
 	contourToPath,
 	editorContourToPath,
@@ -197,6 +198,30 @@ describe("editor workspace", () => {
 		)
 
 		expect(path).toBe("M 0 0 C 20 0 40 20 40 40")
+	})
+
+	it("derives endpoint markers from the normal to an open path's tangent", () => {
+		const contour = [
+			{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
+			{ x: 40, y: 40, incoming: { x: 0, y: -20 } },
+		]
+
+		expect(contourEndpointNormal(contour, 0, false)).toEqual({ x: 0, y: 1 })
+		expect(contourEndpointNormal(contour, 1, false)).toEqual({ x: 1, y: 0 })
+		expect(contourEndpointNormal(contour, 0, true)).toBeNull()
+	})
+
+	it("falls back to the adjacent segment for a handleless endpoint normal", () => {
+		expect(
+			contourEndpointNormal(
+				[
+					{ x: 10, y: 20 },
+					{ x: 40, y: 20 },
+				],
+				0,
+				false,
+			),
+		).toEqual({ x: 0, y: 1 })
 	})
 
 	it("box-selects nodes and handle endpoints independently", () => {
