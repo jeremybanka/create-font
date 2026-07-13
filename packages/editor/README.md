@@ -35,7 +35,8 @@ maps to `O`; every other character in the preview visibly exercises `.notdef`.
 The canvas lays out solved `glyphSource` projections and explicit line breaks
 in font units. An invisible native textarea owns text input and selection while
 Konva renders the actual glyphs and virtual caret. Scrolling pans the world;
-Command/Control-wheel and toolbar controls zoom about a stable focal point.
+Command/Control/Option/Alt-wheel and toolbar controls zoom about a stable focal
+point.
 
 Double-clicking one positioned glyph occurrence changes only the interaction
 mode: that occurrence is replaced in place by the active master's high-level
@@ -73,8 +74,8 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
 
 - Type directly into the multiline canvas and adjust every variation-axis
   control through the design space.
-- Scroll or trackpad-pan around the text; use Command/Control-wheel or the
-  toolbar to zoom.
+- Scroll or trackpad-pan around the text; use Command/Control/Option/Alt-wheel
+  or the toolbar to zoom.
 - Double-click a positioned glyph to replace that occurrence with its editable
   outline. Press Escape to clear the target and resume typing at its position.
 - Choose a master to edit its concrete layer; choose an instance to move the

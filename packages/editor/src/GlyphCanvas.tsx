@@ -12,6 +12,7 @@ import {
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
+import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import { previewHandleDrag, toggledNodeMode } from "./curve-editing.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
@@ -491,7 +492,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						if (
 							pointer !== null &&
 							pointer !== undefined &&
-							(event.evt.ctrlKey || event.evt.metaKey)
+							hasWheelZoomModifier(event.evt)
 						) {
 							zoomCanvas(
 								view.zoom * Math.exp(-event.evt.deltaY * 0.002),
@@ -1000,11 +1001,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				</Stage>
 			</canvas-surface>
 			<p id="canvas-instructions">
-				Type and add line breaks normally. Scroll to pan; use Command or Control
-				with the wheel to zoom. Double-click a glyph to edit its outline. Press
-				Escape to return to typing. Drag an empty area to box-select controls;
-				press Command or Control+A to select all, and Delete to remove the
-				selection. Hold Option or Alt while deleting nodes to break paths open.
+				Type and add line breaks normally. Scroll to pan; use Command, Control,
+				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
+				outline. Press Escape to return to typing. Drag an empty area to
+				box-select controls; press Command or Control+A to select all, and
+				Delete to remove the selection. Hold Option or Alt while deleting nodes
+				to break paths open.
 			</p>
 			<output role="status" aria-live="polite">
 				{editingTextIndex === null

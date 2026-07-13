@@ -1,5 +1,6 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
+	ALT_KEY_LABEL,
 	ariaKeyShortcut,
 	formatHotkey,
 	MOD_KEY_LABEL,
@@ -88,7 +89,7 @@ export function AppShell({ workspace }: AppShellProps) {
 				</active-context>
 				<keyboard-help>
 					Type · Double-click to edit · Esc to type · Scroll to pan ·
-					{` ${MOD_KEY_LABEL}-wheel to zoom`}
+					{` ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom`}
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>
