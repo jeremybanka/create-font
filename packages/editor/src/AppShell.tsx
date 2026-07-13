@@ -6,7 +6,6 @@ import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { useO, useTimeline } from "./state-hooks.ts"
-import { TypingPreview } from "./TypingPreview.tsx"
 
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
@@ -26,7 +25,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const compilation = useO(workspace.font.selectors.compilation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const history = useTimeline(workspace.font.history)
+	const history = useTimeline(workspace.font.historyFor(activeGlyphId))
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
 	useEffect(() => {
@@ -39,12 +38,12 @@ export function AppShell({ workspace }: AppShellProps) {
 				return
 			}
 			event.preventDefault()
-			if (event.shiftKey) workspace.font.redo()
-			else workspace.font.undo()
+			if (event.shiftKey) workspace.font.redo(activeGlyphId)
+			else workspace.font.undo(activeGlyphId)
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [workspace])
+	}, [activeGlyphId, workspace])
 
 	const familyName =
 		source.names.typographicFamily ?? source.names.family ?? "Untitled font"
@@ -62,13 +61,15 @@ export function AppShell({ workspace }: AppShellProps) {
 						<span>{familyName}</span>
 					</project-name>
 				</brand-lockup>
-				<history-controls aria-label="Edit history">
+				<history-controls
+					aria-label={`Edit history for ${glyph?.name ?? "glyph"}`}
+				>
 					<button
 						type="button"
 						title="Undo (⌘Z)"
 						aria-label="Undo"
 						disabled={history.at === 0}
-						onClick={() => workspace.font.undo()}
+						onClick={() => workspace.font.undo(activeGlyphId)}
 					>
 						<span aria-hidden="true">↶</span>
 					</button>
@@ -77,7 +78,7 @@ export function AppShell({ workspace }: AppShellProps) {
 						title="Redo (⇧⌘Z)"
 						aria-label="Redo"
 						disabled={history.at === history.length}
-						onClick={() => workspace.font.redo()}
+						onClick={() => workspace.font.redo(activeGlyphId)}
 					>
 						<span aria-hidden="true">↷</span>
 					</button>
@@ -96,7 +97,6 @@ export function AppShell({ workspace }: AppShellProps) {
 			<main>
 				<FontNavigator workspace={workspace} />
 				<editor-workspace>
-					<TypingPreview workspace={workspace} />
 					<GlyphCanvas workspace={workspace} />
 				</editor-workspace>
 				<GlyphInspector workspace={workspace} />
@@ -107,7 +107,8 @@ export function AppShell({ workspace }: AppShellProps) {
 					<span>{master?.name ?? "—"}</span>
 				</active-context>
 				<keyboard-help>
-					[ ] select · Drag handles · Arrow keys nudge · Shift ×10 · ⌘Z undo
+					Type · Double-click to edit · Esc to type · Scroll to pan · ⌘-wheel to
+					zoom
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>

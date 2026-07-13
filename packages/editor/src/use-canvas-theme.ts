@@ -10,7 +10,6 @@ export interface CanvasTheme {
 	readonly nodeFill: string
 	readonly nodeStroke: string
 	readonly accent: string
-	readonly previewGuide: string
 	readonly previewInk: string
 }
 
@@ -24,7 +23,6 @@ const fallbackTheme: CanvasTheme = Object.freeze({
 	nodeFill: "#171713",
 	nodeStroke: "#f4f3ef",
 	accent: "#df7655",
-	previewGuide: "#353630",
 	previewInk: "#f4f3ef",
 })
 
@@ -48,7 +46,6 @@ function readCanvasTheme(): CanvasTheme {
 		nodeFill: read("--canvas-node-fill", fallbackTheme.nodeFill),
 		nodeStroke: read("--canvas-node-stroke", fallbackTheme.nodeStroke),
 		accent: read("--canvas-accent", fallbackTheme.accent),
-		previewGuide: read("--preview-guide", fallbackTheme.previewGuide),
 		previewInk: read("--preview-ink", fallbackTheme.previewInk),
 	})
 }

@@ -7,7 +7,13 @@ import {
 } from "atom.io"
 import { createContext, createElement, type ComponentChildren } from "preact"
 import { useSyncExternalStore } from "preact/compat"
-import { useCallback, useContext, useEffect, useState } from "preact/hooks"
+import {
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 
@@ -69,16 +75,18 @@ export function useTimeline<Manageable extends TimelineManageable>(
 	timeline: TimelineToken<Manageable>,
 ): TimelinePosition {
 	const silo = useSilo()
+	const positions = useRef(new Map<string, TimelinePosition>())
 	const [position, setPosition] = useState<TimelinePosition>({
 		at: 0,
 		length: 0,
 	})
-	useEffect(
-		() =>
-			silo.subscribe(timeline, (update) =>
-				setPosition({ at: update.at, length: update.length }),
-			),
-		[silo, timeline.key],
-	)
+	useEffect(() => {
+		setPosition(positions.current.get(timeline.key) ?? { at: 0, length: 0 })
+		return silo.subscribe(timeline, (update) => {
+			const next = { at: update.at, length: update.length }
+			positions.current.set(timeline.key, next)
+			setPosition(next)
+		})
+	}, [silo, timeline.key])
 	return position
 }

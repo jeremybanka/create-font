@@ -1,4 +1,12 @@
-import type { EditorHandleKind, EditorLayerNode } from "@trigraph/states"
+import type {
+	EditorHandleKind,
+	EditorLayerNode,
+	EditorNodeMode,
+} from "@trigraph/states"
+
+export function toggledNodeMode(mode: EditorNodeMode): EditorNodeMode {
+	return mode === "soft" ? "hard" : "soft"
+}
 
 const magnitude = (vector: Readonly<{ x: number; y: number }>): number =>
 	Math.hypot(vector.x, vector.y)

@@ -1,9 +1,10 @@
 # @trigraph/editor
 
 `@trigraph/editor` is the first interactive client for the Trigraph font state
-model. It is a Vite/Preact application with a small Glyphs-style workspace: a
-live variable typing preview, concrete master layers, outline-node editing,
-glyph navigation, an inspector, and document-scoped history.
+model. It is a Vite/Preact application with a Glyphs-style workspace centered
+on one multiline text canvas. The same glyph occurrence that participates in
+the live variable layout becomes the outline editor in place, alongside glyph
+navigation, an inspector, and glyph-scoped history.
 
 The included document deliberately stays tiny. Both `.notdef` and `O` are a
 geometric O with identical topology. The `wght` axis travels from a nearly
@@ -13,12 +14,14 @@ maps to `O`; every other character in the preview visibly exercises `.notdef`.
 ## Stack
 
 - Vite+ runs Vite with the Preact preset. The application shell and all DOM UI
-  are Preact; React 18 is reserved for two deliberately isolated canvas roots.
+  are Preact; React 18 is reserved for the deliberately isolated canvas root.
 - `@trigraph/states` owns all editable font facts, its isolated atom.io Silo,
-  transactions, selector graph, ingestion proof, and undo timeline.
+  transactions, selector graph, ingestion proof, and one undo timeline per
+  glyph.
 - A small set of UI atoms lives in that same Silo: active glyph and master,
-  preview text and axis coordinates, node selection, and node visibility.
-- `react-konva` renders both canvas surfaces inside real React 18 islands
+  multiline text, caret and editing occurrence, axis coordinates, node
+  selection, and node visibility.
+- `react-konva` renders the unified canvas inside a real React 18 island
   mounted with `react-dom/client`. Plain props and declarative Konva shape
   descriptors are the only values that cross from Preact. This separation is
   required because react-konva's private reconciler cannot run on Preact
@@ -29,19 +32,17 @@ maps to `O`; every other character in the preview visibly exercises `.notdef`.
 
 ## State flow
 
-The edit canvas composes the active layer from granular `layerNode` selectors,
-so it reads the high-level cubic source rather than a lowered quadratic
-outline. Nodes own relative incoming and outgoing handles. Dragging keeps a
-temporary node or handle position locally, then commits one `movePoints` or
-`moveHandle` transaction on pointer release. That keeps a full drag to one undo
-step. Arrow keys commit one- or ten-unit nudges.
+The canvas lays out solved `glyphSource` projections and explicit line breaks
+in font units. An invisible native textarea owns text input and selection while
+Konva renders the actual glyphs and virtual caret. Scrolling pans the world;
+Command/Control-wheel and toolbar controls zoom about a stable focal point.
 
-The typing preview subscribes to solved `glyphSource` projections. It
-normalizes the current user-space location, evaluates every OpenType support
-region, and applies the solved `gvar` tuple deltas. It therefore shows real
-interpolation, not a cross-fade or a nearest-master switch. Any master edit
-invalidates both the editor layer and the preview through the shared atom.io
-graph.
+Double-clicking one positioned glyph occurrence changes only the interaction
+mode: that occurrence is replaced in place by the active master's high-level
+cubic `layerNode` projection. Nodes own relative incoming and outgoing handles.
+Dragging keeps a temporary node or handle position locally, then commits one
+`movePoints` or `moveHandle` transaction on pointer release. Escape removes the
+editing target and restores textarea focus and the virtual caret.
 
 Immutable axes, cmap, glyph topology, names, and metrics are exposed once as
 the workspace document structure. Components subscribe only to narrow atoms
@@ -49,9 +50,9 @@ and selectors. An edit to `.notdef`, for example, does not invalidate an `O`
 preview. A tiny Preact-native adapter observes the custom Silo through its
 public get, set, and subscribe methods; React is never mixed into the DOM UI.
 
-Toolbar and keyboard history controls call the custom Silo's `undo()` and
-`redo()` methods directly. The Preact timeline hook observes cursor metadata
-without calling implicit-store helpers.
+Toolbar and keyboard history controls resolve the active glyph's timeline and
+call the custom Silo's `undo()` and `redo()` methods directly. Switching glyphs
+switches timeline cursors without combining their edits.
 
 ## Run
 
@@ -70,14 +71,20 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
 
 ## Interaction
 
-- Type into the preview and adjust every variation-axis control through the
-  design space.
+- Type directly into the multiline canvas and adjust every variation-axis
+  control through the design space.
+- Scroll or trackpad-pan around the text; use Command/Control-wheel or the
+  toolbar to zoom.
+- Double-click a positioned glyph to replace that occurrence with its editable
+  outline. Press Escape to clear the target and resume typing at its position.
 - Choose a master to edit its concrete layer; choose an instance to move the
   preview to that named location.
-- Choose `.notdef` or `O`, then drag a node or either of its anchored Bézier
-  handles in one gesture.
+- Once an occurrence is being edited, drag a node or either of its anchored
+  Bézier handles in one gesture.
 - Switch a selected node between Soft (collinear handles) and Hard (independent
   or one-sided handles) in the inspector.
+- Double-click a node, or press Enter while it is selected, to toggle Soft and
+  Hard directly in the canvas. Soft nodes are circles; Hard nodes are squares.
 - Editor contours are intentionally unfilled. The triangular first node marks
   each contour's direction.
 - Focus the canvas and use bracket keys to traverse nodes, then arrow keys to
@@ -90,4 +97,4 @@ navigator into a horizontal strip. Native controls retain keyboard focus
 styles, the canvas exposes an application label and instructions, status is
 communicated with text as well as color, and all icon-only buttons have names.
 The dark palette is the default token set; a system light-mode preference
-activates the original light palette, including both Konva canvases.
+activates the original light palette, including the Konva canvas.

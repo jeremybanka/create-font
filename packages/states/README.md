@@ -147,9 +147,10 @@ font-format invariant that the composed source violates.
 Structural operations are synchronous atom.io transactions. Inserting a shared
 node, loading a document, moving several coordinates, dragging a handle, and
 changing node mode must either update the complete affected structure or make
-no change. Persistent editor atoms
-participate in the document timeline, while projections remain derived state.
-Undo, redo, and history clearing are bound to the document's own `Silo`.
+no change. Each glyph receives its own timeline over only that glyph's family
+members, while projections remain derived state. Undoing `glyph:O` therefore
+cannot rewind `.notdef`, even though both histories live in the document's
+isolated `Silo`.
 
 Loading is intended for trusted `EditorFontSource` values already constructed
 or decoded by an application. It checks structural requirements needed to
@@ -161,10 +162,10 @@ thrown exceptions.
 ## Minimal use
 
 The complete public graph is returned by `createFontEditorState`, including its
-Silo-bound atoms, selector families, transactions, timeline, and convenience
-actions. A typical application creates an isolated graph, loads a serializable
-document, performs edits through transactions, and reads only the projection it
-currently needs:
+Silo-bound atoms, selector families, transactions, per-glyph timelines, and
+convenience actions. A typical application creates an isolated graph, loads a
+serializable document, performs edits through transactions, and reads only the
+projection it currently needs:
 
 <!-- This example is kept in sync with the concrete return surface in state.ts. -->
 
@@ -194,8 +195,8 @@ if (!compilation.ok) {
 	console.log(compilation.font)
 }
 
-editor.undo()
-editor.redo()
+editor.undo("glyph:O")
+editor.redo("glyph:O")
 ```
 
 The IDs in this example are ordinary template-literal typed strings. Real

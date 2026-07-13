@@ -22,10 +22,21 @@ export interface EditorCanvasLayer {
 }
 
 export interface PreviewRunGlyph {
+	readonly kind: "glyph"
 	readonly character: string
+	readonly textStart: number
+	readonly textEnd: number
 	readonly glyphId: GlyphId
 	readonly glyph: ResolvedGlyph | null
 }
+
+export interface PreviewRunLineBreak {
+	readonly kind: "line-break"
+	readonly textStart: number
+	readonly textEnd: number
+}
+
+export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
 
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
@@ -58,7 +69,15 @@ export function createEditorWorkspace(
 	})
 	const previewText = font.silo.atom<string>({
 		key: key("previewText"),
-		default: "OOOO",
+		default: "OOOO\nOOOO",
+	})
+	const caretIndex = font.silo.atom<number>({
+		key: key("caretIndex"),
+		default: 0,
+	})
+	const editingTextIndex = font.silo.atom<number | null>({
+		key: key("editingTextIndex"),
+		default: null,
 	})
 	const previewCoordinate = font.silo.atomFamily<number | null, AxisId>({
 		key: key("previewCoordinate"),
@@ -127,7 +146,7 @@ export function createEditorWorkspace(
 			})
 		},
 	})
-	const previewRun = font.silo.selector<readonly PreviewRunGlyph[]>({
+	const previewRun = font.silo.selector<readonly PreviewRunItem[]>({
 		key: key("previewRun"),
 		get: ({ get }) => {
 			const location = get(previewLocation)
@@ -140,15 +159,26 @@ export function createEditorWorkspace(
 			const firstExported = document.glyphs.find((glyph) => glyph.export)?.id
 			const fallbackId = fallback ?? firstExported
 			if (fallbackId === undefined) return []
-			return Array.from(get(previewText), (character) => {
+			const run: PreviewRunItem[] = []
+			let textOffset = 0
+			for (const character of get(previewText)) {
+				const textStart = textOffset
+				textOffset += character.length
+				if (character === "\n") {
+					run.push({ kind: "line-break", textStart, textEnd: textOffset })
+					continue
+				}
 				const codePoint = character.codePointAt(0)
 				const glyphId =
 					codePoint === undefined
 						? fallbackId
 						: (byCodePoint.get(codePoint) ?? fallbackId)
 				const result = get(font.selectors.glyphSource, glyphId)
-				return {
+				run.push({
+					kind: "glyph",
 					character,
+					textStart,
+					textEnd: textOffset,
 					glyphId,
 					glyph: result.ok
 						? resolveVariableGlyph(
@@ -158,8 +188,9 @@ export function createEditorWorkspace(
 								location,
 							)
 						: null,
-				}
-			})
+				})
+			}
+			return Object.freeze(run)
 		},
 	})
 
@@ -181,6 +212,8 @@ export function createEditorWorkspace(
 			activeMasterId,
 			selectedPointId,
 			previewText,
+			caretIndex,
+			editingTextIndex,
 			previewCoordinate,
 			previewLocation,
 			showNodes,
@@ -191,6 +224,17 @@ export function createEditorWorkspace(
 			selectGlyph(glyphId: GlyphId): void {
 				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
 				font.silo.setState(activeGlyphId, glyphId)
+				font.silo.setState(selectedPointId, null)
+				font.silo.setState(editingTextIndex, null)
+			},
+			enterGlyphEdit(textStart: number, glyphId: GlyphId): void {
+				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
+				font.silo.setState(activeGlyphId, glyphId)
+				font.silo.setState(editingTextIndex, textStart)
+				font.silo.setState(selectedPointId, null)
+			},
+			exitGlyphEdit(): void {
+				font.silo.setState(editingTextIndex, null)
 				font.silo.setState(selectedPointId, null)
 			},
 			selectMaster(masterId: MasterId): void {

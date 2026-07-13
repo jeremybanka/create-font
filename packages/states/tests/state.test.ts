@@ -120,7 +120,7 @@ describe("font editor state", () => {
 			]),
 		).toBe(350)
 
-		editor.undo()
+		editor.undo(oGlyphId)
 		expect(
 			editor.silo.getState(editor.atoms.pointX, [
 				blackMasterId,
@@ -136,7 +136,7 @@ describe("font editor state", () => {
 			]),
 		).toBe(400)
 
-		editor.redo()
+		editor.redo(oGlyphId)
 		expect(
 			editor.silo.getState(editor.atoms.pointX, [
 				blackMasterId,
@@ -144,6 +144,52 @@ describe("font editor state", () => {
 				pointId,
 			]),
 		).toBe(700)
+	})
+
+	it("keeps one independent timeline per glyph", () => {
+		const editor = createLoadedEditor("test/glyph-histories")
+		const source = makeGeometricOEditorFont()
+		const oPointId = source.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.contours[0]?.points[0]?.id
+		const notdefPointId = source.glyphs.find(
+			(glyph) => glyph.id === notdefGlyphId,
+		)?.contours[0]?.points[0]?.id
+		if (oPointId === undefined || notdefPointId === undefined) {
+			throw new Error("Fixture points are missing.")
+		}
+		let oLength = 0
+		let notdefLength = 0
+		editor.silo.subscribe(editor.historyFor(oGlyphId), (update) => {
+			oLength = update.length
+		})
+		editor.silo.subscribe(editor.historyFor(notdefGlyphId), (update) => {
+			notdefLength = update.length
+		})
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: oPointId, x: 510, y: 810 }],
+		})
+		expect(oLength).toBe(1)
+		expect(notdefLength).toBe(0)
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: notdefGlyphId,
+			points: [{ pointId: notdefPointId, x: 520, y: 800 }],
+		})
+		expect(oLength).toBe(1)
+		expect(notdefLength).toBe(1)
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.pointX, [
+				blackMasterId,
+				notdefGlyphId,
+				notdefPointId,
+			]),
+		).toBe(520)
 	})
 
 	it("keeps relative handles anchored when their owning node moves", () => {
@@ -346,7 +392,7 @@ describe("font editor state", () => {
 		expect(inserted?.[1]).toBe("point:glyph:O:inserted")
 		expect(editor.read.compilation().stage).toBe("compiled")
 
-		editor.undo()
+		editor.undo(oGlyphId)
 		expect(
 			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
 		).not.toContain("point:glyph:O:inserted")

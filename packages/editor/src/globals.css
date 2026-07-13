@@ -38,7 +38,6 @@
 	--canvas-node-fill: #111210;
 	--canvas-node-stroke: #efeee8;
 	--canvas-accent: #e17352;
-	--preview-guide: #353630;
 	--preview-ink: #efeee8;
 	color-scheme: dark;
 	font-family: var(--ui-font);
@@ -80,7 +79,6 @@
 		--canvas-node-fill: #faf9f5;
 		--canvas-node-stroke: #171713;
 		--canvas-accent: #ce5d3d;
-		--preview-guide: #dad7cf;
 		--preview-ink: #171713;
 		color-scheme: light;
 	}

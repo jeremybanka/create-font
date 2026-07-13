@@ -6,28 +6,34 @@ import {
 	oGlyphId,
 	weightAxisId,
 } from "../src/demo-font.ts"
-import { previewHandleDrag } from "../src/curve-editing.ts"
-import { createEditorWorkspace } from "../src/editor-workspace.ts"
+import { previewHandleDrag, toggledNodeMode } from "../src/curve-editing.ts"
+import {
+	createEditorWorkspace,
+	type EditorWorkspace,
+} from "../src/editor-workspace.ts"
 import {
 	contourStartDirection,
 	contourToPath,
 	editorContourToPath,
 	resolveVariableGlyph,
 } from "../src/geometry.ts"
+import { layoutTextRun, nearestCaretIndex } from "../src/text-layout.ts"
+
+function previewGlyph(workspace: EditorWorkspace, index: number) {
+	const item = workspace.font.silo.getState(workspace.ui.previewRun)[index]
+	return item?.kind === "glyph" ? item.glyph : null
+}
 
 describe("editor workspace", () => {
 	it("evaluates the geometric O between the Razor and Black masters", () => {
 		const workspace = createEditorWorkspace()
 
 		workspace.actions.setPreviewCoordinate(weightAxisId, 100)
-		const razor = workspace.font.silo.getState(workspace.ui.previewRun)[0]
-			?.glyph
+		const razor = previewGlyph(workspace, 0)
 		workspace.actions.setPreviewCoordinate(weightAxisId, 500)
-		const middle = workspace.font.silo.getState(workspace.ui.previewRun)[0]
-			?.glyph
+		const middle = previewGlyph(workspace, 0)
 		workspace.actions.setPreviewCoordinate(weightAxisId, 900)
-		const black = workspace.font.silo.getState(workspace.ui.previewRun)[0]
-			?.glyph
+		const black = previewGlyph(workspace, 0)
 
 		expect(razor?.contours[1]?.[0]?.y).toBe(752)
 		expect(middle?.contours[1]?.[0]?.y).toBe(600)
@@ -40,7 +46,49 @@ describe("editor workspace", () => {
 		workspace.font.silo.setState(workspace.ui.previewText, "OX")
 		const run = workspace.font.silo.getState(workspace.ui.previewRun)
 
-		expect(run.map((item) => item.glyphId)).toEqual([oGlyphId, notdefGlyphId])
+		expect(
+			run.flatMap((item) => (item.kind === "glyph" ? [item.glyphId] : [])),
+		).toEqual([oGlyphId, notdefGlyphId])
+	})
+
+	it("lays out explicit line breaks and caret stops in one canvas", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "O\nO")
+		const run = workspace.font.silo.getState(workspace.ui.previewRun)
+		const layout = layoutTextRun(
+			run,
+			workspace.document.metrics,
+			workspace.document.metadata.unitsPerEm,
+		)
+
+		expect(run.map((item) => item.kind)).toEqual([
+			"glyph",
+			"line-break",
+			"glyph",
+		])
+		expect(layout.glyphs[1]?.x).toBe(0)
+		expect(layout.glyphs[1]?.baseline).toBeGreaterThan(
+			layout.glyphs[0]?.baseline ?? 0,
+		)
+		expect(layout.carets.find((caret) => caret.textIndex === 2)?.x).toBe(0)
+		expect(
+			nearestCaretIndex(layout.carets, 0, layout.glyphs[1]?.baseline ?? 0),
+		).toBe(2)
+	})
+
+	it("enters and exits outline editing for one text occurrence", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+
+		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(0)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+
+		workspace.actions.exitGlyphEdit()
+		expect(
+			workspace.font.silo.getState(workspace.ui.editingTextIndex),
+		).toBeNull()
 	})
 
 	it("shares master edits with the variable typing preview and undo history", () => {
@@ -57,16 +105,10 @@ describe("editor workspace", () => {
 			glyphId: oGlyphId,
 			points: [{ pointId: innerTop, x: 500, y: 420 }],
 		})
-		expect(
-			workspace.font.silo.getState(workspace.ui.previewRun)[0]?.glyph
-				?.contours[1]?.[0]?.y,
-		).toBe(420)
+		expect(previewGlyph(workspace, 0)?.contours[1]?.[0]?.y).toBe(420)
 
-		workspace.font.undo()
-		expect(
-			workspace.font.silo.getState(workspace.ui.previewRun)[0]?.glyph
-				?.contours[1]?.[0]?.y,
-		).toBe(448)
+		workspace.font.undo(oGlyphId)
+		expect(previewGlyph(workspace, 0)?.contours[1]?.[0]?.y).toBe(448)
 	})
 
 	it("does not invalidate an O preview when an unrelated glyph changes", () => {
@@ -154,6 +196,39 @@ describe("editor workspace", () => {
 			mode: "hard",
 			incoming: { x: 0, y: 10 },
 		})
+	})
+
+	it("toggles node modes in both directions", () => {
+		expect(toggledNodeMode("soft")).toBe("hard")
+		expect(toggledNodeMode("hard")).toBe("soft")
+	})
+
+	it("projects a mode toggle into the active layer and undo history", () => {
+		const workspace = createEditorWorkspace()
+		const pointId = workspace.document.glyphs.find(
+			(glyph) => glyph.id === oGlyphId,
+		)?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+
+		workspace.font.actions.setNodeMode({
+			glyphId: oGlyphId,
+			pointId,
+			mode: "hard",
+		})
+		expect(
+			workspace.font.silo
+				.getState(workspace.ui.activeLayer)
+				?.contours.flat()
+				.find((point) => point.pointId === pointId)?.mode,
+		).toBe("hard")
+
+		workspace.font.undo(oGlyphId)
+		expect(
+			workspace.font.silo
+				.getState(workspace.ui.activeLayer)
+				?.contours.flat()
+				.find((point) => point.pointId === pointId)?.mode,
+		).toBe("soft")
 	})
 
 	it("derives sidebearing from the resolved xMin and left phantom origin", () => {
