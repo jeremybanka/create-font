@@ -47,12 +47,17 @@ to their owning node, so moving a node carries its handles without rewriting
 them. A structural node edit can therefore update every layer atomically, and
 lowering never has to guess whether master contours correspond.
 
-Soft nodes require two handles in every layer, lying on opposite rays of one
-line. Moving either handle rotates the other while preserving its length.
-Deleting one handle leaves its mate intact and makes the node hard. Changing a
-one-sided hard node to soft reconstructs its missing handle from the adjacent
-segment on that side and aligns both handles; a handleless node remains hard.
-Hard nodes permit independent and one-sided handles.
+Soft nodes require at least one handle in every layer. When both handles are
+present, they lie on opposite rays of one line, and moving either rotates the
+other while preserving its length. Deleting one handle leaves its mate intact
+and makes the node hard. Changing a one-sided hard node to soft projects its
+existing handle onto the tangent established by the adjacent segment without
+creating the missing handle; a handleless node remains hard. Hard nodes permit
+independent handles. For a one-handle soft node, only handle length is stored
+geometry: its angle is derived from the adjacent segment on the handleless
+side, using that segment's neighboring control point when present and its
+on-curve node otherwise. Moving either endpoint keeps the handle on that
+tangent.
 
 ## Atom graph
 

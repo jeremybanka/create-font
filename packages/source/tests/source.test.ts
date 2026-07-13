@@ -428,15 +428,24 @@ describe("@trigraph/source", () => {
 		)
 	})
 
-	test("enforces the two-sided collinear invariant for soft nodes", () => {
+	test("allows one-sided soft nodes and enforces alignment when both handles exist", () => {
 		const file = toEditorFontFile(makeGeometricOEditorFont())
 		if (!file.ok) throw new Error("fixture did not convert")
 		const oneSided = mutableFile(file.value)
 		const oneSidedPoint = oneSided.glyphs[0]?.layers[0]?.points[0]
 		if (oneSidedPoint === undefined) throw new Error("fixture node is missing")
 		delete oneSidedPoint.outgoing
+		const decodedOneSided = decodeEditorFontSource(JSON.stringify(oneSided))
+		expect(decodedOneSided.ok).toBe(true)
+
+		const handleless = mutableFile(file.value)
+		const handlelessPoint = handleless.glyphs[0]?.layers[0]?.points[0]
+		if (handlelessPoint === undefined)
+			throw new Error("fixture node is missing")
+		delete handlelessPoint.incoming
+		delete handlelessPoint.outgoing
 		expectFailure(
-			decodeEditorFontSource(JSON.stringify(oneSided)),
+			decodeEditorFontSource(JSON.stringify(handleless)),
 			"source.handle",
 			"$.glyphs[0].layers[0].points[0]",
 		)

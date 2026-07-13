@@ -113,8 +113,9 @@ export interface EditorHandleVectorSource {
 export interface EditorPointSource {
 	readonly id: PointId
 	/**
-	 * Soft nodes keep their two handles collinear when edited. Hard nodes allow
-	 * independent or one-sided handles.
+	 * Soft nodes keep present handles on one tangent line when edited. A sole
+	 * handle's direction is derived from the adjacent segment on its handleless
+	 * side. Hard nodes allow independent handles.
 	 */
 	readonly mode: EditorNodeMode
 }

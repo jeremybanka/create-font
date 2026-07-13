@@ -94,8 +94,8 @@ than silently reinterpreted: version 2 did not record whether contours were
 open or closed and allowed handleless soft nodes. The decoder rejects invalid syntax, duplicate object keys,
 prototype-sensitive keys, unknown properties, missing or wrongly typed fields,
 non-finite in-memory numbers, noncanonical timestamp strings, wrong ID kinds,
-duplicate identities, dangling references, invalid one-sided or non-collinear
-soft-node handles, and topology that cannot be loaded into the state graph.
+duplicate identities, dangling references, handleless or non-collinear
+soft nodes, and topology that cannot be loaded into the state graph.
 Diagnostics have stable codes and
 JSONPath-like paths. Lexical key inspection is iterative, and array inspection
 walks actual own entries rather than trusting or iterating a hostile declared

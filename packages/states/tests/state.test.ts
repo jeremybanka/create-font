@@ -270,16 +270,11 @@ describe("font editor state", () => {
 		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
 		for (const masterId of [razorMasterId, blackMasterId] as const) {
 			const soft = editor.read.layerNode(masterId, oGlyphId, pointId)
-			if (
-				!soft.ok ||
-				soft.value.incoming === undefined ||
-				soft.value.outgoing === undefined
-			) {
-				throw new Error("Soft layer node handles are missing.")
+			if (!soft.ok || soft.value.incoming === undefined) {
+				throw new Error("Soft layer node did not project.")
 			}
 			expect(soft.value.mode).toBe("soft")
-			expect(soft.value.outgoing.x).toBe(-soft.value.incoming.x)
-			expect(soft.value.outgoing.y).toBe(-soft.value.incoming.y)
+			expect(soft.value.outgoing).toBeUndefined()
 		}
 	})
 
@@ -303,7 +298,7 @@ describe("font editor state", () => {
 		expect(node.value.outgoing).toBeDefined()
 	})
 
-	it("keeps a handleless node hard and reconstructs a one-sided smooth node from its neighbor", () => {
+	it("keeps a one-sided smooth node one-sided and projects its handle onto the tangent", () => {
 		const editor = createLoadedEditor("test/soften-one-sided")
 		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
 		const pointId = contour?.points[0]?.id
@@ -320,21 +315,131 @@ describe("font editor state", () => {
 				vector: null,
 			})
 		}
+		const hard = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!hard.ok || hard.value.incoming === undefined) {
+			throw new Error("One-sided hard node did not project.")
+		}
+		const originalLength = Math.hypot(
+			hard.value.incoming.x,
+			hard.value.incoming.y,
+		)
 
 		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
 		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
 		const next = editor.read.layerNode(blackMasterId, oGlyphId, nextPointId)
-		if (!node.ok || !next.ok || node.value.outgoing === undefined) {
+		if (!node.ok || !next.ok || node.value.incoming === undefined) {
 			throw new Error("Softened layer nodes did not project.")
 		}
 		expect(node.value.mode).toBe("soft")
-		const segment = {
-			x: next.value.x - node.value.x,
-			y: next.value.y - node.value.y,
+		expect(node.value.outgoing).toBeUndefined()
+		const tangent = {
+			x: next.value.x + (next.value.incoming?.x ?? 0) - node.value.x,
+			y: next.value.y + (next.value.incoming?.y ?? 0) - node.value.y,
 		}
 		expect(
-			node.value.outgoing.x * segment.y - node.value.outgoing.y * segment.x,
+			node.value.incoming.x * tangent.y - node.value.incoming.y * tangent.x,
 		).toBeCloseTo(0)
+		expect(
+			node.value.incoming.x * tangent.x + node.value.incoming.y * tangent.y,
+		).toBeLessThanOrEqual(0)
+		expect(
+			Math.hypot(node.value.incoming.x, node.value.incoming.y),
+		).toBeCloseTo(originalLength)
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId, x: node.value.x + 60, y: node.value.y - 40 }],
+		})
+		const moved = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const nextAfterMove = editor.read.layerNode(
+			blackMasterId,
+			oGlyphId,
+			nextPointId,
+		)
+		if (!moved.ok || !nextAfterMove.ok || moved.value.incoming === undefined) {
+			throw new Error("Moved one-sided soft node did not project.")
+		}
+		const movedTangent = {
+			x:
+				nextAfterMove.value.x +
+				(nextAfterMove.value.incoming?.x ?? 0) -
+				moved.value.x,
+			y:
+				nextAfterMove.value.y +
+				(nextAfterMove.value.incoming?.y ?? 0) -
+				moved.value.y,
+		}
+		expect(
+			moved.value.incoming.x * movedTangent.y -
+				moved.value.incoming.y * movedTangent.x,
+		).toBeCloseTo(0)
+		expect(
+			Math.hypot(moved.value.incoming.x, moved.value.incoming.y),
+		).toBeCloseTo(originalLength)
+		expect(moved.value.incoming).not.toEqual(node.value.incoming)
+	})
+
+	it("projects a sole outgoing handle without adding an incoming handle", () => {
+		const editor = createLoadedEditor("test/soften-outgoing-only")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[0]?.id
+		const previousPointId = contour?.points.at(-1)?.id
+		if (pointId === undefined || previousPointId === undefined) {
+			throw new Error("Fixture nodes are missing.")
+		}
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "incoming",
+				vector: null,
+			})
+		}
+		const hard = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!hard.ok || hard.value.outgoing === undefined) {
+			throw new Error("One-sided hard node did not project.")
+		}
+		const originalLength = Math.hypot(
+			hard.value.outgoing.x,
+			hard.value.outgoing.y,
+		)
+
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
+		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const previous = editor.read.layerNode(
+			blackMasterId,
+			oGlyphId,
+			previousPointId,
+		)
+		if (!node.ok || !previous.ok || node.value.outgoing === undefined) {
+			throw new Error("Softened layer nodes did not project.")
+		}
+		expect(node.value.mode).toBe("soft")
+		expect(node.value.incoming).toBeUndefined()
+		const awayFromPreviousControl = {
+			x: node.value.x - (previous.value.x + (previous.value.outgoing?.x ?? 0)),
+			y: node.value.y - (previous.value.y + (previous.value.outgoing?.y ?? 0)),
+		}
+		expect(
+			node.value.outgoing.x * awayFromPreviousControl.y -
+				node.value.outgoing.y * awayFromPreviousControl.x,
+		).toBeCloseTo(0)
+		expect(
+			node.value.outgoing.x * awayFromPreviousControl.x +
+				node.value.outgoing.y * awayFromPreviousControl.y,
+		).toBeGreaterThanOrEqual(0)
+		expect(
+			Math.hypot(node.value.outgoing.x, node.value.outgoing.y),
+		).toBeCloseTo(originalLength)
+	})
+
+	it("keeps a handleless node hard when asked to soften it", () => {
+		const editor = createLoadedEditor("test/soften-handleless")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
 
 		for (const masterId of [razorMasterId, blackMasterId] as const) {
 			editor.actions.moveHandle({
@@ -499,12 +604,33 @@ describe("font editor state", () => {
 		).toHaveLength(3)
 	})
 
-	it("diagnoses a raw one-sided soft handle instead of serializing it", () => {
+	it("projects and serializes a raw one-sided soft handle", () => {
 		const editor = createLoadedEditor("test/raw-soft-invariant")
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
 		if (pointId === undefined) throw new Error("Fixture node is missing.")
 		const atomKey = [blackMasterId, oGlyphId, pointId] as const
+		editor.silo.setState(editor.atoms.outgoingHandleX, atomKey, null)
+		editor.silo.setState(editor.atoms.outgoingHandleY, atomKey, null)
+
+		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		expect(node.ok).toBe(true)
+		if (!node.ok) return
+		expect(node.value.mode).toBe("soft")
+		expect(node.value.incoming).toBeDefined()
+		expect(node.value.outgoing).toBeUndefined()
+		expect(editor.read.editorSource()).not.toBeNull()
+		expect(editor.read.compilation().stage).not.toBe("projection-failed")
+	})
+
+	it("diagnoses a raw handleless soft node instead of serializing it", () => {
+		const editor = createLoadedEditor("test/raw-handleless-soft-invariant")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		const atomKey = [blackMasterId, oGlyphId, pointId] as const
+		editor.silo.setState(editor.atoms.incomingHandleX, atomKey, null)
+		editor.silo.setState(editor.atoms.incomingHandleY, atomKey, null)
 		editor.silo.setState(editor.atoms.outgoingHandleX, atomKey, null)
 		editor.silo.setState(editor.atoms.outgoingHandleY, atomKey, null)
 

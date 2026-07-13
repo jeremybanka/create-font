@@ -27,6 +27,61 @@ function oppositeOnSameLine(
 	}
 }
 
+function withLengthAlong(
+	direction: Readonly<{ x: number; y: number }>,
+	length: number,
+): Readonly<{ x: number; y: number }> | null {
+	const directionLength = magnitude(direction)
+	if (directionLength === 0) return null
+	return {
+		x: canonicalZero((direction.x * length) / directionLength),
+		y: canonicalZero((direction.y * length) / directionLength),
+	}
+}
+
+/** Derives the angle of each one-handle soft node from its handleless side. */
+export function deriveOneSidedSoftHandles(
+	nodes: readonly EditorLayerNode[],
+	closed: boolean,
+): readonly EditorLayerNode[] {
+	return nodes.map((node, index) => {
+		if (node.mode !== "soft") return node
+		if (node.incoming !== undefined && node.outgoing === undefined) {
+			const next = nodes[index + 1] ?? (closed ? nodes[0] : undefined)
+			if (next === undefined) return node
+			let tangent = {
+				x: next.x + (next.incoming?.x ?? 0),
+				y: next.y + (next.incoming?.y ?? 0),
+			}
+			if (tangent.x === node.x && tangent.y === node.y) {
+				tangent = { x: next.x, y: next.y }
+			}
+			const incoming = withLengthAlong(
+				{ x: node.x - tangent.x, y: node.y - tangent.y },
+				magnitude(node.incoming),
+			)
+			return incoming === null ? node : { ...node, incoming }
+		}
+		if (node.outgoing !== undefined && node.incoming === undefined) {
+			const previous = nodes[index - 1] ?? (closed ? nodes.at(-1) : undefined)
+			if (previous === undefined) return node
+			let tangent = {
+				x: previous.x + (previous.outgoing?.x ?? 0),
+				y: previous.y + (previous.outgoing?.y ?? 0),
+			}
+			if (tangent.x === node.x && tangent.y === node.y) {
+				tangent = { x: previous.x, y: previous.y }
+			}
+			const outgoing = withLengthAlong(
+				{ x: node.x - tangent.x, y: node.y - tangent.y },
+				magnitude(node.outgoing),
+			)
+			return outgoing === null ? node : { ...node, outgoing }
+		}
+		return node
+	})
+}
+
 /** Mirrors the state transaction's soft-handle constraint during a drag. */
 export function previewHandleDrag(
 	node: EditorLayerNode,
@@ -34,19 +89,31 @@ export function previewHandleDrag(
 	vector: Readonly<{ x: number; y: number }>,
 ): EditorLayerNode {
 	if (handle === "incoming") {
+		const incoming =
+			node.mode === "soft" &&
+			node.outgoing === undefined &&
+			node.incoming !== undefined
+				? (withLengthAlong(node.incoming, magnitude(vector)) ?? node.incoming)
+				: vector
 		return {
 			...node,
-			incoming: vector,
+			incoming,
 			...(node.mode === "soft" && node.outgoing !== undefined
-				? { outgoing: oppositeOnSameLine(vector, node.outgoing) }
+				? { outgoing: oppositeOnSameLine(incoming, node.outgoing) }
 				: {}),
 		}
 	}
+	const outgoing =
+		node.mode === "soft" &&
+		node.incoming === undefined &&
+		node.outgoing !== undefined
+			? (withLengthAlong(node.outgoing, magnitude(vector)) ?? node.outgoing)
+			: vector
 	return {
 		...node,
-		outgoing: vector,
+		outgoing,
 		...(node.mode === "soft" && node.incoming !== undefined
-			? { incoming: oppositeOnSameLine(vector, node.incoming) }
+			? { incoming: oppositeOnSameLine(outgoing, node.incoming) }
 			: {}),
 	}
 }

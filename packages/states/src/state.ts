@@ -482,6 +482,18 @@ function handlesShareOppositeRay(
 	return Math.abs(cross) <= Number.EPSILON * 32 * scale && dot <= 0
 }
 
+function vectorWithLengthAlong(
+	direction: Vector2,
+	length: number,
+): Vector2 | null {
+	const directionLength = Math.hypot(direction.x, direction.y)
+	if (directionLength === 0) return null
+	return {
+		x: (direction.x / directionLength) * length,
+		y: (direction.y / directionLength) * length,
+	}
+}
+
 function validateEditorSourceStructure(source: EditorFontSource): void {
 	if (source.format !== TRIGRAPH_EDITOR_FORMAT) {
 		throw new TypeError(`Expected editor format ${TRIGRAPH_EDITOR_FORMAT}.`)
@@ -627,9 +639,9 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 					)
 				}
 				if (glyphPoints.get(point.pointId)?.mode === "soft") {
-					if (point.incoming === undefined || point.outgoing === undefined) {
+					if (point.incoming === undefined && point.outgoing === undefined) {
 						throw new TypeError(
-							`Soft node ${point.pointId} must have two handles.`,
+							`Soft node ${point.pointId} must have at least one handle.`,
 						)
 					}
 					if (
@@ -882,15 +894,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					return { x: handleX, y: handleY }
 				}
 
-				const incoming = readHandle("incoming")
-				const outgoing = readHandle("outgoing")
+				let incoming = readHandle("incoming")
+				let outgoing = readHandle("outgoing")
 				if (topology?.mode === "soft") {
-					if (incoming === undefined || outgoing === undefined) {
+					if (incoming === undefined && outgoing === undefined) {
 						errors.push(
 							projectionError(
 								"curve.soft_handle_pair",
 								path,
-								"A soft node requires both handles.",
+								"A soft node requires at least one handle.",
 								pointId,
 							),
 						)
@@ -907,6 +919,82 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 								pointId,
 							),
 						)
+					}
+					if (
+						x !== null &&
+						y !== null &&
+						(incoming === undefined) !== (outgoing === undefined)
+					) {
+						const contourId = (get(glyphContourIdsAtoms, glyphId) ?? []).find(
+							(candidate) =>
+								(
+									get(contourPointIdsAtoms, [glyphId, candidate]) ?? []
+								).includes(pointId),
+						)
+						if (contourId !== undefined) {
+							const pointIds =
+								get(contourPointIdsAtoms, [glyphId, contourId]) ?? []
+							const closed =
+								get(contourClosedAtoms, [glyphId, contourId]) ?? false
+							const pointIndex = pointIds.indexOf(pointId)
+							const neighborId =
+								incoming !== undefined
+									? pointIndex < pointIds.length - 1
+										? pointIds[pointIndex + 1]
+										: closed
+											? pointIds[0]
+											: undefined
+									: pointIndex > 0
+										? pointIds[pointIndex - 1]
+										: closed
+											? pointIds.at(-1)
+											: undefined
+							if (neighborId !== undefined) {
+								const neighborX = get(pointXAtoms, [
+									masterId,
+									glyphId,
+									neighborId,
+								])
+								const neighborY = get(pointYAtoms, [
+									masterId,
+									glyphId,
+									neighborId,
+								])
+								if (neighborX !== null && neighborY !== null) {
+									const neighborHandleX = get(
+										incoming !== undefined
+											? incomingHandleXAtoms
+											: outgoingHandleXAtoms,
+										[masterId, glyphId, neighborId],
+									)
+									const neighborHandleY = get(
+										incoming !== undefined
+											? incomingHandleYAtoms
+											: outgoingHandleYAtoms,
+										[masterId, glyphId, neighborId],
+									)
+									let tangentX = neighborX + (neighborHandleX ?? 0)
+									let tangentY = neighborY + (neighborHandleY ?? 0)
+									if (tangentX === x && tangentY === y) {
+										tangentX = neighborX
+										tangentY = neighborY
+									}
+									if (incoming !== undefined) {
+										incoming =
+											vectorWithLengthAlong(
+												{ x: x - tangentX, y: y - tangentY },
+												Math.hypot(incoming.x, incoming.y),
+											) ?? incoming
+									} else if (outgoing !== undefined) {
+										outgoing =
+											vectorWithLengthAlong(
+												{ x: x - tangentX, y: y - tangentY },
+												Math.hypot(outgoing.x, outgoing.y),
+											) ?? outgoing
+									}
+								}
+							}
+						}
 					}
 				}
 				if (
@@ -2653,28 +2741,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						])
 						if ((incomingX === null) !== (incomingY === null)) return null
 						if ((outgoingX === null) !== (outgoingY === null)) return null
-						const topology = get(pointAtoms, [glyphId, pointId])
-						if (topology === null) return null
-						const incoming =
-							incomingX === null || incomingY === null
-								? undefined
-								: { x: incomingX, y: incomingY }
-						const outgoing =
-							outgoingX === null || outgoingY === null
-								? undefined
-								: { x: outgoingX, y: outgoingY }
-						if (
-							topology.mode === "soft" &&
-							(incoming === undefined ||
-								outgoing === undefined ||
-								!handlesShareOppositeRay(incoming, outgoing))
-						) {
-							return null
-						}
+						const projected = get(layerNodeSelectors, [
+							masterId,
+							glyphId,
+							pointId,
+						])
+						if (!projected.ok) return null
+						const { incoming, outgoing } = projected.value
 						points.push({
 							pointId,
-							x,
-							y,
+							x: projected.value.x,
+							y: projected.value.y,
 							...(incoming === undefined ? {} : { incoming }),
 							...(outgoing === undefined ? {} : { outgoing }),
 						})
@@ -3080,14 +3157,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			if ((oldOppositeX === null) !== (oldOppositeY === null)) {
 				throw new TypeError("The opposite soft-node handle is incomplete.")
 			}
+			if (oldOppositeX === null || oldOppositeY === null) return
 			const movedLength = Math.hypot(input.vector.x, input.vector.y)
-			const oppositeLength =
-				oldOppositeX === null || oldOppositeY === null
-					? movedLength
-					: Math.hypot(oldOppositeX, oldOppositeY)
+			const oppositeLength = Math.hypot(oldOppositeX, oldOppositeY)
 			if (movedLength === 0) {
-				set(oppositeX, atomKey, oldOppositeX ?? 0)
-				set(oppositeY, atomKey, oldOppositeY ?? 0)
+				set(oppositeX, atomKey, oldOppositeX)
+				set(oppositeY, atomKey, oldOppositeY)
 				return
 			}
 			set(oppositeX, atomKey, (-input.vector.x / movedLength) * oppositeLength)
@@ -3137,8 +3212,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							: undefined
 				const layerPlans: {
 					readonly atomKey: LayerPointKey
-					readonly incoming: Vector2
-					readonly outgoing: Vector2
+					readonly incoming?: Vector2
+					readonly outgoing?: Vector2
 				}[] = []
 				for (const masterId of layerMasterIds) {
 					const atomKey: LayerPointKey = [
@@ -3198,6 +3273,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							y: (dy / distance) * length,
 						}
 						outgoing = { x: -incoming.x, y: -incoming.y }
+						layerPlans.push({ atomKey, outgoing })
+						continue
 					}
 					if (outgoingX === null || outgoingY === null) {
 						if (incoming === undefined || nextPointId === undefined) return
@@ -3230,6 +3307,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							y: (dy / distance) * length,
 						}
 						incoming = { x: -outgoing.x, y: -outgoing.y }
+						layerPlans.push({ atomKey, incoming })
+						continue
 					}
 					if (incoming === undefined || outgoing === undefined) return
 					const incomingLength = Math.hypot(incoming.x, incoming.y)
@@ -3247,10 +3326,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					})
 				}
 				for (const plan of layerPlans) {
-					set(incomingHandleXAtoms, plan.atomKey, plan.incoming.x)
-					set(incomingHandleYAtoms, plan.atomKey, plan.incoming.y)
-					set(outgoingHandleXAtoms, plan.atomKey, plan.outgoing.x)
-					set(outgoingHandleYAtoms, plan.atomKey, plan.outgoing.y)
+					if (plan.incoming !== undefined) {
+						set(incomingHandleXAtoms, plan.atomKey, plan.incoming.x)
+						set(incomingHandleYAtoms, plan.atomKey, plan.incoming.y)
+					}
+					if (plan.outgoing !== undefined) {
+						set(outgoingHandleXAtoms, plan.atomKey, plan.outgoing.x)
+						set(outgoingHandleYAtoms, plan.atomKey, plan.outgoing.y)
+					}
 				}
 			}
 			set(
@@ -3320,10 +3403,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 				if (input.point.mode === "soft") {
 					if (
-						coordinate.incoming === undefined ||
+						coordinate.incoming === undefined &&
 						coordinate.outgoing === undefined
 					) {
-						throw new TypeError("A soft node requires both handles.")
+						throw new TypeError("A soft node requires at least one handle.")
 					}
 					if (
 						coordinate.incoming !== undefined &&

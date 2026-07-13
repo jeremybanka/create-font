@@ -1370,12 +1370,12 @@ function diagnoseStructure(
 				if (point === undefined) continue
 				const topology = glyphPoints.get(point.pointId)
 				if (topology?.mode !== "soft") continue
-				if (point.incoming === undefined || point.outgoing === undefined) {
+				if (point.incoming === undefined && point.outgoing === undefined) {
 					add(
 						context,
 						"source.handle",
 						`${layerPath}.points[${pointIndex}]`,
-						"A soft node requires both handles in every layer.",
+						"A soft node requires at least one handle in every layer.",
 					)
 					continue
 				}

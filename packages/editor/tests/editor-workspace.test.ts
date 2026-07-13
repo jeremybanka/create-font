@@ -4,9 +4,14 @@ import {
 	blackMasterId,
 	notdefGlyphId,
 	oGlyphId,
+	razorMasterId,
 	weightAxisId,
 } from "../src/demo-font.ts"
-import { previewHandleDrag, toggledNodeMode } from "../src/curve-editing.ts"
+import {
+	deriveOneSidedSoftHandles,
+	previewHandleDrag,
+	toggledNodeMode,
+} from "../src/curve-editing.ts"
 import {
 	createEditorWorkspace,
 	type EditorWorkspace,
@@ -245,6 +250,48 @@ describe("editor workspace", () => {
 			mode: "hard",
 			incoming: { x: 0, y: 10 },
 		})
+		expect(
+			previewHandleDrag(
+				{
+					pointId: node.pointId,
+					mode: node.mode,
+					x: node.x,
+					y: node.y,
+					incoming: node.incoming,
+				},
+				"incoming",
+				{ x: 0, y: 25 },
+			),
+		).toEqual({
+			pointId: node.pointId,
+			mode: node.mode,
+			x: node.x,
+			y: node.y,
+			incoming: { x: -25, y: 0 },
+		})
+	})
+
+	it("derives a one-sided soft handle angle from the handleless side", () => {
+		const nodes = deriveOneSidedSoftHandles(
+			[
+				{
+					pointId: "point:first" as const,
+					mode: "soft" as const,
+					x: 0,
+					y: 0,
+					incoming: { x: -20, y: 0 },
+				},
+				{
+					pointId: "point:next" as const,
+					mode: "hard" as const,
+					x: 10,
+					y: 10,
+					incoming: { x: -10, y: 0 },
+				},
+			],
+			false,
+		)
+		expect(nodes[0]?.incoming).toEqual({ x: 0, y: -20 })
 	})
 
 	it("toggles node modes in both directions", () => {
@@ -278,6 +325,79 @@ describe("editor workspace", () => {
 				?.contours.flatMap((contour) => contour.nodes)
 				.find((point) => point.pointId === pointId)?.mode,
 		).toBe("soft")
+	})
+
+	it("keeps a deleted handle absent when toggling its node back to soft", () => {
+		const workspace = createEditorWorkspace()
+		const contour = workspace.document.glyphs.find(
+			(glyph) => glyph.id === oGlyphId,
+		)?.contours[0]
+		const pointId = contour?.points[0]?.id
+		const nextPointId = contour?.points[1]?.id
+		if (pointId === undefined || nextPointId === undefined) {
+			throw new Error("Fixture nodes are missing.")
+		}
+
+		workspace.font.actions.deleteSelection({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			pointIds: [],
+			handles: [{ pointId, handle: "outgoing" }],
+		})
+		workspace.font.actions.setNodeMode({
+			glyphId: oGlyphId,
+			pointId,
+			mode: "soft",
+		})
+
+		const nodes = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((candidate) => candidate.nodes)
+		const node = nodes?.find((candidate) => candidate.pointId === pointId)
+		const next = nodes?.find((candidate) => candidate.pointId === nextPointId)
+		if (node?.incoming === undefined || next === undefined) {
+			throw new Error("Softened layer nodes did not project.")
+		}
+		expect(node.mode).toBe("soft")
+		expect(node.outgoing).toBeUndefined()
+		const tangent = {
+			x: next.x + (next.incoming?.x ?? 0) - node.x,
+			y: next.y + (next.incoming?.y ?? 0) - node.y,
+		}
+		expect(
+			node.incoming.x * tangent.y - node.incoming.y * tangent.x,
+		).toBeCloseTo(0)
+		expect(
+			node.incoming.x * tangent.x + node.incoming.y * tangent.y,
+		).toBeLessThanOrEqual(0)
+		const originalLength = Math.hypot(node.incoming.x, node.incoming.y)
+
+		workspace.font.actions.movePoints({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId, x: node.x + 40, y: node.y - 60 }],
+		})
+		const movedNodes = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((candidate) => candidate.nodes)
+		const moved = movedNodes?.find((candidate) => candidate.pointId === pointId)
+		const nextAfterMove = movedNodes?.find(
+			(candidate) => candidate.pointId === nextPointId,
+		)
+		if (moved?.incoming === undefined || nextAfterMove === undefined) {
+			throw new Error("Moved one-sided soft node did not project.")
+		}
+		const movedTangent = {
+			x: nextAfterMove.x + (nextAfterMove.incoming?.x ?? 0) - moved.x,
+			y: nextAfterMove.y + (nextAfterMove.incoming?.y ?? 0) - moved.y,
+		}
+		expect(
+			moved.incoming.x * movedTangent.y - moved.incoming.y * movedTangent.x,
+		).toBeCloseTo(0)
+		expect(Math.hypot(moved.incoming.x, moved.incoming.y)).toBeCloseTo(
+			originalLength,
+		)
+		expect(moved.incoming).not.toEqual(node.incoming)
 	})
 
 	it("derives sidebearing from the resolved xMin and left phantom origin", () => {

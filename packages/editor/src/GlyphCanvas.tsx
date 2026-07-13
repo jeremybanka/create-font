@@ -13,7 +13,11 @@ import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
-import { previewHandleDrag, toggledNodeMode } from "./curve-editing.ts"
+import {
+	deriveOneSidedSoftHandles,
+	previewHandleDrag,
+	toggledNodeMode,
+} from "./curve-editing.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
 	contoursToPath,
@@ -109,22 +113,26 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const contours = layer?.contours ?? []
 	const visibleContours = useMemo(
 		() =>
-			contours.map((contour) => ({
-				closed: contour.closed,
-				nodes: contour.nodes.map((point) => {
-					const movedPoint =
-						point.pointId === draggedPoint?.pointId
-							? { ...point, x: draggedPoint.x, y: draggedPoint.y }
-							: point
-					return movedPoint.pointId === draggedHandle?.pointId
-						? previewHandleDrag(
-								movedPoint,
-								draggedHandle.handle,
-								draggedHandle.vector,
-							)
-						: movedPoint
-				}),
-			})),
+			contours.map((contour) => {
+				const positionedNodes = contour.nodes.map((point) =>
+					point.pointId === draggedPoint?.pointId
+						? { ...point, x: draggedPoint.x, y: draggedPoint.y }
+						: point,
+				)
+				return {
+					closed: contour.closed,
+					nodes: deriveOneSidedSoftHandles(positionedNodes, contour.closed).map(
+						(point) =>
+							point.pointId === draggedHandle?.pointId
+								? previewHandleDrag(
+										point,
+										draggedHandle.handle,
+										draggedHandle.vector,
+									)
+								: point,
+					),
+				}
+			}),
 		[contours, draggedHandle, draggedPoint],
 	)
 	const allPoints = visibleContours.flatMap((contour) => contour.nodes)
