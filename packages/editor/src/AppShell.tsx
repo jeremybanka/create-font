@@ -1,6 +1,11 @@
-import { useEffect } from "preact/hooks"
-
 import type { EditorWorkspace } from "./editor-workspace.ts"
+import {
+	ariaKeyShortcut,
+	formatHotkey,
+	MOD_KEY_LABEL,
+	TOOLBAR_LAYOUT,
+	useHotkeys,
+} from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
@@ -11,15 +16,6 @@ export interface AppShellProps {
 	readonly workspace: EditorWorkspace
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLInputElement ||
-		target instanceof HTMLTextAreaElement ||
-		target instanceof HTMLSelectElement ||
-		(target instanceof HTMLElement && target.isContentEditable)
-	)
-}
-
 export function AppShell({ workspace }: AppShellProps) {
 	const source = workspace.document
 	const compilation = useO(workspace.font.selectors.compilation)
@@ -28,22 +24,8 @@ export function AppShell({ workspace }: AppShellProps) {
 	const history = useTimeline(workspace.font.historyFor(activeGlyphId))
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (isEditableTarget(event.target)) return
-			if (
-				!(event.metaKey || event.ctrlKey) ||
-				event.key.toLowerCase() !== "z"
-			) {
-				return
-			}
-			event.preventDefault()
-			if (event.shiftKey) workspace.font.redo(activeGlyphId)
-			else workspace.font.undo(activeGlyphId)
-		}
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [activeGlyphId, workspace])
+	const toolContext = { activeGlyphId, history, workspace }
+	useHotkeys(toolContext)
 
 	const familyName =
 		source.names.typographicFamily ?? source.names.family ?? "Untitled font"
@@ -64,24 +46,22 @@ export function AppShell({ workspace }: AppShellProps) {
 				<history-controls
 					aria-label={`Edit history for ${glyph?.name ?? "glyph"}`}
 				>
-					<button
-						type="button"
-						title="Undo (⌘Z)"
-						aria-label="Undo"
-						disabled={history.at === 0}
-						onClick={() => workspace.font.undo(activeGlyphId)}
-					>
-						<span aria-hidden="true">↶</span>
-					</button>
-					<button
-						type="button"
-						title="Redo (⇧⌘Z)"
-						aria-label="Redo"
-						disabled={history.at === history.length}
-						onClick={() => workspace.font.redo(activeGlyphId)}
-					>
-						<span aria-hidden="true">↷</span>
-					</button>
+					{TOOLBAR_LAYOUT.flat().map((tool) => {
+						const hotkey = formatHotkey(tool.hotkey).join("+")
+						return (
+							<button
+								key={tool.id}
+								type="button"
+								title={`${tool.displayName} (${hotkey})`}
+								aria-label={tool.displayName}
+								aria-keyshortcuts={ariaKeyShortcut(tool.hotkey)}
+								disabled={tool.status(toolContext) === "disabled"}
+								onClick={() => tool.do(toolContext)}
+							>
+								<span aria-hidden="true">{tool.icon}</span>
+							</button>
+						)
+					})}
 				</history-controls>
 				<document-status
 					role="status"
@@ -107,8 +87,8 @@ export function AppShell({ workspace }: AppShellProps) {
 					<span>{master?.name ?? "—"}</span>
 				</active-context>
 				<keyboard-help>
-					Type · Double-click to edit · Esc to type · Scroll to pan · ⌘-wheel to
-					zoom
+					Type · Double-click to edit · Esc to type · Scroll to pan ·
+					{` ${MOD_KEY_LABEL}-wheel to zoom`}
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>
