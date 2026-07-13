@@ -99,14 +99,16 @@ export function contourStartDirection(
 	return null
 }
 
-/** Writes a closed editor contour using node-owned cubic handles. */
+/** Writes an editor contour using node-owned cubic handles. */
 export function editorContourToPath(
 	contour: readonly EditorOutlineNode[],
+	closed = true,
 ): string {
 	const start = contour[0]
 	if (start === undefined) return ""
 	const commands = [`M ${format(start.x)} ${format(start.y)}`]
-	for (let index = 0; index < contour.length; index += 1) {
+	const segmentCount = Math.max(0, contour.length - (closed ? 0 : 1))
+	for (let index = 0; index < segmentCount; index += 1) {
 		const from = contour[index]
 		const to = contour[(index + 1) % contour.length]
 		if (from === undefined || to === undefined) continue
@@ -126,14 +128,24 @@ export function editorContourToPath(
 			`C ${format(firstControl.x)} ${format(firstControl.y)} ${format(secondControl.x)} ${format(secondControl.y)} ${format(to.x)} ${format(to.y)}`,
 		)
 	}
-	commands.push("Z")
+	if (closed) commands.push("Z")
 	return commands.join(" ")
 }
 
 export function editorContoursToPath(
-	contours: readonly (readonly EditorOutlineNode[])[],
+	contours: readonly (
+		| readonly EditorOutlineNode[]
+		| { readonly closed: boolean; readonly nodes: readonly EditorOutlineNode[] }
+	)[],
 ): string {
-	return contours.map(editorContourToPath).filter(Boolean).join(" ")
+	return contours
+		.map((contour) =>
+			"nodes" in contour
+				? editorContourToPath(contour.nodes, contour.closed)
+				: editorContourToPath(contour),
+		)
+		.filter(Boolean)
+		.join(" ")
 }
 
 /** Converts a closed TrueType quadratic contour into SVG path commands. */

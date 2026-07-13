@@ -10,7 +10,7 @@ import type {
 } from "trigraph"
 
 export const TRIGRAPH_EDITOR_FORMAT = "trigraph.editor" as const
-export const TRIGRAPH_EDITOR_VERSION = 2 as const
+export const TRIGRAPH_EDITOR_VERSION = 3 as const
 
 /** Stable, serialization-safe identifiers scoped by editor entity kind. */
 export type AxisId = `axis:${string}`
@@ -121,6 +121,8 @@ export interface EditorPointSource {
 
 export interface EditorContourSource {
 	readonly id: ContourId
+	/** Open contours are valid editor state but must be closed before export. */
+	readonly closed: boolean
 	readonly points: readonly EditorPointSource[]
 }
 

@@ -98,6 +98,7 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 		contours: [
 			{
 				id: contourId(id, "outer"),
+				closed: true,
 				points: Array.from({ length: 4 }, (_, index) => ({
 					id: pointId(id, index * 2),
 					mode: "soft" as const,
@@ -105,6 +106,7 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 			},
 			{
 				id: contourId(id, "counter"),
+				closed: true,
 				points: Array.from({ length: 4 }, (_, index) => ({
 					id: pointId(id, index * 2 + 8),
 					mode: "soft" as const,
@@ -137,7 +139,7 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 export function makeDemoFont(): EditorFontSource {
 	return {
 		format: "trigraph.editor",
-		editorVersion: 2,
+		editorVersion: 3,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

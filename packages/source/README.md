@@ -3,14 +3,14 @@
 `@trigraph/source` is the deterministic file boundary for
 [`@trigraph/states`](../states/README.md). A file represents one complete
 `EditorFontSource` snapshot: the JSON root is the state document itself, with
-the existing `format: "trigraph.editor"` and `editorVersion: 2` discriminants.
+the existing `format: "trigraph.editor"` and `editorVersion: 3` discriminants.
 There is no second envelope and no file-only identity layer.
 
 That direct correspondence is important for a future server-backed editor.
 Stable IDs, author ordering, shared topology, master layers, locations, cmap
 references, relative incoming/outgoing handles, soft/hard node modes, and
-editor-only note and color fields all cross the boundary in the same form
-emitted by the state graph. Decoding returns the
+each contour's explicit `closed` state, plus editor-only note and color fields,
+all cross the boundary in the same form emitted by the state graph. Decoding returns the
 public type that can be passed to `createFontEditorState().actions.load`.
 
 ## The one JSON adaptation
@@ -89,9 +89,9 @@ empty PostScript name. Consequently, encoding a source before and after
 
 ## Validation boundary
 
-Version 2 is a closed schema. Version 1 is rejected explicitly rather than
-silently reinterpreted because node/handle ownership changed at the wire
-boundary. The decoder rejects invalid syntax, duplicate object keys,
+Version 3 is a closed schema. Earlier versions are rejected explicitly rather
+than silently reinterpreted: version 2 did not record whether contours were
+open or closed and allowed handleless soft nodes. The decoder rejects invalid syntax, duplicate object keys,
 prototype-sensitive keys, unknown properties, missing or wrongly typed fields,
 non-finite in-memory numbers, noncanonical timestamp strings, wrong ID kinds,
 duplicate identities, dangling references, invalid one-sided or non-collinear
@@ -104,8 +104,10 @@ the JavaScript call stack.
 
 This is structural source validation, not font compilation. An editor must be
 able to persist work in progress, so values that are structurally sound may
-still have invalid OpenType ranges, incomplete master coverage, or other
-projection and ingestion errors. Those remain the responsibility of
+still contain open contours, invalid OpenType ranges, incomplete master
+coverage, or other projection and ingestion errors. Open contours are
+deliberately accepted for broken-path editing and must be closed before export.
+Those export constraints remain the responsibility of
 `@trigraph/states` selectors and `trigraph` ingestion. A decoded value proves
 that it can be represented and addressed safely by the editor state model, not
 that it is already exportable.

@@ -283,6 +283,222 @@ describe("font editor state", () => {
 		}
 	})
 
+	it("deletes one handle independently and hardens its node", () => {
+		const editor = createLoadedEditor("test/delete-handle")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+
+		editor.actions.deleteSelection({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointIds: [],
+			handles: [{ pointId, handle: "incoming" }],
+		})
+
+		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!node.ok) throw new Error("Edited layer node did not project.")
+		expect(node.value.mode).toBe("hard")
+		expect(node.value.incoming).toBeUndefined()
+		expect(node.value.outgoing).toBeDefined()
+	})
+
+	it("keeps a handleless node hard and reconstructs a one-sided smooth node from its neighbor", () => {
+		const editor = createLoadedEditor("test/soften-one-sided")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[0]?.id
+		const nextPointId = contour?.points[1]?.id
+		if (pointId === undefined || nextPointId === undefined) {
+			throw new Error("Fixture nodes are missing.")
+		}
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "outgoing",
+				vector: null,
+			})
+		}
+
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
+		const node = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const next = editor.read.layerNode(blackMasterId, oGlyphId, nextPointId)
+		if (!node.ok || !next.ok || node.value.outgoing === undefined) {
+			throw new Error("Softened layer nodes did not project.")
+		}
+		expect(node.value.mode).toBe("soft")
+		const segment = {
+			x: next.value.x - node.value.x,
+			y: next.value.y - node.value.y,
+		}
+		expect(
+			node.value.outgoing.x * segment.y - node.value.outgoing.y * segment.x,
+		).toBeCloseTo(0)
+
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "incoming",
+				vector: null,
+			})
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "outgoing",
+				vector: null,
+			})
+		}
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
+		const handleless = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!handleless.ok) throw new Error("Handleless node did not project.")
+		expect(handleless.value.mode).toBe("hard")
+	})
+
+	it("deletes nodes while keeping a contour closed by default", () => {
+		const editor = createLoadedEditor("test/delete-node-closed")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[1]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+
+		editor.actions.deleteSelection({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointIds: [pointId],
+			handles: [],
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toHaveLength(3)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contour.id]),
+		).toBe(true)
+		expect(editor.read.compilation().stage).toBe("compiled")
+	})
+
+	it("breaks deleted node regions into open loose-ended paths and undoes atomically", () => {
+		const editor = createLoadedEditor("test/delete-node-open")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[1]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+
+		editor.actions.deleteSelection({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointIds: [pointId],
+			handles: [],
+			breakPaths: true,
+		})
+
+		const remaining = editor.silo.getState(editor.atoms.contourPointIds, [
+			oGlyphId,
+			contour.id,
+		])
+		expect(remaining).toHaveLength(3)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contour.id]),
+		).toBe(false)
+		const firstPointId = remaining?.[0]
+		const lastPointId = remaining?.at(-1)
+		if (firstPointId === undefined || lastPointId === undefined) {
+			throw new Error("Broken path endpoints are missing.")
+		}
+		const first = editor.read.layerNode(blackMasterId, oGlyphId, firstPointId)
+		const last = editor.read.layerNode(blackMasterId, oGlyphId, lastPointId)
+		if (!first.ok || !last.ok)
+			throw new Error("Broken endpoints did not project.")
+		expect(first.value.incoming).toBeUndefined()
+		expect(last.value.outgoing).toBeUndefined()
+		expect(first.value.mode).toBe("hard")
+		expect(last.value.mode).toBe("hard")
+		const compilation = editor.read.compilation()
+		expect(compilation.stage).toBe("projection-failed")
+		if (compilation.stage === "projection-failed") {
+			expect(compilation.projectionErrors).toContainEqual(
+				expect.objectContaining({ code: "topology.open_contour" }),
+			)
+		}
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toHaveLength(4)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contour.id]),
+		).toBe(true)
+	})
+
+	it("splits disjoint deleted regions into separate open contours", () => {
+		const editor = createLoadedEditor("test/delete-disjoint-regions")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const firstPointId = contour?.points[0]?.id
+		const thirdPointId = contour?.points[2]?.id
+		if (
+			contour === undefined ||
+			firstPointId === undefined ||
+			thirdPointId === undefined
+		) {
+			throw new Error("Fixture contour is missing.")
+		}
+
+		editor.actions.deleteSelection({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointIds: [firstPointId, thirdPointId],
+			handles: [],
+			breakPaths: true,
+		})
+
+		const contourIds = editor.silo.getState(
+			editor.atoms.glyphContourIds,
+			oGlyphId,
+		)
+		expect(contourIds).toHaveLength(3)
+		const splitContours = contourIds?.slice(0, 2) ?? []
+		expect(
+			splitContours.map((contourId) =>
+				editor.silo.getState(editor.atoms.contourPointIds, [
+					oGlyphId,
+					contourId,
+				]),
+			),
+		).toEqual([[contour.points[1]?.id], [contour.points[3]?.id]])
+		expect(
+			splitContours.map((contourId) =>
+				editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contourId]),
+			),
+		).toEqual([false, false])
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.glyphContourIds, oGlyphId),
+		).toHaveLength(2)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toHaveLength(4)
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.glyphContourIds, oGlyphId),
+		).toHaveLength(3)
+	})
+
 	it("diagnoses a raw one-sided soft handle instead of serializing it", () => {
 		const editor = createLoadedEditor("test/raw-soft-invariant")
 		const pointId =

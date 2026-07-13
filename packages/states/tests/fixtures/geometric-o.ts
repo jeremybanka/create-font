@@ -101,10 +101,12 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 	contours: [
 		{
 			id: contourId(id, "outer"),
+			closed: true,
 			points: [0, 2, 4, 6].map((index) => topologyPoint(id, index)),
 		},
 		{
 			id: contourId(id, "counter"),
+			closed: true,
 			points: [8, 10, 12, 14].map((index) => topologyPoint(id, index)),
 		},
 	],
@@ -133,7 +135,7 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 export function makeGeometricOEditorFont(): EditorFontSource {
 	return {
 		format: "trigraph.editor",
-		editorVersion: 2,
+		editorVersion: 3,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

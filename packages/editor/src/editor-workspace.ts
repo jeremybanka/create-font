@@ -7,18 +7,23 @@ import {
 	type GlyphId,
 	type InstanceId,
 	type MasterId,
-	type PointId,
 } from "@trigraph/states"
 
 import { makeDemoFont } from "./demo-font.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
+import type { EditorSelectionTarget } from "./outline-selection.ts"
 
 export interface EditorCanvasLayer {
 	readonly masterId: MasterId
 	readonly glyphId: GlyphId
-	readonly contours: readonly (readonly EditorLayerNode[])[]
+	readonly contours: readonly EditorCanvasContour[]
 	readonly advanceWidth: number
 	readonly leftSideBearing: number
+}
+
+export interface EditorCanvasContour {
+	readonly closed: boolean
+	readonly nodes: readonly EditorLayerNode[]
 }
 
 export interface PreviewRunGlyph {
@@ -63,9 +68,9 @@ export function createEditorWorkspace(
 		key: key("activeMasterId"),
 		default: document.defaultMasterId,
 	})
-	const selectedPointId = font.silo.atom<PointId | null>({
-		key: key("selectedPointId"),
-		default: null,
+	const selection = font.silo.atom<readonly EditorSelectionTarget[]>({
+		key: key("selection"),
+		default: Object.freeze([]),
 	})
 	const previewText = font.silo.atom<string>({
 		key: key("previewText"),
@@ -121,10 +126,11 @@ export function createEditorWorkspace(
 			) {
 				return null
 			}
-			const contours: (readonly EditorLayerNode[])[] = []
+			const contours: EditorCanvasContour[] = []
 			for (const contourId of contourIds) {
 				const pointIds = get(font.atoms.contourPointIds, [glyphId, contourId])
-				if (pointIds === null) return null
+				const closed = get(font.atoms.contourClosed, [glyphId, contourId])
+				if (pointIds === null || closed === null) return null
 				const contour: EditorLayerNode[] = []
 				for (const pointId of pointIds) {
 					const node = get(font.selectors.layerNode, [
@@ -135,7 +141,7 @@ export function createEditorWorkspace(
 					if (!node.ok) return null
 					contour.push(node.value)
 				}
-				contours.push(Object.freeze(contour))
+				contours.push(Object.freeze({ closed, nodes: Object.freeze(contour) }))
 			}
 			return Object.freeze({
 				masterId,
@@ -210,7 +216,7 @@ export function createEditorWorkspace(
 		ui: {
 			activeGlyphId,
 			activeMasterId,
-			selectedPointId,
+			selection,
 			previewText,
 			caretIndex,
 			editingTextIndex,
@@ -224,18 +230,18 @@ export function createEditorWorkspace(
 			selectGlyph(glyphId: GlyphId): void {
 				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
 				font.silo.setState(activeGlyphId, glyphId)
-				font.silo.setState(selectedPointId, null)
+				font.silo.setState(selection, Object.freeze([]))
 				font.silo.setState(editingTextIndex, null)
 			},
 			enterGlyphEdit(textStart: number, glyphId: GlyphId): void {
 				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
 				font.silo.setState(activeGlyphId, glyphId)
 				font.silo.setState(editingTextIndex, textStart)
-				font.silo.setState(selectedPointId, null)
+				font.silo.setState(selection, Object.freeze([]))
 			},
 			exitGlyphEdit(): void {
 				font.silo.setState(editingTextIndex, null)
-				font.silo.setState(selectedPointId, null)
+				font.silo.setState(selection, Object.freeze([]))
 			},
 			selectMaster(masterId: MasterId): void {
 				const master = document.masters.find((item) => item.id === masterId)

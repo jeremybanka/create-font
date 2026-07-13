@@ -3,7 +3,7 @@ import type { EditorFontSource } from "@trigraph/states"
 /** The file is the editor document itself; no additional envelope is added. */
 export const TRIGRAPH_EDITOR_FORMAT: EditorFontSource["format"] =
 	"trigraph.editor"
-export const TRIGRAPH_EDITOR_VERSION: EditorFontSource["editorVersion"] = 2
+export const TRIGRAPH_EDITOR_VERSION: EditorFontSource["editorVersion"] = 3
 
 /**
  * JSON has no bigint scalar. OpenType timestamps therefore use canonical,
@@ -19,7 +19,7 @@ export type EditorFontFileMetadata = Omit<
 }
 
 /**
- * Version 2's on-disk shape. It is exactly `EditorFontSource`, apart from the
+ * Version 3's on-disk shape. It is exactly `EditorFontSource`, apart from the
  * documented timestamp representation above.
  */
 export type EditorFontFile = Omit<EditorFontSource, "metadata"> & {

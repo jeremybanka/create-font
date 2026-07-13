@@ -827,11 +827,12 @@ function parseContour(
 	context: ValidationContext,
 ): EditorContourSource {
 	const record = objectValue(value, path, context)
-	if (record === null) return { id: "contour:", points: [] }
-	checkShape(record, ["id", "points"], path, context)
+	if (record === null) return { id: "contour:", closed: true, points: [] }
+	checkShape(record, ["id", "closed", "points"], path, context)
 	const points = requiredArray(record, "points", path, context)
 	return {
 		id: requiredId<ContourId>(record, "id", "contour:", path, context),
+		closed: requiredBoolean(record, "closed", path, context),
 		points:
 			points?.map((point, index) =>
 				parsePoint(point, `${path}.points[${index}]`, context),
@@ -1369,12 +1370,12 @@ function diagnoseStructure(
 				if (point === undefined) continue
 				const topology = glyphPoints.get(point.pointId)
 				if (topology?.mode !== "soft") continue
-				if ((point.incoming === undefined) !== (point.outgoing === undefined)) {
+				if (point.incoming === undefined || point.outgoing === undefined) {
 					add(
 						context,
 						"source.handle",
 						`${layerPath}.points[${pointIndex}]`,
-						"A soft node requires both handles or neither handle in every layer.",
+						"A soft node requires both handles in every layer.",
 					)
 					continue
 				}
@@ -1445,6 +1446,7 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 				...(glyph.overlap ? { overlap: true } : {}),
 				contours: glyph.contours.map((contour) => ({
 					id: contour.id,
+					closed: contour.closed,
 					points: contour.points.map((point) => ({
 						id: point.id,
 						mode: point.mode,

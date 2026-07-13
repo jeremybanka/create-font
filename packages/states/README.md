@@ -34,8 +34,8 @@ The principal entities are:
   support regions;
 - named instances keyed by stable axis IDs;
 - glyph records containing export intent and editor-only note and color;
-- one ordered contour/node topology per glyph, with `soft` or `hard` editing
-  behavior shared by every master;
+- one ordered open-or-closed contour/node topology per glyph, with `soft` or
+  `hard` editing behavior shared by every master;
 - one coordinate, relative incoming/outgoing handle, and metrics layer per
   glyph and master;
 - a character map from Unicode code points to stable glyph IDs.
@@ -47,12 +47,12 @@ to their owning node, so moving a node carries its handles without rewriting
 them. A structural node edit can therefore update every layer atomically, and
 lowering never has to guess whether master contours correspond.
 
-Soft nodes require either two handles or no handles in every layer. Their
-handles lie on opposite rays of one line. Moving either handle rotates the
-other while preserving its length; removing one removes both. Changing a hard
-node to soft mirrors a missing handle or uses the incoming handle as the
-reference direction when both exist. Hard nodes permit independent and
-one-sided handles.
+Soft nodes require two handles in every layer, lying on opposite rays of one
+line. Moving either handle rotates the other while preserving its length.
+Deleting one handle leaves its mate intact and makes the node hard. Changing a
+one-sided hard node to soft reconstructs its missing handle from the adjacent
+segment on that side and aligns both handles; a handleless node remains hard.
+Hard nodes permit independent and one-sided handles.
 
 ## Atom graph
 
@@ -145,12 +145,16 @@ font-format invariant that the composed source violates.
 ## Editing semantics
 
 Structural operations are synchronous atom.io transactions. Inserting a shared
-node, loading a document, moving several coordinates, dragging a handle, and
-changing node mode must either update the complete affected structure or make
-no change. Each glyph receives its own timeline over only that glyph's family
-members, while projections remain derived state. Undoing `glyph:O` therefore
-cannot rewind `.notdef`, even though both histories live in the document's
-isolated `Silo`.
+node, loading a document, moving several coordinates, dragging or deleting a
+handle, deleting nodes, and changing node mode must either update the complete
+affected structure or make no change. Ordinary node deletion reconnects and
+keeps a contour closed. Breaking deletion splits remaining regions into open
+contours and removes the outward handles from their loose ends. Open contours
+remain valid, serializable editor state but produce a typed
+`topology.open_contour` projection error until closed. Each glyph receives its
+own timeline over only that glyph's family members, while projections remain
+derived state. Undoing `glyph:O` therefore cannot rewind `.notdef`, even though
+both histories live in the document's isolated `Silo`.
 
 Loading is intended for trusted `EditorFontSource` values already constructed
 or decoded by an application. It checks structural requirements needed to

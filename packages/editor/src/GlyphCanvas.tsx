@@ -11,6 +11,11 @@ import {
 	editorContoursToPath,
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
+import {
+	controlsInsideBounds,
+	selectionKey,
+	type EditorSelectionTarget,
+} from "./outline-selection.ts"
 import { Circle, Group, Layer, Line, Path, Rect, Stage } from "./react-konva.ts"
 import { useI, useO } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
@@ -31,6 +36,14 @@ interface DraggedHandle {
 	readonly pointId: PointId
 	readonly handle: EditorHandleKind
 	readonly vector: Readonly<{ x: number; y: number }>
+}
+
+interface SelectionBox {
+	readonly startX: number
+	readonly startY: number
+	readonly endX: number
+	readonly endY: number
+	readonly additive: boolean
 }
 
 const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
@@ -63,12 +76,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const layer = useO(workspace.ui.activeLayer)
-	const selectedPointId = useO(workspace.ui.selectedPointId)
-	const setSelectedPointId = useI(workspace.ui.selectedPointId)
+	const selection = useO(workspace.ui.selection)
+	const setSelection = useI(workspace.ui.selection)
 	const showNodes = useO(workspace.ui.showNodes)
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
+	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -85,8 +99,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const contours = layer?.contours ?? []
 	const visibleContours = useMemo(
 		() =>
-			contours.map((contour) =>
-				contour.map((point) => {
+			contours.map((contour) => ({
+				closed: contour.closed,
+				nodes: contour.nodes.map((point) => {
 					const movedPoint =
 						point.pointId === draggedPoint?.pointId
 							? { ...point, x: draggedPoint.x, y: draggedPoint.y }
@@ -99,13 +114,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							)
 						: movedPoint
 				}),
-			),
+			})),
 		[contours, draggedHandle, draggedPoint],
 	)
-	const allPoints = visibleContours.flat()
-	const selectedPoint = allPoints.find(
-		(point) => point.pointId === selectedPointId,
+	const allPoints = visibleContours.flatMap((contour) => contour.nodes)
+	const selectedNodeIds = new Set(
+		selection
+			.filter((target) => target.kind === "node")
+			.map((target) => target.pointId),
 	)
+	const selectedPoints = allPoints.filter((point) =>
+		selectedNodeIds.has(point.pointId),
+	)
+	const selectedPoint = selectedPoints.at(-1)
 	const metrics = source.metrics
 	const advanceWidth = layer?.advanceWidth ?? 1_000
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
@@ -113,6 +134,51 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const caret =
 		layout.carets.find((candidate) => candidate.textIndex === caretIndex) ??
 		layout.carets.at(-1)
+	const isSelected = (target: EditorSelectionTarget): boolean => {
+		const key = selectionKey(target)
+		return selection.some((candidate) => selectionKey(candidate) === key)
+	}
+	const selectTarget = (
+		target: EditorSelectionTarget,
+		event?: MouseEvent | TouchEvent,
+	): void => {
+		const additive =
+			event instanceof MouseEvent &&
+			(event.metaKey || event.ctrlKey || event.shiftKey)
+		if (!additive) {
+			setSelection(Object.freeze([target]))
+			return
+		}
+		const key = selectionKey(target)
+		setSelection((current) =>
+			Object.freeze(
+				current.some((candidate) => selectionKey(candidate) === key)
+					? current.filter((candidate) => selectionKey(candidate) !== key)
+					: [...current, target],
+			),
+		)
+	}
+	const pointerInEditingGlyph = (
+		event: KonvaEventObject<MouseEvent>,
+	): Readonly<{ x: number; y: number }> | null => {
+		if (editingPosition === undefined) return null
+		const pointer = event.target.getStage()?.getPointerPosition()
+		if (pointer === null || pointer === undefined) return null
+		return {
+			x: (pointer.x - view.x) / worldScale - editingPosition.x,
+			y: editingPosition.baseline - (pointer.y - view.y) / worldScale,
+		}
+	}
+	const targetsInside = (
+		box: SelectionBox,
+	): readonly EditorSelectionTarget[] => {
+		return controlsInsideBounds(allPoints, {
+			minX: Math.min(box.startX, box.endX),
+			maxX: Math.max(box.startX, box.endX),
+			minY: Math.min(box.startY, box.endY),
+			maxY: Math.max(box.startY, box.endY),
+		})
+	}
 
 	useEffect(() => {
 		if (editingTextIndex !== null) return
@@ -161,6 +227,24 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		workspace.actions.exitGlyphEdit()
 		focusTypingAt(nextCaret)
 	}
+	const deleteSelected = (breakPaths: boolean): void => {
+		if (selection.length === 0) return
+		workspace.font.actions.deleteSelection({
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+			pointIds: selection
+				.filter((target) => target.kind === "node")
+				.map((target) => target.pointId),
+			handles: selection
+				.filter((target) => target.kind === "handle")
+				.map((target) => ({
+					pointId: target.pointId,
+					handle: target.handle,
+				})),
+			breakPaths,
+		})
+		setSelection(Object.freeze([]))
+	}
 	const zoomCanvas = (
 		nextZoom: number,
 		focalX = width / 2,
@@ -187,7 +271,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
 				if (event.key === "Escape" && editingTextIndex !== null) {
@@ -203,12 +287,55 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					return
 				if (
 					editingTextIndex !== null &&
+					(event.metaKey || event.ctrlKey) &&
+					event.key.toLowerCase() === "a"
+				) {
+					event.preventDefault()
+					setSelection(
+						Object.freeze(
+							allPoints.flatMap((point): EditorSelectionTarget[] => [
+								{ kind: "node", pointId: point.pointId },
+								...(point.incoming === undefined
+									? []
+									: [
+											{
+												kind: "handle" as const,
+												pointId: point.pointId,
+												handle: "incoming" as const,
+											},
+										]),
+								...(point.outgoing === undefined
+									? []
+									: [
+											{
+												kind: "handle" as const,
+												pointId: point.pointId,
+												handle: "outgoing" as const,
+											},
+										]),
+							]),
+						),
+					)
+					setShowNodes(true)
+					return
+				}
+				if (
+					editingTextIndex !== null &&
+					(event.key === "Delete" || event.key === "Backspace") &&
+					selection.length > 0
+				) {
+					event.preventDefault()
+					deleteSelected(event.altKey)
+					return
+				}
+				if (
+					editingTextIndex !== null &&
 					(event.key === "[" || event.key === "]") &&
 					allPoints.length > 0
 				) {
 					event.preventDefault()
 					const currentIndex = allPoints.findIndex(
-						(point) => point.pointId === selectedPointId,
+						(point) => point.pointId === selectedPoint?.pointId,
 					)
 					const direction = event.key === "]" ? 1 : -1
 					const nextIndex =
@@ -217,7 +344,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 								? 0
 								: allPoints.length - 1
 							: (currentIndex + direction + allPoints.length) % allPoints.length
-					setSelectedPointId(allPoints[nextIndex]?.pointId ?? null)
+					const nextPoint = allPoints[nextIndex]
+					setSelection(
+						nextPoint === undefined
+							? Object.freeze([])
+							: Object.freeze([{ kind: "node", pointId: nextPoint.pointId }]),
+					)
 					setShowNodes(true)
 					return
 				}
@@ -234,15 +366,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				if (
 					editingTextIndex === null ||
 					delta === undefined ||
-					selectedPoint === undefined
+					selectedPoints.length === 0
 				)
 					return
 				event.preventDefault()
 				const multiplier = event.shiftKey ? 10 : 1
-				commitPoint({
-					pointId: selectedPoint.pointId,
-					x: selectedPoint.x + delta[0] * multiplier,
-					y: selectedPoint.y + delta[1] * multiplier,
+				workspace.font.actions.movePoints({
+					masterId: activeMasterId,
+					glyphId: activeGlyphId,
+					points: selectedPoints.map((point) => ({
+						pointId: point.pointId,
+						x: point.x + delta[0] * multiplier,
+						y: point.y + delta[1] * multiplier,
+					})),
 				})
 			}}
 		>
@@ -367,7 +503,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (event.target.name() !== "canvas-background") return
 						if (editingTextIndex !== null) {
-							setSelectedPointId(null)
+							const point = pointerInEditingGlyph(event)
+							if (point === null) return
+							setSelectionBox({
+								startX: point.x,
+								startY: point.y,
+								endX: point.x,
+								endY: point.y,
+								additive:
+									event.evt.metaKey || event.evt.ctrlKey || event.evt.shiftKey,
+							})
 							return
 						}
 						const pointer = event.target.getStage()?.getPointerPosition()
@@ -380,12 +525,36 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							),
 						)
 					}}
+					onMouseMove={(event: KonvaEventObject<MouseEvent>) => {
+						if (selectionBox === null) return
+						const point = pointerInEditingGlyph(event)
+						if (point === null) return
+						setSelectionBox((current) =>
+							current === null
+								? null
+								: { ...current, endX: point.x, endY: point.y },
+						)
+					}}
+					onMouseUp={() => {
+						if (selectionBox === null) return
+						const boxed = targetsInside(selectionBox)
+						setSelection((current) => {
+							if (!selectionBox.additive) return Object.freeze(boxed)
+							const merged = new Map(
+								current.map((target) => [selectionKey(target), target]),
+							)
+							for (const target of boxed)
+								merged.set(selectionKey(target), target)
+							return Object.freeze([...merged.values()])
+						})
+						setSelectionBox(null)
+					}}
 					onTouchStart={(event: KonvaEventObject<TouchEvent>) => {
 						if (
 							editingTextIndex !== null &&
 							event.target.name() === "canvas-background"
 						)
-							setSelectedPointId(null)
+							setSelection(Object.freeze([]))
 					}}
 				>
 					<Layer>
@@ -482,7 +651,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 										{ y: metrics.capHeight, color: palette.guideMid, width: 1 },
 									].map((guide) => (
 										<Line
-											key={guide.y}
+											key={`horizontal-guide:${guide.y}`}
 											points={[-200, guide.y, advanceWidth + 200, guide.y]}
 											stroke={guide.color}
 											strokeWidth={guide.width * inverseScale}
@@ -491,7 +660,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									))}
 									{[0, advanceWidth].map((x) => (
 										<Line
-											key={x}
+											key={`vertical-guide:${x}`}
 											points={[x, metrics.descender, x, metrics.ascender]}
 											stroke={palette.guideSoft}
 											strokeWidth={inverseScale}
@@ -507,12 +676,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									/>
 									{showNodes
 										? visibleContours.map((contour, contourIndex) => {
-												const direction = contourStartDirection(contour)
+												const direction = contourStartDirection(contour.nodes)
 												const directionRadians =
 													((direction?.angle ?? 0) * Math.PI) / 180
 												return (
 													<Group key={`handles:${contourIndex}`}>
-														{contour.map((point) => (
+														{contour.nodes.map((point) => (
 															<Group key={`controls:${point.pointId}`}>
 																{point.incoming === undefined ? null : (
 																	<Line
@@ -544,11 +713,32 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																)}
 															</Group>
 														))}
-														{contour.map((point, pointIndex) => {
-															const selectPoint = (): void =>
-																setSelectedPointId(point.pointId)
+														{contour.nodes.map((point, pointIndex) => {
+															const nodeTarget: EditorSelectionTarget = {
+																kind: "node",
+																pointId: point.pointId,
+															}
+															const selectPoint = (
+																event?: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															): void => selectTarget(nodeTarget, event?.evt)
+															const selectHandle = (
+																handle: EditorHandleKind,
+																event?: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															): void =>
+																selectTarget(
+																	{
+																		kind: "handle",
+																		pointId: point.pointId,
+																		handle,
+																	},
+																	event?.evt,
+																)
 															const togglePointMode = (): void => {
-																selectPoint()
+																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
 															}
 															const dragHandle = (
@@ -596,70 +786,126 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															return (
 																<Group key={`node:${point.pointId}`}>
 																	{point.incoming === undefined ? null : (
-																		<Circle
-																			key={`incoming-handle:${point.pointId}`}
-																			name="bezier-handle"
-																			x={point.x + point.incoming.x}
-																			y={point.y + point.incoming.y}
-																			radius={3.5 * inverseScale}
-																			fill={palette.accent}
-																			stroke={palette.nodeStroke}
-																			strokeWidth={inverseScale}
-																			draggable
-																			onMouseDown={selectPoint}
-																			onTouchStart={selectPoint}
-																			onTap={selectPoint}
-																			onDragStart={selectPoint}
-																			onDragMove={(
-																				event: KonvaEventObject<DragEvent>,
-																			) =>
-																				setDraggedHandle(
-																					dragHandle("incoming", event),
-																				)
-																			}
-																			onDragEnd={(
-																				event: KonvaEventObject<DragEvent>,
-																			) => {
-																				commitHandle(
-																					dragHandle("incoming", event),
-																				)
-																				setDraggedHandle(null)
-																			}}
-																		/>
+																		<Group
+																			key={`incoming-control:${point.pointId}`}
+																		>
+																			<Circle
+																				key={`incoming-handle:${point.pointId}`}
+																				name="bezier-handle"
+																				x={point.x + point.incoming.x}
+																				y={point.y + point.incoming.y}
+																				radius={3.5 * inverseScale}
+																				fill={palette.accent}
+																				stroke={palette.nodeStroke}
+																				strokeWidth={inverseScale}
+																				draggable
+																				onMouseDown={(
+																					event: KonvaEventObject<MouseEvent>,
+																				) => selectHandle("incoming", event)}
+																				onTouchStart={(
+																					event: KonvaEventObject<TouchEvent>,
+																				) => selectHandle("incoming", event)}
+																				onTap={(
+																					event: KonvaEventObject<
+																						MouseEvent | TouchEvent
+																					>,
+																				) => selectHandle("incoming", event)}
+																				onDragStart={() =>
+																					selectHandle("incoming")
+																				}
+																				onDragMove={(
+																					event: KonvaEventObject<DragEvent>,
+																				) =>
+																					setDraggedHandle(
+																						dragHandle("incoming", event),
+																					)
+																				}
+																				onDragEnd={(
+																					event: KonvaEventObject<DragEvent>,
+																				) => {
+																					commitHandle(
+																						dragHandle("incoming", event),
+																					)
+																					setDraggedHandle(null)
+																				}}
+																			/>
+																			{isSelected({
+																				kind: "handle",
+																				pointId: point.pointId,
+																				handle: "incoming",
+																			}) ? (
+																				<Circle
+																					x={point.x + point.incoming.x}
+																					y={point.y + point.incoming.y}
+																					radius={8 * inverseScale}
+																					stroke={palette.accent}
+																					strokeWidth={2 * inverseScale}
+																					listening={false}
+																				/>
+																			) : null}
+																		</Group>
 																	)}
 																	{point.outgoing === undefined ? null : (
-																		<Circle
-																			key={`outgoing-handle:${point.pointId}`}
-																			name="bezier-handle"
-																			x={point.x + point.outgoing.x}
-																			y={point.y + point.outgoing.y}
-																			radius={3.5 * inverseScale}
-																			fill={palette.accent}
-																			stroke={palette.nodeStroke}
-																			strokeWidth={inverseScale}
-																			draggable
-																			onMouseDown={selectPoint}
-																			onTouchStart={selectPoint}
-																			onTap={selectPoint}
-																			onDragStart={selectPoint}
-																			onDragMove={(
-																				event: KonvaEventObject<DragEvent>,
-																			) =>
-																				setDraggedHandle(
-																					dragHandle("outgoing", event),
-																				)
-																			}
-																			onDragEnd={(
-																				event: KonvaEventObject<DragEvent>,
-																			) => {
-																				commitHandle(
-																					dragHandle("outgoing", event),
-																				)
-																				setDraggedHandle(null)
-																			}}
-																		/>
+																		<Group
+																			key={`outgoing-control:${point.pointId}`}
+																		>
+																			<Circle
+																				key={`outgoing-handle:${point.pointId}`}
+																				name="bezier-handle"
+																				x={point.x + point.outgoing.x}
+																				y={point.y + point.outgoing.y}
+																				radius={3.5 * inverseScale}
+																				fill={palette.accent}
+																				stroke={palette.nodeStroke}
+																				strokeWidth={inverseScale}
+																				draggable
+																				onMouseDown={(
+																					event: KonvaEventObject<MouseEvent>,
+																				) => selectHandle("outgoing", event)}
+																				onTouchStart={(
+																					event: KonvaEventObject<TouchEvent>,
+																				) => selectHandle("outgoing", event)}
+																				onTap={(
+																					event: KonvaEventObject<
+																						MouseEvent | TouchEvent
+																					>,
+																				) => selectHandle("outgoing", event)}
+																				onDragStart={() =>
+																					selectHandle("outgoing")
+																				}
+																				onDragMove={(
+																					event: KonvaEventObject<DragEvent>,
+																				) =>
+																					setDraggedHandle(
+																						dragHandle("outgoing", event),
+																					)
+																				}
+																				onDragEnd={(
+																					event: KonvaEventObject<DragEvent>,
+																				) => {
+																					commitHandle(
+																						dragHandle("outgoing", event),
+																					)
+																					setDraggedHandle(null)
+																				}}
+																			/>
+																			{isSelected({
+																				kind: "handle",
+																				pointId: point.pointId,
+																				handle: "outgoing",
+																			}) ? (
+																				<Circle
+																					x={point.x + point.outgoing.x}
+																					y={point.y + point.outgoing.y}
+																					radius={8 * inverseScale}
+																					stroke={palette.accent}
+																					strokeWidth={2 * inverseScale}
+																					listening={false}
+																				/>
+																			) : null}
+																		</Group>
 																	)}
-																	{point.pointId === selectedPointId ? (
+																	{isSelected(nodeTarget) ? (
 																		<Circle
 																			key={`selection:${point.pointId}`}
 																			x={point.x}
@@ -724,6 +970,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 												)
 											})
 										: null}
+									{selectionBox === null ? null : (
+										<Rect
+											x={Math.min(selectionBox.startX, selectionBox.endX)}
+											y={Math.min(selectionBox.startY, selectionBox.endY)}
+											width={Math.abs(selectionBox.endX - selectionBox.startX)}
+											height={Math.abs(selectionBox.endY - selectionBox.startY)}
+											fill={palette.accent}
+											opacity={0.14}
+											stroke={palette.accent}
+											strokeWidth={inverseScale}
+											listening={false}
+										/>
+									)}
 								</Group>
 							)}
 						</Group>
@@ -733,14 +992,18 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			<p id="canvas-instructions">
 				Type and add line breaks normally. Scroll to pan; use Command or Control
 				with the wheel to zoom. Double-click a glyph to edit its outline. Press
-				Escape to return to typing.
+				Escape to return to typing. Drag an empty area to box-select controls;
+				press Command or Control+A to select all, and Delete to remove the
+				selection. Hold Option or Alt while deleting nodes to break paths open.
 			</p>
 			<output role="status" aria-live="polite">
 				{editingTextIndex === null
 					? `Typing mode at text position ${caretIndex}.`
-					: selectedPoint === undefined
-						? `Editing ${glyph?.name ?? "glyph"}; no outline node selected.`
-						: `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`}
+					: selection.length === 0
+						? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+						: selection.length === 1 && selectedPoint !== undefined
+							? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+							: `${selection.length} outline controls selected.`}
 			</output>
 		</glyph-canvas>
 	)

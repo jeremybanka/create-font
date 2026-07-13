@@ -81,6 +81,12 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
   preview to that named location.
 - Once an occurrence is being edited, drag a node or either of its anchored
   Bézier handles in one gesture.
+- Drag an empty canvas region to box-select nodes and handle endpoints. Hold
+  Shift, Command, or Control to add controls to the existing selection;
+  Command/Control-A selects every visible node and handle.
+- Delete or Backspace removes selected handles independently and removes
+  selected nodes while keeping their contours closed. Hold Option/Alt while
+  deleting nodes to split the remaining regions into open, loose-ended paths.
 - Switch a selected node between Soft (collinear handles) and Hard (independent
   or one-sided handles) in the inspector.
 - Double-click a node, or press Enter while it is selected, to toggle Soft and
@@ -88,7 +94,7 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
 - Editor contours are intentionally unfilled. The triangular first node marks
   each contour's direction.
 - Focus the canvas and use bracket keys to traverse nodes, then arrow keys to
-  nudge the selection. Hold Shift for ten font units.
+  nudge every selected node. Hold Shift for ten font units.
 - Use the toolbar, Command-Z / Shift-Command-Z, or Control-Z equivalents for
   undo and redo.
 

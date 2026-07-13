@@ -18,6 +18,7 @@ import {
 	resolveVariableGlyph,
 } from "../src/geometry.ts"
 import { layoutTextRun, nearestCaretIndex } from "../src/text-layout.ts"
+import { controlsInsideBounds } from "../src/outline-selection.ts"
 
 function previewGlyph(workspace: EditorWorkspace, index: number) {
 	const item = workspace.font.silo.getState(workspace.ui.previewRun)[index]
@@ -172,6 +173,39 @@ describe("editor workspace", () => {
 		).toEqual({ x: 10, y: 20, angle: 135 })
 	})
 
+	it("writes broken editor contours without a closing segment", () => {
+		const path = editorContourToPath(
+			[
+				{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
+				{ x: 40, y: 40, incoming: { x: 0, y: -20 } },
+			],
+			false,
+		)
+
+		expect(path).toBe("M 0 0 C 20 0 40 20 40 40")
+	})
+
+	it("box-selects nodes and handle endpoints independently", () => {
+		const controls = controlsInsideBounds(
+			[
+				{
+					pointId: "point:test",
+					mode: "hard",
+					x: 100,
+					y: 100,
+					incoming: { x: -40, y: 0 },
+					outgoing: { x: 40, y: 0 },
+				},
+			],
+			{ minX: 50, minY: 90, maxX: 110, maxY: 110 },
+		)
+
+		expect(controls).toEqual([
+			{ kind: "node", pointId: "point:test" },
+			{ kind: "handle", pointId: "point:test", handle: "incoming" },
+		])
+	})
+
 	it("previews soft handles as one line and hard handles independently", () => {
 		const node = {
 			pointId: "point:test" as const,
@@ -218,7 +252,7 @@ describe("editor workspace", () => {
 		expect(
 			workspace.font.silo
 				.getState(workspace.ui.activeLayer)
-				?.contours.flat()
+				?.contours.flatMap((contour) => contour.nodes)
 				.find((point) => point.pointId === pointId)?.mode,
 		).toBe("hard")
 
@@ -226,7 +260,7 @@ describe("editor workspace", () => {
 		expect(
 			workspace.font.silo
 				.getState(workspace.ui.activeLayer)
-				?.contours.flat()
+				?.contours.flatMap((contour) => contour.nodes)
 				.find((point) => point.pointId === pointId)?.mode,
 		).toBe("soft")
 	})

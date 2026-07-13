@@ -82,6 +82,7 @@ describe("@trigraph/source", () => {
 		])
 		expect(decoded.value.glyphs[1]?.note).toBe("Geometric O")
 		expect(decoded.value.glyphs[1]?.contours[0]?.points[0]?.mode).toBe("soft")
+		expect(decoded.value.glyphs[1]?.contours[0]?.closed).toBe(true)
 		expect(decoded.value.glyphs[1]?.layers[0]?.points[0]?.incoming).toEqual({
 			x: -266.6666666666667,
 			y: 0,
@@ -90,12 +91,34 @@ describe("@trigraph/source", () => {
 		expect(decoded.value.metadata.modifiedAt).toBe(18_446_744_073_709_551_615n)
 	})
 
+	test("round-trips open contours as valid work-in-progress source", () => {
+		const source = makeGeometricOEditorFont()
+		const open: EditorFontSource = {
+			...source,
+			glyphs: source.glyphs.map((glyph) => ({
+				...glyph,
+				contours: glyph.contours.map((contour, index) =>
+					glyph.id === "glyph:O" && index === 0
+						? { ...contour, closed: false }
+						: contour,
+				),
+			})),
+		}
+		const encoded = encodeEditorFontSource(open)
+		expect(encoded.ok).toBe(true)
+		if (!encoded.ok) return
+		const decoded = decodeEditorFontSource(encoded.value)
+		expect(decoded.ok).toBe(true)
+		if (!decoded.ok) return
+		expect(decoded.value.glyphs[1]?.contours[0]?.closed).toBe(false)
+	})
+
 	test("uses the EditorFontSource document as the file root", () => {
 		const file = toEditorFontFile(geometricOWithEveryEditorField())
 		expect(file.ok).toBe(true)
 		if (!file.ok) return
 		expect(file.value.format).toBe("trigraph.editor")
-		expect(file.value.editorVersion).toBe(2)
+		expect(file.value.editorVersion).toBe(3)
 		expect(file.value).not.toHaveProperty("document")
 		expect(file.value).not.toHaveProperty("sourceVersion")
 		expect(file.value.metadata.createdAt).toBe("-1")
@@ -391,13 +414,13 @@ describe("@trigraph/source", () => {
 			"source.unknown_property",
 			"$.surprise",
 		)
-		const future = { ...file.value, editorVersion: 3 }
+		const future = { ...file.value, editorVersion: 4 }
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(future)),
 			"source.version",
 			"$.editorVersion",
 		)
-		const legacy = { ...file.value, editorVersion: 1 }
+		const legacy = { ...file.value, editorVersion: 2 }
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(legacy)),
 			"source.version",

@@ -10,7 +10,8 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const source = workspace.document
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const selectedPointId = useO(workspace.ui.selectedPointId)
+	const selection = useO(workspace.ui.selection)
+	const selectedPointId = selection.at(-1)?.pointId
 	const layer = useO(workspace.ui.activeLayer)
 	const compilation = useO(workspace.font.selectors.compilation)
 	const location = useO(workspace.ui.previewLocation)
@@ -18,17 +19,19 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const master = source.masters.find((item) => item.id === activeMasterId)
 	const pointIds =
 		layer?.contours.flatMap((contour) =>
-			contour.map((point) => point.pointId),
+			contour.nodes.map((point) => point.pointId),
 		) ??
 		glyph?.contours.flatMap((contour) =>
 			contour.points.map((point) => point.id),
 		) ??
 		[]
 	const selectedIndex =
-		selectedPointId === null ? -1 : pointIds.indexOf(selectedPointId)
+		selectedPointId === undefined ? -1 : pointIds.indexOf(selectedPointId)
 	const selectedPoint =
 		layer !== null && selectedIndex >= 0
-			? layer.contours.flat().find((point) => point.pointId === selectedPointId)
+			? layer.contours
+					.flatMap((contour) => contour.nodes)
+					.find((point) => point.pointId === selectedPointId)
 			: undefined
 	const projectionIssueCount = compilation.ok
 		? compilation.projectionWarnings.length +
@@ -59,7 +62,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					<dt>LSB</dt>
 					<dd>{layer?.leftSideBearing ?? "—"}</dd>
 					<dt>Contours</dt>
-					<dd>{glyph?.contours.length ?? 0}</dd>
+					<dd>{layer?.contours.length ?? glyph?.contours.length ?? 0}</dd>
 					<dt>Points</dt>
 					<dd>{pointIds.length}</dd>
 				</dl>

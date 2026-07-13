@@ -195,6 +195,35 @@ export type CurveSegmentKey = readonly [
 	segmentIndex: number,
 ]
 
+function splitContourId(glyphId: GlyphId, firstPointId: PointId): ContourId {
+	return `contour:${glyphId}:split:${firstPointId}`
+}
+
+function remainingPointRuns(
+	pointIds: readonly PointId[],
+	deleted: ReadonlySet<PointId>,
+	closed: boolean,
+): readonly (readonly PointId[])[] {
+	if (!pointIds.some((pointId) => deleted.has(pointId))) return [pointIds]
+	if (pointIds.every((pointId) => deleted.has(pointId))) return []
+	let ordered = pointIds
+	if (closed) {
+		const deletedIndex = pointIds.findIndex((pointId) => deleted.has(pointId))
+		const start = (deletedIndex + 1) % pointIds.length
+		ordered = [...pointIds.slice(start), ...pointIds.slice(0, start)]
+	}
+	const runs: PointId[][] = []
+	let current: PointId[] = []
+	for (const pointId of ordered) {
+		if (deleted.has(pointId)) {
+			if (current.length > 0) runs.push(current)
+			current = []
+		} else current.push(pointId)
+	}
+	if (current.length > 0) runs.push(current)
+	return runs
+}
+
 interface AxisState {
 	readonly tag: string
 	readonly name: string
@@ -306,6 +335,18 @@ export interface InsertPointInput {
 		readonly incoming?: EditorHandleVectorSource
 		readonly outgoing?: EditorHandleVectorSource
 	}[]
+}
+
+export interface DeleteSelectionInput {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly pointIds: readonly PointId[]
+	readonly handles: readonly {
+		readonly pointId: PointId
+		readonly handle: EditorHandleKind
+	}[]
+	/** Break affected paths into open pieces instead of reconnecting them. */
+	readonly breakPaths?: boolean
 }
 
 export interface CreateFontEditorStateOptions {
@@ -529,6 +570,9 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 			EditorGlyphSource["contours"][number]["points"][number]
 		>()
 		for (const contour of glyph.contours) {
+			if (typeof contour.closed !== "boolean") {
+				throw new TypeError(`Contour ${contour.id} must declare closed state.`)
+			}
 			if (contourIds.has(contour.id)) {
 				throw new TypeError(`Contour ID ${contour.id} is not globally unique.`)
 			}
@@ -583,12 +627,9 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 					)
 				}
 				if (glyphPoints.get(point.pointId)?.mode === "soft") {
-					if (
-						(point.incoming === undefined) !==
-						(point.outgoing === undefined)
-					) {
+					if (point.incoming === undefined || point.outgoing === undefined) {
 						throw new TypeError(
-							`Soft node ${point.pointId} must have either two handles or no handles.`,
+							`Soft node ${point.pointId} must have two handles.`,
 						)
 					}
 					if (
@@ -716,6 +757,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		readonly PointId[] | null,
 		GlyphContourKey
 	>({ key: key("contourPointIds"), default: null })
+	const contourClosedAtoms = silo.atomFamily<boolean | null, GlyphContourKey>({
+		key: key("contourClosed"),
+		default: null,
+	})
 	const pointAtoms = silo.atomFamily<PointState | null, GlyphPointKey>({
 		key: key("point"),
 		default: null,
@@ -840,12 +885,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const incoming = readHandle("incoming")
 				const outgoing = readHandle("outgoing")
 				if (topology?.mode === "soft") {
-					if ((incoming === undefined) !== (outgoing === undefined)) {
+					if (incoming === undefined || outgoing === undefined) {
 						errors.push(
 							projectionError(
 								"curve.soft_handle_pair",
 								path,
-								"A soft node requires both handles or neither handle.",
+								"A soft node requires both handles.",
 								pointId,
 							),
 						)
@@ -893,12 +938,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			({ get }) => {
 				const path = `$.glyphs[${glyphId}].contours[${contourId}].segments[${segmentIndex}]`
 				const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+				const closed = get(contourClosedAtoms, [glyphId, contourId])
 				const masterIds = get(glyphLayerMasterIdsAtoms, glyphId)
+				const segmentCount =
+					pointIds === null
+						? 0
+						: Math.max(0, pointIds.length - (closed ? 0 : 1))
 				if (
 					pointIds === null ||
+					closed === null ||
 					!Number.isInteger(segmentIndex) ||
 					segmentIndex < 0 ||
-					segmentIndex >= pointIds.length
+					segmentIndex >= segmentCount
 				) {
 					return projectionFailure([
 						projectionError(
@@ -920,7 +971,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					])
 				}
 				const startPointId = pointIds[segmentIndex]
-				const endPointId = pointIds[(segmentIndex + 1) % pointIds.length]
+				const endPointId = closed
+					? pointIds[(segmentIndex + 1) % pointIds.length]
+					: pointIds[segmentIndex + 1]
 				if (startPointId === undefined || endPointId === undefined) {
 					return projectionFailure([
 						projectionError(
@@ -1556,12 +1609,24 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const seenPointIds = new Set<PointId>()
 				for (const contourId of contourIds ?? []) {
 					const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+					const closed = get(contourClosedAtoms, [glyphId, contourId])
 					if (pointIds === null) {
 						errors.push(
 							projectionError(
 								"topology.missing",
 								`$.glyphs[${glyphId}].contours[${contourId}]`,
 								"Contour point index is missing.",
+								contourId,
+							),
+						)
+						continue
+					}
+					if (closed !== true) {
+						errors.push(
+							projectionError(
+								"topology.open_contour",
+								`$.glyphs[${glyphId}].contours[${contourId}]`,
+								"Open editor contours must be closed before font export.",
 								contourId,
 							),
 						)
@@ -2248,7 +2313,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							)
 						} else globalContourIds.add(contourId)
 						const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
-						if (pointIds === null) {
+						const closed = get(contourClosedAtoms, [glyphId, contourId])
+						if (pointIds === null || closed === null) {
 							errors.push(
 								projectionError(
 									"topology.missing",
@@ -2541,7 +2607,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const orderedPointIds: PointId[] = []
 				for (const contourId of contourIds) {
 					const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
-					if (pointIds === null) return null
+					const closed = get(contourClosedAtoms, [glyphId, contourId])
+					if (pointIds === null || closed === null) return null
 					const points: EditorGlyphSource["contours"][number]["points"][number][] =
 						[]
 					for (const pointId of pointIds) {
@@ -2553,7 +2620,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							mode: point.mode,
 						})
 					}
-					contours.push({ id: contourId, points })
+					contours.push({ id: contourId, closed, points })
 				}
 				const layers: EditorGlyphSource["layers"][number][] = []
 				for (const masterId of layerMasterIds) {
@@ -2598,10 +2665,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 								: { x: outgoingX, y: outgoingY }
 						if (
 							topology.mode === "soft" &&
-							((incoming === undefined) !== (outgoing === undefined) ||
-								(incoming !== undefined &&
-									outgoing !== undefined &&
-									!handlesShareOppositeRay(incoming, outgoing)))
+							(incoming === undefined ||
+								outgoing === undefined ||
+								!handlesShareOppositeRay(incoming, outgoing))
 						) {
 							return null
 						}
@@ -2697,6 +2763,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						set(pointAtoms, [glyphId, pointId], null)
 					}
 					set(contourPointIdsAtoms, [glyphId, contourId], null)
+					set(contourClosedAtoms, [glyphId, contourId], null)
 				}
 				for (const masterId of layerMasterIds) {
 					set(advanceWidthAtoms, [masterId, glyphId], null)
@@ -2833,6 +2900,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					deepFreeze(glyph.contours.map((contour) => contour.id)),
 				)
 				for (const contour of glyph.contours) {
+					set(contourClosedAtoms, [glyph.id, contour.id], contour.closed)
 					set(
 						contourPointIdsAtoms,
 						[glyph.id, contour.id],
@@ -2995,10 +3063,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			if (input.vector === null) {
 				set(selectedX, atomKey, null)
 				set(selectedY, atomKey, null)
-				if (point.mode === "soft") {
-					set(oppositeX, atomKey, null)
-					set(oppositeY, atomKey, null)
-				}
+				set(
+					pointAtoms,
+					[input.glyphId, input.pointId],
+					deepFreeze({ mode: "hard" }),
+				)
 				return
 			}
 
@@ -3042,6 +3111,35 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				throw new TypeError('Node mode must be "soft" or "hard".')
 			}
 			if (input.mode === "soft") {
+				const contourId = (get(glyphContourIdsAtoms, input.glyphId) ?? []).find(
+					(candidate) =>
+						(
+							get(contourPointIdsAtoms, [input.glyphId, candidate]) ?? []
+						).includes(input.pointId),
+				)
+				if (contourId === undefined) return
+				const contourPointIds =
+					get(contourPointIdsAtoms, [input.glyphId, contourId]) ?? []
+				const closed =
+					get(contourClosedAtoms, [input.glyphId, contourId]) ?? false
+				const pointIndex = contourPointIds.indexOf(input.pointId)
+				const previousPointId =
+					pointIndex > 0
+						? contourPointIds[pointIndex - 1]
+						: closed
+							? contourPointIds.at(-1)
+							: undefined
+				const nextPointId =
+					pointIndex < contourPointIds.length - 1
+						? contourPointIds[pointIndex + 1]
+						: closed
+							? contourPointIds[0]
+							: undefined
+				const layerPlans: {
+					readonly atomKey: LayerPointKey
+					readonly incoming: Vector2
+					readonly outgoing: Vector2
+				}[] = []
 				for (const masterId of layerMasterIds) {
 					const atomKey: LayerPointKey = [
 						masterId,
@@ -3060,38 +3158,99 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							"Cannot soften a node with an incomplete handle.",
 						)
 					}
-					if (
-						incomingX === null &&
-						incomingY === null &&
-						outgoingX === null &&
-						outgoingY === null
-					) {
-						continue
-					}
+					if (incomingX === null && outgoingX === null) return
+					let incoming =
+						incomingX === null || incomingY === null
+							? undefined
+							: { x: incomingX, y: incomingY }
+					let outgoing =
+						outgoingX === null || outgoingY === null
+							? undefined
+							: { x: outgoingX, y: outgoingY }
 					if (incomingX === null || incomingY === null) {
-						if (outgoingX === null || outgoingY === null) continue
-						set(incomingHandleXAtoms, atomKey, -outgoingX)
-						set(incomingHandleYAtoms, atomKey, -outgoingY)
-						continue
+						if (outgoing === undefined || previousPointId === undefined) return
+						const x = get(pointXAtoms, atomKey)
+						const y = get(pointYAtoms, atomKey)
+						const neighborX = get(pointXAtoms, [
+							masterId,
+							input.glyphId,
+							previousPointId,
+						])
+						const neighborY = get(pointYAtoms, [
+							masterId,
+							input.glyphId,
+							previousPointId,
+						])
+						if (
+							x === null ||
+							y === null ||
+							neighborX === null ||
+							neighborY === null
+						)
+							return
+						const dx = neighborX - x
+						const dy = neighborY - y
+						const distance = Math.hypot(dx, dy)
+						if (distance === 0) return
+						const length = Math.hypot(outgoing.x, outgoing.y)
+						incoming = {
+							x: (dx / distance) * length,
+							y: (dy / distance) * length,
+						}
+						outgoing = { x: -incoming.x, y: -incoming.y }
 					}
 					if (outgoingX === null || outgoingY === null) {
-						set(outgoingHandleXAtoms, atomKey, -incomingX)
-						set(outgoingHandleYAtoms, atomKey, -incomingY)
-						continue
+						if (incoming === undefined || nextPointId === undefined) return
+						const x = get(pointXAtoms, atomKey)
+						const y = get(pointYAtoms, atomKey)
+						const neighborX = get(pointXAtoms, [
+							masterId,
+							input.glyphId,
+							nextPointId,
+						])
+						const neighborY = get(pointYAtoms, [
+							masterId,
+							input.glyphId,
+							nextPointId,
+						])
+						if (
+							x === null ||
+							y === null ||
+							neighborX === null ||
+							neighborY === null
+						)
+							return
+						const dx = neighborX - x
+						const dy = neighborY - y
+						const distance = Math.hypot(dx, dy)
+						if (distance === 0) return
+						const length = Math.hypot(incoming.x, incoming.y)
+						outgoing = {
+							x: (dx / distance) * length,
+							y: (dy / distance) * length,
+						}
+						incoming = { x: -outgoing.x, y: -outgoing.y }
 					}
-					const incomingLength = Math.hypot(incomingX, incomingY)
-					const outgoingLength = Math.hypot(outgoingX, outgoingY)
-					if (incomingLength === 0) continue
-					set(
-						outgoingHandleXAtoms,
+					if (incoming === undefined || outgoing === undefined) return
+					const incomingLength = Math.hypot(incoming.x, incoming.y)
+					const outgoingLength = Math.hypot(outgoing.x, outgoing.y)
+					layerPlans.push({
 						atomKey,
-						(-incomingX / incomingLength) * outgoingLength,
-					)
-					set(
-						outgoingHandleYAtoms,
-						atomKey,
-						(-incomingY / incomingLength) * outgoingLength,
-					)
+						incoming,
+						outgoing:
+							incomingLength === 0
+								? { x: -incoming.x, y: -incoming.y }
+								: {
+										x: (-incoming.x / incomingLength) * outgoingLength,
+										y: (-incoming.y / incomingLength) * outgoingLength,
+									},
+					})
+				}
+				for (const plan of layerPlans) {
+					set(incomingHandleXAtoms, plan.atomKey, plan.incoming.x)
+					set(incomingHandleYAtoms, plan.atomKey, plan.incoming.y)
+					set(outgoingHandleXAtoms, plan.atomKey, plan.outgoing.x)
+					set(outgoingHandleYAtoms, plan.atomKey, plan.outgoing.y)
 				}
 			}
 			set(
@@ -3161,12 +3320,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 				if (input.point.mode === "soft") {
 					if (
-						(coordinate.incoming === undefined) !==
-						(coordinate.outgoing === undefined)
+						coordinate.incoming === undefined ||
+						coordinate.outgoing === undefined
 					) {
-						throw new TypeError(
-							"A soft node requires both handles or neither handle.",
-						)
+						throw new TypeError("A soft node requires both handles.")
 					}
 					if (
 						coordinate.incoming !== undefined &&
@@ -3228,11 +3385,178 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const deleteSelectionTransaction = silo.transaction<
+		(input: DeleteSelectionInput) => void
+	>({
+		key: key("deleteSelection"),
+		do: ({ get, set }, input) => {
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (contourIds === null || layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			if (!layerMasterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			assertUnique(input.pointIds, "Deleted point IDs")
+			const deleted = new Set(input.pointIds)
+			for (const pointId of deleted) {
+				if (get(pointAtoms, [input.glyphId, pointId]) === null) {
+					throw new TypeError(
+						`Unknown point ${pointId} in glyph ${input.glyphId}.`,
+					)
+				}
+			}
+
+			const handled = new Set<string>()
+			for (const selection of input.handles) {
+				if (deleted.has(selection.pointId)) continue
+				const selectionKey = `${selection.pointId}/${selection.handle}`
+				if (handled.has(selectionKey)) continue
+				handled.add(selectionKey)
+				if (get(pointAtoms, [input.glyphId, selection.pointId]) === null) {
+					throw new TypeError(
+						`Unknown point ${selection.pointId} in glyph ${input.glyphId}.`,
+					)
+				}
+				const atomKey: LayerPointKey = [
+					input.masterId,
+					input.glyphId,
+					selection.pointId,
+				]
+				set(
+					selection.handle === "incoming"
+						? incomingHandleXAtoms
+						: outgoingHandleXAtoms,
+					atomKey,
+					null,
+				)
+				set(
+					selection.handle === "incoming"
+						? incomingHandleYAtoms
+						: outgoingHandleYAtoms,
+					atomKey,
+					null,
+				)
+				set(
+					pointAtoms,
+					[input.glyphId, selection.pointId],
+					deepFreeze({ mode: "hard" }),
+				)
+			}
+
+			if (deleted.size === 0) return
+			const nextContourIds: ContourId[] = []
+			const knownContourIds = new Set(contourIds)
+			for (const contourId of contourIds) {
+				const pointIds = get(contourPointIdsAtoms, [input.glyphId, contourId])
+				const closed = get(contourClosedAtoms, [input.glyphId, contourId])
+				if (pointIds === null || closed === null) {
+					throw new TypeError(
+						`Unknown contour ${contourId} in glyph ${input.glyphId}.`,
+					)
+				}
+				const contourDeleted = new Set(
+					pointIds.filter((pointId) => deleted.has(pointId)),
+				)
+				if (contourDeleted.size === 0) {
+					nextContourIds.push(contourId)
+					continue
+				}
+				const runs = input.breakPaths
+					? remainingPointRuns(pointIds, contourDeleted, closed)
+					: [pointIds.filter((pointId) => !contourDeleted.has(pointId))]
+				const nonEmptyRuns = runs.filter((run) => run.length > 0)
+				if (nonEmptyRuns.length === 0) {
+					set(contourPointIdsAtoms, [input.glyphId, contourId], null)
+					set(contourClosedAtoms, [input.glyphId, contourId], null)
+					continue
+				}
+				for (const [runIndex, run] of nonEmptyRuns.entries()) {
+					const firstPointId = run[0]
+					if (firstPointId === undefined) continue
+					const nextContourId =
+						runIndex === 0
+							? contourId
+							: splitContourId(input.glyphId, firstPointId)
+					if (runIndex > 0 && knownContourIds.has(nextContourId)) {
+						throw new TypeError(
+							`Generated contour ID ${nextContourId} is in use.`,
+						)
+					}
+					knownContourIds.add(nextContourId)
+					nextContourIds.push(nextContourId)
+					set(
+						contourPointIdsAtoms,
+						[input.glyphId, nextContourId],
+						deepFreeze([...run]),
+					)
+					set(
+						contourClosedAtoms,
+						[input.glyphId, nextContourId],
+						input.breakPaths ? false : closed,
+					)
+					if (!input.breakPaths) continue
+					const lastPointId = run.at(-1)
+					if (lastPointId === undefined) continue
+					for (const masterId of layerMasterIds) {
+						set(
+							incomingHandleXAtoms,
+							[masterId, input.glyphId, firstPointId],
+							null,
+						)
+						set(
+							incomingHandleYAtoms,
+							[masterId, input.glyphId, firstPointId],
+							null,
+						)
+						set(
+							outgoingHandleXAtoms,
+							[masterId, input.glyphId, lastPointId],
+							null,
+						)
+						set(
+							outgoingHandleYAtoms,
+							[masterId, input.glyphId, lastPointId],
+							null,
+						)
+					}
+					set(
+						pointAtoms,
+						[input.glyphId, firstPointId],
+						deepFreeze({ mode: "hard" }),
+					)
+					set(
+						pointAtoms,
+						[input.glyphId, lastPointId],
+						deepFreeze({ mode: "hard" }),
+					)
+				}
+			}
+			set(glyphContourIdsAtoms, input.glyphId, deepFreeze(nextContourIds))
+			for (const pointId of deleted) {
+				set(pointAtoms, [input.glyphId, pointId], null)
+				for (const masterId of layerMasterIds) {
+					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
+					set(pointXAtoms, atomKey, null)
+					set(pointYAtoms, atomKey, null)
+					set(incomingHandleXAtoms, atomKey, null)
+					set(incomingHandleYAtoms, atomKey, null)
+					set(outgoingHandleXAtoms, atomKey, null)
+					set(outgoingHandleYAtoms, atomKey, null)
+				}
+			}
+		},
+	})
+
 	const runReplaceFont = silo.runTransaction(replaceFontTransaction)
 	const runMovePoints = silo.runTransaction(movePointsTransaction)
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
+	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
 	let historyGeneration = 0
 	let glyphHistories = new Map<GlyphId, TimelineToken<TimelineManageable>>()
 
@@ -3247,9 +3571,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.findState(glyphLayerMasterIdsAtoms, glyph.id),
 			]
 			for (const contour of glyph.contours) {
-				scope.push(silo.findState(contourPointIdsAtoms, [glyph.id, contour.id]))
+				scope.push(
+					silo.findState(contourPointIdsAtoms, [glyph.id, contour.id]),
+					silo.findState(contourClosedAtoms, [glyph.id, contour.id]),
+				)
 				for (const point of contour.points) {
 					scope.push(silo.findState(pointAtoms, [glyph.id, point.id]))
+					const splitId = splitContourId(glyph.id, point.id)
+					scope.push(
+						silo.findState(contourPointIdsAtoms, [glyph.id, splitId]),
+						silo.findState(contourClosedAtoms, [glyph.id, splitId]),
+					)
 				}
 			}
 			const pointIds = glyph.contours.flatMap((contour) =>
@@ -3316,6 +3648,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			glyphEditor: glyphEditorAtoms,
 			glyphContourIds: glyphContourIdsAtoms,
 			contourPointIds: contourPointIdsAtoms,
+			contourClosed: contourClosedAtoms,
 			point: pointAtoms,
 			glyphLayerMasterIds: glyphLayerMasterIdsAtoms,
 			advanceWidth: advanceWidthAtoms,
@@ -3360,6 +3693,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			moveHandle: moveHandleTransaction,
 			setNodeMode: setNodeModeTransaction,
 			insertPoint: insertPointTransaction,
+			deleteSelection: deleteSelectionTransaction,
 		},
 		historyFor,
 		actions: {
@@ -3378,6 +3712,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
+			},
+			deleteSelection(input: DeleteSelectionInput): void {
+				runDeleteSelection(input)
 			},
 		},
 		read: {
