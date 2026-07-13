@@ -24,6 +24,9 @@ export const selectionKey = (target: EditorSelectionTarget): string =>
 		? `node/${target.pointId}`
 		: `handle/${target.pointId}/${target.handle}`
 
+export const canStartBoxSelectionOn = (targetName: string): boolean =>
+	targetName === "canvas-background" || targetName === "typed-glyph"
+
 /** Returns every visible node or handle endpoint enclosed by a marquee. */
 export function controlsInsideBounds(
 	nodes: readonly EditorLayerNode[],

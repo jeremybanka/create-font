@@ -18,7 +18,10 @@ import {
 	resolveVariableGlyph,
 } from "../src/geometry.ts"
 import { layoutTextRun, nearestCaretIndex } from "../src/text-layout.ts"
-import { controlsInsideBounds } from "../src/outline-selection.ts"
+import {
+	canStartBoxSelectionOn,
+	controlsInsideBounds,
+} from "../src/outline-selection.ts"
 
 function previewGlyph(workspace: EditorWorkspace, index: number) {
 	const item = workspace.font.silo.getState(workspace.ui.previewRun)[index]
@@ -77,13 +80,19 @@ describe("editor workspace", () => {
 		).toBe(2)
 	})
 
-	it("enters and exits outline editing for one text occurrence", () => {
+	it("enters, switches, and exits outline editing occurrences", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)
 
 		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(0)
 		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
 			oGlyphId,
+		)
+
+		workspace.actions.enterGlyphEdit(1, notdefGlyphId)
+		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(1)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			notdefGlyphId,
 		)
 
 		workspace.actions.exitGlyphEdit()
@@ -204,6 +213,12 @@ describe("editor workspace", () => {
 			{ kind: "node", pointId: "point:test" },
 			{ kind: "handle", pointId: "point:test", handle: "incoming" },
 		])
+	})
+
+	it("starts box selection over inactive glyph occurrences", () => {
+		expect(canStartBoxSelectionOn("canvas-background")).toBe(true)
+		expect(canStartBoxSelectionOn("typed-glyph")).toBe(true)
+		expect(canStartBoxSelectionOn("outline-node")).toBe(false)
 	})
 
 	it("previews soft handles as one line and hard handles independently", () => {

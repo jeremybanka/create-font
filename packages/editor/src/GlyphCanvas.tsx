@@ -21,6 +21,7 @@ import {
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
 import {
+	canStartBoxSelectionOn,
 	controlsInsideBounds,
 	selectionKey,
 	type EditorSelectionTarget,
@@ -509,8 +510,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						}))
 					}}
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
-						if (event.target.name() !== "canvas-background") return
 						if (editingTextIndex !== null) {
+							if (!canStartBoxSelectionOn(event.target.name())) return
 							const point = pointerInEditingGlyph(event)
 							if (point === null) return
 							setSelectionBox({
@@ -523,6 +524,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							})
 							return
 						}
+						if (event.target.name() !== "canvas-background") return
 						const pointer = event.target.getStage()?.getPointerPosition()
 						if (pointer === null || pointer === undefined) return
 						focusTypingAt(
