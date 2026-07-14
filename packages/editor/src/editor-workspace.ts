@@ -58,38 +58,37 @@ export function createEditorWorkspace(
 			"The editor requires at least one glyph and one master.",
 		)
 	}
-	const key = (suffix: string): string => `trigraph/editor/ui/${suffix}`
 	const activeGlyphIdAtom = font.silo.atom<GlyphId>({
-		key: key("activeGlyphId"),
+		key: "activeGlyphId",
 		default:
 			document.glyphs.find((glyph) => glyph.name === "O")?.id ?? firstGlyph,
 	})
 	const activeMasterIdAtom = font.silo.atom<MasterId>({
-		key: key("activeMasterId"),
+		key: "activeMasterId",
 		default: document.defaultMasterId,
 	})
 	const selectionAtom = font.silo.atom<readonly EditorSelectionTarget[]>({
-		key: key("selection"),
+		key: "selection",
 		default: Object.freeze([]),
 	})
 	const previewTextAtom = font.silo.atom<string>({
-		key: key("previewText"),
+		key: "previewText",
 		default: "OOOO\nOOOO",
 	})
 	const caretIndexAtom = font.silo.atom<number>({
-		key: key("caretIndex"),
+		key: "caretIndex",
 		default: 0,
 	})
 	const editingTextIndexAtom = font.silo.atom<number | null>({
-		key: key("editingTextIndex"),
+		key: "editingTextIndex",
 		default: null,
 	})
 	const previewCoordinateAtoms = font.silo.atomFamily<number | null, AxisId>({
-		key: key("previewCoordinate"),
+		key: "previewCoordinate",
 		default: null,
 	})
 	const showNodesAtom = font.silo.atom<boolean>({
-		key: key("showNodes"),
+		key: "showNodes",
 		default: true,
 	})
 	for (const axis of document.axes) {
@@ -98,7 +97,7 @@ export function createEditorWorkspace(
 	const previewLocationSelector = font.silo.selector<
 		Readonly<Record<string, number>>
 	>({
-		key: key("previewLocation"),
+		key: "previewLocation",
 		get: ({ get }) =>
 			Object.freeze(
 				Object.fromEntries(
@@ -111,7 +110,7 @@ export function createEditorWorkspace(
 	})
 
 	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
-		key: key("activeLayer"),
+		key: "activeLayer",
 		get: ({ get }) => {
 			const masterId = get(activeMasterIdAtom)
 			const glyphId = get(activeGlyphIdAtom)
@@ -155,7 +154,7 @@ export function createEditorWorkspace(
 		},
 	})
 	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
-		key: key("previewRun"),
+		key: "previewRun",
 		get: ({ get }) => {
 			const location = get(previewLocationSelector)
 			const byCodePoint = new Map(
