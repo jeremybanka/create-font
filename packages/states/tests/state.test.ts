@@ -66,11 +66,13 @@ describe("font editor state", () => {
 	})
 
 	it("keeps documents isolated even when their entity IDs match", () => {
-		const first = createLoadedEditor("test/isolation/a")
-		const second = createLoadedEditor("test/isolation/b")
+		const first = createLoadedEditor("test/isolation")
+		const second = createLoadedEditor("test/isolation")
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[1]?.points[1]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		expect(first.atoms.pointX.key).toBe("pointX")
+		expect(second.atoms.pointX.key).toBe("pointX")
 
 		second.actions.movePoints({
 			masterId: blackMasterId,

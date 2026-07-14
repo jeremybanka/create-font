@@ -375,7 +375,7 @@ export interface DeleteSelectionInput {
 }
 
 export interface CreateFontEditorStateOptions {
-	/** Stable namespace for every atom.io resource belonging to this document. */
+	/** Diagnostic name for this document's isolated Silo. */
 	readonly key: string
 	readonly isProduction?: boolean
 }
@@ -700,146 +700,144 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
  */
 export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	if (options.key.trim().length === 0) {
-		throw new TypeError("A font editor state namespace cannot be empty.")
+		throw new TypeError("A font editor Silo name cannot be empty.")
 	}
 	const silo = new Silo({
 		name: options.key,
 		lifespan: "ephemeral",
 		isProduction: options.isProduction ?? false,
 	})
-	const key = (suffix: string): string => `${options.key}/${suffix}`
-
 	const metadataAtom = silo.atom<EditorFontSource["metadata"] | null>({
-		key: key("metadata"),
+		key: "metadata",
 		default: null,
 	})
 	const namesAtom = silo.atom<EditorFontSource["names"] | null>({
-		key: key("names"),
+		key: "names",
 		default: null,
 	})
 	const metricsAtom = silo.atom<EditorFontSource["metrics"] | null>({
-		key: key("metrics"),
+		key: "metrics",
 		default: null,
 	})
 	const styleAtom = silo.atom<EditorFontSource["style"] | null>({
-		key: key("style"),
+		key: "style",
 		default: null,
 	})
 
 	const axisIdsAtom = silo.atom<readonly AxisId[]>({
-		key: key("axisIds"),
+		key: "axisIds",
 		default: Object.freeze([]),
 	})
 	const masterIdsAtom = silo.atom<readonly MasterId[]>({
-		key: key("masterIds"),
+		key: "masterIds",
 		default: Object.freeze([]),
 	})
 	const defaultMasterIdAtom = silo.atom<MasterId | null>({
-		key: key("defaultMasterId"),
+		key: "defaultMasterId",
 		default: null,
 	})
 	const instanceIdsAtom = silo.atom<readonly InstanceId[]>({
-		key: key("instanceIds"),
+		key: "instanceIds",
 		default: Object.freeze([]),
 	})
 	const glyphIdsAtom = silo.atom<readonly GlyphId[]>({
-		key: key("glyphIds"),
+		key: "glyphIds",
 		default: Object.freeze([]),
 	})
 	const cmapCodePointsAtom = silo.atom<readonly number[]>({
-		key: key("cmapCodePoints"),
+		key: "cmapCodePoints",
 		default: Object.freeze([]),
 	})
 
 	const axisAtoms = silo.atomFamily<AxisState | null, AxisId>({
-		key: key("axis"),
+		key: "axis",
 		default: null,
 	})
 	const masterAtoms = silo.atomFamily<MasterState | null, MasterId>({
-		key: key("master"),
+		key: "master",
 		default: null,
 	})
 	const masterCoordinateAtoms = silo.atomFamily<number | null, MasterAxisKey>({
-		key: key("masterCoordinate"),
+		key: "masterCoordinate",
 		default: null,
 	})
 	const masterSupportStartAtoms = silo.atomFamily<number | null, MasterAxisKey>(
-		{ key: key("masterSupportStart"), default: null },
+		{ key: "masterSupportStart", default: null },
 	)
 	const masterSupportEndAtoms = silo.atomFamily<number | null, MasterAxisKey>({
-		key: key("masterSupportEnd"),
+		key: "masterSupportEnd",
 		default: null,
 	})
 	const instanceAtoms = silo.atomFamily<InstanceState | null, InstanceId>({
-		key: key("instance"),
+		key: "instance",
 		default: null,
 	})
 	const instanceCoordinateAtoms = silo.atomFamily<
 		number | null,
 		InstanceAxisKey
-	>({ key: key("instanceCoordinate"), default: null })
+	>({ key: "instanceCoordinate", default: null })
 	const glyphAtoms = silo.atomFamily<GlyphState | null, GlyphId>({
-		key: key("glyph"),
+		key: "glyph",
 		default: null,
 	})
 	const glyphEditorAtoms = silo.atomFamily<GlyphEditorState | null, GlyphId>({
-		key: key("glyphEditor"),
+		key: "glyphEditor",
 		default: null,
 	})
 	const glyphContourIdsAtoms = silo.atomFamily<
 		readonly ContourId[] | null,
 		GlyphId
-	>({ key: key("glyphContourIds"), default: null })
+	>({ key: "glyphContourIds", default: null })
 	const contourPointIdsAtoms = silo.atomFamily<
 		readonly PointId[] | null,
 		GlyphContourKey
-	>({ key: key("contourPointIds"), default: null })
+	>({ key: "contourPointIds", default: null })
 	const contourClosedAtoms = silo.atomFamily<boolean | null, GlyphContourKey>({
-		key: key("contourClosed"),
+		key: "contourClosed",
 		default: null,
 	})
 	const pointAtoms = silo.atomFamily<PointState | null, GlyphPointKey>({
-		key: key("point"),
+		key: "point",
 		default: null,
 	})
 	const glyphLayerMasterIdsAtoms = silo.atomFamily<
 		readonly MasterId[] | null,
 		GlyphId
-	>({ key: key("glyphLayerMasterIds"), default: null })
+	>({ key: "glyphLayerMasterIds", default: null })
 	const advanceWidthAtoms = silo.atomFamily<number | null, LayerKey>({
-		key: key("advanceWidth"),
+		key: "advanceWidth",
 		default: null,
 	})
 	const leftSideBearingAtoms = silo.atomFamily<number | null, LayerKey>({
-		key: key("leftSideBearing"),
+		key: "leftSideBearing",
 		default: null,
 	})
 	const pointXAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("pointX"),
+		key: "pointX",
 		default: null,
 	})
 	const pointYAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("pointY"),
+		key: "pointY",
 		default: null,
 	})
 	const incomingHandleXAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("incomingHandleX"),
+		key: "incomingHandleX",
 		default: null,
 	})
 	const incomingHandleYAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("incomingHandleY"),
+		key: "incomingHandleY",
 		default: null,
 	})
 	const outgoingHandleXAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("outgoingHandleX"),
+		key: "outgoingHandleX",
 		default: null,
 	})
 	const outgoingHandleYAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: key("outgoingHandleY"),
+		key: "outgoingHandleY",
 		default: null,
 	})
 	const cmapGlyphAtoms = silo.atomFamily<GlyphId | null, number>({
-		key: key("cmapGlyph"),
+		key: "cmapGlyph",
 		default: null,
 	})
 
@@ -847,7 +845,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<EditorLayerNode>,
 		LayerPointKey
 	>({
-		key: key("layerNode"),
+		key: "layerNode",
 		get:
 			([masterId, glyphId, pointId]) =>
 			({ get }) => {
@@ -1045,7 +1043,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<CurveSegmentPlan>,
 		CurveSegmentKey
 	>({
-		key: key("curveSegmentPlan"),
+		key: "curveSegmentPlan",
 		get:
 			([glyphId, contourId, segmentIndex]) =>
 			({ get }) => {
@@ -1189,7 +1187,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<VariationAxisSource>,
 		AxisId
 	>({
-		key: key("axisSource"),
+		key: "axisSource",
 		get:
 			(axisId) =>
 			({ get }) => {
@@ -1261,7 +1259,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const axesSourceSelector = silo.selector<
 		ProjectionResult<readonly VariationAxisSource[]>
 	>({
-		key: key("axesSource"),
+		key: "axesSource",
 		get: ({ get }) => {
 			const axisIds = get(axisIdsAtom)
 			const indexErrors = duplicateValueErrors(axisIds, "$.axisIds")
@@ -1297,7 +1295,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<Readonly<Record<string, number>>>,
 		MasterId
 	>({
-		key: key("masterUserLocation"),
+		key: "masterUserLocation",
 		get:
 			(masterId) =>
 			({ get }) => {
@@ -1367,7 +1365,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<VariationRegionSource>,
 		MasterId
 	>({
-		key: key("masterRegion"),
+		key: "masterRegion",
 		get:
 			(masterId) =>
 			({ get }) => {
@@ -1469,7 +1467,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const variationModelSelector = silo.selector<
 		ProjectionResult<VariationModelProjection>
 	>({
-		key: key("variationModel"),
+		key: "variationModel",
 		get: ({ get }) => {
 			const masterIds = get(masterIdsAtom)
 			const defaultMasterId = get(defaultMasterIdAtom)
@@ -1546,7 +1544,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<NamedInstanceSource>,
 		InstanceId
 	>({
-		key: key("instanceSource"),
+		key: "instanceSource",
 		get:
 			(instanceId) =>
 			({ get }) => {
@@ -1611,7 +1609,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const instancesSourceSelector = silo.selector<
 		ProjectionResult<readonly NamedInstanceSource[]>
 	>({
-		key: key("instancesSource"),
+		key: "instancesSource",
 		get: ({ get }) => {
 			const ids = get(instanceIdsAtom)
 			const result = collectProjectionResults(
@@ -1629,7 +1627,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<CompiledGlyphLayer>,
 		LayerKey
 	>({
-		key: key("glyphLayer"),
+		key: "glyphLayer",
 		get:
 			([masterId, glyphId]) =>
 			({ get }) => {
@@ -1893,7 +1891,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<readonly GlyphVariationSource[]>,
 		GlyphId
 	>({
-		key: key("glyphVariations"),
+		key: "glyphVariations",
 		get:
 			(glyphId) =>
 			({ get }) => {
@@ -2011,7 +2009,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<SimpleGlyphSource>,
 		GlyphId
 	>({
-		key: key("glyphSource"),
+		key: "glyphSource",
 		get:
 			(glyphId) =>
 			({ get }) => {
@@ -2063,7 +2061,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const exportedGlyphIdsSelector = silo.selector<
 		ProjectionResult<readonly GlyphId[]>
 	>({
-		key: key("exportedGlyphIds"),
+		key: "exportedGlyphIds",
 		get: ({ get }) => {
 			const ids = get(glyphIdsAtom)
 			const errors = [...duplicateValueErrors(ids, "$.glyphIds")]
@@ -2099,7 +2097,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const glyphsSourceSelector = silo.selector<
 		ProjectionResult<readonly SimpleGlyphSource[]>
 	>({
-		key: key("glyphsSource"),
+		key: "glyphsSource",
 		get: ({ get }) => {
 			const ids = get(exportedGlyphIdsSelector)
 			if (!ids.ok) return ids
@@ -2116,7 +2114,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<CharacterMapEntrySource>,
 		number
 	>({
-		key: key("cmapEntry"),
+		key: "cmapEntry",
 		get:
 			(codePoint) =>
 			({ get }) => {
@@ -2170,7 +2168,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const cmapSourceSelector = silo.selector<
 		ProjectionResult<readonly CharacterMapEntrySource[]>
 	>({
-		key: key("cmapSource"),
+		key: "cmapSource",
 		get: ({ get }) => {
 			const codePoints = get(cmapCodePointsAtom)
 			const result = collectProjectionResults(
@@ -2187,7 +2185,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const metadataSourceSelector = silo.selector<
 		ProjectionResult<VariableFontSource["metadata"]>
 	>({
-		key: key("metadataSource"),
+		key: "metadataSource",
 		get: ({ get }) => {
 			const metadata = get(metadataAtom)
 			if (metadata === null) {
@@ -2242,7 +2240,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const metricsSourceSelector = silo.selector<
 		ProjectionResult<VariableFontSource["metrics"]>
 	>({
-		key: key("metricsSource"),
+		key: "metricsSource",
 		get: ({ get }) => {
 			const metrics = get(metricsAtom)
 			if (metrics === null) {
@@ -2317,7 +2315,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const styleSourceSelector = silo.selector<
 		ProjectionResult<VariableFontSource["style"]>
 	>({
-		key: key("styleSource"),
+		key: "styleSource",
 		get: ({ get }) => {
 			const style = get(styleAtom)
 			if (style === null) {
@@ -2369,7 +2367,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const namesSourceSelector = silo.selector<
 		ProjectionResult<VariableFontSource["names"]>
 	>({
-		key: key("namesSource"),
+		key: "namesSource",
 		get: ({ get }) => {
 			const names = get(namesAtom)
 			return names === null
@@ -2385,7 +2383,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 
 	const editorStructureSelector = silo.selector<ProjectionResult<true>>({
-		key: key("editorStructure"),
+		key: "editorStructure",
 		get: ({ get }) => {
 			const glyphIds = get(glyphIdsAtom)
 			const masterIds = new Set(get(masterIdsAtom))
@@ -2509,7 +2507,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const fontSourceSelector = silo.selector<
 		ProjectionResult<VariableFontSource>
 	>({
-		key: key("fontSource"),
+		key: "fontSource",
 		get: ({ get }) => {
 			const structure = get(editorStructureSelector)
 			const metadata = get(metadataSourceSelector)
@@ -2570,7 +2568,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 
 	const fontCompilationSelector = silo.selector<FontCompilation>({
-		key: key("fontCompilation"),
+		key: "fontCompilation",
 		get: ({ get }) => {
 			const projected = get(fontSourceSelector)
 			if (!projected.ok) {
@@ -2604,7 +2602,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 
 	const editorSourceSelector = silo.selector<EditorFontSource | null>({
-		key: key("editorSource"),
+		key: "editorSource",
 		get: ({ get }) => {
 			if (!get(editorStructureSelector).ok) return null
 			const metadata = get(metadataAtom)
@@ -2824,7 +2822,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const replaceFontTransaction = silo.transaction<
 		(source: EditorFontSource) => void
 	>({
-		key: key("replaceFont"),
+		key: "replaceFont",
 		do: ({ get, set }, source) => {
 			validateEditorSourceStructure(source)
 
@@ -3078,7 +3076,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const movePointsTransaction = silo.transaction<
 		(input: MovePointsInput) => void
 	>({
-		key: key("movePoints"),
+		key: "movePoints",
 		do: ({ get, set }, input) => {
 			const glyph = get(glyphAtoms, input.glyphId)
 			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
@@ -3122,7 +3120,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const moveHandleTransaction = silo.transaction<
 		(input: MoveHandleInput) => void
 	>({
-		key: key("moveHandle"),
+		key: "moveHandle",
 		do: ({ get, set }, input) => {
 			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
 			const point = get(pointAtoms, [input.glyphId, input.pointId])
@@ -3198,7 +3196,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const setNodeModeTransaction = silo.transaction<
 		(input: SetNodeModeInput) => void
 	>({
-		key: key("setNodeMode"),
+		key: "setNodeMode",
 		do: ({ get, set }, input) => {
 			const point = get(pointAtoms, [input.glyphId, input.pointId])
 			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
@@ -3372,7 +3370,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const insertPointTransaction = silo.transaction<
 		(input: InsertPointInput) => void
 	>({
-		key: key("insertPoint"),
+		key: "insertPoint",
 		do: ({ get, set }, input) => {
 			if (input.point.mode !== "soft" && input.point.mode !== "hard") {
 				throw new TypeError('Node mode must be "soft" or "hard".')
@@ -3496,7 +3494,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const deleteSelectionTransaction = silo.transaction<
 		(input: DeleteSelectionInput) => void
 	>({
-		key: key("deleteSelection"),
+		key: "deleteSelection",
 		do: ({ get, set }, input) => {
 			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
 			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
@@ -3743,7 +3741,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			next.set(
 				glyph.id,
 				silo.timeline({
-					key: key(`history/${historyGeneration}/${glyph.id}`),
+					key: `history/${historyGeneration}/${glyph.id}`,
 					scope,
 				}),
 			)
