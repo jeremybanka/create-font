@@ -1891,7 +1891,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		ProjectionResult<readonly GlyphVariationSource[]>,
 		GlyphId
 	>({
-		key: "glyphVariations",
+		key: "glyphVariation",
 		get:
 			(glyphId) =>
 			({ get }) => {
