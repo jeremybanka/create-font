@@ -2,7 +2,7 @@ import parser from "@typescript-eslint/parser"
 import atomIO from "atom.io/eslint-plugin"
 import type { Linter } from "eslint"
 
-export default [
+const config: Linter.Config[] = [
 	{
 		files: ["src/**/*.ts"],
 		languageOptions: {
@@ -18,7 +18,9 @@ export default [
 		rules: {
 			"atom.io/exact-catch-types": "error",
 			"atom.io/explicit-state-types": "error",
+			"atom.io/explicit-transaction-types": "error",
 			"atom.io/naming-convention": "error",
 		},
 	},
-] satisfies Linter.Config[]
+]
+export default config
