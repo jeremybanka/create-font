@@ -22,7 +22,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const compilation = useO(workspace.font.selectors.compilation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const history = useTL(workspace.font.historyFor(activeGlyphId))
+	const history = useTL(workspace.font.glyphHistoryTimelines, activeGlyphId)
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
 	const toolContext = { activeGlyphId, history, workspace }

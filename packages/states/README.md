@@ -156,10 +156,11 @@ affected structure or make no change. Ordinary node deletion reconnects and
 keeps a contour closed. Breaking deletion splits remaining regions into open
 contours and removes the outward handles from their loose ends. Open contours
 remain valid, serializable editor state but produce a typed
-`topology.open_contour` projection error until closed. Each glyph receives its
-own timeline over only that glyph's family members, while projections remain
-derived state. Undoing `glyph:O` therefore cannot rewind `.notdef`, even though
-both histories live in the document's isolated `Silo`.
+`topology.open_contour` projection error until closed. A keyed timeline family
+routes each glyph-owned atom-family member to that glyph's independent history,
+including points and contours created after loading. Projections remain derived
+state. Undoing `glyph:O` therefore cannot rewind `.notdef`, even though both
+histories live in the document's isolated `Silo`.
 
 Loading is intended for trusted `EditorFontSource` values already constructed
 or decoded by an application. It checks structural requirements needed to
