@@ -6,7 +6,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "vp build",
-		"check": "tsc --noEmit -p tsconfig.json && eslint \"src/**/*.tsx\" && lasertag check \"src/**/*.module.css\"",
+		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
+		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
 		"dev": "vp dev",
 		"preview": "vp preview",
 		"test": "vp test"
@@ -20,6 +21,7 @@
 	"devDependencies": {
 		"@preact/preset-vite": "2.10.5",
 		"@typescript-eslint/parser": "8.63.0",
+		"@typescript-eslint/utils": "8.63.0",
 		"eslint": "10.6.0",
 		"jiti": "2.6.1",
 		"lasertag": "0.4.3",

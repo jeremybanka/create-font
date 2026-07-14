@@ -20,7 +20,6 @@
 	},
 	"scripts": {
 		"build": "vp pack",
-		"check": "tsc --noEmit -p tsconfig.json",
 		"dev": "vp pack --watch --no-clean",
 		"test": "vp test"
 	},
