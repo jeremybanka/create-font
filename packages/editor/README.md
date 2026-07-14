@@ -51,9 +51,10 @@ and selectors. An edit to `.notdef`, for example, does not invalidate an `O`
 preview. A tiny Preact-native adapter observes the custom Silo through its
 public get, set, and subscribe methods; React is never mixed into the DOM UI.
 
-Toolbar and keyboard history controls resolve the active glyph's timeline and
-call the custom Silo's `undo()` and `redo()` methods directly. Switching glyphs
-switches timeline cursors without combining their edits.
+Toolbar and keyboard history controls select the active glyph from the
+workspace's timeline family and call the custom Silo's `undo()` and `redo()`
+methods directly. Switching glyphs switches timeline cursors without combining
+their edits.
 
 ## Run
 

@@ -161,12 +161,16 @@ describe("font editor state", () => {
 		}
 		let oLength = 0
 		let notdefLength = 0
-		editor.silo.subscribe(editor.historyFor(oGlyphId), (update) => {
+		editor.silo.subscribe(editor.glyphHistoryTimelines, oGlyphId, (update) => {
 			oLength = update.length
 		})
-		editor.silo.subscribe(editor.historyFor(notdefGlyphId), (update) => {
-			notdefLength = update.length
-		})
+		editor.silo.subscribe(
+			editor.glyphHistoryTimelines,
+			notdefGlyphId,
+			(update) => {
+				notdefLength = update.length
+			},
+		)
 
 		editor.actions.movePoints({
 			masterId: blackMasterId,
@@ -801,6 +805,23 @@ describe("font editor state", () => {
 		expect(inserted?.[1]).toBe("point:glyph:O:inserted")
 		expect(editor.read.compilation().stage).toBe("compiled")
 
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: "point:glyph:O:inserted", x: 733, y: 811 }],
+		})
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.pointX, [
+				blackMasterId,
+				oGlyphId,
+				"point:glyph:O:inserted",
+			]),
+		).toBe(700)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
+		).toContain("point:glyph:O:inserted")
+
 		editor.undo(oGlyphId)
 		expect(
 			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
@@ -867,11 +888,28 @@ describe("font editor state", () => {
 		const editor = createLoadedEditor("test/replace")
 		const replacement = makeGeometricOEditorFont()
 		Object.assign(replacement.names, { family: "Replacement O" })
+		const pointId = replacement.glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId, x: 625, y: 800 }],
+		})
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
 
 		editor.actions.load(replacement)
 
 		expect(editor.read.editorSource()?.names.family).toBe("Replacement O")
 		expect(editor.read.compilation().stage).toBe("compiled")
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(0)
+		editor.undo(oGlyphId)
+		expect(editor.read.editorSource()?.names.family).toBe("Replacement O")
 	})
 
 	it("invalidates same-ID derived selectors when replacing geometry", () => {

@@ -1,4 +1,4 @@
-import { Silo, type TimelineManageable, type TimelineToken } from "atom.io"
+import { scopeFamily, Silo } from "atom.io"
 import {
 	ingestVariableFont,
 	TRIGRAPH_FORMAT,
@@ -839,6 +839,52 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const cmapGlyphAtoms = silo.atomFamily<GlyphId | null, number>({
 		key: "cmapGlyph",
 		default: null,
+	})
+	const glyphHistoryTimelines = silo.timelineFamily<GlyphId>({
+		key: "glyphHistory",
+		scope: [
+			scopeFamily(glyphAtoms, { timelineKey: (glyphId) => glyphId }),
+			scopeFamily(glyphEditorAtoms, { timelineKey: (glyphId) => glyphId }),
+			scopeFamily(glyphContourIdsAtoms, {
+				timelineKey: (glyphId) => glyphId,
+			}),
+			scopeFamily(glyphLayerMasterIdsAtoms, {
+				timelineKey: (glyphId) => glyphId,
+			}),
+			scopeFamily(contourPointIdsAtoms, {
+				timelineKey: ([glyphId]) => glyphId,
+			}),
+			scopeFamily(contourClosedAtoms, {
+				timelineKey: ([glyphId]) => glyphId,
+			}),
+			scopeFamily(pointAtoms, {
+				timelineKey: ([glyphId]) => glyphId,
+			}),
+			scopeFamily(advanceWidthAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(leftSideBearingAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(pointXAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(pointYAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(incomingHandleXAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(incomingHandleYAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(outgoingHandleXAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(outgoingHandleYAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+		],
 	})
 
 	const layerNodeSelectors = silo.selectorFamily<
@@ -3690,71 +3736,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
-	let historyGeneration = 0
-	let glyphHistories = new Map<GlyphId, TimelineToken<TimelineManageable>>()
 
-	const rebuildGlyphHistories = (source: EditorFontSource): void => {
-		historyGeneration += 1
-		const next = new Map<GlyphId, TimelineToken<TimelineManageable>>()
-		for (const glyph of source.glyphs) {
-			const scope: TimelineManageable[] = [
-				silo.findState(glyphAtoms, glyph.id),
-				silo.findState(glyphEditorAtoms, glyph.id),
-				silo.findState(glyphContourIdsAtoms, glyph.id),
-				silo.findState(glyphLayerMasterIdsAtoms, glyph.id),
-			]
-			for (const contour of glyph.contours) {
-				scope.push(
-					silo.findState(contourPointIdsAtoms, [glyph.id, contour.id]),
-					silo.findState(contourClosedAtoms, [glyph.id, contour.id]),
-				)
-				for (const point of contour.points) {
-					scope.push(silo.findState(pointAtoms, [glyph.id, point.id]))
-					const splitId = splitContourId(glyph.id, point.id)
-					scope.push(
-						silo.findState(contourPointIdsAtoms, [glyph.id, splitId]),
-						silo.findState(contourClosedAtoms, [glyph.id, splitId]),
-					)
-				}
-			}
-			const pointIds = glyph.contours.flatMap((contour) =>
-				contour.points.map((point) => point.id),
-			)
-			for (const layer of glyph.layers) {
-				const layerKey: LayerKey = [layer.masterId, glyph.id]
-				scope.push(
-					silo.findState(advanceWidthAtoms, layerKey),
-					silo.findState(leftSideBearingAtoms, layerKey),
-				)
-				for (const pointId of pointIds) {
-					const pointKey: LayerPointKey = [layer.masterId, glyph.id, pointId]
-					scope.push(
-						silo.findState(pointXAtoms, pointKey),
-						silo.findState(pointYAtoms, pointKey),
-						silo.findState(incomingHandleXAtoms, pointKey),
-						silo.findState(incomingHandleYAtoms, pointKey),
-						silo.findState(outgoingHandleXAtoms, pointKey),
-						silo.findState(outgoingHandleYAtoms, pointKey),
-					)
-				}
-			}
-			next.set(
-				glyph.id,
-				silo.timeline({
-					key: `history/${historyGeneration}/${glyph.id}`,
-					scope,
-				}),
-			)
-		}
-		glyphHistories = next
-	}
-
-	const historyFor = (glyphId: GlyphId): TimelineToken<TimelineManageable> => {
-		const history = glyphHistories.get(glyphId)
-		if (history === undefined) {
+	const assertKnownGlyphHistory = (glyphId: GlyphId): void => {
+		if (!silo.getState(glyphIdsAtom).includes(glyphId)) {
 			throw new TypeError(`Unknown glyph history ${glyphId}.`)
 		}
-		return history
 	}
 
 	return {
@@ -3828,11 +3814,21 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			insertPoint: insertPointTransaction,
 			deleteSelection: deleteSelectionTransaction,
 		},
-		historyFor,
+		glyphHistoryTimelines,
 		actions: {
 			load(source: EditorFontSource): void {
+				const previousGlyphIds = silo.getState(glyphIdsAtom)
 				runReplaceFont(source)
-				rebuildGlyphHistories(source)
+				const nextGlyphIds = silo.getState(glyphIdsAtom)
+				const nextGlyphIdSet = new Set(nextGlyphIds)
+				for (const glyphId of previousGlyphIds) {
+					if (!nextGlyphIdSet.has(glyphId)) {
+						silo.disposeTimeline(glyphHistoryTimelines, glyphId)
+					}
+				}
+				for (const glyphId of nextGlyphIds) {
+					silo.clearTimeline(glyphHistoryTimelines, glyphId)
+				}
 			},
 			movePoints(input: MovePointsInput): void {
 				runMovePoints(input)
@@ -3864,15 +3860,22 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			compilation: (): FontCompilation =>
 				silo.getState(fontCompilationSelector),
 		},
-		undo: (glyphId: GlyphId): void => silo.undo(historyFor(glyphId)),
-		redo: (glyphId: GlyphId): void => silo.redo(historyFor(glyphId)),
+		undo: (glyphId: GlyphId): void => {
+			assertKnownGlyphHistory(glyphId)
+			silo.undo(glyphHistoryTimelines, glyphId)
+		},
+		redo: (glyphId: GlyphId): void => {
+			assertKnownGlyphHistory(glyphId)
+			silo.redo(glyphHistoryTimelines, glyphId)
+		},
 		clearHistory: (glyphId?: GlyphId): void => {
 			if (glyphId !== undefined) {
-				silo.clearTimeline(historyFor(glyphId))
+				assertKnownGlyphHistory(glyphId)
+				silo.clearTimeline(glyphHistoryTimelines, glyphId)
 				return
 			}
-			for (const history of glyphHistories.values()) {
-				silo.clearTimeline(history)
+			for (const currentGlyphId of silo.getState(glyphIdsAtom)) {
+				silo.clearTimeline(glyphHistoryTimelines, currentGlyphId)
 			}
 		},
 	}
