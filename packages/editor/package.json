@@ -19,7 +19,7 @@
 	},
 	"devDependencies": {
 		"@preact/preset-vite": "2.10.5",
-		"@typescript-eslint/parser": "8.62.1",
+		"@typescript-eslint/parser": "8.63.0",
 		"eslint": "10.6.0",
 		"jiti": "2.6.1",
 		"lasertag": "0.4.3",
