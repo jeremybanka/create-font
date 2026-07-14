@@ -17,4 +17,5 @@ runs:
         --filter trigraph
         --filter @trigraph/states
         --filter @trigraph/source
+        --filter @trigraph/preact-konva
         --filter @trigraph/editor
