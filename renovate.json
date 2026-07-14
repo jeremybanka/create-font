@@ -43,7 +43,7 @@
 			"dependencyDashboardApproval": true
 		},
 		{
-			"matchPackageNames": ["@typescript/*"],
+			"matchPackageNames": ["agents.yaml", "atom.io", "lasertag"],
 			"minimumReleaseAge": null
 		}
 	]
