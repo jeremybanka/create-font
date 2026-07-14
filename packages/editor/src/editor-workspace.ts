@@ -59,60 +59,62 @@ export function createEditorWorkspace(
 		)
 	}
 	const key = (suffix: string): string => `trigraph/editor/ui/${suffix}`
-	const activeGlyphId = font.silo.atom<GlyphId>({
+	const activeGlyphIdAtom = font.silo.atom<GlyphId>({
 		key: key("activeGlyphId"),
 		default:
 			document.glyphs.find((glyph) => glyph.name === "O")?.id ?? firstGlyph,
 	})
-	const activeMasterId = font.silo.atom<MasterId>({
+	const activeMasterIdAtom = font.silo.atom<MasterId>({
 		key: key("activeMasterId"),
 		default: document.defaultMasterId,
 	})
-	const selection = font.silo.atom<readonly EditorSelectionTarget[]>({
+	const selectionAtom = font.silo.atom<readonly EditorSelectionTarget[]>({
 		key: key("selection"),
 		default: Object.freeze([]),
 	})
-	const previewText = font.silo.atom<string>({
+	const previewTextAtom = font.silo.atom<string>({
 		key: key("previewText"),
 		default: "OOOO\nOOOO",
 	})
-	const caretIndex = font.silo.atom<number>({
+	const caretIndexAtom = font.silo.atom<number>({
 		key: key("caretIndex"),
 		default: 0,
 	})
-	const editingTextIndex = font.silo.atom<number | null>({
+	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: key("editingTextIndex"),
 		default: null,
 	})
-	const previewCoordinate = font.silo.atomFamily<number | null, AxisId>({
+	const previewCoordinateAtoms = font.silo.atomFamily<number | null, AxisId>({
 		key: key("previewCoordinate"),
 		default: null,
 	})
-	const showNodes = font.silo.atom<boolean>({
+	const showNodesAtom = font.silo.atom<boolean>({
 		key: key("showNodes"),
 		default: true,
 	})
 	for (const axis of document.axes) {
-		font.silo.setState(previewCoordinate, axis.id, axis.default)
+		font.silo.setState(previewCoordinateAtoms, axis.id, axis.default)
 	}
-	const previewLocation = font.silo.selector<Readonly<Record<string, number>>>({
+	const previewLocationSelector = font.silo.selector<
+		Readonly<Record<string, number>>
+	>({
 		key: key("previewLocation"),
 		get: ({ get }) =>
 			Object.freeze(
 				Object.fromEntries(
 					document.axes.map((axis) => [
 						axis.id,
-						get(previewCoordinate, axis.id) ?? axis.default,
+						get(previewCoordinateAtoms, axis.id) ?? axis.default,
 					]),
 				),
 			),
 	})
 
-	const activeLayer = font.silo.selector<EditorCanvasLayer | null>({
+	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
 		key: key("activeLayer"),
 		get: ({ get }) => {
-			const masterId = get(activeMasterId)
-			const glyphId = get(activeGlyphId)
+			const masterId = get(activeMasterIdAtom)
+			const glyphId = get(activeGlyphIdAtom)
 			const contourIds = get(font.atoms.glyphContourIds, glyphId)
 			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
 			const leftSideBearing = get(font.atoms.leftSideBearing, [
@@ -152,10 +154,10 @@ export function createEditorWorkspace(
 			})
 		},
 	})
-	const previewRun = font.silo.selector<readonly PreviewRunItem[]>({
+	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
 		key: key("previewRun"),
 		get: ({ get }) => {
-			const location = get(previewLocation)
+			const location = get(previewLocationSelector)
 			const byCodePoint = new Map(
 				document.cmap.map((entry) => [entry.codePoint, entry.glyphId]),
 			)
@@ -167,7 +169,7 @@ export function createEditorWorkspace(
 			if (fallbackId === undefined) return []
 			const run: PreviewRunItem[] = []
 			let textOffset = 0
-			for (const character of get(previewText)) {
+			for (const character of get(previewTextAtom)) {
 				const textStart = textOffset
 				textOffset += character.length
 				if (character === "\n") {
@@ -203,7 +205,7 @@ export function createEditorWorkspace(
 	const setLocation = (location: EditorLocationSource): void => {
 		for (const axis of document.axes) {
 			font.silo.setState(
-				previewCoordinate,
+				previewCoordinateAtoms,
 				axis.id,
 				location[axis.id] ?? axis.default,
 			)
@@ -214,39 +216,39 @@ export function createEditorWorkspace(
 		font,
 		document,
 		ui: {
-			activeGlyphId,
-			activeMasterId,
-			selection,
-			previewText,
-			caretIndex,
-			editingTextIndex,
-			previewCoordinate,
-			previewLocation,
-			showNodes,
-			activeLayer,
-			previewRun,
+			activeGlyphId: activeGlyphIdAtom,
+			activeMasterId: activeMasterIdAtom,
+			selection: selectionAtom,
+			previewText: previewTextAtom,
+			caretIndex: caretIndexAtom,
+			editingTextIndex: editingTextIndexAtom,
+			previewCoordinate: previewCoordinateAtoms,
+			previewLocation: previewLocationSelector,
+			showNodes: showNodesAtom,
+			activeLayer: activeLayerSelector,
+			previewRun: previewRunSelector,
 		},
 		actions: {
 			selectGlyph(glyphId: GlyphId): void {
 				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
-				font.silo.setState(activeGlyphId, glyphId)
-				font.silo.setState(selection, Object.freeze([]))
-				font.silo.setState(editingTextIndex, null)
+				font.silo.setState(activeGlyphIdAtom, glyphId)
+				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(editingTextIndexAtom, null)
 			},
 			enterGlyphEdit(textStart: number, glyphId: GlyphId): void {
 				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
-				font.silo.setState(activeGlyphId, glyphId)
-				font.silo.setState(editingTextIndex, textStart)
-				font.silo.setState(selection, Object.freeze([]))
+				font.silo.setState(activeGlyphIdAtom, glyphId)
+				font.silo.setState(editingTextIndexAtom, textStart)
+				font.silo.setState(selectionAtom, Object.freeze([]))
 			},
 			exitGlyphEdit(): void {
-				font.silo.setState(editingTextIndex, null)
-				font.silo.setState(selection, Object.freeze([]))
+				font.silo.setState(editingTextIndexAtom, null)
+				font.silo.setState(selectionAtom, Object.freeze([]))
 			},
 			selectMaster(masterId: MasterId): void {
 				const master = document.masters.find((item) => item.id === masterId)
 				if (master === undefined) return
-				font.silo.setState(activeMasterId, masterId)
+				font.silo.setState(activeMasterIdAtom, masterId)
 				setLocation(
 					master.kind === "default"
 						? Object.fromEntries(
@@ -265,7 +267,7 @@ export function createEditorWorkspace(
 				const axis = document.axes.find((item) => item.id === axisId)
 				if (axis === undefined || !Number.isFinite(value)) return
 				font.silo.setState(
-					previewCoordinate,
+					previewCoordinateAtoms,
 					axisId,
 					Math.min(axis.max, Math.max(axis.min, value)),
 				)
