@@ -31,8 +31,8 @@
 	"devDependencies": {
 		"@typescript-eslint/parser": "8.63.0",
 		"@typescript-eslint/utils": "8.63.0",
-		"eslint": "10.6.0",
-		"jiti": "2.6.1",
+		"eslint": "10.7.0",
+		"jiti": "2.7.0",
 		"vitest": "4.1.10"
 	},
 	"engines": {
