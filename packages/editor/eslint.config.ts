@@ -20,6 +20,7 @@ export default [
 		rules: {
 			"atom.io/exact-catch-types": "error",
 			"atom.io/explicit-state-types": "error",
+			"atom.io/explicit-transaction-types": "error",
 			"atom.io/naming-convention": "error",
 		},
 	},
