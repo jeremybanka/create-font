@@ -180,7 +180,8 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 							aria-expanded={addingGlyphs}
 							onClick={openAddGlyphs}
 						>
-							<span aria-hidden="true">+</span>
+							<add-glyph-icon aria-hidden="true">+</add-glyph-icon>
+							<span>Add</span>
 						</button>
 					</add-glyphs-control>
 				</navigation-section>

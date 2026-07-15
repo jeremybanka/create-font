@@ -18,7 +18,7 @@ font-navigator.class {
 
 			&[data-grow="true"] {
 				flex: 1;
-				padding-bottom: 58px;
+				padding-bottom: 42px;
 				border-top: 1px solid var(--line);
 			}
 
@@ -151,28 +151,38 @@ font-navigator.class {
 
 			> add-glyphs-control {
 				position: absolute;
-				right: 2px;
-				bottom: 10px;
+				right: -8px;
+				bottom: -12px;
 				display: block;
 
 				> button {
-					display: grid;
-					place-items: center;
-					width: 34px;
-					height: 34px;
-					padding: 0;
-					border: 1px solid var(--line-strong);
-					border-radius: 50%;
-					background: var(--paper);
-					box-shadow: 0 4px 12px var(--shadow-subtle);
-					font: 400 21px/1 var(--ui-font);
-					color: var(--ink);
+					display: flex;
+					align-items: center;
+					gap: 6px;
+					padding: 5px 8px;
+					border: 1px solid transparent;
+					border-radius: 5px;
+					background: transparent;
+					font: 550 10px/1 var(--ui-font);
+					color: var(--ink-muted);
 					cursor: pointer;
 
-					&:hover,
+					&:hover {
+						background: var(--hover);
+					}
+
 					&[aria-expanded="true"] {
-						border-color: var(--line-selected);
+						border-color: var(--line);
 						background: var(--selected);
+						color: var(--ink);
+					}
+
+					> add-glyph-icon {
+						display: grid;
+						place-items: center;
+						width: 11px;
+						height: 11px;
+						font: 600 16px/1 var(--ui-font);
 					}
 				}
 			}
