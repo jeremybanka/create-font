@@ -358,6 +358,28 @@ export interface InsertPointInput {
 	}[]
 }
 
+export interface CreateContourInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly point: {
+		readonly id: PointId
+		readonly mode: EditorNodeMode
+	}
+	readonly coordinates: readonly {
+		readonly masterId: MasterId
+		readonly x: number
+		readonly y: number
+		readonly incoming?: EditorHandleVectorSource
+		readonly outgoing?: EditorHandleVectorSource
+	}[]
+}
+
+export interface SetContourClosedInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly closed: boolean
+}
+
 export interface DeleteSelectionInput {
 	readonly masterId: MasterId
 	readonly glyphId: GlyphId
@@ -3537,6 +3559,115 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const createContourTransaction = silo.transaction<
+		(input: CreateContourInput) => void
+	>({
+		key: "createContour",
+		do: ({ get, set }, input) => {
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (contourIds === null || layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					if (contourId === input.contourId) {
+						throw new TypeError(
+							`Contour ID ${input.contourId} is already in use.`,
+						)
+					}
+					if (
+						(get(contourPointIdsAtoms, [glyphId, contourId]) ?? []).includes(
+							input.point.id,
+						)
+					) {
+						throw new TypeError(`Point ID ${input.point.id} is already in use.`)
+					}
+				}
+			}
+			if (input.point.mode !== "soft" && input.point.mode !== "hard") {
+				throw new TypeError('Node mode must be "soft" or "hard".')
+			}
+			assertUnique(
+				input.coordinates.map((coordinate) => coordinate.masterId),
+				"New contour coordinate master IDs",
+			)
+			const coordinateIds = new Set(
+				input.coordinates.map((coordinate) => coordinate.masterId),
+			)
+			if (
+				coordinateIds.size !== layerMasterIds.length ||
+				layerMasterIds.some((masterId) => !coordinateIds.has(masterId))
+			) {
+				throw new TypeError(
+					"A new contour point requires coordinates for every glyph layer.",
+				)
+			}
+			for (const coordinate of input.coordinates) {
+				if (!Number.isFinite(coordinate.x) || !Number.isFinite(coordinate.y)) {
+					throw new TypeError("Point coordinates must be finite numbers.")
+				}
+				if (coordinate.incoming !== undefined) {
+					assertFiniteVector(coordinate.incoming, "Incoming handle")
+				}
+				if (coordinate.outgoing !== undefined) {
+					assertFiniteVector(coordinate.outgoing, "Outgoing handle")
+				}
+			}
+
+			set(
+				glyphContourIdsAtoms,
+				input.glyphId,
+				deepFreeze([...contourIds, input.contourId]),
+			)
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze([input.point.id]),
+			)
+			set(contourClosedAtoms, [input.glyphId, input.contourId], false)
+			set(
+				pointAtoms,
+				[input.glyphId, input.point.id],
+				deepFreeze({ mode: input.point.mode }),
+			)
+			for (const coordinate of input.coordinates) {
+				const atomKey: LayerPointKey = [
+					coordinate.masterId,
+					input.glyphId,
+					input.point.id,
+				]
+				set(pointXAtoms, atomKey, coordinate.x)
+				set(pointYAtoms, atomKey, coordinate.y)
+				set(incomingHandleXAtoms, atomKey, coordinate.incoming?.x ?? null)
+				set(incomingHandleYAtoms, atomKey, coordinate.incoming?.y ?? null)
+				set(outgoingHandleXAtoms, atomKey, coordinate.outgoing?.x ?? null)
+				set(outgoingHandleYAtoms, atomKey, coordinate.outgoing?.y ?? null)
+			}
+		},
+	})
+
+	const setContourClosedTransaction = silo.transaction<
+		(input: SetContourClosedInput) => void
+	>({
+		key: "setContourClosed",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			if (pointIds === null) {
+				throw new TypeError(
+					`Unknown contour ${input.contourId} in glyph ${input.glyphId}.`,
+				)
+			}
+			if (input.closed && pointIds.length < 3) {
+				throw new TypeError("A closed contour requires at least three points.")
+			}
+			set(contourClosedAtoms, [input.glyphId, input.contourId], input.closed)
+		},
+	})
+
 	const deleteSelectionTransaction = silo.transaction<
 		(input: DeleteSelectionInput) => void
 	>({
@@ -3735,6 +3866,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
+	const runCreateContour = silo.runTransaction(createContourTransaction)
+	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
 
 	const assertKnownGlyphHistory = (glyphId: GlyphId): void => {
@@ -3812,6 +3945,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			moveHandle: moveHandleTransaction,
 			setNodeMode: setNodeModeTransaction,
 			insertPoint: insertPointTransaction,
+			createContour: createContourTransaction,
+			setContourClosed: setContourClosedTransaction,
 			deleteSelection: deleteSelectionTransaction,
 		},
 		glyphHistoryTimelines,
@@ -3841,6 +3976,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
+			},
+			createContour(input: CreateContourInput): void {
+				runCreateContour(input)
+			},
+			setContourClosed(input: SetContourClosedInput): void {
+				runSetContourClosed(input)
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
 				runDeleteSelection(input)

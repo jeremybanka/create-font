@@ -8,8 +8,9 @@ navigation, an inspector, and glyph-scoped history.
 
 The included document deliberately stays tiny. Both `.notdef` and `O` are a
 geometric O with identical topology. The `wght` axis travels from a nearly
-razor-thin counter at 100 to a nearly pitch-black counter at 900. Only U+004F
-maps to `O`; every other character in the preview visibly exercises `.notdef`.
+razor-thin counter at 100 to a nearly pitch-black counter at 900. U+0041 maps
+to a geometric `A` drawn with the editor's pen, and U+004F maps to `O`; every
+other character in the preview visibly exercises `.notdef`.
 
 ## Stack
 
@@ -83,6 +84,9 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
   preview to that named location.
 - Once an occurrence is being edited, drag a node or either of its anchored
   Bézier handles in one gesture.
+- Activate the Pen button (or press P), click to place hard corner nodes, and
+  click the first node after placing at least three points to close the contour.
+  Continue clicking to draw another contour.
 - Drag an empty canvas region to box-select nodes and handle endpoints. Hold
   Shift, Command, or Control to add controls to the existing selection;
   Command/Control-A selects every visible node and handle.

@@ -12,6 +12,7 @@ export const blackMasterId = "master:black" as const
 export const razorInstanceId = "instance:razor" as const
 export const blackInstanceId = "instance:black" as const
 export const notdefGlyphId = "glyph:.notdef" as const
+export const aGlyphId = "glyph:A" as const
 export const oGlyphId = "glyph:O" as const
 
 const outerCoordinates = [
@@ -45,6 +46,40 @@ const blackCounterCoordinates = [
 	{ x: 548, y: 352 },
 	{ x: 548, y: 400 },
 	{ x: 548, y: 448 },
+] as const
+
+const razorAOuterCoordinates = [
+	{ x: 80, y: 0 },
+	{ x: 400, y: 820 },
+	{ x: 600, y: 820 },
+	{ x: 920, y: 0 },
+	{ x: 700, y: 0 },
+	{ x: 630, y: 190 },
+	{ x: 370, y: 190 },
+	{ x: 300, y: 0 },
+] as const
+
+const blackAOuterCoordinates = [
+	{ x: 40, y: 0 },
+	{ x: 350, y: 820 },
+	{ x: 650, y: 820 },
+	{ x: 960, y: 0 },
+	{ x: 650, y: 0 },
+	{ x: 570, y: 190 },
+	{ x: 430, y: 190 },
+	{ x: 350, y: 0 },
+] as const
+
+const razorACounterCoordinates = [
+	{ x: 400, y: 330 },
+	{ x: 600, y: 330 },
+	{ x: 500, y: 620 },
+] as const
+
+const blackACounterCoordinates = [
+	{ x: 440, y: 330 },
+	{ x: 560, y: 330 },
+	{ x: 500, y: 560 },
 ] as const
 
 const pointId = (glyphId: GlyphId, index: number): PointId =>
@@ -136,6 +171,73 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 	}
 }
 
+function hardNodes(
+	glyphId: GlyphId,
+	coordinates: readonly Coordinate[],
+	pointOffset: number,
+) {
+	return coordinates.map((coordinate, index) => ({
+		pointId: pointId(glyphId, pointOffset + index),
+		x: coordinate.x,
+		y: coordinate.y,
+	}))
+}
+
+function makeGeometricA(): EditorGlyphSource {
+	return {
+		id: aGlyphId,
+		name: "A",
+		export: true,
+		color: "#d5963f",
+		contours: [
+			{
+				id: contourId(aGlyphId, "outer"),
+				closed: true,
+				points: razorAOuterCoordinates.map((_, index) => ({
+					id: pointId(aGlyphId, index),
+					mode: "hard" as const,
+				})),
+			},
+			{
+				id: contourId(aGlyphId, "counter"),
+				closed: true,
+				points: razorACounterCoordinates.map((_, index) => ({
+					id: pointId(aGlyphId, index + razorAOuterCoordinates.length),
+					mode: "hard" as const,
+				})),
+			},
+		],
+		layers: [
+			{
+				masterId: razorMasterId,
+				advanceWidth: 1_000,
+				leftSideBearing: 80,
+				points: [
+					...hardNodes(aGlyphId, razorAOuterCoordinates, 0),
+					...hardNodes(
+						aGlyphId,
+						razorACounterCoordinates,
+						razorAOuterCoordinates.length,
+					),
+				],
+			},
+			{
+				masterId: blackMasterId,
+				advanceWidth: 1_000,
+				leftSideBearing: 80,
+				points: [
+					...hardNodes(aGlyphId, blackAOuterCoordinates, 0),
+					...hardNodes(
+						aGlyphId,
+						blackACounterCoordinates,
+						blackAOuterCoordinates.length,
+					),
+				],
+			},
+		],
+	}
+}
+
 export function makeDemoFont(): EditorFontSource {
 	return {
 		format: "trigraph.editor",
@@ -147,13 +249,13 @@ export function makeDemoFont(): EditorFontSource {
 			lowestPpem: 8,
 		},
 		names: {
-			family: "Trigraph Geometric O",
+			family: "Trigraph Geometric",
 			subfamily: "Razor",
-			uniqueId: "TRIG:Trigraph Geometric O:1.000",
-			fullName: "Trigraph Geometric O Razor",
+			uniqueId: "TRIG:Trigraph Geometric:1.000",
+			fullName: "Trigraph Geometric Razor",
 			version: "Version 1.000",
-			postScriptName: "TrigraphGeometricO-Razor",
-			typographicFamily: "Trigraph Geometric O",
+			postScriptName: "TrigraphGeometric-Razor",
+			typographicFamily: "Trigraph Geometric",
 			typographicSubfamily: "Razor",
 		},
 		metrics: {
@@ -201,20 +303,24 @@ export function makeDemoFont(): EditorFontSource {
 				id: razorInstanceId,
 				name: "Razor",
 				coordinates: { [weightAxisId]: 100 },
-				postScriptName: "TrigraphGeometricO-Razor",
+				postScriptName: "TrigraphGeometric-Razor",
 				elidable: true,
 			},
 			{
 				id: blackInstanceId,
 				name: "Black",
 				coordinates: { [weightAxisId]: 900 },
-				postScriptName: "TrigraphGeometricO-Black",
+				postScriptName: "TrigraphGeometric-Black",
 			},
 		],
 		glyphs: [
 			makeGeometricO(notdefGlyphId, ".notdef"),
+			makeGeometricA(),
 			makeGeometricO(oGlyphId, "O"),
 		],
-		cmap: [{ codePoint: 0x4f, glyphId: oGlyphId }],
+		cmap: [
+			{ codePoint: 0x41, glyphId: aGlyphId },
+			{ codePoint: 0x4f, glyphId: oGlyphId },
+		],
 	}
 }

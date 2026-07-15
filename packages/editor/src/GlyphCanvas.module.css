@@ -150,6 +150,10 @@ glyph-canvas.class {
 		min-height: 0;
 		overflow: hidden;
 		cursor: text;
+
+		&[data-tool="pen"] {
+			cursor: crosshair;
+		}
 	}
 
 	> p,

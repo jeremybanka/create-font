@@ -828,6 +828,55 @@ describe("font editor state", () => {
 		).not.toContain("point:glyph:O:inserted")
 	})
 
+	it("creates and closes a pen contour with shared master coordinates", () => {
+		const editor = createLoadedEditor("test/create-contour")
+		const contourId = "contour:glyph:O:pen"
+		const pointIds = [
+			"point:glyph:O:pen:0",
+			"point:glyph:O:pen:1",
+			"point:glyph:O:pen:2",
+		] as const
+
+		editor.actions.createContour({
+			glyphId: oGlyphId,
+			contourId,
+			point: { id: pointIds[0], mode: "hard" },
+			coordinates: [
+				{ masterId: razorMasterId, x: 200, y: 100 },
+				{ masterId: blackMasterId, x: 200, y: 100 },
+			],
+		})
+		for (const [index, pointId] of pointIds.slice(1).entries()) {
+			editor.actions.insertPoint({
+				glyphId: oGlyphId,
+				contourId,
+				point: { id: pointId, mode: "hard" },
+				coordinates: [
+					{ masterId: razorMasterId, x: 400 + index * 100, y: 300 },
+					{ masterId: blackMasterId, x: 400 + index * 100, y: 300 },
+				],
+			})
+		}
+		editor.actions.setContourClosed({
+			glyphId: oGlyphId,
+			contourId,
+			closed: true,
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
+		).toEqual(pointIds)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contourId]),
+		).toBe(true)
+		expect(editor.read.compilation().stage).toBe("compiled")
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contourId]),
+		).toBe(false)
+	})
+
 	it("derives horizontal phantom deltas from layer metrics", () => {
 		const source = makeGeometricOEditorFont()
 		for (const glyph of source.glyphs) {

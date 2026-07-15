@@ -1,6 +1,7 @@
 import {
 	createFontEditorState,
 	type AxisId,
+	type ContourId,
 	type EditorFontSource,
 	type EditorLayerNode,
 	type EditorLocationSource,
@@ -22,6 +23,7 @@ export interface EditorCanvasLayer {
 }
 
 export interface EditorCanvasContour {
+	readonly id: ContourId
 	readonly closed: boolean
 	readonly nodes: readonly EditorLayerNode[]
 }
@@ -46,7 +48,7 @@ export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
 ) {
-	const font = createFontEditorState({ key: "trigraph/editor/geometric-o" })
+	const font = createFontEditorState({ key: "trigraph/editor/geometric" })
 	font.actions.load(source)
 	const document = font.read.editorSource()
 	if (document === null)
@@ -73,7 +75,7 @@ export function createEditorWorkspace(
 	})
 	const previewTextAtom = font.silo.atom<string>({
 		key: "previewText",
-		default: "OOOO\nOOOO",
+		default: "AOOO\nAOOO",
 	})
 	const caretIndexAtom = font.silo.atom<number>({
 		key: "caretIndex",
@@ -142,7 +144,13 @@ export function createEditorWorkspace(
 					if (!node.ok) return null
 					contour.push(node.value)
 				}
-				contours.push(Object.freeze({ closed, nodes: Object.freeze(contour) }))
+				contours.push(
+					Object.freeze({
+						id: contourId,
+						closed,
+						nodes: Object.freeze(contour),
+					}),
+				)
 			}
 			return Object.freeze({
 				masterId,
