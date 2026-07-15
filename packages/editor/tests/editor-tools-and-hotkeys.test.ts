@@ -43,6 +43,17 @@ describe("editor tools and hotkeys", () => {
 		).toBe("undo")
 	})
 
+	it("maps Q to pen and V to select", () => {
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "q" }), true)?.id).toBe(
+			"pen",
+		)
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "v" }), true)?.id).toBe(
+			"select",
+		)
+		expect(TOOLS.PEN.hotkey).toEqual({ key: "q" })
+		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
+	})
+
 	it("does not match missing, extra, or foreign-platform modifiers", () => {
 		expect(toolForKeyboardEvent(keyboardEvent(), true)).toBeUndefined()
 		expect(

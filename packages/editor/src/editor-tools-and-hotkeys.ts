@@ -1,7 +1,8 @@
 import type { GlyphId } from "@trigraph/states"
 import { useEffect } from "preact/hooks"
 
-import type { EditorWorkspace } from "./editor-workspace.ts"
+import type { EditorIconName } from "./EditorIcon.tsx"
+import type { EditorToolId, EditorWorkspace } from "./editor-workspace.ts"
 import type { TimelineMeta } from "./state-hooks.ts"
 
 type Alphabetical =
@@ -46,6 +47,8 @@ export type ToolStatus = "active" | "disabled" | "ready"
 export interface ToolContext {
 	readonly workspace: EditorWorkspace
 	readonly activeGlyphId: GlyphId
+	readonly activeTool: EditorToolId
+	readonly editingTextIndex: number | null
 	readonly history: TimelineMeta
 }
 
@@ -53,17 +56,38 @@ export interface Tool {
 	readonly id: string
 	readonly displayName: string
 	readonly hotkey: Hotkey
-	readonly icon: string
+	readonly icon: EditorIconName
 	readonly status: (context: ToolContext) => ToolStatus
 	readonly do: (context: ToolContext) => void
 }
 
 export const TOOLS = {
+	SELECT: {
+		id: "select",
+		displayName: "Select",
+		hotkey: { key: "v" },
+		icon: "select",
+		status: ({ activeTool }) => (activeTool === "select" ? "active" : "ready"),
+		do: ({ workspace }) => workspace.actions.selectTool("select"),
+	},
+	PEN: {
+		id: "pen",
+		displayName: "Pen",
+		hotkey: { key: "q" },
+		icon: "pen",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "pen"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("pen"),
+	},
 	UNDO: {
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
-		icon: "↶",
+		icon: "undo",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
 		do: ({ history }) => history.undo(),
 	},
@@ -71,7 +95,7 @@ export const TOOLS = {
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
-		icon: "↷",
+		icon: "redo",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
 		do: ({ history }) => history.redo(),
@@ -79,6 +103,7 @@ export const TOOLS = {
 } as const satisfies Record<string, Tool>
 
 export const TOOLBAR_LAYOUT = [
+	[TOOLS.SELECT, TOOLS.PEN],
 	[TOOLS.UNDO, TOOLS.REDO],
 ] as const satisfies readonly (readonly Tool[])[]
 
@@ -175,9 +200,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function useHotkeys(context: ToolContext): void {
-	const { activeGlyphId, history, workspace } = context
+	const { activeGlyphId, activeTool, editingTextIndex, history, workspace } =
+		context
 	useEffect(() => {
-		const currentContext = { activeGlyphId, history, workspace }
+		const currentContext = {
+			activeGlyphId,
+			activeTool,
+			editingTextIndex,
+			history,
+			workspace,
+		}
 		const handleKeyDown = (event: KeyboardEvent): void => {
 			if (isEditableTarget(event.target)) return
 			const tool = toolForKeyboardEvent(event)
@@ -187,5 +219,12 @@ export function useHotkeys(context: ToolContext): void {
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [activeGlyphId, history.at, history.length, workspace])
+	}, [
+		activeGlyphId,
+		activeTool,
+		editingTextIndex,
+		history.at,
+		history.length,
+		workspace,
+	])
 }

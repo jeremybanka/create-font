@@ -1,4 +1,9 @@
-import type { EditorHandleKind, GlyphId, PointId } from "@trigraph/states"
+import type {
+	ContourId,
+	EditorHandleKind,
+	GlyphId,
+	PointId,
+} from "@trigraph/states"
 import {
 	Circle,
 	Group,
@@ -9,6 +14,7 @@ import {
 	Rect,
 	Stage,
 } from "@trigraph/preact-konva"
+import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
@@ -80,12 +86,14 @@ interface CanvasView {
 
 export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
-	const source = workspace.document
+	const source =
+		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
 	const caretIndex = useO(workspace.ui.caretIndex)
 	const setCaretIndex = useI(workspace.ui.caretIndex)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
+	const activeTool = useO(workspace.ui.activeTool)
 	const run = useO(workspace.ui.previewRun)
 	const location = useO(workspace.ui.previewLocation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -98,6 +106,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
+	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
+	const penEntitySequence = useRef(0)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -181,8 +191,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		event: KonvaEventObject<MouseEvent>,
 	): Readonly<{ x: number; y: number }> | null => {
 		if (editingPosition === undefined) return null
-		const pointer = event.target.getStage()?.getPointerPosition()
-		if (pointer === null || pointer === undefined) return null
+		const pointer = event.target.getStage()?.getPointerPosition() ?? {
+			x: event.evt.offsetX,
+			y: event.evt.offsetY,
+		}
 		return {
 			x: (pointer.x - view.x) / worldScale - editingPosition.x,
 			y: editingPosition.baseline - (pointer.y - view.y) / worldScale,
@@ -204,6 +216,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		const frame = requestAnimationFrame(() => textareaRef.current?.focus())
 		return () => cancelAnimationFrame(frame)
 	}, [editingTextIndex])
+
+	useEffect(() => {
+		setPenContourId(null)
+	}, [activeGlyphId, activeTool, editingTextIndex])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -263,6 +279,82 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			breakPaths,
 		})
 		setSelection(Object.freeze([]))
+	}
+	const nextPenEntityId = (kind: "contour" | "point") => {
+		const occupied = new Set([
+			...contours.map((contour) => contour.id),
+			...allPoints.map((point) => point.pointId),
+		])
+		while (true) {
+			const sequence = penEntitySequence.current
+			penEntitySequence.current += 1
+			const id = `${kind}:${activeGlyphId}:pen:${sequence}`
+			if (!occupied.has(id)) {
+				return kind === "contour" ? (id as ContourId) : (id as PointId)
+			}
+		}
+	}
+	const penCoordinates = (x: number, y: number) =>
+		source.masters.map((sourceMaster) => ({
+			masterId: sourceMaster.id,
+			x:
+				sourceMaster.id === activeMasterId
+					? x
+					: Math.round(
+							500 + (x - 500) * (master?.kind === "default" ? 0.94 : 1 / 0.94),
+						),
+			y,
+		}))
+	const addPenPoint = (x: number, y: number): void => {
+		const roundedX = Math.round(x)
+		const roundedY = Math.round(y)
+		const currentContour = contours.find(
+			(contour) => contour.id === penContourId,
+		)
+		const firstPoint = currentContour?.nodes[0]
+		if (
+			penContourId !== null &&
+			currentContour !== undefined &&
+			currentContour.nodes.length >= 3 &&
+			firstPoint !== undefined &&
+			Math.hypot(firstPoint.x - roundedX, firstPoint.y - roundedY) <= 40
+		) {
+			workspace.font.actions.setContourClosed({
+				glyphId: activeGlyphId,
+				contourId: penContourId,
+				closed: true,
+			})
+			setPenContourId(null)
+			return
+		}
+		const pointId = nextPenEntityId("point") as PointId
+		if (penContourId === null) {
+			const contourId = nextPenEntityId("contour") as ContourId
+			workspace.font.actions.createContour({
+				glyphId: activeGlyphId,
+				contourId,
+				point: { id: pointId, mode: "hard" },
+				coordinates: penCoordinates(roundedX, roundedY),
+			})
+			setPenContourId(contourId)
+		} else {
+			workspace.font.actions.insertPoint({
+				glyphId: activeGlyphId,
+				contourId: penContourId,
+				point: { id: pointId, mode: "hard" },
+				coordinates: penCoordinates(roundedX, roundedY),
+			})
+		}
+		setSelection(Object.freeze([{ kind: "node", pointId }]))
+		setShowNodes(true)
+	}
+	const closePenContour = (contourId: ContourId): void => {
+		workspace.font.actions.setContourClosed({
+			glyphId: activeGlyphId,
+			contourId,
+			closed: true,
+		})
+		setPenContourId(null)
 	}
 	const zoomCanvas = (
 		nextZoom: number,
@@ -425,7 +517,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					<span>
 						{editingTextIndex === null
 							? `${layout.lineCount} line${layout.lineCount === 1 ? "" : "s"} · double-click a glyph to edit`
-							: `${master?.name ?? "No master"} layer · Escape returns to typing`}
+							: activeTool === "pen"
+								? penContourId === null
+									? "Pen · click to start a contour"
+									: "Pen · click the first point to close"
+								: `${master?.name ?? "No master"} layer · Escape returns to typing`}
 					</span>
 				</canvas-title>
 				<canvas-controls>
@@ -458,7 +554,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-label="Zoom out"
 							onClick={() => zoomCanvas(view.zoom / 1.2)}
 						>
-							−
+							<MinusIcon aria-hidden="true" />
 						</button>
 						<button
 							type="button"
@@ -472,7 +568,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-label="Zoom in"
 							onClick={() => zoomCanvas(view.zoom * 1.2)}
 						>
-							+
+							<PlusIcon aria-hidden="true" />
 						</button>
 					</zoom-controls>
 					{editingTextIndex === null ? null : (
@@ -481,17 +577,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-pressed={showNodes}
 							onClick={() => setShowNodes((visible) => !visible)}
 						>
-							<nodes-icon aria-hidden="true">
-								<i />
-								<i />
-								<i />
-							</nodes-icon>
+							<DotsHorizontalIcon aria-hidden="true" />
 							Nodes
 						</button>
 					)}
 				</canvas-controls>
 			</canvas-toolbar>
-			<canvas-surface ref={ref}>
+			<canvas-surface ref={ref} data-tool={activeTool}>
 				<Stage
 					width={width}
 					height={height}
@@ -521,6 +613,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					}}
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (editingTextIndex !== null) {
+							if (activeTool === "pen") {
+								const point = pointerInEditingGlyph(event)
+								if (point !== null) addPenPoint(point.x, point.y)
+								return
+							}
 							if (!canStartBoxSelectionOn(event.target.name())) return
 							const point = pointerInEditingGlyph(event)
 							if (point === null) return
@@ -583,6 +680,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							width={width}
 							height={height}
 							fill={palette.surface}
+							onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
+								if (editingTextIndex === null || activeTool !== "pen") return
+								event.cancelBubble = true
+								const point = pointerInEditingGlyph(event)
+								if (point !== null) addPenPoint(point.x, point.y)
+							}}
 						/>
 						<Group
 							x={view.x}
@@ -753,7 +856,20 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																event?: KonvaEventObject<
 																	MouseEvent | TouchEvent
 																>,
-															): void => selectTarget(nodeTarget, event?.evt)
+															): void => {
+																if (
+																	activeTool === "pen" &&
+																	contour.id === penContourId &&
+																	pointIndex === 0 &&
+																	contour.nodes.length >= 3
+																) {
+																	if (event !== undefined)
+																		event.cancelBubble = true
+																	closePenContour(contour.id)
+																	return
+																}
+																selectTarget(nodeTarget, event?.evt)
+															}
 															const selectHandle = (
 																handle: EditorHandleKind,
 																event?: KonvaEventObject<
@@ -797,7 +913,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																fill: palette.nodeFill,
 																stroke: palette.nodeStroke,
 																strokeWidth: 1.25 * inverseScale,
-																draggable: true,
+																draggable: activeTool === "select",
 																onMouseDown: selectPoint,
 																onTouchStart: selectPoint,
 																onTap: selectPoint,

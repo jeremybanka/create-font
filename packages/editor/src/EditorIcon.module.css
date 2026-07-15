@@ -1,0 +1,12 @@
+editor-icon.class {
+	display: grid;
+	place-items: center;
+	width: 1em;
+	height: 1em;
+
+	> svg {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+}

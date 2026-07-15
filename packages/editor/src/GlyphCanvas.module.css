@@ -89,6 +89,8 @@ glyph-canvas.class {
 				background: var(--panel);
 
 				> button {
+					display: grid;
+					place-items: center;
 					height: 24px;
 					padding: 0;
 					border: 0;
@@ -101,6 +103,11 @@ glyph-canvas.class {
 					&:hover {
 						background: var(--hover);
 						color: var(--ink);
+					}
+
+					> svg {
+						width: 12px;
+						height: 12px;
 					}
 				}
 			}
@@ -127,18 +134,9 @@ glyph-canvas.class {
 					color: var(--ink);
 				}
 
-				> nodes-icon {
-					display: flex;
-					align-items: center;
-					gap: 2px;
-
-					> i {
-						display: block;
-						width: 4px;
-						height: 4px;
-						border-radius: 50%;
-						background: currentcolor;
-					}
+				> svg {
+					width: 14px;
+					height: 14px;
 				}
 			}
 		}
@@ -150,6 +148,10 @@ glyph-canvas.class {
 		min-height: 0;
 		overflow: hidden;
 		cursor: text;
+
+		&[data-tool="pen"] {
+			cursor: crosshair;
+		}
 	}
 
 	> p,

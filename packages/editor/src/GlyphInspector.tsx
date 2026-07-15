@@ -7,7 +7,8 @@ export interface GlyphInspectorProps {
 }
 
 export function GlyphInspector({ workspace }: GlyphInspectorProps) {
-	const source = workspace.document
+	const source =
+		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const selection = useO(workspace.ui.selection)

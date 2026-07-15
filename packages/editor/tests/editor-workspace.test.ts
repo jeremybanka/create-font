@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	aGlyphId,
 	blackMasterId,
 	notdefGlyphId,
 	oGlyphId,
@@ -35,8 +36,19 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
+	it("loads a compiled demo font with a variable A", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "A")
+
+		expect(workspace.font.read.compilation().stage).toBe("compiled")
+		expect(previewGlyph(workspace, 0)?.contours).toHaveLength(2)
+		expect(previewGlyph(workspace, 0)?.contours[0]).toHaveLength(8)
+		expect(previewGlyph(workspace, 0)?.contours[1]).toHaveLength(3)
+	})
+
 	it("evaluates the geometric O between the Razor and Black masters", () => {
 		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "O")
 
 		workspace.actions.setPreviewCoordinate(weightAxisId, 100)
 		const razor = previewGlyph(workspace, 0)
@@ -51,14 +63,44 @@ describe("editor workspace", () => {
 		expect(black?.contours[0]?.[0]?.y).toBe(820)
 	})
 
-	it("maps O through cmap and every unsupported character to .notdef", () => {
+	it("maps A and O through cmap and every unsupported character to .notdef", () => {
 		const workspace = createEditorWorkspace()
-		workspace.font.silo.setState(workspace.ui.previewText, "OX")
+		workspace.font.silo.setState(workspace.ui.previewText, "AOX")
 		const run = workspace.font.silo.getState(workspace.ui.previewRun)
 
 		expect(
 			run.flatMap((item) => (item.kind === "glyph" ? [item.glyphId] : [])),
-		).toEqual([oGlyphId, notdefGlyphId])
+		).toEqual([aGlyphId, oGlyphId, notdefGlyphId])
+	})
+
+	it("adds unique named glyphs and maps single characters", () => {
+		const workspace = createEditorWorkspace()
+		const added = workspace.actions.addGlyphs(["B", "C", "B", "Aacute"])
+		const source = workspace.font.read.editorSource()
+
+		expect(added).toEqual(["glyph:B", "glyph:C", "glyph:Aacute"])
+		expect(source?.glyphs.map((glyph) => glyph.name)).toEqual([
+			".notdef",
+			"A",
+			"O",
+			"B",
+			"C",
+			"Aacute",
+		])
+		expect(source?.cmap).toContainEqual({
+			codePoint: "B".codePointAt(0),
+			glyphId: "glyph:B",
+		})
+		expect(source?.cmap.some((entry) => entry.glyphId === "glyph:Aacute")).toBe(
+			false,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			"glyph:Aacute",
+		)
+
+		workspace.font.silo.setState(workspace.ui.previewText, "B")
+		const item = workspace.font.silo.getState(workspace.ui.previewRun)[0]
+		expect(item?.kind === "glyph" ? item.glyphId : null).toBe("glyph:B")
 	})
 
 	it("lays out explicit line breaks and caret stops in one canvas", () => {
@@ -109,6 +151,7 @@ describe("editor workspace", () => {
 
 	it("shares master edits with the variable typing preview and undo history", () => {
 		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "O")
 		const source = workspace.font.read.editorSource()
 		const innerTop = source?.glyphs.find((glyph) => glyph.id === oGlyphId)
 			?.contours[1]?.points[0]?.id
