@@ -13,6 +13,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
+		"@floating-ui/dom": "^1.8.0",
 		"@trigraph/preact-konva": "workspace:*",
 		"@trigraph/states": "workspace:*",
 		"atom.io": "0.50.0",

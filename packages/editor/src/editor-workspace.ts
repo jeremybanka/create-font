@@ -44,6 +44,7 @@ export interface PreviewRunLineBreak {
 }
 
 export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
+export type EditorToolId = "select" | "pen"
 
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
@@ -84,6 +85,10 @@ export function createEditorWorkspace(
 	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: "editingTextIndex",
 		default: null,
+	})
+	const activeToolAtom = font.silo.atom<EditorToolId>({
+		key: "activeTool",
+		default: "select",
 	})
 	const previewCoordinateAtoms = font.silo.atomFamily<number | null, AxisId>({
 		key: "previewCoordinate",
@@ -166,12 +171,18 @@ export function createEditorWorkspace(
 		get: ({ get }) => {
 			const location = get(previewLocationSelector)
 			const byCodePoint = new Map(
-				document.cmap.map((entry) => [entry.codePoint, entry.glyphId]),
+				get(font.atoms.cmapCodePoints).flatMap((codePoint) => {
+					const glyphId = get(font.atoms.cmapGlyph, codePoint)
+					return glyphId === null ? [] : [[codePoint, glyphId] as const]
+				}),
 			)
-			const fallback = document.glyphs.find(
-				(glyph) => glyph.name === ".notdef",
-			)?.id
-			const firstExported = document.glyphs.find((glyph) => glyph.export)?.id
+			const glyphIds = get(font.atoms.glyphIds)
+			const fallback = glyphIds.find(
+				(glyphId) => get(font.atoms.glyph, glyphId)?.name === ".notdef",
+			)
+			const firstExported = glyphIds.find(
+				(glyphId) => get(font.atoms.glyph, glyphId)?.export,
+			)
 			const fallbackId = fallback ?? firstExported
 			if (fallbackId === undefined) return []
 			const run: PreviewRunItem[] = []
@@ -229,6 +240,7 @@ export function createEditorWorkspace(
 			previewText: previewTextAtom,
 			caretIndex: caretIndexAtom,
 			editingTextIndex: editingTextIndexAtom,
+			activeTool: activeToolAtom,
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
@@ -237,20 +249,87 @@ export function createEditorWorkspace(
 		},
 		actions: {
 			selectGlyph(glyphId: GlyphId): void {
-				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
+				const currentDocument = font.read.editorSource()
+				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))
+					return
 				font.silo.setState(activeGlyphIdAtom, glyphId)
 				font.silo.setState(selectionAtom, Object.freeze([]))
 				font.silo.setState(editingTextIndexAtom, null)
+				font.silo.setState(activeToolAtom, "select")
 			},
 			enterGlyphEdit(textStart: number, glyphId: GlyphId): void {
-				if (!document.glyphs.some((glyph) => glyph.id === glyphId)) return
+				const currentDocument = font.read.editorSource()
+				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))
+					return
 				font.silo.setState(activeGlyphIdAtom, glyphId)
 				font.silo.setState(editingTextIndexAtom, textStart)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(activeToolAtom, "select")
 			},
 			exitGlyphEdit(): void {
 				font.silo.setState(editingTextIndexAtom, null)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(activeToolAtom, "select")
+			},
+			selectTool(tool: EditorToolId): void {
+				font.silo.setState(activeToolAtom, tool)
+			},
+			addGlyphs(names: readonly string[]): readonly GlyphId[] {
+				const currentDocument = font.read.editorSource()
+				if (currentDocument === null) return []
+				const existingNames = new Set(
+					currentDocument.glyphs.map((glyph) => glyph.name),
+				)
+				const existingIds = new Set(
+					currentDocument.glyphs.map((glyph) => glyph.id),
+				)
+				const cmap = [...currentDocument.cmap]
+				const mappedCodePoints = new Set(cmap.map((entry) => entry.codePoint))
+				const glyphs = [...currentDocument.glyphs]
+				const addedIds: GlyphId[] = []
+				for (const rawName of names) {
+					const name = rawName.trim()
+					const id = `glyph:${name}` as GlyphId
+					if (
+						name.length === 0 ||
+						existingNames.has(name) ||
+						existingIds.has(id)
+					)
+						continue
+					existingNames.add(name)
+					existingIds.add(id)
+					glyphs.push({
+						id,
+						name,
+						export: true,
+						color: "#d5963f",
+						contours: [],
+						layers: currentDocument.masters.map((master) => ({
+							masterId: master.id,
+							advanceWidth: currentDocument.metadata.unitsPerEm,
+							leftSideBearing: 80,
+							points: [],
+						})),
+					})
+					const characters = Array.from(name)
+					const codePoint =
+						characters.length === 1 ? name.codePointAt(0) : undefined
+					if (codePoint !== undefined && !mappedCodePoints.has(codePoint)) {
+						cmap.push({ codePoint, glyphId: id })
+						mappedCodePoints.add(codePoint)
+					}
+					addedIds.push(id)
+				}
+				if (addedIds.length === 0) return Object.freeze([])
+				font.actions.load({ ...currentDocument, glyphs, cmap })
+				const selectedId = addedIds.at(-1)
+				if (selectedId !== undefined) {
+					font.silo.setState(activeGlyphIdAtom, selectedId)
+					font.silo.setState(editingTextIndexAtom, null)
+					font.silo.setState(selectionAtom, Object.freeze([]))
+					font.silo.setState(activeToolAtom, "select")
+				}
+				return Object.freeze(addedIds)
 			},
 			selectMaster(masterId: MasterId): void {
 				const master = document.masters.find((item) => item.id === masterId)

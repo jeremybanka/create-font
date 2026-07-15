@@ -46,11 +46,12 @@ Dragging keeps a temporary node or handle position locally, then commits one
 `movePoints` or `moveHandle` transaction on pointer release. Escape removes the
 editing target and restores textarea focus and the virtual caret.
 
-Immutable axes, cmap, glyph topology, names, and metrics are exposed once as
-the workspace document structure. Components subscribe only to narrow atoms
-and selectors. An edit to `.notdef`, for example, does not invalidate an `O`
-preview. A tiny Preact-native adapter observes the custom Silo through its
-public get, set, and subscribe methods; React is never mixed into the DOM UI.
+Axes, names, and metrics are exposed through the workspace document structure;
+the glyph list and cmap can grow through the add-glyph dialog. Components
+subscribe only to narrow atoms and selectors. An edit to `.notdef`, for
+example, does not invalidate an `O` preview. A tiny Preact-native adapter
+observes the custom Silo through its public get, set, and subscribe methods;
+React is never mixed into the DOM UI.
 
 Toolbar and keyboard history controls select the active glyph from the
 workspace's timeline family and call the custom Silo's `undo()` and `redo()`
@@ -84,9 +85,11 @@ loads its self-contained `EditorFontSource` fixture and edits that live state.
   preview to that named location.
 - Once an occurrence is being edited, drag a node or either of its anchored
   Bézier handles in one gesture.
-- Activate the Pen button (or press P), click to place hard corner nodes, and
-  click the first node after placing at least three points to close the contour.
-  Continue clicking to draw another contour.
+- Choose Pen in the floating toolbar (or press Q), click to place hard corner
+  nodes, and click the first node after placing at least three points to close
+  the contour. Press V to return to Select.
+- Use the + button in the glyph panel or Command/Control-Shift-N to add one or
+  more space-separated glyph names. Enter confirms and Escape cancels.
 - Drag an empty canvas region to box-select nodes and handle endpoints. Hold
   Shift, Command, or Control to add controls to the existing selection;
   Command/Control-A selects every visible node and handle.

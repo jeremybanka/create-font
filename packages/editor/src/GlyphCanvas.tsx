@@ -83,16 +83,16 @@ interface CanvasView {
 	readonly zoom: number
 }
 
-type CanvasTool = "select" | "pen"
-
 export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
-	const source = workspace.document
+	const source =
+		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
 	const caretIndex = useO(workspace.ui.caretIndex)
 	const setCaretIndex = useI(workspace.ui.caretIndex)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
+	const activeTool = useO(workspace.ui.activeTool)
 	const run = useO(workspace.ui.previewRun)
 	const location = useO(workspace.ui.previewLocation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -105,7 +105,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
-	const [activeTool, setActiveTool] = useState<CanvasTool>("select")
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
@@ -218,9 +217,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}, [editingTextIndex])
 
 	useEffect(() => {
-		setActiveTool("select")
 		setPenContourId(null)
-	}, [activeGlyphId, editingTextIndex])
+	}, [activeGlyphId, activeTool, editingTextIndex])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -383,20 +381,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape P BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
-				if (
-					editingTextIndex !== null &&
-					event.key.toLowerCase() === "p" &&
-					!event.metaKey &&
-					!event.ctrlKey &&
-					!event.altKey
-				) {
-					event.preventDefault()
-					setActiveTool((tool) => (tool === "pen" ? "select" : "pen"))
-					return
-				}
 				if (event.key === "Escape" && editingTextIndex !== null) {
 					event.preventDefault()
 					exitGlyphEdit()
@@ -584,32 +571,18 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						</button>
 					</zoom-controls>
 					{editingTextIndex === null ? null : (
-						<>
-							<button
-								type="button"
-								aria-label="Pen tool"
-								aria-keyshortcuts="P"
-								aria-pressed={activeTool === "pen"}
-								onClick={() =>
-									setActiveTool((tool) => (tool === "pen" ? "select" : "pen"))
-								}
-							>
-								<pen-icon aria-hidden="true">⌁</pen-icon>
-								Pen
-							</button>
-							<button
-								type="button"
-								aria-pressed={showNodes}
-								onClick={() => setShowNodes((visible) => !visible)}
-							>
-								<nodes-icon aria-hidden="true">
-									<i />
-									<i />
-									<i />
-								</nodes-icon>
-								Nodes
-							</button>
-						</>
+						<button
+							type="button"
+							aria-pressed={showNodes}
+							onClick={() => setShowNodes((visible) => !visible)}
+						>
+							<nodes-icon aria-hidden="true">
+								<i />
+								<i />
+								<i />
+							</nodes-icon>
+							Nodes
+						</button>
 					)}
 				</canvas-controls>
 			</canvas-toolbar>

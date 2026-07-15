@@ -73,6 +73,36 @@ describe("editor workspace", () => {
 		).toEqual([aGlyphId, oGlyphId, notdefGlyphId])
 	})
 
+	it("adds unique named glyphs and maps single characters", () => {
+		const workspace = createEditorWorkspace()
+		const added = workspace.actions.addGlyphs(["B", "C", "B", "Aacute"])
+		const source = workspace.font.read.editorSource()
+
+		expect(added).toEqual(["glyph:B", "glyph:C", "glyph:Aacute"])
+		expect(source?.glyphs.map((glyph) => glyph.name)).toEqual([
+			".notdef",
+			"A",
+			"O",
+			"B",
+			"C",
+			"Aacute",
+		])
+		expect(source?.cmap).toContainEqual({
+			codePoint: "B".codePointAt(0),
+			glyphId: "glyph:B",
+		})
+		expect(source?.cmap.some((entry) => entry.glyphId === "glyph:Aacute")).toBe(
+			false,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			"glyph:Aacute",
+		)
+
+		workspace.font.silo.setState(workspace.ui.previewText, "B")
+		const item = workspace.font.silo.getState(workspace.ui.previewRun)[0]
+		expect(item?.kind === "glyph" ? item.glyphId : null).toBe("glyph:B")
+	})
+
 	it("lays out explicit line breaks and caret stops in one canvas", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "O\nO")
