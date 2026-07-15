@@ -1,0 +1,146 @@
+command-palette.class {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: start center;
+	padding: 11vh 18px 18px;
+	background: rgb(0 0 0 / 32%);
+	backdrop-filter: blur(2px);
+	z-index: 40;
+
+	> command-palette-dialog {
+		display: grid;
+		width: min(580px, 100%);
+		overflow: hidden;
+		border: 1px solid var(--line-strong);
+		border-radius: 10px;
+		background: var(--panel);
+		box-shadow: 0 24px 70px rgb(0 0 0 / 45%), 0 5px 18px var(--shadow-subtle);
+
+		> command-search {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 10px;
+			margin: 7px;
+			padding: 0 10px;
+			border: 1px solid var(--accent);
+			border-radius: 7px;
+			background: var(--paper);
+			box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+
+			> span {
+				font: 400 24px/1 var(--ui-font);
+				color: var(--accent);
+			}
+
+			> input {
+				min-width: 0;
+				padding: 11px 0;
+				border: 0;
+				outline: 0;
+				background: transparent;
+				font: 500 14px/1.2 var(--ui-font);
+				color: var(--ink);
+
+				&::placeholder {
+					color: var(--ink-faint);
+				}
+			}
+
+			> kbd {
+				padding: 3px 5px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--panel);
+				font: 550 9px/1 var(--ui-font);
+				color: var(--ink-faint);
+			}
+		}
+
+		> command-results {
+			display: grid;
+			gap: 2px;
+			max-height: min(360px, 52vh);
+			overflow-y: auto;
+			padding: 3px 7px 7px;
+
+			> button {
+				display: grid;
+				grid-template-columns: 30px minmax(0, 1fr) auto;
+				align-items: center;
+				gap: 10px;
+				width: 100%;
+				padding: 8px 10px;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				text-align: left;
+				color: var(--ink);
+				cursor: pointer;
+
+				&[aria-selected="true"] {
+					background: var(--selected);
+					box-shadow: inset 0 0 0 1px var(--line-selected);
+				}
+
+				&:disabled {
+					opacity: 0.42;
+					cursor: not-allowed;
+				}
+
+				> command-icon {
+					display: grid;
+					place-items: center;
+					width: 28px;
+					height: 28px;
+					border: 1px solid var(--line);
+					border-radius: 6px;
+					background: var(--paper);
+					font: 650 15px/1 var(--ui-font);
+					color: var(--ink-muted);
+				}
+
+				> command-name {
+					display: grid;
+					gap: 3px;
+					min-width: 0;
+
+					> span {
+						font: 570 12px/1.2 var(--ui-font);
+					}
+
+					> small {
+						font: 500 9px/1 var(--ui-font);
+						color: var(--ink-faint);
+					}
+				}
+
+				> kbd,
+				> small {
+					font: 550 9px/1 var(--ui-font);
+					color: var(--ink-faint);
+				}
+			}
+
+			> command-empty {
+				display: grid;
+				place-items: center;
+				min-height: 92px;
+				font-size: 11px;
+				color: var(--ink-faint);
+			}
+		}
+
+		> command-hint {
+			display: flex;
+			justify-content: flex-end;
+			gap: 14px;
+			padding: 7px 12px;
+			border-top: 1px solid var(--line);
+			background: var(--paper);
+			font-size: 9px;
+			color: var(--ink-faint);
+		}
+	}
+}

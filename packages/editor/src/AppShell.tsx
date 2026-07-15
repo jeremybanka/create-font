@@ -1,10 +1,19 @@
+import { useEffect, useRef, useState } from "preact/hooks"
+
+import {
+	isCommandPaletteKeyboardEvent,
+	type PaletteCommand,
+} from "./command-palette.ts"
+import { CommandPalette } from "./CommandPalette.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
 	ALT_KEY_LABEL,
 	ariaKeyShortcut,
 	formatHotkey,
+	IS_MAC_LIKE,
 	MOD_KEY_LABEL,
 	type ToolContext,
+	TOOLS,
 	TOOLBAR_LAYOUT,
 	useHotkeys,
 } from "./editor-tools-and-hotkeys.ts"
@@ -19,6 +28,9 @@ export interface AppShellProps {
 }
 
 export function AppShell({ workspace }: AppShellProps) {
+	const [addingGlyphs, setAddingGlyphs] = useState(false)
+	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const source =
 		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const compilation = useO(workspace.font.selectors.compilation)
@@ -37,6 +49,48 @@ export function AppShell({ workspace }: AppShellProps) {
 		workspace,
 	}
 	useHotkeys(toolContext)
+	const openCommandPalette = (): void => {
+		setAddingGlyphs(false)
+		setCommandPaletteOpen(true)
+	}
+	const closeCommandPalette = (): void => {
+		setCommandPaletteOpen(false)
+		requestAnimationFrame(() => commandCenterRef.current?.focus())
+	}
+
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent): void => {
+			if (!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)) return
+			event.preventDefault()
+			openCommandPalette()
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [])
+
+	const commands: readonly PaletteCommand[] = [
+		{
+			id: "add-glyphs",
+			displayName: "Add glyphs",
+			category: "Glyphs",
+			icon: "+",
+			keywords: ["new", "create", "character"],
+			do: () => setAddingGlyphs(true),
+		},
+		...Object.values(TOOLS).map((tool) => ({
+			id: tool.id,
+			displayName:
+				tool.id === "select" || tool.id === "pen"
+					? `${tool.displayName} tool`
+					: tool.displayName,
+			category: tool.id === "select" || tool.id === "pen" ? "Tools" : "Edit",
+			icon: tool.icon,
+			keywords: [tool.id],
+			shortcut: formatHotkey(tool.hotkey).join("+"),
+			disabled: tool.status(toolContext) === "disabled",
+			do: () => tool.do(toolContext),
+		})),
+	]
 
 	const familyName =
 		source.names.typographicFamily ?? source.names.family ?? "Untitled font"
@@ -54,6 +108,19 @@ export function AppShell({ workspace }: AppShellProps) {
 						<span>{familyName}</span>
 					</project-name>
 				</brand-lockup>
+				<command-center>
+					<button
+						ref={commandCenterRef}
+						type="button"
+						aria-label="Open Command Palette"
+						aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+						onClick={openCommandPalette}
+					>
+						<span aria-hidden="true">›</span>
+						<strong>Commands</strong>
+						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
+					</button>
+				</command-center>
 				<document-status
 					role="status"
 					aria-live="polite"
@@ -66,7 +133,11 @@ export function AppShell({ workspace }: AppShellProps) {
 				</document-status>
 			</header>
 			<main>
-				<FontNavigator workspace={workspace} />
+				<FontNavigator
+					workspace={workspace}
+					addingGlyphs={addingGlyphs}
+					onAddingGlyphsChange={setAddingGlyphs}
+				/>
 				<editor-workspace>
 					<EditorToolbar context={toolContext} />
 					<GlyphCanvas workspace={workspace} />
@@ -80,10 +151,20 @@ export function AppShell({ workspace }: AppShellProps) {
 				</active-context>
 				<keyboard-help>
 					Q Pen · V Select · Esc to type · Scroll to pan ·
-					{` ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom`}
+					{` ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`}
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>
+			{commandPaletteOpen ? (
+				<CommandPalette
+					commands={commands}
+					onCancel={closeCommandPalette}
+					onExecute={(command) => {
+						setCommandPaletteOpen(false)
+						command.do()
+					}}
+				/>
+			) : null}
 		</app-shell>
 	)
 }

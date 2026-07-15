@@ -8,22 +8,26 @@ import {
 import type { JSX } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 
-import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./editor-tools-and-hotkeys.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
 import { useO } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
 	readonly workspace: EditorWorkspace
+	readonly addingGlyphs: boolean
+	readonly onAddingGlyphsChange: (addingGlyphs: boolean) => void
 }
 
-export function FontNavigator({ workspace }: FontNavigatorProps) {
+export function FontNavigator({
+	workspace,
+	addingGlyphs,
+	onAddingGlyphsChange,
+}: FontNavigatorProps) {
 	const source =
 		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const location = useO(workspace.ui.previewLocation)
-	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [glyphNames, setGlyphNames] = useState("")
 	const [floatingStyle, setFloatingStyle] = useState<JSX.CSSProperties>({
 		position: "fixed",
@@ -33,26 +37,15 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 	const inputRef = useRef<HTMLInputElement>(null)
 	const openAddGlyphs = (): void => {
 		setGlyphNames("")
-		setAddingGlyphs(true)
+		onAddingGlyphsChange(true)
 	}
 	const closeAddGlyphs = (): void => {
-		setAddingGlyphs(false)
+		onAddingGlyphsChange(false)
 		requestAnimationFrame(() => addButtonRef.current?.focus())
 	}
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
-			const mod = IS_MAC_LIKE ? event.metaKey : event.ctrlKey
-			if (
-				mod &&
-				event.shiftKey &&
-				!event.altKey &&
-				event.key.toLowerCase() === "n"
-			) {
-				event.preventDefault()
-				openAddGlyphs()
-				return
-			}
 			if (addingGlyphs && event.key === "Escape") {
 				event.preventDefault()
 				closeAddGlyphs()
@@ -64,6 +57,7 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 
 	useEffect(() => {
 		if (!addingGlyphs) return
+		setGlyphNames("")
 		const frame = requestAnimationFrame(() => {
 			inputRef.current?.focus()
 			inputRef.current?.select()
@@ -176,7 +170,6 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 							ref={addButtonRef}
 							type="button"
 							aria-label="Add glyphs"
-							aria-keyshortcuts="Meta+Shift+N Control+Shift+N"
 							aria-expanded={addingGlyphs}
 							onClick={openAddGlyphs}
 						>
@@ -227,7 +220,7 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 								event.currentTarget.form?.requestSubmit()
 							}}
 						/>
-						<small>Separate names with spaces · {MOD_KEY_LABEL}+Shift+N</small>
+						<small>Separate names with spaces</small>
 						<button type="submit">Add glyphs</button>
 					</form>
 				</add-glyph-dialog>

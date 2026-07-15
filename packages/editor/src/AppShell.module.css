@@ -8,7 +8,7 @@ app-shell.class {
 
 	> header {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) minmax(190px, 320px) minmax(0, 1fr);
 		align-items: center;
 		padding: 0 18px;
 		border-bottom: 1px solid var(--line-strong);
@@ -81,6 +81,50 @@ app-shell.class {
 
 			&[data-state="valid"] > i {
 				background: var(--success);
+			}
+		}
+
+		> command-center {
+			display: block;
+			min-width: 0;
+
+			> button {
+				display: grid;
+				grid-template-columns: auto minmax(0, 1fr) auto;
+				align-items: center;
+				gap: 8px;
+				width: 100%;
+				padding: 5px 8px;
+				border: 1px solid var(--line-strong);
+				border-radius: 6px;
+				background: var(--paper);
+				box-shadow: 0 1px 2px var(--shadow-subtle);
+				color: var(--ink-muted);
+				cursor: pointer;
+
+				&:hover {
+					border-color: var(--line-selected);
+					background: var(--hover);
+					color: var(--ink);
+				}
+
+				> span {
+					font: 500 17px/1 var(--ui-font);
+					color: var(--accent);
+				}
+
+				> strong {
+					overflow: hidden;
+					font: 550 10px/1 var(--ui-font);
+					text-align: left;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+				}
+
+				> kbd {
+					font: 550 9px/1 var(--ui-font);
+					color: var(--ink-faint);
+				}
 			}
 		}
 	}
@@ -205,12 +249,22 @@ app-shell.class {
 @media (width <= 620px) {
 	app-shell.class {
 		> header {
-			grid-template-columns: 1fr auto;
+			grid-template-columns: 1fr auto auto;
 			padding: 0 10px;
 
 			> brand-lockup > project-name > span,
 			> document-status > span {
 				display: none;
+			}
+
+			> command-center > button {
+				width: 34px;
+				padding-inline: 8px;
+
+				> strong,
+				> kbd {
+					display: none;
+				}
 			}
 		}
 
