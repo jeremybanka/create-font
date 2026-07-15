@@ -27,7 +27,7 @@
 		"@dprint/oxc": "0.30.0",
 		"@dprint/toml": "0.7.0",
 		"agents.yaml": "0.2.2",
-		"dprint": "0.55.1",
+		"dprint": "0.55.2",
 		"dprint-plugin-malva": "0.16.0",
 		"dprint-plugin-markup": "0.27.3",
 		"dprint-plugin-yaml": "0.6.0",
