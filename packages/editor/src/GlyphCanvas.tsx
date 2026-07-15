@@ -14,6 +14,7 @@ import {
 	Rect,
 	Stage,
 } from "@trigraph/preact-konva"
+import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
@@ -553,7 +554,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-label="Zoom out"
 							onClick={() => zoomCanvas(view.zoom / 1.2)}
 						>
-							−
+							<MinusIcon aria-hidden="true" />
 						</button>
 						<button
 							type="button"
@@ -567,7 +568,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-label="Zoom in"
 							onClick={() => zoomCanvas(view.zoom * 1.2)}
 						>
-							+
+							<PlusIcon aria-hidden="true" />
 						</button>
 					</zoom-controls>
 					{editingTextIndex === null ? null : (
@@ -576,11 +577,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							aria-pressed={showNodes}
 							onClick={() => setShowNodes((visible) => !visible)}
 						>
-							<nodes-icon aria-hidden="true">
-								<i />
-								<i />
-								<i />
-							</nodes-icon>
+							<DotsHorizontalIcon aria-hidden="true" />
 							Nodes
 						</button>
 					)}

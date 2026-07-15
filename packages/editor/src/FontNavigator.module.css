@@ -179,12 +179,9 @@ font-navigator.class {
 						color: var(--ink);
 					}
 
-					> add-glyph-icon {
-						display: grid;
-						place-items: center;
-						width: 11px;
-						height: 11px;
-						font: 600 16px/1 var(--ui-font);
+					> svg {
+						width: 13px;
+						height: 13px;
 					}
 				}
 			}
@@ -223,9 +220,13 @@ font-navigator.class {
 				border: 0;
 				border-radius: 5px;
 				background: transparent;
-				font-size: 18px;
 				color: var(--ink-muted);
 				cursor: pointer;
+
+				> svg {
+					width: 14px;
+					height: 14px;
+				}
 
 				&:hover {
 					background: var(--hover);

@@ -108,8 +108,9 @@ app-shell.class {
 					color: var(--ink);
 				}
 
-				> span {
-					font: 500 17px/1 var(--ui-font);
+				> svg {
+					width: 14px;
+					height: 14px;
 					color: var(--accent);
 				}
 
@@ -196,8 +197,9 @@ app-shell.class {
 							cursor: not-allowed;
 						}
 
-						> span {
-							font: 600 19px/1 var(--ui-font);
+						> editor-icon {
+							width: 19px;
+							height: 19px;
 						}
 					}
 				}

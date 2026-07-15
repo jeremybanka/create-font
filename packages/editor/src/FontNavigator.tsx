@@ -5,6 +5,7 @@ import {
 	offset,
 	shift,
 } from "@floating-ui/dom"
+import { Cross1Icon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 
@@ -173,7 +174,7 @@ export function FontNavigator({
 							aria-expanded={addingGlyphs}
 							onClick={openAddGlyphs}
 						>
-							<add-glyph-icon aria-hidden="true">+</add-glyph-icon>
+							<PlusIcon aria-hidden="true" />
 							<span>Add</span>
 						</button>
 					</add-glyphs-control>
@@ -194,7 +195,7 @@ export function FontNavigator({
 							aria-label="Cancel adding glyphs"
 							onClick={closeAddGlyphs}
 						>
-							×
+							<Cross1Icon aria-hidden="true" />
 						</button>
 					</dialog-heading>
 					<form

@@ -1,6 +1,7 @@
 import type { GlyphId } from "@trigraph/states"
 import { useEffect } from "preact/hooks"
 
+import type { EditorIconName } from "./EditorIcon.tsx"
 import type { EditorToolId, EditorWorkspace } from "./editor-workspace.ts"
 import type { TimelineMeta } from "./state-hooks.ts"
 
@@ -55,7 +56,7 @@ export interface Tool {
 	readonly id: string
 	readonly displayName: string
 	readonly hotkey: Hotkey
-	readonly icon: string
+	readonly icon: EditorIconName
 	readonly status: (context: ToolContext) => ToolStatus
 	readonly do: (context: ToolContext) => void
 }
@@ -65,7 +66,7 @@ export const TOOLS = {
 		id: "select",
 		displayName: "Select",
 		hotkey: { key: "v" },
-		icon: "↖",
+		icon: "select",
 		status: ({ activeTool }) => (activeTool === "select" ? "active" : "ready"),
 		do: ({ workspace }) => workspace.actions.selectTool("select"),
 	},
@@ -73,7 +74,7 @@ export const TOOLS = {
 		id: "pen",
 		displayName: "Pen",
 		hotkey: { key: "q" },
-		icon: "⌁",
+		icon: "pen",
 		status: ({ activeTool, editingTextIndex }) =>
 			editingTextIndex === null
 				? "disabled"
@@ -86,7 +87,7 @@ export const TOOLS = {
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
-		icon: "↶",
+		icon: "undo",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
 		do: ({ history }) => history.undo(),
 	},
@@ -94,7 +95,7 @@ export const TOOLS = {
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
-		icon: "↷",
+		icon: "redo",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
 		do: ({ history }) => history.redo(),

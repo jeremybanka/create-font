@@ -1,3 +1,4 @@
+import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 import {
@@ -5,6 +6,7 @@ import {
 	type PaletteCommand,
 } from "./command-palette.ts"
 import { CommandPalette } from "./CommandPalette.tsx"
+import { EditorIcon } from "./EditorIcon.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
 	ALT_KEY_LABEL,
@@ -73,7 +75,7 @@ export function AppShell({ workspace }: AppShellProps) {
 			id: "add-glyphs",
 			displayName: "Add glyphs",
 			category: "Glyphs",
-			icon: "+",
+			icon: "add",
 			keywords: ["new", "create", "character"],
 			do: () => setAddingGlyphs(true),
 		},
@@ -116,7 +118,7 @@ export function AppShell({ workspace }: AppShellProps) {
 						aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
 						onClick={openCommandPalette}
 					>
-						<span aria-hidden="true">›</span>
+						<MagnifyingGlassIcon aria-hidden="true" />
 						<strong>Commands</strong>
 						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
 					</button>
@@ -189,7 +191,7 @@ function EditorToolbar({ context }: { readonly context: ToolContext }) {
 								disabled={status === "disabled"}
 								onClick={() => tool.do(context)}
 							>
-								<span aria-hidden="true">{tool.icon}</span>
+								<EditorIcon name={tool.icon} />
 							</button>
 						)
 					})}

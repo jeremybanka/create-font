@@ -29,8 +29,9 @@ command-palette.class {
 			background: var(--paper);
 			box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 
-			> span {
-				font: 400 24px/1 var(--ui-font);
+			> svg {
+				width: 16px;
+				height: 16px;
 				color: var(--accent);
 			}
 
@@ -97,8 +98,12 @@ command-palette.class {
 					border: 1px solid var(--line);
 					border-radius: 6px;
 					background: var(--paper);
-					font: 650 15px/1 var(--ui-font);
 					color: var(--ink-muted);
+
+					> editor-icon {
+						width: 15px;
+						height: 15px;
+					}
 				}
 
 				> command-name {
@@ -141,6 +146,17 @@ command-palette.class {
 			background: var(--paper);
 			font-size: 9px;
 			color: var(--ink-faint);
+
+			> span {
+				display: flex;
+				align-items: center;
+				gap: 3px;
+
+				> svg {
+					width: 10px;
+					height: 10px;
+				}
+			}
 		}
 	}
 }

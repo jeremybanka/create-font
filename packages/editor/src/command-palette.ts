@@ -1,8 +1,10 @@
+import type { EditorIconName } from "./EditorIcon.tsx"
+
 export interface PaletteCommand {
 	readonly id: string
 	readonly displayName: string
 	readonly category: string
-	readonly icon: string
+	readonly icon: EditorIconName
 	readonly keywords?: readonly string[]
 	readonly shortcut?: string
 	readonly disabled?: boolean

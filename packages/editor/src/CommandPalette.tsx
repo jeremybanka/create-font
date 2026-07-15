@@ -1,3 +1,9 @@
+import {
+	ArrowDownIcon,
+	ArrowUpIcon,
+	EnterIcon,
+	MagnifyingGlassIcon,
+} from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 
@@ -7,6 +13,7 @@ import {
 	type PaletteCommand,
 } from "./command-palette.ts"
 import css from "./CommandPalette.module.css"
+import { EditorIcon } from "./EditorIcon.tsx"
 
 export interface CommandPaletteProps {
 	readonly commands: readonly PaletteCommand[]
@@ -84,7 +91,7 @@ export function CommandPalette({
 				aria-label="Command Palette"
 			>
 				<command-search>
-					<span aria-hidden="true">›</span>
+					<MagnifyingGlassIcon aria-hidden="true" />
 					<input
 						ref={inputRef}
 						role="combobox"
@@ -122,7 +129,9 @@ export function CommandPalette({
 								}}
 								onClick={() => execute(command)}
 							>
-								<command-icon aria-hidden="true">{command.icon}</command-icon>
+								<command-icon aria-hidden="true">
+									<EditorIcon name={command.icon} />
+								</command-icon>
 								<command-name>
 									<span>{command.displayName}</span>
 									<small>{command.category}</small>
@@ -137,8 +146,15 @@ export function CommandPalette({
 					)}
 				</command-results>
 				<command-hint>
-					<span>↑↓ Navigate</span>
-					<span>↵ Run command</span>
+					<span>
+						<ArrowUpIcon aria-hidden="true" />
+						<ArrowDownIcon aria-hidden="true" />
+						Navigate
+					</span>
+					<span>
+						<EnterIcon aria-hidden="true" />
+						Run command
+					</span>
 				</command-hint>
 			</command-palette-dialog>
 		</command-palette>
