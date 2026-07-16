@@ -7,10 +7,10 @@ import type {
 	NonEmptyReadonlyArray,
 	VariableFont,
 	VariableFontSource,
-} from "@trigraph/target"
+} from "@create-font/target"
 
-export const TRIGRAPH_EDITOR_FORMAT = "trigraph.editor" as const
-export const TRIGRAPH_EDITOR_VERSION = 3 as const
+export const CREATE_FONT_EDITOR_FORMAT = "create-font.editor" as const
+export const CREATE_FONT_EDITOR_VERSION = 3 as const
 
 /** Stable, serialization-safe identifiers scoped by editor entity kind. */
 export type AxisId = `axis:${string}`
@@ -172,8 +172,8 @@ export interface EditorCmapEntrySource {
  * address individual entities independently of that order.
  */
 export interface EditorFontSource {
-	readonly format: typeof TRIGRAPH_EDITOR_FORMAT
-	readonly editorVersion: typeof TRIGRAPH_EDITOR_VERSION
+	readonly format: typeof CREATE_FONT_EDITOR_FORMAT
+	readonly editorVersion: typeof CREATE_FONT_EDITOR_VERSION
 	readonly metadata: FontMetadataSource
 	readonly names: FontNamesSource
 	readonly metrics: FontMetricsSource

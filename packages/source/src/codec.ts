@@ -1,4 +1,4 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 
 import {
 	inspectJsonObjectKeys,

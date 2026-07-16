@@ -1,9 +1,12 @@
 {
-	"name": "@trigraph/preact-konva",
+	"name": "@create-font/preact-konva",
 	"version": "0.0.0",
 	"description": "Small, native Preact bindings for the Konva scene graph",
 	"type": "module",
 	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"dist/*.d.mts",
 		"dist/*.d.mts.map",

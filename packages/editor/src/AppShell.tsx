@@ -114,7 +114,7 @@ export function AppShell({ workspace }: AppShellProps) {
 						<i />
 					</brand-mark>
 					<project-name>
-						<strong>Trigraph</strong>
+						<strong>create-font</strong>
 						<span>{familyName}</span>
 					</project-name>
 				</brand-lockup>
@@ -209,7 +209,7 @@ export function AppShell({ workspace }: AppShellProps) {
 						? `Q Pen · V Select · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
-				<format-label>Trigraph editor v{source.editorVersion}</format-label>
+				<format-label>create-font editor v{source.editorVersion}</format-label>
 			</footer>
 			{commandPaletteOpen ? (
 				<CommandPalette

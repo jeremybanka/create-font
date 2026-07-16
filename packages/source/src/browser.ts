@@ -1,23 +1,23 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
 import { failure, success } from "./result.ts"
 import {
-	TRIGRAPH_EDITOR_FORMAT,
-	TRIGRAPH_EDITOR_VERSION,
+	CREATE_FONT_EDITOR_FORMAT,
+	CREATE_FONT_EDITOR_VERSION,
 	type EditorFontFile,
 	type SourceDiagnostic,
 	type SourceResult,
 } from "./types.ts"
 
-export const TRIGRAPH_SOURCE_FORMAT = "trigraph.source" as const
-export const TRIGRAPH_SOURCE_VERSION = 1 as const
+export const CREATE_FONT_SOURCE_FORMAT = "create-font.source" as const
+export const CREATE_FONT_SOURCE_VERSION = 1 as const
 
 export type ProjectFile = Readonly<{
-	format: typeof TRIGRAPH_SOURCE_FORMAT
-	sourceVersion: typeof TRIGRAPH_SOURCE_VERSION
-	editorFormat: typeof TRIGRAPH_EDITOR_FORMAT
-	editorVersion: typeof TRIGRAPH_EDITOR_VERSION
+	format: typeof CREATE_FONT_SOURCE_FORMAT
+	sourceVersion: typeof CREATE_FONT_SOURCE_VERSION
+	editorFormat: typeof CREATE_FONT_EDITOR_FORMAT
+	editorVersion: typeof CREATE_FONT_EDITOR_VERSION
 }>
 export type MetadataFile = EditorFontFile["metadata"]
 export type NamesFile = EditorFontFile["names"]
@@ -52,7 +52,7 @@ export type CmapIndexFile = readonly Readonly<{
 export type FontSourceDirectoryFiles = Readonly<Record<string, unknown>>
 
 const paths = {
-	project: "trigraph.json",
+	project: "create-font.json",
 	metadata: "metadata.json",
 	names: "names.json",
 	metrics: "metrics.json",
@@ -172,10 +172,10 @@ export function splitEditorFontSource(
 	const file = fileResult.value
 	const files: Record<string, unknown> = {
 		[paths.project]: {
-			format: TRIGRAPH_SOURCE_FORMAT,
-			sourceVersion: TRIGRAPH_SOURCE_VERSION,
-			editorFormat: TRIGRAPH_EDITOR_FORMAT,
-			editorVersion: TRIGRAPH_EDITOR_VERSION,
+			format: CREATE_FONT_SOURCE_FORMAT,
+			sourceVersion: CREATE_FONT_SOURCE_VERSION,
+			editorFormat: CREATE_FONT_EDITOR_FORMAT,
+			editorVersion: CREATE_FONT_EDITOR_VERSION,
 		},
 		[paths.metadata]: file.metadata,
 		[paths.names]: file.names,
@@ -379,10 +379,10 @@ export function assembleEditorFontSource(
 	const projectRecord = recordValue(projectResult.value, paths.project)
 	if (!projectRecord.ok) return failure(projectRecord.errors)
 	if (
-		projectRecord.value.format !== TRIGRAPH_SOURCE_FORMAT ||
-		projectRecord.value.sourceVersion !== TRIGRAPH_SOURCE_VERSION ||
-		projectRecord.value.editorFormat !== TRIGRAPH_EDITOR_FORMAT ||
-		projectRecord.value.editorVersion !== TRIGRAPH_EDITOR_VERSION
+		projectRecord.value.format !== CREATE_FONT_SOURCE_FORMAT ||
+		projectRecord.value.sourceVersion !== CREATE_FONT_SOURCE_VERSION ||
+		projectRecord.value.editorFormat !== CREATE_FONT_EDITOR_FORMAT ||
+		projectRecord.value.editorVersion !== CREATE_FONT_EDITOR_VERSION
 	) {
 		return failure([
 			directoryDiagnostic(
@@ -615,8 +615,8 @@ export function assembleEditorFontSource(
 	}
 
 	const assembled: EditorFontFile = {
-		format: TRIGRAPH_EDITOR_FORMAT,
-		editorVersion: TRIGRAPH_EDITOR_VERSION,
+		format: CREATE_FONT_EDITOR_FORMAT,
+		editorVersion: CREATE_FONT_EDITOR_VERSION,
 		metadata: metadata.value,
 		names: names.value,
 		metrics: metrics.value,

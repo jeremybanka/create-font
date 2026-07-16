@@ -3,7 +3,7 @@ import type {
 	EditorHandleKind,
 	GlyphId,
 	PointId,
-} from "@trigraph/states"
+} from "@create-font/states"
 import {
 	Circle,
 	Group,
@@ -13,7 +13,7 @@ import {
 	Path,
 	Rect,
 	Stage,
-} from "@trigraph/preact-konva"
+} from "@create-font/preact-konva"
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"

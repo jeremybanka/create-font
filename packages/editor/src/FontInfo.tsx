@@ -1,4 +1,4 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontInfo.module.css"

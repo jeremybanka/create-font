@@ -77,7 +77,7 @@ function expectFailure(
 	}
 }
 
-describe("@trigraph/source", () => {
+describe("@create-font/source", () => {
 	test("splits the state graph into loadable-aligned directory units", () => {
 		const source = geometricOWithEveryEditorField()
 		const split = splitEditorFontSource(source)
@@ -89,6 +89,7 @@ describe("@trigraph/source", () => {
 			"axes/index.json",
 			"cmap/004F.json",
 			"cmap/index.json",
+			"create-font.json",
 			"glyphs/glyph%3A.notdef~b88a7b05.json",
 			"glyphs/glyph%3AO~e48dd026.json",
 			"glyphs/index.json",
@@ -102,7 +103,6 @@ describe("@trigraph/source", () => {
 			"metrics.json",
 			"names.json",
 			"style.json",
-			"trigraph.json",
 		])
 		expect(split.value["glyphs/index.json"]).toEqual([
 			{
@@ -111,10 +111,10 @@ describe("@trigraph/source", () => {
 			},
 			{ id: "glyph:O", path: "glyphs/glyph%3AO~e48dd026.json" },
 		])
-		expect(split.value["trigraph.json"]).toEqual({
-			format: "trigraph.source",
+		expect(split.value["create-font.json"]).toEqual({
+			format: "create-font.source",
 			sourceVersion: 1,
-			editorFormat: "trigraph.editor",
+			editorFormat: "create-font.editor",
 			editorVersion: 3,
 		})
 		expect(split.value["glyphs/glyph%3AO~e48dd026.json"]).toEqual(
@@ -246,7 +246,7 @@ describe("@trigraph/source", () => {
 			expect(schema.$schema).toBe(
 				"https://json-schema.org/draft/2020-12/schema",
 			)
-			expect(schema.title).toMatch(/^Trigraph /u)
+			expect(schema.title).toMatch(/^create-font /u)
 		}
 
 		expect(sourceUnitDescriptors.glyph).toMatchObject({
@@ -398,7 +398,7 @@ describe("@trigraph/source", () => {
 		const file = toEditorFontFile(geometricOWithEveryEditorField())
 		expect(file.ok).toBe(true)
 		if (!file.ok) return
-		expect(file.value.format).toBe("trigraph.editor")
+		expect(file.value.format).toBe("create-font.editor")
 		expect(file.value.editorVersion).toBe(3)
 		expect(file.value).not.toHaveProperty("document")
 		expect(file.value).not.toHaveProperty("sourceVersion")
@@ -570,7 +570,7 @@ describe("@trigraph/source", () => {
 		if (!decoded.ok) throw new Error("fixture did not decode")
 		mutable.names.family = "Mutated outside the codec"
 		mutable.glyphs.reverse()
-		expect(decoded.value.names.family).toBe("Trigraph O Razor")
+		expect(decoded.value.names.family).toBe("Create Font O Razor")
 		expect(decoded.value.glyphs[0]?.id).toBe("glyph:.notdef")
 		expect(Object.isFrozen(decoded.value)).toBe(true)
 		expect(Object.isFrozen(decoded.value.glyphs[0]?.layers[0]?.points)).toBe(
@@ -600,26 +600,26 @@ describe("@trigraph/source", () => {
 		expectFailure(decodeEditorFontSource("{"), "json.syntax", "$")
 		expectFailure(
 			decodeEditorFontSource(
-				'{"format":"trigraph.editor","format":"trigraph.editor","editorVersion":1}',
+				'{"format":"create-font.editor","format":"create-font.editor","editorVersion":1}',
 			),
 			"json.duplicate_key",
 			"$.format",
 		)
 		expectFailure(
-			decodeEditorFontSource('{"__proto__":{},"format":"trigraph.editor"}'),
+			decodeEditorFontSource('{"__proto__":{},"format":"create-font.editor"}'),
 			"json.unsafe_key",
 			'$["__proto__"]',
 		)
 		expectFailure(
 			decodeEditorFontSource(
-				'{"format":"trigraph.editor","editorVersion":1,"metadata":{"unitsPerEm":1000,"unitsPerEm":900}}',
+				'{"format":"create-font.editor","editorVersion":1,"metadata":{"unitsPerEm":1000,"unitsPerEm":900}}',
 			),
 			"json.duplicate_key",
 			"$.metadata.unitsPerEm",
 		)
 		expectFailure(
 			decodeEditorFontSource(
-				'{"format":"trigraph.editor","metadata":{"\\u005f_proto__":{}}}',
+				'{"format":"create-font.editor","metadata":{"\\u005f_proto__":{}}}',
 			),
 			"json.unsafe_key",
 			'$.metadata["__proto__"]',

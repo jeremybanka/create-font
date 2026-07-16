@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from "vitest"
 import { treaty } from "@elysiajs/eden"
 
 import {
-	createTrigraphRpc,
+	createFontRpc,
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
-	type TrigraphSourceService,
+	type CreateFontSourceService,
 } from "../src/index.ts"
 
-describe(`Trigraph workspace RPC`, () => {
+describe(`create-font workspace RPC`, () => {
 	it(`serves individual source units through the typed contract`, async () => {
-		const source: TrigraphSourceService = {
+		const source: CreateFontSourceService = {
 			readManifest: vi.fn(async () => ({
 				revision: `manifest-1`,
 				units: [{ path: `glyphs/a.json`, revision: `glyph-a-1` }],
@@ -27,7 +27,7 @@ describe(`Trigraph workspace RPC`, () => {
 			})),
 			writeUnits: vi.fn(),
 		}
-		const app = createTrigraphRpc({
+		const app = createFontRpc({
 			build: async () => ({
 				ok: true,
 				outputs: [],
@@ -58,7 +58,7 @@ describe(`Trigraph workspace RPC`, () => {
 	})
 
 	it(`returns a typed revision conflict for a stale idempotent write`, async () => {
-		const source: TrigraphSourceService = {
+		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(async (input) => {
@@ -70,7 +70,7 @@ describe(`Trigraph workspace RPC`, () => {
 			}),
 			writeUnits: vi.fn(),
 		}
-		const app = createTrigraphRpc({
+		const app = createFontRpc({
 			build: vi.fn(),
 			source,
 		})
@@ -103,7 +103,7 @@ describe(`Trigraph workspace RPC`, () => {
 	})
 
 	it(`writes several related units through one typed transaction`, async () => {
-		const source: TrigraphSourceService = {
+		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(),
@@ -127,7 +127,7 @@ describe(`Trigraph workspace RPC`, () => {
 				],
 			})),
 		}
-		const app = createTrigraphRpc({
+		const app = createFontRpc({
 			build: vi.fn(),
 			source,
 		})
@@ -139,7 +139,7 @@ describe(`Trigraph workspace RPC`, () => {
 						{
 							expectedRevision: `names-1`,
 							path: `names.json`,
-							value: { family: `Trigraph Sans` },
+							value: { family: `Create Font Sans` },
 						},
 						{
 							expectedRevision: `style-1`,
@@ -167,7 +167,7 @@ describe(`Trigraph workspace RPC`, () => {
 	})
 
 	it(`returns a typed not-found response for a missing unit`, async () => {
-		const source: TrigraphSourceService = {
+		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
 			readUnit: vi.fn(async (path) => {
 				throw new SourceUnitNotFoundError(path)
@@ -175,7 +175,7 @@ describe(`Trigraph workspace RPC`, () => {
 			writeUnit: vi.fn(),
 			writeUnits: vi.fn(),
 		}
-		const app = createTrigraphRpc({
+		const app = createFontRpc({
 			build: vi.fn(),
 			source,
 		})
@@ -192,7 +192,7 @@ describe(`Trigraph workspace RPC`, () => {
 	})
 
 	it(`keeps the source routes explicit while the directory service is absent`, async () => {
-		const app = createTrigraphRpc({
+		const app = createFontRpc({
 			build: async () => ({
 				ok: true,
 				outputs: [],

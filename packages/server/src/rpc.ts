@@ -14,17 +14,17 @@ import type {
 	SourceUnitNotFound,
 	SourceServiceUnavailable,
 	SourceValidationFailure,
-	TrigraphSourceService,
+	CreateFontSourceService,
 	WriteSourceUnitInput,
 	WriteSourceUnitsInput,
 } from "./contracts.ts"
 
-export const TRIGRAPH_RPC_VERSION = 3 as const
+export const CREATE_FONT_RPC_VERSION = 3 as const
 
-export type CreateTrigraphRpcOptions = Readonly<{
+export type CreateFontRpcOptions = Readonly<{
 	build: () => Promise<BuildResult>
 	root?: string
-	source?: TrigraphSourceService
+	source?: CreateFontSourceService
 }>
 
 const sourceServiceUnavailable: SourceServiceUnavailable = {
@@ -62,17 +62,17 @@ function sourceErrorResponse(error: unknown) {
 	throw error
 }
 
-export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
+export function createFontRpc(options: CreateFontRpcOptions) {
 	const root = resolve(options.root ?? process.cwd())
 	const sourceConnections = new WeakMap<object, () => void>()
 
 	return new Elysia({
-		name: `trigraph-rpc`,
+		name: `create-font-rpc`,
 		prefix: `/api`,
 	})
 		.get(`/health`, () => ({
 			ok: true as const,
-			rpcVersion: TRIGRAPH_RPC_VERSION,
+			rpcVersion: CREATE_FONT_RPC_VERSION,
 		}))
 		.get(`/workspace`, () => ({
 			root,
@@ -209,4 +209,4 @@ export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
 		)
 }
 
-export type TrigraphRpc = ReturnType<typeof createTrigraphRpc>
+export type CreateFontRpc = ReturnType<typeof createFontRpc>

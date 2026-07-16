@@ -1,8 +1,8 @@
 import { scopeFamily, Silo } from "atom.io"
 import {
 	ingestVariableFont,
-	TRIGRAPH_FORMAT,
-	TRIGRAPH_IR_VERSION,
+	CREATE_FONT_FORMAT,
+	CREATE_FONT_IR_VERSION,
 	type CharacterMapEntrySource,
 	type GlyphVariationSource,
 	type NamedInstanceSource,
@@ -11,7 +11,7 @@ import {
 	type VariableFontSource,
 	type VariationAxisSource,
 	type VariationRegionSource,
-} from "@trigraph/target"
+} from "@create-font/target"
 
 import {
 	collectProjectionResults,
@@ -24,8 +24,8 @@ import {
 	projectionWarning,
 } from "./projection.ts"
 import {
-	TRIGRAPH_EDITOR_FORMAT,
-	TRIGRAPH_EDITOR_VERSION,
+	CREATE_FONT_EDITOR_FORMAT,
+	CREATE_FONT_EDITOR_VERSION,
 	type AxisId,
 	type ContourId,
 	type EditorAxisMapEntrySource,
@@ -542,11 +542,13 @@ function vectorWithLengthAlong(
 }
 
 function validateEditorSourceStructure(source: EditorFontSource): void {
-	if (source.format !== TRIGRAPH_EDITOR_FORMAT) {
-		throw new TypeError(`Expected editor format ${TRIGRAPH_EDITOR_FORMAT}.`)
+	if (source.format !== CREATE_FONT_EDITOR_FORMAT) {
+		throw new TypeError(`Expected editor format ${CREATE_FONT_EDITOR_FORMAT}.`)
 	}
-	if (source.editorVersion !== TRIGRAPH_EDITOR_VERSION) {
-		throw new TypeError(`Expected editor version ${TRIGRAPH_EDITOR_VERSION}.`)
+	if (source.editorVersion !== CREATE_FONT_EDITOR_VERSION) {
+		throw new TypeError(
+			`Expected editor version ${CREATE_FONT_EDITOR_VERSION}.`,
+		)
 	}
 	assertUnique(
 		source.axes.map((axis) => axis.id),
@@ -2619,8 +2621,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			}
 			return projectionSuccess(
 				{
-					format: TRIGRAPH_FORMAT,
-					irVersion: TRIGRAPH_IR_VERSION,
+					format: CREATE_FONT_FORMAT,
+					irVersion: CREATE_FONT_IR_VERSION,
 					metadata: metadata.value,
 					names: names.value,
 					metrics: metrics.value,
@@ -2871,8 +2873,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				cmap.push({ codePoint, glyphId })
 			}
 			return deepFreeze({
-				format: TRIGRAPH_EDITOR_FORMAT,
-				editorVersion: TRIGRAPH_EDITOR_VERSION,
+				format: CREATE_FONT_EDITOR_FORMAT,
+				editorVersion: CREATE_FONT_EDITOR_VERSION,
 				metadata,
 				names,
 				metrics,

@@ -558,7 +558,7 @@ describe("ingestVariableFont", () => {
 		const source = makeGeometricOFont()
 		const valid = ingestVariableFont({
 			...source,
-			names: { ...source.names, family: "Trigraph O 😀" },
+			names: { ...source.names, family: "Create Font O 😀" },
 		})
 		expect(valid.ok).toBe(true)
 

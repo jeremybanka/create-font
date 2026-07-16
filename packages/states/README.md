@@ -1,7 +1,7 @@
-# @trigraph/states
+# @create-font/states
 
-`@trigraph/states` is the high-level, editable design-space model for
-[`@trigraph/target`](../target/README.md). It stores the information a font
+`@create-font/states` is the high-level, editable design-space model for
+[`@create-font/target`](../target/README.md). It stores the information a font
 editor needs while a design is in progress, then incrementally projects that
 state into the target's low-level `VariableFontSource` representation.
 
@@ -17,7 +17,7 @@ The distinction is deliberate:
 A document does not need to be exportable after every edit. Projection results
 carry structured errors and warnings until the state is complete. Once the
 whole-font compilation result reaches `stage: "compiled"`, the generated source
-has also passed `@trigraph/target` ingestion and the returned `font` is the branded,
+has also passed `@create-font/target` ingestion and the returned `font` is the branded,
 deeply frozen low-level representation.
 
 ## Document model
@@ -96,7 +96,7 @@ The intended flow is:
 4. persistence runs after the edit, stores the server's canonical response, and
    refreshes only remotely owned indexes or revisions.
 
-`@trigraph/source` now defines the concrete directory paths and per-file
+`@create-font/source` now defines the concrete directory paths and per-file
 validators. The next integration step is a hydration adapter that validates
 each unit by descriptor and installs its facts into the corresponding local
 atoms. The RPC remains intentionally chatty: individual loadables issue
@@ -209,7 +209,10 @@ projection it currently needs:
 <!-- This example is kept in sync with the concrete return surface in state.ts. -->
 
 ```ts
-import { createFontEditorState, type EditorFontSource } from "@trigraph/states"
+import {
+	createFontEditorState,
+	type EditorFontSource,
+} from "@create-font/states"
 
 declare const source: EditorFontSource
 
@@ -245,7 +248,7 @@ reordering, serialization, and collaborative edits.
 ## Scope
 
 The state model currently targets the same deliberately narrow profile as
-`@trigraph/target` v1: one TrueType-flavored variable font with high-level cubic editing,
+`@create-font/target` v1: one TrueType-flavored variable font with high-level cubic editing,
 bounded quadratic projection, horizontal metrics, complete point deltas, and a
 Unicode character map. It does
 not model binary table layout. Composite glyphs, hinting, OpenType Layout,

@@ -70,22 +70,22 @@ const makeO = (name: string) => ({
 
 export function makeGeometricOFont(): VariableFontSource {
 	return {
-		format: "trigraph.variable-truetype",
+		format: "create-font.variable-truetype",
 		irVersion: 1,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,
-			vendorId: "TRIG",
+			vendorId: "CRFT",
 			lowestPpem: 8,
 		},
 		names: {
-			family: "Trigraph O Razor",
+			family: "Create Font O Razor",
 			subfamily: "Regular",
-			uniqueId: "TRIG:Trigraph O Razor:1.000",
-			fullName: "Trigraph O Razor",
+			uniqueId: "CRFT:Create Font O Razor:1.000",
+			fullName: "Create Font O Razor",
 			version: "Version 1.000",
-			postScriptName: "TrigraphO-Razor",
-			typographicFamily: "Trigraph O",
+			postScriptName: "CreateFontO-Razor",
+			typographicFamily: "Create Font O",
 			typographicSubfamily: "Razor",
 		},
 		metrics: {
@@ -120,13 +120,13 @@ export function makeGeometricOFont(): VariableFontSource {
 			{
 				name: "Razor",
 				coordinates: { wght: 100 },
-				postScriptName: "TrigraphO-Razor",
+				postScriptName: "CreateFontO-Razor",
 				elidable: true,
 			},
 			{
 				name: "Black",
 				coordinates: { wght: 900 },
-				postScriptName: "TrigraphO-Black",
+				postScriptName: "CreateFontO-Black",
 			},
 		],
 		glyphs: [makeO(".notdef"), makeO("O")],

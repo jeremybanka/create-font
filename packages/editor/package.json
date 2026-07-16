@@ -1,9 +1,12 @@
 {
-	"name": "@trigraph/editor",
+	"name": "@create-font/editor",
 	"version": "0.0.0",
-	"private": true,
-	"description": "Interactive variable-font editor for the Trigraph state model",
+	"description": "Interactive variable-font editor for the create-font state model",
 	"type": "module",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": ["src"],
 	"exports": {
 		".": "./src/EditorApplicationRoot.tsx",
 		"./package.json": "./package.json"
@@ -17,8 +20,8 @@
 	"dependencies": {
 		"@floating-ui/dom": "^1.8.0",
 		"@radix-ui/react-icons": "^1.3.2",
-		"@trigraph/preact-konva": "workspace:*",
-		"@trigraph/states": "workspace:*",
+		"@create-font/preact-konva": "workspace:*",
+		"@create-font/states": "workspace:*",
 		"atom.io": "0.50.0",
 		"preact": "10.29.7",
 		"react": "npm:@preact/compat@18.3.2",

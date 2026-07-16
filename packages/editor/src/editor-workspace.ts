@@ -8,7 +8,7 @@ import {
 	type GlyphId,
 	type InstanceId,
 	type MasterId,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 import { makeDemoFont } from "./demo-font.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
@@ -50,7 +50,7 @@ export type EditorToolId = "select" | "pen"
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
 ) {
-	const font = createFontEditorState({ key: "trigraph/editor/font" })
+	const font = createFontEditorState({ key: "create-font/editor/font" })
 	font.actions.load(source)
 	const document = font.read.editorSource()
 	if (document === null)

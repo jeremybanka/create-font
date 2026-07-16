@@ -19,12 +19,12 @@ import type {
 	InstanceId,
 	MasterId,
 	PointId,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 import { diagnostic, failure, success } from "./result.ts"
 import {
-	TRIGRAPH_EDITOR_FORMAT,
-	TRIGRAPH_EDITOR_VERSION,
+	CREATE_FONT_EDITOR_FORMAT,
+	CREATE_FONT_EDITOR_VERSION,
 	type SourceDiagnostic,
 	type SourceResult,
 } from "./types.ts"
@@ -990,8 +990,8 @@ function parseRoot(
 	const record = objectValue(value, "$", context)
 	if (record === null) {
 		return {
-			format: TRIGRAPH_EDITOR_FORMAT,
-			editorVersion: TRIGRAPH_EDITOR_VERSION,
+			format: CREATE_FONT_EDITOR_FORMAT,
+			editorVersion: CREATE_FONT_EDITOR_VERSION,
 			metadata: {
 				unitsPerEm: 0,
 				fontRevision: 0,
@@ -1055,16 +1055,16 @@ function parseRoot(
 		context,
 	)
 	const format = requiredString(record, "format", "$", context)
-	if (format !== TRIGRAPH_EDITOR_FORMAT) {
+	if (format !== CREATE_FONT_EDITOR_FORMAT) {
 		add(
 			context,
 			"source.format",
 			"$.format",
-			`Expected source format ${JSON.stringify(TRIGRAPH_EDITOR_FORMAT)}.`,
+			`Expected source format ${JSON.stringify(CREATE_FONT_EDITOR_FORMAT)}.`,
 		)
 	}
 	const editorVersion = requiredNumber(record, "editorVersion", "$", context)
-	if (editorVersion !== TRIGRAPH_EDITOR_VERSION) {
+	if (editorVersion !== CREATE_FONT_EDITOR_VERSION) {
 		add(
 			context,
 			"source.version",
@@ -1083,8 +1083,8 @@ function parseRoot(
 	const glyphs = requiredArray(record, "glyphs", "$", context)
 	const cmap = requiredArray(record, "cmap", "$", context)
 	return {
-		format: TRIGRAPH_EDITOR_FORMAT,
-		editorVersion: TRIGRAPH_EDITOR_VERSION,
+		format: CREATE_FONT_EDITOR_FORMAT,
+		editorVersion: CREATE_FONT_EDITOR_VERSION,
 		metadata: parseMetadata(
 			metadata === ABSENT ? {} : metadata,
 			"$.metadata",

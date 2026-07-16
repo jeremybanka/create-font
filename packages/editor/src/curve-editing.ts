@@ -2,7 +2,7 @@ import type {
 	EditorHandleKind,
 	EditorLayerNode,
 	EditorNodeMode,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 export function toggledNodeMode(mode: EditorNodeMode): EditorNodeMode {
 	return mode === "soft" ? "hard" : "soft"

@@ -7,8 +7,8 @@ export {
 	validateEditorFontSource,
 } from "./codec.ts"
 export {
-	TRIGRAPH_SOURCE_FORMAT,
-	TRIGRAPH_SOURCE_VERSION,
+	CREATE_FONT_SOURCE_FORMAT,
+	CREATE_FONT_SOURCE_VERSION,
 	assembleEditorFontSource,
 	axisFileSchema,
 	axisIdSchema,
@@ -67,8 +67,8 @@ export {
 	type StyleFile,
 } from "./directory.ts"
 export {
-	TRIGRAPH_EDITOR_FORMAT,
-	TRIGRAPH_EDITOR_VERSION,
+	CREATE_FONT_EDITOR_FORMAT,
+	CREATE_FONT_EDITOR_VERSION,
 	type EditorFontFile,
 	type EditorFontFileMetadata,
 	type SourceDiagnostic,

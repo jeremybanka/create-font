@@ -1,0 +1,53 @@
+{
+	"name": "create-font",
+	"version": "0.0.0",
+	"description": "Repository-local CLI and browser server for create-font font projects",
+	"type": "module",
+	"bin": {
+		"create-font": "./dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"tsconfig.json",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./src/server.ts",
+			"bun": "./dist/server.js",
+			"import": "./dist/server.js"
+		},
+		"./rpc": {
+			"types": "./src/rpc.ts",
+			"bun": "./dist/rpc.js",
+			"import": "./dist/rpc.js"
+		},
+		"./rpc-client": {
+			"types": "./src/rpc-client.ts",
+			"browser": "./dist/rpc-client.js",
+			"import": "./dist/rpc-client.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "bun run ./scripts/build.ts",
+		"dev": "bun --watch ./src/cli.ts serve --root=../..",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@elysia/static": "1.4.11",
+		"@create-font/server": "workspace:*",
+		"@create-font/source": "workspace:*",
+		"@create-font/states": "workspace:*",
+		"comline": "0.5.1",
+		"elysia": "1.4.29",
+		"preact": "10.29.7",
+		"zod": "4.4.3"
+	},
+	"devDependencies": {
+		"@create-font/editor": "workspace:*",
+		"@types/bun": "npm:bun-types@1.3.14",
+		"@types/node": "25.9.5"
+	}
+}

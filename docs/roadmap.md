@@ -1,4 +1,4 @@
-# Trigraph roadmap
+# create-font roadmap
 
 This roadmap connects the existing font model, editor state graph, JSON codec,
 and browser prototype to the repository-local toolchain described in the
@@ -18,15 +18,15 @@ The repository already contains:
   Schema generation;
 - a reusable Elysia/Eden workspace RPC package and atom.io Loadable cache keyed
   by individual source-unit paths;
-- filesystem discovery for `fonts/*/trigraph.json`, validated content-hash
+- filesystem discovery for `fonts/*/create-font.json`, validated content-hash
   reads, and journaled conditional single- and multi-unit writes;
-- a checked-in `fonts/trigraph-sans` development source with two masters and
+- a checked-in `fonts/create-font-sans` development source with two masters and
   seven glyphs; and
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history, now hydrated from and persisted to that source over RPC.
 
-The `trigraph` package provides a preliminary Bun/comline CLI and composes
-`@trigraph/server` with the editor's exported Preact application root through
+The `create-font` package provides a preliminary Bun/comline CLI and composes
+`@create-font/server` with the editor's exported Preact application root through
 Bun's full-stack development server. It opens and persists a real project
 source, but does not yet watch external changes or serialize `.ttf` files.
 
@@ -49,7 +49,7 @@ source, but does not yet watch external changes or serialize `.ttf` files.
   compiler pipeline.
 - Add reproducibility tests, binary conformance checks, and round-trip visual
   fixtures against independent font tooling.
-- Introduce the package-resolved `trigraph build` command.
+- Introduce the package-resolved `create-font build` command.
 - Define configuration and output naming without embedding environment-specific
   paths in canonical source.
 
@@ -64,7 +64,7 @@ source, but does not yet watch external changes or serialize `.ttf` files.
 - Add durable local drafts, external-change conflicts, reconnect behavior, and
   explicit saved/dirty/queued/conflicted UI states.
 - Exercise the same server over loopback locally and through SSH port forwarding
-  without adding SSH behavior to Trigraph.
+  without adding SSH behavior to create-font.
 
 ## 4. Review and diagnostics workflow
 
@@ -99,15 +99,15 @@ rather than bypass them.
 
 ## Product-level acceptance criteria
 
-- A font repository can install Trigraph as a dev dependency and build without a
-  global Trigraph installation.
+- A font repository can install create-font as a dev dependency and build without a
+  global create-font installation.
 - A clean checkout plus its declared toolchain deterministically reproduces its
   font outputs.
 - Visual edits produce understandable JSON diffs and do not rewrite unrelated
   source units.
 - The browser has no direct filesystem authority and cannot silently overwrite
   external changes.
-- The same `trigraph serve` process works locally and in a remote checkout
+- The same `create-font serve` process works locally and in a remote checkout
   reached through standard port forwarding.
 - Terminal builds, textual edits, visual edits, Git, and CI all operate on the
   same canonical repository source.

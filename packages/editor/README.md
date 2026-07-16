@@ -1,8 +1,8 @@
-# @trigraph/editor
+# @create-font/editor
 
-`@trigraph/editor` is the first browser client for the Trigraph font state
+`@create-font/editor` is the first browser client for the create-font font state
 model. It exports the Preact `EditorApplicationRoot` consumed by the public
-`trigraph` application package. The Glyphs-style workspace centers on one
+`create-font` application package. The Glyphs-style workspace centers on one
 multiline text canvas. The same glyph occurrence that participates in the live
 variable layout becomes the outline editor in place, alongside glyph navigation,
 an inspector, and glyph-scoped history.
@@ -17,8 +17,8 @@ other character in the preview visibly exercises `.notdef`.
 
 - The application shell and all DOM UI are Preact. Bun's full-stack bundler
   compiles the application entry, TypeScript, JSX, global CSS, and CSS Modules
-  when `trigraph serve` starts.
-- `@trigraph/states` owns all editable font facts, its isolated atom.io Silo,
+  when `create-font serve` starts.
+- `@create-font/states` owns all editable font facts, its isolated atom.io Silo,
   transactions, selector graph, ingestion proof, and one undo timeline per
   glyph.
 - A small set of UI atoms lives in that same Silo: active glyph and master,
@@ -65,14 +65,14 @@ their edits.
 From the workspace root:
 
 ```sh
-pnpm --filter trigraph dev
-pnpm --filter @trigraph/editor test
-pnpm --filter @trigraph/editor check
-pnpm --filter @trigraph/editor build
+pnpm --filter create-font dev
+pnpm --filter @create-font/editor test
+pnpm --filter @create-font/editor check
+pnpm --filter @create-font/editor build
 ```
 
 The editor is no longer a self-starting Vite application. Its package root
-exports `EditorApplicationRoot`; `trigraph/public/index.tsx` owns the browser
+exports `EditorApplicationRoot`; `create-font/public/index.tsx` owns the browser
 mount and imports that component.
 
 The initial slice intentionally has no inert save or export affordances. The UI
@@ -80,7 +80,7 @@ currently loads its self-contained `EditorFontSource` fixture and edits that
 live state.
 
 In the product architecture, this application is bundled with the public
-`trigraph` npm package and served by `trigraph serve` from beside the font
+`create-font` npm package and served by `create-font serve` from beside the font
 repository. The same CLI process owns project discovery, filesystem access,
 watching, conditional persistence, compilation, and diagnostics. The browser
 uses a versioned same-origin workspace protocol; it never receives arbitrary
@@ -88,7 +88,7 @@ filesystem or process access.
 
 Local and remote workspaces use that same arrangement. For a remote repository,
 the user runs the repository-local CLI through their normal SSH session and
-forwards its loopback port to a local development browser. Trigraph does not
+forwards its loopback port to a local development browser. create-font does not
 implement SSH or synchronize a second checkout. See the repository
 [architecture](../../docs/architecture.md) and
 [roadmap](../../docs/roadmap.md#3-workspace-server-and-browser-persistence).

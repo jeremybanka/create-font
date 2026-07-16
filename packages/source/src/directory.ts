@@ -1,19 +1,19 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 import { z } from "zod/v4"
 
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
 import { inspectJsonObjectKeys } from "./json.ts"
 import { failure, success } from "./result.ts"
 import {
-	TRIGRAPH_EDITOR_FORMAT,
-	TRIGRAPH_EDITOR_VERSION,
+	CREATE_FONT_EDITOR_FORMAT,
+	CREATE_FONT_EDITOR_VERSION,
 	type EditorFontFile,
 	type SourceDiagnostic,
 	type SourceResult,
 } from "./types.ts"
 
-export const TRIGRAPH_SOURCE_FORMAT = "trigraph.source" as const
-export const TRIGRAPH_SOURCE_VERSION = 1 as const
+export const CREATE_FONT_SOURCE_FORMAT = "create-font.source" as const
+export const CREATE_FONT_SOURCE_VERSION = 1 as const
 
 const finiteNumberSchema = z.number().finite()
 const unicodeScalarSchema = z
@@ -40,13 +40,13 @@ const locationSchema = z.record(axisIdSchema, finiteNumberSchema)
 
 export const projectFileSchema = z
 	.object({
-		format: z.literal(TRIGRAPH_SOURCE_FORMAT),
-		sourceVersion: z.literal(TRIGRAPH_SOURCE_VERSION),
-		editorFormat: z.literal(TRIGRAPH_EDITOR_FORMAT),
-		editorVersion: z.literal(TRIGRAPH_EDITOR_VERSION),
+		format: z.literal(CREATE_FONT_SOURCE_FORMAT),
+		sourceVersion: z.literal(CREATE_FONT_SOURCE_VERSION),
+		editorFormat: z.literal(CREATE_FONT_EDITOR_FORMAT),
+		editorVersion: z.literal(CREATE_FONT_EDITOR_VERSION),
 	})
 	.strict()
-	.meta({ title: "Trigraph project manifest" })
+	.meta({ title: "create-font project manifest" })
 
 export const metadataFileSchema = z
 	.object({
@@ -58,7 +58,7 @@ export const metadataFileSchema = z
 		modifiedAt: canonicalBigintSchema.optional(),
 	})
 	.strict()
-	.meta({ title: "Trigraph font metadata" })
+	.meta({ title: "create-font font metadata" })
 
 export const namesFileSchema = z
 	.object({
@@ -72,7 +72,7 @@ export const namesFileSchema = z
 		typographicSubfamily: z.string(),
 	})
 	.strict()
-	.meta({ title: "Trigraph font names" })
+	.meta({ title: "create-font font names" })
 
 export const metricsFileSchema = z
 	.object({
@@ -87,7 +87,7 @@ export const metricsFileSchema = z
 		underlineThickness: finiteNumberSchema,
 	})
 	.strict()
-	.meta({ title: "Trigraph font metrics" })
+	.meta({ title: "create-font font metrics" })
 
 export const styleFileSchema = z
 	.object({
@@ -99,7 +99,7 @@ export const styleFileSchema = z
 		italicAngle: finiteNumberSchema,
 	})
 	.strict()
-	.meta({ title: "Trigraph font style" })
+	.meta({ title: "create-font font style" })
 
 const axisMapEntrySchema = z
 	.object({ from: finiteNumberSchema, to: finiteNumberSchema })
@@ -117,7 +117,7 @@ export const axisFileSchema = z
 		map: z.array(axisMapEntrySchema).optional(),
 	})
 	.strict()
-	.meta({ title: "Trigraph axis" })
+	.meta({ title: "create-font axis" })
 
 const masterSupportSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("non-intermediate") }).strict(),
@@ -149,7 +149,7 @@ export const masterFileSchema = z
 			})
 			.strict(),
 	])
-	.meta({ title: "Trigraph master" })
+	.meta({ title: "create-font master" })
 
 export const instanceFileSchema = z
 	.object({
@@ -160,7 +160,7 @@ export const instanceFileSchema = z
 		elidable: z.boolean().optional(),
 	})
 	.strict()
-	.meta({ title: "Trigraph instance" })
+	.meta({ title: "create-font instance" })
 
 const pointSchema = z
 	.object({
@@ -208,7 +208,7 @@ export const glyphFileSchema = z
 		layers: z.array(glyphLayerSchema),
 	})
 	.strict()
-	.meta({ title: "Trigraph glyph" })
+	.meta({ title: "create-font glyph" })
 
 export const cmapEntryFileSchema = z
 	.object({
@@ -216,7 +216,7 @@ export const cmapEntryFileSchema = z
 		glyphId: glyphIdSchema,
 	})
 	.strict()
-	.meta({ title: "Trigraph character mapping" })
+	.meta({ title: "create-font character mapping" })
 
 function isSafeCollectionUnitPath(path: string, directory: string): boolean {
 	const prefix = `${directory}/`
@@ -281,23 +281,23 @@ const cmapIndexEntrySchema = z
 
 export const axisIndexFileSchema = z
 	.array(axisIndexEntrySchema)
-	.meta({ title: "Trigraph axis index" })
+	.meta({ title: "create-font axis index" })
 export const masterIndexFileSchema = z
 	.object({
 		defaultMasterId: masterIdSchema,
 		entries: z.array(masterIndexEntrySchema),
 	})
 	.strict()
-	.meta({ title: "Trigraph master index" })
+	.meta({ title: "create-font master index" })
 export const instanceIndexFileSchema = z
 	.array(instanceIndexEntrySchema)
-	.meta({ title: "Trigraph instance index" })
+	.meta({ title: "create-font instance index" })
 export const glyphIndexFileSchema = z
 	.array(glyphIndexEntrySchema)
-	.meta({ title: "Trigraph glyph index" })
+	.meta({ title: "create-font glyph index" })
 export const cmapIndexFileSchema = z
 	.array(cmapIndexEntrySchema)
-	.meta({ title: "Trigraph character-map index" })
+	.meta({ title: "create-font character-map index" })
 
 export type ProjectFile = z.infer<typeof projectFileSchema>
 export type MetadataFile = z.infer<typeof metadataFileSchema>
@@ -355,7 +355,7 @@ export const sourceUnitDescriptors = {
 	project: {
 		cardinality: "singleton",
 		kind: "project",
-		path: "trigraph.json",
+		path: "create-font.json",
 		schema: projectFileSchema,
 	},
 	metadata: {
@@ -655,10 +655,10 @@ export function splitEditorFontSource(
 	const file = fileResult.value
 	const files: Record<string, unknown> = {
 		[sourceUnitDescriptors.project.path]: {
-			format: TRIGRAPH_SOURCE_FORMAT,
-			sourceVersion: TRIGRAPH_SOURCE_VERSION,
-			editorFormat: TRIGRAPH_EDITOR_FORMAT,
-			editorVersion: TRIGRAPH_EDITOR_VERSION,
+			format: CREATE_FONT_SOURCE_FORMAT,
+			sourceVersion: CREATE_FONT_SOURCE_VERSION,
+			editorFormat: CREATE_FONT_EDITOR_FORMAT,
+			editorVersion: CREATE_FONT_EDITOR_VERSION,
 		},
 		[sourceUnitDescriptors.metadata.path]: file.metadata,
 		[sourceUnitDescriptors.names.path]: file.names,
