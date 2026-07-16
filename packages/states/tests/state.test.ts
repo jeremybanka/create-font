@@ -16,7 +16,7 @@ function createLoadedEditor(key: string) {
 }
 
 describe("font editor state", () => {
-	it("projects the Razor/Black geometric O through trigraph ingestion", () => {
+	it("projects the Razor/Black geometric O through target ingestion", () => {
 		const editor = createLoadedEditor("test/compile")
 		const compilation = editor.read.compilation()
 

@@ -4,12 +4,14 @@
 	"private": true,
 	"description": "Interactive variable-font editor for the Trigraph state model",
 	"type": "module",
+	"exports": {
+		".": "./src/EditorApplicationRoot.tsx",
+		"./package.json": "./package.json"
+	},
 	"scripts": {
-		"build": "vp build",
+		"build": "tsc --project tsconfig.json --noEmit",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
-		"dev": "vp dev",
-		"preview": "vp preview",
 		"test": "vp test"
 	},
 	"dependencies": {
@@ -18,16 +20,17 @@
 		"@trigraph/preact-konva": "workspace:*",
 		"@trigraph/states": "workspace:*",
 		"atom.io": "0.50.0",
-		"preact": "10.29.7"
+		"preact": "10.29.7",
+		"react": "npm:@preact/compat@18.3.2",
+		"react-dom": "npm:@preact/compat@18.3.2",
+		"treetrunks": "0.1.8"
 	},
 	"devDependencies": {
-		"@preact/preset-vite": "2.10.5",
 		"@typescript-eslint/parser": "8.64.0",
 		"@typescript-eslint/utils": "8.64.0",
 		"eslint": "10.7.0",
 		"jiti": "2.7.0",
 		"lasertag": "0.5.2",
-		"vite": "8.1.4",
 		"vitest": "4.1.10"
 	},
 	"engines": {

@@ -1,23 +1,23 @@
 # @trigraph/states
 
 `@trigraph/states` is the high-level, editable design-space model for
-[trigraph](../trigraph/README.md). It stores the information a font editor needs
-while a design is in progress, then incrementally projects that state into
-trigraph's low-level `VariableFontSource` representation.
+[`@trigraph/target`](../target/README.md). It stores the information a font
+editor needs while a design is in progress, then incrementally projects that
+state into the target's low-level `VariableFontSource` representation.
 
 The distinction is deliberate:
 
 - editor state has stable entity IDs, source masters, shared glyph topology,
   per-master coordinates, selection-friendly diagnostics, and editor-only
   annotations;
-- the trigraph IR has resolved glyph order, axis-tagged locations, default
+- the target IR has resolved glyph order, axis-tagged locations, default
   outlines and metrics, complete variation tuples, numeric glyph IDs, and no
   editing metadata.
 
 A document does not need to be exportable after every edit. Projection results
 carry structured errors and warnings until the state is complete. Once the
 whole-font compilation result reaches `stage: "compiled"`, the generated source
-has also passed `trigraph` ingestion and the returned `font` is the branded,
+has also passed `@trigraph/target` ingestion and the returned `font` is the branded,
 deeply frozen low-level representation.
 
 ## Document model
@@ -73,6 +73,35 @@ hot atoms, so dragging a node or handle does not replace an entire glyph or
 master. Notes and color labels are also separated from export-bearing atoms,
 so annotation changes do not invalidate glyph lowering.
 
+### Remote source cache
+
+`createRemoteFontSourceState` is the RPC-facing companion to the hot editor
+model. It stores the source manifest in one `Loadable` atom and each JSON file
+in a `Loadable` atom-family member keyed by its relative source-unit path.
+Reading a member performs that unit's request; the path is its cache identity;
+`refreshUnit` explicitly invalidates only that member.
+
+This cache is deliberately outside `glyphHistoryTimelines`. Remote hydration,
+server revisions, and persistence acknowledgements are not user edits and must
+not appear in undo history. Supply a `hydrate` callback to decode each unit and
+install its narrow local facts. The loadable's path identity ensures that
+callback runs once for the cached read, not once per component observer.
+
+The intended flow is:
+
+1. a component reads the loadable for the file it needs;
+2. `hydrate` runs a dedicated transaction that establishes local atoms as a
+   baseline; a concrete glyph hydrator then clears only that glyph's timeline;
+3. visual edits remain synchronous local transactions;
+4. persistence runs after the edit, stores the server's canonical response, and
+   refreshes only remotely owned indexes or revisions.
+
+`@trigraph/source` now defines the concrete directory paths and per-file
+validators. The next integration step is a hydration adapter that validates
+each unit by descriptor and installs its facts into the corresponding local
+atoms. The RPC remains intentionally chatty: individual loadables issue
+individual requests rather than depending on aggregate query endpoints.
+
 Selectors form a lowering graph rather than one monolithic compiler:
 
 1. axis selectors quantize user-space values and validate axis maps;
@@ -99,7 +128,7 @@ master, which would be incorrect when supports overlap.
 
 ### Cubic editing over a quadratic IR
 
-The editor model owns ordinary cubic Bézier handles, while trigraph v1 targets
+The editor model owns ordinary cubic Bézier handles, while target v1 uses
 TrueType quadratic outlines. Lowering is deterministic and coordinated across
 masters. Each cubic subcurve is approximated by
 `Q = (3(C1 + C2) - P0 - P3) / 4`; the distance between its two interior
@@ -140,7 +169,7 @@ source that produced it.
 Whole-font compilation has three explicit outcomes:
 
 - `projection-failed`: editor state could not form a complete low-level source;
-- `ingestion-failed`: a source was formed, but trigraph's technical validity
+- `ingestion-failed`: a source was formed, but the target's technical validity
   proof rejected it;
 - `compiled`: projection and ingestion both succeeded.
 
@@ -201,7 +230,7 @@ const compilation = editor.read.compilation()
 if (!compilation.ok) {
 	console.error(compilation.stage)
 } else {
-	// Ready for trigraph's deterministic lowering layer.
+	// Ready for the target's deterministic lowering layer.
 	console.log(compilation.font)
 }
 
@@ -216,12 +245,18 @@ reordering, serialization, and collaborative edits.
 ## Scope
 
 The state model currently targets the same deliberately narrow profile as
-trigraph v1: one TrueType-flavored variable font with high-level cubic editing,
+`@trigraph/target` v1: one TrueType-flavored variable font with high-level cubic editing,
 bounded quadratic projection, horizontal metrics, complete point deltas, and a
 Unicode character map. It does
 not model binary table layout. Composite glyphs, hinting, OpenType Layout,
 vertical metrics, color, CFF/CFF2, sparse IUP deltas, and binary serialization
 belong to future profiles or other layers.
+
+In the larger [toolchain architecture](../../docs/architecture.md), this state
+graph remains the hot model for visual editing and design-space projection.
+Textual OpenType Layout rules and other programmable behavior can compile in a
+separate layer and join the deterministic build pipeline without becoming
+mutable atom-by-atom editor state.
 
 Editor-only fields such as notes, color labels, and soft/hard handle behavior
 are never projected into the IR. Conversely, low-level facts such as glyph IDs,

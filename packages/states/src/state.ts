@@ -11,7 +11,7 @@ import {
 	type VariableFontSource,
 	type VariationAxisSource,
 	type VariationRegionSource,
-} from "trigraph"
+} from "@trigraph/target"
 
 import {
 	collectProjectionResults,

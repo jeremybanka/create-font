@@ -7,7 +7,7 @@ import type {
 	NonEmptyReadonlyArray,
 	VariableFont,
 	VariableFontSource,
-} from "trigraph"
+} from "@trigraph/target"
 
 export const TRIGRAPH_EDITOR_FORMAT = "trigraph.editor" as const
 export const TRIGRAPH_EDITOR_VERSION = 3 as const

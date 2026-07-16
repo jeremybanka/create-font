@@ -1,0 +1,13 @@
+{
+	"defaultMasterId": "master:razor",
+	"entries": [
+		{
+			"id": "master:razor",
+			"path": "masters/master%3Arazor~f06b8821.json"
+		},
+		{
+			"id": "master:black",
+			"path": "masters/master%3Ablack~e935e1c2.json"
+		}
+	]
+}

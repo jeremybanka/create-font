@@ -1,0 +1,218 @@
+font-info.class {
+	display: block;
+	min-width: 0;
+	min-height: 0;
+	padding: 34px clamp(24px, 4vw, 64px) 64px;
+	overflow: auto;
+	background: var(--paper);
+
+	> info-heading {
+		display: grid;
+		gap: 4px;
+		max-width: 760px;
+		margin-bottom: 30px;
+
+		> p {
+			margin: 0;
+			font-size: 10px;
+			font-weight: 720;
+			letter-spacing: 0.1em;
+			text-transform: uppercase;
+			color: var(--accent);
+		}
+
+		> h1 {
+			margin: 0;
+			font-size: clamp(28px, 4vw, 48px);
+			font-weight: 680;
+			letter-spacing: -0.04em;
+		}
+
+		> span {
+			font-size: 11px;
+			line-height: 1.5;
+			color: var(--ink-muted);
+		}
+	}
+
+	> info-layout {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 18px;
+		max-width: 1380px;
+
+		> info-section {
+			display: grid;
+			align-content: start;
+			gap: 20px;
+			padding: clamp(18px, 2.5vw, 28px);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			background: var(--panel);
+
+			&[data-wide="true"] {
+				grid-column: 1 / -1;
+			}
+
+			> section-heading {
+				display: flex;
+				justify-content: space-between;
+				gap: 16px;
+				padding-bottom: 16px;
+				border-bottom: 1px solid var(--line);
+
+				h2 {
+					margin: 0 0 5px;
+					font-size: 15px;
+					font-weight: 680;
+				}
+
+				p {
+					margin: 0;
+					font-size: 10px;
+					line-height: 1.5;
+					color: var(--ink-muted);
+				}
+			}
+
+			> field-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 15px 18px;
+
+				> text-field,
+				> number-field {
+					display: block;
+					min-width: 0;
+				}
+
+				> text-field > label,
+				> number-field > label {
+					display: grid;
+					gap: 6px;
+
+					> span {
+						font-size: 9px;
+						font-weight: 650;
+						letter-spacing: 0.04em;
+						color: var(--ink-muted);
+					}
+
+					> input {
+						min-width: 0;
+						width: 100%;
+						padding: 9px 10px;
+						border: 1px solid var(--line-strong);
+						border-radius: 6px;
+						background: var(--paper);
+						font: 500 11px/1.2 var(--ui-font);
+						color: var(--ink);
+					}
+				}
+
+				> flag-group {
+					display: flex;
+					flex-wrap: wrap;
+					align-items: center;
+					gap: 8px 13px;
+					padding: 8px 10px;
+					border: 1px solid var(--line-strong);
+					border-radius: 6px;
+					background: var(--paper);
+
+					> span {
+						flex-basis: 100%;
+						font-size: 9px;
+						font-weight: 650;
+						color: var(--ink-muted);
+					}
+
+					> label {
+						display: flex;
+						align-items: center;
+						gap: 5px;
+						font-size: 10px;
+						color: var(--ink);
+					}
+				}
+			}
+
+			> design-space-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 18px;
+
+				> entity-list {
+					display: grid;
+					align-content: start;
+					gap: 7px;
+
+					> h3 {
+						margin: 0 0 4px;
+						font-size: 9px;
+						font-weight: 720;
+						letter-spacing: 0.08em;
+						text-transform: uppercase;
+						color: var(--ink-muted);
+					}
+
+					> article {
+						display: grid;
+						grid-template-columns: minmax(0, 1fr) auto;
+						gap: 5px 10px;
+						padding: 10px;
+						border: 1px solid var(--line);
+						border-radius: 7px;
+						background: var(--paper);
+
+						> strong {
+							min-width: 0;
+							overflow: hidden;
+							font-size: 11px;
+							text-overflow: ellipsis;
+							white-space: nowrap;
+						}
+
+						> code {
+							font: 500 9px/1.2 ui-monospace, monospace;
+							color: var(--accent);
+						}
+
+						> span {
+							grid-column: 1 / -1;
+							overflow: hidden;
+							font-size: 9px;
+							text-overflow: ellipsis;
+							white-space: nowrap;
+							color: var(--ink-faint);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+@media (width <= 960px) {
+	font-info.class > info-layout {
+		grid-template-columns: 1fr;
+
+		> info-section[data-wide="true"] {
+			grid-column: auto;
+
+			> design-space-grid {
+				grid-template-columns: 1fr;
+			}
+		}
+	}
+}
+
+@media (width <= 620px) {
+	font-info.class {
+		padding: 24px 16px 40px;
+
+		> info-layout > info-section > field-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+}

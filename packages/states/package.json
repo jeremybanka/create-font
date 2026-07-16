@@ -25,8 +25,9 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"atom.io": "0.50.0",
-		"trigraph": "workspace:*"
+		"@trigraph/server": "workspace:*",
+		"@trigraph/target": "workspace:*",
+		"atom.io": "0.50.0"
 	},
 	"devDependencies": {
 		"@typescript-eslint/parser": "8.64.0",

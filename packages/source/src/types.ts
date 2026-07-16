@@ -27,6 +27,12 @@ export type EditorFontFile = Omit<EditorFontSource, "metadata"> & {
 }
 
 export type SourceDiagnosticCode =
+	| "directory.cmap_code_point"
+	| "directory.duplicate_id"
+	| "directory.duplicate_path"
+	| "directory.entity_id"
+	| "directory.missing_file"
+	| "directory.unknown_file"
 	| "json.duplicate_key"
 	| "json.inspection"
 	| "json.syntax"
@@ -43,6 +49,7 @@ export type SourceDiagnosticCode =
 	| "source.number"
 	| "source.object"
 	| "source.reference"
+	| "source.schema"
 	| "source.string"
 	| "source.timestamp"
 	| "source.unicode"
@@ -52,6 +59,8 @@ export type SourceDiagnosticCode =
 export interface SourceDiagnostic {
 	readonly severity: "error"
 	readonly code: SourceDiagnosticCode
+	/** Relative source-unit path when validating a directory-shaped source. */
+	readonly unitPath?: string
 	/** Stable JSONPath-like location in the source file. */
 	readonly path: string
 	readonly message: string

@@ -131,6 +131,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						: point,
 				)
 				return {
+					id: contour.id,
 					closed: contour.closed,
 					nodes: deriveOneSidedSoftHandles(positionedNodes, contour.closed).map(
 						(point) =>
@@ -281,7 +282,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		setSelection(Object.freeze([]))
 	}
 	const nextPenEntityId = (kind: "contour" | "point") => {
-		const occupied = new Set([
+		const occupied = new Set<string>([
 			...contours.map((contour) => contour.id),
 			...allPoints.map((point) => point.pointId),
 		])

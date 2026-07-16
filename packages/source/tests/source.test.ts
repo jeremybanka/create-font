@@ -4,13 +4,25 @@ import { createFontEditorState } from "../../states/src/state.ts"
 import type { EditorFontSource } from "../../states/src/types.ts"
 import { makeGeometricOEditorFont } from "../../states/tests/fixtures/geometric-o.ts"
 import {
+	assembleEditorFontSource as assembleBrowserEditorFontSource,
+	splitEditorFontSource as splitBrowserEditorFontSource,
+} from "../src/browser.ts"
+import {
+	assembleEditorFontSource,
 	canonicalizeEditorFontSource,
+	defaultGlyphUnitPath,
 	decodeEditorFontSource,
 	encodeEditorFontSource,
 	fromEditorFontFile,
+	jsonSchemaForSourceUnit,
+	sourceUnitDescriptors,
+	splitEditorFontSource,
 	toEditorFontFile,
 	validateEditorFontSource,
+	validateSourceUnit,
 	type EditorFontFile,
+	type FontSourceDirectoryFiles,
+	type SourceUnitKind,
 } from "../src/index.ts"
 
 type DeepMutable<Value> = Value extends readonly (infer Item)[]
@@ -66,6 +78,275 @@ function expectFailure(
 }
 
 describe("@trigraph/source", () => {
+	test("splits the state graph into loadable-aligned directory units", () => {
+		const source = geometricOWithEveryEditorField()
+		const split = splitEditorFontSource(source)
+		expect(split.ok).toBe(true)
+		if (!split.ok) return
+
+		expect(Object.keys(split.value).sort()).toEqual([
+			"axes/axis%3Awght~8b338244.json",
+			"axes/index.json",
+			"cmap/004F.json",
+			"cmap/index.json",
+			"glyphs/glyph%3A.notdef~b88a7b05.json",
+			"glyphs/glyph%3AO~e48dd026.json",
+			"glyphs/index.json",
+			"instances/index.json",
+			"instances/instance%3Ablack~9b4bfa3b.json",
+			"instances/instance%3Arazor~e8094f74.json",
+			"masters/index.json",
+			"masters/master%3Ablack~e935e1c2.json",
+			"masters/master%3Arazor~f06b8821.json",
+			"metadata.json",
+			"metrics.json",
+			"names.json",
+			"style.json",
+			"trigraph.json",
+		])
+		expect(split.value["glyphs/index.json"]).toEqual([
+			{
+				id: "glyph:.notdef",
+				path: "glyphs/glyph%3A.notdef~b88a7b05.json",
+			},
+			{ id: "glyph:O", path: "glyphs/glyph%3AO~e48dd026.json" },
+		])
+		expect(split.value["trigraph.json"]).toEqual({
+			format: "trigraph.source",
+			sourceVersion: 1,
+			editorFormat: "trigraph.editor",
+			editorVersion: 3,
+		})
+		expect(split.value["glyphs/glyph%3AO~e48dd026.json"]).toEqual(
+			source.glyphs[1],
+		)
+		expect(split.value["metadata.json"]).toEqual({
+			...source.metadata,
+			createdAt: "-1",
+			modifiedAt: "18446744073709551615",
+		})
+		expect(split.value["axes/index.json"]).toEqual([
+			{ id: "axis:wght", path: "axes/axis%3Awght~8b338244.json" },
+		])
+		expect(split.value["masters/index.json"]).toEqual({
+			defaultMasterId: "master:razor",
+			entries: [
+				{
+					id: "master:razor",
+					path: "masters/master%3Arazor~f06b8821.json",
+				},
+				{
+					id: "master:black",
+					path: "masters/master%3Ablack~e935e1c2.json",
+				},
+			],
+		})
+		expect(split.value["cmap/index.json"]).toEqual([
+			{ codePoint: 0x4f, path: "cmap/004F.json" },
+		])
+		expect(Object.isFrozen(split.value)).toBe(true)
+		expect(Object.isFrozen(split.value["glyphs/glyph%3AO~e48dd026.json"])).toBe(
+			true,
+		)
+	})
+
+	test("assembles directory units into the exact state snapshot", () => {
+		const source = geometricOWithEveryEditorField()
+		const split = splitEditorFontSource(source, {
+			axisPath: () => "axes/weight.json",
+			masterPath: (_master, index) => `masters/unit-${index}.json`,
+			instancePath: (_instance, index) => `instances/unit-${index}.json`,
+			glyphPath: (_glyph, index) =>
+				index === 0 ? "glyphs/fallback.json" : "glyphs/latin/capital-o.json",
+			cmapPath: () => "cmap/latin-capital-o.json",
+		})
+		if (!split.ok) throw new Error("fixture did not split")
+
+		const assembled = assembleEditorFontSource(split.value)
+		expect(assembled.ok).toBe(true)
+		if (!assembled.ok) return
+		expect(assembled.value).toEqual(source)
+		expect(assembled.value.glyphs.map(({ id }) => id)).toEqual([
+			"glyph:.notdef",
+			"glyph:O",
+		])
+	})
+
+	test("keeps the browser codec in parity without schema dependencies", () => {
+		const source = geometricOWithEveryEditorField()
+		const split = splitBrowserEditorFontSource(source)
+		expect(split.ok).toBe(true)
+		if (!split.ok) return
+
+		const assembled = assembleBrowserEditorFontSource(split.value)
+		expect(assembled.ok).toBe(true)
+		if (!assembled.ok) return
+		expect(assembled.value).toEqual(source)
+	})
+
+	test("keeps glyph identity independent from its indexed file path", () => {
+		const source = makeGeometricOEditorFont()
+		const split = splitEditorFontSource(source, {
+			glyphPath: (_glyph, index) => `glyphs/unit-${index}.json`,
+		})
+		if (!split.ok) throw new Error("fixture did not split")
+		const files = {
+			...split.value,
+			"glyphs/index.json": [
+				{ id: "glyph:.notdef", path: "glyphs/unit-0.json" },
+				{ id: "glyph:O", path: "glyphs/unit-1.json" },
+			],
+		} satisfies FontSourceDirectoryFiles
+		const assembled = assembleEditorFontSource(files)
+		expect(assembled.ok).toBe(true)
+
+		const mismatched = {
+			...files,
+			"glyphs/index.json": [
+				{ id: "glyph:wrong", path: "glyphs/unit-0.json" },
+				{ id: "glyph:O", path: "glyphs/unit-1.json" },
+			],
+		}
+		const result = assembleEditorFontSource(mismatched)
+		expect(result.ok).toBe(false)
+		if (!result.ok) {
+			expect(result.errors[0]).toEqual(
+				expect.objectContaining({
+					code: "directory.entity_id",
+					unitPath: "glyphs/unit-0.json",
+					path: "$.id",
+				}),
+			)
+		}
+	})
+
+	test("publishes one Zod validator and JSON Schema per source unit kind", () => {
+		const kinds: readonly SourceUnitKind[] = [
+			"project",
+			"metadata",
+			"names",
+			"metrics",
+			"style",
+			"axis-index",
+			"axis",
+			"master-index",
+			"master",
+			"instance-index",
+			"instance",
+			"glyph-index",
+			"glyph",
+			"cmap-index",
+			"cmap-entry",
+		]
+		for (const kind of kinds) {
+			const schema = jsonSchemaForSourceUnit(kind) as {
+				readonly $schema?: string
+				readonly title?: string
+			}
+			expect(schema.$schema).toBe(
+				"https://json-schema.org/draft/2020-12/schema",
+			)
+			expect(schema.title).toMatch(/^Trigraph /u)
+		}
+
+		expect(sourceUnitDescriptors.glyph).toMatchObject({
+			cardinality: "collection",
+			directory: "glyphs",
+			inventoryPath: "glyphs/index.json",
+		})
+		expect(sourceUnitDescriptors.axis).toMatchObject({
+			cardinality: "collection",
+			inventoryPath: "axes/index.json",
+		})
+		expect(
+			validateSourceUnit("glyph-index", [
+				{ id: "glyph:O", path: "glyphs/latin/o.json" },
+			]).ok,
+		).toBe(true)
+		const invalidIndex = validateSourceUnit(
+			"glyph-index",
+			[{ id: "glyph:O", path: "../outside.json" }],
+			"glyphs/index.json",
+		)
+		expect(invalidIndex.ok).toBe(false)
+		if (!invalidIndex.ok) {
+			expect(invalidIndex.errors).toContainEqual(
+				expect.objectContaining({
+					code: "source.schema",
+					unitPath: "glyphs/index.json",
+					path: "$[0].path",
+				}),
+			)
+		}
+		for (const path of [
+			"glyphs/../outside.json",
+			"glyphs/./inside.json",
+			"glyphs/%2E%2E/outside.json",
+			"glyphs/%252e%252e/outside.json",
+			"glyphs/folder%2Foutside.json",
+			"glyphs/folder%5Coutside.json",
+		]) {
+			expect(
+				validateSourceUnit(
+					"glyph-index",
+					[{ id: "glyph:O", path }],
+					"glyphs/index.json",
+				).ok,
+				path,
+			).toBe(false)
+		}
+	})
+
+	test("diagnoses missing, duplicate, and unindexed source units", () => {
+		const split = splitEditorFontSource(makeGeometricOEditorFont())
+		if (!split.ok) throw new Error("fixture did not split")
+		const { "metadata.json": _missing, ...withoutMetadata } = split.value
+		const missing = assembleEditorFontSource(withoutMetadata)
+		expect(missing.ok).toBe(false)
+		if (!missing.ok) {
+			expect(missing.errors[0]).toEqual(
+				expect.objectContaining({
+					code: "directory.missing_file",
+					unitPath: "metadata.json",
+				}),
+			)
+		}
+
+		const duplicateIndex = {
+			...split.value,
+			"glyphs/index.json": [
+				{ id: "glyph:O", path: "glyphs/glyph%3AO~e48dd026.json" },
+				{ id: "glyph:O", path: "glyphs/other.json" },
+			],
+			"glyphs/other.json": split.value["glyphs/glyph%3AO~e48dd026.json"],
+		}
+		const duplicate = assembleEditorFontSource(duplicateIndex)
+		expect(duplicate.ok).toBe(false)
+		if (!duplicate.ok) {
+			expect(duplicate.errors[0]?.code).toBe("directory.duplicate_id")
+		}
+
+		const unknown = assembleEditorFontSource({
+			...split.value,
+			"glyphs/orphan.json": split.value["glyphs/glyph%3AO~e48dd026.json"],
+		})
+		expect(unknown.ok).toBe(false)
+		if (!unknown.ok) {
+			expect(unknown.errors[0]).toEqual(
+				expect.objectContaining({
+					code: "directory.unknown_file",
+					unitPath: "glyphs/orphan.json",
+				}),
+			)
+		}
+	})
+
+	test("provides a portable default path without making it an identity", () => {
+		expect(defaultGlyphUnitPath("glyph:A/B !")).toBe(
+			"glyphs/glyph%3AA%2FB%20%21~fe8d89be.json",
+		)
+	})
+
 	test("round-trips every state field and bigint timestamp losslessly", () => {
 		const source = geometricOWithEveryEditorField()
 		const encoded = encodeEditorFontSource(source)

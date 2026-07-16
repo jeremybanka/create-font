@@ -15,6 +15,8 @@ runs:
         --frozen-lockfile
         --filter trigraph-workspace
         --filter trigraph
+        --filter @trigraph/server
+        --filter @trigraph/target
         --filter @trigraph/states
         --filter @trigraph/source
         --filter @trigraph/preact-konva

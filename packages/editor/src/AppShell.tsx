@@ -5,6 +5,7 @@ import {
 	isCommandPaletteKeyboardEvent,
 	type PaletteCommand,
 } from "./command-palette.ts"
+import { AppAnchor } from "./AppAnchor.tsx"
 import { CommandPalette } from "./CommandPalette.tsx"
 import { EditorIcon } from "./EditorIcon.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
@@ -20,9 +21,11 @@ import {
 	useHotkeys,
 } from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
+import { FontInfo } from "./FontInfo.tsx"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
+import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useTL } from "./state-hooks.ts"
 
 export interface AppShellProps {
@@ -40,6 +43,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const activeTool = useO(workspace.ui.activeTool)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
+	const routeName = useO(workspace.ui.routeName)
 	const history = useTL(workspace.font.glyphHistoryTimelines, activeGlyphId)
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
@@ -50,7 +54,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		history,
 		workspace,
 	}
-	useHotkeys(toolContext)
+	useHotkeys(toolContext, routeName === "canvas")
 	const openCommandPalette = (): void => {
 		setAddingGlyphs(false)
 		setCommandPaletteOpen(true)
@@ -77,7 +81,10 @@ export function AppShell({ workspace }: AppShellProps) {
 			category: "Glyphs",
 			icon: "add",
 			keywords: ["new", "create", "character"],
-			do: () => setAddingGlyphs(true),
+			do: () => {
+				workspace.actions.navigate("/glyphs")
+				setAddingGlyphs(true)
+			},
 		},
 		...Object.values(TOOLS).map((tool) => ({
 			id: tool.id,
@@ -89,7 +96,8 @@ export function AppShell({ workspace }: AppShellProps) {
 			icon: tool.icon,
 			keywords: [tool.id],
 			shortcut: formatHotkey(tool.hotkey).join("+"),
-			disabled: tool.status(toolContext) === "disabled",
+			disabled:
+				routeName !== "canvas" || tool.status(toolContext) === "disabled",
 			do: () => tool.do(toolContext),
 		})),
 	]
@@ -123,37 +131,83 @@ export function AppShell({ workspace }: AppShellProps) {
 						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
 					</button>
 				</command-center>
-				<document-status
-					role="status"
-					aria-live="polite"
-					data-state={compilation.ok ? "valid" : "invalid"}
-				>
-					<i />
-					<span>
-						{compilation.ok ? "Technically valid" : "Needs attention"}
-					</span>
-				</document-status>
+				<header-actions>
+					<document-status
+						role="status"
+						aria-live="polite"
+						data-state={compilation.ok ? "valid" : "invalid"}
+					>
+						<i />
+						<span>
+							{compilation.ok ? "Technically valid" : "Needs attention"}
+						</span>
+					</document-status>
+					<view-tabs aria-label="Application views">
+						<AppAnchor
+							href="/"
+							aria-current={routeName === "canvas" ? "page" : undefined}
+						>
+							Canvas
+						</AppAnchor>
+						<AppAnchor
+							href="/glyphs"
+							aria-current={routeName === "glyphs" ? "page" : undefined}
+						>
+							Glyphs
+						</AppAnchor>
+						<AppAnchor
+							href="/info"
+							aria-current={routeName === "info" ? "page" : undefined}
+						>
+							Font Info
+						</AppAnchor>
+					</view-tabs>
+				</header-actions>
 			</header>
-			<main>
-				<FontNavigator
-					workspace={workspace}
-					addingGlyphs={addingGlyphs}
-					onAddingGlyphsChange={setAddingGlyphs}
-				/>
-				<editor-workspace>
-					<EditorToolbar context={toolContext} />
-					<GlyphCanvas workspace={workspace} />
-				</editor-workspace>
-				<GlyphInspector workspace={workspace} />
+			<main data-view={routeName}>
+				{routeName === "canvas" ? (
+					<>
+						<FontNavigator workspace={workspace} />
+						<editor-workspace>
+							<EditorToolbar context={toolContext} />
+							<GlyphCanvas workspace={workspace} />
+						</editor-workspace>
+						<GlyphInspector workspace={workspace} />
+					</>
+				) : routeName === "glyphs" ? (
+					<GlyphLibrary
+						workspace={workspace}
+						addingGlyphs={addingGlyphs}
+						onAddingGlyphsChange={setAddingGlyphs}
+					/>
+				) : routeName === "info" ? (
+					<FontInfo workspace={workspace} />
+				) : (
+					<not-found-view>
+						<strong>View not found</strong>
+						<AppAnchor href="/">Return to the canvas</AppAnchor>
+					</not-found-view>
+				)}
 			</main>
 			<footer>
 				<active-context>
-					<strong>{glyph?.name ?? "—"}</strong>
-					<span>{master?.name ?? "—"}</span>
+					<strong>
+						{routeName === "canvas"
+							? (glyph?.name ?? "—")
+							: routeName === "glyphs"
+								? "Glyph library"
+								: routeName === "info"
+									? "Font info"
+									: "Unknown view"}
+					</strong>
+					<span>
+						{routeName === "canvas" ? (master?.name ?? "—") : familyName}
+					</span>
 				</active-context>
 				<keyboard-help>
-					Q Pen · V Select · Esc to type · Scroll to pan ·
-					{` ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`}
+					{routeName === "canvas"
+						? `Q Pen · V Select · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
+						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>Trigraph editor v{source.editorVersion}</format-label>
 			</footer>

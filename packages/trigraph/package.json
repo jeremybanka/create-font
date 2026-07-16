@@ -1,32 +1,53 @@
 {
 	"name": "trigraph",
 	"version": "0.0.0",
-	"description": "A rigorously typed logical SFNT IR for OpenType variable TrueType fonts",
+	"description": "Repository-local CLI and browser server for Trigraph font projects",
 	"type": "module",
-	"sideEffects": false,
+	"bin": {
+		"trigraph": "./dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"tsconfig.json",
+		"README.md"
+	],
 	"exports": {
 		".": {
-			"types": "./dist/index.d.mts",
-			"import": "./dist/index.mjs"
+			"types": "./src/server.ts",
+			"bun": "./dist/server.js",
+			"import": "./dist/server.js"
+		},
+		"./rpc": {
+			"types": "./src/rpc.ts",
+			"bun": "./dist/rpc.js",
+			"import": "./dist/rpc.js"
+		},
+		"./rpc-client": {
+			"types": "./src/rpc-client.ts",
+			"browser": "./dist/rpc-client.js",
+			"import": "./dist/rpc-client.js"
 		},
 		"./package.json": "./package.json"
 	},
-	"files": [
-		"dist/*.d.mts",
-		"dist/*.d.mts.map",
-		"dist/*.mjs",
-		"dist/*.mjs.map",
-		"src"
-	],
 	"scripts": {
-		"build": "vp pack",
-		"dev": "vp pack --watch --no-clean",
-		"test": "vp test"
+		"build": "bun run ./scripts/build.ts",
+		"dev": "bun --watch ./src/cli.ts serve --root=../..",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@elysia/static": "1.4.11",
+		"@trigraph/server": "workspace:*",
+		"@trigraph/source": "workspace:*",
+		"@trigraph/states": "workspace:*",
+		"comline": "0.5.1",
+		"elysia": "1.4.29",
+		"preact": "10.29.7",
+		"zod": "4.4.3"
 	},
 	"devDependencies": {
-		"vitest": "4.1.10"
-	},
-	"engines": {
-		"node": ">=22.0.0"
+		"@trigraph/editor": "workspace:*",
+		"@types/bun": "npm:bun-types@1.3.14",
+		"@types/node": "25.9.5"
 	}
 }

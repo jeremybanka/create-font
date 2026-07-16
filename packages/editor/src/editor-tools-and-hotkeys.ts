@@ -199,10 +199,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
 	)
 }
 
-export function useHotkeys(context: ToolContext): void {
+export function useHotkeys(context: ToolContext, enabled = true): void {
 	const { activeGlyphId, activeTool, editingTextIndex, history, workspace } =
 		context
 	useEffect(() => {
+		if (!enabled) return
 		const currentContext = {
 			activeGlyphId,
 			activeTool,
@@ -225,6 +226,7 @@ export function useHotkeys(context: ToolContext): void {
 		editingTextIndex,
 		history.at,
 		history.length,
+		enabled,
 		workspace,
 	])
 }

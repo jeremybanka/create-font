@@ -1,17 +1,111 @@
 # @trigraph/source
 
 `@trigraph/source` is the deterministic file boundary for
-[`@trigraph/states`](../states/README.md). A file represents one complete
-`EditorFontSource` snapshot: the JSON root is the state document itself, with
-the existing `format: "trigraph.editor"` and `editorVersion: 3` discriminants.
-There is no second envelope and no file-only identity layer.
+[`@trigraph/states`](../states/README.md). It defines both:
 
-That direct correspondence is important for a future server-backed editor.
+- a complete-document codec for interchange, migrations, and in-memory
+  backends;
+- the repository directory contract used by the development server.
+
+Both representations map directly to `EditorFontSource`.
 Stable IDs, author ordering, shared topology, master layers, locations, cmap
 references, relative incoming/outgoing handles, soft/hard node modes, and
 each contour's explicit `closed` state, plus editor-only note and color fields,
-all cross the boundary in the same form emitted by the state graph. Decoding returns the
-public type that can be passed to `createFontEditorState().actions.load`.
+all cross the boundary in the same form emitted by the state graph.
+
+## Project source directory
+
+The directory is deliberately shaped around the state graph's useful remote
+loadable identities:
+
+```text
+trigraph.json
+metadata.json
+names.json
+metrics.json
+style.json
+axes/
+  index.json
+  <indexed path>.json
+masters/
+  index.json
+  <indexed path>.json
+instances/
+  index.json
+  <indexed path>.json
+glyphs/
+  index.json
+  <indexed path>.json
+cmap/
+  index.json
+  <indexed path>.json
+```
+
+- `trigraph.json` has its own `trigraph.source` format/version and separately
+  declares the editor snapshot format/version it assembles.
+- `metadata.json`, `names.json`, `metrics.json`, and `style.json` correspond
+  directly to the state graph's compact singleton atoms.
+- each entity family has an ordered `index.json` whose entries pair an
+  identity with an explicit safe relative path.
+- `masters/index.json` also owns the default-master reference.
+- axes, masters, instances, and character mappings each have one unit per
+  atom-family identity.
+- each indexed glyph file is one complete glyph timeline unit: glyph facts,
+  topology, and all master layers.
+
+The explicit indexes mean IDs and code points remain application identities
+rather than being treated as raw filenames. Existing repositories can retain
+arbitrary indexed paths through renames and reordering. The exported
+`default*UnitPath` functions are only portable initial-path policies.
+
+`sourceUnitDescriptors` exposes unit kinds, singleton paths, collection
+inventory, and validators for server/RPC routing. Each file kind has a named
+Zod schema, and `jsonSchemaForSourceUnit(kind)` generates its JSON Schema
+Draft 2020-12 representation.
+
+Server and tooling code should import the package root. Browser code should
+import `@trigraph/source/browser`, which exposes directory assembly, splitting,
+path helpers, and structural file types without including Zod or the per-unit
+schema implementation. The workspace server validates every unit before the
+browser receives it; the browser codec verifies index relationships and runs
+the whole-editor-source validator after assembly.
+
+```ts
+import {
+	assembleEditorFontSource,
+	jsonSchemaForSourceUnit,
+	sourceUnitDescriptors,
+	splitEditorFontSource,
+} from "@trigraph/source"
+
+const directory = splitEditorFontSource(editor.read.editorSource()!)
+if (!directory.ok) throw new Error(directory.errors[0].message)
+
+await writeJsonUnits(directory.value)
+
+const glyphSchema = jsonSchemaForSourceUnit("glyph")
+const glyphInventoryPath = sourceUnitDescriptors.glyph.inventoryPath
+const axisInventoryPath = sourceUnitDescriptors.axis.inventoryPath
+
+const assembled = assembleEditorFontSource(await readJsonUnits())
+if (assembled.ok) editor.actions.load(assembled.value)
+```
+
+`assembleEditorFontSource` validates every unit, checks inventories for
+duplicate identities and paths, rejects missing or orphan units, verifies that
+indexed and contained identities agree, then passes the composed snapshot
+through the existing whole-document structural and relational validation.
+
+The server owns filesystem discovery, atomic persistence, revisions, and
+watching. This package owns the directory's portable data contract.
+
+## Complete-document codec
+
+One JSON document can still represent one complete `EditorFontSource`
+snapshot: the JSON root is the state document itself, with the existing
+`format: "trigraph.editor"` and `editorVersion: 3` discriminants. There is no
+second envelope and no file-only identity layer. Decoding returns the public
+type that can be passed to `createFontEditorState().actions.load`.
 
 ## The one JSON adaptation
 
@@ -108,6 +202,6 @@ still contain open contours, invalid OpenType ranges, incomplete master
 coverage, or other projection and ingestion errors. Open contours are
 deliberately accepted for broken-path editing and must be closed before export.
 Those export constraints remain the responsibility of
-`@trigraph/states` selectors and `trigraph` ingestion. A decoded value proves
+`@trigraph/states` selectors and `@trigraph/target` ingestion. A decoded value proves
 that it can be represented and addressed safely by the editor state model, not
 that it is already exportable.

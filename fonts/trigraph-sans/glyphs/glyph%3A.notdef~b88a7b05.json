@@ -1,0 +1,276 @@
+{
+	"id": "glyph:.notdef",
+	"name": ".notdef",
+	"export": true,
+	"color": "#807c73",
+	"contours": [
+		{
+			"id": "contour:glyph:.notdef:outer",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:00",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:02",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:04",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:06",
+					"mode": "soft"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:.notdef:counter",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:08",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:10",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:12",
+					"mode": "soft"
+				},
+				{
+					"id": "point:glyph:.notdef:14",
+					"mode": "soft"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:razor",
+			"advanceWidth": 1000,
+			"leftSideBearing": 80,
+			"points": [
+				{
+					"pointId": "point:glyph:.notdef:00",
+					"x": 500,
+					"y": 820,
+					"incoming": {
+						"x": -280,
+						"y": 0
+					},
+					"outgoing": {
+						"x": 280,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:02",
+					"x": 920,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": 280
+					},
+					"outgoing": {
+						"x": 0,
+						"y": -280
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:04",
+					"x": 500,
+					"y": -20,
+					"incoming": {
+						"x": 280,
+						"y": 0
+					},
+					"outgoing": {
+						"x": -280,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:06",
+					"x": 80,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": -280
+					},
+					"outgoing": {
+						"x": 0,
+						"y": 280
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:08",
+					"x": 500,
+					"y": 752,
+					"incoming": {
+						"x": 234.66666666666666,
+						"y": 0
+					},
+					"outgoing": {
+						"x": -234.66666666666666,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:10",
+					"x": 148,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": 234.66666666666666
+					},
+					"outgoing": {
+						"x": 0,
+						"y": -234.66666666666666
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:12",
+					"x": 500,
+					"y": 48,
+					"incoming": {
+						"x": -234.66666666666666,
+						"y": 0
+					},
+					"outgoing": {
+						"x": 234.66666666666666,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:14",
+					"x": 852,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": -234.66666666666666
+					},
+					"outgoing": {
+						"x": 0,
+						"y": 234.66666666666666
+					}
+				}
+			]
+		},
+		{
+			"masterId": "master:black",
+			"advanceWidth": 1000,
+			"leftSideBearing": 80,
+			"points": [
+				{
+					"pointId": "point:glyph:.notdef:00",
+					"x": 500,
+					"y": 820,
+					"incoming": {
+						"x": -280,
+						"y": 0
+					},
+					"outgoing": {
+						"x": 280,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:02",
+					"x": 920,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": 280
+					},
+					"outgoing": {
+						"x": 0,
+						"y": -280
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:04",
+					"x": 500,
+					"y": -20,
+					"incoming": {
+						"x": 280,
+						"y": 0
+					},
+					"outgoing": {
+						"x": -280,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:06",
+					"x": 80,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": -280
+					},
+					"outgoing": {
+						"x": 0,
+						"y": 280
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:08",
+					"x": 500,
+					"y": 448,
+					"incoming": {
+						"x": 32,
+						"y": 0
+					},
+					"outgoing": {
+						"x": -32,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:10",
+					"x": 452,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": 32
+					},
+					"outgoing": {
+						"x": 0,
+						"y": -32
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:12",
+					"x": 500,
+					"y": 352,
+					"incoming": {
+						"x": -32,
+						"y": 0
+					},
+					"outgoing": {
+						"x": 32,
+						"y": 0
+					}
+				},
+				{
+					"pointId": "point:glyph:.notdef:14",
+					"x": 548,
+					"y": 400,
+					"incoming": {
+						"x": 0,
+						"y": -32
+					},
+					"outgoing": {
+						"x": 0,
+						"y": 32
+					}
+				}
+			]
+		}
+	]
+}

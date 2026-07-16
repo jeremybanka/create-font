@@ -14,7 +14,7 @@
 			"@trigraph/preact-konva": ["./packages/preact-konva/src/index.ts"],
 			"@trigraph/source": ["./packages/source/src/index.ts"],
 			"@trigraph/states": ["./packages/states/src/index.ts"],
-			"trigraph": ["./packages/trigraph/src/index.ts"]
+			"@trigraph/target": ["./packages/target/src/index.ts"]
 		},
 		"rootDir": ".",
 		"skipLibCheck": true,
@@ -23,5 +23,5 @@
 		"types": []
 	},
 	"include": ["**/*.ts", "*.d.ts"],
-	"exclude": ["packages/editor", "packages/preact-konva"]
+	"exclude": ["packages/editor", "packages/preact-konva", "packages/trigraph"]
 }

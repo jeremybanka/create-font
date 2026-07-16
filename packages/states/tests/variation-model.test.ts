@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { VariationRegionSource } from "trigraph"
+import type { VariationRegionSource } from "@trigraph/target"
 
 import {
 	buildMasterScalarMatrix,

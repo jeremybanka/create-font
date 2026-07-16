@@ -12,10 +12,11 @@ export default defineConfig({
 				skipNodeModulesBundle: true,
 			},
 			dts: {
-				entry: ["src/index.ts"],
+				entry: ["src/index.ts", "src/browser.ts"],
 				sourcemap: true,
 			},
 			entry: {
+				browser: "src/browser.ts",
 				index: "src/index.ts",
 			},
 			format: "esm",

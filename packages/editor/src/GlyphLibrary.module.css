@@ -1,0 +1,283 @@
+glyph-library.class {
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	min-width: 0;
+	min-height: 0;
+	padding: 34px clamp(24px, 4vw, 64px) 54px;
+	overflow: auto;
+	background: var(--paper);
+
+	> library-heading {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 24px;
+		padding-bottom: 26px;
+
+		> view-title {
+			display: grid;
+			gap: 4px;
+
+			> p {
+				margin: 0;
+				font-size: 10px;
+				font-weight: 720;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				color: var(--accent);
+			}
+
+			> h1 {
+				margin: 0;
+				font-size: clamp(28px, 4vw, 48px);
+				font-weight: 680;
+				letter-spacing: -0.04em;
+			}
+
+			> span {
+				font-size: 11px;
+				color: var(--ink-muted);
+			}
+		}
+
+		> library-actions {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+
+			> label {
+				display: grid;
+				grid-template-columns: auto minmax(120px, 240px);
+				align-items: center;
+				gap: 8px;
+				padding: 0 10px;
+				border: 1px solid var(--line-strong);
+				border-radius: 7px;
+				background: var(--panel);
+
+				> svg {
+					width: 14px;
+					height: 14px;
+					color: var(--ink-muted);
+				}
+
+				> input {
+					min-width: 0;
+					padding: 8px 0;
+					border: 0;
+					outline: 0;
+					background: transparent;
+					font-size: 11px;
+					color: var(--ink);
+				}
+			}
+
+			> button {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 9px 12px;
+				border: 0;
+				border-radius: 7px;
+				background: var(--ink);
+				font: 650 11px/1 var(--ui-font);
+				color: var(--ink-inverse);
+				cursor: pointer;
+
+				> svg {
+					width: 14px;
+					height: 14px;
+				}
+			}
+		}
+	}
+
+	> glyph-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+		align-content: start;
+		gap: clamp(12px, 2vw, 22px);
+
+		> button {
+			display: grid;
+			gap: 10px;
+			min-width: 0;
+			padding: 9px;
+			border: 1px solid transparent;
+			border-radius: 10px;
+			background: transparent;
+			text-align: left;
+			color: var(--ink);
+			cursor: pointer;
+
+			&:hover {
+				background: var(--hover);
+			}
+
+			&[aria-pressed="true"] {
+				border-color: var(--line-glyph-selected);
+				background: var(--selected);
+			}
+
+			> glyph-tile {
+				display: grid;
+				place-items: center;
+				width: 100%;
+				min-width: 0;
+				aspect-ratio: 1;
+				overflow: hidden;
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				background: var(--panel);
+				color: var(--ink);
+
+				> svg {
+					display: block;
+					width: 100%;
+					height: 100%;
+					overflow: hidden;
+
+					> path {
+						fill: currentcolor;
+					}
+				}
+			}
+
+			> glyph-label {
+				display: grid;
+				gap: 3px;
+				min-width: 0;
+
+				> strong {
+					overflow: hidden;
+					font-size: 11px;
+					font-weight: 650;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+				}
+
+				> span {
+					font-size: 9px;
+					color: var(--ink-faint);
+				}
+			}
+		}
+	}
+
+	> empty-library {
+		display: grid;
+		place-content: center;
+		gap: 6px;
+		min-height: 260px;
+		text-align: center;
+
+		> span {
+			font-size: 11px;
+			color: var(--ink-muted);
+		}
+	}
+
+	> dialog-backdrop {
+		position: fixed;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		padding: 18px;
+		background: rgb(0 0 0 / 35%);
+		backdrop-filter: blur(3px);
+		z-index: 20;
+
+		> add-glyph-dialog {
+			display: grid;
+			gap: 18px;
+			width: min(360px, 100%);
+			padding: 18px;
+			border: 1px solid var(--line-strong);
+			border-radius: 12px;
+			background: var(--panel);
+			box-shadow: 0 22px 70px var(--shadow-subtle);
+
+			> dialog-heading {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+
+				> strong {
+					font-size: 15px;
+				}
+
+				> button {
+					display: grid;
+					place-items: center;
+					width: 28px;
+					height: 28px;
+					padding: 0;
+					border: 0;
+					border-radius: 5px;
+					background: transparent;
+					color: var(--ink-muted);
+					cursor: pointer;
+				}
+			}
+
+			> form {
+				display: grid;
+				gap: 9px;
+
+				> label {
+					font-size: 10px;
+					font-weight: 700;
+					letter-spacing: 0.07em;
+					text-transform: uppercase;
+					color: var(--ink-muted);
+				}
+
+				> input {
+					padding: 10px;
+					border: 1px solid var(--line-strong);
+					border-radius: 7px;
+					background: var(--paper);
+					color: var(--ink);
+				}
+
+				> small {
+					font-size: 9px;
+					color: var(--ink-faint);
+				}
+
+				> button {
+					justify-self: end;
+					margin-top: 5px;
+					padding: 8px 12px;
+					border: 0;
+					border-radius: 7px;
+					background: var(--ink);
+					font: 650 11px/1 var(--ui-font);
+					color: var(--ink-inverse);
+					cursor: pointer;
+				}
+			}
+		}
+	}
+}
+
+@media (width <= 720px) {
+	glyph-library.class {
+		padding: 24px 16px 40px;
+
+		> library-heading {
+			align-items: stretch;
+			flex-direction: column;
+
+			> library-actions {
+				> label {
+					flex: 1;
+				}
+			}
+		}
+
+		> glyph-grid {
+			grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+		}
+	}
+}
