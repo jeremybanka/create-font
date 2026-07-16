@@ -5,12 +5,13 @@ representation of an OpenType variable font. It is a logical SFNT: one step
 after design-space or master compilation, and one step before binary font
 serialization.
 
-This library is the low-level compilation target of the intended public
-`trigraph` npm toolchain. The unscoped package will provide the
-package-manager-resolved CLI for building a repository and serving its browser
-editor while depending on this validated target as an independently usable API.
-The CLI, project source directory, workspace server, bundled editor assets, and
-binary serializer are roadmap work; see the repository
+This library is the low-level compilation target of the public `trigraph` npm
+toolchain. The unscoped package now provides the preliminary
+package-manager-resolved CLI and Elysia/Eden server boundary while depending on
+the workspace's implementation layers. The complete build pipeline will feed
+this validated target as an independently usable API. The project source
+directory, bundled editor assets, and binary serializer are roadmap work; see
+the repository
 [architecture](../../docs/architecture.md) and
 [roadmap](../../docs/roadmap.md).
 

@@ -23,5 +23,5 @@
 		"types": []
 	},
 	"include": ["**/*.ts", "*.d.ts"],
-	"exclude": ["packages/editor", "packages/preact-konva"]
+	"exclude": ["packages/editor", "packages/preact-konva", "packages/trigraph"]
 }

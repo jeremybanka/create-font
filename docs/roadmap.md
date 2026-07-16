@@ -17,9 +17,10 @@ The repository already contains:
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history.
 
-The current demo is in-memory. The package does not yet serialize `.ttf` files,
-provide a CLI executable, open a source directory, or persist through a
-workspace server.
+The current editor demo is in-memory. The `trigraph` package now provides a
+preliminary Bun/comline CLI and Elysia/Eden server boundary, but it does not yet
+serialize `.ttf` files, open a source directory, persist project edits, or
+import and serve the editor.
 
 ## 1. Repository source workspace
 

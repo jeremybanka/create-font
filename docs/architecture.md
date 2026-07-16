@@ -184,10 +184,10 @@ The intended public distribution is the `trigraph` npm package:
 - contains or depends on the compiler, source codecs, and workspace server; and
 - bundles the matching browser application as immutable assets.
 
-Today, the logical-SFNT TypeScript library is provided by
-`@trigraph/target`, while `@trigraph/editor` is private and the unscoped
-`trigraph` package does not yet exist. Adding that CLI package, the
-project/workspace layer, binary serialization, and bundled editor assets is
+Today, `@trigraph/target` provides the logical-SFNT TypeScript library and the
+unscoped `trigraph` package provides a preliminary Bun CLI, Elysia server, and
+Eden client boundary. The project/workspace source layer, binary serialization,
+and importing and bundling the private `@trigraph/editor` application remain
 roadmap work.
 
 ## Architectural non-goals

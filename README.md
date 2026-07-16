@@ -33,6 +33,8 @@ the complete toolchain.
 
 ## Packages
 
+- [`trigraph`](packages/trigraph/README.md) is the Bun CLI and Elysia workspace
+  application.
 - [`@trigraph/target`](packages/target/README.md) is the validated, logical-SFNT
   compilation target.
 - [`@trigraph/states`](packages/states/README.md) is the atom.io editor model
@@ -42,6 +44,6 @@ the complete toolchain.
 - [`@trigraph/editor`](packages/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
 
-These packages are the current implementation layers. The future public
-`trigraph` package will provide a CLI entry point around them and bundle the
-editor assets.
+These packages are the current implementation layers. The `trigraph`
+application now owns the preliminary CLI and RPC boundaries; importing and
+bundling the browser editor is the next integration step.
