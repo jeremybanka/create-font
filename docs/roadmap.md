@@ -18,9 +18,10 @@ The repository already contains:
   glyph-local history.
 
 The current editor demo is in-memory. The `trigraph` package now provides a
-preliminary Bun/comline CLI and Elysia/Eden server boundary, but it does not yet
-serialize `.ttf` files, open a source directory, persist project edits, or
-import and serve the editor.
+preliminary Bun/comline CLI and Elysia/Eden server boundary. It imports the
+editor's exported Preact application root and serves it with Bun's full-stack
+development server, but it does not yet serialize `.ttf` files, open a source
+directory, or persist project edits.
 
 ## 1. Repository source workspace
 

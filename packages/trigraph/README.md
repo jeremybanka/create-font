@@ -22,21 +22,29 @@ to have emitted a font.
 
 `trigraph serve` starts the Elysia workspace process on loopback by default.
 The initial RPC exposes health, workspace identity, and the same preliminary
-build operation used by the CLI.
+build operation used by the CLI. The same process serves the editor through
+Elysia's Bun full-stack static plugin.
 
 ```sh
 pnpm exec trigraph serve --port=4173
 ```
 
-## Editor integration boundary
+## Editor application boundary
 
-This package declares `@trigraph/editor` as a workspace development dependency
-because the consumer application will own and bundle the browser entrypoint.
-No editor code is imported yet: `@trigraph/editor` is currently a self-starting
-private Vite application without an exported mount function or Bun-compatible
-asset entrypoint.
+The consumer package owns `public/index.html` and `public/index.tsx`. Its browser
+entry imports `EditorApplicationRoot` from the private `@trigraph/editor`
+workspace package and mounts it with Preact.
 
-The next integration step will require changing the editor package to expose a
-browser module that this application can import alongside
-`createTrigraphRpcClient`. That editor change is deliberately outside this
-preliminary scaffold.
+The Elysia server awaits `@elysia/static` with `bunFullstack: true` and serves
+that application at `/`. Bun therefore owns TypeScript/JSX and CSS bundling,
+CSS Modules, and the same-origin application/API development server; Vite is
+not part of the serving path.
+
+Development runs use `public/index.tsx` directly so Bun can follow the
+`@trigraph/editor` workspace export. The package build emits a self-contained
+HTML, JavaScript, and CSS application under `dist/public`, which is what the
+compiled server serves after installation.
+
+The current Bun canary's HMR transform omits CSS Module bindings from generated
+client chunks. `trigraph serve` therefore keeps Bun's full-stack runtime
+bundling active but sets `hmr: false` until that canary regression is fixed.

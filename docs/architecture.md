@@ -186,9 +186,11 @@ The intended public distribution is the `trigraph` npm package:
 
 Today, `@trigraph/target` provides the logical-SFNT TypeScript library and the
 unscoped `trigraph` package provides a preliminary Bun CLI, Elysia server, and
-Eden client boundary. The project/workspace source layer, binary serialization,
-and importing and bundling the private `@trigraph/editor` application remain
-roadmap work.
+Eden client boundary. The private `@trigraph/editor` package exports its Preact
+application root, which the `trigraph` browser entry imports and serves through
+Elysia's Bun full-stack development pattern. Packaging the editor as immutable
+release assets, the project/workspace source layer, and binary serialization
+remain roadmap work.
 
 ## Architectural non-goals
 

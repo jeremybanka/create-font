@@ -45,5 +45,5 @@ the complete toolchain.
   editor built directly on that state graph.
 
 These packages are the current implementation layers. The `trigraph`
-application now owns the preliminary CLI and RPC boundaries; importing and
-bundling the browser editor is the next integration step.
+application owns the preliminary CLI and RPC boundaries plus the Bun full-stack
+browser entry that imports `EditorApplicationRoot` from `@trigraph/editor`.

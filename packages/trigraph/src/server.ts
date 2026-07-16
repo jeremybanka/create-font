@@ -1,24 +1,23 @@
-import { resolve } from "node:path"
+import { basename, resolve } from "node:path"
 
+import { staticPlugin } from "@elysia/static"
 import { Elysia } from "elysia"
 
 import { createTrigraphRpc } from "./rpc.ts"
 
-const editorIntegrationPending = `<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>Trigraph</title>
-	</head>
-	<body>
-		<main>
-			<h1>Trigraph workspace server</h1>
-			<p>The Elysia RPC is running. Editor integration is the next step.</p>
-		</main>
-	</body>
-</html>
-`
+const isBundledApplication = basename(import.meta.dir) === `dist`
+const editorAssets = resolve(
+	import.meta.dir,
+	isBundledApplication ? `public` : `../public`,
+)
+
+const editorApplication = await staticPlugin({
+	alwaysStatic: isBundledApplication,
+	assets: editorAssets,
+	bunFullstack: !isBundledApplication,
+	indexHTML: true,
+	prefix: `/`,
+})
 
 export type CreateTrigraphServerOptions = Readonly<{
 	root?: string
@@ -31,10 +30,7 @@ export function createTrigraphServerApp(
 
 	return new Elysia({ name: `trigraph-server` })
 		.use(createTrigraphRpc({ root }))
-		.get(`/`, ({ set }) => {
-			set.headers[`content-type`] = `text/html; charset=utf-8`
-			return editorIntegrationPending
-		})
+		.use(editorApplication)
 }
 
 export type TrigraphServerApp = ReturnType<typeof createTrigraphServerApp>
@@ -47,6 +43,12 @@ export type StartTrigraphServerOptions = CreateTrigraphServerOptions &
 
 export function startTrigraphServer(options: StartTrigraphServerOptions = {}) {
 	const app = createTrigraphServerApp(options).listen({
+		development: {
+			console: true,
+			// The current Bun canary drops CSS Module imports from its HMR chunks.
+			// Runtime full-stack bundling works correctly without that transform.
+			hmr: false,
+		},
 		hostname: options.hostname ?? `127.0.0.1`,
 		port: options.port ?? 4173,
 	})

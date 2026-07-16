@@ -23,6 +23,11 @@ const builds = await Promise.all([
 		sourcemap: `external`,
 		target: `browser`,
 	}),
+	Bun.build({
+		entrypoints: [resolve(packageRoot, `public/index.html`)],
+		outdir: resolve(outdir, `public`),
+		target: `browser`,
+	}),
 ])
 
 const failures = builds.flatMap((build) => (build.success ? [] : build.logs))
