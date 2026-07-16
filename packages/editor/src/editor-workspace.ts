@@ -49,7 +49,7 @@ export type EditorToolId = "select" | "pen"
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
 ) {
-	const font = createFontEditorState({ key: "trigraph/editor/geometric" })
+	const font = createFontEditorState({ key: "trigraph/editor/font" })
 	font.actions.load(source)
 	const document = font.read.editorSource()
 	if (document === null)
@@ -76,7 +76,7 @@ export function createEditorWorkspace(
 	})
 	const previewTextAtom = font.silo.atom<string>({
 		key: "previewText",
-		default: "AOOO\nAOOO",
+		default: "AHO\nnon",
 	})
 	const caretIndexAtom = font.silo.atom<number>({
 		key: "caretIndex",

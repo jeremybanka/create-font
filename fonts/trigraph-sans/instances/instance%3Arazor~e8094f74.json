@@ -1,0 +1,9 @@
+{
+	"id": "instance:razor",
+	"name": "Razor",
+	"coordinates": {
+		"axis:wght": 100
+	},
+	"postScriptName": "TrigraphGeometricO-Razor",
+	"elidable": true
+}

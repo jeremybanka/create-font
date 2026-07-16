@@ -5,6 +5,7 @@ import { Elysia, status, t } from "elysia"
 import {
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
+	SourceValidationError,
 } from "./contracts.ts"
 import type {
 	BuildResult,
@@ -12,11 +13,13 @@ import type {
 	SourceUnitConflict,
 	SourceUnitNotFound,
 	SourceServiceUnavailable,
+	SourceValidationFailure,
 	TrigraphSourceService,
 	WriteSourceUnitInput,
+	WriteSourceUnitsInput,
 } from "./contracts.ts"
 
-export const TRIGRAPH_RPC_VERSION = 2 as const
+export const TRIGRAPH_RPC_VERSION = 3 as const
 
 export type CreateTrigraphRpcOptions = Readonly<{
 	build: () => Promise<BuildResult>
@@ -48,6 +51,14 @@ function sourceErrorResponse(error: unknown) {
 		}
 		return status(409, body)
 	}
+	if (error instanceof SourceValidationError) {
+		const body: SourceValidationFailure = {
+			code: `source.validation_failed`,
+			issues: error.issues,
+			message: error.message,
+		}
+		return status(422, body)
+	}
 	throw error
 }
 
@@ -66,11 +77,16 @@ export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
 			root,
 		}))
 		.post(`/build`, options.build)
-		.get(`/source`, () =>
-			options.source === undefined
-				? status(501, sourceServiceUnavailable)
-				: options.source.readManifest(),
-		)
+		.get(`/source`, async () => {
+			if (options.source === undefined) {
+				return status(501, sourceServiceUnavailable)
+			}
+			try {
+				return await options.source.readManifest()
+			} catch (error) {
+				return sourceErrorResponse(error)
+			}
+		})
 		.get(
 			`/source/unit`,
 			async ({ query }) => {
@@ -120,6 +136,45 @@ export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
 					idempotencyKey: t.String({ minLength: 1 }),
 					path: t.String({ minLength: 1 }),
 					value: t.Any(),
+				}),
+			},
+		)
+		.put(
+			`/source/units`,
+			async ({ body }) => {
+				if (
+					body.writes.some(
+						(write) =>
+							write.expectedRevision !== null &&
+							typeof write.expectedRevision !== `string`,
+					)
+				) {
+					const invalidRequest: SourceInvalidRequest = {
+						code: `source.invalid_request`,
+						message: `Every expectedRevision must be a string or null.`,
+					}
+					return status(422, invalidRequest)
+				}
+				if (options.source === undefined) {
+					return status(501, sourceServiceUnavailable)
+				}
+				try {
+					return await options.source.writeUnits(body as WriteSourceUnitsInput)
+				} catch (error) {
+					return sourceErrorResponse(error)
+				}
+			},
+			{
+				body: t.Object({
+					idempotencyKey: t.String({ minLength: 1 }),
+					writes: t.Array(
+						t.Object({
+							expectedRevision: t.Any(),
+							path: t.String({ minLength: 1 }),
+							value: t.Any(),
+						}),
+						{ minItems: 1 },
+					),
 				}),
 			},
 		)

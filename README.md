@@ -21,11 +21,12 @@ protocol rather than owning files directly. This also makes remote development
 ordinary: run Trigraph in the remote checkout, forward its loopback port over
 SSH, and use a local browser.
 
-Canonical structured font data will live in a reviewable directory of JSON
-files. Generated intermediates, binary outputs, and local editor state remain
-separate. Programmable behavior such as OpenType Layout rules may live in
-ordinary code files referenced by the project and compile to a sandboxed module
-format such as WebAssembly.
+Canonical structured font data lives below `fonts/<project>/` in reviewable
+JSON files. The checked-in `fonts/trigraph-sans` project is the development
+font served by `pnpm dev`. Generated intermediates, binary outputs, and local
+editor state remain separate. Programmable behavior such as OpenType Layout
+rules may live in ordinary code files referenced by the project and compile to
+a sandboxed module format such as WebAssembly.
 
 See [the architecture](docs/architecture.md) for the durable system boundaries
 and [the roadmap](docs/roadmap.md) for the path from the current libraries to

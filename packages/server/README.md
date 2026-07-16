@@ -10,16 +10,18 @@ Source JSON is exposed as individually addressable units:
 - `GET /api/source` lists available units and their revisions;
 - `GET /api/source/unit?path=…` reads one unit;
 - `PUT /api/source/unit` writes one unit with a required idempotency key and an
-  explicit expected revision (`null` means create).
+  explicit expected revision (`null` means create); and
+- `PUT /api/source/units` atomically writes one or more coordinated units.
 
 The unit path is the cache identity used by `@trigraph/states`.
-`@trigraph/source` defines the concrete directory layout and per-file schemas;
-a filesystem source service will connect those validators to these routes.
+`@trigraph/source` defines the concrete directory layout and per-file schemas.
+The `trigraph` application supplies a filesystem implementation that validates
+the complete project before committing a write.
 
 The server is intentionally chatty. A glyph, axis, instance, or other loadable
 can issue its own request; there is no aggregate query endpoint or tactical
-frontend loader. Source-service handlers will be backed by the directory
-manager once that package's validators and layout are settled.
+frontend loader. The contract remains independent of the filesystem
+implementation.
 
 Reads report missing units as `source.unit_not_found`. Writes use optimistic
 concurrency and report stale revisions as `source.revision_conflict`, including

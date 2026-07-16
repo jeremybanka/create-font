@@ -1,0 +1,26 @@
+[
+	{
+		"codePoint": 32,
+		"path": "cmap/0020.json"
+	},
+	{
+		"codePoint": 65,
+		"path": "cmap/0041.json"
+	},
+	{
+		"codePoint": 72,
+		"path": "cmap/0048.json"
+	},
+	{
+		"codePoint": 79,
+		"path": "cmap/004F.json"
+	},
+	{
+		"codePoint": 110,
+		"path": "cmap/006E.json"
+	},
+	{
+		"codePoint": 111,
+		"path": "cmap/006F.json"
+	}
+]

@@ -25,6 +25,7 @@ describe(`Trigraph workspace RPC`, () => {
 				revision: `glyph-a-2`,
 				value: input.value,
 			})),
+			writeUnits: vi.fn(),
 		}
 		const app = createTrigraphRpc({
 			build: async () => ({
@@ -67,6 +68,7 @@ describe(`Trigraph workspace RPC`, () => {
 					`glyph-a-2`,
 				)
 			}),
+			writeUnits: vi.fn(),
 		}
 		const app = createTrigraphRpc({
 			build: vi.fn(),
@@ -100,6 +102,70 @@ describe(`Trigraph workspace RPC`, () => {
 		)
 	})
 
+	it(`writes several related units through one typed transaction`, async () => {
+		const source: TrigraphSourceService = {
+			readManifest: vi.fn(),
+			readUnit: vi.fn(),
+			writeUnit: vi.fn(),
+			writeUnits: vi.fn(async (input) => ({
+				revision: `manifest-2`,
+				units: input.writes.map((write) => ({
+					path: write.path,
+					revision: `${write.path}-2`,
+					value: write.value,
+				})) as [
+					{
+						path: string
+						revision: string
+						value: (typeof input.writes)[number]["value"]
+					},
+					...{
+						path: string
+						revision: string
+						value: (typeof input.writes)[number]["value"]
+					}[],
+				],
+			})),
+		}
+		const app = createTrigraphRpc({
+			build: vi.fn(),
+			source,
+		})
+		const response = await app.handle(
+			new Request(`http://localhost/api/source/units`, {
+				body: JSON.stringify({
+					idempotencyKey: `write-related-units`,
+					writes: [
+						{
+							expectedRevision: `names-1`,
+							path: `names.json`,
+							value: { family: `Trigraph Sans` },
+						},
+						{
+							expectedRevision: `style-1`,
+							path: `style.json`,
+							value: { weightClass: 900 },
+						},
+					],
+				}),
+				headers: { "content-type": `application/json` },
+				method: `PUT`,
+			}),
+		)
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual(
+			expect.objectContaining({
+				revision: `manifest-2`,
+				units: expect.arrayContaining([
+					expect.objectContaining({ path: `names.json` }),
+					expect.objectContaining({ path: `style.json` }),
+				]),
+			}),
+		)
+		expect(source.writeUnits).toHaveBeenCalledTimes(1)
+	})
+
 	it(`returns a typed not-found response for a missing unit`, async () => {
 		const source: TrigraphSourceService = {
 			readManifest: vi.fn(),
@@ -107,6 +173,7 @@ describe(`Trigraph workspace RPC`, () => {
 				throw new SourceUnitNotFoundError(path)
 			}),
 			writeUnit: vi.fn(),
+			writeUnits: vi.fn(),
 		}
 		const app = createTrigraphRpc({
 			build: vi.fn(),

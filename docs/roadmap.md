@@ -18,23 +18,23 @@ The repository already contains:
   Schema generation;
 - a reusable Elysia/Eden workspace RPC package and atom.io Loadable cache keyed
   by individual source-unit paths;
+- filesystem discovery for `fonts/*/trigraph.json`, validated content-hash
+  reads, and journaled conditional single- and multi-unit writes;
+- a checked-in `fonts/trigraph-sans` development source with two masters and
+  seven glyphs; and
 - a browser editor prototype with text preview, outline editing, selection, and
-  glyph-local history.
+  glyph-local history, now hydrated from and persisted to that source over RPC.
 
-The current editor demo is in-memory. The `trigraph` package now provides a
-preliminary Bun/comline CLI and composes `@trigraph/server` with the editor's
-exported Preact application root through Bun's full-stack development server.
-It does not yet serialize `.ttf` files, open a source directory, or persist
-project edits.
+The `trigraph` package provides a preliminary Bun/comline CLI and composes
+`@trigraph/server` with the editor's exported Preact application root through
+Bun's full-stack development server. It opens and persists a real project
+source, but does not yet watch external changes or serialize `.ttf` files.
 
 ## 1. Repository source workspace
 
-- Implement filesystem discovery and canonical reads for the established
-  `trigraph.source` v1 directory.
-- Implement conditional atomic writes for individual units and atomic
-  multi-unit writes for entity/index changes.
-- Connect source-unit validators to the server and concrete atom.io hydration
-  transactions.
+- Add filesystem watching, event coalescing, and periodic reconciliation.
+- Make remote invalidations refresh atom.io loadables without disturbing
+  unrelated timelines.
 - Preserve stable IDs and deterministic ordering across edit, save, external
   change, and migration.
 - Add migrations, source-located diagnostics, and realistically large fixtures.
@@ -55,15 +55,12 @@ project edits.
 
 ## 3. Workspace server and browser persistence
 
-- Introduce a codec-neutral workspace contract and run the demo through an
-  in-memory implementation first.
-- Implement `trigraph serve` with project discovery, paged inventory, versioned
-  reads, conditional atomic writes, watching, reconciliation, diagnostics, and
-  build status.
+- Add paged inventory, watching, reconciliation, diagnostics, and build status
+  to the existing codec-neutral workspace contract.
 - Bundle version-matched editor assets in the public package and serve them from
   the same origin as the workspace API.
-- Replace the editor's static fixture with reactive project state and lazy source
-  loading suitable for large glyph sets.
+- Replace eager whole-project hydration with lazy source loading suitable for
+  large glyph sets.
 - Add durable local drafts, external-change conflicts, reconnect behavior, and
   explicit saved/dirty/queued/conflicted UI states.
 - Exercise the same server over loopback locally and through SSH port forwarding

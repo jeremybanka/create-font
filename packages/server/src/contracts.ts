@@ -44,22 +44,38 @@ export type SourceUnitSnapshot = SourceUnitDescriptor &
 		value: JsonValue
 	}>
 
-export type WriteSourceUnitInput = Readonly<{
+export type SourceUnitWrite = Readonly<{
 	/**
 	 * `null` means the caller expects to create the unit. A string means the
 	 * caller expects to replace exactly that revision.
 	 */
 	expectedRevision: string | null
-	/** Stable across retries of one logical write. */
-	idempotencyKey: string
 	path: SourceUnitPath
 	value: JsonValue
+}>
+
+export type WriteSourceUnitInput = SourceUnitWrite &
+	Readonly<{
+		/** Stable across retries of one logical write. */
+		idempotencyKey: string
+	}>
+
+export type WriteSourceUnitsInput = Readonly<{
+	/** Stable across retries of the complete logical transaction. */
+	idempotencyKey: string
+	writes: readonly [SourceUnitWrite, ...SourceUnitWrite[]]
+}>
+
+export type WriteSourceUnitsResult = Readonly<{
+	revision: string
+	units: readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
 }>
 
 export interface TrigraphSourceService {
 	readManifest(): Promise<SourceManifest>
 	readUnit(path: SourceUnitPath): Promise<SourceUnitSnapshot>
 	writeUnit(input: WriteSourceUnitInput): Promise<SourceUnitSnapshot>
+	writeUnits(input: WriteSourceUnitsInput): Promise<WriteSourceUnitsResult>
 }
 
 export type SourceServiceUnavailable = Readonly<{
@@ -69,6 +85,19 @@ export type SourceServiceUnavailable = Readonly<{
 
 export type SourceInvalidRequest = Readonly<{
 	code: `source.invalid_request`
+	message: string
+}>
+
+export type SourceValidationIssue = Readonly<{
+	code: string
+	message: string
+	path: string
+	unitPath?: string
+}>
+
+export type SourceValidationFailure = Readonly<{
+	code: `source.validation_failed`
+	issues: readonly [SourceValidationIssue, ...SourceValidationIssue[]]
 	message: string
 }>
 
@@ -111,5 +140,17 @@ export class SourceUnitConflictError extends Error {
 		this.actualRevision = actualRevision
 		this.expectedRevision = expectedRevision
 		this.path = path
+	}
+}
+
+export class SourceValidationError extends Error {
+	readonly issues: readonly [SourceValidationIssue, ...SourceValidationIssue[]]
+
+	constructor(
+		issues: readonly [SourceValidationIssue, ...SourceValidationIssue[]],
+	) {
+		super(`The proposed font source is not valid.`)
+		this.name = `SourceValidationError`
+		this.issues = issues
 	}
 }

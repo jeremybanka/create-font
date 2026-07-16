@@ -13,6 +13,8 @@ import { z } from "zod/v4"
 
 import { buildProject } from "./build.ts"
 import { startTrigraphServer } from "./server.ts"
+import { createFileSystemSourceService } from "./source-service.ts"
+import { selectFontProject } from "./workspace.ts"
 
 const helpSchema = {
 	help: z.boolean().optional(),
@@ -58,12 +60,20 @@ export const trigraphCli = cli({
 			`Start the interactive workspace server.`,
 			z.object({
 				...helpSchema,
+				font: z.string().optional(),
 				hostname: z.string().optional(),
 				port: z.number().int().min(1).max(65_535).optional(),
 				root: z.string().optional(),
 			}),
 			{
 				...helpConfig,
+				font: {
+					description: `Font project name below fonts/.`,
+					example: `--font=trigraph-sans`,
+					flag: `f`,
+					parse: parseStringOption,
+					required: false,
+				},
 				hostname: {
 					description: `Address to bind. Loopback is the default.`,
 					example: `--hostname=127.0.0.1`,
@@ -134,13 +144,19 @@ export async function runCli(
 				return 1
 			}
 			case `serve`: {
-				const { hostname, port, root } = inputs.opts
+				const { font, hostname, port, root } = inputs.opts
+				const project = await selectFontProject(root, font)
+				const source = await createFileSystemSourceService(project.root)
 				const server = startTrigraphServer({
 					...(hostname === undefined ? {} : { hostname }),
 					...(port === undefined ? {} : { port }),
-					...(root === undefined ? {} : { root }),
+					root: project.root,
+					source,
 				})
-				writeLine(io.stdout, `Trigraph is running at ${server.url}`)
+				writeLine(
+					io.stdout,
+					`Trigraph is serving ${project.path} at ${server.url}`,
+				)
 				return 0
 			}
 		}

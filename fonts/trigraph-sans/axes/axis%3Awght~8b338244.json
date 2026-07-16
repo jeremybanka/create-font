@@ -1,0 +1,8 @@
+{
+	"id": "axis:wght",
+	"tag": "wght",
+	"name": "Weight",
+	"min": 100,
+	"default": 100,
+	"max": 900
+}

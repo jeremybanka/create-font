@@ -1,0 +1,20 @@
+{
+	"id": "glyph:space",
+	"name": "space",
+	"export": true,
+	"contours": [],
+	"layers": [
+		{
+			"masterId": "master:razor",
+			"advanceWidth": 320,
+			"leftSideBearing": 0,
+			"points": []
+		},
+		{
+			"masterId": "master:black",
+			"advanceWidth": 360,
+			"leftSideBearing": 0,
+			"points": []
+		}
+	]
+}

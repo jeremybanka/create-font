@@ -15,9 +15,10 @@ interactive server is an Elysia application; and
 `trigraph/rpc-client` exposes the corresponding Eden Treaty client factory.
 The reusable workspace routes and client typing live in `@trigraph/server`;
 this package composes them with the editor application and CLI build handler.
-The composed application accepts a source-service implementation, allowing the
-directory manager to be attached without introducing a server-to-states
-dependency.
+The composed application discovers projects below `fonts/`, attaches the
+filesystem source service, and hydrates the editor through the same Elysia/Eden
+contract used for persistence. This keeps the server independent from the
+atom.io implementation in `@trigraph/states`.
 
 ## Current commands
 
@@ -26,20 +27,27 @@ source format and binary serializer are not implemented yet, so it currently
 returns a structured `build.not_implemented` diagnostic rather than claiming
 to have emitted a font.
 
-`trigraph serve` starts the Elysia workspace process on loopback by default.
-The initial RPC exposes health, workspace identity, and the same preliminary
-build operation used by the CLI. The same process serves the editor through
-Elysia's Bun full-stack static plugin.
+`trigraph serve` starts the Elysia workspace process on loopback by default. It
+discovers `fonts/*/trigraph.json`, selects the sole project automatically, and
+serves its validated source units through the workspace RPC. With multiple font
+projects, select one by directory name:
 
 ```sh
-pnpm exec trigraph serve --port=4173
+pnpm exec trigraph serve --font=trigraph-sans --port=4173
 ```
+
+Reads carry content-hash revisions. Single- and multi-unit writes use
+optimistic concurrency, idempotency keys, whole-project validation, and a
+transaction journal so coordinated entity/index edits either commit together
+or roll back.
 
 ## Editor application boundary
 
 The consumer package owns `public/index.html` and `public/index.tsx`. Its browser
 entry imports `EditorApplicationRoot` from the private `@trigraph/editor`
-workspace package and mounts it with Preact.
+workspace package, loads the selected project's source units through Eden,
+assembles them into editor state, and persists changed units back through the
+multi-write route.
 
 The Elysia server awaits `@elysia/static` with `bunFullstack: true` and serves
 that application at `/`. Bun therefore owns TypeScript/JSX and CSS bundling,

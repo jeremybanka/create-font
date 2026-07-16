@@ -5,12 +5,14 @@ import type {
 	SourceUnitSnapshot,
 	TrigraphSourceService,
 	WriteSourceUnitInput,
+	WriteSourceUnitsInput,
+	WriteSourceUnitsResult,
 } from "@trigraph/server"
 import type { TrigraphRpcClient } from "@trigraph/server/client"
 
 export type FontSourceRemoteClient = Pick<
 	TrigraphSourceService,
-	"readManifest" | "readUnit" | "writeUnit"
+	"readManifest" | "readUnit" | "writeUnit" | "writeUnits"
 >
 
 export class TrigraphRpcRequestError extends Error {
@@ -66,6 +68,22 @@ export function createEdenFontSourceClient(
 			}
 			if (`code` in result.data) {
 				throw new TrigraphRpcRequestError(`writeUnit`, 501)
+			}
+			return result.data
+		},
+		async writeUnits(input) {
+			const result = await client.api.source.units.put({
+				...input,
+				writes: [...input.writes],
+			})
+			if (result.error !== null || result.data === null) {
+				throw new TrigraphRpcRequestError(
+					`writeUnits`,
+					result.error?.status ?? 500,
+				)
+			}
+			if (`code` in result.data) {
+				throw new TrigraphRpcRequestError(`writeUnits`, 500)
 			}
 			return result.data
 		},
@@ -156,6 +174,17 @@ export function createRemoteFontSourceState(
 				silo.setState(unitAtoms, input.path, snapshot)
 				silo.resetState(manifestAtom)
 				return snapshot
+			},
+			async writeUnits(
+				input: WriteSourceUnitsInput,
+			): Promise<WriteSourceUnitsResult> {
+				const result = await options.client.writeUnits(input)
+				for (const snapshot of result.units) {
+					await options.hydrate?.(snapshot, { reason: `write` })
+					silo.setState(unitAtoms, snapshot.path, snapshot)
+				}
+				silo.resetState(manifestAtom)
+				return result
 			},
 		},
 	}

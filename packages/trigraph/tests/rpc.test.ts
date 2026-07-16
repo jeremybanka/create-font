@@ -11,7 +11,7 @@ describe(`Trigraph RPC`, () => {
 			.then((response) => response.json())
 		expect(health).toEqual({
 			ok: true,
-			rpcVersion: 2,
+			rpcVersion: 3,
 		})
 
 		const workspace = await app

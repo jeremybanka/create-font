@@ -1,7 +1,8 @@
 import type { EditorFontSource } from "@trigraph/states"
-import { z } from "zod"
+import { z } from "zod/v4"
 
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
+import { inspectJsonObjectKeys } from "./json.ts"
 import { failure, success } from "./result.ts"
 import {
 	TRIGRAPH_EDITOR_FORMAT,
@@ -520,12 +521,66 @@ function schemaDiagnostics(
 export function validateSourceUnit<Kind extends SourceUnitKind>(
 	kind: Kind,
 	value: unknown,
-	unitPath = kind,
+	unitPath: string = kind,
 ): SourceResult<SourceUnitValueByKind[Kind]> {
 	const result = descriptorByKind[kind].schema.safeParse(value)
 	return result.success
 		? success(result.data as SourceUnitValueByKind[Kind])
 		: failure(schemaDiagnostics(unitPath, result.error))
+}
+
+export function sourceUnitKindForPath(path: string): SourceUnitKind | null {
+	for (const descriptor of Object.values(sourceUnitDescriptors)) {
+		if (descriptor.cardinality === "singleton") {
+			if (descriptor.path === path) return descriptor.kind
+			continue
+		}
+		if (
+			path !== descriptor.inventoryPath &&
+			path.startsWith(`${descriptor.directory}/`)
+		) {
+			return descriptor.kind
+		}
+	}
+	return null
+}
+
+export function parseSourceUnitText(
+	kind: SourceUnitKind,
+	text: string,
+	unitPath: string,
+): SourceResult<unknown> {
+	let value: unknown
+	try {
+		value = JSON.parse(text)
+	} catch {
+		return failure([
+			{
+				severity: "error",
+				code: "json.syntax",
+				unitPath,
+				path: "$",
+				message: "Invalid JSON syntax.",
+			},
+		])
+	}
+	const lexicalDiagnostics = inspectJsonObjectKeys(text).map((diagnostic) => ({
+		...diagnostic,
+		unitPath,
+	}))
+	if (lexicalDiagnostics.length > 0) return failure(lexicalDiagnostics)
+	return validateSourceUnit(kind, value, unitPath)
+}
+
+export function formatSourceUnit(
+	kind: SourceUnitKind,
+	value: unknown,
+	unitPath: string = kind,
+): SourceResult<string> {
+	const validated = validateSourceUnit(kind, value, unitPath)
+	return validated.ok
+		? success(`${JSON.stringify(validated.value, null, "\t")}\n`)
+		: failure(validated.errors)
 }
 
 export function jsonSchemaForSourceUnit(kind: SourceUnitKind): unknown {
@@ -537,11 +592,16 @@ export function jsonSchemaForSourceUnit(kind: SourceUnitKind): unknown {
 export type FontSourceDirectoryFiles = Readonly<Record<string, unknown>>
 
 function encodePathSegment(value: string): string {
-	return encodeURIComponent(value).replace(
+	const encoded = encodeURIComponent(value).replace(
 		/[!'()*]/gu,
 		(character) =>
 			`%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
 	)
+	let hash = 0x811c9dc5
+	for (const byte of new TextEncoder().encode(value)) {
+		hash = Math.imul(hash ^ byte, 0x01000193)
+	}
+	return `${encoded}~${(hash >>> 0).toString(16).padStart(8, "0")}`
 }
 
 export function defaultAxisUnitPath(id: string): string {

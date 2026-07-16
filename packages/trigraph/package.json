@@ -32,12 +32,14 @@
 	},
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
-		"dev": "bun --watch ./src/cli.ts serve",
+		"dev": "bun --watch ./src/cli.ts serve --root=../..",
 		"test": "bun test"
 	},
 	"dependencies": {
 		"@elysia/static": "1.4.11",
 		"@trigraph/server": "workspace:*",
+		"@trigraph/source": "workspace:*",
+		"@trigraph/states": "workspace:*",
 		"comline": "0.5.1",
 		"elysia": "1.4.29",
 		"preact": "10.29.7",

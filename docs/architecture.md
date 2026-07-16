@@ -84,27 +84,28 @@ with stable entity IDs and file boundaries aligned with useful editor
 loadables:
 
 ```text
-font-source/
-  trigraph.json
-  metadata.json
-  names.json
-  metrics.json
-  style.json
-  axes/
-    index.json
-    *.json
-  masters/
-    index.json
-    *.json
-  instances/
-    index.json
-    *.json
-  glyphs/
-    index.json
-    *.json
-  cmap/
-    index.json
-    *.json
+fonts/
+  trigraph-sans/
+    trigraph.json
+    metadata.json
+    names.json
+    metrics.json
+    style.json
+    axes/
+      index.json
+      *.json
+    masters/
+      index.json
+      *.json
+    instances/
+      index.json
+      *.json
+    glyphs/
+      index.json
+      *.json
+    cmap/
+      index.json
+      *.json
 ```
 
 Each index preserves author order and maps stable identities to explicit safe
@@ -200,7 +201,10 @@ provides the Elysia/Eden workspace boundary; and the unscoped `trigraph`
 package owns the Bun CLI and composes the server with the editor application.
 The private `@trigraph/editor` package exports its Preact application root,
 which the `trigraph` browser entry serves through Elysia's Bun full-stack
-development pattern. Filesystem-backed source management, immutable release
+development pattern. The application discovers `fonts/*/trigraph.json`, serves
+the selected project through a filesystem-backed source service, hydrates the
+browser from individual source units, and persists coordinated edits through
+conditional multi-unit writes. Watching and reconciliation, immutable release
 assets, and binary serialization remain roadmap work.
 
 ## Architectural non-goals

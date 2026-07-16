@@ -81,19 +81,19 @@ describe("@trigraph/source", () => {
 		if (!split.ok) return
 
 		expect(Object.keys(split.value).sort()).toEqual([
-			"axes/axis%3Awght.json",
+			"axes/axis%3Awght~8b338244.json",
 			"axes/index.json",
 			"cmap/004F.json",
 			"cmap/index.json",
-			"glyphs/glyph%3A.notdef.json",
-			"glyphs/glyph%3AO.json",
+			"glyphs/glyph%3A.notdef~b88a7b05.json",
+			"glyphs/glyph%3AO~e48dd026.json",
 			"glyphs/index.json",
 			"instances/index.json",
-			"instances/instance%3Ablack.json",
-			"instances/instance%3Arazor.json",
+			"instances/instance%3Ablack~9b4bfa3b.json",
+			"instances/instance%3Arazor~e8094f74.json",
 			"masters/index.json",
-			"masters/master%3Ablack.json",
-			"masters/master%3Arazor.json",
+			"masters/master%3Ablack~e935e1c2.json",
+			"masters/master%3Arazor~f06b8821.json",
 			"metadata.json",
 			"metrics.json",
 			"names.json",
@@ -103,9 +103,9 @@ describe("@trigraph/source", () => {
 		expect(split.value["glyphs/index.json"]).toEqual([
 			{
 				id: "glyph:.notdef",
-				path: "glyphs/glyph%3A.notdef.json",
+				path: "glyphs/glyph%3A.notdef~b88a7b05.json",
 			},
-			{ id: "glyph:O", path: "glyphs/glyph%3AO.json" },
+			{ id: "glyph:O", path: "glyphs/glyph%3AO~e48dd026.json" },
 		])
 		expect(split.value["trigraph.json"]).toEqual({
 			format: "trigraph.source",
@@ -113,27 +113,37 @@ describe("@trigraph/source", () => {
 			editorFormat: "trigraph.editor",
 			editorVersion: 3,
 		})
-		expect(split.value["glyphs/glyph%3AO.json"]).toEqual(source.glyphs[1])
+		expect(split.value["glyphs/glyph%3AO~e48dd026.json"]).toEqual(
+			source.glyphs[1],
+		)
 		expect(split.value["metadata.json"]).toEqual({
 			...source.metadata,
 			createdAt: "-1",
 			modifiedAt: "18446744073709551615",
 		})
 		expect(split.value["axes/index.json"]).toEqual([
-			{ id: "axis:wght", path: "axes/axis%3Awght.json" },
+			{ id: "axis:wght", path: "axes/axis%3Awght~8b338244.json" },
 		])
 		expect(split.value["masters/index.json"]).toEqual({
 			defaultMasterId: "master:razor",
 			entries: [
-				{ id: "master:razor", path: "masters/master%3Arazor.json" },
-				{ id: "master:black", path: "masters/master%3Ablack.json" },
+				{
+					id: "master:razor",
+					path: "masters/master%3Arazor~f06b8821.json",
+				},
+				{
+					id: "master:black",
+					path: "masters/master%3Ablack~e935e1c2.json",
+				},
 			],
 		})
 		expect(split.value["cmap/index.json"]).toEqual([
 			{ codePoint: 0x4f, path: "cmap/004F.json" },
 		])
 		expect(Object.isFrozen(split.value)).toBe(true)
-		expect(Object.isFrozen(split.value["glyphs/glyph%3AO.json"])).toBe(true)
+		expect(Object.isFrozen(split.value["glyphs/glyph%3AO~e48dd026.json"])).toBe(
+			true,
+		)
 	})
 
 	test("assembles directory units into the exact state snapshot", () => {
@@ -289,10 +299,10 @@ describe("@trigraph/source", () => {
 		const duplicateIndex = {
 			...split.value,
 			"glyphs/index.json": [
-				{ id: "glyph:O", path: "glyphs/glyph%3AO.json" },
+				{ id: "glyph:O", path: "glyphs/glyph%3AO~e48dd026.json" },
 				{ id: "glyph:O", path: "glyphs/other.json" },
 			],
-			"glyphs/other.json": split.value["glyphs/glyph%3AO.json"],
+			"glyphs/other.json": split.value["glyphs/glyph%3AO~e48dd026.json"],
 		}
 		const duplicate = assembleEditorFontSource(duplicateIndex)
 		expect(duplicate.ok).toBe(false)
@@ -302,7 +312,7 @@ describe("@trigraph/source", () => {
 
 		const unknown = assembleEditorFontSource({
 			...split.value,
-			"glyphs/orphan.json": split.value["glyphs/glyph%3AO.json"],
+			"glyphs/orphan.json": split.value["glyphs/glyph%3AO~e48dd026.json"],
 		})
 		expect(unknown.ok).toBe(false)
 		if (!unknown.ok) {
@@ -317,7 +327,7 @@ describe("@trigraph/source", () => {
 
 	test("provides a portable default path without making it an identity", () => {
 		expect(defaultGlyphUnitPath("glyph:A/B !")).toBe(
-			"glyphs/glyph%3AA%2FB%20%21.json",
+			"glyphs/glyph%3AA%2FB%20%21~fe8d89be.json",
 		)
 	})
 
