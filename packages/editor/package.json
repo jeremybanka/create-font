@@ -20,7 +20,9 @@
 		"@trigraph/preact-konva": "workspace:*",
 		"@trigraph/states": "workspace:*",
 		"atom.io": "0.50.0",
-		"preact": "10.29.7"
+		"preact": "10.29.7",
+		"react": "npm:@preact/compat@18.3.2",
+		"react-dom": "npm:@preact/compat@18.3.2"
 	},
 	"devDependencies": {
 		"@typescript-eslint/parser": "8.64.0",
