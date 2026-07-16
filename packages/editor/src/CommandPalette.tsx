@@ -81,7 +81,7 @@ export function CommandPalette({
 	return (
 		<command-palette
 			className={css.class}
-			onMouseDown={(event) => {
+			onMouseDown={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
 				if (event.target === event.currentTarget) onCancel()
 			}}
 		>
