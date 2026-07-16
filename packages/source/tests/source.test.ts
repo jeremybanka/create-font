@@ -4,6 +4,10 @@ import { createFontEditorState } from "../../states/src/state.ts"
 import type { EditorFontSource } from "../../states/src/types.ts"
 import { makeGeometricOEditorFont } from "../../states/tests/fixtures/geometric-o.ts"
 import {
+	assembleEditorFontSource as assembleBrowserEditorFontSource,
+	splitEditorFontSource as splitBrowserEditorFontSource,
+} from "../src/browser.ts"
+import {
 	assembleEditorFontSource,
 	canonicalizeEditorFontSource,
 	defaultGlyphUnitPath,
@@ -166,6 +170,18 @@ describe("@trigraph/source", () => {
 			"glyph:.notdef",
 			"glyph:O",
 		])
+	})
+
+	test("keeps the browser codec in parity without schema dependencies", () => {
+		const source = geometricOWithEveryEditorField()
+		const split = splitBrowserEditorFontSource(source)
+		expect(split.ok).toBe(true)
+		if (!split.ok) return
+
+		const assembled = assembleBrowserEditorFontSource(split.value)
+		expect(assembled.ok).toBe(true)
+		if (!assembled.ok) return
+		expect(assembled.value).toEqual(source)
 	})
 
 	test("keeps glyph identity independent from its indexed file path", () => {

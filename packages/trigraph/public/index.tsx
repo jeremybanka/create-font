@@ -18,7 +18,7 @@ import {
 	type InstanceIndexFile,
 	type MasterIndexFile,
 	type SplitFontSourceOptions,
-} from "@trigraph/source"
+} from "@trigraph/source/browser"
 import type { EditorFontSource } from "@trigraph/states"
 import { render } from "preact"
 

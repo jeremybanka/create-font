@@ -63,6 +63,13 @@ inventory, and validators for server/RPC routing. Each file kind has a named
 Zod schema, and `jsonSchemaForSourceUnit(kind)` generates its JSON Schema
 Draft 2020-12 representation.
 
+Server and tooling code should import the package root. Browser code should
+import `@trigraph/source/browser`, which exposes directory assembly, splitting,
+path helpers, and structural file types without including Zod or the per-unit
+schema implementation. The workspace server validates every unit before the
+browser receives it; the browser codec verifies index relationships and runs
+the whole-editor-source validator after assembly.
+
 ```ts
 import {
 	assembleEditorFontSource,

@@ -47,7 +47,8 @@ The consumer package owns `public/index.html` and `public/index.tsx`. Its browse
 entry imports `EditorApplicationRoot` from the private `@trigraph/editor`
 workspace package, loads the selected project's source units through Eden,
 assembles them into editor state, and persists changed units back through the
-multi-write route.
+multi-write route. It uses the browser-only `@trigraph/source/browser`
+entrypoint, leaving Zod schemas and per-unit validation in the server process.
 
 The Elysia server awaits `@elysia/static` with `bunFullstack: true` and serves
 that application at `/`. Bun therefore owns TypeScript/JSX and CSS bundling,
