@@ -39,6 +39,11 @@ export type SourceManifest = Readonly<{
 	units: readonly SourceUnitDescriptor[]
 }>
 
+export type SourceChangedEvent = Readonly<{
+	type: `source.changed`
+	manifest: SourceManifest
+}>
+
 export type SourceUnitSnapshot = SourceUnitDescriptor &
 	Readonly<{
 		value: JsonValue
@@ -76,6 +81,11 @@ export interface TrigraphSourceService {
 	readUnit(path: SourceUnitPath): Promise<SourceUnitSnapshot>
 	writeUnit(input: WriteSourceUnitInput): Promise<SourceUnitSnapshot>
 	writeUnits(input: WriteSourceUnitsInput): Promise<WriteSourceUnitsResult>
+	/**
+	 * Subscribe to validated manifest changes caused by RPC writes or external
+	 * filesystem edits. The service remains usable without realtime support.
+	 */
+	subscribe?(listener: (event: SourceChangedEvent) => void): () => void
 }
 
 export type SourceServiceUnavailable = Readonly<{

@@ -64,6 +64,7 @@ function sourceErrorResponse(error: unknown) {
 
 export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
 	const root = resolve(options.root ?? process.cwd())
+	const sourceConnections = new WeakMap<object, () => void>()
 
 	return new Elysia({
 		name: `trigraph-rpc`,
@@ -77,6 +78,34 @@ export function createTrigraphRpc(options: CreateTrigraphRpcOptions) {
 			root,
 		}))
 		.post(`/build`, options.build)
+		.ws(`/source/events`, {
+			open(ws) {
+				if (options.source?.subscribe === undefined) {
+					ws.close()
+					return
+				}
+				const unsubscribe = options.source.subscribe((event) => {
+					ws.send(event)
+				})
+				sourceConnections.set(ws, unsubscribe)
+			},
+			close(ws) {
+				sourceConnections.get(ws)?.()
+				sourceConnections.delete(ws)
+			},
+			response: t.Object({
+				type: t.Literal(`source.changed`),
+				manifest: t.Object({
+					revision: t.String(),
+					units: t.Array(
+						t.Object({
+							path: t.String(),
+							revision: t.String(),
+						}),
+					),
+				}),
+			}),
+		})
 		.get(`/source`, async () => {
 			if (options.source === undefined) {
 				return status(501, sourceServiceUnavailable)

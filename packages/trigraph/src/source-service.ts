@@ -8,6 +8,7 @@ import {
 	stat,
 	writeFile,
 } from "node:fs/promises"
+import { watch } from "node:fs"
 import { createHash, randomUUID } from "node:crypto"
 import { dirname, join, relative, resolve, sep } from "node:path"
 
@@ -17,6 +18,7 @@ import {
 	SourceValidationError,
 	type JsonValue,
 	type SourceManifest,
+	type SourceChangedEvent,
 	type SourceUnitSnapshot,
 	type TrigraphSourceService,
 	type WriteSourceUnitInput,
@@ -131,6 +133,17 @@ async function collectJsonPaths(
 	return paths.toSorted()
 }
 
+async function collectDirectories(
+	directory: string,
+): Promise<readonly string[]> {
+	const directories = [directory]
+	for (const entry of await readdir(directory, { withFileTypes: true })) {
+		if (entry.name === `.trigraph` || !entry.isDirectory()) continue
+		directories.push(...(await collectDirectories(join(directory, entry.name))))
+	}
+	return directories
+}
+
 function resolveInside(root: string, path: string): string {
 	const normalized = normalizeUnitPath(path)
 	const absolute = resolve(root, normalized)
@@ -211,6 +224,8 @@ export async function createFileSystemSourceService(
 		string,
 		Readonly<{ fingerprint: string; result: WriteSourceUnitsResult }>
 	>()
+	const sourceListeners = new Set<(event: SourceChangedEvent) => void>()
+	let publishedRevision: string | null = null
 
 	const loadProject = async (): Promise<LoadedProject> => {
 		const values: Record<string, unknown> = {}
@@ -369,6 +384,32 @@ export async function createFileSystemSourceService(
 		return result
 	}
 
+	const publishManifest = (manifest: SourceManifest): void => {
+		if (manifest.revision === publishedRevision) return
+		publishedRevision = manifest.revision
+		const event: SourceChangedEvent = {
+			type: `source.changed`,
+			manifest,
+		}
+		for (const listener of sourceListeners) listener(event)
+	}
+
+	publishedRevision = (await loadProject()).manifest.revision
+	let refreshTimer: ReturnType<typeof setTimeout> | undefined
+	const scheduleRefresh = (): void => {
+		if (refreshTimer !== undefined) clearTimeout(refreshTimer)
+		refreshTimer = setTimeout(() => {
+			refreshTimer = undefined
+			void withLock(async () => {
+				publishManifest((await loadProject()).manifest)
+			}).catch(() => undefined)
+		}, 50)
+	}
+	const watchers = (await collectDirectories(projectRoot)).map((directory) =>
+		watch(directory, scheduleRefresh),
+	)
+	for (const watcher of watchers) watcher.unref()
+
 	return {
 		readManifest: () => withLock(async () => (await loadProject()).manifest),
 		readUnit: (path) =>
@@ -393,5 +434,15 @@ export async function createFileSystemSourceService(
 				return first
 			}),
 		writeUnits: (input) => withLock(() => writeUnitsUnlocked(input)),
+		subscribe(listener) {
+			sourceListeners.add(listener)
+			for (const watcher of watchers) watcher.ref()
+			return () => {
+				sourceListeners.delete(listener)
+				if (sourceListeners.size === 0) {
+					for (const watcher of watchers) watcher.unref()
+				}
+			}
+		},
 	}
 }

@@ -76,6 +76,9 @@ importers:
       react-dom:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(preact@10.29.7)'
+      treetrunks:
+        specifier: 0.1.8
+        version: 0.1.8
     devDependencies:
       '@typescript-eslint/parser':
         specifier: 8.64.0

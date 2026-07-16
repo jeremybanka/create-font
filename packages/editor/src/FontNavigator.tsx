@@ -1,87 +1,16 @@
-import {
-	autoUpdate,
-	computePosition,
-	flip,
-	offset,
-	shift,
-} from "@floating-ui/dom"
-import { Cross1Icon, PlusIcon } from "@radix-ui/react-icons"
-import type { JSX } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
-
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
-import { createGlyphPreview } from "./glyph-preview.ts"
 import { useO } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
 	readonly workspace: EditorWorkspace
-	readonly addingGlyphs: boolean
-	readonly onAddingGlyphsChange: (addingGlyphs: boolean) => void
 }
 
-export function FontNavigator({
-	workspace,
-	addingGlyphs,
-	onAddingGlyphsChange,
-}: FontNavigatorProps) {
+export function FontNavigator({ workspace }: FontNavigatorProps) {
 	const source =
 		useO(workspace.font.selectors.editorSource) ?? workspace.document
-	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const location = useO(workspace.ui.previewLocation)
-	const [glyphNames, setGlyphNames] = useState("")
-	const [floatingStyle, setFloatingStyle] = useState<JSX.CSSProperties>({
-		position: "fixed",
-	})
-	const addButtonRef = useRef<HTMLButtonElement>(null)
-	const dialogRef = useRef<HTMLElement>(null)
-	const inputRef = useRef<HTMLInputElement>(null)
-	const openAddGlyphs = (): void => {
-		setGlyphNames("")
-		onAddingGlyphsChange(true)
-	}
-	const closeAddGlyphs = (): void => {
-		onAddingGlyphsChange(false)
-		requestAnimationFrame(() => addButtonRef.current?.focus())
-	}
-
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (addingGlyphs && event.key === "Escape") {
-				event.preventDefault()
-				closeAddGlyphs()
-			}
-		}
-		window.addEventListener("keydown", handleKeyDown)
-		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [addingGlyphs])
-
-	useEffect(() => {
-		if (!addingGlyphs) return
-		setGlyphNames("")
-		const frame = requestAnimationFrame(() => {
-			inputRef.current?.focus()
-			inputRef.current?.select()
-		})
-		return () => cancelAnimationFrame(frame)
-	}, [addingGlyphs])
-
-	useEffect(() => {
-		if (!addingGlyphs) return
-		const reference = addButtonRef.current
-		const floating = dialogRef.current
-		if (reference === null || floating === null) return
-		return autoUpdate(reference, floating, () => {
-			void computePosition(reference, floating, {
-				placement: "right-end",
-				strategy: "fixed",
-				middleware: [offset(10), flip(), shift({ padding: 12 })],
-			}).then(({ x, y }) => {
-				setFloatingStyle({ position: "fixed", left: x, top: y })
-			})
-		})
-	}, [addingGlyphs])
 
 	return (
 		<font-navigator className={css.class}>
@@ -145,109 +74,7 @@ export function FontNavigator({
 						})}
 					</ul>
 				</navigation-section>
-
-				<navigation-section data-grow="true">
-					<section-heading>
-						<span>Glyphs</span>
-						<data value={source.glyphs.length}>{source.glyphs.length}</data>
-					</section-heading>
-					<glyph-grid>
-						{source.glyphs.map((glyph) => {
-							const preview = createGlyphPreview(
-								glyph,
-								activeMasterId,
-								source.metrics,
-								source.metadata.unitsPerEm,
-							)
-							return (
-								<button
-									key={glyph.id}
-									type="button"
-									aria-pressed={glyph.id === activeGlyphId}
-									aria-label={`Edit ${glyph.name}`}
-									onClick={() => workspace.actions.selectGlyph(glyph.id)}
-								>
-									<glyph-tile aria-hidden="true">
-										{preview === null ? null : (
-											<svg
-												viewBox={preview.viewBox}
-												preserveAspectRatio="xMidYMid meet"
-												focusable="false"
-											>
-												<path
-													d={preview.path}
-													fillRule="evenodd"
-													clipRule="evenodd"
-													transform="scale(1 -1)"
-												/>
-											</svg>
-										)}
-									</glyph-tile>
-									<span>{glyph.name}</span>
-								</button>
-							)
-						})}
-					</glyph-grid>
-					<add-glyphs-control>
-						<button
-							ref={addButtonRef}
-							type="button"
-							aria-label="Add glyphs"
-							aria-expanded={addingGlyphs}
-							onClick={openAddGlyphs}
-						>
-							<PlusIcon aria-hidden="true" />
-							<span>Add</span>
-						</button>
-					</add-glyphs-control>
-				</navigation-section>
 			</nav>
-			{addingGlyphs ? (
-				<add-glyph-dialog
-					ref={dialogRef}
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="add-glyphs-heading"
-					style={floatingStyle}
-				>
-					<dialog-heading>
-						<strong id="add-glyphs-heading">Add glyphs</strong>
-						<button
-							type="button"
-							aria-label="Cancel adding glyphs"
-							onClick={closeAddGlyphs}
-						>
-							<Cross1Icon aria-hidden="true" />
-						</button>
-					</dialog-heading>
-					<form
-						onSubmit={(event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
-							event.preventDefault()
-							const names = glyphNames.trim().split(/\s+/).filter(Boolean)
-							if (names.length === 0) return
-							workspace.actions.addGlyphs(names)
-							closeAddGlyphs()
-						}}
-					>
-						<label for="new-glyph-names">Glyph names</label>
-						<input
-							ref={inputRef}
-							id="new-glyph-names"
-							value={glyphNames}
-							placeholder="B C Aacute"
-							autocomplete="off"
-							onInput={(event) => setGlyphNames(event.currentTarget.value)}
-							onKeyDown={(event) => {
-								if (event.key !== "Enter") return
-								event.preventDefault()
-								event.currentTarget.form?.requestSubmit()
-							}}
-						/>
-						<small>Separate names with spaces</small>
-						<button type="submit">Add glyphs</button>
-					</form>
-				</add-glyph-dialog>
-			) : null}
 		</font-navigator>
 	)
 }

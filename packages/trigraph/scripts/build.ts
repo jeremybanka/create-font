@@ -24,7 +24,17 @@ const builds = await Promise.all([
 		target: `browser`,
 	}),
 	Bun.build({
-		entrypoints: [resolve(packageRoot, `public/index.html`)],
+		entrypoints: [
+			resolve(packageRoot, `public/index.html`),
+			resolve(packageRoot, `public/info/index.html`),
+			resolve(packageRoot, `public/glyphs/index.html`),
+		],
+		outdir: resolve(outdir, `public`),
+		splitting: true,
+		target: `browser`,
+	}),
+	Bun.build({
+		entrypoints: [resolve(packageRoot, `public/source-session.worker.ts`)],
 		outdir: resolve(outdir, `public`),
 		target: `browser`,
 	}),

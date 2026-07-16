@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises"
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "bun:test"
 import {
 	SourceUnitConflictError,
 	SourceValidationError,
+	type SourceChangedEvent,
 } from "@trigraph/server"
 
 import { createFileSystemSourceService } from "../src/source-service.ts"
@@ -156,6 +157,44 @@ describe(`filesystem font source service`, () => {
 		)
 		expect((await source.readUnit(`style.json`)).value).toEqual(
 			expect.objectContaining({ bold: true, weightClass: 900 }),
+		)
+	})
+
+	it(`publishes validated source changes made outside the RPC`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot)
+		const before = await source.readManifest()
+		let unsubscribe = (): void => undefined
+		const changed = new Promise<SourceChangedEvent>((resolveChanged) => {
+			unsubscribe =
+				source.subscribe?.((event) => {
+					unsubscribe()
+					resolveChanged(event)
+				}) ?? unsubscribe
+		})
+		const namesPath = resolve(projectRoot, `names.json`)
+		const namesText = await readFile(namesPath, `utf8`)
+		await writeFile(
+			namesPath,
+			namesText.replace(
+				`"family": "Trigraph Sans"`,
+				`"family": "Trigraph Sans External"`,
+			),
+		)
+
+		const event = await Promise.race([
+			changed,
+			new Promise<never>((_resolve, reject) => {
+				setTimeout(
+					() => reject(new Error(`Timed out waiting for source change.`)),
+					2_000,
+				)
+			}),
+		])
+		expect(event.type).toBe(`source.changed`)
+		expect(event.manifest.revision).not.toBe(before.revision)
+		expect((await source.readUnit(`names.json`)).value).toEqual(
+			expect.objectContaining({ family: `Trigraph Sans External` }),
 		)
 	})
 })

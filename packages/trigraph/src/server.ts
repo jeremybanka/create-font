@@ -18,6 +18,17 @@ const editorApplication = await staticPlugin({
 	indexHTML: true,
 	prefix: `/`,
 })
+const sourceSessionWorker = isBundledApplication
+	? Bun.file(resolve(editorAssets, `source-session.worker.js`))
+	: (
+			await Bun.build({
+				entrypoints: [resolve(editorAssets, `source-session.worker.ts`)],
+				target: `browser`,
+			})
+		).outputs[0]
+if (sourceSessionWorker === undefined) {
+	throw new Error(`Bun did not build the source session worker.`)
+}
 
 export type CreateTrigraphServerOptions = CreateTrigraphRpcOptions
 
@@ -26,6 +37,15 @@ export function createTrigraphServerApp(
 ) {
 	return new Elysia({ name: `trigraph-server` })
 		.use(createTrigraphRpc(options))
+		.get(
+			`/source-session.worker.js`,
+			() =>
+				new Response(sourceSessionWorker, {
+					headers: {
+						"content-type": `text/javascript; charset=utf-8`,
+					},
+				}),
+		)
 		.use(editorApplication)
 }
 

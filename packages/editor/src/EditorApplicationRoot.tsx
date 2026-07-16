@@ -1,5 +1,5 @@
 import type { EditorFontSource } from "@trigraph/states"
-import { useEffect, useState } from "preact/hooks"
+import { useEffect, useRef, useState } from "preact/hooks"
 
 import { AppShell } from "./AppShell.tsx"
 import css from "./EditorApplicationRoot.module.css"
@@ -17,13 +17,28 @@ export function EditorApplicationRoot({
 	source,
 }: EditorApplicationRootProps) {
 	const [workspace] = useState(() => createEditorWorkspace(source))
+	const applyingSource = useRef(false)
+	const currentSource = useRef(source)
+
+	useEffect(() => {
+		if (currentSource.current === source) return
+		currentSource.current = source
+		applyingSource.current = true
+		try {
+			workspace.actions.replaceSource(source)
+		} finally {
+			applyingSource.current = false
+		}
+	}, [source, workspace])
 
 	useEffect(() => {
 		if (onSourceChange === undefined) return
 		return workspace.font.silo.subscribe(
 			workspace.font.selectors.editorSource,
 			({ newValue: nextSource }) => {
-				if (nextSource !== null) void onSourceChange(nextSource)
+				if (nextSource !== null && !applyingSource.current) {
+					void onSourceChange(nextSource)
+				}
 			},
 		)
 	}, [onSourceChange, workspace])

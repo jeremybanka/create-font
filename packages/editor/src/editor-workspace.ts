@@ -13,6 +13,7 @@ import {
 import { makeDemoFont } from "./demo-font.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
+import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
 
 export interface EditorCanvasLayer {
 	readonly masterId: MasterId
@@ -98,6 +99,68 @@ export function createEditorWorkspace(
 		key: "showNodes",
 		default: true,
 	})
+	const pathnameAtom = font.silo.atom<string>({
+		key: "pathname",
+		default: () =>
+			typeof window === "undefined" ? "/" : window.location.pathname,
+		effects: [
+			({ setSelf }) => {
+				if (
+					typeof window === "undefined" ||
+					typeof globalThis.document === "undefined"
+				) {
+					return
+				}
+				const syncFromBrowser = (): void => {
+					setSelf(window.location.pathname)
+				}
+				const navigateFromClick = (event: MouseEvent): void => {
+					if (
+						event.defaultPrevented ||
+						event.button !== 0 ||
+						event.metaKey ||
+						event.altKey ||
+						event.ctrlKey ||
+						event.shiftKey
+					) {
+						return
+					}
+					if (!(event.target instanceof Element)) return
+					const anchor = event.target.closest(`a`)
+					if (!(anchor instanceof HTMLAnchorElement)) return
+					if (anchor.target && anchor.target !== `_self`) return
+					if (anchor.hasAttribute(`download`)) return
+					const url = new URL(anchor.href)
+					if (url.origin !== window.location.origin) return
+					event.preventDefault()
+					history.pushState(null, ``, `${url.pathname}${url.search}${url.hash}`)
+					setSelf(url.pathname)
+				}
+				globalThis.document.addEventListener(`click`, navigateFromClick)
+				window.addEventListener(`popstate`, syncFromBrowser)
+				return () => {
+					globalThis.document.removeEventListener(`click`, navigateFromClick)
+					window.removeEventListener(`popstate`, syncFromBrowser)
+				}
+			},
+		],
+	})
+	const routeSelector = font.silo.selector<Route | 404>({
+		key: "route",
+		get: ({ get }) => {
+			const path = get(pathnameAtom).split(`/`).slice(1).filter(Boolean)
+			return isRoute(path) ? path : 404
+		},
+	})
+	const routeNameSelector = font.silo.selector<
+		"canvas" | "glyphs" | "info" | "not-found"
+	>({
+		key: "routeName",
+		get: ({ get }) => {
+			const route = get(routeSelector)
+			return route === 404 ? "not-found" : routeName(route)
+		},
+	})
 	for (const axis of document.axes) {
 		font.silo.setState(previewCoordinateAtoms, axis.id, axis.default)
 	}
@@ -105,15 +168,20 @@ export function createEditorWorkspace(
 		Readonly<Record<string, number>>
 	>({
 		key: "previewLocation",
-		get: ({ get }) =>
-			Object.freeze(
+		get: ({ get }) => {
+			const axes = get(font.atoms.axisIds).flatMap((axisId) => {
+				const axis = get(font.atoms.axis, axisId)
+				return axis === null ? [] : [{ id: axisId, ...axis }]
+			})
+			return Object.freeze(
 				Object.fromEntries(
-					document.axes.map((axis) => [
+					axes.map((axis) => [
 						axis.id,
 						get(previewCoordinateAtoms, axis.id) ?? axis.default,
 					]),
 				),
-			),
+			)
+		},
 	})
 
 	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
@@ -169,6 +237,22 @@ export function createEditorWorkspace(
 	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
 		key: "previewRun",
 		get: ({ get }) => {
+			const axes = get(font.atoms.axisIds).flatMap((axisId) => {
+				const axis = get(font.atoms.axis, axisId)
+				if (axis === null) return []
+				return [
+					{
+						id: axisId,
+						tag: axis.tag,
+						name: axis.name,
+						min: axis.min,
+						default: axis.default,
+						max: axis.max,
+						...(axis.hidden ? { hidden: true } : {}),
+						...(axis.map === null ? {} : { map: axis.map }),
+					},
+				]
+			})
 			const location = get(previewLocationSelector)
 			const byCodePoint = new Map(
 				get(font.atoms.cmapCodePoints).flatMap((codePoint) => {
@@ -207,12 +291,7 @@ export function createEditorWorkspace(
 					textEnd: textOffset,
 					glyphId,
 					glyph: result.ok
-						? resolveVariableGlyph(
-								glyphId,
-								result.value,
-								document.axes,
-								location,
-							)
+						? resolveVariableGlyph(glyphId, result.value, axes, location)
 						: null,
 				})
 			}
@@ -221,7 +300,9 @@ export function createEditorWorkspace(
 	})
 
 	const setLocation = (location: EditorLocationSource): void => {
-		for (const axis of document.axes) {
+		const currentDocument = font.read.editorSource()
+		if (currentDocument === null) return
+		for (const axis of currentDocument.axes) {
 			font.silo.setState(
 				previewCoordinateAtoms,
 				axis.id,
@@ -244,10 +325,19 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			pathname: pathnameAtom,
+			route: routeSelector,
+			routeName: routeNameSelector,
 			activeLayer: activeLayerSelector,
 			previewRun: previewRunSelector,
 		},
 		actions: {
+			navigate(pathname: Pathname): void {
+				if (typeof window !== "undefined") {
+					history.pushState(null, ``, pathname)
+				}
+				font.silo.setState(pathnameAtom, pathname)
+			},
 			selectGlyph(glyphId: GlyphId): void {
 				const currentDocument = font.read.editorSource()
 				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))
@@ -332,31 +422,58 @@ export function createEditorWorkspace(
 				return Object.freeze(addedIds)
 			},
 			selectMaster(masterId: MasterId): void {
-				const master = document.masters.find((item) => item.id === masterId)
+				const currentDocument = font.read.editorSource()
+				if (currentDocument === null) return
+				const master = currentDocument.masters.find(
+					(item) => item.id === masterId,
+				)
 				if (master === undefined) return
 				font.silo.setState(activeMasterIdAtom, masterId)
 				setLocation(
 					master.kind === "default"
 						? Object.fromEntries(
-								document.axes.map((axis) => [axis.id, axis.default]),
+								currentDocument.axes.map((axis) => [axis.id, axis.default]),
 							)
 						: master.location,
 				)
 			},
 			selectInstance(instanceId: InstanceId): void {
-				const instance = document.instances.find(
+				const currentDocument = font.read.editorSource()
+				const instance = currentDocument?.instances.find(
 					(item) => item.id === instanceId,
 				)
 				if (instance !== undefined) setLocation(instance.coordinates)
 			},
 			setPreviewCoordinate(axisId: AxisId, value: number): void {
-				const axis = document.axes.find((item) => item.id === axisId)
+				const axis = font.read
+					.editorSource()
+					?.axes.find((item) => item.id === axisId)
 				if (axis === undefined || !Number.isFinite(value)) return
 				font.silo.setState(
 					previewCoordinateAtoms,
 					axisId,
 					Math.min(axis.max, Math.max(axis.min, value)),
 				)
+			},
+			replaceSource(source: EditorFontSource): void {
+				font.actions.load(source)
+				for (const axis of source.axes) {
+					if (font.silo.getState(previewCoordinateAtoms, axis.id) === null) {
+						font.silo.setState(previewCoordinateAtoms, axis.id, axis.default)
+					}
+				}
+				const currentGlyphId = font.silo.getState(activeGlyphIdAtom)
+				if (!source.glyphs.some((glyph) => glyph.id === currentGlyphId)) {
+					const fallbackGlyph = source.glyphs[0]?.id
+					if (fallbackGlyph !== undefined) {
+						font.silo.setState(activeGlyphIdAtom, fallbackGlyph)
+					}
+				}
+				const currentMasterId = font.silo.getState(activeMasterIdAtom)
+				if (!source.masters.some((master) => master.id === currentMasterId)) {
+					font.silo.setState(activeMasterIdAtom, source.defaultMasterId)
+				}
+				font.silo.setState(selectionAtom, Object.freeze([]))
 			},
 		},
 	}
