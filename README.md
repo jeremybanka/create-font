@@ -35,17 +35,19 @@ the complete toolchain.
 
 - [`trigraph`](packages/trigraph/README.md) is the Bun CLI and Elysia workspace
   application.
+- [`@trigraph/server`](packages/server/README.md) owns the reusable workspace
+  RPC contract, Elysia routes, and Eden client typing.
 - [`@trigraph/target`](packages/target/README.md) is the validated, logical-SFNT
   compilation target.
 - [`@trigraph/states`](packages/states/README.md) is the atom.io editor model
-  that incrementally projects into that IR.
-- [`@trigraph/source`](packages/source/README.md) is its deterministic,
-  lossless JSON source-file codec.
+  that incrementally projects into that IR and hydrates remote source units.
+- [`@trigraph/source`](packages/source/README.md) defines the versioned JSON
+  directory contract, per-file Zod schemas, and deterministic codecs.
 - [`@trigraph/editor`](packages/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
 
 These packages are the current implementation layers. The `trigraph`
-application owns the preliminary CLI and RPC boundaries plus the Bun full-stack
+application composes the reusable server boundary with the Bun full-stack
 browser entry that imports `EditorApplicationRoot` from `@trigraph/editor`.
 
 The workspace toolchain pins Bun through `mise.toml`; Bun is a repository

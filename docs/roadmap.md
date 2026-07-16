@@ -14,26 +14,30 @@ The repository already contains:
 - a high-level editor state graph that projects design-space sources into that
   model;
 - a deterministic, lossless codec for complete editor-state JSON documents;
+- a versioned, multi-file JSON directory contract with Zod validators and JSON
+  Schema generation;
+- a reusable Elysia/Eden workspace RPC package and atom.io Loadable cache keyed
+  by individual source-unit paths;
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history.
 
 The current editor demo is in-memory. The `trigraph` package now provides a
-preliminary Bun/comline CLI and Elysia/Eden server boundary. It imports the
-editor's exported Preact application root and serves it with Bun's full-stack
-development server, but it does not yet serialize `.ttf` files, open a source
-directory, or persist project edits.
+preliminary Bun/comline CLI and composes `@trigraph/server` with the editor's
+exported Preact application root through Bun's full-stack development server.
+It does not yet serialize `.ttf` files, open a source directory, or persist
+project edits.
 
 ## 1. Repository source workspace
 
-- Specify a versioned project manifest and directory layout.
-- Choose reviewable file boundaries for font information, axes, glyphs,
-  locations, character mappings, and other structured data.
-- Compose source units into `EditorFontSource` without making the whole project
-  one rewrite unit.
-- Preserve stable IDs and deterministic ordering across load, edit, format, and
-  save.
-- Add migrations, JSON Schemas, source-located diagnostics, and fixtures for
-  realistically large projects.
+- Implement filesystem discovery and canonical reads for the established
+  `trigraph.source` v1 directory.
+- Implement conditional atomic writes for individual units and atomic
+  multi-unit writes for entity/index changes.
+- Connect source-unit validators to the server and concrete atom.io hydration
+  transactions.
+- Preserve stable IDs and deterministic ordering across edit, save, external
+  change, and migration.
+- Add migrations, source-located diagnostics, and realistically large fixtures.
 - Explicitly separate canonical source, generated intermediates, final outputs,
   caches, and per-user editor state.
 

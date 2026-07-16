@@ -13,6 +13,11 @@ The application runs on the Bun version pinned by the repository's
 `mise.toml`. Its command-line interface is defined with `comline`; its
 interactive server is an Elysia application; and
 `trigraph/rpc-client` exposes the corresponding Eden Treaty client factory.
+The reusable workspace routes and client typing live in `@trigraph/server`;
+this package composes them with the editor application and CLI build handler.
+The composed application accepts a source-service implementation, allowing the
+directory manager to be attached without introducing a server-to-states
+dependency.
 
 ## Current commands
 

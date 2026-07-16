@@ -73,6 +73,35 @@ hot atoms, so dragging a node or handle does not replace an entire glyph or
 master. Notes and color labels are also separated from export-bearing atoms,
 so annotation changes do not invalidate glyph lowering.
 
+### Remote source cache
+
+`createRemoteFontSourceState` is the RPC-facing companion to the hot editor
+model. It stores the source manifest in one `Loadable` atom and each JSON file
+in a `Loadable` atom-family member keyed by its relative source-unit path.
+Reading a member performs that unit's request; the path is its cache identity;
+`refreshUnit` explicitly invalidates only that member.
+
+This cache is deliberately outside `glyphHistoryTimelines`. Remote hydration,
+server revisions, and persistence acknowledgements are not user edits and must
+not appear in undo history. Supply a `hydrate` callback to decode each unit and
+install its narrow local facts. The loadable's path identity ensures that
+callback runs once for the cached read, not once per component observer.
+
+The intended flow is:
+
+1. a component reads the loadable for the file it needs;
+2. `hydrate` runs a dedicated transaction that establishes local atoms as a
+   baseline; a concrete glyph hydrator then clears only that glyph's timeline;
+3. visual edits remain synchronous local transactions;
+4. persistence runs after the edit, stores the server's canonical response, and
+   refreshes only remotely owned indexes or revisions.
+
+`@trigraph/source` now defines the concrete directory paths and per-file
+validators. The next integration step is a hydration adapter that validates
+each unit by descriptor and installs its facts into the corresponding local
+atoms. The RPC remains intentionally chatty: individual loadables issue
+individual requests rather than depending on aggregate query endpoints.
+
 Selectors form a lowering graph rather than one monolithic compiler:
 
 1. axis selectors quantize user-space values and validate axis maps;

@@ -1,30 +1,24 @@
-import { resolve } from "node:path"
-
-import { Elysia } from "elysia"
+import {
+	createTrigraphRpc as createWorkspaceRpc,
+	TRIGRAPH_RPC_VERSION,
+	type TrigraphSourceService,
+} from "@trigraph/server"
 
 import { buildProject } from "./build.ts"
 
-export const TRIGRAPH_RPC_VERSION = 1 as const
+export { TRIGRAPH_RPC_VERSION }
 
 export type CreateTrigraphRpcOptions = Readonly<{
 	root?: string
+	source?: TrigraphSourceService
 }>
 
 export function createTrigraphRpc(options: CreateTrigraphRpcOptions = {}) {
-	const root = resolve(options.root ?? process.cwd())
-
-	return new Elysia({
-		name: `trigraph-rpc`,
-		prefix: `/api`,
+	return createWorkspaceRpc({
+		build: () => buildProject(options.root),
+		...(options.root === undefined ? {} : { root: options.root }),
+		...(options.source === undefined ? {} : { source: options.source }),
 	})
-		.get(`/health`, () => ({
-			ok: true as const,
-			rpcVersion: TRIGRAPH_RPC_VERSION,
-		}))
-		.get(`/workspace`, () => ({
-			root,
-		}))
-		.post(`/build`, () => buildProject(root))
 }
 
 export type TrigraphRpc = ReturnType<typeof createTrigraphRpc>

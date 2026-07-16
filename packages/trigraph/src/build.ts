@@ -1,24 +1,9 @@
 import { stat } from "node:fs/promises"
 import { resolve } from "node:path"
 
-export type BuildDiagnostic = Readonly<{
-	code: `build.not_implemented` | `workspace.not_directory`
-	message: string
-	path: string
-	severity: `error`
-}>
+import type { BuildResult } from "@trigraph/server"
 
-export type BuildResult =
-	| Readonly<{
-			ok: true
-			root: string
-			outputs: readonly string[]
-	  }>
-	| Readonly<{
-			ok: false
-			root: string
-			errors: readonly [BuildDiagnostic, ...BuildDiagnostic[]]
-	  }>
+export type { BuildDiagnostic, BuildResult } from "@trigraph/server"
 
 export async function buildProject(
 	rootInput: string = process.cwd(),

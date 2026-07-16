@@ -79,36 +79,44 @@ watcher invalidations, diagnostics, and build status.
 
 ## Project source
 
-The canonical project source is expected to be a directory of JSON documents,
-with stable entity IDs and deliberately chosen file boundaries. Exact names and
-granularity remain a format-design decision, but the direction is:
+The canonical structured source is a versioned directory of JSON documents
+with stable entity IDs and file boundaries aligned with useful editor
+loadables:
 
 ```text
-font-family/
-  package.json
+font-source/
   trigraph.json
-  src/
-    font.json
-    axes.json
-    glyphs/
-      A.json
-      B.json
-    features/
-      layout.rs
-  build/
-    Family[wdth,wght].ttf
+  metadata.json
+  names.json
+  metrics.json
+  style.json
+  axes/
+    index.json
+    *.json
+  masters/
+    index.json
+    *.json
+  instances/
+    index.json
+    *.json
+  glyphs/
+    index.json
+    *.json
+  cmap/
+    index.json
+    *.json
 ```
 
-`font.json`, `axes.json`, and glyph files illustrate canonical structured font
-data; they are not a committed schema. `layout.rs` illustrates separately
-compiled behavior referenced by project configuration. Build output paths are
-also configurable.
+Each index preserves author order and maps stable identities to explicit safe
+paths. Axes, masters, instances, glyphs, and character mappings are individually
+loadable; one glyph file contains all atoms owned by that glyph's undo timeline.
+`@trigraph/source` exports one Zod validator per file kind, JSON Schema
+generation, and split/assemble operations for `EditorFontSource`.
 
-The current `@trigraph/source` codec serializes one complete
-`EditorFontSource` document. That remains a useful validation and canonical
-encoding boundary, but it is not the eventual project-storage contract. A
-workspace source layer will compose multiple versioned JSON units into editor
-state and write changed units back without rewriting unrelated files.
+The complete-document codec remains useful for interchange, migrations,
+in-memory backends, and whole-snapshot validation. Programmable behavior such
+as `features/layout.rs` remains a separate compiler input rather than an editor
+state unit.
 
 Source formats must distinguish:
 
@@ -146,6 +154,8 @@ Reads return canonical content plus an opaque revision or content hash. Writes
 include the expected revision and an idempotency key, use a private temporary
 sibling, and atomically replace the target. A changed revision produces a
 conflict instead of overwriting work performed by another editor or Git.
+Operations that create, delete, or reorder entities must eventually update an
+index and one or more entity units through one atomic multi-unit transaction.
 
 Watcher events are hints. The server coalesces them, rescans affected source
 units, and periodically reconciles the project. Bulk operations such as branch
@@ -184,13 +194,14 @@ The intended public distribution is the `trigraph` npm package:
 - contains or depends on the compiler, source codecs, and workspace server; and
 - bundles the matching browser application as immutable assets.
 
-Today, `@trigraph/target` provides the logical-SFNT TypeScript library and the
-unscoped `trigraph` package provides a preliminary Bun CLI, Elysia server, and
-Eden client boundary. The private `@trigraph/editor` package exports its Preact
-application root, which the `trigraph` browser entry imports and serves through
-Elysia's Bun full-stack development pattern. Packaging the editor as immutable
-release assets, the project/workspace source layer, and binary serialization
-remain roadmap work.
+Today, `@trigraph/target` provides the logical-SFNT TypeScript library;
+`@trigraph/source` defines the JSON directory contract; `@trigraph/server`
+provides the Elysia/Eden workspace boundary; and the unscoped `trigraph`
+package owns the Bun CLI and composes the server with the editor application.
+The private `@trigraph/editor` package exports its Preact application root,
+which the `trigraph` browser entry serves through Elysia's Bun full-stack
+development pattern. Filesystem-backed source management, immutable release
+assets, and binary serialization remain roadmap work.
 
 ## Architectural non-goals
 

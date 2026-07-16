@@ -3,7 +3,7 @@ import { basename, resolve } from "node:path"
 import { staticPlugin } from "@elysia/static"
 import { Elysia } from "elysia"
 
-import { createTrigraphRpc } from "./rpc.ts"
+import { createTrigraphRpc, type CreateTrigraphRpcOptions } from "./rpc.ts"
 
 const isBundledApplication = basename(import.meta.dir) === `dist`
 const editorAssets = resolve(
@@ -19,17 +19,13 @@ const editorApplication = await staticPlugin({
 	prefix: `/`,
 })
 
-export type CreateTrigraphServerOptions = Readonly<{
-	root?: string
-}>
+export type CreateTrigraphServerOptions = CreateTrigraphRpcOptions
 
 export function createTrigraphServerApp(
 	options: CreateTrigraphServerOptions = {},
 ) {
-	const root = resolve(options.root ?? process.cwd())
-
 	return new Elysia({ name: `trigraph-server` })
-		.use(createTrigraphRpc({ root }))
+		.use(createTrigraphRpc(options))
 		.use(editorApplication)
 }
 
