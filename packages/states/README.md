@@ -223,6 +223,12 @@ not model binary table layout. Composite glyphs, hinting, OpenType Layout,
 vertical metrics, color, CFF/CFF2, sparse IUP deltas, and binary serialization
 belong to future profiles or other layers.
 
+In the larger [toolchain architecture](../../docs/architecture.md), this state
+graph remains the hot model for visual editing and design-space projection.
+Textual OpenType Layout rules and other programmable behavior can compile in a
+separate layer and join the deterministic build pipeline without becoming
+mutable atom-by-atom editor state.
+
 Editor-only fields such as notes, color labels, and soft/hard handle behavior
 are never projected into the IR. Conversely, low-level facts such as glyph IDs,
 complete tuple deltas, normalized tag-keyed regions, and phantom-point metric

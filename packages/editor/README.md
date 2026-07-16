@@ -1,6 +1,6 @@
 # @trigraph/editor
 
-`@trigraph/editor` is the first interactive client for the Trigraph font state
+`@trigraph/editor` is the first browser client for the Trigraph font state
 model. It is a Vite/Preact application with a Glyphs-style workspace centered
 on one multiline text canvas. The same glyph occurrence that participates in
 the live variable layout becomes the outline editor in place, alongside glyph
@@ -69,9 +69,23 @@ pnpm --filter @trigraph/editor check
 pnpm --filter @trigraph/editor build
 ```
 
-The initial slice intentionally has no inert save or export affordances. A
-server-backed source workflow will provide persistence later; the UI currently
-loads its self-contained `EditorFontSource` fixture and edits that live state.
+The initial slice intentionally has no inert save or export affordances. The UI
+currently loads its self-contained `EditorFontSource` fixture and edits that
+live state.
+
+In the product architecture, this application is bundled with the public
+`trigraph` npm package and served by `trigraph serve` from beside the font
+repository. The same CLI process owns project discovery, filesystem access,
+watching, conditional persistence, compilation, and diagnostics. The browser
+uses a versioned same-origin workspace protocol; it never receives arbitrary
+filesystem or process access.
+
+Local and remote workspaces use that same arrangement. For a remote repository,
+the user runs the repository-local CLI through their normal SSH session and
+forwards its loopback port to a local development browser. Trigraph does not
+implement SSH or synchronize a second checkout. See the repository
+[architecture](../../docs/architecture.md) and
+[roadmap](../../docs/roadmap.md#3-workspace-server-and-browser-persistence).
 
 ## Interaction
 

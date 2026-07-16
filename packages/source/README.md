@@ -1,10 +1,11 @@
 # @trigraph/source
 
 `@trigraph/source` is the deterministic file boundary for
-[`@trigraph/states`](../states/README.md). A file represents one complete
-`EditorFontSource` snapshot: the JSON root is the state document itself, with
-the existing `format: "trigraph.editor"` and `editorVersion: 3` discriminants.
-There is no second envelope and no file-only identity layer.
+[`@trigraph/states`](../states/README.md). In the current codec, one JSON
+document represents one complete `EditorFontSource` snapshot: the JSON root is
+the state document itself, with the existing `format: "trigraph.editor"` and
+`editorVersion: 3` discriminants. There is no second envelope and no file-only
+identity layer.
 
 That direct correspondence is important for a future server-backed editor.
 Stable IDs, author ordering, shared topology, master layers, locations, cmap
@@ -12,6 +13,22 @@ references, relative incoming/outgoing handles, soft/hard node modes, and
 each contour's explicit `closed` state, plus editor-only note and color fields,
 all cross the boundary in the same form emitted by the state graph. Decoding returns the
 public type that can be passed to `createFontEditorState().actions.load`.
+
+## Relationship to project source
+
+This complete-document codec is not the eventual storage contract for a
+Trigraph repository. The product architecture calls for a directory of
+reviewable JSON source units so a glyph edit does not rewrite unrelated font
+data. A future workspace source layer will discover and validate those units,
+compose them into editor state, and encode only changed units on save.
+
+The existing codec remains useful as the canonical boundary for a complete
+snapshot, in-memory backends, interchange fixtures, migrations, and validation.
+Directory layout, manifests, cross-file references, per-unit revisions, and
+atomic persistence belong to the workspace layer rather than being inferred by
+this package. See the repository's
+[architecture](../../docs/architecture.md#project-source) and
+[roadmap](../../docs/roadmap.md#1-repository-source-workspace).
 
 ## The one JSON adaptation
 
