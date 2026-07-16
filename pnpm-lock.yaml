@@ -87,8 +87,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       lasertag:
-        specifier: 0.5.1
-        version: 0.5.1(@typescript-eslint/parser@8.64.0(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(preact@10.29.7)
+        specifier: 0.5.2
+        version: 0.5.2(@typescript-eslint/parser@8.64.0(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(preact@10.29.7)
       vite:
         specifier: 8.1.4
         version: 8.1.4(jiti@2.7.0)(yaml@2.9.0)
@@ -2265,8 +2265,8 @@ packages:
   konva@10.3.0:
     resolution: {integrity: sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==}
 
-  lasertag@0.5.1:
-    resolution: {integrity: sha512-nCL7ggUN8gHVXVyrfFwJlMLTNTP87x6w8YMdJoAW7Kqtf09GXTSAUGxZYmHDnOQy/7VoCXUyEpga6hXay1W7hg==}
+  lasertag@0.5.2:
+    resolution: {integrity: sha512-qJT2QSZIjQGE5vkokbq7N00MYyITQ2iQOzgAaUY7aZsLgz73Af4XoWFNnv8iSPv0/A68K4dnypXI/elP3qwKAw==}
     engines: {node: 26.5.0, pnpm: 11.13.0}
     hasBin: true
     peerDependencies:
@@ -5344,7 +5344,7 @@ snapshots:
 
   konva@10.3.0: {}
 
-  lasertag@0.5.1(@typescript-eslint/parser@8.64.0(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(preact@10.29.7):
+  lasertag@0.5.2(@typescript-eslint/parser@8.64.0(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))(preact@10.29.7):
     dependencies:
       '@astrojs/compiler': 4.0.0
       '@vscode/vsce': 3.9.2
