@@ -1,23 +1,23 @@
 # @trigraph/states
 
 `@trigraph/states` is the high-level, editable design-space model for
-[trigraph](../trigraph/README.md). It stores the information a font editor needs
-while a design is in progress, then incrementally projects that state into
-trigraph's low-level `VariableFontSource` representation.
+[`@trigraph/target`](../target/README.md). It stores the information a font
+editor needs while a design is in progress, then incrementally projects that
+state into the target's low-level `VariableFontSource` representation.
 
 The distinction is deliberate:
 
 - editor state has stable entity IDs, source masters, shared glyph topology,
   per-master coordinates, selection-friendly diagnostics, and editor-only
   annotations;
-- the trigraph IR has resolved glyph order, axis-tagged locations, default
+- the target IR has resolved glyph order, axis-tagged locations, default
   outlines and metrics, complete variation tuples, numeric glyph IDs, and no
   editing metadata.
 
 A document does not need to be exportable after every edit. Projection results
 carry structured errors and warnings until the state is complete. Once the
 whole-font compilation result reaches `stage: "compiled"`, the generated source
-has also passed `trigraph` ingestion and the returned `font` is the branded,
+has also passed `@trigraph/target` ingestion and the returned `font` is the branded,
 deeply frozen low-level representation.
 
 ## Document model
@@ -99,7 +99,7 @@ master, which would be incorrect when supports overlap.
 
 ### Cubic editing over a quadratic IR
 
-The editor model owns ordinary cubic Bézier handles, while trigraph v1 targets
+The editor model owns ordinary cubic Bézier handles, while target v1 uses
 TrueType quadratic outlines. Lowering is deterministic and coordinated across
 masters. Each cubic subcurve is approximated by
 `Q = (3(C1 + C2) - P0 - P3) / 4`; the distance between its two interior
@@ -140,7 +140,7 @@ source that produced it.
 Whole-font compilation has three explicit outcomes:
 
 - `projection-failed`: editor state could not form a complete low-level source;
-- `ingestion-failed`: a source was formed, but trigraph's technical validity
+- `ingestion-failed`: a source was formed, but the target's technical validity
   proof rejected it;
 - `compiled`: projection and ingestion both succeeded.
 
@@ -201,7 +201,7 @@ const compilation = editor.read.compilation()
 if (!compilation.ok) {
 	console.error(compilation.stage)
 } else {
-	// Ready for trigraph's deterministic lowering layer.
+	// Ready for the target's deterministic lowering layer.
 	console.log(compilation.font)
 }
 
@@ -216,7 +216,7 @@ reordering, serialization, and collaborative edits.
 ## Scope
 
 The state model currently targets the same deliberately narrow profile as
-trigraph v1: one TrueType-flavored variable font with high-level cubic editing,
+`@trigraph/target` v1: one TrueType-flavored variable font with high-level cubic editing,
 bounded quadratic projection, horizontal metrics, complete point deltas, and a
 Unicode character map. It does
 not model binary table layout. Composite glyphs, hinting, OpenType Layout,

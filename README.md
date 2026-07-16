@@ -33,7 +33,8 @@ the complete toolchain.
 
 ## Packages
 
-- [`trigraph`](packages/trigraph/README.md) is the validated, logical-SFNT IR.
+- [`@trigraph/target`](packages/target/README.md) is the validated, logical-SFNT
+  compilation target.
 - [`@trigraph/states`](packages/states/README.md) is the atom.io editor model
   that incrementally projects into that IR.
 - [`@trigraph/source`](packages/source/README.md) is its deterministic,
@@ -41,6 +42,6 @@ the complete toolchain.
 - [`@trigraph/editor`](packages/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
 
-These packages are the current implementation layers. The public `trigraph`
-package will grow a CLI entry point around them and bundle the editor assets;
-it does not expose that executable yet.
+These packages are the current implementation layers. The future public
+`trigraph` package will provide a CLI entry point around them and bundle the
+editor assets.

@@ -125,6 +125,6 @@ still contain open contours, invalid OpenType ranges, incomplete master
 coverage, or other projection and ingestion errors. Open contours are
 deliberately accepted for broken-path editing and must be closed before export.
 Those export constraints remain the responsibility of
-`@trigraph/states` selectors and `trigraph` ingestion. A decoded value proves
+`@trigraph/states` selectors and `@trigraph/target` ingestion. A decoded value proves
 that it can be represented and addressed safely by the editor state model, not
 that it is already exportable.

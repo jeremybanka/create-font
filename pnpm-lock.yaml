@@ -121,12 +121,12 @@ importers:
 
   packages/states:
     dependencies:
+      '@trigraph/target':
+        specifier: workspace:*
+        version: link:../target
       atom.io:
         specifier: 0.50.0
         version: 0.50.0(@typescript-eslint/parser@8.64.0(eslint@10.7.0(jiti@2.7.0)))(eslint@10.7.0(jiti@2.7.0))
-      trigraph:
-        specifier: workspace:*
-        version: link:../trigraph
     devDependencies:
       '@typescript-eslint/parser':
         specifier: 8.64.0
@@ -144,7 +144,7 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@vitest/browser-preview@4.1.10)(vite@8.1.4(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/trigraph:
+  packages/target:
     devDependencies:
       vitest:
         specifier: 4.1.10

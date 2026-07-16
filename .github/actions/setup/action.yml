@@ -14,7 +14,7 @@ runs:
         pnpm install
         --frozen-lockfile
         --filter trigraph-workspace
-        --filter trigraph
+        --filter @trigraph/target
         --filter @trigraph/states
         --filter @trigraph/source
         --filter @trigraph/preact-konva

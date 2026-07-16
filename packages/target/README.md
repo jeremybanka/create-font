@@ -1,8 +1,18 @@
-# trigraph
+# @trigraph/target
 
-Trigraph is a rigorously validated, low-level TypeScript representation of an
-OpenType variable font. It is a logical SFNT: one step after design-space or
-master compilation, and one step before binary font serialization.
+`@trigraph/target` is a rigorously validated, low-level TypeScript
+representation of an OpenType variable font. It is a logical SFNT: one step
+after design-space or master compilation, and one step before binary font
+serialization.
+
+This library is the low-level compilation target of the intended public
+`trigraph` npm toolchain. The unscoped package will provide the
+package-manager-resolved CLI for building a repository and serving its browser
+editor while depending on this validated target as an independently usable API.
+The CLI, project source directory, workspace server, bundled editor assets, and
+binary serializer are roadmap work; see the repository
+[architecture](../../docs/architecture.md) and
+[roadmap](../../docs/roadmap.md).
 
 Version 1 models the meaning needed to produce a TrueType-flavored variable
 font, not the byte layout of its tables. Glyph IDs, default outlines, metrics,
@@ -80,7 +90,7 @@ import {
 	ingestVariableFont,
 	type SimpleGlyphSource,
 	type VariableFontSource,
-} from "trigraph"
+} from "@trigraph/target"
 
 const contours = [
 	[

@@ -1,4 +1,4 @@
-import type { VariationRegionSource } from "trigraph"
+import type { VariationRegionSource } from "@trigraph/target"
 
 import type {
 	EditorAxisSource,
