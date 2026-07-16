@@ -76,7 +76,7 @@ export type WriteSourceUnitsResult = Readonly<{
 	units: readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
 }>
 
-export interface TrigraphSourceService {
+export interface CreateFontSourceService {
 	readManifest(): Promise<SourceManifest>
 	readUnit(path: SourceUnitPath): Promise<SourceUnitSnapshot>
 	writeUnit(input: WriteSourceUnitInput): Promise<SourceUnitSnapshot>

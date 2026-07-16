@@ -1,10 +1,10 @@
-# Trigraph architecture
+# create-font architecture
 
 ## Product model
 
-Trigraph is a repository-local font toolchain with a browser-based visual
-editor. A font repository installs `trigraph` as a development dependency and
-commits its source and toolchain configuration. Trigraph is not a hosted source
+create-font is a repository-local font toolchain with a browser-based visual
+editor. A font repository installs `create-font` as a development dependency and
+commits its source and toolchain configuration. create-font is not a hosted source
 of truth and does not require a globally installed desktop application.
 
 The experience deliberately resembles a code editor:
@@ -20,8 +20,8 @@ The experience deliberately resembles a code editor:
 
 ### Terminal
 
-The CLI is the automation boundary. `trigraph build` validates and compiles the
-project into font binaries. `trigraph serve` watches the same project, serves
+The CLI is the automation boundary. `create-font build` validates and compiles the
+project into font binaries. `create-font serve` watches the same project, serves
 the web application, and exposes workspace operations to it. Checks, migrations,
 and other noninteractive commands should use the same underlying services.
 
@@ -32,7 +32,7 @@ hand-editable JSON can be edited directly. Programmable shaping and generation
 logic can be written in an appropriate source language and compiled to a
 portable, sandboxable module format such as WebAssembly.
 
-Trigraph should provide schemas, stable diagnostics, formatting, and eventually
+create-font should provide schemas, stable diagnostics, formatting, and eventually
 language-tooling integration without attempting to replace the programmer's
 editor.
 
@@ -53,7 +53,7 @@ browser editor
           |
           | versioned HTTP/WebSocket protocol
           v
-trigraph serve
+create-font serve
   - serves version-matched editor assets
   - discovers and validates the project
   - reads, watches, and atomically writes source
@@ -85,8 +85,8 @@ loadables:
 
 ```text
 fonts/
-  trigraph-sans/
-    trigraph.json
+  create-font-sans/
+    create-font.json
     metadata.json
     names.json
     metrics.json
@@ -111,7 +111,7 @@ fonts/
 Each index preserves author order and maps stable identities to explicit safe
 paths. Axes, masters, instances, glyphs, and character mappings are individually
 loadable; one glyph file contains all atoms owned by that glyph's undo timeline.
-`@trigraph/source` exports one Zod validator per file kind, JSON Schema
+`@create-font/source` exports one Zod validator per file kind, JSON Schema
 generation, and split/assemble operations for `EditorFontSource`.
 
 The complete-document codec remains useful for interchange, migrations,
@@ -145,7 +145,7 @@ part of that interface before untrusted modules are enabled in the browser or
 server.
 
 OpenType Layout does not need to become mutable atom-by-atom editor state merely
-because Trigraph builds it. It can remain a separate compiler input that joins
+because create-font builds it. It can remain a separate compiler input that joins
 the pipeline before final lowering. The same separation can support generators
 and other programmable transforms later.
 
@@ -171,12 +171,12 @@ replaying changes; divergence requires an explicit conflict workflow.
 ## Local and remote development
 
 Local and remote workspaces use the same process and protocol. Locally, the
-browser opens the loopback address printed by `trigraph serve`. Remotely, the
+browser opens the loopback address printed by `create-font serve`. Remotely, the
 user runs that command inside the checkout through an ordinary SSH session and
 forwards the loopback port with OpenSSH, an IDE, or their existing development
 environment.
 
-Trigraph does not implement SSH, copy a second host into the remote machine, or
+create-font does not implement SSH, copy a second host into the remote machine, or
 synchronize a shadow checkout. Node, the package manager, and the repository's
 development dependencies are provisioned by the repository's normal toolchain,
 which may use mise, Nix, a container, or another explicit environment manager.
@@ -188,20 +188,20 @@ NULs, symlink escapes, and other attempts to broaden authority.
 
 ## Package and process ownership
 
-The intended public distribution is the `trigraph` npm package:
+The intended public distribution is the `create-font` npm package:
 
 - installed in the font repository as a dev dependency;
-- exposes a package-manager-resolved `trigraph` executable;
+- exposes a package-manager-resolved `create-font` executable;
 - contains or depends on the compiler, source codecs, and workspace server; and
 - bundles the matching browser application as immutable assets.
 
-Today, `@trigraph/target` provides the logical-SFNT TypeScript library;
-`@trigraph/source` defines the JSON directory contract; `@trigraph/server`
-provides the Elysia/Eden workspace boundary; and the unscoped `trigraph`
+Today, `@create-font/target` provides the logical-SFNT TypeScript library;
+`@create-font/source` defines the JSON directory contract; `@create-font/server`
+provides the Elysia/Eden workspace boundary; and the unscoped `create-font`
 package owns the Bun CLI and composes the server with the editor application.
-The private `@trigraph/editor` package exports its Preact application root,
-which the `trigraph` browser entry serves through Elysia's Bun full-stack
-development pattern. The application discovers `fonts/*/trigraph.json`, serves
+The private `@create-font/editor` package exports its Preact application root,
+which the `create-font` browser entry serves through Elysia's Bun full-stack
+development pattern. The application discovers `fonts/*/create-font.json`, serves
 the selected project through a filesystem-backed source service, hydrates the
 browser from individual source units, and persists coordinated edits through
 conditional multi-unit writes. Watching and reconciliation, immutable release
@@ -211,7 +211,7 @@ assets, and binary serialization remain roadmap work.
 
 - Replacing the user's terminal, text editor, SSH client, or Git workflow.
 - Giving the browser unrestricted filesystem or process access.
-- Requiring a globally installed Trigraph executable.
+- Requiring a globally installed create-font executable.
 - Hiding canonical source in a database or browser-only storage.
 - Treating generated font binaries as the editable source of truth.
 - Making remote development depend on SSHFS or bidirectional repository sync.

@@ -1,4 +1,4 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 import { AppShell } from "./AppShell.tsx"

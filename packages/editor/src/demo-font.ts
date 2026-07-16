@@ -4,7 +4,7 @@ import type {
 	EditorGlyphSource,
 	GlyphId,
 	PointId,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 export const weightAxisId = "axis:wght" as const
 export const razorMasterId = "master:razor" as const
@@ -240,22 +240,22 @@ function makeGeometricA(): EditorGlyphSource {
 
 export function makeDemoFont(): EditorFontSource {
 	return {
-		format: "trigraph.editor",
+		format: "create-font.editor",
 		editorVersion: 3,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,
-			vendorId: "TRIG",
+			vendorId: "CRFT",
 			lowestPpem: 8,
 		},
 		names: {
-			family: "Trigraph Geometric",
+			family: "Create Font Geometric",
 			subfamily: "Razor",
-			uniqueId: "TRIG:Trigraph Geometric:1.000",
-			fullName: "Trigraph Geometric Razor",
+			uniqueId: "CRFT:Create Font Geometric:1.000",
+			fullName: "Create Font Geometric Razor",
 			version: "Version 1.000",
-			postScriptName: "TrigraphGeometric-Razor",
-			typographicFamily: "Trigraph Geometric",
+			postScriptName: "CreateFontGeometric-Razor",
+			typographicFamily: "Create Font Geometric",
 			typographicSubfamily: "Razor",
 		},
 		metrics: {
@@ -303,14 +303,14 @@ export function makeDemoFont(): EditorFontSource {
 				id: razorInstanceId,
 				name: "Razor",
 				coordinates: { [weightAxisId]: 100 },
-				postScriptName: "TrigraphGeometric-Razor",
+				postScriptName: "CreateFontGeometric-Razor",
 				elidable: true,
 			},
 			{
 				id: blackInstanceId,
 				name: "Black",
 				coordinates: { [weightAxisId]: 900 },
-				postScriptName: "TrigraphGeometric-Black",
+				postScriptName: "CreateFontGeometric-Black",
 			},
 		],
 		glyphs: [

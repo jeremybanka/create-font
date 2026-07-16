@@ -1,4 +1,4 @@
-import type { EditorGlyphSource, MasterId } from "@trigraph/states"
+import type { EditorGlyphSource, MasterId } from "@create-font/states"
 
 import { editorContoursToPath } from "./geometry.ts"
 

@@ -2,7 +2,7 @@ import type {
 	EditorHandleKind,
 	EditorLayerNode,
 	PointId,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 export type EditorSelectionTarget =
 	| { readonly kind: "node"; readonly pointId: PointId }

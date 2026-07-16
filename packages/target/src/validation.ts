@@ -1,6 +1,6 @@
 import {
-	TRIGRAPH_FORMAT,
-	TRIGRAPH_IR_VERSION,
+	CREATE_FONT_FORMAT,
+	CREATE_FONT_IR_VERSION,
 	type AdvanceWidth,
 	type AxisMapEntry,
 	type AxisTag,
@@ -147,7 +147,7 @@ function exactKeys(
 				context,
 				"font.unknown_property",
 				path,
-				"Symbol properties are not permitted in the Trigraph IR.",
+				"Symbol properties are not permitted in the create-font IR.",
 				table,
 			)
 			continue
@@ -218,7 +218,7 @@ function asArray(
 			context,
 			"scalar.type",
 			path,
-			"Sparse arrays are not permitted in the Trigraph IR.",
+			"Sparse arrays are not permitted in the create-font IR.",
 			table,
 		)
 		return []
@@ -2319,21 +2319,21 @@ function ingestVariableFontData(value: unknown): IngestResult {
 		context,
 		"sfnt",
 	)
-	if (source.format !== TRIGRAPH_FORMAT) {
+	if (source.format !== CREATE_FONT_FORMAT) {
 		error(
 			context,
 			"font.format",
 			"$.format",
-			`Expected ${JSON.stringify(TRIGRAPH_FORMAT)}.`,
+			`Expected ${JSON.stringify(CREATE_FONT_FORMAT)}.`,
 			"sfnt",
 		)
 	}
-	if (source.irVersion !== TRIGRAPH_IR_VERSION) {
+	if (source.irVersion !== CREATE_FONT_IR_VERSION) {
 		error(
 			context,
 			"font.ir_version",
 			"$.irVersion",
-			`Expected IR version ${TRIGRAPH_IR_VERSION}.`,
+			`Expected IR version ${CREATE_FONT_IR_VERSION}.`,
 			"sfnt",
 		)
 	}
@@ -2376,8 +2376,8 @@ function ingestVariableFontData(value: unknown): IngestResult {
 	}
 
 	const font = {
-		format: TRIGRAPH_FORMAT,
-		irVersion: TRIGRAPH_IR_VERSION,
+		format: CREATE_FONT_FORMAT,
+		irVersion: CREATE_FONT_IR_VERSION,
 		metadata,
 		names,
 		metrics,

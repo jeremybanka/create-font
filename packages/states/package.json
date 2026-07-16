@@ -1,7 +1,10 @@
 {
-	"name": "@trigraph/states",
+	"name": "@create-font/states",
 	"version": "0.0.0",
 	"description": "Atom.io state and compilation model for variable-font editors",
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"dist/*.d.mts",
 		"dist/*.d.mts.map",
@@ -25,8 +28,8 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"@trigraph/server": "workspace:*",
-		"@trigraph/target": "workspace:*",
+		"@create-font/server": "workspace:*",
+		"@create-font/target": "workspace:*",
 		"atom.io": "0.50.0"
 	},
 	"devDependencies": {

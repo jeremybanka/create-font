@@ -1,9 +1,9 @@
-import type { EditorFontSource } from "@trigraph/states"
+import type { EditorFontSource } from "@create-font/states"
 
 /** The file is the editor document itself; no additional envelope is added. */
-export const TRIGRAPH_EDITOR_FORMAT: EditorFontSource["format"] =
-	"trigraph.editor"
-export const TRIGRAPH_EDITOR_VERSION: EditorFontSource["editorVersion"] = 3
+export const CREATE_FONT_EDITOR_FORMAT: EditorFontSource["format"] =
+	"create-font.editor"
+export const CREATE_FONT_EDITOR_VERSION: EditorFontSource["editorVersion"] = 3
 
 /**
  * JSON has no bigint scalar. OpenType timestamps therefore use canonical,

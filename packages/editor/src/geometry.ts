@@ -5,7 +5,7 @@ import {
 	type EditorHandleVectorSource,
 	type GlyphId,
 	type PointId,
-} from "@trigraph/states"
+} from "@create-font/states"
 
 export interface OutlinePoint {
 	readonly id?: PointId

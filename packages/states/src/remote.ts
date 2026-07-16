@@ -3,43 +3,43 @@ import type {
 	SourceManifest,
 	SourceUnitPath,
 	SourceUnitSnapshot,
-	TrigraphSourceService,
+	CreateFontSourceService,
 	WriteSourceUnitInput,
 	WriteSourceUnitsInput,
 	WriteSourceUnitsResult,
-} from "@trigraph/server"
-import type { TrigraphRpcClient } from "@trigraph/server/client"
+} from "@create-font/server"
+import type { CreateFontRpcClient } from "@create-font/server/client"
 
 export type FontSourceRemoteClient = Pick<
-	TrigraphSourceService,
+	CreateFontSourceService,
 	"readManifest" | "readUnit" | "writeUnit" | "writeUnits"
 >
 
-export class TrigraphRpcRequestError extends Error {
+export class CreateFontRpcRequestError extends Error {
 	readonly status: number
 
 	constructor(operation: string, status: number) {
-		super(`Trigraph RPC ${operation} failed with HTTP ${status}.`)
-		this.name = `TrigraphRpcRequestError`
+		super(`create-font RPC ${operation} failed with HTTP ${status}.`)
+		this.name = `CreateFontRpcRequestError`
 		this.status = status
 	}
 }
 
 /** Adapt the generated Eden client to the source service used by atom.io. */
 export function createEdenFontSourceClient(
-	client: TrigraphRpcClient,
+	client: CreateFontRpcClient,
 ): FontSourceRemoteClient {
 	return {
 		async readManifest() {
 			const result = await client.api.source.get()
 			if (result.error !== null || result.data === null) {
-				throw new TrigraphRpcRequestError(
+				throw new CreateFontRpcRequestError(
 					`readManifest`,
 					result.error?.status ?? 500,
 				)
 			}
 			if (`code` in result.data) {
-				throw new TrigraphRpcRequestError(`readManifest`, 501)
+				throw new CreateFontRpcRequestError(`readManifest`, 501)
 			}
 			return result.data
 		},
@@ -48,26 +48,26 @@ export function createEdenFontSourceClient(
 				query: { path },
 			})
 			if (result.error !== null || result.data === null) {
-				throw new TrigraphRpcRequestError(
+				throw new CreateFontRpcRequestError(
 					`readUnit`,
 					result.error?.status ?? 500,
 				)
 			}
 			if (`code` in result.data) {
-				throw new TrigraphRpcRequestError(`readUnit`, 501)
+				throw new CreateFontRpcRequestError(`readUnit`, 501)
 			}
 			return result.data
 		},
 		async writeUnit(input) {
 			const result = await client.api.source.unit.put(input)
 			if (result.error !== null || result.data === null) {
-				throw new TrigraphRpcRequestError(
+				throw new CreateFontRpcRequestError(
 					`writeUnit`,
 					result.error?.status ?? 500,
 				)
 			}
 			if (`code` in result.data) {
-				throw new TrigraphRpcRequestError(`writeUnit`, 501)
+				throw new CreateFontRpcRequestError(`writeUnit`, 501)
 			}
 			return result.data
 		},
@@ -77,13 +77,13 @@ export function createEdenFontSourceClient(
 				writes: [...input.writes],
 			})
 			if (result.error !== null || result.data === null) {
-				throw new TrigraphRpcRequestError(
+				throw new CreateFontRpcRequestError(
 					`writeUnits`,
 					result.error?.status ?? 500,
 				)
 			}
 			if (`code` in result.data) {
-				throw new TrigraphRpcRequestError(`writeUnits`, 500)
+				throw new CreateFontRpcRequestError(`writeUnits`, 500)
 			}
 			return result.data
 		},

@@ -1,11 +1,11 @@
 import { treaty, type Treaty } from "@elysiajs/eden"
 
-import type { TrigraphRpc } from "./rpc.ts"
+import type { CreateFontRpc } from "./rpc.ts"
 
-export function createTrigraphRpcClient(
+export function createFontRpcClient(
 	origin: string,
-): Treaty.Create<TrigraphRpc> {
-	return treaty<TrigraphRpc>(origin)
+): Treaty.Create<CreateFontRpc> {
+	return treaty<CreateFontRpc>(origin)
 }
 
-export type TrigraphRpcClient = ReturnType<typeof createTrigraphRpcClient>
+export type CreateFontRpcClient = ReturnType<typeof createFontRpcClient>

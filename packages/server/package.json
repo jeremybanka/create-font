@@ -1,7 +1,10 @@
 {
-	"name": "@trigraph/server",
+	"name": "@create-font/server",
 	"version": "0.0.0",
-	"description": "Elysia workspace RPC contracts and Eden client for Trigraph",
+	"description": "Elysia workspace RPC contracts and Eden client for create-font",
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"dist/*.d.mts",
 		"dist/*.d.mts.map",

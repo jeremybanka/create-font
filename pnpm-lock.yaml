@@ -58,10 +58,10 @@ importers:
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(@preact/compat@18.3.2(preact@10.29.7))
-      '@trigraph/preact-konva':
+      '@create-font/preact-konva':
         specifier: workspace:*
         version: link:../preact-konva
-      '@trigraph/states':
+      '@create-font/states':
         specifier: workspace:*
         version: link:../states
       atom.io:
@@ -130,7 +130,7 @@ importers:
 
   packages/source:
     dependencies:
-      '@trigraph/states':
+      '@create-font/states':
         specifier: workspace:*
         version: link:../states
       zod:
@@ -143,10 +143,10 @@ importers:
 
   packages/states:
     dependencies:
-      '@trigraph/server':
+      '@create-font/server':
         specifier: workspace:*
         version: link:../server
-      '@trigraph/target':
+      '@create-font/target':
         specifier: workspace:*
         version: link:../target
       atom.io:
@@ -175,18 +175,18 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(vite@8.1.4(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/trigraph:
+  packages/create-font:
     dependencies:
       '@elysia/static':
         specifier: 1.4.11
         version: 1.4.11(elysia@1.4.29(@sinclair/typebox@0.34.52)(bun-types@1.3.14)(exact-mirror@1.2.2)(file-type@22.0.1)(openapi-types@12.1.3)(typescript@7.0.2))
-      '@trigraph/server':
+      '@create-font/server':
         specifier: workspace:*
         version: link:../server
-      '@trigraph/source':
+      '@create-font/source':
         specifier: workspace:*
         version: link:../source
-      '@trigraph/states':
+      '@create-font/states':
         specifier: workspace:*
         version: link:../states
       comline:
@@ -202,7 +202,7 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@trigraph/editor':
+      '@create-font/editor':
         specifier: workspace:*
         version: link:../editor
       '@types/bun':

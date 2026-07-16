@@ -1,4 +1,4 @@
-import type { GlyphId } from "@trigraph/states"
+import type { GlyphId } from "@create-font/states"
 import { useEffect } from "preact/hooks"
 
 import type { EditorIconName } from "./EditorIcon.tsx"

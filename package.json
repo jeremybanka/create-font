@@ -1,5 +1,5 @@
 {
-	"name": "trigraph-workspace",
+	"name": "create-font-workspace",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -17,7 +17,7 @@
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter trigraph --filter @trigraph/server --filter @trigraph/target --filter @trigraph/states --filter @trigraph/source --filter @trigraph/preact-konva --filter @trigraph/editor --fail-if-no-match test"
+		"test": "vp run --filter create-font --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.1",

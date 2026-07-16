@@ -998,9 +998,9 @@ describe("font editor state", () => {
 		Object.assign(source.names, { family: "Caller mutation" })
 
 		expect(Object.isFrozen(source.names)).toBe(false)
-		expect(editor.read.editorSource()?.names.family).toBe("Trigraph O Razor")
+		expect(editor.read.editorSource()?.names.family).toBe("Create Font O Razor")
 		expect(editor.read.compilation()).toBe(compilation)
-		expect(compilation.source.names.family).toBe("Trigraph O Razor")
+		expect(compilation.source.names.family).toBe("Create Font O Razor")
 		expect(Object.isFrozen(compilation.source)).toBe(true)
 		expect(Object.isFrozen(compilation.source.glyphs[1]?.contours)).toBe(true)
 		expect(() =>

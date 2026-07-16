@@ -1,7 +1,7 @@
-# @trigraph/source
+# @create-font/source
 
-`@trigraph/source` is the deterministic file boundary for
-[`@trigraph/states`](../states/README.md). It defines both:
+`@create-font/source` is the deterministic file boundary for
+[`@create-font/states`](../states/README.md). It defines both:
 
 - a complete-document codec for interchange, migrations, and in-memory
   backends;
@@ -19,7 +19,7 @@ The directory is deliberately shaped around the state graph's useful remote
 loadable identities:
 
 ```text
-trigraph.json
+create-font.json
 metadata.json
 names.json
 metrics.json
@@ -41,7 +41,7 @@ cmap/
   <indexed path>.json
 ```
 
-- `trigraph.json` has its own `trigraph.source` format/version and separately
+- `create-font.json` has its own `create-font.source` format/version and separately
   declares the editor snapshot format/version it assembles.
 - `metadata.json`, `names.json`, `metrics.json`, and `style.json` correspond
   directly to the state graph's compact singleton atoms.
@@ -64,7 +64,7 @@ Zod schema, and `jsonSchemaForSourceUnit(kind)` generates its JSON Schema
 Draft 2020-12 representation.
 
 Server and tooling code should import the package root. Browser code should
-import `@trigraph/source/browser`, which exposes directory assembly, splitting,
+import `@create-font/source/browser`, which exposes directory assembly, splitting,
 path helpers, and structural file types without including Zod or the per-unit
 schema implementation. The workspace server validates every unit before the
 browser receives it; the browser codec verifies index relationships and runs
@@ -76,7 +76,7 @@ import {
 	jsonSchemaForSourceUnit,
 	sourceUnitDescriptors,
 	splitEditorFontSource,
-} from "@trigraph/source"
+} from "@create-font/source"
 
 const directory = splitEditorFontSource(editor.read.editorSource()!)
 if (!directory.ok) throw new Error(directory.errors[0].message)
@@ -103,7 +103,7 @@ watching. This package owns the directory's portable data contract.
 
 One JSON document can still represent one complete `EditorFontSource`
 snapshot: the JSON root is the state document itself, with the existing
-`format: "trigraph.editor"` and `editorVersion: 3` discriminants. There is no
+`format: "create-font.editor"` and `editorVersion: 3` discriminants. There is no
 second envelope and no file-only identity layer. Decoding returns the public
 type that can be passed to `createFontEditorState().actions.load`.
 
@@ -130,8 +130,8 @@ an exception:
 import {
 	decodeEditorFontSource,
 	encodeEditorFontSource,
-} from "@trigraph/source"
-import { createFontEditorState } from "@trigraph/states"
+} from "@create-font/source"
+import { createFontEditorState } from "@create-font/states"
 
 const decoded = decodeEditorFontSource(await response.text())
 
@@ -202,6 +202,6 @@ still contain open contours, invalid OpenType ranges, incomplete master
 coverage, or other projection and ingestion errors. Open contours are
 deliberately accepted for broken-path editing and must be closed before export.
 Those export constraints remain the responsibility of
-`@trigraph/states` selectors and `@trigraph/target` ingestion. A decoded value proves
+`@create-font/states` selectors and `@create-font/target` ingestion. A decoded value proves
 that it can be represented and addressed safely by the editor state model, not
 that it is already exportable.

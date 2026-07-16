@@ -29,8 +29,8 @@ export type VariationDelta = Branded<number, "VariationDelta">
 export type NonEmptyReadonlyArray<Value> = readonly [Value, ...Value[]]
 export type NormalizedLocation = NonEmptyReadonlyArray<F2Dot14>
 
-export const TRIGRAPH_FORMAT = "trigraph.variable-truetype" as const
-export const TRIGRAPH_IR_VERSION = 1 as const
+export const CREATE_FONT_FORMAT = "create-font.variable-truetype" as const
+export const CREATE_FONT_IR_VERSION = 1 as const
 
 export interface FontMetadataSource {
 	readonly unitsPerEm: number
@@ -162,8 +162,8 @@ export interface CharacterMapEntrySource {
 }
 
 export interface VariableFontSource {
-	readonly format: typeof TRIGRAPH_FORMAT
-	readonly irVersion: typeof TRIGRAPH_IR_VERSION
+	readonly format: typeof CREATE_FONT_FORMAT
+	readonly irVersion: typeof CREATE_FONT_IR_VERSION
 	readonly metadata: FontMetadataSource
 	readonly names: FontNamesSource
 	readonly metrics: FontMetricsSource
@@ -296,8 +296,8 @@ export interface CharacterMapEntry {
 }
 
 export type VariableFont = {
-	readonly format: typeof TRIGRAPH_FORMAT
-	readonly irVersion: typeof TRIGRAPH_IR_VERSION
+	readonly format: typeof CREATE_FONT_FORMAT
+	readonly irVersion: typeof CREATE_FONT_IR_VERSION
 	readonly metadata: FontMetadata
 	readonly names: FontNames
 	readonly metrics: FontMetrics

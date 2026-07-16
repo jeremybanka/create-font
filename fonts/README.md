@@ -1,8 +1,8 @@
 # Font projects
 
-Each immediate subdirectory is an independently addressable Trigraph font
+Each immediate subdirectory is an independently addressable create-font font
 project. The development server discovers projects by finding
-`fonts/*/trigraph.json`.
+`fonts/*/create-font.json`.
 
-When the repository contains one font, `trigraph serve` selects it
-automatically. With multiple projects, use `trigraph serve --font=<name>`.
+When the repository contains one font, `create-font serve` selects it
+automatically. With multiple projects, use `create-font serve --font=<name>`.

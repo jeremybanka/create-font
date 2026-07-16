@@ -1,9 +1,12 @@
 {
-	"name": "@trigraph/target",
+	"name": "@create-font/target",
 	"version": "0.0.0",
 	"description": "A rigorously validated logical SFNT compilation target for OpenType variable TrueType fonts",
 	"type": "module",
 	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.mts",

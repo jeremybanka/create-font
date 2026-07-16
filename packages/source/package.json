@@ -1,7 +1,10 @@
 {
-	"name": "@trigraph/source",
+	"name": "@create-font/source",
 	"version": "0.0.0",
-	"description": "A deterministic, versioned JSON source format for trigraph editor state",
+	"description": "A deterministic, versioned JSON source format for create-font editor state",
+	"publishConfig": {
+		"access": "public"
+	},
 	"files": [
 		"dist/*.d.mts",
 		"dist/*.d.mts.map",
@@ -29,7 +32,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"@trigraph/states": "workspace:*",
+		"@create-font/states": "workspace:*",
 		"zod": "4.4.3"
 	},
 	"devDependencies": {
