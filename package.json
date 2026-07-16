@@ -20,7 +20,7 @@
 		"test": "vp run --filter trigraph --filter @trigraph/states --filter @trigraph/source --filter @trigraph/preact-konva --filter @trigraph/editor --fail-if-no-match test"
 	},
 	"devDependencies": {
-		"@changesets/cli": "2.31.0",
+		"@changesets/cli": "2.31.1",
 		"@changesets/config": "3.1.4",
 		"@dprint/json": "0.23.0",
 		"@dprint/markdown": "0.22.1",
