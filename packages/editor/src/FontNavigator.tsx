@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
+import { createGlyphPreview } from "./glyph-preview.ts"
 import { useO } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
@@ -151,20 +152,41 @@ export function FontNavigator({
 						<data value={source.glyphs.length}>{source.glyphs.length}</data>
 					</section-heading>
 					<glyph-grid>
-						{source.glyphs.map((glyph) => (
-							<button
-								key={glyph.id}
-								type="button"
-								aria-pressed={glyph.id === activeGlyphId}
-								aria-label={`Edit ${glyph.name}`}
-								onClick={() => workspace.actions.selectGlyph(glyph.id)}
-							>
-								<glyph-tile aria-hidden="true">
-									{glyph.name === ".notdef" ? "◌" : glyph.name}
-								</glyph-tile>
-								<span>{glyph.name}</span>
-							</button>
-						))}
+						{source.glyphs.map((glyph) => {
+							const preview = createGlyphPreview(
+								glyph,
+								activeMasterId,
+								source.metrics,
+								source.metadata.unitsPerEm,
+							)
+							return (
+								<button
+									key={glyph.id}
+									type="button"
+									aria-pressed={glyph.id === activeGlyphId}
+									aria-label={`Edit ${glyph.name}`}
+									onClick={() => workspace.actions.selectGlyph(glyph.id)}
+								>
+									<glyph-tile aria-hidden="true">
+										{preview === null ? null : (
+											<svg
+												viewBox={preview.viewBox}
+												preserveAspectRatio="xMidYMid meet"
+												focusable="false"
+											>
+												<path
+													d={preview.path}
+													fillRule="evenodd"
+													clipRule="evenodd"
+													transform="scale(1 -1)"
+												/>
+											</svg>
+										)}
+									</glyph-tile>
+									<span>{glyph.name}</span>
+								</button>
+							)
+						})}
 					</glyph-grid>
 					<add-glyphs-control>
 						<button
