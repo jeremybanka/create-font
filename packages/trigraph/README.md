@@ -9,8 +9,9 @@ pnpm exec trigraph build
 pnpm exec trigraph serve
 ```
 
-The application runs on Bun canary. Its command-line interface is defined with
-`comline`; its interactive server is an Elysia application; and
+The application runs on the Bun version pinned by the repository's
+`mise.toml`. Its command-line interface is defined with `comline`; its
+interactive server is an Elysia application; and
 `trigraph/rpc-client` exposes the corresponding Eden Treaty client factory.
 
 ## Current commands
@@ -45,6 +46,6 @@ Development runs use `public/index.tsx` directly so Bun can follow the
 HTML, JavaScript, and CSS application under `dist/public`, which is what the
 compiled server serves after installation.
 
-The current Bun canary's HMR transform omits CSS Module bindings from generated
-client chunks. `trigraph serve` therefore keeps Bun's full-stack runtime
-bundling active but sets `hmr: false` until that canary regression is fixed.
+Bun 1.3.14's HMR transform omits CSS Module bindings from generated client
+chunks. `trigraph serve` therefore keeps Bun's full-stack runtime bundling
+active but sets `hmr: false` until that regression is fixed.

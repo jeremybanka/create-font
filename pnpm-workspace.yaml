@@ -3,7 +3,6 @@ packages:
 
 allowBuilds:
   "@vscode/vsce-sign": false
-  bun: true
   dprint: true
   keytar: false
 

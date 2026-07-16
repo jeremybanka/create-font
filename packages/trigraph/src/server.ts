@@ -45,7 +45,7 @@ export function startTrigraphServer(options: StartTrigraphServerOptions = {}) {
 	const app = createTrigraphServerApp(options).listen({
 		development: {
 			console: true,
-			// The current Bun canary drops CSS Module imports from its HMR chunks.
+			// Bun 1.3.14 drops CSS Module imports from its HMR chunks.
 			// Runtime full-stack bundling works correctly without that transform.
 			hmr: false,
 		},

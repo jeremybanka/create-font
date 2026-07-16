@@ -47,3 +47,13 @@ the complete toolchain.
 These packages are the current implementation layers. The `trigraph`
 application owns the preliminary CLI and RPC boundaries plus the Bun full-stack
 browser entry that imports `EditorApplicationRoot` from `@trigraph/editor`.
+
+The workspace toolchain pins Bun through `mise.toml`; Bun is a repository
+runtime, not an npm dependency. Run the complete development stack from the
+workspace root:
+
+```sh
+mise install
+pnpm install
+pnpm dev
+```

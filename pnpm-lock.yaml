@@ -152,9 +152,6 @@ importers:
       '@elysiajs/eden':
         specifier: 1.4.9
         version: 1.4.9(elysia@1.4.29(@sinclair/typebox@0.34.52)(bun-types@1.3.14)(exact-mirror@1.2.2)(file-type@22.0.1)(openapi-types@12.1.3)(typescript@7.0.2))
-      bun:
-        specifier: canary
-        version: 1.3.13-canary.20260425.1
       comline:
         specifier: 0.5.1
         version: 0.5.1(zod@4.4.3)
@@ -523,66 +520,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@oven/bun-darwin-aarch64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-vT8NKOJ3vvdFlnjaqi1RG2+w2PFPghGvAkc0GKXQcO/iGrBKZEC27f4zTx3wKWGaZ3wAP6BIzxx8CrkNJq1taQ==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@oven/bun-darwin-x64-baseline@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-5TAVF4YT98BMCrxg/Gs/Twzblz53Zy8h4HVwGOTlxxTCgTO4HhRBngkRIWfrFFeQetKu2bCK1YAKxn8BjcNe8A==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@oven/bun-darwin-x64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-MGvNO1efTKO/dwKcE8Z8AaYYS60A7kU11r8IZOA8cQU1J+kUf3cYxQjXHleFk2jhkZUj7S39NNnx3pcSOYm6Kg==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@oven/bun-linux-aarch64-musl@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-+1RFEfqyvZZfXGmi4JsBjTdYuGF52FLegrZmdoxuVxWuPx6pFIJbJ1jOehIcTz/yxr6RBtjkkgH08HdPRaCtig==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@oven/bun-linux-aarch64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-C8LWiJIKkC6qk4Q70Q8y1QI9jve3uneaVfDNs325zxTloHxKJ1N5Qq2FznokyP08P3GimogpWy6LzllKiyIayQ==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@oven/bun-linux-x64-baseline@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-fn80FRyx7nWtgJZb0Lvz0yCtsJhRnr/ZjAzlTLZFrRXGFtLQexpT9BDXf+xjezMhLJ/xnl0hD+uKesWX1HjnCg==}
-    cpu: [x64]
-    os: [linux]
-
-  '@oven/bun-linux-x64-musl-baseline@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-oCRoseZZE/LasbaCAl0zMS+dM13O0YtQDD1LFL4N54nZqI7zG7X/VPkciOH2qrALcDGsGtSnU9AhKjhAR6xOkA==}
-    cpu: [x64]
-    os: [linux]
-
-  '@oven/bun-linux-x64-musl@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-faS+4ZOk08vnLeefShACNa6FqUtDNnX0wBFqntAgF9MZgBC/a4U7m+ZMshtKN7jLCxeiH0nleKjjNm7i+whrag==}
-    cpu: [x64]
-    os: [linux]
-
-  '@oven/bun-linux-x64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-l/cHuPLVUkHfhX7gmHDAyCK/uN9Fm3c4xRuYwCBkjwZ1WnJQyFlvxuAkTX8opGSg9zSNbNV1lmyks+tgWZZ2Qg==}
-    cpu: [x64]
-    os: [linux]
-
-  '@oven/bun-windows-aarch64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-f1hFXJPj5uSMbH5rbu1ikj3ADWnErFGzta+0p2H0zruNPwAKjBhcZE+hDlYrlYsvRaG2FT0l5pdWx5J93jYVXQ==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@oven/bun-windows-x64-baseline@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-7w/+y+OX6ihtpjWX+sZvaCKRXu00DTdpMTjRRRLLgh7d24svzI1VzCm4F1LBIGnfR/Qkx0FCH32XmaAibv1jyg==}
-    cpu: [x64]
-    os: [win32]
-
-  '@oven/bun-windows-x64@1.3.13-canary.20260425.1':
-    resolution: {integrity: sha512-k/SJa6AuhwaHNj4WmDUettPmAcIJua8NCeonxiSNKyNZp3rPu9S7RpbauGaK3nkgWzGat9MbzPlLk7tPb4ubRg==}
-    cpu: [x64]
-    os: [win32]
 
   '@oxc-project/runtime@0.138.0':
     resolution: {integrity: sha512-yHhoXsN8tYxgdJCdD91PbySNjEEaBX/tH2OQRDXJpsQv5b184oC4/qVbU7qlblvfil/JP15Lh2HW7+HN5DS90Q==}
@@ -1615,12 +1552,6 @@ packages:
 
   bun-types@1.3.14:
     resolution: {integrity: sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ==}
-
-  bun@1.3.13-canary.20260425.1:
-    resolution: {integrity: sha512-KGrsLUoKsSLrgkvp0LBZlLn+F+3J6JmhThmkAoBPr/zkDu5Lgqn78qx2Hf+OSJJ7ZZqfEx1yhraLNBOqmR9XQA==}
-    cpu: [arm64, x64]
-    os: [darwin, linux, win32]
-    hasBin: true
 
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
@@ -3695,42 +3626,6 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@oven/bun-darwin-aarch64@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-darwin-x64-baseline@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-darwin-x64@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-aarch64-musl@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-aarch64@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-x64-baseline@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-x64-musl-baseline@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-x64-musl@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-linux-x64@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-windows-aarch64@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-windows-x64-baseline@1.3.13-canary.20260425.1':
-    optional: true
-
-  '@oven/bun-windows-x64@1.3.13-canary.20260425.1':
-    optional: true
-
   '@oxc-project/runtime@0.138.0': {}
 
   '@oxc-project/types@0.138.0': {}
@@ -4522,21 +4417,6 @@ snapshots:
   bun-types@1.3.14:
     dependencies:
       '@types/node': 12.20.55
-
-  bun@1.3.13-canary.20260425.1:
-    optionalDependencies:
-      '@oven/bun-darwin-aarch64': 1.3.13-canary.20260425.1
-      '@oven/bun-darwin-x64': 1.3.13-canary.20260425.1
-      '@oven/bun-darwin-x64-baseline': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-aarch64': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-aarch64-musl': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-x64': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-x64-baseline': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-x64-musl': 1.3.13-canary.20260425.1
-      '@oven/bun-linux-x64-musl-baseline': 1.3.13-canary.20260425.1
-      '@oven/bun-windows-aarch64': 1.3.13-canary.20260425.1
-      '@oven/bun-windows-x64': 1.3.13-canary.20260425.1
-      '@oven/bun-windows-x64-baseline': 1.3.13-canary.20260425.1
 
   bundle-name@4.1.0:
     dependencies:
