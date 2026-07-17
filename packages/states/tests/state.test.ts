@@ -56,6 +56,27 @@ describe("font editor state", () => {
 		})
 	})
 
+	it("reports invalid overshoot metadata without passing it to target v1", () => {
+		const editor = createFontEditorState({ key: "test/overshoot-projection" })
+		const source = makeGeometricOEditorFont()
+		editor.actions.load({
+			...source,
+			metrics: {
+				...source.metrics,
+				overshoots: { ...source.metrics.overshoots, xHeight: -1 },
+			},
+		})
+		const compilation = editor.read.compilation()
+		expect(compilation.stage).toBe("projection-failed")
+		if (compilation.stage !== "projection-failed") return
+		expect(compilation.projectionErrors).toContainEqual(
+			expect.objectContaining({
+				code: "metrics.overshoot_range",
+				path: "$.metrics.overshoots.xHeight",
+			}),
+		)
+	})
+
 	it("round-trips serializable editor state", () => {
 		const source = makeGeometricOEditorFont()
 		const editor = createFontEditorState({ key: "test/round-trip" })
@@ -146,6 +167,68 @@ describe("font editor state", () => {
 				pointId,
 			]),
 		).toBe(700)
+	})
+
+	it("edits horizontal metrics atomically in glyph history", () => {
+		const editor = createLoadedEditor("test/horizontal-metrics")
+		const before = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		if (before === undefined) throw new Error("Missing fixture layer.")
+
+		editor.actions.setHorizontalMetrics({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+		const changed = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(changed).toMatchObject({
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+
+		editor.undo(oGlyphId)
+		const undone = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(undone).toMatchObject({
+			advanceWidth: before.advanceWidth,
+			leftSideBearing: before.leftSideBearing,
+		})
+		editor.redo(oGlyphId)
+		expect(
+			editor.read
+				.editorSource()
+				?.glyphs.find((glyph) => glyph.id === oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId),
+		).toMatchObject({
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+	})
+
+	it("rejects horizontal metrics outside their storage domains", () => {
+		const editor = createLoadedEditor("test/horizontal-metric-bounds")
+		expect(() =>
+			editor.actions.setHorizontalMetrics({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				advanceWidth: 65_536,
+			}),
+		).toThrow(/0 through 65535/u)
+		expect(() =>
+			editor.actions.setHorizontalMetrics({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				leftSideBearing: -32_769,
+			}),
+		).toThrow(/-32768 through 32767/u)
 	})
 
 	it("keeps one independent timeline per glyph", () => {

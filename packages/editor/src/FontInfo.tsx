@@ -1,4 +1,9 @@
-import type { EditorFontSource } from "@create-font/states"
+import {
+	MAX_OVERSHOOT_DEPTH,
+	VERTICAL_ALIGNMENT_METRIC_IDS,
+	type EditorFontSource,
+	type VerticalAlignmentMetricId,
+} from "@create-font/states"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontInfo.module.css"
@@ -48,6 +53,18 @@ export function FontInfo({ workspace }: FontInfoProps) {
 		workspace.font.silo.setState(
 			workspace.font.atoms.style,
 			Object.freeze({ ...style, [key]: value }),
+		)
+	}
+	const setOvershoot = (
+		key: VerticalAlignmentMetricId,
+		value: number,
+	): void => {
+		workspace.font.silo.setState(
+			workspace.font.atoms.metrics,
+			Object.freeze({
+				...metrics,
+				overshoots: Object.freeze({ ...metrics.overshoots, [key]: value }),
+			}),
 		)
 	}
 
@@ -223,6 +240,24 @@ export function FontInfo({ workspace }: FontInfoProps) {
 							/>
 						))}
 					</field-grid>
+					<section-heading>
+						<heading-copy>
+							<h3>Alignment overshoots</h3>
+							<p>Permitted rounded-outline depth beyond each alignment line.</p>
+						</heading-copy>
+					</section-heading>
+					<field-grid>
+						{VERTICAL_ALIGNMENT_METRIC_IDS.map((key) => (
+							<NumberField
+								key={`overshoot:${key}`}
+								label={`${overshootLabel(key)} overshoot`}
+								value={metrics.overshoots[key]}
+								min={0}
+								max={MAX_OVERSHOOT_DEPTH}
+								onInput={(value) => setOvershoot(key, value)}
+							/>
+						))}
+					</field-grid>
 				</info-section>
 
 				<info-section data-wide="true">
@@ -313,11 +348,15 @@ function TextField({
 
 function NumberField({
 	label,
+	max,
+	min,
 	onInput,
 	step = "1",
 	value,
 }: {
 	readonly label: string
+	readonly max?: number
+	readonly min?: number
 	readonly onInput: (value: number) => void
 	readonly step?: string
 	readonly value: number
@@ -328,6 +367,8 @@ function NumberField({
 				<span>{label}</span>
 				<input
 					type="number"
+					min={min}
+					max={max}
 					step={step}
 					value={value}
 					onInput={(event) => {
@@ -338,4 +379,19 @@ function NumberField({
 			</label>
 		</number-field>
 	)
+}
+
+function overshootLabel(key: VerticalAlignmentMetricId): string {
+	return (
+		{
+			baseline: "Baseline",
+			ascender: "Ascender",
+			descender: "Descender",
+			winAscent: "Windows ascent",
+			winDescent: "Windows descent",
+			xHeight: "x-height",
+			capHeight: "Cap height",
+			underlinePosition: "Underline position",
+		} as const
+	)[key]
 }

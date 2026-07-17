@@ -1,5 +1,6 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphInspector.module.css"
+import { NumericInput } from "./NumericInput.tsx"
 import { useO } from "./state-hooks.ts"
 
 export interface GlyphInspectorProps {
@@ -43,6 +44,18 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 			: compilation.projectionWarnings.length +
 				compilation.ingestionErrors.length +
 				compilation.ingestionWarnings.length
+	const setMetrics = (
+		input:
+			| { readonly advanceWidth: number }
+			| { readonly leftSideBearing: number },
+	): void => {
+		if (layer === null) return
+		workspace.font.actions.setHorizontalMetrics({
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+			...input,
+		})
+	}
 
 	return (
 		<glyph-inspector className={css.class}>
@@ -58,15 +71,52 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					<dd>{glyph?.name ?? "—"}</dd>
 					<dt>Master</dt>
 					<dd>{master?.name ?? "—"}</dd>
-					<dt>Advance</dt>
-					<dd>{layer?.advanceWidth ?? "—"}</dd>
-					<dt>LSB</dt>
-					<dd>{layer?.leftSideBearing ?? "—"}</dd>
 					<dt>Contours</dt>
 					<dd>{layer?.contours.length ?? glyph?.contours.length ?? 0}</dd>
 					<dt>Points</dt>
 					<dd>{pointIds.length}</dd>
 				</dl>
+				{layer === null ? null : (
+					<metric-fields>
+						<label>
+							<span>Width</span>
+							<NumericInput
+								aria-label="Glyph width"
+								value={layer.advanceWidth}
+								min={0}
+								max={65_535}
+								onCommit={(advanceWidth) => setMetrics({ advanceWidth })}
+							/>
+						</label>
+						<label>
+							<span>LSB</span>
+							<NumericInput
+								aria-label="Left side bearing"
+								value={layer.leftSideBearing}
+								min={-32_768}
+								max={32_767}
+								onCommit={(leftSideBearing) => setMetrics({ leftSideBearing })}
+							/>
+						</label>
+						<label>
+							<span>RSB</span>
+							<NumericInput
+								aria-label="Right side bearing"
+								value={layer.rightSideBearing}
+								min={-layer.leftSideBearing - layer.outlineWidth}
+								max={65_535 - layer.leftSideBearing - layer.outlineWidth}
+								onCommit={(rightSideBearing) =>
+									setMetrics({
+										advanceWidth:
+											rightSideBearing +
+											layer.leftSideBearing +
+											layer.outlineWidth,
+									})
+								}
+							/>
+						</label>
+					</metric-fields>
+				)}
 			</inspector-section>
 
 			<inspector-section

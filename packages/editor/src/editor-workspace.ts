@@ -21,6 +21,10 @@ export interface EditorCanvasLayer {
 	readonly contours: readonly EditorCanvasContour[]
 	readonly advanceWidth: number
 	readonly leftSideBearing: number
+	readonly xMin: number
+	readonly xMax: number
+	readonly outlineWidth: number
+	readonly rightSideBearing: number
 }
 
 export interface EditorCanvasContour {
@@ -225,12 +229,22 @@ export function createEditorWorkspace(
 					}),
 				)
 			}
+			const xCoordinates = contours.flatMap((contour) =>
+				contour.nodes.map((node) => node.x),
+			)
+			const xMin = xCoordinates.length === 0 ? 0 : Math.min(...xCoordinates)
+			const xMax = xCoordinates.length === 0 ? 0 : Math.max(...xCoordinates)
+			const outlineWidth = xMax - xMin
 			return Object.freeze({
 				masterId,
 				glyphId,
 				contours: Object.freeze(contours),
 				advanceWidth,
 				leftSideBearing,
+				xMin,
+				xMax,
+				outlineWidth,
+				rightSideBearing: advanceWidth - leftSideBearing - outlineWidth,
 			})
 		},
 	})

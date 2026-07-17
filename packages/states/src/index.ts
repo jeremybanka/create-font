@@ -1,6 +1,7 @@
 export * from "./remote.ts"
 export * from "./state.ts"
 export * from "./types.ts"
+export * from "./vertical-metrics.ts"
 export {
 	buildMasterScalarMatrix,
 	invertScalarMatrix,

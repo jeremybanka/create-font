@@ -103,7 +103,9 @@ watching. This package owns the directory's portable data contract.
 
 One JSON document can still represent one complete `EditorFontSource`
 snapshot: the JSON root is the state document itself, with the existing
-`format: "create-font.editor"` and `editorVersion: 3` discriminants. There is no
+`format: "create-font.editor"` and `editorVersion: 4` discriminants. Version 3
+files and directory manifests are migrated on read by adding zero-depth
+alignment overshoots; every new write emits version 4. There is no
 second envelope and no file-only identity layer. Decoding returns the public
 type that can be passed to `createFontEditorState().actions.load`.
 
