@@ -106,7 +106,7 @@ describe("canvas hit testing", () => {
 		expect(radii.get("node/point:right")).toBe(2)
 	})
 
-	it("uses stable IDs for exact ties and leaves coincident shapes non-overlapping", () => {
+	it("gives exact-coincident controls one stable draggable owner", () => {
 		const controls = [
 			{
 				target: { kind: "node" as const, pointId: pointId("z") },
@@ -118,16 +118,21 @@ describe("canvas hit testing", () => {
 				x: 0,
 				y: 0,
 			},
+			{
+				target: { kind: "node" as const, pointId: pointId("nearby") },
+				x: 8,
+				y: 0,
+			},
 		]
-		expect(
-			nearestEditorControlHit(controls, { x: 0, y: 0 }, 1)?.target,
-		).toEqual(controls[1]?.target)
-		expect(editorControlHitRadii(controls, 1)).toEqual(
-			new Map([
-				["node/point:z", 0],
-				["node/point:a", 0],
-			]),
-		)
+		for (const ordered of [controls, [...controls].reverse()]) {
+			expect(
+				nearestEditorControlHit(ordered, { x: 0, y: 0 }, 1)?.target,
+			).toEqual(controls[1]?.target)
+			const radii = editorControlHitRadii(ordered, 1)
+			expect(radii.get("node/point:a")).toBe(4)
+			expect(radii.get("node/point:z")).toBe(0)
+			expect(radii.get("node/point:nearby")).toBe(4)
+		}
 	})
 
 	it("finds the nearest path within a forgiving screen-space radius", () => {

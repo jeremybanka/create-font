@@ -136,8 +136,9 @@ export function nearestEditorControlHit(
 /**
  * Caps each interactive control shape at its nearest-neighbor bisector.
  * Distinct enlarged targets therefore never overlap and cannot shadow one
- * another through Konva draw order. Coincident controls deliberately receive a
- * zero-radius shape; the deterministic stage-level resolver remains available.
+ * another through Konva draw order. An exact-coincident group gives its stable
+ * lowest-key control the group's draggable region and leaves the remaining
+ * shapes at zero radius, matching the deterministic stage-level resolver.
  */
 export function editorControlHitRadii(
 	candidates: readonly EditorControlHitCandidate[],
@@ -146,20 +147,25 @@ export function editorControlHitRadii(
 ): ReadonlyMap<string, number> {
 	const radii = new Map<string, number>()
 	for (const candidate of candidates) {
+		const key = selectionKey(candidate.target)
+		const coincidentOwnerKey = candidates.reduce((ownerKey, other) => {
+			if (squaredDistance(candidate, other) !== 0) return ownerKey
+			const otherKey = selectionKey(other.target)
+			return otherKey < ownerKey ? otherKey : ownerKey
+		}, key)
+		if (key !== coincidentOwnerKey) {
+			radii.set(key, 0)
+			continue
+		}
 		let nearestSquared = Number.POSITIVE_INFINITY
 		for (const other of candidates) {
 			if (other === candidate) continue
-			nearestSquared = Math.min(
-				nearestSquared,
-				squaredDistance(candidate, other),
-			)
+			const distance = squaredDistance(candidate, other)
+			if (distance > 0) nearestSquared = Math.min(nearestSquared, distance)
 		}
 		const nearestRadiusPx =
 			Math.sqrt(nearestSquared) * Math.max(0, worldScale) * 0.5
-		radii.set(
-			selectionKey(candidate.target),
-			Math.min(maximumRadiusPx, nearestRadiusPx),
-		)
+		radii.set(key, Math.min(maximumRadiusPx, nearestRadiusPx))
 	}
 	return radii
 }
