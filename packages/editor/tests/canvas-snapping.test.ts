@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import { resolveVerticalMetricGuides } from "@create-font/states"
 
-import { snapDraggedPoint } from "../src/canvas-snapping.ts"
+import {
+	snapDraggedPoint,
+	snapDraggedTarget,
+	type DragPositionTarget,
+} from "../src/canvas-snapping.ts"
 import { makeDemoFont } from "../src/demo-font.ts"
 import { parseNumericInput } from "../src/numeric-input.ts"
 
@@ -45,6 +49,38 @@ describe("canvas snapping", () => {
 		}
 		expect(snapDraggedPoint({ ...input, worldScale: 0.5 }).x).toBe(86)
 		expect(snapDraggedPoint({ ...input, worldScale: 2 }).x).toBe(100)
+	})
+
+	it("reasserts the snapped canvas target position on every drag event", () => {
+		let position = { x: 103, y: 497 }
+		const target: DragPositionTarget = {
+			x: () => position.x,
+			y: () => position.y,
+			position: (next) => {
+				position = { ...next }
+			},
+		}
+		const context = {
+			pointId: "point:dragged" as const,
+			nodes: [
+				{ pointId: "point:dragged" as const, x: 103, y: 497 },
+				{ pointId: "point:other" as const, x: 100, y: 300 },
+			],
+			metrics: metricLines,
+			worldScale: 1,
+			thresholdPixels: 7,
+		}
+
+		expect(snapDraggedTarget(target, context)).toMatchObject({ x: 100, y: 500 })
+		expect(position).toEqual({ x: 100, y: 500 })
+
+		position = { x: 105, y: 496 }
+		expect(snapDraggedTarget(target, context)).toMatchObject({ x: 100, y: 500 })
+		expect(position).toEqual({ x: 100, y: 500 })
+
+		position = { x: 120, y: 480 }
+		expect(snapDraggedTarget(target, context)).toMatchObject({ x: 120, y: 480 })
+		expect(position).toEqual({ x: 120, y: 480 })
 	})
 })
 
