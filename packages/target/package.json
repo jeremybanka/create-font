@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/target",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"description": "A rigorously validated logical SFNT compilation target for OpenType variable TrueType fonts",
 	"repository": {
 		"type": "git",
