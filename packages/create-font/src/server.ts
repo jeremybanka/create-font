@@ -66,7 +66,7 @@ export function startCreateFontServer(
 			hmr: false,
 		},
 		hostname: options.hostname ?? `127.0.0.1`,
-		port: options.port ?? 4173,
+		port: options.port ?? 3000,
 	})
 	const server = app.server
 	if (server === null) {
