@@ -18,6 +18,12 @@ import {
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
+import {
+	DEFAULT_VISUAL_DEBUG_STATE,
+	toggleVisualDebug,
+	type VisualDebugState,
+	type VisualDebugToggleId,
+} from "./visual-debug.ts"
 
 export interface EditorCanvasLayer {
 	readonly masterId: MasterId
@@ -129,6 +135,10 @@ export function createEditorWorkspace(
 	const showNodesAtom = font.silo.atom<boolean>({
 		key: "showNodes",
 		default: true,
+	})
+	const visualDebugAtom = font.silo.atom<VisualDebugState>({
+		key: "visualDebug",
+		default: DEFAULT_VISUAL_DEBUG_STATE,
 	})
 	const validationAtom = font.silo.atom<EditorValidationStatus>({
 		key: "validation",
@@ -405,6 +415,7 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			visualDebug: visualDebugAtom,
 			validation: validationAtom,
 			pathname: pathnameAtom,
 			route: routeSelector,
@@ -415,6 +426,11 @@ export function createEditorWorkspace(
 			faviconHref: faviconHrefSelector,
 		},
 		actions: {
+			toggleVisualDebug(id: VisualDebugToggleId): void {
+				font.silo.setState(visualDebugAtom, (state) =>
+					toggleVisualDebug(state, id),
+				)
+			},
 			navigate(pathname: Pathname): void {
 				if (typeof window !== "undefined") {
 					history.pushState(null, ``, pathname)

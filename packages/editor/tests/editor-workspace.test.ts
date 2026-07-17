@@ -48,6 +48,20 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
+	it("keeps visual debug state across editor lifecycle actions", () => {
+		const workspace = createEditorWorkspace()
+		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({
+			"hit-targets": false,
+		})
+
+		workspace.actions.toggleVisualDebug("hit-targets")
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.actions.exitGlyphEdit()
+
+		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({
+			"hit-targets": true,
+		})
+	})
 	it("coalesces a transaction into one external-store notification", async () => {
 		const silo = new Silo({
 			name: "test/settled-selector",
