@@ -179,17 +179,16 @@ Caching adds further invariants that the current fresh-read approach avoids:
 - invalid external state needs explicit last-known-good/error semantics rather
   than silently advancing the published revision.
 
-## Follow-up recommendations
+## Recommendations and disposition
 
-1. **First optimization — high impact / high confidence / medium complexity:**
-   add an atomic, bounded `SourceProjectSnapshot { revision, units[] }` read to
-   the source service and RPC. One request calls `loadProjectDirectory()` once
-   and derives the aggregate revision and every unit snapshot from that same
-   `LoadedProject`. This preserves fresh-from-disk behavior, eliminates 206 HTTP
-   requests and repeated loads, and removes the manifest/unit torn-read window
-   without introducing authoritative cache invalidation.
-2. **Phase two only if a single load remains material — medium incremental impact
-   / medium confidence / high correctness complexity:** keep an immutable
+1. **Implemented and confirmed:** the atomic, bounded
+   `SourceProjectSnapshot { revision, units[] }` service/RPC read calls
+   `loadProjectDirectory()` once and derives the aggregate revision and every
+   unit snapshot from that same `LoadedProject`. It preserves fresh-from-disk
+   behavior, eliminates 206 HTTP requests and repeated loads, and removes the
+   manifest/unit torn-read window without authoritative cache invalidation.
+2. **Defer unless a larger font makes a single load material — medium incremental
+   impact / medium confidence / high correctness complexity:** keep an immutable
    last-known-good `LoadedProject` pointer and atomically swap it only after full
    validation. Address forced write refresh, deep ownership, watcher-registration
    gaps, dynamic directory reconciliation, invalid-state reporting, and bounded
@@ -200,10 +199,9 @@ Caching adds further invariants that the current fresh-read approach avoids:
    event supersedes an in-flight refresh. Reuse unchanged units only when their
    raw-text descriptor revisions match, and delete paths absent from the newer
    manifest.
-4. **Secondary / medium impact / medium confidence:** profile the 274 ms warm p50
-   hydration long task with a sampling trace after the source bottleneck is
-   removed. It is material for warm navigation but only about 2% of the current
-   cold path.
+4. **Next measured target / medium impact / medium confidence:** profile the
+   274 ms warm and 403 ms optimized-cold hydration long task with a sampling
+   trace. Hydration and validation now dominate startup.
 5. **Reject as a primary fix:** removing the service lock or merely increasing
    HTTP concurrency retains N complete project loads, increases I/O/CPU pressure,
    and weakens coherence. Combining canonical source into one file would conflict
@@ -232,6 +230,61 @@ profile before adding cache complexity. In particular, if a single project load
 remains significant for a 1,000-unit stress corpus, then cache/incremental work
 has measured justification.
 
+## Bulk-snapshot implementation result
+
+The implementation adds `SourceProjectSnapshot { revision, units[] }` to the
+public service contract and `GET /api/source/snapshot` to RPC version 4. The
+filesystem service derives the aggregate revision and all 206 unit
+values/revisions from one validated `LoadedProject`. The SharedWorker uses this
+route for initial load and subsequent refreshes. The legacy manifest and
+individual-unit routes remain available, and no persistent cache was added.
+
+Ten post-change development samples repeated the original cold protocol on an
+instrumented server at `http://127.0.0.1:4181/`. Every Playwright context had a
+new HTTP cache and SharedWorker. The server recorded exactly one
+`read-snapshot` project load for each context, in addition to its one-time
+initialization load.
+
+| Optimized cold development metric |         p50 |         p95 |              Range |
+| --------------------------------- | ----------: | ----------: | -----------------: |
+| Navigation → editor usable        | 1,059.25 ms | 1,096.45 ms | 1,034.4–1,102.3 ms |
+| Navigation → source message       |   665.30 ms |   687.31 ms |     633.2–688.3 ms |
+| Snapshot RPC phase                |    81.30 ms |    88.03 ms |       75.2–88.3 ms |
+| Snapshot resource duration        |    71.15 ms |    77.78 ms |       65.6–78.0 ms |
+| Server complete project load      |    67.21 ms |    72.70 ms |     61.66–72.85 ms |
+| Source directory assembly         |    15.25 ms |    16.23 ms |       14.5–16.5 ms |
+| Worker validation / compilation   |   475.55 ms |   495.40 ms |     456.7–500.4 ms |
+| Main editor hydration / render    |   402.50 ms |   412.02 ms |     381.0–414.0 ms |
+| Main-thread total blocking time   |   334.00 ms |   342.20 ms |         312–344 ms |
+| Worker → main message transit     |     3.00 ms |     3.40 ms |       2.80–3.40 ms |
+
+Every run made exactly one source snapshot request and zero legacy manifest or
+unit requests. It returned 206 units in a 300,477-byte encoded body / 300,777
+transfer bytes; `unitRequests` was empty and no console errors were observed.
+The 1,059.25 ms editor-usable p50 is a 92.34% reduction from the 13,835 ms
+baseline, lands inside the predicted 1.0–1.2 second floor, and is below the
+1.5-second falsification threshold. The 81.30 ms snapshot RPC p50 is also well
+below the 250 ms threshold.
+
+The direct source-service profiler independently measured ten bulk reads at
+59.47 / 72.72 ms wall p50 / p95. Their complete-load phase was 59.32 / 72.66 ms,
+and encoding the 300,477-byte response took 1.93 ms in the recorded sample.
+This confirms that the browser route now performs O(N) file reads and one
+assembly rather than O(N²) reads and N assemblies.
+
+A built-production cold confirmation on isolated port 4182 reached editor
+usable in 1,044.0 ms. Its snapshot RPC took 90.8 ms (81 ms resource duration),
+validation 475.1 ms, assembly 14.6 ms, inferred hydration 387.3 ms, and total
+blocking time 318 ms. It likewise made exactly one 300,477-byte snapshot request,
+returned 206 units, issued no legacy unit requests, and logged no console
+errors. The optimized attribution therefore survives bundling.
+
+The prediction is confirmed for the checked-in 206-unit font. Persistent caching
+is not justified by this startup target: the remaining cold cost is dominated by
+validation and main-thread hydration, while the complete fresh disk load is
+about 6% of editor-usable p50. A larger-font corpus may still justify cache or
+incremental work after separate measurement.
+
 ### Correctness and regression test plan
 
 For every exposed snapshot, tests must recompute the aggregate revision from the
@@ -252,6 +305,13 @@ Benchmark 20-, 206-, and approximately 1,000-unit projects with ten cold and ten
 warm dev and production runs. Assert one initial snapshot request and O(N) file
 reads; use latency budgets as regression signals rather than timing assertions in
 ordinary unit tests.
+
+The implementation tests cover aggregate and unit revision recomputation,
+assembly of all returned values, a legacy manifest/unit torn-read race, typed RPC
+success/unavailable/validation paths, worker transport failures, and a newer
+manifest arriving while an older snapshot RPC is in flight. The broader
+watcher/write/cache matrix remains follow-up coverage for any persistent-cache or
+incremental-loading implementation.
 
 Re-run the same ten cold and warm samples after the source-service change. A
 candidate regression budget for `workbench-sans` is cold p50 ≤ 2 seconds, cold

@@ -19,7 +19,7 @@ import type {
 	WriteSourceUnitsInput,
 } from "./contracts.ts"
 
-export const CREATE_FONT_RPC_VERSION = 3 as const
+export const CREATE_FONT_RPC_VERSION = 4 as const
 
 export type CreateFontRpcOptions = Readonly<{
 	build: () => Promise<BuildResult>
@@ -112,6 +112,16 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			}
 			try {
 				return await options.source.readManifest()
+			} catch (error) {
+				return sourceErrorResponse(error)
+			}
+		})
+		.get(`/source/snapshot`, async () => {
+			if (options.source === undefined) {
+				return status(501, sourceServiceUnavailable)
+			}
+			try {
+				return await options.source.readSnapshot()
 			} catch (error) {
 				return sourceErrorResponse(error)
 			}

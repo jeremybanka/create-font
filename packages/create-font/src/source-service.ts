@@ -19,6 +19,7 @@ import {
 	type JsonValue,
 	type SourceManifest,
 	type SourceChangedEvent,
+	type SourceProjectSnapshot,
 	type SourceUnitSnapshot,
 	type CreateFontSourceService,
 	type WriteSourceUnitInput,
@@ -46,6 +47,7 @@ type LoadedProject = Readonly<{
 export type SourceProjectLoadTrigger =
 	| `initialization`
 	| `read-manifest`
+	| `read-snapshot`
 	| `read-unit`
 	| `standalone-load`
 	| `watch-refresh`
@@ -362,6 +364,11 @@ export async function createFileSystemSourceService(
 		return { path, revision, value: value as JsonValue }
 	}
 
+	const projectSnapshot = (project: LoadedProject): SourceProjectSnapshot => ({
+		revision: project.manifest.revision,
+		units: project.manifest.units.map(({ path }) => snapshot(project, path)),
+	})
+
 	const writeUnitsUnlocked = async (
 		input: WriteSourceUnitsInput,
 	): Promise<WriteSourceUnitsResult> => {
@@ -486,6 +493,8 @@ export async function createFileSystemSourceService(
 	return {
 		readManifest: () =>
 			withLock(async () => (await loadProject(`read-manifest`)).manifest),
+		readSnapshot: () =>
+			withLock(async () => projectSnapshot(await loadProject(`read-snapshot`))),
 		readUnit: (path) =>
 			withLock(async () =>
 				snapshot(await loadProject(`read-unit`), normalizeUnitPath(path)),

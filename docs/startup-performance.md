@@ -14,17 +14,17 @@ with epoch-based time origins. It includes:
 - bootstrap render, source-message receipt, editor hydration/render, and the
   first double-animation-frame `editor-usable` milestone;
 - SharedWorker module/connection/source-ready milestones;
-- manifest RPC, parallel source-unit RPC, directory assembly, and validation /
-  compilation phases;
-- individual unit-request durations, RPC resource sizes when the browser exposes
-  them, and cross-context message transit time; and
+- atomic source-snapshot RPC, directory assembly, and validation / compilation
+  phases (legacy profiles may contain manifest/unit fan-out phases instead);
+- source request counts, legacy individual unit-request durations, RPC resource
+  sizes when the browser exposes them, and cross-context message transit time;
+  and
 - a `cold-worker` / `warm-worker` classification. A SharedWorker can outlive a
   tab, so warm navigation is a distinct product scenario rather than a noisy
   cold run.
 
-The instrumentation is observational. It does not add retries, caching, request
-aggregation, or another startup strategy. Capture evidence before proposing an
-optimization.
+The instrumentation is observational. It does not add retries or caching and
+reports whichever startup transport the worker uses.
 
 ## Reproducible capture protocol
 
@@ -61,11 +61,11 @@ bun packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
 
 This opt-in diagnostic records why each complete project load occurred and
 splits it into path collection, file read/parse/hash, and source assembly. It
-then simulates encoding one atomic bulk snapshot so repeated project loading can
-be distinguished from JSON serialization and payload size. It does not change
-the service's read, write, watcher, or caching behavior. Timing calls are skipped
-unless an observer is supplied, and observer failures are isolated from source
-loading.
+profiles the legacy manifest/unit fan-out and ten atomic bulk reads, then encodes
+one bulk response so repeated project loading can be distinguished from JSON
+serialization and payload size. It does not change the service's read, write,
+watcher, or caching behavior. Timing calls are skipped unless an observer is
+supplied, and observer failures are isolated from source loading.
 
 - A **cold-worker run** starts in a new browser context, so no source-session
   SharedWorker or HTTP cache survives.
@@ -98,9 +98,11 @@ sum of each observed task's duration above 50 ms. Browsers without Long Tasks
 API support return an empty list and zero; record that limitation rather than
 treating zero as proof of no blocking.
 
-Do not sum overlapping resource durations. For parallel source-unit requests,
-the `source-unit-rpc-fanout` wall time is the relevant critical path; individual
-durations identify stragglers.
+Do not sum overlapping resource durations. Current profiles use the
+`source-snapshot-rpc` wall phase and should contain exactly one
+`/api/source/snapshot` resource on a cold load. Legacy parallel-source-unit
+profiles use `source-unit-rpc-fanout`; their individual durations identify
+stragglers.
 
 ## Baselines
 

@@ -52,6 +52,15 @@ export type SourceUnitSnapshot = SourceUnitDescriptor &
 		value: JsonValue
 	}>
 
+/**
+ * One validated, revision-consistent view of every logical source unit.
+ * `revision` is derived from the ordered path/unit-revision pairs in `units`.
+ */
+export type SourceProjectSnapshot = Readonly<{
+	revision: string
+	units: readonly SourceUnitSnapshot[]
+}>
+
 export type SourceUnitWrite = Readonly<{
 	/**
 	 * `null` means the caller expects to create the unit. A string means the
@@ -81,6 +90,7 @@ export type WriteSourceUnitsResult = Readonly<{
 
 export interface CreateFontSourceService {
 	readManifest(): Promise<SourceManifest>
+	readSnapshot(): Promise<SourceProjectSnapshot>
 	readUnit(path: SourceUnitPath): Promise<SourceUnitSnapshot>
 	writeUnit(input: WriteSourceUnitInput): Promise<SourceUnitSnapshot>
 	writeUnits(input: WriteSourceUnitsInput): Promise<WriteSourceUnitsResult>

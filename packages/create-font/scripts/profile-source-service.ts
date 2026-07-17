@@ -17,13 +17,23 @@ const manifest = await service.readManifest()
 const manifestWallDuration = performance.now() - manifestStartedAt
 
 const unitReadsStartedAt = performance.now()
-const units = await Promise.all(
-	manifest.units.map(({ path }) => service.readUnit(path)),
-)
+await Promise.all(manifest.units.map(({ path }) => service.readUnit(path)))
 const unitReadsWallDuration = performance.now() - unitReadsStartedAt
 
+const snapshotSamples = []
+for (let index = 0; index < 10; index += 1) {
+	const snapshotStartedAt = performance.now()
+	const snapshot = await service.readSnapshot()
+	snapshotSamples.push({
+		duration: performance.now() - snapshotStartedAt,
+		snapshot,
+	})
+}
+const snapshot = snapshotSamples.at(-1)?.snapshot
+if (snapshot === undefined) throw new Error(`No snapshot was profiled.`)
+
 const serializationStartedAt = performance.now()
-const bulkPayload = JSON.stringify({ manifest, units })
+const bulkPayload = JSON.stringify(snapshot)
 const bulkSerializationDuration = performance.now() - serializationStartedAt
 
 const quantile = (values: readonly number[], probability: number): number => {
@@ -85,7 +95,7 @@ const report = {
 	bulkTheory: {
 		encodedPayloadBytes: new TextEncoder().encode(bulkPayload).byteLength,
 		estimatedSingleLoadAndSerialization:
-			(diagnostics.find((event) => event.trigger === `read-manifest`)
+			(diagnostics.find((event) => event.trigger === `read-snapshot`)
 				?.totalDuration ?? 0) + bulkSerializationDuration,
 		serializationDuration: bulkSerializationDuration,
 	},
@@ -95,6 +105,16 @@ const report = {
 		[...grouped].map(([trigger, events]) => [trigger, summarize(events)]),
 	),
 	sourceUnitCount: manifest.units.length,
+	snapshotWall: {
+		p50: quantile(
+			snapshotSamples.map(({ duration }) => duration),
+			0.5,
+		),
+		p95: quantile(
+			snapshotSamples.map(({ duration }) => duration),
+			0.95,
+		),
+	},
 	totalProjectLoadCount: diagnostics.length,
 	unitReadsWallDuration,
 }

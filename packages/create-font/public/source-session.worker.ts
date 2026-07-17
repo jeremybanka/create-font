@@ -1,7 +1,4 @@
-import {
-	createFontRpcClient,
-	type CreateFontRpcClient,
-} from "@create-font/server/client"
+import { createFontRpcClient } from "@create-font/server/client"
 import type {
 	JsonValue,
 	SourceManifest,
@@ -34,8 +31,9 @@ import type {
 	SourceSessionEvent,
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
-	SourceUnitRequestTiming,
 } from "./source-session.ts"
+import { createSourceSnapshotRefreshController } from "./source-session-refresh.ts"
+import { sourceProjectSnapshotFromResponse } from "./source-session-snapshot.ts"
 import {
 	createStartupTimeline,
 	startupResourceTimings,
@@ -57,10 +55,7 @@ let source: EditorFontSource | null = null
 let revision: string | null = null
 let validation: FontValidationStatus | null = null
 let writeQueue = Promise.resolve()
-let refreshQueue: Promise<void> | null = null
-let pendingManifest: SourceManifest | undefined
 let startupProfile: SourceSessionStartupProfile | null = null
-const startupUnitRequests: SourceUnitRequestTiming[] = []
 
 function assertData<Value>(
 	result: Readonly<{ data: Value | null; error: { status: number } | null }>,
@@ -72,33 +67,6 @@ function assertData<Value>(
 		)
 	}
 	return result.data
-}
-
-async function loadSourceUnits(
-	rpc: CreateFontRpcClient,
-	manifest: SourceManifest,
-	requestTimings?: SourceUnitRequestTiming[],
-): Promise<readonly SourceUnitSnapshot[]> {
-	return Promise.all(
-		manifest.units.map(async ({ path }) => {
-			const startedAt =
-				requestTimings === undefined ? undefined : performance.now()
-			const snapshot = assertData(
-				await rpc.api.source.unit.get({ query: { path } }),
-				`Read ${path}`,
-			)
-			if (startedAt !== undefined) {
-				requestTimings?.push({
-					duration: performance.now() - startedAt,
-					path,
-				})
-			}
-			if (`code` in snapshot) {
-				throw new Error(`Source unit ${path} is unavailable.`)
-			}
-			return snapshot
-		}),
-	)
 }
 
 function pathOptions(files: FontSourceDirectoryFiles): SplitFontSourceOptions {
@@ -181,78 +149,64 @@ function compileValidation(
 	return { ok: compilation.ok, issueCount }
 }
 
-async function refresh(manifest?: SourceManifest): Promise<void> {
-	if (manifest?.revision === revision) return
-	if (manifest !== undefined) pendingManifest = manifest
-	if (refreshQueue !== null) return refreshQueue
-	refreshQueue = (async () => {
-		do {
-			const initialLoad = source === null
-			if (initialLoad) startupTimeline.mark(`refresh-start`)
-			const requested = pendingManifest
-			pendingManifest = undefined
-			const finishManifest = initialLoad
-				? startupTimeline.startPhase(`source-manifest-rpc`)
-				: undefined
-			const inventory =
-				requested ??
-				assertData(await client.api.source.get(), `Read source inventory`)
-			finishManifest?.()
-			if (`code` in inventory) {
-				throw new Error(`Font source is not available.`)
-			}
-			if (inventory.revision === revision) continue
-			const finishUnits = initialLoad
-				? startupTimeline.startPhase(`source-unit-rpc-fanout`)
-				: undefined
-			const snapshots = await loadSourceUnits(
-				client,
-				inventory,
-				initialLoad ? startupUnitRequests : undefined,
-			)
-			finishUnits?.()
-			const files = Object.fromEntries(
-				snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
-			)
-			const finishAssembly = initialLoad
-				? startupTimeline.startPhase(`source-assembly`)
-				: undefined
-			const assembled = assembleEditorFontSource(files)
-			finishAssembly?.()
-			if (!assembled.ok) throw new Error(assembled.errors[0].message)
-			sourceUnits = new Map(
-				snapshots.map((snapshot) => [snapshot.path, snapshot]),
-			)
-			source = assembled.value
-			revision = inventory.revision
-			const finishValidation = initialLoad
-				? startupTimeline.startPhase(`source-validation-compilation`)
-				: undefined
-			validation = compileValidation(source)
-			finishValidation?.()
-			if (initialLoad) {
-				startupTimeline.mark(`source-ready`)
-				startupProfile = Object.freeze({
-					resources: startupResourceTimings(
-						performance
-							.getEntriesByType(`resource`)
-							.filter((entry) => entry.name.includes(`/api/source`)),
-					),
-					sourceUnitCount: inventory.units.length,
-					timeline: startupTimeline.snapshot(),
-					unitRequests: Object.freeze([...startupUnitRequests]),
-				})
-			}
-			const event = currentSourceEvent()
-			if (event !== null) broadcast(event)
-		} while (
-			pendingManifest !== undefined &&
-			pendingManifest.revision !== revision
+const refreshController = createSourceSnapshotRefreshController({
+	applySnapshot(project, initialLoad) {
+		const snapshots = project.units
+		const files = Object.fromEntries(
+			snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
 		)
-	})().finally(() => {
-		refreshQueue = null
-	})
-	return refreshQueue
+		const finishAssembly = initialLoad
+			? startupTimeline.startPhase(`source-assembly`)
+			: undefined
+		const assembled = assembleEditorFontSource(files)
+		finishAssembly?.()
+		if (!assembled.ok) throw new Error(assembled.errors[0].message)
+		sourceUnits = new Map(
+			snapshots.map((snapshot) => [snapshot.path, snapshot]),
+		)
+		source = assembled.value
+		revision = project.revision
+		const finishValidation = initialLoad
+			? startupTimeline.startPhase(`source-validation-compilation`)
+			: undefined
+		validation = compileValidation(source)
+		finishValidation?.()
+		if (initialLoad) {
+			startupTimeline.mark(`source-ready`)
+			const resources = startupResourceTimings(
+				performance
+					.getEntriesByType(`resource`)
+					.filter((entry) => entry.name.includes(`/api/source`)),
+			)
+			startupProfile = Object.freeze({
+				resources,
+				sourceRequestCount: resources.filter((entry) =>
+					entry.name.includes(`/api/source/snapshot`),
+				).length,
+				sourceUnitCount: snapshots.length,
+				timeline: startupTimeline.snapshot(),
+				unitRequests: Object.freeze([]),
+			})
+		}
+		const event = currentSourceEvent()
+		if (event !== null) broadcast(event)
+	},
+	currentRevision: () => revision,
+	async readSnapshot(initialLoad) {
+		if (initialLoad) startupTimeline.mark(`refresh-start`)
+		const finishSnapshot = initialLoad
+			? startupTimeline.startPhase(`source-snapshot-rpc`)
+			: undefined
+		const project = sourceProjectSnapshotFromResponse(
+			await client.api.source.snapshot.get(),
+		)
+		finishSnapshot?.()
+		return project
+	},
+})
+
+function refresh(manifest?: SourceManifest): Promise<void> {
+	return refreshController.refresh(manifest?.revision)
 }
 
 async function save(

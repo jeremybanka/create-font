@@ -44,6 +44,7 @@ type BrowserStartupProfile = Readonly<{
 		sourceMessageReceived?: number
 		workerAssembly?: number
 		workerManifestRpc?: number
+		workerSnapshotRpc?: number
 		workerSourceReady?: number
 		workerUnitRpcFanout?: number
 		workerValidationCompilation?: number
@@ -130,6 +131,7 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 			sourceMessageReceived: timeline.milestones[`source-message-received`],
 			workerAssembly: phaseDuration(`source-assembly`),
 			workerManifestRpc: phaseDuration(`source-manifest-rpc`),
+			workerSnapshotRpc: phaseDuration(`source-snapshot-rpc`),
 			workerSourceReady:
 				workerReady === undefined
 					? undefined

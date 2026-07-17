@@ -17,6 +17,7 @@ export type SourceUnitRequestTiming = Readonly<{
 
 export type SourceSessionStartupProfile = Readonly<{
 	resources: readonly StartupResourceTiming[]
+	sourceRequestCount: number
 	sourceUnitCount: number
 	timeline: StartupTimelineSnapshot
 	unitRequests: readonly SourceUnitRequestTiming[]
