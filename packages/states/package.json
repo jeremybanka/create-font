@@ -2,6 +2,11 @@
 	"name": "@create-font/states",
 	"version": "0.0.0",
 	"description": "Atom.io state and compilation model for variable-font editors",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/states"
+	},
 	"publishConfig": {
 		"access": "public"
 	},
