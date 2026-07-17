@@ -528,7 +528,7 @@ export function makeWorkbenchSans(): EditorFontSource {
 	const glyphs = [notdefGlyph(), ...printableAscii.map(strokeGlyph)]
 	return {
 		format: "create-font.editor",
-		editorVersion: 3,
+		editorVersion: 4,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1.1,
@@ -555,6 +555,16 @@ export function makeWorkbenchSans(): EditorFontSource {
 			capHeight: CAP_HEIGHT,
 			underlinePosition: -120,
 			underlineThickness: 60,
+			overshoots: {
+				baseline: 12,
+				ascender: 0,
+				descender: 0,
+				winAscent: 0,
+				winDescent: 0,
+				xHeight: 12,
+				capHeight: 12,
+				underlinePosition: 0,
+			},
 		},
 		style: {
 			weightClass: 350,
