@@ -59,6 +59,10 @@ import {
 import { useI, useO, useOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
+import {
+	activeTextareaSelectionIndex,
+	observeTextareaSelection,
+} from "./textarea-selection.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 
@@ -326,6 +330,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		const frame = requestAnimationFrame(() => textareaRef.current?.focus())
 		return () => cancelAnimationFrame(frame)
 	}, [editingTextIndex])
+
+	useEffect(() => {
+		const textarea = textareaRef.current
+		if (textarea === null) return
+		return observeTextareaSelection(textarea, setCaretIndex)
+	}, [setCaretIndex])
 
 	useEffect(() => {
 		setPenContourId(null)
@@ -752,10 +762,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
 					const textarea = event.currentTarget
 					setText(textarea.value)
-					setCaretIndex(textarea.selectionStart ?? textarea.value.length)
+					setCaretIndex(activeTextareaSelectionIndex(textarea))
 				}}
 				onSelect={(event: JSX.TargetedEvent<HTMLTextAreaElement, Event>) =>
-					setCaretIndex(event.currentTarget.selectionStart ?? 0)
+					setCaretIndex(activeTextareaSelectionIndex(event.currentTarget))
 				}
 			/>
 			<canvas-toolbar>
