@@ -4,7 +4,9 @@ import { resolveVerticalMetricGuides } from "@create-font/states"
 
 import {
 	incidentStraightProjectionCandidates,
+	orthogonalConstraint,
 	projectionGuidePoints,
+	resolveGesturePoint,
 	snapDraggedPoint,
 	snapDraggedTarget,
 	snapGroupTranslation,
@@ -61,6 +63,180 @@ describe("canvas snapping", () => {
 				{ position: () => undefined },
 			),
 		).toBe(false)
+	})
+
+	it.each([
+		{
+			name: "north-east horizontal",
+			candidate: { x: 140, y: 110 },
+			expected: { x: 140, y: 100, axis: "y" },
+		},
+		{
+			name: "north-west vertical",
+			candidate: { x: 90, y: 140 },
+			expected: { x: 100, y: 140, axis: "x" },
+		},
+		{
+			name: "south-west horizontal",
+			candidate: { x: 60, y: 90 },
+			expected: { x: 60, y: 100, axis: "y" },
+		},
+		{
+			name: "south-east vertical",
+			candidate: { x: 110, y: 60 },
+			expected: { x: 100, y: 60, axis: "x" },
+		},
+	] as const)(
+		"constrains a $name drag through its immutable anchor",
+		({ candidate, expected }) => {
+			const result = resolveGesturePoint({
+				pointId: "point:dragged",
+				anchor: { x: 100, y: 100 },
+				candidate,
+				shiftKey: true,
+				nodes: [],
+				metrics: [],
+				worldScale: 1,
+			})
+			expect(result).toMatchObject({ x: expected.x, y: expected.y })
+			expect(result.snaps).toEqual([
+				expect.objectContaining({
+					axis: expected.axis,
+					kind: "orthogonal-constraint",
+				}),
+			])
+		},
+	)
+
+	it("chooses horizontal motion for exact diagonal ties", () => {
+		expect(
+			orthogonalConstraint({ x: 100, y: 100 }, { x: 60, y: 140 }, true),
+		).toEqual({ axis: "y", value: 100 })
+	})
+
+	it("applies and removes Shift against the same raw candidate without moving the anchor", () => {
+		const input = {
+			pointId: "point:dragged" as const,
+			anchor: { x: 100, y: 100 },
+			candidate: { x: 180, y: 130 },
+			nodes: [],
+			metrics: [],
+			worldScale: 1,
+		}
+		expect(resolveGesturePoint({ ...input, shiftKey: false })).toMatchObject({
+			x: 180,
+			y: 130,
+		})
+		expect(resolveGesturePoint({ ...input, shiftKey: true })).toMatchObject({
+			x: 180,
+			y: 100,
+		})
+		expect(resolveGesturePoint({ ...input, shiftKey: false })).toMatchObject({
+			x: 180,
+			y: 130,
+		})
+	})
+
+	it("lets ordinary snapping adjust only the free axis", () => {
+		const horizontal = resolveGesturePoint({
+			pointId: "point:dragged",
+			anchor: { x: 0, y: 0 },
+			candidate: { x: 96, y: 20 },
+			shiftKey: true,
+			nodes: [{ pointId: "point:other", x: 100, y: 999 }],
+			metrics: [{ ...metricLines[0]!, y: 20 }],
+			worldScale: 1,
+		})
+		expect(horizontal).toMatchObject({ x: 100, y: 0 })
+		expect(horizontal.snaps.map((snap) => [snap.axis, snap.kind])).toEqual([
+			["y", "orthogonal-constraint"],
+			["x", "node"],
+		])
+
+		const vertical = resolveGesturePoint({
+			pointId: "point:dragged",
+			anchor: { x: 0, y: 0 },
+			candidate: { x: 20, y: 496 },
+			shiftKey: true,
+			nodes: [{ pointId: "point:other", x: 20, y: 999 }],
+			metrics: [{ ...metricLines[0]!, y: 500 }],
+			worldScale: 1,
+		})
+		expect(vertical).toMatchObject({ x: 0, y: 500 })
+		expect(vertical.snaps.map((snap) => [snap.axis, snap.kind])).toEqual([
+			["x", "orthogonal-constraint"],
+			["y", "metric"],
+		])
+	})
+
+	it("gives Shift precedence over projected segments at every zoom", () => {
+		const input = {
+			pointId: "point:dragged" as const,
+			anchor: { x: 0, y: 0 },
+			candidate: { x: 50, y: 56 },
+			shiftKey: true,
+			nodes: [{ pointId: "point:other" as const, x: 64, y: 999 }],
+			metrics: [],
+			projectionCandidates: [diagonalProjection],
+		}
+		const atOneToOne = resolveGesturePoint({ ...input, worldScale: 1 })
+		expect(atOneToOne).toMatchObject({ x: 0, y: 56 })
+		expect(atOneToOne.snaps).toEqual([
+			expect.objectContaining({ kind: "orthogonal-constraint" }),
+		])
+		const zoomedOut = resolveGesturePoint({ ...input, worldScale: 0.5 })
+		expect(zoomedOut).toMatchObject({ x: 0, y: 56 })
+		expect(
+			zoomedOut.snaps.some((snap) => snap.kind === "segment-projection"),
+		).toBe(false)
+
+		const freeAxisInput = {
+			...input,
+			candidate: { x: 86, y: 5 },
+			nodes: [{ pointId: "point:other" as const, x: 100, y: 999 }],
+		}
+		expect(resolveGesturePoint({ ...freeAxisInput, worldScale: 1 }).x).toBe(86)
+		expect(resolveGesturePoint({ ...freeAxisInput, worldScale: 0.5 }).x).toBe(
+			100,
+		)
+	})
+
+	it("uses font-space y deltas and leaves a first Pen point unconstrained", () => {
+		const invertedUpward = resolveGesturePoint({
+			pointId: "point:dragged",
+			anchor: { x: 0, y: 0 },
+			candidate: { x: 5, y: 80 },
+			shiftKey: true,
+			nodes: [],
+			metrics: [],
+			worldScale: 1,
+		})
+		expect(invertedUpward).toMatchObject({ x: 0, y: 80 })
+		const firstPenPoint = resolveGesturePoint({
+			pointId: "point:pen-preview",
+			anchor: null,
+			candidate: { x: 30, y: 70 },
+			shiftKey: true,
+			nodes: [],
+			metrics: [],
+			worldScale: 4,
+		})
+		expect(firstPenPoint).toEqual({ x: 30, y: 70, snaps: [] })
+	})
+
+	it("returns identical coordinates for preview and commit resolution", () => {
+		const input = {
+			pointId: "point:gesture" as const,
+			anchor: { x: 10, y: 20 },
+			candidate: { x: 83.4, y: 44.6 },
+			shiftKey: true,
+			nodes: [{ pointId: "point:snap" as const, x: 80, y: 500 }],
+			metrics: [],
+			worldScale: 1,
+		}
+		const preview = resolveGesturePoint(input)
+		const commit = resolveGesturePoint(input)
+		expect(commit).toEqual(preview)
 	})
 
 	it("snaps axes independently and excludes the dragged node", () => {
@@ -336,6 +512,51 @@ describe("canvas snapping", () => {
 		expect(snapped).toMatchObject({ deltaX: 70, deltaY: 40 })
 		expect(snapped.snaps).toEqual([
 			expect.objectContaining({ axis: "x", anchor: "max", value: 100 }),
+			expect.objectContaining({ axis: "y", anchor: "min", value: 60 }),
+		])
+	})
+
+	it("constrains a multi-node selection as one rigid Shift translation", () => {
+		const common = {
+			bounds: { minX: 10, minY: 20, maxX: 30, maxY: 60 },
+			deltaX: 67,
+			deltaY: 37,
+			selectedPointIds: new Set(["point:a" as const, "point:b" as const]),
+			nodes: [
+				{ pointId: "point:a" as const, x: 10, y: 20 },
+				{ pointId: "point:b" as const, x: 30, y: 60 },
+				{ pointId: "point:target" as const, x: 100, y: 60 },
+			],
+			metrics: [],
+			worldScale: 1,
+			thresholdPixels: 7,
+		}
+
+		const horizontal = snapGroupTranslation({
+			...common,
+			axisConstraint: { axis: "y", value: 20 },
+		})
+		expect(horizontal).toMatchObject({ deltaX: 70, deltaY: 0 })
+		expect(horizontal.snaps).toEqual([
+			expect.objectContaining({
+				axis: "y",
+				kind: "orthogonal-constraint",
+				value: 20,
+			}),
+			expect.objectContaining({ axis: "x", anchor: "max", value: 100 }),
+		])
+
+		const vertical = snapGroupTranslation({
+			...common,
+			axisConstraint: { axis: "x", value: 10 },
+		})
+		expect(vertical).toMatchObject({ deltaX: 0, deltaY: 40 })
+		expect(vertical.snaps).toEqual([
+			expect.objectContaining({
+				axis: "x",
+				kind: "orthogonal-constraint",
+				value: 10,
+			}),
 			expect.objectContaining({ axis: "y", anchor: "min", value: 60 }),
 		])
 	})
