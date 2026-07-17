@@ -109,15 +109,17 @@ describe(`font CLI`, () => {
 		expect(captured.stdout.join(``)).toContain(`dev`)
 	})
 
-	it(`runs the preliminary build command for a selected font`, async () => {
+	it(`builds a selected font and prints its artifact path`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli(
 			[`bun`, `font`, `build`, `workbench-sans`, `--root`, `../..`],
 			captured.io,
 		)
 
-		expect(exitCode).toBe(1)
-		expect(captured.stderr.join(``)).toContain(`build.not_implemented`)
-		expect(captured.stderr.join(``)).toContain(`fonts/workbench-sans`)
+		expect(exitCode).toBe(0)
+		expect(captured.stderr).toEqual([])
+		expect(captured.stdout.join(``)).toContain(
+			`artifacts/workbench-sans/WorkbenchSans-Text.ttf`,
+		)
 	})
 })

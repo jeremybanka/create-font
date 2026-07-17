@@ -39,13 +39,15 @@
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
 		"dev": "bun --watch ./src/font-cli.ts dev --root=../..",
-		"test": "bun test"
+		"test": "bun run test:browser-bundle && bun test --path-ignore-patterns='**/preact-compat.test.ts'",
+		"test:browser-bundle": "bun test ./tests/preact-compat.test.ts"
 	},
 	"dependencies": {
 		"@elysia/static": "1.4.11",
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
+		"@create-font/target": "workspace:*",
 		"comline": "0.5.1",
 		"elysia": "1.4.29",
 		"preact": "10.29.7",

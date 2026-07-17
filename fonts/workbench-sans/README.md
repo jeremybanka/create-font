@@ -6,3 +6,7 @@ ASCII character from U+0020 through U+007E, with compatible topology across
 weights and reviewable per-entity JSON source units.
 
 Regenerate the checked-in source with `bun scripts/workbench-sans.ts`.
+
+From the repository root, build the installable variable TrueType artifact with
+`bun font build workbench-sans`. The deterministic output is written to
+`artifacts/workbench-sans/WorkbenchSans-Text.ttf`.

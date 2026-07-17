@@ -5,10 +5,13 @@ export type JsonValue =
 	| { readonly [key: string]: JsonValue }
 
 export type BuildDiagnostic = Readonly<{
-	code: `build.not_implemented` | `workspace.not_directory`
+	code: string
+	entityId?: string
 	message: string
 	path: string
 	severity: `error`
+	table?: string
+	unitPath?: string
 }>
 
 export type BuildResult =

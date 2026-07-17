@@ -38,10 +38,22 @@ new workspace contains a private `package.json`, the local `create-font`
 development dependency, and a minimal validated Regular font source with one
 default master. Pass `--no-install` to defer the initial `bun install`.
 
-`font build [name]` enters the shared build orchestration boundary. The project
-source format and binary serializer are not implemented yet, so it currently
-returns a structured `build.not_implemented` diagnostic rather than claiming
-to have emitted a font.
+`font build [name]` validates the selected directory source, projects it through
+the editor compiler, and emits a deterministic variable TrueType font. Outputs
+stay outside canonical source below
+`artifacts/<project>/<PostScriptName>.ttf`; the command prints the absolute
+artifact path on success. The file is replaced atomically only after source
+validation, target ingestion, and serialization complete.
+
+```sh
+bun font build workbench-sans
+```
+
+The target-v1 profile supports simple unhinted quadratic glyphs, complete
+`gvar` point deltas, a Windows Unicode `cmap`, named instances, the required
+13-table variable TrueType set, and optional `avar`. Composite glyphs,
+OpenType Layout, color, vertical metrics, and instructions remain later
+profiles.
 
 `font dev [name]` starts the Elysia workspace process on loopback by default. It
 discovers `fonts/*/create-font.json`, selects the sole project automatically, and

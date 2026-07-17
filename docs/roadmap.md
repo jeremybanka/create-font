@@ -21,14 +21,17 @@ The repository already contains:
 - filesystem discovery for `fonts/*/create-font.json`, validated content-hash
   reads, and journaled conditional single- and multi-unit writes;
 - a checked-in `fonts/workbench-sans` development source with two masters and
-  seven glyphs; and
+  the complete printable ASCII repertoire;
+- a deterministic target-v1 SFNT serializer and `font build` path that writes
+  atomic artifacts; and
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history, now hydrated from and persisted to that source over RPC.
 
 The `create-font` package provides a preliminary Bun/comline CLI and composes
 `@create-font/server` with the editor's exported Preact application root through
 Bun's full-stack development server. It opens and persists a real project
-source, but does not yet watch external changes or serialize `.ttf` files.
+source and compiles `.ttf` artifacts, but does not yet publish live build status
+through the workspace protocol.
 
 ## 1. Repository source workspace
 
@@ -43,15 +46,11 @@ source, but does not yet watch external changes or serialize `.ttf` files.
 
 ## 2. Complete deterministic font builds
 
-- Finish binary serialization for the current 13-table TrueType variable-font
-  profile.
-- Make projection, ingestion, lowering, and serialization one diagnostic-rich
-  compiler pipeline.
-- Add reproducibility tests, binary conformance checks, and round-trip visual
-  fixtures against independent font tooling.
-- Introduce the package-resolved `font build` command.
-- Define configuration and output naming without embedding environment-specific
-  paths in canonical source.
+- Extend binary conformance checks and round-trip visual fixtures against more
+  independent font tooling.
+- Add build configuration and multi-output profiles without embedding
+  environment-specific paths in canonical source.
+- Publish build status and structured warnings through the workspace protocol.
 
 ## 3. Workspace server and browser persistence
 
