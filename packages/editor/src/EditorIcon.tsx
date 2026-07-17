@@ -1,19 +1,32 @@
 import {
 	CursorArrowIcon,
+	DotFilledIcon,
 	Pencil2Icon,
 	PlusIcon,
 	ResetIcon,
+	TransformIcon,
 } from "@radix-ui/react-icons"
 
 import css from "./EditorIcon.module.css"
 
-export type EditorIconName = "add" | "pen" | "redo" | "select" | "undo"
+export type EditorIconName =
+	| "add"
+	| "make-first"
+	| "pen"
+	| "redo"
+	| "reverse"
+	| "select"
+	| "transform"
+	| "undo"
 
 const EDITOR_ICONS = {
 	add: PlusIcon,
+	"make-first": DotFilledIcon,
 	pen: Pencil2Icon,
 	redo: ResetIcon,
+	reverse: ResetIcon,
 	select: CursorArrowIcon,
+	transform: TransformIcon,
 	undo: ResetIcon,
 } as const
 

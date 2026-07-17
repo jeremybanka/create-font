@@ -18,16 +18,25 @@ import {
 	type EditorWorkspace,
 } from "../src/editor-workspace.ts"
 import {
+	combinedEditorPathPreview,
 	contourEndpointNormal,
 	contourStartDirection,
 	contourToPath,
+	editorSegmentCubic,
 	editorContourToPath,
+	nearestEditorSegment,
 	resolveVariableGlyph,
 } from "../src/geometry.ts"
 import { layoutTextRun, nearestCaretIndex } from "../src/text-layout.ts"
 import {
 	canStartBoxSelectionOn,
+	boundsOfControls,
+	contourSelectionTargets,
 	controlsInsideBounds,
+	nearestAxisAlignment,
+	resolveSelectionControls,
+	scaleSelectionControls,
+	translateSelectionControls,
 } from "../src/outline-selection.ts"
 
 function previewGlyph(workspace: EditorWorkspace, index: number) {
@@ -296,6 +305,36 @@ describe("editor workspace", () => {
 		expect(path).toBe("M 0 0 C 20 0 40 20 40 40")
 	})
 
+	it("derives a deterministic non-destructive overlap preview", () => {
+		const contours = [
+			{
+				closed: true,
+				nodes: [
+					{ x: 0, y: 0 },
+					{ x: 100, y: 0 },
+					{ x: 100, y: 100 },
+				],
+			},
+			{
+				closed: true,
+				nodes: [
+					{ x: 50, y: 0 },
+					{ x: 150, y: 0 },
+					{ x: 150, y: 100 },
+				],
+			},
+		]
+		const first = combinedEditorPathPreview(contours)
+		const second = combinedEditorPathPreview(contours)
+		expect(first).toEqual(second)
+		expect(first).toMatchObject({
+			fillRule: "nonzero",
+			sourceContourCount: 2,
+			nonDestructive: true,
+		})
+		expect(first.path.match(/M /g)).toHaveLength(2)
+	})
+
 	it("derives endpoint markers from the normal to an open path's tangent", () => {
 		const contour = [
 			{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
@@ -339,6 +378,112 @@ describe("editor workspace", () => {
 			{ kind: "node", pointId: "point:test" },
 			{ kind: "handle", pointId: "point:test", handle: "incoming" },
 		])
+	})
+
+	it("resolves, bounds, aligns, translates, and scales mixed controls deterministically", () => {
+		const nodes = [
+			{
+				pointId: "point:first" as const,
+				mode: "hard" as const,
+				x: 10,
+				y: 20,
+				outgoing: { x: 12, y: 0 },
+			},
+			{
+				pointId: "point:second" as const,
+				mode: "hard" as const,
+				x: 12,
+				y: 80,
+			},
+		]
+		const selection = [
+			{ kind: "handle", pointId: nodes[0]!.pointId, handle: "outgoing" },
+			{ kind: "node", pointId: nodes[1]!.pointId },
+		] as const
+		const controls = resolveSelectionControls(nodes, selection)
+
+		expect(controls.map(({ x, y }) => ({ x, y }))).toEqual([
+			{ x: 22, y: 20 },
+			{ x: 12, y: 80 },
+		])
+		expect(boundsOfControls(controls)).toEqual({
+			minX: 12,
+			minY: 20,
+			maxX: 22,
+			maxY: 80,
+		})
+		expect(nearestAxisAlignment(controls)).toMatchObject({
+			axis: "vertical",
+			coordinate: 17,
+			handles: [{ x: 17, y: 20 }],
+			points: [{ x: 17, y: 80 }],
+		})
+		expect(nearestAxisAlignment([...controls].reverse())).toMatchObject({
+			axis: "vertical",
+			coordinate: 17,
+		})
+		expect(translateSelectionControls(controls, 3, -4)).toMatchObject({
+			handles: [{ x: 25, y: 16 }],
+			points: [{ x: 15, y: 76 }],
+		})
+		expect(
+			scaleSelectionControls(controls, {
+				anchorX: 12,
+				anchorY: 20,
+				scaleX: 2,
+				scaleY: 0.5,
+			}),
+		).toMatchObject({
+			handles: [{ x: 32, y: 20 }],
+			points: [{ x: 12, y: 50 }],
+		})
+	})
+
+	it("uses a stable vertical tie break and returns complete contour targets", () => {
+		const nodes = [
+			{ pointId: "point:a" as const, mode: "hard" as const, x: 0, y: 0 },
+			{
+				pointId: "point:b" as const,
+				mode: "hard" as const,
+				x: 10,
+				y: 10,
+				incoming: { x: -2, y: 0 },
+			},
+		]
+		const controls = resolveSelectionControls(nodes, [
+			{ kind: "node", pointId: nodes[0]!.pointId },
+			{ kind: "node", pointId: nodes[1]!.pointId },
+		])
+		expect(nearestAxisAlignment(controls)?.axis).toBe("vertical")
+		expect(contourSelectionTargets(nodes)).toEqual([
+			{ kind: "node", pointId: "point:a" },
+			{ kind: "node", pointId: "point:b" },
+			{ kind: "handle", pointId: "point:b", handle: "incoming" },
+		])
+	})
+
+	it("finds nearest line and cubic segments in authored geometry", () => {
+		const line = [
+			{ x: 0, y: 0 },
+			{ x: 100, y: 0 },
+		]
+		expect(nearestEditorSegment(line, false, { x: 25, y: 7 })).toMatchObject({
+			segmentIndex: 0,
+			amount: 0.25,
+			x: 25,
+			y: 0,
+			distance: 7,
+		})
+		const curve = [
+			{ x: 0, y: 0, outgoing: { x: 0, y: 100 } },
+			{ x: 100, y: 0, incoming: { x: 0, y: 100 } },
+		]
+		const nearest = nearestEditorSegment(curve, false, { x: 50, y: 76 })
+		expect(nearest?.segmentIndex).toBe(0)
+		expect(nearest?.amount).toBeCloseTo(0.5, 3)
+		expect(nearest?.x).toBeCloseTo(50, 3)
+		expect(nearest?.y).toBeCloseTo(75, 3)
+		expect(editorSegmentCubic(curve, 0, false)).not.toBeNull()
 	})
 
 	it("starts box selection over inactive glyph occurrences", () => {

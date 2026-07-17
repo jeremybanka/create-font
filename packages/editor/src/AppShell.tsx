@@ -41,17 +41,22 @@ export function AppShell({ workspace }: AppShellProps) {
 	const compilation = useO(workspace.font.selectors.compilation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const activeLayer = useO(workspace.ui.activeLayer)
 	const activeTool = useO(workspace.ui.activeTool)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
+	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const history = useTL(workspace.font.glyphHistoryTimelines, activeGlyphId)
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
 	const toolContext = {
 		activeGlyphId,
+		activeLayer,
+		activeMasterId,
 		activeTool,
 		editingTextIndex,
 		history,
+		selection,
 		workspace,
 	}
 	useHotkeys(toolContext, routeName === "canvas")
@@ -89,10 +94,13 @@ export function AppShell({ workspace }: AppShellProps) {
 		...Object.values(TOOLS).map((tool) => ({
 			id: tool.id,
 			displayName:
-				tool.id === "select" || tool.id === "pen"
+				tool.id === "select" || tool.id === "pen" || tool.id === "transform"
 					? `${tool.displayName} tool`
 					: tool.displayName,
-			category: tool.id === "select" || tool.id === "pen" ? "Tools" : "Edit",
+			category:
+				tool.id === "select" || tool.id === "pen" || tool.id === "transform"
+					? "Tools"
+					: "Edit",
 			icon: tool.icon,
 			keywords: [tool.id],
 			shortcut: formatHotkey(tool.hotkey).join("+"),
@@ -206,7 +214,7 @@ export function AppShell({ workspace }: AppShellProps) {
 				</active-context>
 				<keyboard-help>
 					{routeName === "canvas"
-						? `Q Pen · V Select · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
+						? `Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>create-font editor v{source.editorVersion}</format-label>

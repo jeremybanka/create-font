@@ -49,7 +49,7 @@ export interface PreviewRunLineBreak {
 }
 
 export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
-export type EditorToolId = "select" | "pen"
+export type EditorToolId = "select" | "pen" | "transform"
 
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),

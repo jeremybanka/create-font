@@ -1,6 +1,8 @@
 import {
+	evaluateCubicCurve,
 	normalizeEditorLocation,
 	regionScalar,
+	type CubicCurve,
 	type EditorAxisSource,
 	type EditorHandleVectorSource,
 	type GlyphId,
@@ -12,6 +14,22 @@ export interface OutlinePoint {
 	readonly x: number
 	readonly y: number
 	readonly onCurve: boolean
+}
+
+export interface NearestEditorSegment {
+	readonly segmentIndex: number
+	readonly amount: number
+	readonly x: number
+	readonly y: number
+	readonly distance: number
+}
+
+export interface CombinedPathPreview {
+	/** Nonzero-fill path data; source contours remain independently editable. */
+	readonly path: string
+	readonly fillRule: "nonzero"
+	readonly sourceContourCount: number
+	readonly nonDestructive: true
 }
 
 export interface ContourStartDirection {
@@ -30,6 +48,124 @@ export interface EditorOutlineNode {
 export interface UnitVector {
 	readonly x: number
 	readonly y: number
+}
+
+export function editorSegmentCubic(
+	contour: readonly EditorOutlineNode[],
+	segmentIndex: number,
+	closed: boolean,
+): CubicCurve | null {
+	const segmentCount = Math.max(0, contour.length - (closed ? 0 : 1))
+	if (
+		!Number.isInteger(segmentIndex) ||
+		segmentIndex < 0 ||
+		segmentIndex >= segmentCount
+	)
+		return null
+	const from = contour[segmentIndex]
+	const to = contour[(segmentIndex + 1) % contour.length]
+	if (from === undefined || to === undefined) return null
+	return {
+		p0: { x: from.x, y: from.y },
+		c1: {
+			x: from.x + (from.outgoing?.x ?? 0),
+			y: from.y + (from.outgoing?.y ?? 0),
+		},
+		c2: {
+			x: to.x + (to.incoming?.x ?? 0),
+			y: to.y + (to.incoming?.y ?? 0),
+		},
+		p3: { x: to.x, y: to.y },
+	}
+}
+
+function squaredDistance(
+	left: Readonly<{ x: number; y: number }>,
+	right: Readonly<{ x: number; y: number }>,
+): number {
+	return (left.x - right.x) ** 2 + (left.y - right.y) ** 2
+}
+
+function nearestAmountOnCubic(
+	cubic: CubicCurve,
+	pointer: Readonly<{ x: number; y: number }>,
+): number {
+	const samples = 64
+	let bestIndex = 0
+	let bestDistance = Number.POSITIVE_INFINITY
+	for (let index = 0; index <= samples; index += 1) {
+		const distance = squaredDistance(
+			evaluateCubicCurve(cubic, index / samples),
+			pointer,
+		)
+		if (distance < bestDistance) {
+			bestIndex = index
+			bestDistance = distance
+		}
+	}
+	let low = Math.max(0, (bestIndex - 1) / samples)
+	let high = Math.min(1, (bestIndex + 1) / samples)
+	for (let iteration = 0; iteration < 28; iteration += 1) {
+		const first = low + (high - low) / 3
+		const second = high - (high - low) / 3
+		if (
+			squaredDistance(evaluateCubicCurve(cubic, first), pointer) <=
+			squaredDistance(evaluateCubicCurve(cubic, second), pointer)
+		) {
+			high = second
+		} else {
+			low = first
+		}
+	}
+	return (low + high) / 2
+}
+
+/** Finds the nearest authored line/cubic segment in font units. */
+export function nearestEditorSegment(
+	contour: readonly EditorOutlineNode[],
+	closed: boolean,
+	pointer: Readonly<{ x: number; y: number }>,
+): NearestEditorSegment | null {
+	const segmentCount = Math.max(0, contour.length - (closed ? 0 : 1))
+	let nearest: NearestEditorSegment | null = null
+	for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+		const cubic = editorSegmentCubic(contour, segmentIndex, closed)
+		if (cubic === null) continue
+		const from = contour[segmentIndex]
+		const to = contour[(segmentIndex + 1) % contour.length]
+		if (from === undefined || to === undefined) continue
+		let amount: number
+		const straight = from.outgoing === undefined && to.incoming === undefined
+		if (straight) {
+			const dx = to.x - from.x
+			const dy = to.y - from.y
+			const denominator = dx * dx + dy * dy
+			amount =
+				denominator === 0
+					? 0
+					: Math.max(
+							0,
+							Math.min(
+								1,
+								((pointer.x - from.x) * dx + (pointer.y - from.y) * dy) /
+									denominator,
+							),
+						)
+		} else {
+			amount = nearestAmountOnCubic(cubic, pointer)
+		}
+		const point = straight
+			? {
+					x: from.x + (to.x - from.x) * amount,
+					y: from.y + (to.y - from.y) * amount,
+				}
+			: evaluateCubicCurve(cubic, amount)
+		const distance = Math.sqrt(squaredDistance(point, pointer))
+		if (nearest === null || distance < nearest.distance) {
+			nearest = { segmentIndex, amount, ...point, distance }
+		}
+	}
+	return nearest
 }
 
 export interface ResolvedGlyph {
@@ -199,6 +335,26 @@ export function editorContoursToPath(
 		)
 		.filter(Boolean)
 		.join(" ")
+}
+
+/**
+ * Produces the non-destructive paint representation used for overlap preview.
+ * Nonzero fill visually unions same-winding overlaps without changing source
+ * topology; this deliberately does not claim compiler-compatible boolean
+ * normalization across variable masters.
+ */
+export function combinedEditorPathPreview(
+	contours: readonly (
+		| readonly EditorOutlineNode[]
+		| { readonly closed: boolean; readonly nodes: readonly EditorOutlineNode[] }
+	)[],
+): CombinedPathPreview {
+	return {
+		path: editorContoursToPath(contours),
+		fillRule: "nonzero",
+		sourceContourCount: contours.length,
+		nonDestructive: true,
+	}
 }
 
 /** Converts a closed TrueType quadratic contour into SVG path commands. */

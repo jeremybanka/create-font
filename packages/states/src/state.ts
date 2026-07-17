@@ -13,6 +13,8 @@ import {
 	type VariationRegionSource,
 } from "@create-font/target"
 
+import { splitCubicCurve } from "./curve-geometry.ts"
+
 import {
 	collectProjectionResults,
 	deepFreeze,
@@ -342,6 +344,37 @@ export interface MoveHandleInput {
 	readonly handle: EditorHandleKind
 	/** Relative vector from the owning node, or null to remove the handle. */
 	readonly vector: EditorHandleVectorSource | null
+}
+
+export interface TransformControlsInput {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly points: readonly MovePointInput[]
+	/** Final absolute endpoint positions; state converts them to relative vectors. */
+	readonly handles: readonly {
+		readonly pointId: PointId
+		readonly handle: EditorHandleKind
+		readonly x: number
+		readonly y: number
+	}[]
+}
+
+export interface SplitSegmentInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly segmentIndex: number
+	readonly pointId: PointId
+	/** Shared curve parameter applied to every master. */
+	readonly amount: number
+}
+
+export interface ReverseContourInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+}
+
+export interface MakeNodeFirstInput extends ReverseContourInput {
+	readonly pointId: PointId
 }
 
 export interface SetNodeModeInput {
@@ -2122,6 +2155,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				if (!layer.ok || !variations.ok) {
 					return projectionFailure(errors, warnings)
 				}
+				if (glyph.overlap && layer.value.contours.length > 1) {
+					warnings.push(
+						projectionWarning(
+							"overlap.union_deferred",
+							`$.glyphs[${glyphId}].overlap`,
+							"Overlapping authored contours are retained in compiled topology; the current target can mark overlaps but cannot normalize a deterministic cross-master boolean union.",
+							glyphId,
+						),
+					)
+				}
 				return projectionSuccess(
 					{
 						kind: "simple",
@@ -3331,6 +3374,170 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const transformControlsTransaction = silo.transaction<
+		(input: TransformControlsInput) => void
+	>({
+		key: "transformControls",
+		do: ({ get, set }, input) => {
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (layerMasterIds === null || !layerMasterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			assertUnique(
+				input.points.map((point) => point.pointId),
+				"Transformed point IDs",
+			)
+			assertUnique(
+				input.handles.map((handle) => `${handle.pointId}/${handle.handle}`),
+				"Transformed handles",
+			)
+			const nextPositions = new Map<PointId, Vector2>()
+			const pointIds = new Set<PointId>()
+			for (const point of input.points) pointIds.add(point.pointId)
+			for (const handle of input.handles) pointIds.add(handle.pointId)
+			for (const pointId of pointIds) {
+				if (get(pointAtoms, [input.glyphId, pointId]) === null) {
+					throw new TypeError(
+						`Unknown point ${pointId} in glyph ${input.glyphId}.`,
+					)
+				}
+				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
+				const x = get(pointXAtoms, atomKey)
+				const y = get(pointYAtoms, atomKey)
+				if (x === null || y === null) {
+					throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
+				}
+				nextPositions.set(pointId, { x, y })
+			}
+			for (const point of input.points) {
+				if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+					throw new TypeError("Point coordinates must be finite numbers.")
+				}
+				nextPositions.set(point.pointId, { x: point.x, y: point.y })
+			}
+			const selectedHandles = new Map<
+				PointId,
+				Partial<Record<EditorHandleKind, Vector2>>
+			>()
+			for (const handle of input.handles) {
+				if (!Number.isFinite(handle.x) || !Number.isFinite(handle.y)) {
+					throw new TypeError("Handle endpoints must be finite numbers.")
+				}
+				const owner = nextPositions.get(handle.pointId)
+				if (owner === undefined) throw new Error("Missing transformed owner.")
+				const atomKey: LayerPointKey = [
+					input.masterId,
+					input.glyphId,
+					handle.pointId,
+				]
+				const existingX = get(
+					handle.handle === "incoming"
+						? incomingHandleXAtoms
+						: outgoingHandleXAtoms,
+					atomKey,
+				)
+				const existingY = get(
+					handle.handle === "incoming"
+						? incomingHandleYAtoms
+						: outgoingHandleYAtoms,
+					atomKey,
+				)
+				if (existingX === null || existingY === null) {
+					throw new TypeError(
+						`Cannot transform missing ${handle.handle} handle on ${handle.pointId}.`,
+					)
+				}
+				const byKind = selectedHandles.get(handle.pointId) ?? {}
+				byKind[handle.handle] = {
+					x: handle.x - owner.x,
+					y: handle.y - owner.y,
+				}
+				selectedHandles.set(handle.pointId, byKind)
+			}
+
+			for (const point of input.points) {
+				const atomKey: LayerPointKey = [
+					input.masterId,
+					input.glyphId,
+					point.pointId,
+				]
+				set(pointXAtoms, atomKey, point.x)
+				set(pointYAtoms, atomKey, point.y)
+			}
+
+			const writeHandle = (
+				atomKey: LayerPointKey,
+				handle: EditorHandleKind,
+				vector: Vector2,
+			): void => {
+				set(
+					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+					atomKey,
+					vector.x,
+				)
+				set(
+					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+					atomKey,
+					vector.y,
+				)
+			}
+			for (const [pointId, selected] of selectedHandles) {
+				const topology = get(pointAtoms, [input.glyphId, pointId])
+				if (topology === null) continue
+				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
+				const incomingX = get(incomingHandleXAtoms, atomKey)
+				const incomingY = get(incomingHandleYAtoms, atomKey)
+				const outgoingX = get(outgoingHandleXAtoms, atomKey)
+				const outgoingY = get(outgoingHandleYAtoms, atomKey)
+				const oldIncoming =
+					incomingX === null || incomingY === null
+						? undefined
+						: { x: incomingX, y: incomingY }
+				const oldOutgoing =
+					outgoingX === null || outgoingY === null
+						? undefined
+						: { x: outgoingX, y: outgoingY }
+				let incoming = selected.incoming
+				let outgoing = selected.outgoing
+				if (
+					topology.mode === "soft" &&
+					oldIncoming !== undefined &&
+					oldOutgoing !== undefined
+				) {
+					if (incoming !== undefined) {
+						const oppositeLength = Math.hypot(
+							...(outgoing === undefined
+								? [oldOutgoing.x, oldOutgoing.y]
+								: [outgoing.x, outgoing.y]),
+						)
+						const movedLength = Math.hypot(incoming.x, incoming.y)
+						outgoing =
+							movedLength === 0
+								? (outgoing ?? oldOutgoing)
+								: {
+										x: (-incoming.x / movedLength) * oppositeLength,
+										y: (-incoming.y / movedLength) * oppositeLength,
+									}
+					} else if (outgoing !== undefined) {
+						const movedLength = Math.hypot(outgoing.x, outgoing.y)
+						const oppositeLength = Math.hypot(oldIncoming.x, oldIncoming.y)
+						incoming =
+							movedLength === 0
+								? oldIncoming
+								: {
+										x: (-outgoing.x / movedLength) * oppositeLength,
+										y: (-outgoing.y / movedLength) * oppositeLength,
+									}
+					}
+				}
+				if (incoming !== undefined) writeHandle(atomKey, "incoming", incoming)
+				if (outgoing !== undefined) writeHandle(atomKey, "outgoing", outgoing)
+			}
+		},
+	})
+
 	const setNodeModeTransaction = silo.transaction<
 		(input: SetNodeModeInput) => void
 	>({
@@ -3626,6 +3833,252 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					coordinate.outgoing?.y ?? null,
 				)
 			}
+		},
+	})
+
+	const splitSegmentTransaction = silo.transaction<
+		(input: SplitSegmentInput) => void
+	>({
+		key: "splitSegment",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || closed === null || layerMasterIds === null) {
+				throw new TypeError(
+					`Unknown contour ${input.contourId} in glyph ${input.glyphId}.`,
+				)
+			}
+			const segmentCount = Math.max(0, pointIds.length - (closed ? 0 : 1))
+			if (
+				!Number.isInteger(input.segmentIndex) ||
+				input.segmentIndex < 0 ||
+				input.segmentIndex >= segmentCount
+			) {
+				throw new RangeError("Segment index is outside the contour.")
+			}
+			if (
+				!Number.isFinite(input.amount) ||
+				input.amount <= 0.001 ||
+				input.amount >= 0.999
+			) {
+				throw new RangeError("Segment split must stay away from its endpoints.")
+			}
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					if (
+						(get(contourPointIdsAtoms, [glyphId, contourId]) ?? []).includes(
+							input.pointId,
+						)
+					)
+						throw new TypeError(`Point ID ${input.pointId} is already in use.`)
+				}
+			}
+			const startPointId = pointIds[input.segmentIndex]
+			const endPointId = closed
+				? pointIds[(input.segmentIndex + 1) % pointIds.length]
+				: pointIds[input.segmentIndex + 1]
+			if (startPointId === undefined || endPointId === undefined) {
+				throw new TypeError("Segment endpoints are missing.")
+			}
+			const plans: {
+				readonly masterId: MasterId
+				readonly point: Vector2
+				readonly straight: boolean
+				readonly startOutgoing?: Vector2
+				readonly incoming?: Vector2
+				readonly outgoing?: Vector2
+				readonly endIncoming?: Vector2
+			}[] = []
+			for (const masterId of layerMasterIds) {
+				const start = get(layerNodeSelectors, [
+					masterId,
+					input.glyphId,
+					startPointId,
+				])
+				const end = get(layerNodeSelectors, [
+					masterId,
+					input.glyphId,
+					endPointId,
+				])
+				if (!start.ok || !end.ok) {
+					throw new TypeError("Cannot split a segment with invalid endpoints.")
+				}
+				const straight =
+					start.value.outgoing === undefined && end.value.incoming === undefined
+				if (straight) {
+					plans.push({
+						masterId,
+						straight,
+						point: {
+							x: start.value.x + (end.value.x - start.value.x) * input.amount,
+							y: start.value.y + (end.value.y - start.value.y) * input.amount,
+						},
+					})
+					continue
+				}
+				const split = splitCubicCurve(
+					{
+						p0: start.value,
+						c1: {
+							x: start.value.x + (start.value.outgoing?.x ?? 0),
+							y: start.value.y + (start.value.outgoing?.y ?? 0),
+						},
+						c2: {
+							x: end.value.x + (end.value.incoming?.x ?? 0),
+							y: end.value.y + (end.value.incoming?.y ?? 0),
+						},
+						p3: end.value,
+					},
+					input.amount,
+				)
+				plans.push({
+					masterId,
+					straight,
+					point: split.point,
+					startOutgoing: {
+						x: split.left.c1.x - split.left.p0.x,
+						y: split.left.c1.y - split.left.p0.y,
+					},
+					incoming: {
+						x: split.left.c2.x - split.point.x,
+						y: split.left.c2.y - split.point.y,
+					},
+					outgoing: {
+						x: split.right.c1.x - split.point.x,
+						y: split.right.c1.y - split.point.y,
+					},
+					endIncoming: {
+						x: split.right.c2.x - split.right.p3.x,
+						y: split.right.c2.y - split.right.p3.y,
+					},
+				})
+			}
+
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze([
+					...pointIds.slice(0, input.segmentIndex + 1),
+					input.pointId,
+					...pointIds.slice(input.segmentIndex + 1),
+				]),
+			)
+			set(
+				pointAtoms,
+				[input.glyphId, input.pointId],
+				deepFreeze({ mode: "hard" }),
+			)
+			const writeVector = (
+				masterId: MasterId,
+				pointId: PointId,
+				handle: EditorHandleKind,
+				vector: Vector2 | undefined,
+			): void => {
+				const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
+				set(
+					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+					atomKey,
+					vector?.x ?? null,
+				)
+				set(
+					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+					atomKey,
+					vector?.y ?? null,
+				)
+			}
+			for (const plan of plans) {
+				const atomKey: LayerPointKey = [
+					plan.masterId,
+					input.glyphId,
+					input.pointId,
+				]
+				set(pointXAtoms, atomKey, plan.point.x)
+				set(pointYAtoms, atomKey, plan.point.y)
+				writeVector(plan.masterId, input.pointId, "incoming", plan.incoming)
+				writeVector(plan.masterId, input.pointId, "outgoing", plan.outgoing)
+				if (!plan.straight) {
+					writeVector(
+						plan.masterId,
+						startPointId,
+						"outgoing",
+						plan.startOutgoing,
+					)
+					writeVector(plan.masterId, endPointId, "incoming", plan.endIncoming)
+				}
+			}
+		},
+	})
+
+	const reverseContourTransaction = silo.transaction<
+		(input: ReverseContourInput) => void
+	>({
+		key: "reverseContour",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const masterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || closed === null || masterIds === null) {
+				throw new TypeError(`Unknown contour ${input.contourId}.`)
+			}
+			if (!closed)
+				throw new TypeError(
+					"Only closed contours can preserve their first node when reversed.",
+				)
+			if (pointIds.length < 2) return
+			const first = pointIds[0]
+			if (first === undefined) return
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze([first, ...pointIds.slice(1).reverse()]),
+			)
+			for (const masterId of masterIds) {
+				for (const pointId of pointIds) {
+					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
+					const incomingX = get(incomingHandleXAtoms, atomKey)
+					const incomingY = get(incomingHandleYAtoms, atomKey)
+					const outgoingX = get(outgoingHandleXAtoms, atomKey)
+					const outgoingY = get(outgoingHandleYAtoms, atomKey)
+					set(incomingHandleXAtoms, atomKey, outgoingX)
+					set(incomingHandleYAtoms, atomKey, outgoingY)
+					set(outgoingHandleXAtoms, atomKey, incomingX)
+					set(outgoingHandleYAtoms, atomKey, incomingY)
+				}
+			}
+		},
+	})
+
+	const makeNodeFirstTransaction = silo.transaction<
+		(input: MakeNodeFirstInput) => void
+	>({
+		key: "makeNodeFirst",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			if (pointIds === null || closed === null) {
+				throw new TypeError(`Unknown contour ${input.contourId}.`)
+			}
+			if (!closed)
+				throw new TypeError("Only closed contours have a rotatable first node.")
+			const index = pointIds.indexOf(input.pointId)
+			if (index < 0)
+				throw new TypeError(`Point ${input.pointId} is not in the contour.`)
+			if (index === 0) return
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze([...pointIds.slice(index), ...pointIds.slice(0, index)]),
+			)
 		},
 	})
 
@@ -3937,8 +4390,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		setHorizontalMetricsTransaction,
 	)
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
+	const runTransformControls = silo.runTransaction(transformControlsTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
+	const runSplitSegment = silo.runTransaction(splitSegmentTransaction)
+	const runReverseContour = silo.runTransaction(reverseContourTransaction)
+	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
 	const runCreateContour = silo.runTransaction(createContourTransaction)
 	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
@@ -4017,8 +4474,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			movePoints: movePointsTransaction,
 			setHorizontalMetrics: setHorizontalMetricsTransaction,
 			moveHandle: moveHandleTransaction,
+			transformControls: transformControlsTransaction,
 			setNodeMode: setNodeModeTransaction,
 			insertPoint: insertPointTransaction,
+			splitSegment: splitSegmentTransaction,
+			reverseContour: reverseContourTransaction,
+			makeNodeFirst: makeNodeFirstTransaction,
 			createContour: createContourTransaction,
 			setContourClosed: setContourClosedTransaction,
 			deleteSelection: deleteSelectionTransaction,
@@ -4048,11 +4509,23 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			moveHandle(input: MoveHandleInput): void {
 				runMoveHandle(input)
 			},
+			transformControls(input: TransformControlsInput): void {
+				runTransformControls(input)
+			},
 			setNodeMode(input: SetNodeModeInput): void {
 				runSetNodeMode(input)
 			},
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
+			},
+			splitSegment(input: SplitSegmentInput): void {
+				runSplitSegment(input)
+			},
+			reverseContour(input: ReverseContourInput): void {
+				runReverseContour(input)
+			},
+			makeNodeFirst(input: MakeNodeFirstInput): void {
+				runMakeNodeFirst(input)
 			},
 			createContour(input: CreateContourInput): void {
 				runCreateContour(input)
