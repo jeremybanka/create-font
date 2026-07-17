@@ -226,15 +226,8 @@ export function createEditorWorkspace(
 			const glyphId = get(activeGlyphIdAtom)
 			const contourIds = get(font.atoms.glyphContourIds, glyphId)
 			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
-			const leftSideBearing = get(font.atoms.leftSideBearing, [
-				masterId,
-				glyphId,
-			])
-			if (
-				contourIds === null ||
-				advanceWidth === null ||
-				leftSideBearing === null
-			) {
+			const bounds = get(font.selectors.layerBounds, [masterId, glyphId])
+			if (contourIds === null || advanceWidth === null || !bounds.ok) {
 				return null
 			}
 			const contours: EditorCanvasContour[] = []
@@ -260,22 +253,18 @@ export function createEditorWorkspace(
 					}),
 				)
 			}
-			const xCoordinates = contours.flatMap((contour) =>
-				contour.nodes.map((node) => node.x),
-			)
-			const xMin = xCoordinates.length === 0 ? 0 : Math.min(...xCoordinates)
-			const xMax = xCoordinates.length === 0 ? 0 : Math.max(...xCoordinates)
+			const { xMin, xMax } = bounds.value
 			const outlineWidth = xMax - xMin
 			return Object.freeze({
 				masterId,
 				glyphId,
 				contours: Object.freeze(contours),
 				advanceWidth,
-				leftSideBearing,
+				leftSideBearing: xMin,
 				xMin,
 				xMax,
 				outlineWidth,
-				rightSideBearing: advanceWidth - leftSideBearing - outlineWidth,
+				rightSideBearing: advanceWidth - xMax,
 			})
 		},
 	})

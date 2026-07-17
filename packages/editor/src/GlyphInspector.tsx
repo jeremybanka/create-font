@@ -35,17 +35,27 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					.find((point) => point.pointId === selectedPointId)
 			: undefined
 	const projectionIssueCount = validation.issueCount
-	const setMetrics = (
-		input:
-			| { readonly advanceWidth: number }
-			| { readonly leftSideBearing: number },
-	): void => {
+	const setWidth = (advanceWidth: number): void => {
 		if (layer === null) return
 		workspace.font.actions.setHorizontalMetrics({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
-			...input,
+			advanceWidth,
 		})
+	}
+	const setLeftSideBearing = (leftSideBearing: number): void => {
+		workspace.font.silo.setState(
+			workspace.font.selectors.leftSideBearing,
+			[activeMasterId, activeGlyphId],
+			leftSideBearing,
+		)
+	}
+	const setRightSideBearing = (rightSideBearing: number): void => {
+		workspace.font.silo.setState(
+			workspace.font.selectors.rightSideBearing,
+			[activeMasterId, activeGlyphId],
+			rightSideBearing,
+		)
 	}
 
 	return (
@@ -76,7 +86,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 								value={layer.advanceWidth}
 								min={0}
 								max={65_535}
-								onCommit={(advanceWidth) => setMetrics({ advanceWidth })}
+								onCommit={setWidth}
 							/>
 						</label>
 						<label>
@@ -86,7 +96,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 								value={layer.leftSideBearing}
 								min={-32_768}
 								max={32_767}
-								onCommit={(leftSideBearing) => setMetrics({ leftSideBearing })}
+								onCommit={setLeftSideBearing}
 							/>
 						</label>
 						<label>
@@ -94,16 +104,9 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 							<NumericInput
 								aria-label="Right side bearing"
 								value={layer.rightSideBearing}
-								min={-layer.leftSideBearing - layer.outlineWidth}
-								max={65_535 - layer.leftSideBearing - layer.outlineWidth}
-								onCommit={(rightSideBearing) =>
-									setMetrics({
-										advanceWidth:
-											rightSideBearing +
-											layer.leftSideBearing +
-											layer.outlineWidth,
-									})
-								}
+								min={-layer.xMax}
+								max={65_535 - layer.xMax}
+								onCommit={setRightSideBearing}
 							/>
 						</label>
 					</metric-fields>

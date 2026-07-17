@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	cubicCurveBounds,
 	evaluateCubicCurve,
 	interpolateCurvePoint,
 	splitCubicCurve,
@@ -8,6 +9,30 @@ import {
 } from "../src/index.ts"
 
 describe("cubic curve geometry", () => {
+	it("finds interior extrema instead of using the control hull", () => {
+		const bounds = cubicCurveBounds({
+			p0: { x: 0, y: 0 },
+			c1: { x: -120, y: 120 },
+			c2: { x: 220, y: 120 },
+			p3: { x: 100, y: 0 },
+		})
+		expect(bounds.minX).toBeCloseTo(-26.072, 3)
+		expect(bounds.maxX).toBeCloseTo(126.072, 3)
+		expect(bounds.minY).toBe(0)
+		expect(bounds.maxY).toBe(90)
+	})
+
+	it("bounds degenerate linear cubics by their endpoints", () => {
+		expect(
+			cubicCurveBounds({
+				p0: { x: -20, y: 40 },
+				c1: { x: -20, y: 40 },
+				c2: { x: 60, y: -10 },
+				p3: { x: 60, y: -10 },
+			}),
+		).toEqual({ minX: -20, minY: -10, maxX: 60, maxY: 40 })
+	})
+
 	it("splits a cubic without changing its locus", () => {
 		const cubic = {
 			p0: { x: 0, y: 0 },
