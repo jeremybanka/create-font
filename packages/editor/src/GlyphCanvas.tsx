@@ -42,6 +42,7 @@ import { useI, useO } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
@@ -550,27 +551,30 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					})}
 					<zoom-controls aria-label="Canvas zoom">
-						<button
-							type="button"
-							aria-label="Zoom out"
+						<TooltipButton
+							label="Zoom out"
+							description="Reduce the canvas magnification."
+							placement="bottom"
 							onClick={() => zoomCanvas(view.zoom / 1.2)}
 						>
 							<MinusIcon aria-hidden="true" />
-						</button>
-						<button
-							type="button"
-							title="Reset canvas view"
+						</TooltipButton>
+						<TooltipButton
+							label="Reset canvas view"
+							description="Return to 100% zoom and reset the canvas pan."
+							placement="bottom"
 							onClick={() => setView({ x: 72, y: 72, zoom: 1 })}
 						>
 							{Math.round(view.zoom * 100)}%
-						</button>
-						<button
-							type="button"
-							aria-label="Zoom in"
+						</TooltipButton>
+						<TooltipButton
+							label="Zoom in"
+							description="Increase the canvas magnification."
+							placement="bottom"
 							onClick={() => zoomCanvas(view.zoom * 1.2)}
 						>
 							<PlusIcon aria-hidden="true" />
-						</button>
+						</TooltipButton>
 					</zoom-controls>
 					{editingTextIndex === null ? null : (
 						<button

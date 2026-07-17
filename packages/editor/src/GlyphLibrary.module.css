@@ -206,7 +206,7 @@ glyph-library.class {
 					font-size: 15px;
 				}
 
-				> button {
+				> tooltip-button > button {
 					display: grid;
 					place-items: center;
 					width: 28px;

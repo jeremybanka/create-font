@@ -10,6 +10,7 @@ import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphLibrary.module.css"
 import { createGlyphPreview } from "./glyph-preview.ts"
 import { useO } from "./state-hooks.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface GlyphLibraryProps {
 	readonly addingGlyphs: boolean
@@ -155,13 +156,14 @@ export function GlyphLibrary({
 					>
 						<dialog-heading>
 							<strong id="add-glyphs-heading">Add glyphs</strong>
-							<button
-								type="button"
-								aria-label="Cancel adding glyphs"
+							<TooltipButton
+								label="Cancel adding glyphs"
+								description="Close this dialog without adding glyphs."
+								placement="left"
 								onClick={closeAddGlyphs}
 							>
 								<Cross1Icon aria-hidden="true" />
-							</button>
+							</TooltipButton>
 						</dialog-heading>
 						<form
 							onSubmit={(event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {

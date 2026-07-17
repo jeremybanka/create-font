@@ -2,6 +2,13 @@ import { EditorApplicationRoot } from "@create-font/editor"
 import type { EditorFontSource } from "@create-font/states"
 import { render } from "preact"
 
+import { BootstrapScreen } from "./BootstrapScreen.tsx"
+import {
+	bootstrapDocumentTitle,
+	INITIAL_BOOTSTRAP_STATE,
+	nextBootstrapState,
+	type BootstrapState,
+} from "./bootstrap-state.ts"
 import type {
 	SourceSessionEvent,
 	SourceSessionRequest,
@@ -10,18 +17,11 @@ import type {
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
-if (!(`SharedWorker` in globalThis)) {
-	throw new Error(`create-font requires SharedWorker support.`)
-}
-
-const worker = new SharedWorker("/source-session.worker.js", {
-	name: `create-font-source-session`,
-	type: `module`,
-})
-const port = worker.port
+let port: MessagePort | null = null
 let revision: string | null = null
 let saveQueue = Promise.resolve()
-let rendered = false
+let renderedSource = false
+let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
 const pending = new Map<
 	string,
 	Readonly<{
@@ -30,14 +30,32 @@ const pending = new Map<
 	}>
 >()
 
-function showSource(source: EditorFontSource): void {
-	const familyName =
-		source.names.typographicFamily || source.names.family || `Untitled font`
-	document.title = `create-font — ${familyName}`
-	if (!rendered) {
-		applicationMount.replaceChildren()
-		rendered = true
+function retrySource(): void {
+	bootstrapState = nextBootstrapState(bootstrapState, { type: `retry` })
+	renderBootstrap()
+	if (port === null) {
+		connectSourceSession()
+		return
 	}
+	const request: SourceSessionRequest = { type: `refresh` }
+	port.postMessage(request)
+}
+
+function renderBootstrap(): void {
+	document.title = bootstrapDocumentTitle(bootstrapState)
+	render(
+		<BootstrapScreen state={bootstrapState} onAction={retrySource} />,
+		applicationMount,
+	)
+}
+
+function showBootstrapError(message: string): void {
+	bootstrapState = nextBootstrapState(bootstrapState, { type: `fail`, message })
+	renderBootstrap()
+}
+
+function showSource(source: EditorFontSource): void {
+	renderedSource = true
 	render(
 		<EditorApplicationRoot source={source} onSourceChange={saveSource} />,
 		applicationMount,
@@ -62,7 +80,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 						requestId,
 						source,
 					}
-					port.postMessage(request)
+					port?.postMessage(request)
 				}),
 		)
 	return saveQueue.catch((error: unknown) => {
@@ -71,36 +89,60 @@ function saveSource(source: EditorFontSource): Promise<void> {
 	})
 }
 
-port.addEventListener(
-	`message`,
-	(message: MessageEvent<SourceSessionEvent>) => {
-		const event = message.data
-		switch (event.type) {
-			case `source`:
-				revision = event.revision
-				showSource(event.source)
-				break
-			case `saved`: {
-				revision = event.revision
-				const request = pending.get(event.requestId)
-				pending.delete(event.requestId)
-				request?.resolve()
-				break
-			}
-			case `error`: {
-				const error = new Error(event.message)
-				if (event.requestId === undefined) {
-					console.error(error)
-					if (!rendered) applicationMount.textContent = event.message
-					break
-				}
-				const request = pending.get(event.requestId)
-				pending.delete(event.requestId)
-				request?.reject(error)
-				break
-			}
+function handleSourceSessionEvent(
+	message: MessageEvent<SourceSessionEvent>,
+): void {
+	const event = message.data
+	switch (event.type) {
+		case `source`:
+			revision = event.revision
+			showSource(event.source)
+			break
+		case `saved`: {
+			revision = event.revision
+			const request = pending.get(event.requestId)
+			pending.delete(event.requestId)
+			request?.resolve()
+			break
 		}
-	},
-)
-port.start()
-applicationMount.textContent = `Loading font source…`
+		case `error`: {
+			const error = new Error(event.message)
+			if (event.requestId === undefined) {
+				console.error(error)
+				if (!renderedSource) showBootstrapError(event.message)
+				break
+			}
+			const request = pending.get(event.requestId)
+			pending.delete(event.requestId)
+			request?.reject(error)
+			break
+		}
+	}
+}
+
+function connectSourceSession(): void {
+	if (!(`SharedWorker` in globalThis)) {
+		showBootstrapError(
+			`This browser cannot open a shared font source session. Try a recent version of Chrome, Edge, or Firefox.`,
+		)
+		return
+	}
+	try {
+		const worker = new SharedWorker("/source-session.worker.js", {
+			name: `create-font-source-session`,
+			type: `module`,
+		})
+		port = worker.port
+		port.addEventListener(`message`, handleSourceSessionEvent)
+		port.start()
+	} catch (error: unknown) {
+		showBootstrapError(
+			error instanceof Error
+				? error.message
+				: `The source session did not start.`,
+		)
+	}
+}
+
+renderBootstrap()
+connectSourceSession()

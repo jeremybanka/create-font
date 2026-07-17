@@ -7,11 +7,11 @@ import {
 } from "./command-palette.ts"
 import { AppAnchor } from "./AppAnchor.tsx"
 import { CommandPalette } from "./CommandPalette.tsx"
+import { useEditorDocumentMetadata } from "./document-metadata.ts"
 import { EditorIcon } from "./EditorIcon.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
 	ALT_KEY_LABEL,
-	ariaKeyShortcut,
 	formatHotkey,
 	IS_MAC_LIKE,
 	MOD_KEY_LABEL,
@@ -27,6 +27,7 @@ import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useTL } from "./state-hooks.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
@@ -44,6 +45,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const activeTool = useO(workspace.ui.activeTool)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
 	const routeName = useO(workspace.ui.routeName)
+	const previewText = useO(workspace.ui.previewText)
 	const history = useTL(workspace.font.glyphHistoryTimelines, activeGlyphId)
 	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
 	const master = source.masters.find((item) => item.id === activeMasterId)
@@ -54,6 +56,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		history,
 		workspace,
 	}
+	useEditorDocumentMetadata(source, routeName, previewText)
 	useHotkeys(toolContext, routeName === "canvas")
 	const openCommandPalette = (): void => {
 		setAddingGlyphs(false)
@@ -232,21 +235,19 @@ function EditorToolbar({ context }: { readonly context: ToolContext }) {
 				<tool-island key={tools.map((tool) => tool.id).join("-")}>
 					{tools.map((tool) => {
 						const status = tool.status(context)
-						const hotkey = formatHotkey(tool.hotkey).join("+")
 						return (
-							<button
+							<TooltipButton
 								key={tool.id}
-								type="button"
-								title={`${tool.displayName} (${hotkey})`}
-								aria-label={tool.displayName}
-								aria-keyshortcuts={ariaKeyShortcut(tool.hotkey)}
+								label={tool.displayName}
+								description={tool.description}
+								hotkey={tool.hotkey}
 								aria-pressed={status === "active"}
 								data-status={status}
 								disabled={status === "disabled"}
 								onClick={() => tool.do(context)}
 							>
 								<EditorIcon name={tool.icon} />
-							</button>
+							</TooltipButton>
 						)
 					})}
 				</tool-island>

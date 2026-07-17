@@ -88,7 +88,7 @@ glyph-canvas.class {
 				border-radius: 6px;
 				background: var(--panel);
 
-				> button {
+				> tooltip-button > button {
 					display: grid;
 					place-items: center;
 					height: 24px;
