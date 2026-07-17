@@ -90,6 +90,35 @@ export function resolveSelectionControls(
 	return controls
 }
 
+/**
+ * Adds the owner of a selected soft-handle pair so a rigid translation keeps
+ * both endpoints exact without violating the soft node's collinear invariant.
+ * The expanded selection also makes the implicit owner move visible in the UI.
+ */
+export function selectionForRigidTranslation(
+	nodes: readonly EditorLayerNode[],
+	selection: readonly EditorSelectionTarget[],
+): readonly EditorSelectionTarget[] {
+	const selected = new Set(selection.map(selectionKey))
+	const expanded = [...selection]
+	for (const node of nodes) {
+		if (
+			node.mode !== "soft" ||
+			node.incoming === undefined ||
+			node.outgoing === undefined ||
+			!selected.has(`handle/${node.pointId}/incoming`) ||
+			!selected.has(`handle/${node.pointId}/outgoing`)
+		)
+			continue
+		const nodeTarget = { kind: "node", pointId: node.pointId } as const
+		const key = selectionKey(nodeTarget)
+		if (selected.has(key)) continue
+		selected.add(key)
+		expanded.push(nodeTarget)
+	}
+	return Object.freeze(expanded)
+}
+
 export function boundsOfControls(
 	controls: readonly Pick<ResolvedSelectionControl, "x" | "y">[],
 ): SelectionBounds | null {

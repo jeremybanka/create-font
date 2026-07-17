@@ -38,6 +38,7 @@ import {
 	nearestAxisAlignment,
 	resolveSelectionControls,
 	scaleSelectionControls,
+	selectionForRigidTranslation,
 	translateSelectionControls,
 } from "../src/outline-selection.ts"
 
@@ -566,6 +567,52 @@ describe("editor workspace", () => {
 		).toMatchObject({
 			handles: [{ x: 32, y: 20 }],
 			points: [{ x: 12, y: 50 }],
+		})
+	})
+
+	it("includes a soft handle pair's owner in a rigid translation", () => {
+		const node = {
+			pointId: "point:soft-pair" as const,
+			mode: "soft" as const,
+			x: 0,
+			y: 0,
+			incoming: { x: -10, y: 0 },
+			outgoing: { x: 20, y: 0 },
+		}
+		const selection = selectionForRigidTranslation(
+			[node],
+			[
+				{ kind: "handle", pointId: node.pointId, handle: "incoming" },
+				{ kind: "handle", pointId: node.pointId, handle: "outgoing" },
+			],
+		)
+		expect(selection).toEqual([
+			{ kind: "handle", pointId: node.pointId, handle: "incoming" },
+			{ kind: "handle", pointId: node.pointId, handle: "outgoing" },
+			{ kind: "node", pointId: node.pointId },
+		])
+		expect(
+			translateSelectionControls(
+				resolveSelectionControls([node], selection),
+				0,
+				10,
+			),
+		).toEqual({
+			points: [{ pointId: node.pointId, x: 0, y: 10 }],
+			handles: [
+				{
+					pointId: node.pointId,
+					handle: "incoming",
+					x: -10,
+					y: 10,
+				},
+				{
+					pointId: node.pointId,
+					handle: "outgoing",
+					x: 20,
+					y: 10,
+				},
+			],
 		})
 	})
 
