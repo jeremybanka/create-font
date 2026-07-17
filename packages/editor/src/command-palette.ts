@@ -7,6 +7,8 @@ export interface PaletteCommand {
 	readonly icon: EditorIconName
 	readonly keywords?: readonly string[]
 	readonly shortcut?: string
+	readonly status?: string
+	readonly checked?: boolean
 	readonly disabled?: boolean
 	readonly disabledReason?: string | undefined
 	readonly do: () => void

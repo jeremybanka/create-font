@@ -123,6 +123,7 @@ export function CommandPalette({
 								type="button"
 								role="option"
 								aria-selected={command.id === activeCommand?.id}
+								aria-checked={command.checked}
 								disabled={command.disabled}
 								onMouseEnter={() => {
 									if (!command.disabled) setActiveId(command.id)
@@ -138,6 +139,8 @@ export function CommandPalette({
 								</command-name>
 								{command.disabled ? (
 									<small>{command.disabledReason ?? "Unavailable"}</small>
+								) : command.status !== undefined ? (
+									<small>{command.status}</small>
 								) : command.shortcut === undefined ? null : (
 									<kbd>{command.shortcut}</kbd>
 								)}

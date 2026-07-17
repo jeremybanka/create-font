@@ -120,6 +120,7 @@ import {
 	serializeOutlineClipboard,
 } from "./outline-clipboard.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
+import { visualDebugControlRegions } from "./visual-debug.ts"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
@@ -222,6 +223,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const setSelection = useI(workspace.ui.selection)
 	const showNodes = useO(workspace.ui.showNodes)
 	const setShowNodes = useI(workspace.ui.showNodes)
+	const visualDebug = useO(workspace.ui.visualDebug)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
 	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
@@ -380,6 +382,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const hitControlRadii = useMemo(
 		() => editorControlHitRadii(hitControlCandidates, worldScale),
 		[hitControlCandidates, worldScale],
+	)
+	const debugControlRegions = useMemo(
+		() => visualDebugControlRegions(hitControlCandidates, hitControlRadii),
+		[hitControlCandidates, hitControlRadii],
 	)
 	const caret =
 		layout.carets.find((candidate) => candidate.textIndex === caretIndex) ??
@@ -2812,6 +2818,45 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											))}
 										</Group>
 									)}
+									{visualDebug["hit-targets"] && activeTool === "select" ? (
+										<Group name="visual-debug-hit-targets" listening={false}>
+											{visibleContours.map((contour) => (
+														<Path
+															key={`visual-debug-segment:${contour.id}`}
+															name="visual-debug-segment-hit"
+															data={editorContourToPath(
+																contour.nodes,
+																contour.closed,
+															)}
+															fillEnabled={false}
+															stroke="#228b22"
+															strokeWidth={
+																SEGMENT_HIT_RADIUS_PX * 2 * inverseScale
+															}
+															opacity={0.12}
+															listening={false}
+														/>
+													))}
+											{debugControlRegions.flatMap((region) =>
+												region.radiusPx === 0
+													? []
+													: [
+															<Circle
+																key={`visual-debug-control:${region.key}`}
+																name="visual-debug-control-hit"
+																x={region.x}
+																y={region.y}
+																radius={region.radiusPx * inverseScale}
+																fill="#228b22"
+																stroke="#166534"
+																strokeWidth={inverseScale}
+																opacity={0.18}
+																listening={false}
+															/>,
+														],
+											)}
+										</Group>
+									) : null}
 									{selectionBox === null ? null : (
 										<Rect
 											x={Math.min(selectionBox.startX, selectionBox.endX)}

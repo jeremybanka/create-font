@@ -29,6 +29,7 @@ import { GlyphInspector } from "./GlyphInspector.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useOF, useTL } from "./state-hooks.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
+import { visualDebugPaletteCommands } from "./visual-debug.ts"
 
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
@@ -51,6 +52,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
 	const faviconHref = useO(workspace.ui.faviconHref)
+	const visualDebug = useO(workspace.ui.visualDebug)
 	const history = useTL(
 		workspace.font.glyphHistoryTimelines,
 		activeGlyphId,
@@ -120,6 +122,9 @@ export function AppShell({ workspace }: AppShellProps) {
 					: toolDisabledReason(tool, toolContext),
 			do: () => tool.do(toolContext),
 		})),
+		...visualDebugPaletteCommands(visualDebug, (id) =>
+			workspace.actions.toggleVisualDebug(id),
+		),
 	]
 
 	const familyName = names.typographicFamily ?? names.family ?? "Untitled font"
