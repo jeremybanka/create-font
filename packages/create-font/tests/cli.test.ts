@@ -60,10 +60,15 @@ describe(`create-font CLI`, () => {
 
 		expect(result.workspaceCreated).toBe(true)
 		expect(result.fontName).toBe(`my-font`)
+		const createFontPackageJson = JSON.parse(
+			await readFile(join(import.meta.dir, `../package.json`), `utf8`),
+		) as { version: string }
 		const packageJson = JSON.parse(
 			await readFile(join(result.workspaceRoot, `package.json`), `utf8`),
 		) as { devDependencies: Record<string, string> }
-		expect(packageJson.devDependencies[`create-font`]).toBe(`0.0.0`)
+		expect(packageJson.devDependencies[`create-font`]).toBe(
+			createFontPackageJson.version,
+		)
 
 		const projects = await discoverFontProjects(result.workspaceRoot)
 		expect(projects.map((project) => project.name)).toEqual([`my-font`])
