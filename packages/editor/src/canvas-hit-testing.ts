@@ -5,8 +5,8 @@ import {
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
 
-export const CONTROL_HIT_RADIUS_PX = 12
-export const SEGMENT_HIT_RADIUS_PX = 12
+export const CONTROL_HIT_RADIUS_PX = 24
+export const SEGMENT_HIT_RADIUS_PX = 24
 
 interface CircularHitContext<Shape> {
 	beginPath(): void

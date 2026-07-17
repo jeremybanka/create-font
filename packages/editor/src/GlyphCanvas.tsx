@@ -2821,22 +2821,20 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									{visualDebug["hit-targets"] && activeTool === "select" ? (
 										<Group name="visual-debug-hit-targets" listening={false}>
 											{visibleContours.map((contour) => (
-														<Path
-															key={`visual-debug-segment:${contour.id}`}
-															name="visual-debug-segment-hit"
-															data={editorContourToPath(
-																contour.nodes,
-																contour.closed,
-															)}
-															fillEnabled={false}
-															stroke="#228b22"
-															strokeWidth={
-																SEGMENT_HIT_RADIUS_PX * 2 * inverseScale
-															}
-															opacity={0.12}
-															listening={false}
-														/>
-													))}
+												<Path
+													key={`visual-debug-segment:${contour.id}`}
+													name="visual-debug-segment-hit"
+													data={editorContourToPath(
+														contour.nodes,
+														contour.closed,
+													)}
+													fillEnabled={false}
+													stroke="#228b22"
+													strokeWidth={SEGMENT_HIT_RADIUS_PX * 2 * inverseScale}
+													opacity={0.12}
+													listening={false}
+												/>
+											))}
 											{debugControlRegions.flatMap((region) =>
 												region.radiusPx === 0
 													? []

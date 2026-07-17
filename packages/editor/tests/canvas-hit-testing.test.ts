@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest"
 
 import {
 	circularHitRegion,
+	CONTROL_HIT_RADIUS_PX,
 	editorControlHitCandidates,
 	editorControlHitRadii,
 	nearestEditorControlHit,
 	nearestEditorSegmentHit,
 	resolveEditorCanvasHit,
+	SEGMENT_HIT_RADIUS_PX,
 } from "../src/canvas-hit-testing.ts"
 import type { EditorCanvasContour } from "../src/editor-workspace.ts"
 
@@ -32,6 +34,11 @@ const contours: readonly EditorCanvasContour[] = [
 ]
 
 describe("canvas hit testing", () => {
+	it("uses a 24px maximum radius for controls and segments", () => {
+		expect(CONTROL_HIT_RADIUS_PX).toBe(24)
+		expect(SEGMENT_HIT_RADIUS_PX).toBe(24)
+	})
+
 	it("draws circular hit regions independently of visible geometry", () => {
 		const calls: unknown[] = []
 		const shape = { id: "shape" }
@@ -69,14 +76,15 @@ describe("canvas hit testing", () => {
 	})
 
 	it("uses zoom-stable screen distances", () => {
-		const controls = editorControlHitCandidates(contours)
+		const controls = [editorControlHitCandidates(contours)[0]!]
 		expect(
-			nearestEditorControlHit(controls, { x: 8, y: 0 }, 1)?.target,
+			nearestEditorControlHit(controls, { x: 23, y: 0 }, 1)?.target,
 		).toEqual({ kind: "node", pointId: pointId("a") })
-		expect(nearestEditorControlHit(controls, { x: 8, y: 0 }, 2)).toBeNull()
+		expect(nearestEditorControlHit(controls, { x: 25, y: 0 }, 1)).toBeNull()
 		expect(
-			nearestEditorControlHit(controls, { x: 4, y: 0 }, 2)?.target,
+			nearestEditorControlHit(controls, { x: 11.5, y: 0 }, 2)?.target,
 		).toEqual({ kind: "node", pointId: pointId("a") })
+		expect(nearestEditorControlHit(controls, { x: 12.5, y: 0 }, 2)).toBeNull()
 	})
 
 	it("gives every distinct crowded control its nearest-side region", () => {
@@ -136,16 +144,17 @@ describe("canvas hit testing", () => {
 	})
 
 	it("finds the nearest path within a forgiving screen-space radius", () => {
-		const hit = nearestEditorSegmentHit(contours, { x: 50, y: 11 }, 1)
+		const hit = nearestEditorSegmentHit(contours, { x: 50, y: 23 }, 1)
 		expect(hit).toMatchObject({
 			kind: "segment",
 			contourId: contourId("main"),
 		})
-		expect(hit?.distancePx).toBeCloseTo(11, 10)
-		expect(nearestEditorSegmentHit(contours, { x: 50, y: 13 }, 1)).toBeNull()
+		expect(hit?.distancePx).toBeCloseTo(23, 10)
+		expect(nearestEditorSegmentHit(contours, { x: 50, y: 25 }, 1)).toBeNull()
 		expect(
-			nearestEditorSegmentHit(contours, { x: 50, y: 5.5 }, 2)?.distancePx,
-		).toBeCloseTo(11, 10)
+			nearestEditorSegmentHit(contours, { x: 50, y: 11.5 }, 2)?.distancePx,
+		).toBeCloseTo(23, 10)
+		expect(nearestEditorSegmentHit(contours, { x: 50, y: 12.5 }, 2)).toBeNull()
 	})
 
 	it("uses contour IDs instead of render order to break path ties", () => {
