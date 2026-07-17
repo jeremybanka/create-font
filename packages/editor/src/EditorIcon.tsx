@@ -1,43 +1,41 @@
 import {
+	AlignCenterVerticallyIcon,
 	CursorArrowIcon,
 	DotFilledIcon,
-	Pencil2Icon,
+	Half2Icon,
+	Pencil1Icon,
 	PlusIcon,
-	ResetIcon,
+	DoubleArrowLeftIcon,
+	DoubleArrowRightIcon,
+	ShuffleIcon,
+	StarIcon,
 	TransformIcon,
 } from "@radix-ui/react-icons"
+import type * as Radix from "@radix-ui/react-icons"
 
 import css from "./EditorIcon.module.css"
 
-export type EditorIconName =
-	| "add"
-	| "make-first"
-	| "pen"
-	| "redo"
-	| "reverse"
-	| "select"
-	| "transform"
-	| "undo"
+export type EditorIconName = keyof typeof EDITOR_ICONS
 
 const EDITOR_ICONS = {
-	add: PlusIcon,
-	"make-first": DotFilledIcon,
-	pen: Pencil2Icon,
-	redo: ResetIcon,
-	reverse: ResetIcon,
-	select: CursorArrowIcon,
-	transform: TransformIcon,
-	undo: ResetIcon,
-} as const
+	AlignCenterVerticallyIcon,
+	CursorArrowIcon,
+	DotFilledIcon,
+	Half2Icon,
+	Pencil1Icon,
+	PlusIcon,
+	DoubleArrowLeftIcon,
+	DoubleArrowRightIcon,
+	ShuffleIcon,
+	StarIcon,
+	TransformIcon,
+} as const satisfies Partial<typeof Radix>
 
 export function EditorIcon({ name }: { readonly name: EditorIconName }) {
 	const Icon = EDITOR_ICONS[name]
 	return (
 		<editor-icon className={css.class}>
-			<Icon
-				aria-hidden="true"
-				style={name === "redo" ? { transform: "scaleX(-1)" } : undefined}
-			/>
+			<Icon aria-hidden="true" />
 		</editor-icon>
 	)
 }

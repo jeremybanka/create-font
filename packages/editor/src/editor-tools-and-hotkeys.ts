@@ -89,7 +89,7 @@ export const TOOLS = {
 		id: "select",
 		displayName: "Select",
 		hotkey: { key: "v" },
-		icon: "select",
+		icon: "CursorArrowIcon",
 		status: ({ activeTool }) => (activeTool === "select" ? "active" : "ready"),
 		do: ({ workspace }) => workspace.actions.selectTool("select"),
 	},
@@ -98,7 +98,7 @@ export const TOOLS = {
 		id: "pen",
 		displayName: "Pen",
 		hotkey: { key: "q" },
-		icon: "pen",
+		icon: "Pencil1Icon",
 		status: ({ activeTool, editingTextIndex }) =>
 			editingTextIndex === null
 				? "disabled"
@@ -113,7 +113,7 @@ export const TOOLS = {
 		id: "transform",
 		displayName: "Transform Selection",
 		hotkey: { key: "t" },
-		icon: "transform",
+		icon: "TransformIcon",
 		status: ({ activeTool, editingTextIndex }) =>
 			editingTextIndex === null
 				? "disabled"
@@ -127,7 +127,7 @@ export const TOOLS = {
 		id: "align-selection",
 		displayName: "Align Selection",
 		hotkey: { key: "a", shift: true },
-		icon: "transform",
+		icon: "AlignCenterVerticallyIcon",
 		status: ({ activeLayer, editingTextIndex, selection }) =>
 			editingTextIndex === null ||
 			activeLayer === null ||
@@ -158,7 +158,7 @@ export const TOOLS = {
 		id: "reverse-path",
 		displayName: "Reverse Path",
 		hotkey: { key: "r", shift: true },
-		icon: "reverse",
+		icon: "ShuffleIcon",
 		status: (context) =>
 			context.editingTextIndex !== null && selectedContour(context)?.closed
 				? "ready"
@@ -177,7 +177,7 @@ export const TOOLS = {
 		id: "make-node-first",
 		displayName: "Make Node First",
 		hotkey: { key: "f", shift: true },
-		icon: "make-first",
+		icon: "StarIcon",
 		status: (context) => {
 			const nodes = context.selection.filter((target) => target.kind === "node")
 			const contour = selectedContour(context)
@@ -206,7 +206,7 @@ export const TOOLS = {
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
-		icon: "undo",
+		icon: "DoubleArrowLeftIcon",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
 		do: ({ history }) => history.undo(),
 	},
@@ -215,7 +215,7 @@ export const TOOLS = {
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
-		icon: "redo",
+		icon: "DoubleArrowRightIcon",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
 		do: ({ history }) => history.redo(),
