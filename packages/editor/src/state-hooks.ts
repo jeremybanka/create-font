@@ -14,6 +14,8 @@ import {
 	useSyncExternalStore,
 } from "preact/compat"
 
+import { subscribeToSettledState } from "./settled-subscription.ts"
+
 export const EditorStateContext = createContext<Silo | null>(null)
 
 function useEditorSilo(): Silo {
@@ -40,7 +42,7 @@ export function useO<T, E = never>(
 	const silo = useEditorSilo()
 	const subscribe = useCallback(
 		(notify: () => void) =>
-			silo.subscribe(token as ReadableToken<T>, () => notify()),
+			subscribeToSettledState(silo, token as ReadableToken<T>, notify),
 		[silo, token],
 	)
 	const getSnapshot = useCallback(() => silo.getState(token), [silo, token])

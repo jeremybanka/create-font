@@ -5,6 +5,7 @@ import { AppShell } from "./AppShell.tsx"
 import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
+import { subscribeToSettledState } from "./settled-subscription.ts"
 import { EditorStateContext } from "./state-hooks.ts"
 
 export type EditorApplicationRootProps = Readonly<{
@@ -33,9 +34,13 @@ export function EditorApplicationRoot({
 
 	useEffect(() => {
 		if (onSourceChange === undefined) return
-		return workspace.font.silo.subscribe(
+		return subscribeToSettledState(
+			workspace.font.silo,
 			workspace.font.selectors.editorSource,
-			({ newValue: nextSource }) => {
+			() => {
+				const nextSource = workspace.font.silo.getState(
+					workspace.font.selectors.editorSource,
+				)
 				if (nextSource !== null && !applyingSource.current) {
 					void onSourceChange(nextSource)
 				}
