@@ -53,6 +53,20 @@ const profile = await page.evaluate(() =>
 Save the complete JSON snapshot, not only `profile.summary`. Resource and
 long-task entries are needed to explain the headline durations.
 
+Profile the server-side source service separately from HTTP and browser work:
+
+```sh
+bun packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
+```
+
+This opt-in diagnostic records why each complete project load occurred and
+splits it into path collection, file read/parse/hash, and source assembly. It
+then simulates encoding one atomic bulk snapshot so repeated project loading can
+be distinguished from JSON serialization and payload size. It does not change
+the service's read, write, watcher, or caching behavior. Timing calls are skipped
+unless an observer is supplied, and observer failures are isolated from source
+loading.
+
 - A **cold-worker run** starts in a new browser context, so no source-session
   SharedWorker or HTTP cache survives.
 - A **warm-worker run** reloads or opens another tab in the same context after a

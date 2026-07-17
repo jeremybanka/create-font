@@ -11,7 +11,10 @@ import {
 import { assembleEditorFontSource } from "@create-font/source"
 import { createFontEditorState } from "@create-font/states"
 
-import { createFileSystemSourceService } from "../src/source-service.ts"
+import {
+	createFileSystemSourceService,
+	type SourceProjectLoadDiagnostic,
+} from "../src/source-service.ts"
 import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
@@ -56,6 +59,43 @@ describe(`font workspace discovery`, () => {
 })
 
 describe(`filesystem font source service`, () => {
+	it(`reports project-load phases and their operation triggers`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const diagnostics: SourceProjectLoadDiagnostic[] = []
+		const source = await createFileSystemSourceService(projectRoot, {
+			onProjectLoad: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const manifest = await source.readManifest()
+		await source.readUnit(`names.json`)
+
+		expect(diagnostics.map(({ trigger }) => trigger)).toEqual([
+			`initialization`,
+			`read-manifest`,
+			`read-unit`,
+		])
+		for (const diagnostic of diagnostics) {
+			expect(diagnostic.unitCount).toBe(manifest.units.length)
+			expect(diagnostic.totalDuration).toBeGreaterThanOrEqual(
+				diagnostic.collectPathsDuration +
+					diagnostic.readParseDuration +
+					diagnostic.assembleDuration,
+			)
+		}
+	})
+
+	it(`ignores project-load diagnostic observer failures`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot, {
+			onProjectLoad: () => {
+				throw new Error(`diagnostic observer failure`)
+			},
+		})
+
+		await expect(source.readManifest()).resolves.toMatchObject({
+			units: expect.any(Array),
+		})
+	})
+
 	it(`reads a validated project and writes one revisioned unit`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)

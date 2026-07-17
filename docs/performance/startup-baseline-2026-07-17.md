@@ -82,6 +82,43 @@ The production capture contained one 363 ms main-thread long task. Most
 importantly, bundled assets did not change the attribution: source-unit RPC work
 still consumed about 92% of time to editor usable.
 
+### Direct source-service profile
+
+The reproducible profiler ran directly against `fonts/workbench-sans`, outside
+HTTP and the browser:
+
+```sh
+bun packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
+```
+
+It observed exactly 208 complete project loads: one during service
+initialization, one for `readManifest()`, and 206 for the concurrently requested
+`readUnit()` calls. The service lock serialized the unit calls.
+
+| Direct service metric                   |           Result |
+| --------------------------------------- | ---------------: |
+| `readManifest()` wall time              |         67.98 ms |
+| 206 `readUnit()` calls wall time        |     12,498.92 ms |
+| Per-unit complete load total p50 / p95  | 59.81 / 66.09 ms |
+| Path collection per load p50 / p95      |   2.32 / 3.40 ms |
+| File realpath/read/hash/parse p50 / p95 | 43.98 / 50.32 ms |
+| Full source assembly per load p50 / p95 | 12.65 / 15.36 ms |
+| One bulk JSON payload encoding          |          2.17 ms |
+| Bulk JSON payload size                  |    325,266 bytes |
+| One manifest-style load + bulk encoding |         70.01 ms |
+
+The per-load p50 spends about 74% in file resolution/read/hash/parse and 21% in
+assembly. The unit fan-out alone performs 206 × 206 = 42,436 file reads/parses
+and 206 assemblies. Including initialization and the manifest makes the complete
+cold path 42,848 file reads/parses and 208 assemblies.
+
+An independent lower-bound run called
+`loadEditorFontSourceDirectory("./fonts/workbench-sans")` 12 times sequentially,
+discarded two warmups (98.3 and 69.3 ms), and measured the remaining ten:
+p50 63.52 ms, upper sample 67.44 ms, range 57.87–67.66 ms. Multiplying the p50 by
+206 predicts 13.09 seconds, closely matching the browser's 12.70-second fan-out
+p50 and the direct service's 12.50-second wall time.
+
 ## Attribution
 
 The cold path is dominated by source-unit transport/server work, not source
@@ -102,25 +139,119 @@ The measured behavior explains both the request waterfall and its roughly
 parallelism across the service lock, and parallelism alone would still repeat
 the full-project validation work.
 
+This is an N+2 complete-load pattern over an N-file project, making initial
+source work O(N²). The independent single-load timing accounts for essentially
+the entire observed critical path, so the theory is falsifiable and already
+cross-validated at browser, RPC-wall, and direct-service levels.
+
+## Consistency audit
+
+The current service has valuable correctness properties worth preserving:
+
+- every individual manifest/unit read and write is serialized by `withLock` and
+  returns data from a fully parsed and assembled project;
+- writes reload disk state before checking revisions, validate the complete
+  candidate, journal and atomically rename coordinated units, roll back failures,
+  and reload the committed result;
+- idempotency keys return the prior logical result or reject mismatched reuse;
+  and
+- watcher events debounce, enter the same lock, and publish only a successfully
+  validated manifest.
+
+The multi-request startup does not provide a coherent project snapshot,
+however. A manifest may be read at revision A, an external edit may land, and
+later unit requests may return revision B. The worker neither binds unit reads
+to the inventory revision nor checks each returned unit revision against its
+manifest descriptor, yet labels the assembled source with the inventory's
+aggregate revision. A structurally valid mixed read can therefore be accepted
+under the wrong revision.
+
+Caching adds further invariants that the current fresh-read approach avoids:
+
+- writes must force a disk refresh at their start so a debounced/missed watcher
+  cannot permit an overwrite based on stale cached revisions;
+- cached values need immutable nested `JsonValue` ownership, not only a readonly
+  map type;
+- watcher registration currently happens after the initial load, leaving a gap
+  in which a future authoritative cache could miss an edit;
+- the watcher list covers only directories present at startup, so nested
+  directory creation/removal needs a reconciled directory→watcher map; and
+- invalid external state needs explicit last-known-good/error semantics rather
+  than silently advancing the published revision.
+
 ## Follow-up recommendations
 
-1. **High impact / high confidence / medium complexity:** keep one immutable,
-   validated `LoadedProject` snapshot in the filesystem source service. Serve
-   the manifest and unit snapshots from that same revision, update it atomically
-   after writes, and invalidate/reload it once after coalesced external watcher
-   events. Preserve the existing lock for mutations, not repeated read-only
-   whole-project loads. Add consistency tests for reads racing writes and watcher
-   invalidation.
-2. **Alternative or complementary / high confidence / medium complexity:** add a
-   bounded source-snapshot RPC that returns the manifest and validated units in
-   one response. This removes 206 HTTP round trips but should reuse the cached
-   service snapshot rather than mask repeated disk validation behind one route.
-3. **Secondary / medium impact / medium confidence:** profile the 274 ms warm p50
+1. **First optimization — high impact / high confidence / medium complexity:**
+   add an atomic, bounded `SourceProjectSnapshot { revision, units[] }` read to
+   the source service and RPC. One request calls `loadProjectDirectory()` once
+   and derives the aggregate revision and every unit snapshot from that same
+   `LoadedProject`. This preserves fresh-from-disk behavior, eliminates 206 HTTP
+   requests and repeated loads, and removes the manifest/unit torn-read window
+   without introducing authoritative cache invalidation.
+2. **Phase two only if a single load remains material — medium incremental impact
+   / medium confidence / high correctness complexity:** keep an immutable
+   last-known-good `LoadedProject` pointer and atomically swap it only after full
+   validation. Address forced write refresh, deep ownership, watcher-registration
+   gaps, dynamic directory reconciliation, invalid-state reporting, and bounded
+   reconciliation before making cached reads authoritative.
+3. **Later incremental loading — potentially high large-font impact / medium
+   complexity:** batch only changed/new paths, but bind the request to an expected
+   aggregate revision. A stale revision is a normal retry when a newer watcher
+   event supersedes an in-flight refresh. Reuse unchanged units only when their
+   raw-text descriptor revisions match, and delete paths absent from the newer
+   manifest.
+4. **Secondary / medium impact / medium confidence:** profile the 274 ms warm p50
    hydration long task with a sampling trace after the source bottleneck is
    removed. It is material for warm navigation but only about 2% of the current
    cold path.
-4. **Low priority now:** do not optimize the 16 ms assembly phase or 3 ms
+5. **Reject as a primary fix:** removing the service lock or merely increasing
+   HTTP concurrency retains N complete project loads, increases I/O/CPU pressure,
+   and weakens coherence. Combining canonical source into one file would conflict
+   with the repository-oriented directory contract.
+6. **Low priority now:** do not optimize the 16 ms assembly phase or 3 ms
    cross-thread transit based on this baseline.
+
+### Falsifiable bulk-snapshot prediction
+
+The direct profile measured one complete load plus encoding at 70 ms for a
+325 KB body. Adding the existing browser phases gives a predicted cold floor of
+roughly 1.0–1.2 seconds: about 70 ms server work/encoding + transport, 16 ms
+browser assembly, 519 ms validation, 378 ms hydration, and small asset/transit
+costs.
+
+The theory predicts, for `workbench-sans` on this environment:
+
+- one initial source HTTP request instead of manifest + 206 unit requests;
+- one browser-triggered complete project load and O(N) file reads instead of
+  N+1 loads and O(N²) reads;
+- unit/snapshot RPC wall time below 250 ms; and
+- cold editor-usable p50 below 1.5 seconds without a persistent cache.
+
+Any of these failing falsifies part of the theory and should trigger another
+profile before adding cache complexity. In particular, if a single project load
+remains significant for a 1,000-unit stress corpus, then cache/incremental work
+has measured justification.
+
+### Correctness and regression test plan
+
+For every exposed snapshot, tests must recompute the aggregate revision from the
+ordered path/unit-revision pairs, verify each unit revision matches its returned
+content, and successfully assemble all units. Add race coverage for:
+
+- an external edit between legacy manifest and unit reads, and an edit during a
+  bulk read;
+- a newer source event arriving while an older refresh is in flight;
+- rapid coalesced edits, invalid external state followed by repair, and revision
+  monotonicity;
+- nested directory add/delete/rename and watcher events without filenames;
+- reads racing RPC writes, stale writes, transaction rollback, and idempotent
+  retry; and
+- old/new/deleted unit paths bound to an expected aggregate revision.
+
+Benchmark 20-, 206-, and approximately 1,000-unit projects with ten cold and ten
+warm dev and production runs. Assert one initial snapshot request and O(N) file
+reads; use latency budgets as regression signals rather than timing assertions in
+ordinary unit tests.
 
 Re-run the same ten cold and warm samples after the source-service change. A
 candidate regression budget for `workbench-sans` is cold p50 ≤ 2 seconds, cold

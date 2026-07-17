@@ -145,6 +145,29 @@
 		"unitRpcFanout": 12540.3,
 		"validation": 481.3
 	},
+	"sourceServiceProfile": {
+		"bulkPayloadBytes": 325266,
+		"bulkSerializationDuration": 2.171209,
+		"estimatedSingleLoadAndSerialization": 70.011094,
+		"manifestWallDuration": 67.979213,
+		"projectLoads": {
+			"initialization": 1,
+			"readManifest": 1,
+			"readUnit": 206,
+			"total": 208
+		},
+		"readUnitLoad": {
+			"assembleP50": 12.650221,
+			"assembleP95": 15.355058,
+			"collectPathsP50": 2.317963,
+			"collectPathsP95": 3.395471,
+			"readParseP50": 43.97613,
+			"readParseP95": 50.318253,
+			"totalP50": 59.807689,
+			"totalP95": 66.085826
+		},
+		"unitReadsWallDuration": 12498.924439
+	},
 	"warm": [
 		{
 			"editorUsable": 330.6,
