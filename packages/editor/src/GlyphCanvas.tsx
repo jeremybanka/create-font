@@ -25,7 +25,13 @@ import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
-import { snapDraggedTarget, type ActiveSnap } from "./canvas-snapping.ts"
+import {
+	incidentStraightProjectionCandidates,
+	projectionGuidePoints,
+	snapDraggedTarget,
+	type ActiveSnap,
+	type SegmentProjectionCandidate,
+} from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
 	previewHandleDrag,
@@ -82,6 +88,12 @@ interface DraggedPoint {
 	readonly pointId: PointId
 	readonly x: number
 	readonly y: number
+}
+
+interface PointDrag {
+	readonly pointId: PointId
+	readonly projectionCandidates: readonly SegmentProjectionCandidate[]
+	lastPoint: DraggedPoint | null
 }
 
 interface DraggedHandle {
@@ -168,6 +180,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const penEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
+	const pointDragRef = useRef<PointDrag | null>(null)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -282,6 +295,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		return [...groups.entries()].map(([y, lines]) => ({ y, lines }))
 	}, [metricLines])
 	const advanceWidth = layer?.advanceWidth ?? 1_000
+	const activeSnapGuideExtent =
+		Math.max(
+			advanceWidth + 400,
+			metrics.ascender - metrics.descender + metrics.lineGap + 400,
+		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
 	const caret =
@@ -350,6 +368,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	useEffect(() => {
 		setPenContourId(null)
 		setActiveSnaps([])
+		pointDragRef.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
 	const commitPoint = (point: DraggedPoint): void => {
@@ -1233,14 +1252,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 										<Line
 											key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
 											points={
-												snap.axis === "x"
-													? [
-															snap.value,
-															metrics.descender - 100,
-															snap.value,
-															metrics.ascender + metrics.lineGap + 100,
-														]
-													: [-200, snap.value, advanceWidth + 200, snap.value]
+												snap.axis === "projection"
+													? projectionGuidePoints(snap, activeSnapGuideExtent)
+													: snap.axis === "x"
+														? [
+																snap.value,
+																metrics.descender - 100,
+																snap.value,
+																metrics.ascender + metrics.lineGap + 100,
+															]
+														: [-200, snap.value, advanceWidth + 200, snap.value]
 											}
 											stroke={palette.accent}
 											strokeWidth={1.5 * inverseScale}
@@ -1400,6 +1421,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		nodes: allPoints,
 																		metrics: metricLines,
 																		worldScale,
+																		projectionCandidates:
+																			pointDragRef.current?.pointId ===
+																			point.pointId
+																				? pointDragRef.current
+																						.projectionCandidates
+																				: [],
 																	},
 																)
 																return {
@@ -1409,6 +1436,20 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		y: snapped.y,
 																	},
 																	snaps: snapped.snaps,
+																}
+															}
+															const beginPointDrag = (
+																event: KonvaEventObject<DragEvent>,
+															): void => {
+																selectPoint(event)
+																pointDragRef.current = {
+																	pointId: point.pointId,
+																	projectionCandidates:
+																		incidentStraightProjectionCandidates(
+																			contours,
+																			point.pointId,
+																		),
+																	lastPoint: null,
 																}
 															}
 															const nodeProps = {
@@ -1424,19 +1465,37 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																onTap: selectPoint,
 																onDblClick: togglePointMode,
 																onDblTap: togglePointMode,
-																onDragStart: selectPoint,
+																onDragStart: beginPointDrag,
 																onDragMove: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
 																	const dragged = dragPoint(event)
+																	if (
+																		pointDragRef.current?.pointId ===
+																		point.pointId
+																	) {
+																		pointDragRef.current.lastPoint =
+																			dragged.point
+																	}
 																	setDraggedPoint(dragged.point)
 																	setActiveSnaps(dragged.snaps)
 																},
 																onDragEnd: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
-																	const dragged = dragPoint(event)
-																	commitPoint(dragged.point)
+																	const preview =
+																		pointDragRef.current?.pointId ===
+																		point.pointId
+																			? pointDragRef.current.lastPoint
+																			: null
+																	const committed =
+																		preview ?? dragPoint(event).point
+																	event.target.position({
+																		x: committed.x,
+																		y: committed.y,
+																	})
+																	commitPoint(committed)
+																	pointDragRef.current = null
 																	setDraggedPoint(null)
 																	setActiveSnaps([])
 																},

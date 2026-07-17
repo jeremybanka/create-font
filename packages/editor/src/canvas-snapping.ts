@@ -6,13 +6,28 @@ export interface SnapNode {
 	readonly y: number
 }
 
-export interface ActiveSnap {
+export interface ActiveAxisSnap {
 	readonly axis: "x" | "y"
 	readonly kind: "node" | "metric"
 	readonly id: string
 	readonly label: string
 	readonly value: number
 }
+
+export interface SegmentProjectionCandidate {
+	readonly id: string
+	readonly label: string
+	readonly origin: Readonly<{ x: number; y: number }>
+	readonly neighbor: Readonly<{ x: number; y: number }>
+}
+
+export interface ActiveProjectionSnap extends SegmentProjectionCandidate {
+	readonly axis: "projection"
+	readonly kind: "segment-projection"
+	readonly amount: number
+}
+
+export type ActiveSnap = ActiveAxisSnap | ActiveProjectionSnap
 
 export interface SnappedPoint {
 	readonly x: number
@@ -32,13 +47,116 @@ export interface DraggedPointSnapContext {
 	readonly metrics: readonly VerticalMetricLine[]
 	readonly worldScale: number
 	readonly thresholdPixels?: number
+	readonly projectionCandidates?: readonly SegmentProjectionCandidate[]
+	/** Explicit gesture constraints such as Shift take precedence over automatic snaps. */
+	readonly explicitConstraint?: (
+		point: Readonly<{ x: number; y: number }>,
+	) => SnappedPoint | null
+}
+
+export interface ProjectionContourNode extends SnapNode {
+	readonly incoming?: unknown
+	readonly outgoing?: unknown
+}
+
+export interface ProjectionContour {
+	readonly id: string
+	readonly closed: boolean
+	readonly nodes: readonly ProjectionContourNode[]
 }
 
 interface Candidate {
-	readonly kind: ActiveSnap["kind"]
+	readonly kind: ActiveAxisSnap["kind"]
 	readonly id: string
 	readonly label: string
 	readonly value: number
+}
+
+interface ProjectedCandidate {
+	readonly candidate: SegmentProjectionCandidate
+	readonly x: number
+	readonly y: number
+	readonly amount: number
+	readonly distance: number
+}
+
+function projectToCandidate(
+	point: Readonly<{ x: number; y: number }>,
+	candidate: SegmentProjectionCandidate,
+): ProjectedCandidate | null {
+	const dx = candidate.neighbor.x - candidate.origin.x
+	const dy = candidate.neighbor.y - candidate.origin.y
+	const denominator = dx * dx + dy * dy
+	if (denominator === 0) return null
+	const amount =
+		((point.x - candidate.origin.x) * dx +
+			(point.y - candidate.origin.y) * dy) /
+		denominator
+	const x = candidate.origin.x + dx * amount
+	const y = candidate.origin.y + dy * amount
+	return {
+		candidate,
+		x,
+		y,
+		amount,
+		distance: Math.hypot(point.x - x, point.y - y),
+	}
+}
+
+/** Snapshots non-degenerate straight segments incident to one point. */
+export function incidentStraightProjectionCandidates(
+	contours: readonly ProjectionContour[],
+	pointId: PointId,
+): readonly SegmentProjectionCandidate[] {
+	const candidates: SegmentProjectionCandidate[] = []
+	for (const contour of contours) {
+		const segmentCount = Math.max(
+			0,
+			contour.nodes.length - (contour.closed ? 0 : 1),
+		)
+		for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+			const start = contour.nodes[segmentIndex]
+			const end = contour.nodes[(segmentIndex + 1) % contour.nodes.length]
+			if (
+				start === undefined ||
+				end === undefined ||
+				(start.pointId !== pointId && end.pointId !== pointId) ||
+				start.outgoing !== undefined ||
+				end.incoming !== undefined
+			) {
+				continue
+			}
+			const dragged = start.pointId === pointId ? start : end
+			const neighbor = start.pointId === pointId ? end : start
+			if (dragged.x === neighbor.x && dragged.y === neighbor.y) continue
+			candidates.push({
+				id: `${contour.id}/${segmentIndex}`,
+				label: "Straight segment projection",
+				origin: { x: dragged.x, y: dragged.y },
+				neighbor: { x: neighbor.x, y: neighbor.y },
+			})
+		}
+	}
+	return Object.freeze(candidates)
+}
+
+export function projectionGuidePoints(
+	snap: ActiveProjectionSnap,
+	extent: number,
+): [number, number, number, number] {
+	const dx = snap.neighbor.x - snap.origin.x
+	const dy = snap.neighbor.y - snap.origin.y
+	const length = Math.hypot(dx, dy)
+	if (length === 0) {
+		return [snap.origin.x, snap.origin.y, snap.origin.x, snap.origin.y]
+	}
+	const scale = extent / length
+	return [
+		snap.origin.x - dx * scale,
+		snap.origin.y - dy * scale,
+		snap.origin.x + dx * scale,
+		snap.origin.y + dy * scale,
+	]
 }
 
 function nearest(
@@ -58,7 +176,7 @@ function nearest(
 	)
 }
 
-/** Resolves independent, zoom-stable x/y snapping for one dragged node. */
+/** Resolves explicit, projected-line, then independent axis constraints. */
 export function snapDraggedPoint(
 	input: {
 		readonly x: number
@@ -66,6 +184,32 @@ export function snapDraggedPoint(
 	} & DraggedPointSnapContext,
 ): SnappedPoint {
 	const threshold = (input.thresholdPixels ?? 7) / input.worldScale
+	const explicit = input.explicitConstraint?.({ x: input.x, y: input.y })
+	if (explicit !== undefined && explicit !== null) return explicit
+	const projection = (input.projectionCandidates ?? [])
+		.map((candidate) => projectToCandidate(input, candidate))
+		.filter(
+			(candidate): candidate is ProjectedCandidate =>
+				candidate !== null && candidate.distance <= threshold,
+		)
+		.toSorted(
+			(left, right) =>
+				left.distance - right.distance ||
+				left.candidate.id.localeCompare(right.candidate.id),
+		)[0]
+	if (projection !== undefined) {
+		const snap: ActiveProjectionSnap = {
+			...projection.candidate,
+			axis: "projection",
+			kind: "segment-projection",
+			amount: projection.amount,
+		}
+		return Object.freeze({
+			x: projection.x,
+			y: projection.y,
+			snaps: Object.freeze([snap]),
+		})
+	}
 	const otherNodes = input.nodes.filter(
 		(node) => node.pointId !== input.pointId,
 	)
