@@ -29,6 +29,8 @@ import { snapDraggedTarget, type ActiveSnap } from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
 	previewHandleDrag,
+	segmentPointerAction,
+	shouldSelectContourOnSegmentDoubleClick,
 	toggledNodeMode,
 } from "./curve-editing.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
@@ -638,6 +640,42 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		})
 		setPenContourId(null)
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
+		setShowNodes(true)
+	}
+	const addHandlesToSegment = (
+		contour: (typeof visibleContours)[number],
+		event: KonvaEventObject<MouseEvent>,
+	): void => {
+		event.cancelBubble = true
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return
+		const nearest = nearestEditorSegment(contour.nodes, contour.closed, pointer)
+		if (nearest === null) return
+		const start = contour.nodes[nearest.segmentIndex]
+		const end = contour.closed
+			? contour.nodes[(nearest.segmentIndex + 1) % contour.nodes.length]
+			: contour.nodes[nearest.segmentIndex + 1]
+		if (start === undefined || end === undefined) return
+		const changed = workspace.font.actions.addSegmentHandles({
+			glyphId: activeGlyphId,
+			contourId: contour.id,
+			segmentIndex: nearest.segmentIndex,
+		})
+		if (!changed) return
+		setSelection(
+			Object.freeze([
+				{
+					kind: "handle" as const,
+					pointId: start.pointId,
+					handle: "outgoing" as const,
+				},
+				{
+					kind: "handle" as const,
+					pointId: end.pointId,
+					handle: "incoming" as const,
+				},
+			]),
+		)
 		setShowNodes(true)
 	}
 	const zoomCanvas = (
@@ -1274,11 +1312,25 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 												activeTool === "select" || activeTool === "pen"
 											}
 											onMouseDown={(event) => {
-												if (activeTool === "pen")
+												const action = segmentPointerAction(
+													activeTool,
+													event.evt,
+												)
+												if (action === "split") {
 													splitContourSegment(contour, event)
+												} else if (action === "add-handles") {
+													addHandlesToSegment(contour, event)
+												}
 											}}
 											onDblClick={(event) => {
-												if (activeTool !== "select") return
+												if (
+													!shouldSelectContourOnSegmentDoubleClick(
+														activeTool,
+														event.evt,
+													)
+												) {
+													return
+												}
 												event.cancelBubble = true
 												selectWholeContour(contour, event.evt)
 											}}
@@ -1769,12 +1821,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				Type and add line breaks normally. Scroll to pan; use Command, Control,
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
 				outline. Double-click an outline segment to select its path; use the Pen
-				Tool on a segment to insert a point. Press Escape to return to typing or
-				cancel a transform. Drag an empty area to box-select controls; press
-				Command or Control+A to select all, Shift+A to align, and Delete to
-				remove the selection. Use Command or Control+C and V to copy and paste
-				outline selections. Hold Option or Alt while deleting nodes to break
-				paths open, or while deleting a handle to remove its adjoining segment.
+				Tool on a segment to insert a point, or Option/Alt-click a straight
+				segment to add curve handles. Press Escape to return to typing or cancel
+				a transform. Drag an empty area to box-select controls; press Command or
+				Control+A to select all, Shift+A to align, and Delete to remove the
+				selection. Use Command or Control+C and V to copy and paste outline
+				selections. Hold Option or Alt while deleting nodes to break paths open,
+				or while deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??

@@ -13,7 +13,7 @@ import {
 	type VariationRegionSource,
 } from "@create-font/target"
 
-import { splitCubicCurve } from "./curve-geometry.ts"
+import { splitCubicCurve, straightSegmentHandles } from "./curve-geometry.ts"
 
 import {
 	collectProjectionResults,
@@ -367,6 +367,12 @@ export interface SplitSegmentInput {
 	readonly pointId: PointId
 	/** Shared curve parameter applied to every master. */
 	readonly amount: number
+}
+
+export interface AddSegmentHandlesInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly segmentIndex: number
 }
 
 export interface ReverseContourInput {
@@ -3904,6 +3910,131 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const addSegmentHandlesTransaction = silo.transaction<
+		(input: AddSegmentHandlesInput) => boolean
+	>({
+		key: "addSegmentHandles",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || closed === null || layerMasterIds === null) {
+				return false
+			}
+			const segmentCount = Math.max(0, pointIds.length - (closed ? 0 : 1))
+			if (
+				!Number.isInteger(input.segmentIndex) ||
+				input.segmentIndex < 0 ||
+				input.segmentIndex >= segmentCount
+			) {
+				return false
+			}
+			const startPointId = pointIds[input.segmentIndex]
+			const endPointId = closed
+				? pointIds[(input.segmentIndex + 1) % pointIds.length]
+				: pointIds[input.segmentIndex + 1]
+			if (startPointId === undefined || endPointId === undefined) return false
+			const startTopology = get(pointAtoms, [input.glyphId, startPointId])
+			const endTopology = get(pointAtoms, [input.glyphId, endPointId])
+			if (startTopology === null || endTopology === null) return false
+
+			const plans: {
+				readonly masterId: MasterId
+				readonly startOutgoing: Vector2
+				readonly endIncoming: Vector2
+			}[] = []
+			let hardenStart = false
+			let hardenEnd = false
+			for (const masterId of layerMasterIds) {
+				const startKey: LayerPointKey = [masterId, input.glyphId, startPointId]
+				const endKey: LayerPointKey = [masterId, input.glyphId, endPointId]
+				const start = get(pointPositionAtoms, startKey)
+				const end = get(pointPositionAtoms, endKey)
+				if (start === null || end === null) return false
+
+				const startOutgoingX = get(outgoingHandleXAtoms, startKey)
+				const startOutgoingY = get(outgoingHandleYAtoms, startKey)
+				const endIncomingX = get(incomingHandleXAtoms, endKey)
+				const endIncomingY = get(incomingHandleYAtoms, endKey)
+				if (
+					startOutgoingX !== null ||
+					startOutgoingY !== null ||
+					endIncomingX !== null ||
+					endIncomingY !== null
+				) {
+					return false
+				}
+
+				const handles = straightSegmentHandles(start, end)
+				if (handles === null) return false
+				const startIncomingX = get(incomingHandleXAtoms, startKey)
+				const startIncomingY = get(incomingHandleYAtoms, startKey)
+				const endOutgoingX = get(outgoingHandleXAtoms, endKey)
+				const endOutgoingY = get(outgoingHandleYAtoms, endKey)
+				if (
+					(startIncomingX === null) !== (startIncomingY === null) ||
+					(endOutgoingX === null) !== (endOutgoingY === null)
+				) {
+					return false
+				}
+				if (
+					startTopology.mode === "soft" &&
+					startIncomingX !== null &&
+					startIncomingY !== null &&
+					!handlesShareOppositeRay(
+						{ x: startIncomingX, y: startIncomingY },
+						handles.startOutgoing,
+					)
+				) {
+					hardenStart = true
+				}
+				if (
+					endTopology.mode === "soft" &&
+					endOutgoingX !== null &&
+					endOutgoingY !== null &&
+					!handlesShareOppositeRay(handles.endIncoming, {
+						x: endOutgoingX,
+						y: endOutgoingY,
+					})
+				) {
+					hardenEnd = true
+				}
+				plans.push({ masterId, ...handles })
+			}
+
+			if (hardenStart) {
+				set(
+					pointAtoms,
+					[input.glyphId, startPointId],
+					deepFreeze({ mode: "hard" }),
+				)
+			}
+			if (hardenEnd) {
+				set(
+					pointAtoms,
+					[input.glyphId, endPointId],
+					deepFreeze({ mode: "hard" }),
+				)
+			}
+			for (const plan of plans) {
+				const startKey: LayerPointKey = [
+					plan.masterId,
+					input.glyphId,
+					startPointId,
+				]
+				const endKey: LayerPointKey = [plan.masterId, input.glyphId, endPointId]
+				set(outgoingHandleXAtoms, startKey, plan.startOutgoing.x)
+				set(outgoingHandleYAtoms, startKey, plan.startOutgoing.y)
+				set(incomingHandleXAtoms, endKey, plan.endIncoming.x)
+				set(incomingHandleYAtoms, endKey, plan.endIncoming.y)
+			}
+			return true
+		},
+	})
+
 	const splitSegmentTransaction = silo.transaction<
 		(input: SplitSegmentInput) => void
 	>({
@@ -4613,6 +4744,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runTransformControls = silo.runTransaction(transformControlsTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
+	const runAddSegmentHandles = silo.runTransaction(addSegmentHandlesTransaction)
 	const runSplitSegment = silo.runTransaction(splitSegmentTransaction)
 	const runReverseContour = silo.runTransaction(reverseContourTransaction)
 	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
@@ -4705,6 +4837,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			transformControls: transformControlsTransaction,
 			setNodeMode: setNodeModeTransaction,
 			insertPoint: insertPointTransaction,
+			addSegmentHandles: addSegmentHandlesTransaction,
 			splitSegment: splitSegmentTransaction,
 			reverseContour: reverseContourTransaction,
 			makeNodeFirst: makeNodeFirstTransaction,
@@ -4754,6 +4887,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
 				markDocumentChanged()
+			},
+			addSegmentHandles(input: AddSegmentHandlesInput): boolean {
+				const changed = runAddSegmentHandles(input)
+				if (changed) markDocumentChanged()
+				return changed
 			},
 			splitSegment(input: SplitSegmentInput): void {
 				runSplitSegment(input)

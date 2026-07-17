@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { evaluateCubicCurve, splitCubicCurve } from "../src/index.ts"
+import {
+	evaluateCubicCurve,
+	interpolateCurvePoint,
+	splitCubicCurve,
+	straightSegmentHandles,
+} from "../src/index.ts"
 
 describe("cubic curve geometry", () => {
 	it("splits a cubic without changing its locus", () => {
@@ -44,5 +49,69 @@ describe("cubic curve geometry", () => {
 		}
 		expect(() => splitCubicCurve(cubic, -0.1)).toThrow(/\[0, 1\]/)
 		expect(() => splitCubicCurve(cubic, 1.1)).toThrow(/\[0, 1\]/)
+	})
+
+	it.each([
+		[
+			{ x: 0, y: 0 },
+			{ x: 90, y: 0 },
+		],
+		[
+			{ x: 20, y: -30 },
+			{ x: 20, y: 60 },
+		],
+		[
+			{ x: -40, y: 80 },
+			{ x: 50, y: -10 },
+		],
+	] as const)(
+		"creates one-third handles that preserve a straight segment",
+		(start, end) => {
+			const handles = straightSegmentHandles(start, end)
+			if (handles === null) throw new Error("Fixture segment is degenerate.")
+			expect(handles.startOutgoing).toEqual({
+				x: (end.x - start.x) / 3,
+				y: (end.y - start.y) / 3,
+			})
+			expect(handles.endIncoming).toEqual({
+				x: (start.x - end.x) / 3,
+				y: (start.y - end.y) / 3,
+			})
+			const cubic = {
+				p0: start,
+				c1: {
+					x: start.x + handles.startOutgoing.x,
+					y: start.y + handles.startOutgoing.y,
+				},
+				c2: {
+					x: end.x + handles.endIncoming.x,
+					y: end.y + handles.endIncoming.y,
+				},
+				p3: end,
+			}
+			for (const amount of [0, 0.2, 0.5, 0.8, 1]) {
+				const actual = evaluateCubicCurve(cubic, amount)
+				const expected = interpolateCurvePoint(start, end, amount)
+				expect(actual.x).toBeCloseTo(expected.x, 12)
+				expect(actual.y).toBeCloseTo(expected.y, 12)
+			}
+		},
+	)
+
+	it("rejects invalid segments without producing signed zero", () => {
+		expect(straightSegmentHandles({ x: 4, y: -2 }, { x: 4, y: -2 })).toBeNull()
+		expect(
+			straightSegmentHandles({ x: Number.NaN, y: 0 }, { x: 10, y: 0 }),
+		).toBeNull()
+		expect(
+			straightSegmentHandles(
+				{ x: 0, y: 0 },
+				{ x: Number.POSITIVE_INFINITY, y: 0 },
+			),
+		).toBeNull()
+		expect(straightSegmentHandles({ x: 0, y: 0 }, { x: 0, y: 30 })).toEqual({
+			startOutgoing: { x: 0, y: 10 },
+			endIncoming: { x: 0, y: -10 },
+		})
 	})
 })
