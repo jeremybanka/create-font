@@ -86,6 +86,43 @@ describe("editor workspace", () => {
 		expect(computations).toBe(2)
 	})
 
+	it("shares selector work and coalesces same-turn timeline-style updates", async () => {
+		const silo = new Silo({
+			name: "test/shared-settled-selector",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const firstAtom = silo.atom({ key: "first", default: 1 })
+		const secondAtom = silo.atom({ key: "second", default: 2 })
+		let computations = 0
+		const sumSelector = silo.selector({
+			key: "sum",
+			get: ({ get }) => {
+				computations += 1
+				return get(firstAtom) + get(secondAtom)
+			},
+		})
+		expect(silo.getState(sumSelector)).toBe(3)
+		let firstNotifications = 0
+		let secondNotifications = 0
+		const unsubscribeFirst = subscribeToSettledState(silo, sumSelector, () => {
+			firstNotifications += 1
+		})
+		const unsubscribeSecond = subscribeToSettledState(silo, sumSelector, () => {
+			secondNotifications += 1
+		})
+
+		silo.setState(firstAtom, 3)
+		silo.setState(secondAtom, 4)
+		await Promise.resolve()
+		unsubscribeFirst()
+		unsubscribeSecond()
+
+		expect(firstNotifications).toBe(1)
+		expect(secondNotifications).toBe(1)
+		expect(computations).toBe(2)
+	})
+
 	it("notifies external-store subscribers once after replacing a source", () => {
 		const workspace = createEditorWorkspace()
 		const selector = workspace.font.selectors.editorSource

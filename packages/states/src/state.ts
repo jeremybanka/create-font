@@ -878,12 +878,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "leftSideBearing",
 		default: null,
 	})
-	const pointXAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: "pointX",
-		default: null,
-	})
-	const pointYAtoms = silo.atomFamily<number | null, LayerPointKey>({
-		key: "pointY",
+	const pointPositionAtoms = silo.atomFamily<Vector2 | null, LayerPointKey>({
+		key: "pointPosition",
 		default: null,
 	})
 	const incomingHandleXAtoms = silo.atomFamily<number | null, LayerPointKey>({
@@ -932,10 +928,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			scopeFamily(leftSideBearingAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
-			scopeFamily(pointXAtoms, {
-				timelineKey: ([, glyphId]) => glyphId,
-			}),
-			scopeFamily(pointYAtoms, {
+			scopeFamily(pointPositionAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
 			scopeFamily(incomingHandleXAtoms, {
@@ -963,8 +956,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			({ get }) => {
 				const path = `$.glyphs[${glyphId}].layers[${masterId}].points[${pointId}]`
 				const topology = get(pointAtoms, [glyphId, pointId])
-				const x = get(pointXAtoms, [masterId, glyphId, pointId])
-				const y = get(pointYAtoms, [masterId, glyphId, pointId])
+				const position = get(pointPositionAtoms, [masterId, glyphId, pointId])
+				const x = position?.x ?? null
+				const y = position?.y ?? null
 				const errors: ProjectionError[] = []
 				if (topology === null) {
 					errors.push(
@@ -1085,17 +1079,13 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 											? pointIds.at(-1)
 											: undefined
 							if (neighborId !== undefined) {
-								const neighborX = get(pointXAtoms, [
+								const neighborPosition = get(pointPositionAtoms, [
 									masterId,
 									glyphId,
 									neighborId,
 								])
-								const neighborY = get(pointYAtoms, [
-									masterId,
-									glyphId,
-									neighborId,
-								])
-								if (neighborX !== null && neighborY !== null) {
+								if (neighborPosition !== null) {
+									const { x: neighborX, y: neighborY } = neighborPosition
 									const neighborHandleX = get(
 										incoming !== undefined
 											? incomingHandleXAtoms
@@ -2873,10 +2863,13 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					const points: EditorGlyphSource["layers"][number]["points"][number][] =
 						[]
 					for (const pointId of orderedPointIds) {
-						const x = get(pointXAtoms, [masterId, glyphId, pointId])
-						const y = get(pointYAtoms, [masterId, glyphId, pointId])
-						if ((x === null) !== (y === null)) return null
-						if (x === null || y === null) continue
+						const position = get(pointPositionAtoms, [
+							masterId,
+							glyphId,
+							pointId,
+						])
+						if (position === null) continue
+						const { x, y } = position
 						const incomingX = get(incomingHandleXAtoms, [
 							masterId,
 							glyphId,
@@ -3004,8 +2997,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					set(advanceWidthAtoms, [masterId, glyphId], null)
 					set(leftSideBearingAtoms, [masterId, glyphId], null)
 					for (const pointId of pointIds) {
-						set(pointXAtoms, [masterId, glyphId, pointId], null)
-						set(pointYAtoms, [masterId, glyphId, pointId], null)
+						set(pointPositionAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleYAtoms, [masterId, glyphId, pointId], null)
 						set(outgoingHandleXAtoms, [masterId, glyphId, pointId], null)
@@ -3170,14 +3162,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					for (const pointId of glyphPointIds) {
 						const point = coordinates.get(pointId)
 						set(
-							pointXAtoms,
+							pointPositionAtoms,
 							[layer.masterId, glyph.id, pointId],
-							point?.x ?? null,
-						)
-						set(
-							pointYAtoms,
-							[layer.masterId, glyph.id, pointId],
-							point?.y ?? null,
+							point === undefined
+								? null
+								: deepFreeze({ x: point.x, y: point.y }),
 						)
 						set(
 							incomingHandleXAtoms,
@@ -3239,14 +3228,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			}
 			for (const point of input.points) {
 				set(
-					pointXAtoms,
+					pointPositionAtoms,
 					[input.masterId, input.glyphId, point.pointId],
-					point.x,
-				)
-				set(
-					pointYAtoms,
-					[input.masterId, input.glyphId, point.pointId],
-					point.y,
+					deepFreeze({ x: point.x, y: point.y }),
 				)
 			}
 		},
@@ -3404,12 +3388,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					)
 				}
 				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
-				const x = get(pointXAtoms, atomKey)
-				const y = get(pointYAtoms, atomKey)
-				if (x === null || y === null) {
+				const position = get(pointPositionAtoms, atomKey)
+				if (position === null) {
 					throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
 				}
-				nextPositions.set(pointId, { x, y })
+				nextPositions.set(pointId, position)
 			}
 			for (const point of input.points) {
 				if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
@@ -3463,8 +3446,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.glyphId,
 					point.pointId,
 				]
-				set(pointXAtoms, atomKey, point.x)
-				set(pointYAtoms, atomKey, point.y)
+				set(pointPositionAtoms, atomKey, deepFreeze({ x: point.x, y: point.y }))
 			}
 
 			const writeHandle = (
@@ -3612,25 +3594,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							: { x: outgoingX, y: outgoingY }
 					if (incomingX === null || incomingY === null) {
 						if (outgoing === undefined || previousPointId === undefined) return
-						const x = get(pointXAtoms, atomKey)
-						const y = get(pointYAtoms, atomKey)
-						const neighborX = get(pointXAtoms, [
+						const position = get(pointPositionAtoms, atomKey)
+						const neighborPosition = get(pointPositionAtoms, [
 							masterId,
 							input.glyphId,
 							previousPointId,
 						])
-						const neighborY = get(pointYAtoms, [
-							masterId,
-							input.glyphId,
-							previousPointId,
-						])
-						if (
-							x === null ||
-							y === null ||
-							neighborX === null ||
-							neighborY === null
-						)
-							return
+						if (position === null || neighborPosition === null) return
+						const { x, y } = position
+						const { x: neighborX, y: neighborY } = neighborPosition
 						const dx = neighborX - x
 						const dy = neighborY - y
 						const distance = Math.hypot(dx, dy)
@@ -3646,25 +3618,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					}
 					if (outgoingX === null || outgoingY === null) {
 						if (incoming === undefined || nextPointId === undefined) return
-						const x = get(pointXAtoms, atomKey)
-						const y = get(pointYAtoms, atomKey)
-						const neighborX = get(pointXAtoms, [
+						const position = get(pointPositionAtoms, atomKey)
+						const neighborPosition = get(pointPositionAtoms, [
 							masterId,
 							input.glyphId,
 							nextPointId,
 						])
-						const neighborY = get(pointYAtoms, [
-							masterId,
-							input.glyphId,
-							nextPointId,
-						])
-						if (
-							x === null ||
-							y === null ||
-							neighborX === null ||
-							neighborY === null
-						)
-							return
+						if (position === null || neighborPosition === null) return
+						const { x, y } = position
+						const { x: neighborX, y: neighborY } = neighborPosition
 						const dx = neighborX - x
 						const dy = neighborY - y
 						const distance = Math.hypot(dx, dy)
@@ -3803,14 +3765,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			)
 			for (const coordinate of input.coordinates) {
 				set(
-					pointXAtoms,
+					pointPositionAtoms,
 					[coordinate.masterId, input.glyphId, input.point.id],
-					coordinate.x,
-				)
-				set(
-					pointYAtoms,
-					[coordinate.masterId, input.glyphId, input.point.id],
-					coordinate.y,
+					deepFreeze({ x: coordinate.x, y: coordinate.y }),
 				)
 				set(
 					incomingHandleXAtoms,
@@ -3996,8 +3953,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.glyphId,
 					input.pointId,
 				]
-				set(pointXAtoms, atomKey, plan.point.x)
-				set(pointYAtoms, atomKey, plan.point.y)
+				set(
+					pointPositionAtoms,
+					atomKey,
+					deepFreeze({ x: plan.point.x, y: plan.point.y }),
+				)
 				writeVector(plan.masterId, input.pointId, "incoming", plan.incoming)
 				writeVector(plan.masterId, input.pointId, "outgoing", plan.outgoing)
 				if (!plan.straight) {
@@ -4160,8 +4120,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.glyphId,
 					input.point.id,
 				]
-				set(pointXAtoms, atomKey, coordinate.x)
-				set(pointYAtoms, atomKey, coordinate.y)
+				set(
+					pointPositionAtoms,
+					atomKey,
+					deepFreeze({ x: coordinate.x, y: coordinate.y }),
+				)
 				set(incomingHandleXAtoms, atomKey, coordinate.incoming?.x ?? null)
 				set(incomingHandleYAtoms, atomKey, coordinate.incoming?.y ?? null)
 				set(outgoingHandleXAtoms, atomKey, coordinate.outgoing?.x ?? null)
@@ -4373,8 +4336,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				set(pointAtoms, [input.glyphId, pointId], null)
 				for (const masterId of layerMasterIds) {
 					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
-					set(pointXAtoms, atomKey, null)
-					set(pointYAtoms, atomKey, null)
+					set(pointPositionAtoms, atomKey, null)
 					set(incomingHandleXAtoms, atomKey, null)
 					set(incomingHandleYAtoms, atomKey, null)
 					set(outgoingHandleXAtoms, atomKey, null)
@@ -4435,8 +4397,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			glyphLayerMasterIds: glyphLayerMasterIdsAtoms,
 			advanceWidth: advanceWidthAtoms,
 			leftSideBearing: leftSideBearingAtoms,
-			pointX: pointXAtoms,
-			pointY: pointYAtoms,
+			pointPosition: pointPositionAtoms,
 			incomingHandleX: incomingHandleXAtoms,
 			incomingHandleY: incomingHandleYAtoms,
 			outgoingHandleX: outgoingHandleXAtoms,

@@ -92,8 +92,8 @@ describe("font editor state", () => {
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[1]?.points[1]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
-		expect(first.atoms.pointX.key).toBe("pointX")
-		expect(second.atoms.pointX.key).toBe("pointX")
+		expect(first.atoms.pointPosition.key).toBe("pointPosition")
+		expect(second.atoms.pointPosition.key).toBe("pointPosition")
 
 		second.actions.movePoints({
 			masterId: blackMasterId,
@@ -102,19 +102,19 @@ describe("font editor state", () => {
 		})
 
 		expect(
-			first.silo.getState(first.atoms.pointX, [
+			first.silo.getState(first.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(460)
+		).toEqual({ x: 460, y: 400 })
 		expect(
-			second.silo.getState(second.atoms.pointX, [
+			second.silo.getState(second.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(777)
+		).toEqual({ x: 777, y: 444 })
 	})
 
 	it("records a multi-coordinate drag as undoable document history", () => {
@@ -122,6 +122,13 @@ describe("font editor state", () => {
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[1]?.points[1]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		let recordedUpdates = 0
+		const unsubscribe = editor.silo.subscribe(
+			editor.transactions.movePoints,
+			(event) => {
+				recordedUpdates = event.subEvents.length
+			},
+		)
 
 		editor.actions.movePoints({
 			masterId: blackMasterId,
@@ -129,44 +136,32 @@ describe("font editor state", () => {
 			points: [{ pointId, x: 700, y: 350 }],
 		})
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(700)
-		expect(
-			editor.silo.getState(editor.atoms.pointY, [
-				blackMasterId,
-				oGlyphId,
-				pointId,
-			]),
-		).toBe(350)
+		).toEqual({ x: 700, y: 350 })
+		expect(recordedUpdates).toBe(1)
+		unsubscribe()
 
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(460)
-		expect(
-			editor.silo.getState(editor.atoms.pointY, [
-				blackMasterId,
-				oGlyphId,
-				pointId,
-			]),
-		).toBe(400)
+		).toEqual({ x: 460, y: 400 })
 
 		editor.redo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(700)
+		).toEqual({ x: 700, y: 350 })
 	})
 
 	it("edits horizontal metrics atomically in glyph history", () => {
@@ -273,12 +268,12 @@ describe("font editor state", () => {
 
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				notdefGlyphId,
 				notdefPointId,
 			]),
-		).toBe(520)
+		).toEqual({ x: 520, y: 800 })
 	})
 
 	it("keeps relative handles anchored when their owning node moves", () => {
@@ -895,12 +890,12 @@ describe("font editor state", () => {
 		})
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				"point:glyph:O:inserted",
 			]),
-		).toBe(700)
+		).toEqual({ x: 700, y: 800 })
 		expect(
 			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
 		).toContain("point:glyph:O:inserted")
@@ -1091,19 +1086,25 @@ describe("font editor state", () => {
 		).toThrow()
 	})
 
-	it("does not serialize a half-present coordinate pair", () => {
+	it("does not serialize a missing point position", () => {
 		const editor = createLoadedEditor("test/partial-coordinate")
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
 
 		editor.silo.setState(
-			editor.atoms.pointY,
+			editor.atoms.pointPosition,
 			[blackMasterId, oGlyphId, pointId],
 			null,
 		)
 
-		expect(editor.read.editorSource()).toBeNull()
+		expect(
+			editor.read
+				.editorSource()
+				?.glyphs[1]?.layers[1]?.points.some(
+					(point) => point.pointId === pointId,
+				),
+		).toBe(false)
 		expect(editor.read.compilation().stage).toBe("projection-failed")
 	})
 
