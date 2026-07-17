@@ -937,44 +937,72 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "glyphLayerMasterIds",
 		default: null,
 	})
-	const advanceWidthAtoms = silo.atomFamily<number | null, LayerKey>({
-		key: "advanceWidth",
-		default: null,
-	})
-	const layerPointPositionsAtoms = silo.atomFamily<
-		Readonly<Record<string, Vector2>>,
+	const layerGeometryAtoms = silo.atomFamily<
+		Readonly<{
+			advanceWidth: number | null
+			pointPositions: Readonly<Record<string, Vector2>>
+		}>,
 		LayerKey
 	>({
-		key: "layerPointPositions",
-		default: deepFreeze({}),
+		key: "layerGeometry",
+		default: deepFreeze({ advanceWidth: null, pointPositions: {} }),
+	})
+	const readAdvanceWidth = (
+		get: ReaderToolkit["get"],
+		key: LayerKey,
+	): number | null => get(layerGeometryAtoms, key).advanceWidth
+	const writeAdvanceWidth = (
+		get: WriterToolkit["get"],
+		set: WriterToolkit["set"],
+		key: LayerKey,
+		advanceWidth: number | null,
+	): void => {
+		const geometry = get(layerGeometryAtoms, key)
+		if (geometry.advanceWidth === advanceWidth) return
+		set(layerGeometryAtoms, key, deepFreeze({ ...geometry, advanceWidth }))
+	}
+	const advanceWidthSelectors = silo.selectorFamily<number | null, LayerKey>({
+		key: "advanceWidth",
+		get:
+			(key) =>
+			({ get }) =>
+				readAdvanceWidth(get, key),
+		set:
+			(key) =>
+			({ get, set }, advanceWidth) =>
+				writeAdvanceWidth(get, set, key, advanceWidth),
 	})
 	const readPointPosition = (
 		get: ReaderToolkit["get"],
 		[masterId, glyphId, pointId]: LayerPointKey,
 	): Vector2 | null =>
-		get(layerPointPositionsAtoms, [masterId, glyphId])[pointId] ?? null
+		get(layerGeometryAtoms, [masterId, glyphId]).pointPositions[pointId] ?? null
 	const writePointPosition = (
 		get: WriterToolkit["get"],
 		set: WriterToolkit["set"],
 		[masterId, glyphId, pointId]: LayerPointKey,
 		nextPosition: Vector2 | null,
 	): void => {
-		const positions = get(layerPointPositionsAtoms, [masterId, glyphId])
+		const geometry = get(layerGeometryAtoms, [masterId, glyphId])
+		const positions = geometry.pointPositions
 		if (nextPosition === null) {
 			if (!(pointId in positions)) return
 			const nextPositions = { ...positions }
 			delete nextPositions[pointId]
 			set(
-				layerPointPositionsAtoms,
+				layerGeometryAtoms,
 				[masterId, glyphId],
-				deepFreeze(nextPositions),
+				deepFreeze({ ...geometry, pointPositions: nextPositions }),
 			)
 			return
 		}
 		set(
-			layerPointPositionsAtoms,
+			layerGeometryAtoms,
 			[masterId, glyphId],
-			deepFreeze({ ...positions, [pointId]: nextPosition }),
+			deepFreeze({
+				...geometry,
+				pointPositions: { ...positions, [pointId]: nextPosition },
+			}),
 		)
 	}
 	const pointPositionSelectors = silo.selectorFamily<
@@ -1031,10 +1059,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			scopeFamily(pointAtoms, {
 				timelineKey: ([glyphId]) => glyphId,
 			}),
-			scopeFamily(advanceWidthAtoms, {
-				timelineKey: ([, glyphId]) => glyphId,
-			}),
-			scopeFamily(layerPointPositionsAtoms, {
+			scopeFamily(layerGeometryAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
 			scopeFamily(incomingHandleXAtoms, {
@@ -1372,6 +1397,19 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					}
 					const delta = nextLeftSideBearing - bounds.value.xMin
 					if (delta === 0) return
+					const geometry = get(layerGeometryAtoms, [masterId, glyphId])
+					const { advanceWidth } = geometry
+					if (advanceWidth === null) {
+						throw new TypeError(
+							`Glyph ${glyphId} has no advance width in layer ${masterId}.`,
+						)
+					}
+					const nextAdvanceWidth = advanceWidth + delta
+					if (nextAdvanceWidth < 0 || nextAdvanceWidth > MAX_UINT16) {
+						throw new TypeError(
+							"The resulting advance width must be from 0 through 65535.",
+						)
+					}
 					const contourIds = get(glyphContourIdsAtoms, glyphId) ?? []
 					const pointIds = contourIds.flatMap(
 						(contourId) =>
@@ -1382,7 +1420,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							"An empty glyph's left side bearing is always zero.",
 						)
 					}
-					const positions = get(layerPointPositionsAtoms, [masterId, glyphId])
+					const positions = geometry.pointPositions
 					const nextPositions = { ...positions }
 					for (const pointId of pointIds) {
 						const position = positions[pointId]
@@ -1397,9 +1435,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						})
 					}
 					set(
-						layerPointPositionsAtoms,
+						layerGeometryAtoms,
 						[masterId, glyphId],
-						deepFreeze(nextPositions),
+						deepFreeze({
+							advanceWidth: nextAdvanceWidth,
+							pointPositions: nextPositions,
+						}),
 					)
 					set(documentRevisionAtom, (revision) => revision + 1)
 				},
@@ -1415,7 +1456,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			(key) =>
 			({ get }) => {
 				const bounds = get(layerBoundsSelectors, key)
-				const advanceWidth = get(advanceWidthAtoms, key)
+				const advanceWidth = readAdvanceWidth(get, key)
 				return bounds.ok && advanceWidth !== null
 					? advanceWidth - bounds.value.xMax
 					: null
@@ -1441,8 +1482,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						"The resulting advance width must be from 0 through 65535.",
 					)
 				}
-				if (get(advanceWidthAtoms, [masterId, glyphId]) === advanceWidth) return
-				set(advanceWidthAtoms, [masterId, glyphId], advanceWidth)
+				const key: LayerKey = [masterId, glyphId]
+				if (readAdvanceWidth(get, key) === advanceWidth) return
+				writeAdvanceWidth(get, set, key, advanceWidth)
 				set(documentRevisionAtom, (revision) => revision + 1)
 			},
 	})
@@ -2106,7 +2148,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 
 				const advanceWidth = projectRoundedInteger(
-					get(advanceWidthAtoms, [masterId, glyphId]),
+					readAdvanceWidth(get, [masterId, glyphId]),
 					0,
 					MAX_UINT16,
 					`${path}.advanceWidth`,
@@ -3253,7 +3295,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							...(outgoing === undefined ? {} : { outgoing }),
 						})
 					}
-					const advanceWidth = get(advanceWidthAtoms, [masterId, glyphId])
+					const advanceWidth = readAdvanceWidth(get, [masterId, glyphId])
 					const bounds = get(layerBoundsSelectors, [masterId, glyphId])
 					if (advanceWidth === null) return null
 					layers.push({
@@ -3380,7 +3422,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					set(contourClosedAtoms, [glyphId, contourId], null)
 				}
 				for (const masterId of layerMasterIds) {
-					set(advanceWidthAtoms, [masterId, glyphId], null)
+					set(advanceWidthSelectors, [masterId, glyphId], null)
 					for (const pointId of pointIds) {
 						set(pointPositionSelectors, [masterId, glyphId, pointId], null)
 						set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
@@ -3535,7 +3577,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					contour.points.map((point) => point.id),
 				)
 				for (const layer of glyph.layers) {
-					set(advanceWidthAtoms, [layer.masterId, glyph.id], layer.advanceWidth)
+					set(
+						advanceWidthSelectors,
+						[layer.masterId, glyph.id],
+						layer.advanceWidth,
+					)
 					const coordinates = new Map(
 						layer.points.map((point) => [point.pointId, point] as const),
 					)
@@ -3637,7 +3683,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				)
 			}
 			set(
-				advanceWidthAtoms,
+				advanceWidthSelectors,
 				[input.masterId, input.glyphId],
 				input.advanceWidth,
 			)
@@ -5154,7 +5200,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			contourClosed: contourClosedAtoms,
 			point: pointAtoms,
 			glyphLayerMasterIds: glyphLayerMasterIdsAtoms,
-			advanceWidth: advanceWidthAtoms,
+			advanceWidth: advanceWidthSelectors,
 			pointPosition: pointPositionSelectors,
 			incomingHandleX: incomingHandleXAtoms,
 			incomingHandleY: incomingHandleYAtoms,

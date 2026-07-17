@@ -515,7 +515,13 @@ describe("font editor state", () => {
 		const before = editor.read
 			.editorGlyphSource(oGlyphId)
 			?.layers.find((layer) => layer.masterId === razorMasterId)
-		if (before === undefined) throw new Error("Missing fixture layer.")
+		const rightSideBearing = editor.silo.getState(
+			editor.selectors.rightSideBearing,
+			[razorMasterId, oGlyphId],
+		)
+		if (before === undefined || rightSideBearing === null) {
+			throw new Error("Missing fixture layer metrics.")
+		}
 		editor.silo.setState(
 			editor.selectors.leftSideBearing,
 			[razorMasterId, oGlyphId],
@@ -525,7 +531,13 @@ describe("font editor state", () => {
 			.editorGlyphSource(oGlyphId)
 			?.layers.find((layer) => layer.masterId === razorMasterId)
 		expect(after?.leftSideBearing).toBeCloseTo(before.leftSideBearing + 25)
-		expect(after?.advanceWidth).toBe(before.advanceWidth)
+		expect(after?.advanceWidth).toBeCloseTo(before.advanceWidth + 25)
+		expect(
+			editor.silo.getState(editor.selectors.rightSideBearing, [
+				razorMasterId,
+				oGlyphId,
+			]),
+		).toBeCloseTo(rightSideBearing)
 		expect(after?.points).toEqual(
 			before.points.map((point) => ({ ...point, x: point.x + 25 })),
 		)
