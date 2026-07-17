@@ -11,6 +11,7 @@ import {
 	type DragPositionTarget,
 	type SegmentProjectionCandidate,
 } from "../src/canvas-snapping.ts"
+import { restoreCancelledGroupDragTarget } from "../src/canvas-group-drag.ts"
 import { makeDemoFont } from "../src/demo-font.ts"
 import { parseNumericInput } from "../src/numeric-input.ts"
 
@@ -43,6 +44,25 @@ const projectionInput = (
 })
 
 describe("canvas snapping", () => {
+	it("holds a cancelled group drag at its original target position", () => {
+		let position = { x: 80, y: 90 }
+		const target = {
+			position: (next: Readonly<{ x: number; y: number }>) => {
+				position = { ...next }
+			},
+		}
+		expect(
+			restoreCancelledGroupDragTarget({ target, x: 10, y: 20 }, target),
+		).toBe(true)
+		expect(position).toEqual({ x: 10, y: 20 })
+		expect(
+			restoreCancelledGroupDragTarget(
+				{ target, x: 10, y: 20 },
+				{ position: () => undefined },
+			),
+		).toBe(false)
+	})
+
 	it("snaps axes independently and excludes the dragged node", () => {
 		const snapped = snapDraggedPoint({
 			pointId: "point:dragged",
