@@ -7,6 +7,7 @@ import {
 	projectionGuidePoints,
 	snapDraggedPoint,
 	snapDraggedTarget,
+	snapGroupTranslation,
 	type DragPositionTarget,
 	type SegmentProjectionCandidate,
 } from "../src/canvas-snapping.ts"
@@ -288,6 +289,76 @@ describe("canvas snapping", () => {
 			-707.1067811865474, -707.1067811865474, 707.1067811865474,
 			707.1067811865474,
 		])
+	})
+
+	it("snaps group edges and centers independently", () => {
+		const snapped = snapGroupTranslation({
+			bounds: { minX: 10, minY: 20, maxX: 30, maxY: 60 },
+			deltaX: 67,
+			deltaY: 37,
+			selectedPointIds: new Set(["point:selected"]),
+			nodes: [
+				{ pointId: "point:selected", x: 10, y: 20 },
+				{ pointId: "point:target", x: 100, y: 60 },
+			],
+			metrics: [
+				{
+					kind: "line",
+					id: "baseline",
+					label: "Baseline",
+					y: 0,
+					overshoot: { minY: 0, maxY: 0 },
+				},
+			],
+			worldScale: 1,
+			thresholdPixels: 7,
+		})
+		expect(snapped).toMatchObject({ deltaX: 70, deltaY: 40 })
+		expect(snapped.snaps).toEqual([
+			expect.objectContaining({ axis: "x", anchor: "max", value: 100 }),
+			expect.objectContaining({ axis: "y", anchor: "min", value: 60 }),
+		])
+	})
+
+	it("excludes selected owners and uses zoom-stable deterministic group ties", () => {
+		const input = {
+			bounds: { minX: 0, minY: 0, maxX: 20, maxY: 20 },
+			deltaX: 4,
+			deltaY: 0,
+			selectedPointIds: new Set(["point:selected" as const]),
+			nodes: [
+				{ pointId: "point:selected" as const, x: 4, y: 0 },
+				{ pointId: "point:z" as const, x: 17, y: 100 },
+				{ pointId: "point:a" as const, x: 11, y: 100 },
+			],
+			metrics: [],
+			thresholdPixels: 3,
+		}
+		const wide = snapGroupTranslation({ ...input, worldScale: 1 })
+		expect(wide.deltaX).toBe(1)
+		expect(wide.snaps[0]).toEqual(
+			expect.objectContaining({ anchor: "center", id: "point:a" }),
+		)
+		const zoomed = snapGroupTranslation({ ...input, worldScale: 2 })
+		expect(zoomed.deltaX).toBe(4)
+		expect(zoomed.snaps).toHaveLength(0)
+	})
+
+	it("allows half-unit translations when a group center snaps exactly", () => {
+		const snapped = snapGroupTranslation({
+			bounds: { minX: 0, minY: 0, maxX: 9, maxY: 10 },
+			deltaX: 5,
+			deltaY: 0,
+			selectedPointIds: new Set(),
+			nodes: [{ pointId: "point:target", x: 10, y: 100 }],
+			metrics: [],
+			worldScale: 1,
+			thresholdPixels: 1,
+		})
+		expect(snapped.deltaX).toBe(5.5)
+		expect(snapped.snaps[0]).toEqual(
+			expect.objectContaining({ anchor: "center", value: 10 }),
+		)
 	})
 })
 

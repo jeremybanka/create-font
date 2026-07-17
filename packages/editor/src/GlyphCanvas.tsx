@@ -29,6 +29,7 @@ import {
 	incidentStraightProjectionCandidates,
 	projectionGuidePoints,
 	snapDraggedTarget,
+	snapGroupTranslation,
 	type ActiveSnap,
 	type SegmentProjectionCandidate,
 } from "./canvas-snapping.ts"
@@ -129,6 +130,23 @@ interface TransformDrag {
 	readonly bounds: SelectionBounds
 }
 
+interface GroupDrag {
+	readonly target: EditorSelectionTarget
+	readonly targetX: number
+	readonly targetY: number
+	readonly controls: readonly ResolvedSelectionControl[]
+	readonly bounds: SelectionBounds
+	readonly selectedPointIds: ReadonlySet<PointId>
+}
+
+interface LiveGroupDragTarget {
+	readonly selection: EditorSelectionTarget
+	readonly node: {
+		position(position: Readonly<{ x: number; y: number }>): unknown
+		getLayer(): { batchDraw(): unknown } | null
+	}
+}
+
 const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowLeft: [-1, 0],
 	ArrowRight: [1, 0],
@@ -178,11 +196,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
 	const [transformPreview, setTransformPreview] =
 		useState<SelectionTransformResult | null>(null)
+	const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
 	const pointDragRef = useRef<PointDrag | null>(null)
+	const lastGroupDragTarget = useRef<LiveGroupDragTarget | null>(null)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -371,7 +391,23 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		setPenContourId(null)
 		setActiveSnaps([])
 		pointDragRef.current = null
+		setGroupDrag(null)
+		setTransformPreview(null)
+		lastGroupDragTarget.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
+
+	useEffect(() => {
+		if (groupDrag !== null || transformPreview !== null) return
+		const live = lastGroupDragTarget.current
+		if (live === null) return
+		const control = resolveSelectionControls(
+			contours.flatMap((contour) => contour.nodes),
+			[live.selection],
+		)[0]
+		if (control === undefined) return
+		live.node.position({ x: control.x, y: control.y })
+		live.node.getLayer()?.batchDraw()
+	}, [contours, groupDrag, transformPreview])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -541,6 +577,88 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			y: Math.round(handle.y),
 		})),
 	})
+	const beginGroupDrag = (
+		target: EditorSelectionTarget,
+		targetX: number,
+		targetY: number,
+	): boolean => {
+		if (!isSelected(target)) return false
+		const controls = resolveSelectionControls(allPoints, selection)
+		const bounds = boundsOfControls(controls)
+		if (controls.length < 2 || bounds === null) return false
+		setGroupDrag({
+			target,
+			targetX,
+			targetY,
+			controls,
+			bounds,
+			selectedPointIds: new Set(selection.map((item) => item.pointId)),
+		})
+		return true
+	}
+	const resolveGroupDrag = (
+		event: KonvaEventObject<DragEvent>,
+	): Readonly<{
+		preview: SelectionTransformResult
+		snaps: readonly ActiveSnap[]
+	}> | null => {
+		if (groupDrag === null) return null
+		const snapped = snapGroupTranslation({
+			bounds: groupDrag.bounds,
+			deltaX: Math.round(event.target.x() - groupDrag.targetX),
+			deltaY: Math.round(event.target.y() - groupDrag.targetY),
+			selectedPointIds: groupDrag.selectedPointIds,
+			nodes: allPoints,
+			metrics: metricLines,
+			worldScale,
+		})
+		event.target.position({
+			x: groupDrag.targetX + snapped.deltaX,
+			y: groupDrag.targetY + snapped.deltaY,
+		})
+		return {
+			preview: translateSelectionControls(
+				groupDrag.controls,
+				snapped.deltaX,
+				snapped.deltaY,
+			),
+			snaps: snapped.snaps,
+		}
+	}
+	const previewGroupDrag = (event: KonvaEventObject<DragEvent>): boolean => {
+		const resolved = resolveGroupDrag(event)
+		if (resolved === null) return false
+		setTransformPreview(resolved.preview)
+		setActiveSnaps(resolved.snaps)
+		return true
+	}
+	const commitGroupDrag = (event: KonvaEventObject<DragEvent>): boolean => {
+		const currentGroupDrag = groupDrag
+		const resolved = resolveGroupDrag(event)
+		if (resolved === null || currentGroupDrag === null) return false
+		const liveTarget = event.target
+		const finalTargetPosition = {
+			x: liveTarget.x(),
+			y: liveTarget.y(),
+		}
+		lastGroupDragTarget.current = {
+			selection: currentGroupDrag.target,
+			node: liveTarget,
+		}
+		workspace.font.actions.transformControls({
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+			...resolved.preview,
+		})
+		setGroupDrag(null)
+		setTransformPreview(null)
+		setActiveSnaps([])
+		requestAnimationFrame(() => {
+			liveTarget.position(finalTargetPosition)
+			liveTarget.getLayer()?.batchDraw()
+		})
+		return true
+	}
 	const beginTransform = (handle: TransformHandle): void => {
 		const controls = resolveSelectionControls(allPoints, selection)
 		const bounds = boundsOfControls(controls)
@@ -819,6 +937,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				)
 			}}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+				if (event.key === "Escape" && groupDrag !== null) {
+					event.preventDefault()
+					setGroupDrag(null)
+					setTransformPreview(null)
+					setActiveSnaps([])
+					return
+				}
 				if (event.key === "Escape" && transformDrag !== null) {
 					event.preventDefault()
 					setTransformDrag(null)
@@ -1286,27 +1411,80 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											listening={false}
 										/>
 									))}
-									{activeSnaps.map((snap) => (
-										<Line
-											key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
-											points={
-												snap.axis === "projection"
-													? projectionGuidePoints(snap, activeSnapGuideExtent)
-													: snap.axis === "x"
-														? [
-																snap.value,
-																metrics.descender - 100,
-																snap.value,
-																metrics.ascender + metrics.lineGap + 100,
-															]
-														: [-200, snap.value, advanceWidth + 200, snap.value]
-											}
-											stroke={palette.accent}
-											strokeWidth={1.5 * inverseScale}
-											dash={[7 * inverseScale, 4 * inverseScale]}
-											listening={false}
-										/>
-									))}
+									{activeSnaps.map((snap) => {
+										const anchorLabel =
+											snap.axis === "projection" || snap.anchor === undefined
+												? snap.label
+												: `Group ${
+														snap.axis === "x"
+															? snap.anchor === "min"
+																? "left"
+																: snap.anchor === "max"
+																	? "right"
+																	: "center"
+															: snap.anchor === "min"
+																? "bottom"
+																: snap.anchor === "max"
+																	? "top"
+																	: "center"
+													} → ${snap.label}`
+										return (
+											<Group
+												key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
+												name={`active-snap active-snap-${snap.axis}`}
+											>
+												<Line
+													points={
+														snap.axis === "projection"
+															? projectionGuidePoints(
+																	snap,
+																	activeSnapGuideExtent,
+																)
+															: snap.axis === "x"
+															? [
+																	snap.value,
+																	metrics.descender - 100,
+																	snap.value,
+																	metrics.ascender + metrics.lineGap + 100,
+																]
+															: [
+																	-200,
+																	snap.value,
+																	advanceWidth + 200,
+																	snap.value,
+																]
+													}
+													stroke={palette.accent}
+													strokeWidth={1.5 * inverseScale}
+													dash={[7 * inverseScale, 4 * inverseScale]}
+													listening={false}
+												/>
+												<Text
+														x={
+															snap.axis === "projection"
+																? snap.origin.x + 5 * inverseScale
+																: snap.axis === "x"
+																? snap.value + 5 * inverseScale
+																: -195
+														}
+														y={
+															snap.axis === "projection"
+																? snap.origin.y + 5 * inverseScale
+																: snap.axis === "x"
+															? metrics.ascender +
+																metrics.lineGap +
+																10 * inverseScale
+															: snap.value + 5 * inverseScale
+													}
+													scaleY={-1}
+													text={anchorLabel}
+													fontSize={10 * inverseScale}
+													fill={palette.accent}
+													listening={false}
+												/>
+											</Group>
+										)
+									})}
 									<Path
 										data={combinedPreview.path}
 										fill={palette.previewInk}
@@ -1505,6 +1683,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																}
 															}
 															const nodeProps = {
+																id: point.pointId,
 																name: "outline-point",
 																x: point.x,
 																y: point.y,
@@ -1512,15 +1691,27 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																stroke: palette.nodeStroke,
 																strokeWidth: 1.25 * inverseScale,
 																draggable: activeTool === "select",
-																onMouseDown: selectPoint,
-																onTouchStart: selectPoint,
+																onClick: selectPoint,
 																onTap: selectPoint,
 																onDblClick: togglePointMode,
 																onDblTap: togglePointMode,
-																onDragStart: beginPointDrag,
+														onDragStart: (
+															event: KonvaEventObject<DragEvent>,
+														) => {
+																	if (
+																		!beginGroupDrag(
+																			nodeTarget,
+																			point.x,
+																			point.y,
+																)
+															) {
+																beginPointDrag(event)
+															}
+														},
 																onDragMove: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
+																	if (previewGroupDrag(event)) return
 																	const dragged = dragPoint(event)
 																	if (
 																		pointDragRef.current?.pointId ===
@@ -1532,10 +1723,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																	setDraggedPoint(dragged.point)
 																	setActiveSnaps(dragged.snaps)
 																},
-																onDragEnd: (
-																	event: KonvaEventObject<DragEvent>,
-																) => {
-																	const preview =
+														onDragEnd: (
+															event: KonvaEventObject<DragEvent>,
+														) => {
+															if (commitGroupDrag(event)) return
+															const preview =
 																		pointDragRef.current?.pointId ===
 																		point.pointId
 																			? pointDragRef.current.lastPoint
@@ -1546,8 +1738,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		x: committed.x,
 																		y: committed.y,
 																	})
-																	commitPoint(committed)
-																	pointDragRef.current = null
+															commitPoint(committed)
+															pointDragRef.current = null
 																	setDraggedPoint(null)
 																	setActiveSnaps([])
 																},
@@ -1586,30 +1778,43 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
 																				draggable
-																				onMouseDown={(
+																				onClick={(
 																					event: KonvaEventObject<MouseEvent>,
-																				) => selectHandle("incoming", event)}
-																				onTouchStart={(
-																					event: KonvaEventObject<TouchEvent>,
 																				) => selectHandle("incoming", event)}
 																				onTap={(
 																					event: KonvaEventObject<
 																						MouseEvent | TouchEvent
 																					>,
 																				) => selectHandle("incoming", event)}
-																				onDragStart={() =>
-																					selectHandle("incoming")
-																				}
+																				onDragStart={(
+																					event: KonvaEventObject<DragEvent>,
+																				) => {
+																					const incoming = point.incoming
+																					if (incoming === undefined) return
+																					const startedGroup = beginGroupDrag(
+																						{
+																							kind: "handle",
+																							pointId: point.pointId,
+																							handle: "incoming",
+																						},
+																						point.x + incoming.x,
+																						point.y + incoming.y,
+																					)
+																					if (!startedGroup)
+																						selectHandle("incoming", event)
+																				}}
 																				onDragMove={(
 																					event: KonvaEventObject<DragEvent>,
-																				) =>
+																				) => {
+																					if (previewGroupDrag(event)) return
 																					setDraggedHandle(
 																						dragHandle("incoming", event),
 																					)
-																				}
+																				}}
 																				onDragEnd={(
 																					event: KonvaEventObject<DragEvent>,
 																				) => {
+																					if (commitGroupDrag(event)) return
 																					commitHandle(
 																						dragHandle("incoming", event),
 																					)
@@ -1646,30 +1851,43 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
 																				draggable
-																				onMouseDown={(
+																				onClick={(
 																					event: KonvaEventObject<MouseEvent>,
-																				) => selectHandle("outgoing", event)}
-																				onTouchStart={(
-																					event: KonvaEventObject<TouchEvent>,
 																				) => selectHandle("outgoing", event)}
 																				onTap={(
 																					event: KonvaEventObject<
 																						MouseEvent | TouchEvent
 																					>,
 																				) => selectHandle("outgoing", event)}
-																				onDragStart={() =>
-																					selectHandle("outgoing")
-																				}
+																				onDragStart={(
+																					event: KonvaEventObject<DragEvent>,
+																				) => {
+																					const outgoing = point.outgoing
+																					if (outgoing === undefined) return
+																					const startedGroup = beginGroupDrag(
+																						{
+																							kind: "handle",
+																							pointId: point.pointId,
+																							handle: "outgoing",
+																						},
+																						point.x + outgoing.x,
+																						point.y + outgoing.y,
+																					)
+																					if (!startedGroup)
+																						selectHandle("outgoing", event)
+																				}}
 																				onDragMove={(
 																					event: KonvaEventObject<DragEvent>,
-																				) =>
+																				) => {
+																					if (previewGroupDrag(event)) return
 																					setDraggedHandle(
 																						dragHandle("outgoing", event),
 																					)
-																				}
+																				}}
 																				onDragEnd={(
 																					event: KonvaEventObject<DragEvent>,
 																				) => {
+																					if (commitGroupDrag(event)) return
 																					commitHandle(
 																						dragHandle("outgoing", event),
 																					)
