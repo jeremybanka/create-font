@@ -108,6 +108,8 @@ export const TOOLS = {
 		do: ({ workspace }) => workspace.actions.selectTool("pen"),
 	},
 	TRANSFORM: {
+		description:
+			"Move or resize selected nodes and handles with a bounding box.",
 		id: "transform",
 		displayName: "Transform Selection",
 		hotkey: { key: "t" },
@@ -121,6 +123,7 @@ export const TOOLS = {
 		do: ({ workspace }) => workspace.actions.selectTool("transform"),
 	},
 	ALIGN: {
+		description: "Align selected nodes and handles along their nearest axis.",
 		id: "align-selection",
 		displayName: "Align Selection",
 		hotkey: { key: "a", shift: true },
@@ -150,6 +153,8 @@ export const TOOLS = {
 		},
 	},
 	REVERSE: {
+		description:
+			"Reverse the selected closed path while keeping its first node.",
 		id: "reverse-path",
 		displayName: "Reverse Path",
 		hotkey: { key: "r", shift: true },
@@ -168,6 +173,7 @@ export const TOOLS = {
 		},
 	},
 	MAKE_FIRST: {
+		description: "Make the selected node the first node of its closed path.",
 		id: "make-node-first",
 		displayName: "Make Node First",
 		hotkey: { key: "f", shift: true },

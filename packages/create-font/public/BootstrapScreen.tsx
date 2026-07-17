@@ -23,7 +23,11 @@ export function BootstrapScreen({ onAction, state }: BootstrapScreenProps) {
 					aria-live={loading ? `polite` : `assertive`}
 					aria-atomic="true"
 				>
-					<p>{loading ? `Opening your font workspace` : `Font source unavailable`}</p>
+					<p>
+						{loading
+							? `Opening your font workspace`
+							: `Font source unavailable`}
+					</p>
 					<h1>
 						{loading
 							? `Preparing the drawing room…`

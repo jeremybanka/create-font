@@ -19,9 +19,7 @@ export function nextBootstrapState(
 	return Object.freeze({
 		type: `error`,
 		message:
-			message.length === 0
-				? `The font source could not be opened.`
-				: message,
+			message.length === 0 ? `The font source could not be opened.` : message,
 	})
 }
 
