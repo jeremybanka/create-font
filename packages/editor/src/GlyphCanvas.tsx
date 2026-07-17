@@ -64,6 +64,14 @@ import {
 	observeTextareaSelection,
 } from "./textarea-selection.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
+import {
+	copyOutlineSelection,
+	OUTLINE_CLIPBOARD_MIME,
+	outlineClipboardPlainText,
+	parseOutlineClipboard,
+	prepareOutlinePaste,
+	serializeOutlineClipboard,
+} from "./outline-clipboard.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface GlyphCanvasProps {
@@ -158,6 +166,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		useState<SelectionTransformResult | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
+	const clipboardEntitySequence = useRef(0)
+	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -415,6 +425,25 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			}
 		}
 	}
+	const nextClipboardEntityId = (kind: "contour" | "point") => {
+		const source = workspace.font.read.editorSource()
+		const occupied = new Set<string>(
+			(source?.glyphs ?? []).flatMap((sourceGlyph) => [
+				...sourceGlyph.contours.map((contour) => contour.id),
+				...sourceGlyph.contours.flatMap((contour) =>
+					contour.points.map((point) => point.id),
+				),
+			]),
+		)
+		while (true) {
+			const sequence = clipboardEntitySequence.current
+			clipboardEntitySequence.current += 1
+			const id = `${kind}:${activeGlyphId}:paste:${sequence}`
+			if (!occupied.has(id)) {
+				return kind === "contour" ? (id as ContourId) : (id as PointId)
+			}
+		}
+	}
 	const penCoordinates = (x: number, y: number) =>
 		masterIds.map((sourceMasterId) => ({
 			masterId: sourceMasterId,
@@ -637,8 +666,101 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Shift+A ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+V Control+V Shift+A ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
+			onCopy={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+				if (
+					editingTextIndex === null ||
+					event.target instanceof HTMLTextAreaElement
+				)
+					return
+				const clipboard = event.clipboardData
+				if (clipboard === null) {
+					setClipboardStatus("The system clipboard is unavailable.")
+					return
+				}
+				if (glyph === null) {
+					setClipboardStatus("The active glyph is unavailable for copying.")
+					return
+				}
+				const copied = copyOutlineSelection(glyph, selection)
+				if (!copied.ok) {
+					setClipboardStatus(copied.error)
+					return
+				}
+				event.preventDefault()
+				clipboard.setData(
+					OUTLINE_CLIPBOARD_MIME,
+					serializeOutlineClipboard(copied.value),
+				)
+				clipboard.setData("text/plain", outlineClipboardPlainText(copied.value))
+				const pointCount = copied.value.contours.reduce(
+					(total, contour) => total + contour.points.length,
+					0,
+				)
+				setClipboardStatus(
+					`Copied ${pointCount} outline node${pointCount === 1 ? "" : "s"}.`,
+				)
+			}}
+			onPaste={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+				if (
+					editingTextIndex === null ||
+					event.target instanceof HTMLTextAreaElement
+				)
+					return
+				const clipboard = event.clipboardData
+				if (clipboard === null) {
+					setClipboardStatus("The system clipboard is unavailable.")
+					return
+				}
+				const serialized =
+					clipboard.getData(OUTLINE_CLIPBOARD_MIME) ||
+					clipboard.getData("text/plain")
+				if (serialized.length === 0) {
+					setClipboardStatus(
+						"The clipboard does not contain create-font outlines.",
+					)
+					return
+				}
+				const parsed = parseOutlineClipboard(serialized)
+				if (!parsed.ok) {
+					setClipboardStatus(parsed.error)
+					return
+				}
+				const paste = prepareOutlinePaste(
+					parsed.value,
+					activeGlyphId,
+					masterIds,
+					nextClipboardEntityId,
+				)
+				if (!paste.ok) {
+					setClipboardStatus(paste.error)
+					return
+				}
+				try {
+					workspace.font.actions.pasteContours(paste.value)
+				} catch (error) {
+					setClipboardStatus(
+						error instanceof Error
+							? error.message
+							: "The outlines could not be pasted.",
+					)
+					return
+				}
+				event.preventDefault()
+				setSelection(
+					Object.freeze(
+						paste.value.selectedPointIds.map((pointId) => ({
+							kind: "node" as const,
+							pointId,
+						})),
+					),
+				)
+				setShowNodes(true)
+				setClipboardStatus(
+					`Pasted ${paste.value.selectedPointIds.length} outline node${paste.value.selectedPointIds.length === 1 ? "" : "s"}.`,
+				)
+			}}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
 				if (event.key === "Escape" && transformDrag !== null) {
 					event.preventDefault()
@@ -1649,17 +1771,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				Tool on a segment to insert a point. Press Escape to return to typing or
 				cancel a transform. Drag an empty area to box-select controls; press
 				Command or Control+A to select all, Shift+A to align, and Delete to
-				remove the selection. Hold Option or Alt while deleting nodes to break
+				remove the selection. Use Command or Control+C and V to copy and paste
+				outline selections. Hold Option or Alt while deleting nodes to break
 				paths open, or while deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
-				{editingTextIndex === null
-					? `Typing mode at text position ${caretIndex}.`
-					: selection.length === 0
-						? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-						: selection.length === 1 && selectedPoint !== undefined
-							? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-							: `${selection.length} outline controls selected.`}
+				{clipboardStatus ??
+					(editingTextIndex === null
+						? `Typing mode at text position ${caretIndex}.`
+						: selection.length === 0
+							? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+							: selection.length === 1 && selectedPoint !== undefined
+								? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+								: `${selection.length} outline controls selected.`)}
 			</output>
 		</glyph-canvas>
 	)

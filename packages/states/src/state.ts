@@ -32,6 +32,7 @@ import {
 	type ContourId,
 	type EditorAxisMapEntrySource,
 	type EditorCmapEntrySource,
+	type EditorContourSource,
 	type EditorFontSource,
 	type EditorGlyphSource,
 	type EditorHandleKind,
@@ -413,6 +414,16 @@ export interface CreateContourInput {
 		readonly y: number
 		readonly incoming?: EditorHandleVectorSource
 		readonly outgoing?: EditorHandleVectorSource
+	}[]
+}
+
+/** Complete outline fragments ready to append to an existing glyph. */
+export interface PasteContoursInput {
+	readonly glyphId: GlyphId
+	readonly contours: readonly EditorContourSource[]
+	readonly layers: readonly {
+		readonly masterId: MasterId
+		readonly points: readonly EditorLayerPointSource[]
 	}[]
 }
 
@@ -4254,6 +4265,153 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const pasteContoursTransaction = silo.transaction<
+		(input: PasteContoursInput) => void
+	>({
+		key: "pasteContours",
+		do: ({ get, set }, input) => {
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (contourIds === null || layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			if (input.contours.length === 0) {
+				throw new TypeError(
+					"Pasted outlines must contain at least one contour.",
+				)
+			}
+
+			const pastedContourIds = input.contours.map((contour) => contour.id)
+			const pastedPoints = input.contours.flatMap((contour) => contour.points)
+			const pastedPointIds = pastedPoints.map((point) => point.id)
+			assertUnique(pastedContourIds, "Pasted contour IDs")
+			assertUnique(pastedPointIds, "Pasted point IDs")
+			if (pastedPoints.length === 0) {
+				throw new TypeError("Pasted contours must contain points.")
+			}
+			for (const contour of input.contours) {
+				if (contour.points.length === 0) {
+					throw new TypeError(`Pasted contour ${contour.id} is empty.`)
+				}
+				if (contour.closed && contour.points.length < 3) {
+					throw new TypeError(
+						"A closed contour requires at least three points.",
+					)
+				}
+				for (const point of contour.points) {
+					if (point.mode !== "soft" && point.mode !== "hard") {
+						throw new TypeError('Node mode must be "soft" or "hard".')
+					}
+				}
+			}
+
+			const occupiedContours = new Set<ContourId>()
+			const occupiedPoints = new Set<PointId>()
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					occupiedContours.add(contourId)
+					for (const pointId of get(contourPointIdsAtoms, [
+						glyphId,
+						contourId,
+					]) ?? []) {
+						occupiedPoints.add(pointId)
+					}
+				}
+			}
+			for (const contourId of pastedContourIds) {
+				if (occupiedContours.has(contourId)) {
+					throw new TypeError(`Contour ID ${contourId} is already in use.`)
+				}
+			}
+			for (const pointId of pastedPointIds) {
+				if (occupiedPoints.has(pointId)) {
+					throw new TypeError(`Point ID ${pointId} is already in use.`)
+				}
+			}
+
+			assertUnique(
+				input.layers.map((layer) => layer.masterId),
+				"Pasted layer master IDs",
+			)
+			const layersByMaster = new Map(
+				input.layers.map((layer) => [layer.masterId, layer]),
+			)
+			if (
+				layersByMaster.size !== layerMasterIds.length ||
+				layerMasterIds.some((masterId) => !layersByMaster.has(masterId))
+			) {
+				throw new TypeError(
+					"Pasted outlines require coordinates for every destination glyph layer.",
+				)
+			}
+			const pastedPointIdSet = new Set(pastedPointIds)
+			for (const layer of input.layers) {
+				assertUnique(
+					layer.points.map((point) => point.pointId),
+					`Pasted ${layer.masterId} point IDs`,
+				)
+				if (
+					layer.points.length !== pastedPointIds.length ||
+					layer.points.some((point) => !pastedPointIdSet.has(point.pointId))
+				) {
+					throw new TypeError(
+						`Pasted layer ${layer.masterId} must contain every pasted point exactly once.`,
+					)
+				}
+				for (const point of layer.points) {
+					if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+						throw new TypeError("Point coordinates must be finite numbers.")
+					}
+					if (point.incoming !== undefined) {
+						assertFiniteVector(point.incoming, "Incoming handle")
+					}
+					if (point.outgoing !== undefined) {
+						assertFiniteVector(point.outgoing, "Outgoing handle")
+					}
+				}
+			}
+
+			set(
+				glyphContourIdsAtoms,
+				input.glyphId,
+				deepFreeze([...contourIds, ...pastedContourIds]),
+			)
+			for (const contour of input.contours) {
+				set(
+					contourPointIdsAtoms,
+					[input.glyphId, contour.id],
+					deepFreeze(contour.points.map((point) => point.id)),
+				)
+				set(contourClosedAtoms, [input.glyphId, contour.id], contour.closed)
+				for (const point of contour.points) {
+					set(
+						pointAtoms,
+						[input.glyphId, point.id],
+						deepFreeze({ mode: point.mode }),
+					)
+				}
+			}
+			for (const layer of input.layers) {
+				for (const point of layer.points) {
+					const atomKey: LayerPointKey = [
+						layer.masterId,
+						input.glyphId,
+						point.pointId,
+					]
+					set(
+						pointPositionAtoms,
+						atomKey,
+						deepFreeze({ x: point.x, y: point.y }),
+					)
+					set(incomingHandleXAtoms, atomKey, point.incoming?.x ?? null)
+					set(incomingHandleYAtoms, atomKey, point.incoming?.y ?? null)
+					set(outgoingHandleXAtoms, atomKey, point.outgoing?.x ?? null)
+					set(outgoingHandleYAtoms, atomKey, point.outgoing?.y ?? null)
+				}
+			}
+		},
+	})
+
 	const deleteSelectionTransaction = silo.transaction<
 		(input: DeleteSelectionInput) => void
 	>({
@@ -4460,6 +4618,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
 	const runCreateContour = silo.runTransaction(createContourTransaction)
 	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
+	const runPasteContours = silo.runTransaction(pasteContoursTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
 
 	const assertKnownGlyphHistory = (glyphId: GlyphId): void => {
@@ -4551,6 +4710,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			makeNodeFirst: makeNodeFirstTransaction,
 			createContour: createContourTransaction,
 			setContourClosed: setContourClosedTransaction,
+			pasteContours: pasteContoursTransaction,
 			deleteSelection: deleteSelectionTransaction,
 		},
 		glyphHistoryTimelines,
@@ -4613,6 +4773,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			setContourClosed(input: SetContourClosedInput): void {
 				runSetContourClosed(input)
+				markDocumentChanged()
+			},
+			pasteContours(input: PasteContoursInput): void {
+				runPasteContours(input)
 				markDocumentChanged()
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
