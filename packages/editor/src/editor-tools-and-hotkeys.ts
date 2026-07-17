@@ -294,6 +294,7 @@ function buildQuickLookup(
 const HOTKEY_QUICK_LOOKUP = buildQuickLookup(TOOLS)
 
 interface KeyboardShortcutEvent {
+	readonly defaultPrevented?: boolean
 	readonly key: string
 	readonly metaKey: boolean
 	readonly ctrlKey: boolean
@@ -305,6 +306,7 @@ export function toolForKeyboardEvent(
 	event: KeyboardShortcutEvent,
 	macLike = IS_MAC_LIKE,
 ): Tool | undefined {
+	if (event.defaultPrevented) return undefined
 	// Treat the non-platform modifier as an extra modifier, not as Mod.
 	if (macLike ? event.ctrlKey : event.metaKey) return undefined
 	return HOTKEY_QUICK_LOOKUP[

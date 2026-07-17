@@ -16,6 +16,7 @@ function keyboardEvent(
 		ctrlKey: boolean
 		shiftKey: boolean
 		altKey: boolean
+		defaultPrevented: boolean
 	}> = {},
 ) {
 	return {
@@ -24,6 +25,7 @@ function keyboardEvent(
 		ctrlKey: false,
 		shiftKey: false,
 		altKey: false,
+		defaultPrevented: false,
 		...overrides,
 	}
 }
@@ -68,6 +70,21 @@ describe("editor tools and hotkeys", () => {
 		)
 		expect(TOOLS.PEN.hotkey).toEqual({ key: "q" })
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
+	})
+
+	it("ignores shortcuts already consumed by an interaction mode", () => {
+		expect(
+			toolForKeyboardEvent(
+				keyboardEvent({ key: "q", defaultPrevented: true }),
+				true,
+			),
+		).toBeUndefined()
+		expect(
+			toolForKeyboardEvent(
+				keyboardEvent({ metaKey: true, defaultPrevented: true }),
+				true,
+			),
+		).toBeUndefined()
 	})
 
 	it("maps transform and path commands to exact shortcuts", () => {
