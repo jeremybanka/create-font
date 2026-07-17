@@ -572,6 +572,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				isEditablePreviewTarget(event.target) ||
 				groupDragRef.current !== null ||
 				penGestureRef.current !== null ||
+				pointDragRef.current !== null ||
+				draggedHandle !== null ||
 				transformDrag !== null ||
 				selectionBox !== null
 			)
@@ -596,7 +598,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			window.removeEventListener("blur", clear)
 			document.removeEventListener("visibilitychange", handleVisibility)
 		}
-	}, [editingTextIndex, selectionBox, transformDrag])
+	}, [draggedHandle, editingTextIndex, selectionBox, transformDrag])
+
+	useEffect(() => {
+		if (activeTool !== "transform" || transformBounds === null)
+			setTransformCursor(null)
+	}, [activeTool, transformBounds === null])
 
 	useEffect(() => {
 		const gesture = penGestureRef.current
@@ -1296,6 +1303,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				)
 			}}
 			onPaste={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+				if (momentaryPreview) {
+					event.preventDefault()
+					return
+				}
 				if (
 					editingTextIndex === null ||
 					event.target instanceof HTMLTextAreaElement
@@ -1355,6 +1366,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				)
 			}}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+				if (momentaryPreview) {
+					event.preventDefault()
+					return
+				}
 				const currentGroupDrag = groupDragRef.current
 				if (event.key === "Escape" && currentGroupDrag !== null) {
 					event.preventDefault()
@@ -1384,6 +1399,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					event.preventDefault()
 					setTransformDrag(null)
 					setTransformPreview(null)
+					setTransformCursor(null)
 					return
 				}
 				if (event.key === "Escape" && editingTextIndex !== null) {

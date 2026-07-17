@@ -150,6 +150,12 @@ export function TooltipButton({
 			onBlur={() => {
 				if (explainedDisabled) dispatch("blur")
 			}}
+			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+				if (!explainedDisabled || event.key !== "Escape") return
+				dispatch("escape")
+				setVisible(false)
+				event.stopPropagation()
+			}}
 		>
 			<button
 				{...buttonProps}

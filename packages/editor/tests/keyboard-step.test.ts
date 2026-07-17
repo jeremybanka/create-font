@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { keyboardStepMultiplier } from "../src/keyboard-step.ts"
+import {
+	keyboardStepMultiplier,
+	stepBoundedNumber,
+} from "../src/keyboard-step.ts"
 import { stepNumericInput } from "../src/numeric-input.ts"
 
 const modifiers = (
@@ -37,5 +40,14 @@ describe("keyboard stepping", () => {
 		expect(stepNumericInput("12", 5, 1, 10, -100, 100)).toBe(22)
 		expect(stepNumericInput("", 5, -1, 100, -20, 20)).toBe(-20)
 		expect(stepNumericInput("invalid", 5, 1, 100, -20, 20)).toBe(20)
+	})
+
+	it("steps and clamps decimal-valued Font Info fields by editor units", () => {
+		expect(
+			stepBoundedNumber(1.125, 1, modifiers({ shiftKey: true }), false),
+		).toBe(11.125)
+		expect(
+			stepBoundedNumber(12, -1, modifiers({ ctrlKey: true }), false, 0, 20),
+		).toBe(0)
 	})
 })
