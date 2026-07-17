@@ -9,7 +9,8 @@ await rm(outdir, { force: true, recursive: true })
 const builds = await Promise.all([
 	Bun.build({
 		entrypoints: [
-			resolve(packageRoot, `src/cli.ts`),
+			resolve(packageRoot, `src/create-font-cli.ts`),
+			resolve(packageRoot, `src/font-cli.ts`),
 			resolve(packageRoot, `src/rpc.ts`),
 			resolve(packageRoot, `src/server.ts`),
 		],

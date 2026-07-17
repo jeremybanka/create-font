@@ -49,7 +49,7 @@ source, but does not yet watch external changes or serialize `.ttf` files.
   compiler pipeline.
 - Add reproducibility tests, binary conformance checks, and round-trip visual
   fixtures against independent font tooling.
-- Introduce the package-resolved `create-font build` command.
+- Introduce the package-resolved `font build` command.
 - Define configuration and output naming without embedding environment-specific
   paths in canonical source.
 
@@ -107,7 +107,7 @@ rather than bypass them.
   source units.
 - The browser has no direct filesystem authority and cannot silently overwrite
   external changes.
-- The same `create-font serve` process works locally and in a remote checkout
+- The same `font dev` process works locally and in a remote checkout
   reached through standard port forwarding.
 - Terminal builds, textual edits, visual edits, Git, and CI all operate on the
   same canonical repository source.
