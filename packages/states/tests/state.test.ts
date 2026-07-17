@@ -510,6 +510,69 @@ describe("font editor state", () => {
 		}
 	})
 
+	it("writes LSB by translating one master outline as a single history edit", () => {
+		const editor = createLoadedEditor("test/writable-lsb")
+		const before = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		if (before === undefined) throw new Error("Missing fixture layer.")
+		editor.silo.setState(
+			editor.selectors.leftSideBearing,
+			[razorMasterId, oGlyphId],
+			before.leftSideBearing + 25,
+		)
+		const after = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(after?.leftSideBearing).toBeCloseTo(before.leftSideBearing + 25)
+		expect(after?.advanceWidth).toBe(before.advanceWidth)
+		expect(after?.points).toEqual(
+			before.points.map((point) => ({ ...point, x: point.x + 25 })),
+		)
+		editor.undo(oGlyphId)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId),
+		).toEqual(before)
+	})
+
+	it("writes RSB through advance width without moving the outline", () => {
+		const editor = createLoadedEditor("test/writable-rsb")
+		const before = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		const rightSideBearing = editor.silo.getState(
+			editor.selectors.rightSideBearing,
+			[razorMasterId, oGlyphId],
+		)
+		if (before === undefined || rightSideBearing === null) {
+			throw new Error("Missing fixture layer metrics.")
+		}
+		editor.silo.setState(
+			editor.selectors.rightSideBearing,
+			[razorMasterId, oGlyphId],
+			rightSideBearing + 30,
+		)
+		const after = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(
+			editor.silo.getState(editor.selectors.rightSideBearing, [
+				razorMasterId,
+				oGlyphId,
+			]),
+		).toBeCloseTo(rightSideBearing + 30)
+		expect(after?.advanceWidth).toBeCloseTo(before.advanceWidth + 30)
+		expect(after?.points).toEqual(before.points)
+		editor.undo(oGlyphId)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId),
+		).toEqual(before)
+	})
+
 	it("keeps one independent timeline per glyph", () => {
 		const editor = createLoadedEditor("test/glyph-histories")
 		const source = makeGeometricOEditorFont()

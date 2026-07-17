@@ -43,6 +43,20 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 			advanceWidth,
 		})
 	}
+	const setLeftSideBearing = (leftSideBearing: number): void => {
+		workspace.font.silo.setState(
+			workspace.font.selectors.leftSideBearing,
+			[activeMasterId, activeGlyphId],
+			leftSideBearing,
+		)
+	}
+	const setRightSideBearing = (rightSideBearing: number): void => {
+		workspace.font.silo.setState(
+			workspace.font.selectors.rightSideBearing,
+			[activeMasterId, activeGlyphId],
+			rightSideBearing,
+		)
+	}
 
 	return (
 		<glyph-inspector className={css.class}>
@@ -77,15 +91,23 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 						</label>
 						<label>
 							<span>LSB</span>
-							<output aria-label="Left side bearing">
-								{layer.leftSideBearing}
-							</output>
+							<NumericInput
+								aria-label="Left side bearing"
+								value={layer.leftSideBearing}
+								min={-32_768}
+								max={32_767}
+								onCommit={setLeftSideBearing}
+							/>
 						</label>
 						<label>
 							<span>RSB</span>
-							<output aria-label="Right side bearing">
-								{layer.rightSideBearing}
-							</output>
+							<NumericInput
+								aria-label="Right side bearing"
+								value={layer.rightSideBearing}
+								min={-layer.xMax}
+								max={65_535 - layer.xMax}
+								onCommit={setRightSideBearing}
+							/>
 						</label>
 					</metric-fields>
 				)}
