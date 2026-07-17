@@ -62,7 +62,7 @@ function MasterNavigationItem({
 }) {
 	const master = useOF(workspace.font.selectors.editorMasterSource, masterId)
 	return (
-		<master-navigation-item style={{ display: "contents" }}>
+		<master-navigation-item>
 			{master === null ? null : (
 				<li>
 					<button
@@ -105,7 +105,7 @@ function InstanceNavigationItem({
 		.map((axis) => coordinates[axis.id] ?? axis.default)
 		.join("/")
 	return (
-		<instance-navigation-item style={{ display: "contents" }}>
+		<instance-navigation-item>
 			{instance === null ? null : (
 				<li>
 					<button

@@ -185,7 +185,7 @@ function GlyphLibraryItem({
 			? null
 			: createGlyphPreview(glyph, activeMasterId, metrics, metadata.unitsPerEm)
 	return (
-		<glyph-library-item style={{ display: "contents" }}>
+		<glyph-library-item>
 			{glyph === null ? null : (
 				<button
 					type="button"
