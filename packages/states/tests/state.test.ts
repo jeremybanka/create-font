@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { createFontEditorState, evaluateCubicCurve } from "../src/index.ts"
+import {
+	createFontEditorState,
+	evaluateCubicCurve,
+	straightSegmentHandles,
+} from "../src/index.ts"
 import {
 	blackMasterId,
 	makeGeometricOEditorFont,
@@ -13,6 +17,50 @@ function createLoadedEditor(key: string) {
 	const editor = createFontEditorState({ key })
 	editor.actions.load(makeGeometricOEditorFont())
 	return editor
+}
+
+function makeStraightSegmentFixture(options?: {
+	readonly closed?: boolean
+	readonly contourIndex?: number
+	readonly segmentIndex?: number
+}) {
+	const source = makeGeometricOEditorFont()
+	const glyph = source.glyphs.find((candidate) => candidate.id === oGlyphId)
+	const contour = glyph?.contours[options?.contourIndex ?? 1]
+	if (glyph === undefined || contour === undefined) {
+		throw new Error("Fixture contour is missing.")
+	}
+	if (options?.closed !== undefined) {
+		Object.assign(contour, { closed: options.closed })
+	}
+	const segmentIndex = options?.segmentIndex ?? 0
+	const start = contour.points[segmentIndex]
+	const end = contour.closed
+		? contour.points[(segmentIndex + 1) % contour.points.length]
+		: contour.points[segmentIndex + 1]
+	if (start === undefined || end === undefined) {
+		throw new Error("Fixture segment is missing.")
+	}
+	for (const layer of glyph.layers) {
+		const startPoint = layer.points.find(
+			(point) => point.pointId === start.id,
+		) as { outgoing?: { readonly x: number; readonly y: number } } | undefined
+		const endPoint = layer.points.find((point) => point.pointId === end.id) as
+			| { incoming?: { readonly x: number; readonly y: number } }
+			| undefined
+		if (startPoint === undefined || endPoint === undefined) {
+			throw new Error("Fixture layer segment is missing.")
+		}
+		delete startPoint.outgoing
+		delete endPoint.incoming
+	}
+	return {
+		source,
+		contourId: contour.id,
+		segmentIndex,
+		startPointId: start.id,
+		endPointId: end.id,
+	}
 }
 
 describe("font editor state", () => {
@@ -1386,6 +1434,300 @@ describe("font editor state", () => {
 				contour.id,
 			]),
 		).toEqual(contour.points.map(({ id }) => id))
+	})
+
+	it("adds exact one-third handles across all masters as one history entry", () => {
+		const fixture = makeStraightSegmentFixture()
+		const editor = createFontEditorState({ key: "test/add-segment-handles" })
+		editor.actions.load(fixture.source)
+		const before = new Map(
+			[razorMasterId, blackMasterId].map((masterId) => {
+				const start = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					fixture.startPointId,
+				)
+				const end = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					fixture.endPointId,
+				)
+				if (!start.ok || !end.ok) {
+					throw new Error("Straight fixture nodes did not project.")
+				}
+				const startKey = [masterId, oGlyphId, fixture.startPointId] as const
+				const endKey = [masterId, oGlyphId, fixture.endPointId] as const
+				return [
+					masterId,
+					{
+						start: start.value,
+						end: end.value,
+						startIncoming: {
+							x: editor.silo.getState(editor.atoms.incomingHandleX, startKey),
+							y: editor.silo.getState(editor.atoms.incomingHandleY, startKey),
+						},
+						endOutgoing: {
+							x: editor.silo.getState(editor.atoms.outgoingHandleX, endKey),
+							y: editor.silo.getState(editor.atoms.outgoingHandleY, endKey),
+						},
+					},
+				] as const
+			}),
+		)
+
+		expect(
+			editor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: fixture.contourId,
+				segmentIndex: fixture.segmentIndex,
+			}),
+		).toBe(true)
+
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const original = before.get(masterId)
+			const start = editor.read.layerNode(
+				masterId,
+				oGlyphId,
+				fixture.startPointId,
+			)
+			const end = editor.read.layerNode(masterId, oGlyphId, fixture.endPointId)
+			if (original === undefined || !start.ok || !end.ok) {
+				throw new Error("Converted segment nodes did not project.")
+			}
+			const expected = straightSegmentHandles(original.start, original.end)
+			if (expected === null) throw new Error("Fixture segment is degenerate.")
+			expect(start.value.outgoing).toEqual(expected.startOutgoing)
+			expect(end.value.incoming).toEqual(expected.endIncoming)
+			expect(start.value.mode).toBe("hard")
+			expect(end.value.mode).toBe("hard")
+			const startKey = [masterId, oGlyphId, fixture.startPointId] as const
+			const endKey = [masterId, oGlyphId, fixture.endPointId] as const
+			expect({
+				x: editor.silo.getState(editor.atoms.incomingHandleX, startKey),
+				y: editor.silo.getState(editor.atoms.incomingHandleY, startKey),
+			}).toEqual(original.startIncoming)
+			expect({
+				x: editor.silo.getState(editor.atoms.outgoingHandleX, endKey),
+				y: editor.silo.getState(editor.atoms.outgoingHandleY, endKey),
+			}).toEqual(original.endOutgoing)
+		}
+		const plan = editor.silo.getState(editor.selectors.curveSegmentPlan, [
+			oGlyphId,
+			fixture.contourId,
+			fixture.segmentIndex,
+		])
+		expect(plan.ok && plan.value.curved).toBe(true)
+		expect(editor.read.compilation().stage).toBe("compiled")
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toMatchObject({ at: 1, length: 1 })
+
+		editor.undo(oGlyphId)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const start = editor.read.layerNode(
+				masterId,
+				oGlyphId,
+				fixture.startPointId,
+			)
+			const end = editor.read.layerNode(masterId, oGlyphId, fixture.endPointId)
+			if (!start.ok || !end.ok) throw new Error("Undo nodes did not project.")
+			expect(start.value.outgoing).toBeUndefined()
+			expect(end.value.incoming).toBeUndefined()
+			expect(start.value.mode).toBe("soft")
+			expect(end.value.mode).toBe("soft")
+		}
+		editor.redo(oGlyphId)
+		expect(
+			editor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: fixture.contourId,
+				segmentIndex: fixture.segmentIndex,
+			}),
+		).toBe(false)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toMatchObject({ at: 1, length: 1 })
+	})
+
+	it("keeps ineligible cross-master and degenerate segments unchanged", () => {
+		const curvedFixture = makeStraightSegmentFixture()
+		const curvedEditor = createFontEditorState({
+			key: "test/add-handles-curved",
+		})
+		curvedEditor.actions.load(curvedFixture.source)
+		curvedEditor.actions.moveHandle({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			pointId: curvedFixture.startPointId,
+			handle: "outgoing",
+			vector: { x: 10, y: -20 },
+		})
+		curvedEditor.clearHistory(oGlyphId)
+		expect(
+			curvedEditor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: curvedFixture.contourId,
+				segmentIndex: curvedFixture.segmentIndex,
+			}),
+		).toBe(false)
+		const blackStraight = curvedEditor.read.layerNode(
+			blackMasterId,
+			oGlyphId,
+			curvedFixture.startPointId,
+		)
+		if (!blackStraight.ok) throw new Error("Black fixture did not project.")
+		expect(blackStraight.value.outgoing).toBeUndefined()
+		expect(
+			curvedEditor.silo.inspectTimeline(
+				curvedEditor.glyphHistoryTimelines,
+				oGlyphId,
+			),
+		).toMatchObject({ at: 0, length: 0 })
+
+		const zeroFixture = makeStraightSegmentFixture()
+		const zeroEditor = createFontEditorState({ key: "test/add-handles-zero" })
+		zeroEditor.actions.load(zeroFixture.source)
+		const blackStart = zeroEditor.read.layerNode(
+			blackMasterId,
+			oGlyphId,
+			zeroFixture.startPointId,
+		)
+		if (!blackStart.ok) throw new Error("Zero fixture start did not project.")
+		zeroEditor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{
+					pointId: zeroFixture.endPointId,
+					x: blackStart.value.x,
+					y: blackStart.value.y,
+				},
+			],
+		})
+		zeroEditor.clearHistory(oGlyphId)
+		expect(
+			zeroEditor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: zeroFixture.contourId,
+				segmentIndex: zeroFixture.segmentIndex,
+			}),
+		).toBe(false)
+		const razorStraight = zeroEditor.read.layerNode(
+			razorMasterId,
+			oGlyphId,
+			zeroFixture.startPointId,
+		)
+		if (!razorStraight.ok) throw new Error("Razor fixture did not project.")
+		expect(razorStraight.value.outgoing).toBeUndefined()
+		expect(
+			zeroEditor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: zeroFixture.contourId,
+				segmentIndex: 99,
+			}),
+		).toBe(false)
+		expect(
+			zeroEditor.silo.inspectTimeline(
+				zeroEditor.glyphHistoryTimelines,
+				oGlyphId,
+			),
+		).toMatchObject({ at: 0, length: 0 })
+	})
+
+	it("keeps compatible soft endpoints soft in every master", () => {
+		const fixture = makeStraightSegmentFixture()
+		const glyph = fixture.source.glyphs.find(
+			(candidate) => candidate.id === oGlyphId,
+		)
+		if (glyph === undefined) throw new Error("Fixture glyph is missing.")
+		for (const layer of glyph.layers) {
+			const start = layer.points.find(
+				(point) => point.pointId === fixture.startPointId,
+			) as
+				| {
+						x: number
+						y: number
+						incoming?: { readonly x: number; readonly y: number }
+				  }
+				| undefined
+			const end = layer.points.find(
+				(point) => point.pointId === fixture.endPointId,
+			) as
+				| {
+						x: number
+						y: number
+						outgoing?: { readonly x: number; readonly y: number }
+				  }
+				| undefined
+			if (start === undefined || end === undefined) {
+				throw new Error("Fixture layer segment is missing.")
+			}
+			const handles = straightSegmentHandles(start, end)
+			if (handles === null) throw new Error("Fixture segment is degenerate.")
+			start.incoming = {
+				x: -handles.startOutgoing.x,
+				y: -handles.startOutgoing.y,
+			}
+			end.outgoing = {
+				x: -handles.endIncoming.x,
+				y: -handles.endIncoming.y,
+			}
+		}
+		const editor = createFontEditorState({ key: "test/add-handles-soft" })
+		editor.actions.load(fixture.source)
+		expect(
+			editor.actions.addSegmentHandles({
+				glyphId: oGlyphId,
+				contourId: fixture.contourId,
+				segmentIndex: fixture.segmentIndex,
+			}),
+		).toBe(true)
+		for (const pointId of [fixture.startPointId, fixture.endPointId]) {
+			expect(
+				editor.silo.getState(editor.atoms.point, [oGlyphId, pointId]),
+			).toEqual({ mode: "soft" })
+		}
+		expect(editor.read.compilation().stage).toBe("compiled")
+	})
+
+	it("supports open and closing straight segments", () => {
+		for (const [name, fixture] of [
+			["open", makeStraightSegmentFixture({ closed: false, segmentIndex: 0 })],
+			[
+				"closing",
+				makeStraightSegmentFixture({ closed: true, segmentIndex: 3 }),
+			],
+		] as const) {
+			const editor = createFontEditorState({ key: `test/add-handles-${name}` })
+			editor.actions.load(fixture.source)
+			expect(
+				editor.actions.addSegmentHandles({
+					glyphId: oGlyphId,
+					contourId: fixture.contourId,
+					segmentIndex: fixture.segmentIndex,
+				}),
+			).toBe(true)
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				const start = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					fixture.startPointId,
+				)
+				const end = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					fixture.endPointId,
+				)
+				expect(start).toMatchObject({
+					ok: true,
+					value: { outgoing: expect.any(Object) },
+				})
+				expect(end).toMatchObject({
+					ok: true,
+					value: { incoming: expect.any(Object) },
+				})
+			}
+		}
 	})
 
 	it("reverses a closed contour while preserving its first node and geometry handles", () => {

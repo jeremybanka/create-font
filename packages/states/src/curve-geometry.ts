@@ -16,6 +16,42 @@ export interface CubicSplit {
 	readonly right: CubicCurve
 }
 
+export interface StraightSegmentHandles {
+	readonly startOutgoing: CurvePoint
+	readonly endIncoming: CurvePoint
+}
+
+const canonicalZero = (value: number): number =>
+	Object.is(value, -0) ? 0 : value
+
+/** Control vectors that reproduce a non-degenerate line as an exact cubic. */
+export function straightSegmentHandles(
+	start: CurvePoint,
+	end: CurvePoint,
+): StraightSegmentHandles | null {
+	if (
+		!Number.isFinite(start.x) ||
+		!Number.isFinite(start.y) ||
+		!Number.isFinite(end.x) ||
+		!Number.isFinite(end.y)
+	) {
+		return null
+	}
+	const dx = end.x - start.x
+	const dy = end.y - start.y
+	if (dx === 0 && dy === 0) return null
+	return {
+		startOutgoing: {
+			x: canonicalZero(dx / 3),
+			y: canonicalZero(dy / 3),
+		},
+		endIncoming: {
+			x: canonicalZero(-dx / 3),
+			y: canonicalZero(-dy / 3),
+		},
+	}
+}
+
 export const interpolateCurvePoint = (
 	left: CurvePoint,
 	right: CurvePoint,

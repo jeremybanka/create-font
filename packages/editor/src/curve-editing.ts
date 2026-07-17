@@ -4,6 +4,27 @@ import type {
 	EditorNodeMode,
 } from "@create-font/states"
 
+import type { EditorToolId } from "./editor-workspace.ts"
+
+export type SegmentPointerAction = "add-handles" | "split"
+
+/** Resolves modifier/tool precedence for an authored segment press. */
+export function segmentPointerAction(
+	tool: EditorToolId,
+	event: Readonly<{ altKey: boolean }>,
+): SegmentPointerAction | null {
+	if (tool === "pen") return "split"
+	return tool === "select" && event.altKey ? "add-handles" : null
+}
+
+/** Keeps a modified double-click from also selecting the whole contour. */
+export function shouldSelectContourOnSegmentDoubleClick(
+	tool: EditorToolId,
+	event: Readonly<{ altKey: boolean }>,
+): boolean {
+	return tool === "select" && !event.altKey
+}
+
 export function toggledNodeMode(mode: EditorNodeMode): EditorNodeMode {
 	return mode === "soft" ? "hard" : "soft"
 }
