@@ -20,8 +20,9 @@ The experience deliberately resembles a code editor:
 
 ### Terminal
 
-The CLI is the automation boundary. `create-font build` validates and compiles the
-project into font binaries. `create-font serve` watches the same project, serves
+The CLI is the automation boundary. `create-font` creates workspaces and adds font
+projects. The repository-local `font build` validates and compiles a project into
+font binaries. `font dev` watches the same project, serves
 the web application, and exposes workspace operations to it. Checks, migrations,
 and other noninteractive commands should use the same underlying services.
 
@@ -53,7 +54,7 @@ browser editor
           |
           | versioned HTTP/WebSocket protocol
           v
-create-font serve
+font dev
   - serves version-matched editor assets
   - discovers and validates the project
   - reads, watches, and atomically writes source
@@ -171,7 +172,7 @@ replaying changes; divergence requires an explicit conflict workflow.
 ## Local and remote development
 
 Local and remote workspaces use the same process and protocol. Locally, the
-browser opens the loopback address printed by `create-font serve`. Remotely, the
+browser opens the loopback address printed by `font dev`. Remotely, the
 user runs that command inside the checkout through an ordinary SSH session and
 forwards the loopback port with OpenSSH, an IDE, or their existing development
 environment.

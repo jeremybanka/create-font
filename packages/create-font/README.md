@@ -1,12 +1,22 @@
 # create-font
 
-`create-font` is the repository-local application package for the create-font font
-toolchain. It is intended to be installed as a development dependency and run
-with the repository's package manager:
+`create-font` is the application package for the create-font font toolchain. It
+ships two Bun executables with separate roles. Create a new workspace with the
+initializer:
 
 ```sh
-pnpm exec create-font build
-pnpm exec create-font serve
+bun create font my-font
+cd my-font
+bun font dev
+```
+
+The generated workspace lists only `create-font` as a development dependency.
+Installing that package links both `create-font` and `font` locally. Inside an
+existing workspace, the initializer adds another font project without replacing
+the workspace or reinstalling its dependencies:
+
+```sh
+bun create-font display-font
 ```
 
 The application runs on the Bun version pinned by the repository's
@@ -20,21 +30,29 @@ filesystem source service, and hydrates the editor through the same Elysia/Eden
 contract used for persistence. This keeps the server independent from the
 atom.io implementation in `@create-font/states`.
 
-## Current commands
+## Executables
 
-`create-font build` enters the shared build orchestration boundary. The project
+`create-font [name]` creates a workspace when the current directory is not one,
+or creates `fonts/<name>` when run inside an existing create-font workspace. A
+new workspace contains a private `package.json`, the local `create-font`
+development dependency, and a minimal validated Regular font source with one
+default master. Pass `--no-install` to defer the initial `bun install`.
+
+`font build [name]` enters the shared build orchestration boundary. The project
 source format and binary serializer are not implemented yet, so it currently
 returns a structured `build.not_implemented` diagnostic rather than claiming
 to have emitted a font.
 
-`create-font serve` starts the Elysia workspace process on loopback by default. It
+`font dev [name]` starts the Elysia workspace process on loopback by default. It
 discovers `fonts/*/create-font.json`, selects the sole project automatically, and
 serves its validated source units through the workspace RPC. With multiple font
 projects, select one by directory name:
 
 ```sh
-pnpm exec create-font serve --font=create-font-sans --port=4173
+bun font dev create-font-sans --port=4173
 ```
+
+`font serve` remains an alias for `font dev`.
 
 Reads carry content-hash revisions. Single- and multi-unit writes use
 optimistic concurrency, idempotency keys, whole-project validation, and a
@@ -61,5 +79,5 @@ HTML, JavaScript, and CSS application under `dist/public`, which is what the
 compiled server serves after installation.
 
 Bun 1.3.14's HMR transform omits CSS Module bindings from generated client
-chunks. `create-font serve` therefore keeps Bun's full-stack runtime bundling
+chunks. `font dev` therefore keeps Bun's full-stack runtime bundling
 active but sets `hmr: false` until that regression is fixed.

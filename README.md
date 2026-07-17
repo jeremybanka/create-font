@@ -7,8 +7,8 @@ with the project.
 
 During development, create-font has three cooperating surfaces:
 
-- the terminal, where `create-font build` produces fonts and `create-font serve`
-  starts the workspace server;
+- the terminal, where `create-font` creates workspaces and font projects while
+  `font build` produces fonts and `font dev` starts the workspace server;
 - the programmer's ordinary editor, where programmable font behavior can be
   written as code; and
 - the browser, where create-font provides spatial editing, proofs, samples, visual
@@ -18,7 +18,7 @@ The CLI runs beside the source tree. It owns filesystem access, watching,
 validation, compilation, and persistence, and it serves the web application and
 its workspace protocol. The browser edits structured source through that
 protocol rather than owning files directly. This also makes remote development
-ordinary: run create-font in the remote checkout, forward its loopback port over
+ordinary: run `font dev` in the remote checkout, forward its loopback port over
 SSH, and use a local browser.
 
 Canonical structured font data lives below `fonts/<project>/` in reviewable
@@ -34,7 +34,8 @@ the complete toolchain.
 
 ## Packages
 
-- [`create-font`](packages/create-font/README.md) is the Bun CLI and Elysia workspace
+- [`create-font`](packages/create-font/README.md) provides the `create-font`
+  initializer, the repository-local `font` CLI, and the Elysia workspace
   application.
 - [`@create-font/server`](packages/server/README.md) owns the reusable workspace
   RPC contract, Elysia routes, and Eden client typing.

@@ -4,7 +4,8 @@
 	"description": "Repository-local CLI and browser server for create-font font projects",
 	"type": "module",
 	"bin": {
-		"create-font": "./dist/cli.js"
+		"create-font": "./dist/create-font-cli.js",
+		"font": "./dist/font-cli.js"
 	},
 	"files": [
 		"dist",
@@ -32,7 +33,7 @@
 	},
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
-		"dev": "bun --watch ./src/cli.ts serve --root=../..",
+		"dev": "bun --watch ./src/font-cli.ts dev --root=../..",
 		"test": "bun test"
 	},
 	"dependencies": {
