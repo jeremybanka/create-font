@@ -23,6 +23,17 @@ export interface VerticalMetricBand {
 
 export type VerticalMetricGuide = VerticalMetricLine | VerticalMetricBand
 
+export interface VerticalOvershootBandSegment {
+	readonly minY: number
+	readonly maxY: number
+	readonly lines: readonly VerticalMetricLine[]
+}
+
+export interface VerticalMetricAlignment {
+	readonly kind: "line" | "overshoot"
+	readonly lines: readonly VerticalMetricLine[]
+}
+
 export function zeroOvershoots(): EditorFontMetricsSource["overshoots"] {
 	return Object.freeze({
 		baseline: 0,
@@ -104,11 +115,64 @@ export function matchingVerticalMetrics(
 	y: number,
 	guides: readonly VerticalMetricGuide[],
 ): readonly VerticalMetricLine[] {
-	return guides.flatMap((guide) =>
-		guide.kind === "line" &&
-		y >= guide.overshoot.minY &&
-		y <= guide.overshoot.maxY
-			? [guide]
-			: [],
+	return Object.freeze(
+		guides.flatMap((guide) =>
+			guide.kind === "line" &&
+			y >= guide.overshoot.minY &&
+			y <= guide.overshoot.maxY
+				? [guide]
+				: [],
+		),
+	)
+}
+
+/** Classifies a coordinate without losing coincident or overlapping matches. */
+export function resolveVerticalMetricAlignment(
+	y: number,
+	guides: readonly VerticalMetricGuide[],
+): VerticalMetricAlignment | null {
+	const lines = matchingVerticalMetrics(y, guides)
+	if (lines.length === 0) return null
+	return Object.freeze({
+		kind: lines.some((line) => line.y === y) ? "line" : "overshoot",
+		lines,
+	})
+}
+
+/**
+ * Splits overshoot coverage into non-overlapping spans. Coincident and partially
+ * overlapping zones therefore paint each y slice once while retaining every
+ * metric identity that covers it.
+ */
+export function resolveVerticalOvershootBandSegments(
+	guides: readonly VerticalMetricGuide[],
+): readonly VerticalOvershootBandSegment[] {
+	const lines = guides.filter(
+		(guide): guide is VerticalMetricLine =>
+			guide.kind === "line" && guide.overshoot.minY < guide.overshoot.maxY,
+	)
+	const boundaries = [
+		...new Set(
+			lines.flatMap((line) => [line.overshoot.minY, line.overshoot.maxY]),
+		),
+	].sort((first, second) => first - second)
+
+	return Object.freeze(
+		boundaries.slice(0, -1).flatMap((minY, index) => {
+			const maxY = boundaries[index + 1]
+			if (maxY === undefined || minY === maxY) return []
+			const coveringLines = lines.filter(
+				(line) => line.overshoot.minY < maxY && line.overshoot.maxY > minY,
+			)
+			return coveringLines.length === 0
+				? []
+				: [
+						Object.freeze({
+							minY,
+							maxY,
+							lines: Object.freeze(coveringLines),
+						}),
+					]
+		}),
 	)
 }
