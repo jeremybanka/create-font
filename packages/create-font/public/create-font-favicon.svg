@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<style>
+		.background { fill: #1c1b17; }
+		.bar { fill: #f4f3ef; }
+		.accent { fill: #e17352; }
+		@media (prefers-color-scheme: dark) {
+			.background { fill: #efeee8; }
+			.bar { fill: #171815; }
+		}
+	</style>
+	<rect class="background" x="5" y="5" width="54" height="54" rx="14" />
+	<rect class="bar" x="18" y="17" width="7" height="30" rx="3.5" />
+	<rect class="accent" x="29" y="25" width="7" height="22" rx="3.5" />
+	<rect class="bar" x="40" y="17" width="7" height="30" rx="3.5" />
+</svg>

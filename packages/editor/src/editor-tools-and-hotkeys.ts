@@ -66,6 +66,7 @@ export interface ToolContext {
 }
 
 export interface Tool {
+	readonly description: string
 	readonly id: string
 	readonly displayName: string
 	readonly hotkey: Hotkey
@@ -84,6 +85,7 @@ function selectedContour(context: ToolContext): EditorCanvasContour | null {
 
 export const TOOLS = {
 	SELECT: {
+		description: "Select and edit outline nodes and Bézier handles.",
 		id: "select",
 		displayName: "Select",
 		hotkey: { key: "v" },
@@ -92,6 +94,7 @@ export const TOOLS = {
 		do: ({ workspace }) => workspace.actions.selectTool("select"),
 	},
 	PEN: {
+		description: "Draw a new contour one node at a time.",
 		id: "pen",
 		displayName: "Pen",
 		hotkey: { key: "q" },
@@ -193,6 +196,7 @@ export const TOOLS = {
 		},
 	},
 	UNDO: {
+		description: "Undo the latest edit to the active glyph.",
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
@@ -201,6 +205,7 @@ export const TOOLS = {
 		do: ({ history }) => history.undo(),
 	},
 	REDO: {
+		description: "Restore the next edit to the active glyph.",
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
