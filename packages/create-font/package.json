@@ -46,6 +46,7 @@
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
+		"@create-font/target": "workspace:*",
 		"comline": "0.5.1",
 		"elysia": "1.4.29",
 		"preact": "10.29.7",

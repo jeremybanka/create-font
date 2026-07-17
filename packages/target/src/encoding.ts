@@ -244,7 +244,7 @@ export function createCanonicalEncodingPlan(
 			"avar",
 			8 +
 				font.axes.reduce(
-					(length, axis) => length + 2 + 4 * (axis.map?.length ?? 0),
+					(length, axis) => length + 2 + 4 * (axis.map?.length ?? 3),
 					0,
 				),
 		)

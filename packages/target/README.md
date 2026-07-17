@@ -1,16 +1,16 @@
 # @create-font/target
 
 `@create-font/target` is a rigorously validated, low-level TypeScript
-representation of an OpenType variable font. It is a logical SFNT: one step
-after design-space or master compilation, and one step before binary font
-serialization.
+representation of an OpenType variable font. It includes both the logical SFNT
+boundary after design-space compilation and the deterministic target-v1 binary
+serializer.
 
 This library is the low-level compilation target of the public `create-font` npm
 toolchain. The unscoped package now provides the preliminary
 package-manager-resolved CLI and Elysia/Eden server boundary while depending on
-the workspace's implementation layers. The complete build pipeline will feed
-this validated target as an independently usable API. The project source
-directory, bundled editor assets, and binary serializer are roadmap work; see
+the workspace's implementation layers. The complete build pipeline feeds this
+validated target as an independently usable API. Project source and bundled
+editor assets remain the responsibility of higher layers; see
 the repository
 [architecture](../../docs/architecture.md) and
 [roadmap](../../docs/roadmap.md).
@@ -18,11 +18,11 @@ the repository
 Version 1 models the meaning needed to produce a TrueType-flavored variable
 font, not the byte layout of its tables. Glyph IDs, default outlines, metrics,
 axes, normalized variation regions, complete deltas, names, and character
-mappings are already resolved. A future binary lowerer should only have to
-pack the selected records, assign offsets and name IDs, and calculate checksums.
+mappings are already resolved. The binary serializer only packs the selected
+records, assigns offsets and name IDs, and calculates checksums.
 `createLoweringPlan` already derives the shared `head`, `hhea`, `maxp`, glyph,
 table-directory, canonical encoding, and exact table-length facts needed by
-that serializer.
+`serializeVariableFont` consumes those facts and emits the final `Uint8Array`.
 
 ## Version 1 profile
 
@@ -251,7 +251,7 @@ Recommendations are warnings: a power-of-two `unitsPerEm`, a visible `.notdef`
 outline, default-location instance names that reuse the font's default names,
 and avoiding simultaneous `ital` and `slnt` axes unless both are truly needed.
 
-## Binary lowering target
+## Binary serialization
 
 OpenType requires eight tables in any functional outline font and adds
 TrueType- and variation-specific requirements. A v1 font lowers to these 13
@@ -260,7 +260,7 @@ required tables:
 `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `name`, `OS/2`, `post`, `glyf`, `loca`,
 `fvar`, `gvar`, and `STAT`.
 
-A lowerer would additionally emit an `avar` table when an axis has a non-null
+A lowerer additionally emits an `avar` table when an axis has a non-null
 map. `HVAR` is not required for TrueType outlines because `gvar` carries metric
 variation through phantom points, though the OpenType specification recommends
 adding it for performance.
@@ -272,7 +272,7 @@ table set. Its encoding plan fixes long `loca` and `gvar` offsets, uncompressed
 `glyf` coordinates, complete private point lists, no shared `gvar` tuples,
 Windows format 4 or 12 `cmap`, `OS/2` version 4, `post` format 3.0, STAT axis
 value format, name-record counts, every table length, and the padded SFNT size.
-A binary lowerer should consume those decisions and finish only byte-level work:
+The binary serializer consumes those decisions and performs only byte-level work:
 
 - the SFNT directory, table order, offsets, four-byte padding, table checksums,
   and `head.checksumAdjustment`;
@@ -288,19 +288,31 @@ Those choices must not repair or reinterpret the design. If lowering requires
 new design decisions, the input belongs in a higher-level compiler rather than
 this IR.
 
+Build bytes only after successful ingestion:
+
+```ts
+const result = ingestVariableFont(source)
+if (!result.ok) throw new Error(`invalid font`)
+const bytes = serializeVariableFont(result.value)
+```
+
+Serialization verifies every table length against the encoding plan, writes
+directory records in bytewise tag order, pads tables to four bytes, and sets
+`head.checkSumAdjustment` so the complete SFNT checksum is `0xB1B0AFBA`.
+
 ## Non-goals and next steps
 
-create-font does not yet write `.ttf` files or ingest existing font binaries. It is
-not a design-space/master compiler: `deriveSimpleGlyphDeltas` is a narrow
+create-font does not ingest existing font binaries. This package is not a
+design-space/master compiler: `deriveSimpleGlyphDeltas` is a narrow
 topology-checking subtraction helper, and `instantiateGlyph` is a conformance
 evaluator for already-compiled tuple data. Version 1 excludes composite glyphs,
 TrueType instructions, sparse/IUP `gvar`, `HVAR`, `MVAR`, vertical metrics,
 CFF/CFF2, OpenType Layout, color, and bitmap tables.
 
-The next lower layer is a deterministic serializer for the 13-table profile.
-Higher-level packages can then target `VariableFontSource`, use ingestion as the
-technical validity boundary, and hand only a validated `VariableFont` to that
-serializer.
+Higher-level packages target `VariableFontSource`, use ingestion as the
+technical validity boundary, and hand only a validated `VariableFont` to the
+serializer. Future target profiles can add composites, layout, hinting, and
+other tables without weakening that proof boundary.
 
 ## OpenType references
 

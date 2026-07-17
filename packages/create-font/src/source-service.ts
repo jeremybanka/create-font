@@ -33,10 +33,12 @@ import {
 	type FontSourceDirectoryFiles,
 	type SourceDiagnostic,
 } from "@create-font/source"
+import type { EditorFontSource } from "@create-font/states"
 
 type LoadedProject = Readonly<{
 	manifest: SourceManifest
 	revisions: ReadonlyMap<string, string>
+	source: EditorFontSource
 	texts: ReadonlyMap<string, string>
 	values: FontSourceDirectoryFiles
 }>
@@ -205,6 +207,68 @@ async function recoverTransactions(projectRoot: string): Promise<void> {
 	}
 }
 
+async function loadProjectDirectory(
+	projectRoot: string,
+): Promise<LoadedProject> {
+	const values: Record<string, unknown> = {}
+	const revisions = new Map<string, string>()
+	const texts = new Map<string, string>()
+	const paths = await collectJsonPaths(projectRoot)
+	for (const path of paths) {
+		const kind = sourceUnitKindForPath(path)
+		if (kind === null) {
+			throw validationError([
+				{
+					severity: `error`,
+					code: `directory.unknown_file`,
+					unitPath: path,
+					path: `$`,
+					message: `Source unit ${JSON.stringify(path)} is not part of the create-font directory contract.`,
+				},
+			])
+		}
+		const absolute = resolveInside(projectRoot, path)
+		const canonical = await realpath(absolute)
+		if (
+			canonical !== absolute &&
+			relative(projectRoot, canonical).startsWith(`..`)
+		) {
+			throw new Error(`Source unit escapes its font project: ${path}`)
+		}
+		const text = await readFile(absolute, `utf8`)
+		const parsed = parseSourceUnitText(kind, text, path)
+		if (!parsed.ok) throw validationError(parsed.errors)
+		values[path] = parsed.value
+		texts.set(path, text)
+		revisions.set(path, revisionForText(text))
+	}
+	const assembled = assembleEditorFontSource(values)
+	if (!assembled.ok) throw validationError(assembled.errors)
+	const units = paths.map((path) => ({
+		path,
+		revision: revisions.get(path) ?? revisionForText(``),
+	}))
+	return {
+		manifest: {
+			revision: manifestRevision(units),
+			units,
+		},
+		revisions,
+		source: assembled.value,
+		texts,
+		values,
+	}
+}
+
+/** Loads one validated directory project without starting filesystem watchers. */
+export async function loadEditorFontSourceDirectory(
+	projectRootInput: string,
+): Promise<EditorFontSource> {
+	const projectRoot = await realpath(resolve(projectRootInput))
+	await recoverTransactions(projectRoot)
+	return (await loadProjectDirectory(projectRoot)).source
+}
+
 export async function createFileSystemSourceService(
 	projectRootInput: string,
 ): Promise<CreateFontSourceService> {
@@ -227,55 +291,8 @@ export async function createFileSystemSourceService(
 	const sourceListeners = new Set<(event: SourceChangedEvent) => void>()
 	let publishedRevision: string | null = null
 
-	const loadProject = async (): Promise<LoadedProject> => {
-		const values: Record<string, unknown> = {}
-		const revisions = new Map<string, string>()
-		const texts = new Map<string, string>()
-		const paths = await collectJsonPaths(projectRoot)
-		for (const path of paths) {
-			const kind = sourceUnitKindForPath(path)
-			if (kind === null) {
-				throw validationError([
-					{
-						severity: `error`,
-						code: `directory.unknown_file`,
-						unitPath: path,
-						path: `$`,
-						message: `Source unit ${JSON.stringify(path)} is not part of the create-font directory contract.`,
-					},
-				])
-			}
-			const absolute = resolveInside(projectRoot, path)
-			const canonical = await realpath(absolute)
-			if (
-				canonical !== absolute &&
-				relative(projectRoot, canonical).startsWith(`..`)
-			) {
-				throw new Error(`Source unit escapes its font project: ${path}`)
-			}
-			const text = await readFile(absolute, `utf8`)
-			const parsed = parseSourceUnitText(kind, text, path)
-			if (!parsed.ok) throw validationError(parsed.errors)
-			values[path] = parsed.value
-			texts.set(path, text)
-			revisions.set(path, revisionForText(text))
-		}
-		const assembled = assembleEditorFontSource(values)
-		if (!assembled.ok) throw validationError(assembled.errors)
-		const units = paths.map((path) => ({
-			path,
-			revision: revisions.get(path) ?? revisionForText(``),
-		}))
-		return {
-			manifest: {
-				revision: manifestRevision(units),
-				units,
-			},
-			revisions,
-			texts,
-			values,
-		}
-	}
+	const loadProject = (): Promise<LoadedProject> =>
+		loadProjectDirectory(projectRoot)
 
 	const snapshot = (
 		project: LoadedProject,
