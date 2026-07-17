@@ -380,7 +380,7 @@ describe("font editor state", () => {
 		expect(editor.read.editorGlyphSource(oGlyphId)).toBe(before)
 	})
 
-	it("edits horizontal metrics atomically in glyph history", () => {
+	it("edits advance width in glyph history while deriving the sidebearing", () => {
 		const editor = createLoadedEditor("test/horizontal-metrics")
 		const before = editor.read
 			.editorSource()
@@ -392,7 +392,6 @@ describe("font editor state", () => {
 			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			advanceWidth: before.advanceWidth + 40,
-			leftSideBearing: before.leftSideBearing - 10,
 		})
 		const changed = editor.read
 			.editorSource()
@@ -400,7 +399,7 @@ describe("font editor state", () => {
 			?.layers.find((layer) => layer.masterId === razorMasterId)
 		expect(changed).toMatchObject({
 			advanceWidth: before.advanceWidth + 40,
-			leftSideBearing: before.leftSideBearing - 10,
+			leftSideBearing: before.leftSideBearing,
 		})
 
 		editor.undo(oGlyphId)
@@ -420,7 +419,7 @@ describe("font editor state", () => {
 				?.layers.find((layer) => layer.masterId === razorMasterId),
 		).toMatchObject({
 			advanceWidth: before.advanceWidth + 40,
-			leftSideBearing: before.leftSideBearing - 10,
+			leftSideBearing: before.leftSideBearing,
 		})
 	})
 
@@ -433,13 +432,82 @@ describe("font editor state", () => {
 				advanceWidth: 65_536,
 			}),
 		).toThrow(/0 through 65535/u)
-		expect(() =>
-			editor.actions.setHorizontalMetrics({
-				masterId: razorMasterId,
-				glyphId: oGlyphId,
-				leftSideBearing: -32_769,
-			}),
-		).toThrow(/-32768 through 32767/u)
+	})
+
+	it("derives each master sidebearing from translated outline geometry", () => {
+		const editor = createLoadedEditor("test/derived-sidebearings")
+		const source = editor.read.editorGlyphSource(oGlyphId)
+		if (source === null) throw new Error("Missing fixture glyph.")
+		const pointIds = source.contours.flatMap((contour) =>
+			contour.points.map((point) => point.id),
+		)
+		const before = source.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)
+		if (before === undefined) throw new Error("Missing fixture layer.")
+		editor.actions.movePoints({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			points: before.points.map((point) => ({
+				pointId: point.pointId,
+				x: point.x + 37,
+				y: point.y,
+			})),
+		})
+		const after = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(after?.leftSideBearing).toBeCloseTo(before.leftSideBearing + 37)
+		const compiled = editor.read.glyphLayer(razorMasterId, oGlyphId)
+		expect(compiled.ok).toBe(true)
+		if (compiled.ok) {
+			expect(compiled.value.leftSideBearing).toBe(compiled.value.xMin)
+		}
+		expect(editor.read.compilation().stage).toBe("compiled")
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === blackMasterId)
+				?.leftSideBearing,
+		).toBe(
+			source.layers.find((layer) => layer.masterId === blackMasterId)
+				?.leftSideBearing,
+		)
+		expect(pointIds).toHaveLength(before.points.length)
+		editor.undo(oGlyphId)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId)
+				?.leftSideBearing,
+		).toBe(before.leftSideBearing)
+		editor.redo(oGlyphId)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId)
+				?.leftSideBearing,
+		).toBeCloseTo(before.leftSideBearing + 37)
+	})
+
+	it("treats loaded sidebearings as compatibility data, not editor state", () => {
+		const source = makeGeometricOEditorFont()
+		const layer = source.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((candidate) => candidate.masterId === razorMasterId)
+		if (layer === undefined) throw new Error("Missing fixture layer.")
+		Object.assign(layer, { leftSideBearing: -12_345 })
+		const editor = createFontEditorState({ key: "test/legacy-sidebearing" })
+		editor.actions.load(source)
+		const serialized = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((candidate) => candidate.masterId === razorMasterId)
+		expect(serialized?.leftSideBearing).not.toBe(-12_345)
+		const compiled = editor.read.glyphLayer(razorMasterId, oGlyphId)
+		expect(compiled.ok).toBe(true)
+		if (compiled.ok) {
+			expect(compiled.value.leftSideBearing).toBe(compiled.value.xMin)
+		}
 	})
 
 	it("keeps one independent timeline per glyph", () => {
@@ -1494,7 +1562,7 @@ describe("font editor state", () => {
 				(candidate) => candidate.masterId === blackMasterId,
 			)
 			if (layer === undefined) throw new Error("Black layer is missing.")
-			Object.assign(layer, { advanceWidth: 1_100, leftSideBearing: 80 })
+			Object.assign(layer, { advanceWidth: 1_100 })
 		}
 		const editor = createFontEditorState({ key: "test/phantom" })
 		editor.actions.load(source)
@@ -1503,8 +1571,8 @@ describe("font editor state", () => {
 		expect(glyph.ok).toBe(true)
 		if (!glyph.ok) return
 		expect(glyph.value.variations[0]?.deltas.phantom).toEqual({
-			left: 20,
-			right: 120,
+			left: 0,
+			right: 100,
 			top: 0,
 			bottom: 0,
 		})

@@ -16,6 +16,13 @@ export interface CubicSplit {
 	readonly right: CubicCurve
 }
 
+export interface CurveBounds {
+	readonly minX: number
+	readonly minY: number
+	readonly maxX: number
+	readonly maxY: number
+}
+
 export interface StraightSegmentHandles {
 	readonly startOutgoing: CurvePoint
 	readonly endIncoming: CurvePoint
@@ -79,6 +86,51 @@ export function evaluateCubicCurve(
 			3 * inverseSquared * amount * cubic.c1.y +
 			3 * inverse * amountSquared * cubic.c2.y +
 			amountSquared * amount * cubic.p3.y,
+	}
+}
+
+function derivativeRoots(
+	p0: number,
+	c1: number,
+	c2: number,
+	p3: number,
+): readonly number[] {
+	const a = -p0 + 3 * c1 - 3 * c2 + p3
+	const b = 2 * (p0 - 2 * c1 + c2)
+	const c = c1 - p0
+	const epsilon = Number.EPSILON * 64
+	if (Math.abs(a) <= epsilon) {
+		if (Math.abs(b) <= epsilon) return []
+		const root = -c / b
+		return root > 0 && root < 1 ? [root] : []
+	}
+	const discriminant = b * b - 4 * a * c
+	if (discriminant < 0) return []
+	const squareRoot = Math.sqrt(Math.max(0, discriminant))
+	const first = (-b + squareRoot) / (2 * a)
+	const second = (-b - squareRoot) / (2 * a)
+	return [first, second].filter(
+		(root, index, roots) =>
+			root > 0 &&
+			root < 1 &&
+			(index === 0 || Math.abs(root - (roots[0] ?? root)) > epsilon),
+	)
+}
+
+/** Exact axis-aligned bounds of a cubic's locus, including interior extrema. */
+export function cubicCurveBounds(cubic: CubicCurve): CurveBounds {
+	const amounts = new Set<number>([
+		0,
+		1,
+		...derivativeRoots(cubic.p0.x, cubic.c1.x, cubic.c2.x, cubic.p3.x),
+		...derivativeRoots(cubic.p0.y, cubic.c1.y, cubic.c2.y, cubic.p3.y),
+	])
+	const points = [...amounts].map((amount) => evaluateCubicCurve(cubic, amount))
+	return {
+		minX: Math.min(...points.map((point) => point.x)),
+		minY: Math.min(...points.map((point) => point.y)),
+		maxX: Math.max(...points.map((point) => point.x)),
+		maxY: Math.max(...points.map((point) => point.y)),
 	}
 }
 

@@ -13,7 +13,11 @@ import {
 	type VariationRegionSource,
 } from "@create-font/target"
 
-import { splitCubicCurve, straightSegmentHandles } from "./curve-geometry.ts"
+import {
+	cubicCurveBounds,
+	splitCubicCurve,
+	straightSegmentHandles,
+} from "./curve-geometry.ts"
 
 import {
 	collectProjectionResults,
@@ -300,6 +304,13 @@ export interface EditorLayerNode extends EditorLayerPointSource {
 	readonly mode: EditorNodeMode
 }
 
+export interface EditorLayerBounds {
+	readonly xMin: number
+	readonly yMin: number
+	readonly xMax: number
+	readonly yMax: number
+}
+
 export interface CurveSegmentPlan {
 	readonly startPointId: PointId
 	readonly endPointId: PointId
@@ -329,14 +340,11 @@ export interface MovePointsInput {
 	readonly points: readonly MovePointInput[]
 }
 
-export type SetHorizontalMetricsInput = Readonly<{
-	masterId: MasterId
-	glyphId: GlyphId
-}> &
-	(
-		| Readonly<{ advanceWidth: number; leftSideBearing?: number }>
-		| Readonly<{ advanceWidth?: number; leftSideBearing: number }>
-	)
+export interface SetHorizontalMetricsInput {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly advanceWidth: number
+}
 
 export interface MoveHandleInput {
 	readonly masterId: MasterId
@@ -928,10 +936,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "advanceWidth",
 		default: null,
 	})
-	const leftSideBearingAtoms = silo.atomFamily<number | null, LayerKey>({
-		key: "leftSideBearing",
-		default: null,
-	})
 	const pointPositionAtoms = silo.atomFamily<Vector2 | null, LayerPointKey>({
 		key: "pointPosition",
 		default: null,
@@ -977,9 +981,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				timelineKey: ([glyphId]) => glyphId,
 			}),
 			scopeFamily(advanceWidthAtoms, {
-				timelineKey: ([, glyphId]) => glyphId,
-			}),
-			scopeFamily(leftSideBearingAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
 			scopeFamily(pointPositionAtoms, {
@@ -1192,6 +1193,105 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					...(incoming === undefined ? {} : { incoming }),
 					...(outgoing === undefined ? {} : { outgoing }),
 				})
+			},
+	})
+
+	const layerBoundsSelectors = silo.selectorFamily<
+		ProjectionResult<EditorLayerBounds>,
+		LayerKey
+	>({
+		key: "layerBounds",
+		get:
+			([masterId, glyphId]) =>
+			({ get }) => {
+				const contourIds = get(glyphContourIdsAtoms, glyphId)
+				if (contourIds === null) {
+					return projectionFailure([
+						projectionError(
+							"topology.missing",
+							`$.glyphs[${glyphId}].contours`,
+							"Glyph contour topology is missing.",
+							glyphId,
+						),
+					])
+				}
+				const errors: ProjectionError[] = []
+				let xMin = Number.POSITIVE_INFINITY
+				let yMin = Number.POSITIVE_INFINITY
+				let xMax = Number.NEGATIVE_INFINITY
+				let yMax = Number.NEGATIVE_INFINITY
+				const include = (bounds: {
+					readonly minX: number
+					readonly minY: number
+					readonly maxX: number
+					readonly maxY: number
+				}): void => {
+					xMin = Math.min(xMin, bounds.minX)
+					yMin = Math.min(yMin, bounds.minY)
+					xMax = Math.max(xMax, bounds.maxX)
+					yMax = Math.max(yMax, bounds.maxY)
+				}
+				for (const contourId of contourIds) {
+					const pointIds = get(contourPointIdsAtoms, [glyphId, contourId])
+					const closed = get(contourClosedAtoms, [glyphId, contourId])
+					if (pointIds === null || closed === null) {
+						errors.push(
+							projectionError(
+								"topology.missing",
+								`$.glyphs[${glyphId}].contours[${contourId}]`,
+								"Contour topology is missing.",
+								contourId,
+							),
+						)
+						continue
+					}
+					const nodes = pointIds.map((pointId) =>
+						get(layerNodeSelectors, [masterId, glyphId, pointId]),
+					)
+					for (const node of nodes) {
+						if (!node.ok) errors.push(...node.errors)
+						else
+							include({
+								minX: node.value.x,
+								minY: node.value.y,
+								maxX: node.value.x,
+								maxY: node.value.y,
+							})
+					}
+					const segmentCount = Math.max(0, pointIds.length - (closed ? 0 : 1))
+					for (let index = 0; index < segmentCount; index += 1) {
+						const start = nodes[index]
+						const end = nodes[(index + 1) % nodes.length]
+						if (
+							start === undefined ||
+							end === undefined ||
+							!start.ok ||
+							!end.ok
+						) {
+							continue
+						}
+						include(
+							cubicCurveBounds({
+								p0: start.value,
+								c1: {
+									x: start.value.x + (start.value.outgoing?.x ?? 0),
+									y: start.value.y + (start.value.outgoing?.y ?? 0),
+								},
+								c2: {
+									x: end.value.x + (end.value.incoming?.x ?? 0),
+									y: end.value.y + (end.value.incoming?.y ?? 0),
+								},
+								p3: end.value,
+							}),
+						)
+					}
+				}
+				if (errors.length > 0) return projectionFailure(errors)
+				return projectionSuccess(
+					xMin === Number.POSITIVE_INFINITY
+						? { xMin: 0, yMin: 0, xMax: 0, yMax: 0 }
+						: { xMin, yMin, xMax, yMax },
+				)
 			},
 	})
 
@@ -1860,16 +1960,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					`${path}.advanceWidth`,
 					glyphId,
 				)
-				const leftSideBearing = projectRoundedInteger(
-					get(leftSideBearingAtoms, [masterId, glyphId]),
-					MIN_INT16,
-					MAX_INT16,
-					`${path}.leftSideBearing`,
-					glyphId,
-				)
-				warnings.push(...advanceWidth.warnings, ...leftSideBearing.warnings)
+				warnings.push(...advanceWidth.warnings)
 				if (!advanceWidth.ok) errors.push(...advanceWidth.errors)
-				if (!leftSideBearing.ok) errors.push(...leftSideBearing.errors)
 
 				const contours: PointSource[][] = []
 				const flattenedPoints: PointSource[] = []
@@ -2025,9 +2117,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					}
 					contours.push(contour)
 				}
-				if (errors.length > 0 || !advanceWidth.ok || !leftSideBearing.ok) {
+				if (errors.length > 0 || !advanceWidth.ok) {
 					return projectionFailure(errors, warnings)
 				}
+				const xMin = xMinOf(flattenedPoints)
 				return projectionSuccess(
 					{
 						masterId,
@@ -2035,8 +2128,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						contours,
 						flattenedPoints,
 						advanceWidth: advanceWidth.value,
-						leftSideBearing: leftSideBearing.value,
-						xMin: xMinOf(flattenedPoints),
+						leftSideBearing: xMin,
+						xMin,
 					},
 					warnings,
 				)
@@ -3009,9 +3102,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						})
 					}
 					const advanceWidth = get(advanceWidthAtoms, [masterId, glyphId])
-					const leftSideBearing = get(leftSideBearingAtoms, [masterId, glyphId])
-					if (advanceWidth === null || leftSideBearing === null) return null
-					layers.push({ masterId, advanceWidth, leftSideBearing, points })
+					const bounds = get(layerBoundsSelectors, [masterId, glyphId])
+					if (advanceWidth === null) return null
+					layers.push({
+						masterId,
+						advanceWidth,
+						leftSideBearing: bounds.ok
+							? bounds.value.xMin
+							: points.length === 0
+								? 0
+								: Math.min(...points.map((point) => point.x)),
+						points,
+					})
 				}
 				return deepFreeze({
 					id: glyphId,
@@ -3127,7 +3229,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 				for (const masterId of layerMasterIds) {
 					set(advanceWidthAtoms, [masterId, glyphId], null)
-					set(leftSideBearingAtoms, [masterId, glyphId], null)
 					for (const pointId of pointIds) {
 						set(pointPositionAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
@@ -3283,11 +3384,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				)
 				for (const layer of glyph.layers) {
 					set(advanceWidthAtoms, [layer.masterId, glyph.id], layer.advanceWidth)
-					set(
-						leftSideBearingAtoms,
-						[layer.masterId, glyph.id],
-						layer.leftSideBearing,
-					)
 					const coordinates = new Map(
 						layer.points.map((point) => [point.pointId, point] as const),
 					)
@@ -3379,38 +3475,20 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
 				)
 			}
-			if (input.advanceWidth !== undefined) {
-				if (
-					!Number.isInteger(input.advanceWidth) ||
-					input.advanceWidth < 0 ||
-					input.advanceWidth > MAX_UINT16
-				) {
-					throw new TypeError(
-						"Advance width must be an integer from 0 through 65535.",
-					)
-				}
-				set(
-					advanceWidthAtoms,
-					[input.masterId, input.glyphId],
-					input.advanceWidth,
+			if (
+				!Number.isInteger(input.advanceWidth) ||
+				input.advanceWidth < 0 ||
+				input.advanceWidth > MAX_UINT16
+			) {
+				throw new TypeError(
+					"Advance width must be an integer from 0 through 65535.",
 				)
 			}
-			if (input.leftSideBearing !== undefined) {
-				if (
-					!Number.isInteger(input.leftSideBearing) ||
-					input.leftSideBearing < MIN_INT16 ||
-					input.leftSideBearing > MAX_INT16
-				) {
-					throw new TypeError(
-						"Left side bearing must be an integer from -32768 through 32767.",
-					)
-				}
-				set(
-					leftSideBearingAtoms,
-					[input.masterId, input.glyphId],
-					input.leftSideBearing,
-				)
-			}
+			set(
+				advanceWidthAtoms,
+				[input.masterId, input.glyphId],
+				input.advanceWidth,
+			)
 		},
 	})
 
@@ -4921,7 +4999,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			point: pointAtoms,
 			glyphLayerMasterIds: glyphLayerMasterIdsAtoms,
 			advanceWidth: advanceWidthAtoms,
-			leftSideBearing: leftSideBearingAtoms,
 			pointPosition: pointPositionAtoms,
 			incomingHandleX: incomingHandleXAtoms,
 			incomingHandleY: incomingHandleYAtoms,
@@ -4947,6 +5024,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			instanceSource: instanceSourceSelectors,
 			instancesSource: instancesSourceSelector,
 			layerNode: layerNodeSelectors,
+			layerBounds: layerBoundsSelectors,
 			curveSegmentPlan: curveSegmentPlanSelectors,
 			glyphLayer: glyphLayerSelectors,
 			glyphVariations: glyphVariationSelectors,

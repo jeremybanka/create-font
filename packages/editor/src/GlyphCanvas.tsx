@@ -233,7 +233,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
 	const [transformPreview, setTransformPreview] =
 		useState<SelectionTransformResult | null>(null)
-	const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null)
 	const groupDragRef = useRef<GroupDrag | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
@@ -242,7 +241,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const pointDragRef = useRef<PointDrag | null>(null)
-	const lastGroupDragTarget = useRef<LiveGroupDragTarget | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
 		LiveGroupDragTarget["node"]
 	> | null>(null)
@@ -583,25 +581,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		penContourResumeRef.current = null
 		setActiveSnaps([])
 		pointDragRef.current = null
-		setGroupDrag(null)
 		groupDragRef.current = null
 		setTransformPreview(null)
-		lastGroupDragTarget.current = null
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
-
-	useEffect(() => {
-		if (groupDrag !== null || transformPreview !== null) return
-		const live = lastGroupDragTarget.current
-		if (live === null) return
-		const control = resolveSelectionControls(
-			contours.flatMap((contour) => contour.nodes),
-			[live.selection],
-		)[0]
-		if (control === undefined) return
-		live.node.position({ x: control.x, y: control.y })
-		live.node.getLayer()?.batchDraw()
-	}, [contours, groupDrag, transformPreview])
 
 	useEffect(() => {
 		if (penContourId !== null) {
@@ -933,7 +916,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			lastRawDelta: null,
 		}
 		groupDragRef.current = nextGroupDrag
-		setGroupDrag(nextGroupDrag)
 		return true
 	}
 	const applyGroupDrag = (
@@ -1036,30 +1018,17 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		const currentGroupDrag = groupDragRef.current
 		const resolved = resolveGroupDrag(event)
 		if (resolved === null || currentGroupDrag === null) return false
-		const liveTarget = event.target
-		const finalTargetPosition = {
-			x: liveTarget.x(),
-			y: liveTarget.y(),
-		}
-		lastGroupDragTarget.current = {
-			selection: currentGroupDrag.target,
-			node: liveTarget,
-		}
 		workspace.font.actions.transformControls({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			...resolved.preview,
 		})
 		groupDragRef.current = null
-		setGroupDrag(null)
 		setTransformPreview(null)
 		setDraggedPoint(null)
 		setDraggedHandle(null)
 		setActiveSnaps([])
-		requestAnimationFrame(() => {
-			liveTarget.position(finalTargetPosition)
-			liveTarget.getLayer()?.batchDraw()
-		})
+		cancelledGroupDrag.current = null
 		return true
 	}
 	const beginTransform = (handle: TransformHandle): void => {
@@ -1355,7 +1324,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					)
 					currentGroupDrag.node.getLayer()?.batchDraw()
 					groupDragRef.current = null
-					setGroupDrag(null)
 					setTransformPreview(null)
 					setDraggedPoint(null)
 					setDraggedHandle(null)

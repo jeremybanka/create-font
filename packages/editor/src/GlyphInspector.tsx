@@ -35,16 +35,12 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					.find((point) => point.pointId === selectedPointId)
 			: undefined
 	const projectionIssueCount = validation.issueCount
-	const setMetrics = (
-		input:
-			| { readonly advanceWidth: number }
-			| { readonly leftSideBearing: number },
-	): void => {
+	const setWidth = (advanceWidth: number): void => {
 		if (layer === null) return
 		workspace.font.actions.setHorizontalMetrics({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
-			...input,
+			advanceWidth,
 		})
 	}
 
@@ -76,35 +72,20 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 								value={layer.advanceWidth}
 								min={0}
 								max={65_535}
-								onCommit={(advanceWidth) => setMetrics({ advanceWidth })}
+								onCommit={setWidth}
 							/>
 						</label>
 						<label>
 							<span>LSB</span>
-							<NumericInput
-								aria-label="Left side bearing"
-								value={layer.leftSideBearing}
-								min={-32_768}
-								max={32_767}
-								onCommit={(leftSideBearing) => setMetrics({ leftSideBearing })}
-							/>
+							<output aria-label="Left side bearing">
+								{layer.leftSideBearing}
+							</output>
 						</label>
 						<label>
 							<span>RSB</span>
-							<NumericInput
-								aria-label="Right side bearing"
-								value={layer.rightSideBearing}
-								min={-layer.leftSideBearing - layer.outlineWidth}
-								max={65_535 - layer.leftSideBearing - layer.outlineWidth}
-								onCommit={(rightSideBearing) =>
-									setMetrics({
-										advanceWidth:
-											rightSideBearing +
-											layer.leftSideBearing +
-											layer.outlineWidth,
-									})
-								}
-							/>
+							<output aria-label="Right side bearing">
+								{layer.rightSideBearing}
+							</output>
 						</label>
 					</metric-fields>
 				)}
