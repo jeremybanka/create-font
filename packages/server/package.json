@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/server",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"description": "Elysia workspace RPC contracts and Eden client for create-font",
 	"repository": {
 		"type": "git",

@@ -1,5 +1,20 @@
 # create-font
 
+## 0.2.1
+
+### Patch Changes
+
+- 84cccb3: Serialize validated target-v1 fonts and make `font build` emit deterministic,
+  atomic variable TrueType artifacts with structured diagnostics.
+- Updated dependencies [4541636]
+- Updated dependencies [4541636]
+- Updated dependencies [4541636]
+- Updated dependencies [84cccb3]
+  - @create-font/states@0.2.0
+  - @create-font/server@0.0.1
+  - @create-font/target@0.0.1
+  - @create-font/source@0.1.1
+
 ## 0.2.0
 
 ### Minor Changes
