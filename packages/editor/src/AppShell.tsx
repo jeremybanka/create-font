@@ -26,7 +26,7 @@ import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
-import { useO, useTL } from "./state-hooks.ts"
+import { useO, useOF, useTL } from "./state-hooks.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface AppShellProps {
@@ -37,20 +37,24 @@ export function AppShell({ workspace }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
-	const compilation = useO(workspace.font.selectors.compilation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const names = useO(workspace.font.atoms.names) ?? workspace.document.names
+	const validation = useO(workspace.ui.validation)
 	const activeLayer = useO(workspace.ui.activeLayer)
 	const activeTool = useO(workspace.ui.activeTool)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
 	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
-	const history = useTL(workspace.font.glyphHistoryTimelines, activeGlyphId)
-	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
-	const master = source.masters.find((item) => item.id === activeMasterId)
+	const faviconHref = useO(workspace.ui.faviconHref)
+	const history = useTL(
+		workspace.font.glyphHistoryTimelines,
+		activeGlyphId,
+		workspace.font.actions.markDocumentChanged,
+	)
 	const toolContext = {
 		activeGlyphId,
 		activeLayer,
@@ -61,7 +65,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		selection,
 		workspace,
 	}
-	useEditorDocumentMetadata(source, routeName, previewText)
+	useEditorDocumentMetadata(faviconHref, routeName, previewText)
 	useHotkeys(toolContext, routeName === "canvas")
 	const openCommandPalette = (): void => {
 		setAddingGlyphs(false)
@@ -87,7 +91,7 @@ export function AppShell({ workspace }: AppShellProps) {
 			id: "add-glyphs",
 			displayName: "Add glyphs",
 			category: "Glyphs",
-			icon: "add",
+			icon: "PlusIcon",
 			keywords: ["new", "create", "character"],
 			do: () => {
 				workspace.actions.navigate("/glyphs")
@@ -113,8 +117,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		})),
 	]
 
-	const familyName =
-		source.names.typographicFamily ?? source.names.family ?? "Untitled font"
+	const familyName = names.typographicFamily ?? names.family ?? "Untitled font"
 	return (
 		<app-shell className={css.class}>
 			<header>
@@ -146,11 +149,11 @@ export function AppShell({ workspace }: AppShellProps) {
 					<document-status
 						role="status"
 						aria-live="polite"
-						data-state={compilation.ok ? "valid" : "invalid"}
+						data-state={validation.ok ? "valid" : "invalid"}
 					>
 						<i />
 						<span>
-							{compilation.ok ? "Technically valid" : "Needs attention"}
+							{validation.ok ? "Technically valid" : "Needs attention"}
 						</span>
 					</document-status>
 					<view-tabs aria-label="Application views">
@@ -220,7 +223,9 @@ export function AppShell({ workspace }: AppShellProps) {
 						? `Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
-				<format-label>create-font editor v{source.editorVersion}</format-label>
+				<format-label>
+					create-font editor v{workspace.document.editorVersion}
+				</format-label>
 			</footer>
 			{commandPaletteOpen ? (
 				<CommandPalette

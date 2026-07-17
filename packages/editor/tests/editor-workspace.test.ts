@@ -47,7 +47,7 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
-	it("does not recompute a subscribed selector for intermediate transaction state", () => {
+	it("coalesces a transaction into one external-store notification", async () => {
 		const silo = new Silo({
 			name: "test/settled-selector",
 			lifespan: "ephemeral",
@@ -80,10 +80,11 @@ describe("editor workspace", () => {
 		})
 
 		setBoth()
+		await Promise.resolve()
 		unsubscribe()
 
 		expect(notifications).toBe(1)
-		expect(computations).toBe(2)
+		expect(computations).toBe(3)
 	})
 
 	it("shares selector work and coalesces same-turn timeline-style updates", async () => {
@@ -120,10 +121,10 @@ describe("editor workspace", () => {
 
 		expect(firstNotifications).toBe(1)
 		expect(secondNotifications).toBe(1)
-		expect(computations).toBe(2)
+		expect(computations).toBe(3)
 	})
 
-	it("notifies external-store subscribers once after replacing a source", () => {
+	it("notifies external-store subscribers once after replacing a source", async () => {
 		const workspace = createEditorWorkspace()
 		const selector = workspace.font.selectors.editorSource
 		const source = workspace.font.silo.getState(selector)
@@ -143,6 +144,7 @@ describe("editor workspace", () => {
 		)
 
 		workspace.actions.replaceSource(replacement)
+		await Promise.resolve()
 		unsubscribe()
 
 		expect(snapshots).toHaveLength(1)
@@ -359,6 +361,28 @@ describe("editor workspace", () => {
 		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toBe(
 			layerBefore,
 		)
+	})
+
+	it("caches editor-source projection independently for each glyph", () => {
+		const workspace = createEditorWorkspace()
+		const aBefore = workspace.font.read.editorGlyphSource(aGlyphId)
+		const oBefore = workspace.font.read.editorGlyphSource(oGlyphId)
+		const point = oBefore?.contours[0]?.points[0]
+		const layerPoint = oBefore?.layers[0]?.points.find(
+			(item) => item.pointId === point?.id,
+		)
+		if (oBefore === null || point === undefined || layerPoint === undefined) {
+			throw new Error("Missing O fixture point.")
+		}
+
+		workspace.font.actions.movePoints({
+			masterId: oBefore.layers[0]?.masterId ?? razorMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: layerPoint.x + 1, y: layerPoint.y }],
+		})
+
+		expect(workspace.font.read.editorGlyphSource(aGlyphId)).toBe(aBefore)
+		expect(workspace.font.read.editorGlyphSource(oGlyphId)).not.toBe(oBefore)
 	})
 
 	it("writes valid closed quadratic SVG paths", () => {

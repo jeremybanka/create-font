@@ -19,17 +19,21 @@ type Metrics = EditorFontSource["metrics"]
 type Style = EditorFontSource["style"]
 
 export function FontInfo({ workspace }: FontInfoProps) {
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
-	const names = useO(workspace.font.atoms.names) ?? source.names
-	const metadata = useO(workspace.font.atoms.metadata) ?? source.metadata
-	const metrics = useO(workspace.font.atoms.metrics) ?? source.metrics
-	const style = useO(workspace.font.atoms.style) ?? source.style
+	const names = useO(workspace.font.atoms.names) ?? workspace.document.names
+	const metadata =
+		useO(workspace.font.atoms.metadata) ?? workspace.document.metadata
+	const metrics =
+		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
+	const style = useO(workspace.font.atoms.style) ?? workspace.document.style
+	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const masters = useO(workspace.font.selectors.editorMastersSource) ?? []
+	const instances = useO(workspace.font.selectors.editorInstancesSource) ?? []
 	const setNames = <Key extends keyof Names>(key: Key, value: Names[Key]) => {
 		workspace.font.silo.setState(
 			workspace.font.atoms.names,
 			Object.freeze({ ...names, [key]: value }),
 		)
+		workspace.font.actions.markDocumentChanged()
 	}
 	const setMetadata = <Key extends keyof Metadata>(
 		key: Key,
@@ -39,6 +43,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 			workspace.font.atoms.metadata,
 			Object.freeze({ ...metadata, [key]: value }),
 		)
+		workspace.font.actions.markDocumentChanged()
 	}
 	const setMetrics = <Key extends keyof Metrics>(
 		key: Key,
@@ -48,12 +53,14 @@ export function FontInfo({ workspace }: FontInfoProps) {
 			workspace.font.atoms.metrics,
 			Object.freeze({ ...metrics, [key]: value }),
 		)
+		workspace.font.actions.markDocumentChanged()
 	}
 	const setStyle = <Key extends keyof Style>(key: Key, value: Style[Key]) => {
 		workspace.font.silo.setState(
 			workspace.font.atoms.style,
 			Object.freeze({ ...style, [key]: value }),
 		)
+		workspace.font.actions.markDocumentChanged()
 	}
 	const setOvershoot = (
 		key: VerticalAlignmentMetricId,
@@ -66,6 +73,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 				overshoots: Object.freeze({ ...metrics.overshoots, [key]: value }),
 			}),
 		)
+		workspace.font.actions.markDocumentChanged()
 	}
 
 	return (
@@ -270,7 +278,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 					<design-space-grid>
 						<entity-list>
 							<h3>Axes</h3>
-							{source.axes.map((axis) => (
+							{axes.map((axis) => (
 								<article key={axis.id}>
 									<strong>{axis.name}</strong>
 									<code>{axis.tag}</code>
@@ -282,14 +290,14 @@ export function FontInfo({ workspace }: FontInfoProps) {
 						</entity-list>
 						<entity-list>
 							<h3>Masters</h3>
-							{source.masters.map((master) => (
+							{masters.map((master) => (
 								<article key={master.id}>
 									<strong>{master.name}</strong>
 									<code>{master.kind}</code>
 									<span>
 										{master.kind === "default"
 											? "Default source"
-											: source.axes
+											: axes
 													.map(
 														(axis) =>
 															`${axis.tag} ${master.location[axis.id] ?? axis.default}`,
@@ -301,12 +309,12 @@ export function FontInfo({ workspace }: FontInfoProps) {
 						</entity-list>
 						<entity-list>
 							<h3>Instances</h3>
-							{source.instances.map((instance) => (
+							{instances.map((instance) => (
 								<article key={instance.id}>
 									<strong>{instance.name}</strong>
 									<code>{instance.elidable ? "elidable" : "named"}</code>
 									<span>
-										{source.axes
+										{axes
 											.map(
 												(axis) =>
 													`${axis.tag} ${instance.coordinates[axis.id] ?? axis.default}`,

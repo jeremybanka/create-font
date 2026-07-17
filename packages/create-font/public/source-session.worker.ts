@@ -24,9 +24,13 @@ import {
 	type MasterIndexFile,
 	type SplitFontSourceOptions,
 } from "@create-font/source/browser"
-import type { EditorFontSource } from "@create-font/states"
+import {
+	createFontEditorState,
+	type EditorFontSource,
+} from "@create-font/states"
 
 import type {
+	FontValidationStatus,
 	SourceSessionEvent,
 	SourceSessionRequest,
 } from "./source-session.ts"
@@ -43,6 +47,7 @@ const ports = new Set<MessagePort>()
 let sourceUnits = new Map<string, SourceUnitSnapshot>()
 let source: EditorFontSource | null = null
 let revision: string | null = null
+let validation: FontValidationStatus | null = null
 let writeQueue = Promise.resolve()
 let refreshQueue: Promise<void> | null = null
 let pendingManifest: SourceManifest | undefined
@@ -119,8 +124,29 @@ function broadcast(event: SourceSessionEvent, except?: MessagePort): void {
 }
 
 function currentSourceEvent(): SourceSessionEvent | null {
-	if (source === null || revision === null) return null
-	return { type: `source`, revision, source }
+	if (source === null || revision === null || validation === null) return null
+	return { type: `source`, revision, source, validation }
+}
+
+const validationState = createFontEditorState({
+	key: `create-font/source-validation`,
+	isProduction: true,
+})
+function compileValidation(
+	sourceValue: EditorFontSource,
+): FontValidationStatus {
+	validationState.actions.load(sourceValue)
+	const compilation = validationState.read.compilation()
+	const issueCount = compilation.ok
+		? compilation.projectionWarnings.length +
+			compilation.ingestionWarnings.length
+		: compilation.stage === `projection-failed`
+			? compilation.projectionErrors.length +
+				compilation.projectionWarnings.length
+			: compilation.projectionWarnings.length +
+				compilation.ingestionErrors.length +
+				compilation.ingestionWarnings.length
+	return { ok: compilation.ok, issueCount }
 }
 
 async function refresh(manifest?: SourceManifest): Promise<void> {
@@ -149,6 +175,7 @@ async function refresh(manifest?: SourceManifest): Promise<void> {
 			)
 			source = assembled.value
 			revision = inventory.revision
+			validation = compileValidation(source)
 			const event = currentSourceEvent()
 			if (event !== null) broadcast(event)
 		} while (
@@ -197,10 +224,12 @@ async function save(
 		})
 	}
 	if (writes.length === 0) {
+		validation = compileValidation(request.source)
 		post(port, {
 			type: `saved`,
 			requestId: request.requestId,
 			revision: revision as string,
+			validation,
 		})
 		return
 	}
@@ -215,10 +244,12 @@ async function save(
 	for (const snapshot of result.units) sourceUnits.set(snapshot.path, snapshot)
 	source = request.source
 	revision = result.revision
+	validation = compileValidation(source)
 	post(port, {
 		type: `saved`,
 		requestId: request.requestId,
 		revision,
+		validation,
 	})
 	const event = currentSourceEvent()
 	if (event !== null) broadcast(event, port)

@@ -789,6 +789,13 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "style",
 		default: null,
 	})
+	const documentRevisionAtom = silo.atom<number>({
+		key: "documentRevision",
+		default: 0,
+	})
+	const markDocumentChanged = (): void => {
+		silo.setState(documentRevisionAtom, (revision) => revision + 1)
+	}
 
 	const axisIdsAtom = silo.atom<readonly AxisId[]>({
 		key: "axisIds",
@@ -828,7 +835,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		default: null,
 	})
 	const masterSupportStartAtoms = silo.atomFamily<number | null, MasterAxisKey>(
-		{ key: "masterSupportStart", default: null },
+		{
+			key: "masterSupportStart",
+			default: null,
+		},
 	)
 	const masterSupportEndAtoms = silo.atomFamily<number | null, MasterAxisKey>({
 		key: "masterSupportEnd",
@@ -841,7 +851,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const instanceCoordinateAtoms = silo.atomFamily<
 		number | null,
 		InstanceAxisKey
-	>({ key: "instanceCoordinate", default: null })
+	>({
+		key: "instanceCoordinate",
+		default: null,
+	})
 	const glyphAtoms = silo.atomFamily<GlyphState | null, GlyphId>({
 		key: "glyph",
 		default: null,
@@ -853,11 +866,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const glyphContourIdsAtoms = silo.atomFamily<
 		readonly ContourId[] | null,
 		GlyphId
-	>({ key: "glyphContourIds", default: null })
+	>({
+		key: "glyphContourIds",
+		default: null,
+	})
 	const contourPointIdsAtoms = silo.atomFamily<
 		readonly PointId[] | null,
 		GlyphContourKey
-	>({ key: "contourPointIds", default: null })
+	>({
+		key: "contourPointIds",
+		default: null,
+	})
 	const contourClosedAtoms = silo.atomFamily<boolean | null, GlyphContourKey>({
 		key: "contourClosed",
 		default: null,
@@ -869,7 +888,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const glyphLayerMasterIdsAtoms = silo.atomFamily<
 		readonly MasterId[] | null,
 		GlyphId
-	>({ key: "glyphLayerMasterIds", default: null })
+	>({
+		key: "glyphLayerMasterIds",
+		default: null,
+	})
 	const advanceWidthAtoms = silo.atomFamily<number | null, LayerKey>({
 		key: "advanceWidth",
 		default: null,
@@ -2726,30 +2748,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const editorSourceSelector = silo.selector<EditorFontSource | null>({
-		key: "editorSource",
-		get: ({ get }) => {
-			if (!get(editorStructureSelector).ok) return null
-			const metadata = get(metadataAtom)
-			const names = get(namesAtom)
-			const metrics = get(metricsAtom)
-			const style = get(styleAtom)
-			const defaultMasterId = get(defaultMasterIdAtom)
-			if (
-				metadata === null ||
-				names === null ||
-				metrics === null ||
-				style === null ||
-				defaultMasterId === null
-			)
-				return null
-
-			const axisIds = get(axisIdsAtom)
-			const axes: EditorFontSource["axes"][number][] = []
-			for (const axisId of axisIds) {
+	const editorAxisSourceSelectors = silo.selectorFamily<
+		EditorFontSource["axes"][number] | null,
+		AxisId
+	>({
+		key: "editorAxisSource",
+		get:
+			(axisId) =>
+			({ get }) => {
 				const axis = get(axisAtoms, axisId)
 				if (axis === null) return null
-				axes.push({
+				return deepFreeze({
 					id: axisId,
 					tag: axis.tag,
 					name: axis.name,
@@ -2759,35 +2768,57 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					...(axis.hidden ? { hidden: true } : {}),
 					...(axis.map === null ? {} : { map: axis.map }),
 				})
+			},
+	})
+	const editorAxesSourceSelector = silo.selector<
+		EditorFontSource["axes"] | null
+	>({
+		key: "editorAxesSource",
+		get: ({ get }) => {
+			const axes = []
+			for (const axisId of get(axisIdsAtom)) {
+				const axis = get(editorAxisSourceSelectors, axisId)
+				if (axis === null) return null
+				axes.push(axis)
 			}
+			return deepFreeze(axes)
+		},
+	})
 
-			const masterIds = get(masterIdsAtom)
-			const masters: EditorMasterSource[] = []
-			for (const masterId of masterIds) {
+	const editorMasterSourceSelectors = silo.selectorFamily<
+		EditorMasterSource | null,
+		MasterId
+	>({
+		key: "editorMasterSource",
+		get:
+			(masterId) =>
+			({ get }) => {
 				const master = get(masterAtoms, masterId)
 				if (master === null) return null
 				if (master.kind === "default") {
-					masters.push({ id: masterId, kind: "default", name: master.name })
-					continue
+					return deepFreeze({
+						id: masterId,
+						kind: "default",
+						name: master.name,
+					})
 				}
 				const location: Partial<Record<AxisId, number>> = {}
-				for (const axisId of axisIds) {
+				for (const axisId of get(axisIdsAtom)) {
 					const coordinate = get(masterCoordinateAtoms, [masterId, axisId])
 					if (coordinate !== null) location[axisId] = coordinate
 				}
 				if (master.supportKind === "non-intermediate") {
-					masters.push({
+					return deepFreeze({
 						id: masterId,
 						kind: "source",
 						name: master.name,
 						location,
 						support: { kind: "non-intermediate" },
 					})
-					continue
 				}
 				const start: Partial<Record<AxisId, number>> = {}
 				const end: Partial<Record<AxisId, number>> = {}
-				for (const axisId of axisIds) {
+				for (const axisId of get(axisIdsAtom)) {
 					const startCoordinate = get(masterSupportStartAtoms, [
 						masterId,
 						axisId,
@@ -2796,25 +2827,46 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					if (startCoordinate !== null) start[axisId] = startCoordinate
 					if (endCoordinate !== null) end[axisId] = endCoordinate
 				}
-				masters.push({
+				return deepFreeze({
 					id: masterId,
 					kind: "source",
 					name: master.name,
 					location,
 					support: { kind: "intermediate", start, end },
 				})
+			},
+	})
+	const editorMastersSourceSelector = silo.selector<
+		EditorFontSource["masters"] | null
+	>({
+		key: "editorMastersSource",
+		get: ({ get }) => {
+			const masters = []
+			for (const masterId of get(masterIdsAtom)) {
+				const master = get(editorMasterSourceSelectors, masterId)
+				if (master === null) return null
+				masters.push(master)
 			}
+			return deepFreeze(masters)
+		},
+	})
 
-			const instances: EditorFontSource["instances"][number][] = []
-			for (const instanceId of get(instanceIdsAtom)) {
+	const editorInstanceSourceSelectors = silo.selectorFamily<
+		EditorFontSource["instances"][number] | null,
+		InstanceId
+	>({
+		key: "editorInstanceSource",
+		get:
+			(instanceId) =>
+			({ get }) => {
 				const instance = get(instanceAtoms, instanceId)
 				if (instance === null) return null
 				const coordinates: Partial<Record<AxisId, number>> = {}
-				for (const axisId of axisIds) {
+				for (const axisId of get(axisIdsAtom)) {
 					const coordinate = get(instanceCoordinateAtoms, [instanceId, axisId])
 					if (coordinate !== null) coordinates[axisId] = coordinate
 				}
-				instances.push({
+				return deepFreeze({
 					id: instanceId,
 					name: instance.name,
 					coordinates,
@@ -2823,10 +2875,31 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						: { postScriptName: instance.postScriptName }),
 					...(instance.elidable ? { elidable: true } : {}),
 				})
+			},
+	})
+	const editorInstancesSourceSelector = silo.selector<
+		EditorFontSource["instances"] | null
+	>({
+		key: "editorInstancesSource",
+		get: ({ get }) => {
+			const instances = []
+			for (const instanceId of get(instanceIdsAtom)) {
+				const instance = get(editorInstanceSourceSelectors, instanceId)
+				if (instance === null) return null
+				instances.push(instance)
 			}
+			return deepFreeze(instances)
+		},
+	})
 
-			const glyphs: EditorGlyphSource[] = []
-			for (const glyphId of get(glyphIdsAtom)) {
+	const editorGlyphSourceSelectors = silo.selectorFamily<
+		EditorGlyphSource | null,
+		GlyphId
+	>({
+		key: "editorGlyphSource",
+		get:
+			(glyphId) =>
+			({ get }) => {
 				const glyph = get(glyphAtoms, glyphId)
 				const glyphEditor = get(glyphEditorAtoms, glyphId)
 				const contourIds = get(glyphContourIdsAtoms, glyphId)
@@ -2851,10 +2924,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						const point = get(pointAtoms, [glyphId, pointId])
 						if (point === null) return null
 						orderedPointIds.push(pointId)
-						points.push({
-							id: pointId,
-							mode: point.mode,
-						})
+						points.push({ id: pointId, mode: point.mode })
 					}
 					contours.push({ id: contourId, closed, points })
 				}
@@ -2869,7 +2939,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							pointId,
 						])
 						if (position === null) continue
-						const { x, y } = position
 						const incomingX = get(incomingHandleXAtoms, [
 							masterId,
 							glyphId,
@@ -2912,7 +2981,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					if (advanceWidth === null || leftSideBearing === null) return null
 					layers.push({ masterId, advanceWidth, leftSideBearing, points })
 				}
-				glyphs.push({
+				return deepFreeze({
 					id: glyphId,
 					name: glyph.name,
 					export: glyph.export,
@@ -2922,6 +2991,37 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					contours,
 					layers,
 				})
+			},
+	})
+
+	const editorSourceSelector = silo.selector<EditorFontSource | null>({
+		key: "editorSource",
+		get: ({ get }) => {
+			if (!get(editorStructureSelector).ok) return null
+			const metadata = get(metadataAtom)
+			const names = get(namesAtom)
+			const metrics = get(metricsAtom)
+			const style = get(styleAtom)
+			const defaultMasterId = get(defaultMasterIdAtom)
+			if (
+				metadata === null ||
+				names === null ||
+				metrics === null ||
+				style === null ||
+				defaultMasterId === null
+			)
+				return null
+
+			const axes = get(editorAxesSourceSelector)
+			const masters = get(editorMastersSourceSelector)
+			const instances = get(editorInstancesSourceSelector)
+			if (axes === null || masters === null || instances === null) return null
+
+			const glyphs: EditorGlyphSource[] = []
+			for (const glyphId of get(glyphIdsAtom)) {
+				const glyph = get(editorGlyphSourceSelectors, glyphId)
+				if (glyph === null) return null
+				glyphs.push(glyph)
 			}
 
 			const cmap: EditorCmapEntrySource[] = []
@@ -4371,6 +4471,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	return {
 		silo,
 		atoms: {
+			documentRevision: documentRevisionAtom,
 			metadata: metadataAtom,
 			names: namesAtom,
 			metrics: metricsAtom,
@@ -4406,6 +4507,13 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 		selectors: {
 			editorSource: editorSourceSelector,
+			editorAxisSource: editorAxisSourceSelectors,
+			editorAxesSource: editorAxesSourceSelector,
+			editorMasterSource: editorMasterSourceSelectors,
+			editorMastersSource: editorMastersSourceSelector,
+			editorInstanceSource: editorInstanceSourceSelectors,
+			editorInstancesSource: editorInstancesSourceSelector,
+			editorGlyphSource: editorGlyphSourceSelectors,
 			editorStructure: editorStructureSelector,
 			axisSource: axisSourceSelectors,
 			axesSource: axesSourceSelector,
@@ -4447,6 +4555,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 		glyphHistoryTimelines,
 		actions: {
+			markDocumentChanged,
 			load(source: EditorFontSource): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)
 				runReplaceFont(source)
@@ -4460,42 +4569,55 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				for (const glyphId of nextGlyphIds) {
 					silo.clearTimeline(glyphHistoryTimelines, glyphId)
 				}
+				markDocumentChanged()
 			},
 			movePoints(input: MovePointsInput): void {
 				runMovePoints(input)
+				markDocumentChanged()
 			},
 			setHorizontalMetrics(input: SetHorizontalMetricsInput): void {
 				runSetHorizontalMetrics(input)
+				markDocumentChanged()
 			},
 			moveHandle(input: MoveHandleInput): void {
 				runMoveHandle(input)
+				markDocumentChanged()
 			},
 			transformControls(input: TransformControlsInput): void {
 				runTransformControls(input)
+				markDocumentChanged()
 			},
 			setNodeMode(input: SetNodeModeInput): void {
 				runSetNodeMode(input)
+				markDocumentChanged()
 			},
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
+				markDocumentChanged()
 			},
 			splitSegment(input: SplitSegmentInput): void {
 				runSplitSegment(input)
+				markDocumentChanged()
 			},
 			reverseContour(input: ReverseContourInput): void {
 				runReverseContour(input)
+				markDocumentChanged()
 			},
 			makeNodeFirst(input: MakeNodeFirstInput): void {
 				runMakeNodeFirst(input)
+				markDocumentChanged()
 			},
 			createContour(input: CreateContourInput): void {
 				runCreateContour(input)
+				markDocumentChanged()
 			},
 			setContourClosed(input: SetContourClosedInput): void {
 				runSetContourClosed(input)
+				markDocumentChanged()
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
 				runDeleteSelection(input)
+				markDocumentChanged()
 			},
 		},
 		read: {
@@ -4507,6 +4629,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.getState(layerNodeSelectors, [masterId, glyphId, pointId]),
 			glyphSource: (glyphId: GlyphId) =>
 				silo.getState(glyphSourceSelectors, glyphId),
+			editorGlyphSource: (glyphId: GlyphId) =>
+				silo.getState(editorGlyphSourceSelectors, glyphId),
 			variationModel: () => silo.getState(variationModelSelector),
 			fontSource: () => silo.getState(fontSourceSelector),
 			compilation: (): FontCompilation =>
@@ -4515,10 +4639,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		undo: (glyphId: GlyphId): void => {
 			assertKnownGlyphHistory(glyphId)
 			silo.undo(glyphHistoryTimelines, glyphId)
+			markDocumentChanged()
 		},
 		redo: (glyphId: GlyphId): void => {
 			assertKnownGlyphHistory(glyphId)
 			silo.redo(glyphHistoryTimelines, glyphId)
+			markDocumentChanged()
 		},
 		clearHistory: (glyphId?: GlyphId): void => {
 			if (glyphId !== undefined) {

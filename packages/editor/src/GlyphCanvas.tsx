@@ -56,7 +56,7 @@ import {
 	type SelectionBounds,
 	type SelectionTransformResult,
 } from "./outline-selection.ts"
-import { useI, useO } from "./state-hooks.ts"
+import { useI, useO, useOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
@@ -122,8 +122,6 @@ interface CanvasView {
 
 export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
 	const caretIndex = useO(workspace.ui.caretIndex)
@@ -134,6 +132,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const location = useO(workspace.ui.previewLocation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const metrics =
+		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
+	const metadata =
+		useO(workspace.font.atoms.metadata) ?? workspace.document.metadata
+	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const masterIds = useO(workspace.font.atoms.masterIds)
 	const layer = useO(workspace.ui.activeLayer)
 	const selection = useO(workspace.ui.selection)
 	const setSelection = useI(workspace.ui.selection)
@@ -152,11 +158,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const { ref, width, height } = useElementSize<HTMLElement>()
-	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
-	const master = source.masters.find((item) => item.id === activeMasterId)
 	const layout = useMemo(
-		() => layoutTextRun(run, source.metrics, source.metadata.unitsPerEm),
-		[run, source.metadata.unitsPerEm, source.metrics],
+		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
+		[run, metadata.unitsPerEm, metrics],
 	)
 	const editingPosition = layout.glyphs.find(
 		(position) => position.item.textStart === editingTextIndex,
@@ -243,7 +247,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const selectedControls = resolveSelectionControls(allPoints, selection)
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
-	const metrics = source.metrics
 	const metricGuides = useMemo(
 		() => resolveVerticalMetricGuides(metrics),
 		[metrics],
@@ -403,10 +406,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		}
 	}
 	const penCoordinates = (x: number, y: number) =>
-		source.masters.map((sourceMaster) => ({
-			masterId: sourceMaster.id,
+		masterIds.map((sourceMasterId) => ({
+			masterId: sourceMasterId,
 			x:
-				sourceMaster.id === activeMasterId
+				sourceMasterId === activeMasterId
 					? x
 					: Math.round(
 							500 + (x - 500) * (master?.kind === "default" ? 0.94 : 1 / 0.94),
@@ -773,7 +776,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					</span>
 				</canvas-title>
 				<canvas-controls>
-					{source.axes.map((axis) => {
+					{axes.map((axis) => {
 						const coordinate = location[axis.id] ?? axis.default
 						return (
 							<label key={axis.id}>

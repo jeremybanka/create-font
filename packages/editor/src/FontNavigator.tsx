@@ -1,16 +1,15 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
-import { useO } from "./state-hooks.ts"
+import { useO, useOF } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
 	readonly workspace: EditorWorkspace
 }
 
 export function FontNavigator({ workspace }: FontNavigatorProps) {
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const location = useO(workspace.ui.previewLocation)
+	const masterIds = useO(workspace.font.atoms.masterIds)
+	const instanceIds = useO(workspace.font.atoms.instanceIds)
 
 	return (
 		<font-navigator className={css.class}>
@@ -18,23 +17,16 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 				<navigation-section>
 					<section-heading>
 						<span>Masters</span>
-						<data value={source.masters.length}>{source.masters.length}</data>
+						<data value={masterIds.length}>{masterIds.length}</data>
 					</section-heading>
 					<ul>
-						{source.masters.map((master) => (
-							<li key={master.id}>
-								<button
-									type="button"
-									aria-pressed={master.id === activeMasterId}
-									onClick={() => workspace.actions.selectMaster(master.id)}
-								>
-									<master-swatch data-master={master.kind} />
-									<span>{master.name}</span>
-									<small>
-										{master.kind === "default" ? "Default" : "Source"}
-									</small>
-								</button>
-							</li>
+						{masterIds.map((masterId) => (
+							<MasterNavigationItem
+								key={masterId}
+								workspace={workspace}
+								masterId={masterId}
+								active={masterId === activeMasterId}
+							/>
 						))}
 					</ul>
 				</navigation-section>
@@ -42,39 +34,91 @@ export function FontNavigator({ workspace }: FontNavigatorProps) {
 				<navigation-section>
 					<section-heading>
 						<span>Instances</span>
-						<data value={source.instances.length}>
-							{source.instances.length}
-						</data>
+						<data value={instanceIds.length}>{instanceIds.length}</data>
 					</section-heading>
 					<ul>
-						{source.instances.map((instance) => {
-							const isActive = source.axes.every(
-								(axis) =>
-									(instance.coordinates[axis.id] ?? axis.default) ===
-									(location[axis.id] ?? axis.default),
-							)
-							const locationLabel = source.axes
-								.map((axis) => instance.coordinates[axis.id] ?? axis.default)
-								.join("/")
-							return (
-								<li key={instance.id}>
-									<button
-										type="button"
-										aria-pressed={isActive}
-										onClick={() =>
-											workspace.actions.selectInstance(instance.id)
-										}
-									>
-										<instance-mark />
-										<span>{instance.name}</span>
-										<small>{locationLabel}</small>
-									</button>
-								</li>
-							)
-						})}
+						{instanceIds.map((instanceId) => (
+							<InstanceNavigationItem
+								key={instanceId}
+								workspace={workspace}
+								instanceId={instanceId}
+							/>
+						))}
 					</ul>
 				</navigation-section>
 			</nav>
 		</font-navigator>
+	)
+}
+
+function MasterNavigationItem({
+	workspace,
+	masterId,
+	active,
+}: {
+	readonly workspace: EditorWorkspace
+	readonly masterId: Parameters<EditorWorkspace["actions"]["selectMaster"]>[0]
+	readonly active: boolean
+}) {
+	const master = useOF(workspace.font.selectors.editorMasterSource, masterId)
+	return (
+		<master-navigation-item style={{ display: "contents" }}>
+			{master === null ? null : (
+				<li>
+					<button
+						type="button"
+						aria-pressed={active}
+						onClick={() => workspace.actions.selectMaster(masterId)}
+					>
+						<master-swatch data-master={master.kind} />
+						<span>{master.name}</span>
+						<small>{master.kind === "default" ? "Default" : "Source"}</small>
+					</button>
+				</li>
+			)}
+		</master-navigation-item>
+	)
+}
+
+function InstanceNavigationItem({
+	workspace,
+	instanceId,
+}: {
+	readonly workspace: EditorWorkspace
+	readonly instanceId: Parameters<
+		EditorWorkspace["actions"]["selectInstance"]
+	>[0]
+}) {
+	const instance = useOF(
+		workspace.font.selectors.editorInstanceSource,
+		instanceId,
+	)
+	const location = useO(workspace.ui.previewLocation)
+	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const coordinates = instance?.coordinates ?? {}
+	const isActive = axes.every(
+		(axis) =>
+			(coordinates[axis.id] ?? axis.default) ===
+			(location[axis.id] ?? axis.default),
+	)
+	const locationLabel = axes
+		.map((axis) => coordinates[axis.id] ?? axis.default)
+		.join("/")
+	return (
+		<instance-navigation-item style={{ display: "contents" }}>
+			{instance === null ? null : (
+				<li>
+					<button
+						type="button"
+						aria-pressed={isActive}
+						onClick={() => workspace.actions.selectInstance(instanceId)}
+					>
+						<instance-mark />
+						<span>{instance.name}</span>
+						<small>{locationLabel}</small>
+					</button>
+				</li>
+			)}
+		</instance-navigation-item>
 	)
 }

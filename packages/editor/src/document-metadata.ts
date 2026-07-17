@@ -108,7 +108,7 @@ export function installFavicon(documentValue: Document, href: string): void {
 }
 
 export function useEditorDocumentMetadata(
-	source: EditorFontSource,
+	faviconHref: string,
 	view: EditorViewName,
 	canvasText: string,
 ): void {
@@ -117,6 +117,6 @@ export function useEditorDocumentMetadata(
 	}, [canvasText, view])
 
 	useEffect(() => {
-		installFavicon(document, createFontFaviconHref(source))
-	}, [source])
+		installFavicon(document, faviconHref)
+	}, [faviconHref])
 }

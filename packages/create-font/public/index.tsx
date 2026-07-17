@@ -10,6 +10,7 @@ import {
 	type BootstrapState,
 } from "./bootstrap-state.ts"
 import type {
+	FontValidationStatus,
 	SourceSessionEvent,
 	SourceSessionRequest,
 } from "./source-session.ts"
@@ -21,6 +22,7 @@ let port: MessagePort | null = null
 let revision: string | null = null
 let saveQueue = Promise.resolve()
 let renderedSource = false
+let currentSource: EditorFontSource | null = null
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
 const pending = new Map<
 	string,
@@ -54,15 +56,24 @@ function showBootstrapError(message: string): void {
 	renderBootstrap()
 }
 
-function showSource(source: EditorFontSource): void {
+function showSource(
+	source: EditorFontSource,
+	validation: FontValidationStatus,
+): void {
 	renderedSource = true
+	currentSource = source
 	render(
-		<EditorApplicationRoot source={source} onSourceChange={saveSource} />,
+		<EditorApplicationRoot
+			source={source}
+			validation={validation}
+			onSourceChange={saveSource}
+		/>,
 		applicationMount,
 	)
 }
 
 function saveSource(source: EditorFontSource): Promise<void> {
+	currentSource = source
 	saveQueue = saveQueue
 		.catch(() => undefined)
 		.then(
@@ -96,10 +107,11 @@ function handleSourceSessionEvent(
 	switch (event.type) {
 		case `source`:
 			revision = event.revision
-			showSource(event.source)
+			showSource(event.source, event.validation)
 			break
 		case `saved`: {
 			revision = event.revision
+			if (currentSource !== null) showSource(currentSource, event.validation)
 			const request = pending.get(event.requestId)
 			pending.delete(event.requestId)
 			request?.resolve()
