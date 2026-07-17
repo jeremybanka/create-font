@@ -439,6 +439,21 @@ export interface SetContourClosedInput {
 	readonly closed: boolean
 }
 
+export interface CloseContourInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	/** Omit for a click closure that preserves the first point's authored handles. */
+	readonly firstPoint?: {
+		readonly pointId: PointId
+		readonly mode: "soft"
+		readonly coordinates: readonly {
+			readonly masterId: MasterId
+			readonly incoming: EditorHandleVectorSource
+			readonly outgoing: EditorHandleVectorSource
+		}[]
+	}
+}
+
 export interface DeleteSelectionInput {
 	readonly masterId: MasterId
 	readonly glyphId: GlyphId
@@ -4338,6 +4353,23 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				if (coordinate.outgoing !== undefined) {
 					assertFiniteVector(coordinate.outgoing, "Outgoing handle")
 				}
+				if (input.point.mode === "soft") {
+					if (
+						coordinate.incoming === undefined &&
+						coordinate.outgoing === undefined
+					) {
+						throw new TypeError("A soft node requires at least one handle.")
+					}
+					if (
+						coordinate.incoming !== undefined &&
+						coordinate.outgoing !== undefined &&
+						!handlesShareOppositeRay(coordinate.incoming, coordinate.outgoing)
+					) {
+						throw new TypeError(
+							"A soft node's handles must be collinear and opposite.",
+						)
+					}
+				}
 			}
 
 			set(
@@ -4393,6 +4425,106 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				throw new TypeError("A closed contour requires at least three points.")
 			}
 			set(contourClosedAtoms, [input.glyphId, input.contourId], input.closed)
+		},
+	})
+
+	const closeContourTransaction = silo.transaction<
+		(input: CloseContourInput) => void
+	>({
+		key: "closeContour",
+		do: ({ get, set }, input) => {
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || closed === null || layerMasterIds === null) {
+				throw new TypeError(
+					`Unknown contour ${input.contourId} in glyph ${input.glyphId}.`,
+				)
+			}
+			if (closed) throw new TypeError("Contour is already closed.")
+			if (pointIds.length < 3) {
+				throw new TypeError("A closed contour requires at least three points.")
+			}
+			const firstPointId = pointIds[0]
+			if (
+				firstPointId === undefined ||
+				get(pointAtoms, [input.glyphId, firstPointId]) === null
+			) {
+				throw new TypeError("The contour's first point is missing.")
+			}
+			for (const masterId of layerMasterIds) {
+				const firstPoint = get(layerNodeSelectors, [
+					masterId,
+					input.glyphId,
+					firstPointId,
+				])
+				if (!firstPoint.ok) {
+					throw new TypeError(
+						`The contour's first point is invalid in layer ${masterId}.`,
+					)
+				}
+			}
+
+			const replacement = input.firstPoint
+			if (replacement !== undefined) {
+				if (replacement.pointId !== firstPointId) {
+					throw new TypeError(
+						`Point ${replacement.pointId} is not the contour's first point.`,
+					)
+				}
+				if (replacement.mode !== "soft") {
+					throw new TypeError('A replacement closure point must be "soft".')
+				}
+				assertUnique(
+					replacement.coordinates.map((coordinate) => coordinate.masterId),
+					"Closure point coordinate master IDs",
+				)
+				const coordinateIds = new Set(
+					replacement.coordinates.map((coordinate) => coordinate.masterId),
+				)
+				if (
+					coordinateIds.size !== layerMasterIds.length ||
+					layerMasterIds.some((masterId) => !coordinateIds.has(masterId))
+				) {
+					throw new TypeError(
+						"A replacement closure point requires handles for every glyph layer.",
+					)
+				}
+				for (const coordinate of replacement.coordinates) {
+					assertFiniteVector(coordinate.incoming, "Incoming handle")
+					assertFiniteVector(coordinate.outgoing, "Outgoing handle")
+					if (
+						!handlesShareOppositeRay(coordinate.incoming, coordinate.outgoing)
+					) {
+						throw new TypeError(
+							"A replacement closure point's handles must be collinear and opposite.",
+						)
+					}
+				}
+			}
+
+			if (replacement !== undefined) {
+				set(
+					pointAtoms,
+					[input.glyphId, firstPointId],
+					deepFreeze({ mode: replacement.mode }),
+				)
+				for (const coordinate of replacement.coordinates) {
+					const atomKey: LayerPointKey = [
+						coordinate.masterId,
+						input.glyphId,
+						firstPointId,
+					]
+					set(incomingHandleXAtoms, atomKey, coordinate.incoming.x)
+					set(incomingHandleYAtoms, atomKey, coordinate.incoming.y)
+					set(outgoingHandleXAtoms, atomKey, coordinate.outgoing.x)
+					set(outgoingHandleYAtoms, atomKey, coordinate.outgoing.y)
+				}
+			}
+			set(contourClosedAtoms, [input.glyphId, input.contourId], true)
 		},
 	})
 
@@ -4750,6 +4882,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
 	const runCreateContour = silo.runTransaction(createContourTransaction)
 	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
+	const runCloseContour = silo.runTransaction(closeContourTransaction)
 	const runPasteContours = silo.runTransaction(pasteContoursTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
 
@@ -4843,6 +4976,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			makeNodeFirst: makeNodeFirstTransaction,
 			createContour: createContourTransaction,
 			setContourClosed: setContourClosedTransaction,
+			closeContour: closeContourTransaction,
 			pasteContours: pasteContoursTransaction,
 			deleteSelection: deleteSelectionTransaction,
 		},
@@ -4911,6 +5045,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			setContourClosed(input: SetContourClosedInput): void {
 				runSetContourClosed(input)
+				markDocumentChanged()
+			},
+			closeContour(input: CloseContourInput): void {
+				runCloseContour(input)
 				markDocumentChanged()
 			},
 			pasteContours(input: PasteContoursInput): void {

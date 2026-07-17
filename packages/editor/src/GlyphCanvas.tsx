@@ -73,6 +73,13 @@ import {
 	type SelectionBounds,
 	type SelectionTransformResult,
 } from "./outline-selection.ts"
+import {
+	penLayerCoordinates,
+	penPointerAction,
+	resolvePenGesture,
+	type PenGestureResolution,
+	type PenPoint,
+} from "./pen-gesture.ts"
 import { useI, useO, useOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
@@ -114,6 +121,17 @@ interface DraggedHandle {
 	readonly pointId: PointId
 	readonly handle: EditorHandleKind
 	readonly vector: Readonly<{ x: number; y: number }>
+}
+
+interface PenPlacementGesture {
+	readonly pointerId: number
+	readonly point: PenPoint
+	readonly snaps: readonly ActiveSnap[]
+	readonly downScreen: PenPoint
+	readonly closingPointId: PointId | null
+	readonly captureTarget: HTMLCanvasElement | null
+	readonly captureCancelListener: ((event: PointerEvent) => void) | null
+	currentScreen: PenPoint
 }
 
 interface SelectionBox {
@@ -210,6 +228,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		x: number
 		y: number
 	}> | null>(null)
+	const [penGesture, setPenGesture] = useState<PenPlacementGesture | null>(null)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
 	const [transformPreview, setTransformPreview] =
@@ -220,6 +239,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const penEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
+	const penContourResumeRef = useRef<ContourId | null>(null)
+	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const pointDragRef = useRef<PointDrag | null>(null)
 	const lastGroupDragTarget = useRef<LiveGroupDragTarget | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
@@ -374,7 +395,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		)
 	}
 	const pointerInEditingGlyph = (
-		event: KonvaEventObject<MouseEvent | DragEvent>,
+		event: KonvaEventObject<MouseEvent | PointerEvent | DragEvent>,
 	): Readonly<{ x: number; y: number }> | null => {
 		if (editingPosition === undefined) return null
 		const pointer = event.target.getStage()?.getPointerPosition() ?? {
@@ -386,6 +407,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			y: editingPosition.baseline - (pointer.y - view.y) / worldScale,
 		}
 	}
+	const pointerOnCanvas = (
+		event: KonvaEventObject<MouseEvent | PointerEvent | DragEvent>,
+	): PenPoint =>
+		event.target.getStage()?.getPointerPosition() ?? {
+			x: event.evt.offsetX,
+			y: event.evt.offsetY,
+		}
 	const currentPenContour =
 		penContourId === null
 			? undefined
@@ -411,15 +439,61 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			worldScale,
 			projectionCandidates,
 		})
+	const penGestureResolution =
+		penGesture === null
+			? null
+			: resolvePenGesture({
+					downScreen: penGesture.downScreen,
+					currentScreen: penGesture.currentScreen,
+					worldScale,
+				})
 	const penPlacement =
-		activeTool === "pen" && editingTextIndex !== null && penPointer !== null
-			? resolveCanvasGesturePoint(
-					"point:pen-placement-preview" as PointId,
-					penAnchor,
-					penPointer,
-					shiftHeld,
-				)
-			: null
+		activeTool !== "pen" || editingTextIndex === null
+			? null
+			: penGesture !== null
+				? {
+						x: penGesture.point.x,
+						y: penGesture.point.y,
+						snaps: penGesture.snaps,
+					}
+				: penPointer === null
+					? null
+					: resolveCanvasGesturePoint(
+							"point:pen-placement-preview" as PointId,
+							penAnchor,
+							penPointer,
+							shiftHeld,
+						)
+	const penHandles = penGestureResolution?.handles ?? null
+	const penCandidateNode =
+		penPlacement === null
+			? null
+			: {
+					pointId:
+						penGesture?.closingPointId ??
+						("point:pen-placement-preview" as PointId),
+					x: penPlacement.x,
+					y: penPlacement.y,
+					mode: penGestureResolution?.mode ?? ("hard" as const),
+					...(penHandles === null ? {} : penHandles),
+				}
+	let penPendingPath = ""
+	if (penCandidateNode !== null && penAnchor !== null) {
+		if (
+			penGesture?.closingPointId !== null &&
+			penGesture?.closingPointId !== undefined &&
+			currentPenContour !== undefined
+		) {
+			penPendingPath = editorContourToPath(
+				currentPenContour.nodes.map((node, index) =>
+					index === 0 ? { ...node, ...penCandidateNode } : node,
+				),
+				true,
+			)
+		} else {
+			penPendingPath = editorContourToPath([penAnchor, penCandidateNode], false)
+		}
+	}
 	const visibleSnaps =
 		activeTool === "pen" ? (penPlacement?.snaps ?? []) : activeSnaps
 	const applyPointDrag = (
@@ -484,8 +558,29 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}, [])
 
 	useEffect(() => {
+		const gesture = penGestureRef.current
+		penGestureRef.current = null
+		if (
+			gesture !== null &&
+			gesture.captureTarget !== null &&
+			gesture.captureCancelListener !== null
+		) {
+			gesture.captureTarget.removeEventListener(
+				"pointercancel",
+				gesture.captureCancelListener,
+			)
+			gesture.captureTarget.removeEventListener(
+				"lostpointercapture",
+				gesture.captureCancelListener,
+			)
+		}
+		if (gesture?.captureTarget?.hasPointerCapture(gesture.pointerId)) {
+			gesture.captureTarget.releasePointerCapture(gesture.pointerId)
+		}
 		setPenContourId(null)
 		setPenPointer(null)
+		setPenGesture(null)
+		penContourResumeRef.current = null
 		setActiveSnaps([])
 		pointDragRef.current = null
 		setGroupDrag(null)
@@ -507,6 +602,31 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		live.node.position({ x: control.x, y: control.y })
 		live.node.getLayer()?.batchDraw()
 	}, [contours, groupDrag, transformPreview])
+
+	useEffect(() => {
+		if (penContourId !== null) {
+			const activeContour = contours.find(
+				(contour) => contour.id === penContourId,
+			)
+			if (activeContour === undefined || activeContour.closed) {
+				setPenContourId(null)
+			} else {
+				penContourResumeRef.current = penContourId
+			}
+			return
+		}
+		const resumable = contours.find(
+			(contour) =>
+				contour.id === penContourResumeRef.current && !contour.closed,
+		)
+		if (
+			resumable !== undefined &&
+			activeTool === "pen" &&
+			editingTextIndex !== null
+		) {
+			setPenContourId(resumable.id)
+		}
+	}, [activeTool, contours, editingTextIndex, penContourId])
 
 	useEffect(() => {
 		const drag = pointDragRef.current
@@ -606,85 +726,173 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			}
 		}
 	}
-	const penCoordinates = (x: number, y: number) =>
-		masterIds.map((sourceMasterId) => ({
-			masterId: sourceMasterId,
-			x:
-				sourceMasterId === activeMasterId
-					? x
-					: Math.round(
-							500 + (x - 500) * (master?.kind === "default" ? 0.94 : 1 / 0.94),
-						),
-			y,
-		}))
-	const addPenPoint = (x: number, y: number): void => {
-		const roundedX = Math.round(x)
-		const roundedY = Math.round(y)
-		const currentContour = contours.find(
-			(contour) => contour.id === penContourId,
-		)
-		const firstPoint = currentContour?.nodes[0]
-		if (
-			penContourId !== null &&
-			currentContour !== undefined &&
-			currentContour.nodes.length >= 3 &&
-			firstPoint !== undefined &&
-			Math.hypot(firstPoint.x - roundedX, firstPoint.y - roundedY) <= 40
-		) {
-			workspace.font.actions.setContourClosed({
-				glyphId: activeGlyphId,
-				contourId: penContourId,
-				closed: true,
-			})
-			setPenContourId(null)
-			setPenPointer(null)
-			return
-		}
+	const penLayerTransforms = masterIds.map((sourceMasterId) => ({
+		masterId: sourceMasterId,
+		xScale:
+			sourceMasterId === activeMasterId
+				? 1
+				: master?.kind === "default"
+					? 0.94
+					: 1 / 0.94,
+	}))
+	const penCoordinates = (point: PenPoint, gesture: PenGestureResolution) =>
+		penLayerCoordinates(point, gesture, penLayerTransforms)
+	const commitPenPoint = (
+		point: PenPoint,
+		gesture: PenGestureResolution,
+	): void => {
 		const pointId = nextPenEntityId("point") as PointId
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
 			workspace.font.actions.createContour({
 				glyphId: activeGlyphId,
 				contourId,
-				point: { id: pointId, mode: "hard" },
-				coordinates: penCoordinates(roundedX, roundedY),
+				point: { id: pointId, mode: gesture.mode },
+				coordinates: penCoordinates(point, gesture),
 			})
+			penContourResumeRef.current = contourId
 			setPenContourId(contourId)
 		} else {
 			workspace.font.actions.insertPoint({
 				glyphId: activeGlyphId,
 				contourId: penContourId,
-				point: { id: pointId, mode: "hard" },
-				coordinates: penCoordinates(roundedX, roundedY),
+				point: { id: pointId, mode: gesture.mode },
+				coordinates: penCoordinates(point, gesture),
 			})
+			penContourResumeRef.current = penContourId
 		}
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
 		setShowNodes(true)
 		setPenPointer(null)
 	}
-	const placePenPoint = (event: KonvaEventObject<MouseEvent>): void => {
-		const pointer = pointerInEditingGlyph(event)
-		if (pointer === null) return
-		const placement = resolveCanvasGesturePoint(
-			"point:pen-placement-preview" as PointId,
-			penAnchor,
-			pointer,
-			event.evt.shiftKey,
+	const commitPenClosure = (gesture: PenGestureResolution): void => {
+		if (
+			penContourId === null ||
+			currentPenContour === undefined ||
+			currentPenContour.nodes.length < 3
 		)
-		addPenPoint(placement.x, placement.y)
-	}
-	const previewPenPoint = (event: KonvaEventObject<MouseEvent>): void => {
-		setPenPointer(pointerInEditingGlyph(event))
-		if (shiftHeld !== event.evt.shiftKey) setShiftHeld(event.evt.shiftKey)
-	}
-	const closePenContour = (contourId: ContourId): void => {
-		workspace.font.actions.setContourClosed({
+			return
+		const firstPoint = currentPenContour.nodes[0]
+		if (firstPoint === undefined) return
+		penContourResumeRef.current = penContourId
+		workspace.font.actions.closeContour({
 			glyphId: activeGlyphId,
-			contourId,
-			closed: true,
+			contourId: penContourId,
+			...(gesture.handles === null
+				? {}
+				: {
+						firstPoint: {
+							pointId: firstPoint.pointId,
+							mode: "soft" as const,
+							coordinates: penCoordinates(firstPoint, gesture).map(
+								({ masterId, incoming, outgoing }) => ({
+									masterId,
+									incoming: incoming!,
+									outgoing: outgoing!,
+								}),
+							),
+						},
+					}),
 		})
 		setPenContourId(null)
 		setPenPointer(null)
+		setSelection(Object.freeze([{ kind: "node", pointId: firstPoint.pointId }]))
+		setShowNodes(true)
+	}
+	const releasePenCapture = (gesture: PenPlacementGesture): void => {
+		if (
+			gesture.captureTarget !== null &&
+			gesture.captureCancelListener !== null
+		) {
+			gesture.captureTarget.removeEventListener(
+				"pointercancel",
+				gesture.captureCancelListener,
+			)
+			gesture.captureTarget.removeEventListener(
+				"lostpointercapture",
+				gesture.captureCancelListener,
+			)
+		}
+		if (gesture.captureTarget?.hasPointerCapture(gesture.pointerId)) {
+			gesture.captureTarget.releasePointerCapture(gesture.pointerId)
+		}
+	}
+	const cancelPenGesture = (): void => {
+		const gesture = penGestureRef.current
+		penGestureRef.current = null
+		setPenGesture(null)
+		setPenPointer(null)
+		if (gesture !== null) releasePenCapture(gesture)
+	}
+	const beginPenGesture = (
+		event: KonvaEventObject<PointerEvent>,
+		closingPoint?: Readonly<{ pointId: PointId; x: number; y: number }>,
+	): void => {
+		if (editingTextIndex === null || activeTool !== "pen") return
+		if (penGestureRef.current !== null) return
+		if (event.evt.button !== 0 || !event.evt.isPrimary) return
+		event.cancelBubble = true
+		const rawPoint = pointerInEditingGlyph(event)
+		if (rawPoint === null) return
+		const placement =
+			closingPoint === undefined
+				? resolveCanvasGesturePoint(
+						"point:pen-placement-preview" as PointId,
+						penAnchor,
+						rawPoint,
+						event.evt.shiftKey,
+					)
+				: { x: closingPoint.x, y: closingPoint.y, snaps: [] }
+		const nativeTarget =
+			event.evt.target instanceof HTMLCanvasElement ? event.evt.target : null
+		const captureCancelListener = (nativeEvent: PointerEvent): void => {
+			if (nativeEvent.pointerId === event.evt.pointerId) cancelPenGesture()
+		}
+		const gesture: PenPlacementGesture = {
+			pointerId: event.evt.pointerId,
+			point: { x: placement.x, y: placement.y },
+			snaps: placement.snaps,
+			downScreen: pointerOnCanvas(event),
+			currentScreen: pointerOnCanvas(event),
+			closingPointId: closingPoint?.pointId ?? null,
+			captureTarget: nativeTarget,
+			captureCancelListener,
+		}
+		penGestureRef.current = gesture
+		nativeTarget?.addEventListener("pointercancel", captureCancelListener)
+		nativeTarget?.addEventListener("lostpointercapture", captureCancelListener)
+		nativeTarget?.setPointerCapture(event.evt.pointerId)
+		setPenGesture(gesture)
+		setPenPointer(null)
+	}
+	const updatePenPointer = (event: KonvaEventObject<PointerEvent>): void => {
+		const gesture = penGestureRef.current
+		if (gesture !== null) {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			gesture.currentScreen = pointerOnCanvas(event)
+			setPenGesture({ ...gesture })
+			return
+		}
+		setPenPointer(pointerInEditingGlyph(event))
+		if (shiftHeld !== event.evt.shiftKey) setShiftHeld(event.evt.shiftKey)
+	}
+	const finishPenGesture = (event: KonvaEventObject<PointerEvent>): void => {
+		const gesture = penGestureRef.current
+		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
+		gesture.currentScreen = pointerOnCanvas(event)
+		const resolution = resolvePenGesture({
+			downScreen: gesture.downScreen,
+			currentScreen: gesture.currentScreen,
+			worldScale,
+		})
+		penGestureRef.current = null
+		setPenGesture(null)
+		if (gesture.closingPointId === null) {
+			commitPenPoint(gesture.point, resolution)
+		} else {
+			commitPenClosure(resolution)
+		}
+		releasePenCapture(gesture)
 	}
 	const roundedTransform = (
 		result: SelectionTransformResult,
@@ -954,14 +1162,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}
 	const splitContourSegment = (
 		contour: (typeof visibleContours)[number],
-		event: KonvaEventObject<MouseEvent>,
+		event: KonvaEventObject<MouseEvent | PointerEvent>,
 	): void => {
 		const pointer = pointerInEditingGlyph(event)
 		if (pointer === null) return
 		const nearest = nearestEditorSegment(contour.nodes, contour.closed, pointer)
 		if (nearest === null || nearest.amount <= 0.001 || nearest.amount >= 0.999)
 			return
-		event.cancelBubble = true
 		const pointId = nextPenEntityId("point") as PointId
 		workspace.font.actions.splitSegment({
 			glyphId: activeGlyphId,
@@ -970,6 +1177,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			pointId,
 			amount: nearest.amount,
 		})
+		penContourResumeRef.current = null
 		setPenContourId(null)
 		setPenPointer(null)
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
@@ -1154,6 +1362,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					setActiveSnaps([])
 					return
 				}
+				if (event.key === "Escape" && penGestureRef.current !== null) {
+					event.preventDefault()
+					cancelPenGesture()
+					return
+				}
 				if (event.key === "Escape" && transformDrag !== null) {
 					event.preventDefault()
 					setTransformDrag(null)
@@ -1294,8 +1507,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							? `${layout.lineCount} line${layout.lineCount === 1 ? "" : "s"} · double-click a glyph to edit`
 							: activeTool === "pen"
 								? penContourId === null
-									? "Pen · click to start a contour"
-									: "Pen · Shift constrains · click the first point to close"
+									? "Pen · click for a corner · drag for a curve"
+									: "Pen · drag for curves · click or drag the first point to close"
 								: `${master?.name ?? "No master"} layer · Escape returns to typing`}
 					</span>
 				</canvas-title>
@@ -1391,10 +1604,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					}}
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (editingTextIndex !== null) {
-							if (activeTool === "pen") {
-								placePenPoint(event)
-								return
-							}
+							if (activeTool === "pen") return
 							if (!canStartBoxSelectionOn(event.target.name())) return
 							const point = pointerInEditingGlyph(event)
 							if (point === null) return
@@ -1420,10 +1630,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					}}
 					onMouseMove={(event: KonvaEventObject<MouseEvent>) => {
-						if (editingTextIndex !== null && activeTool === "pen") {
-							previewPenPoint(event)
-							return
-						}
+						if (editingTextIndex !== null && activeTool === "pen") return
 						if (selectionBox === null) return
 						const point = pointerInEditingGlyph(event)
 						if (point === null) return
@@ -1434,7 +1641,23 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					}}
 					onMouseLeave={() => {
-						if (activeTool === "pen") setPenPointer(null)
+						if (activeTool === "pen" && penGestureRef.current === null)
+							setPenPointer(null)
+					}}
+					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
+						if (editingTextIndex !== null && activeTool === "pen")
+							updatePenPointer(event)
+					}}
+					onPointerUp={(event: KonvaEventObject<PointerEvent>) => {
+						if (activeTool === "pen") finishPenGesture(event)
+					}}
+					onPointerCancel={(event: KonvaEventObject<PointerEvent>) => {
+						if (penGestureRef.current?.pointerId === event.evt.pointerId)
+							cancelPenGesture()
+					}}
+					onLostPointerCapture={(event: KonvaEventObject<PointerEvent>) => {
+						if (penGestureRef.current?.pointerId === event.evt.pointerId)
+							cancelPenGesture()
 					}}
 					onMouseUp={() => {
 						if (selectionBox === null) return
@@ -1464,10 +1687,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							width={width}
 							height={height}
 							fill={palette.surface}
-							onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
+							onPointerDown={(event: KonvaEventObject<PointerEvent>) => {
 								if (editingTextIndex === null || activeTool !== "pen") return
-								event.cancelBubble = true
-								placePenPoint(event)
+								if (penPointerAction("background") === "place")
+									beginPenGesture(event)
 							}}
 						/>
 						<Group
@@ -1513,6 +1736,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 												width={position.advance}
 												height={metrics.ascender - metrics.descender}
 												fill="rgb(0 0 0 / 0.001)"
+												onPointerDown={(
+													event: KonvaEventObject<PointerEvent>,
+												) => {
+													if (
+														editingTextIndex !== null &&
+														activeTool === "pen" &&
+														penPointerAction("typed-glyph") === "place"
+													)
+														beginPenGesture(event)
+												}}
 												onMouseDown={placeCaret}
 												onTouchStart={placeCaret}
 												onDblClick={() =>
@@ -1713,26 +1946,54 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 										strokeWidth={1.25 * inverseScale}
 										listening={false}
 									/>
-									{penPlacement === null ? null : (
+									{penCandidateNode === null ? null : (
 										<Group listening={false}>
-											{penAnchor === null ? null : (
-												<Line
+											{penPendingPath === "" ? null : (
+												<Path
 													name="pen-placement-segment"
-													points={[
-														penAnchor.x,
-														penAnchor.y,
-														penPlacement.x,
-														penPlacement.y,
-													]}
+													data={penPendingPath}
+													fillEnabled={false}
 													stroke={palette.accent}
 													strokeWidth={1.5 * inverseScale}
 													dash={[5 * inverseScale, 4 * inverseScale]}
 												/>
 											)}
+											{penHandles === null
+												? null
+												: (["incoming", "outgoing"] as const).map((handle) => {
+														const endpoint = {
+															x: penCandidateNode.x + penHandles[handle].x,
+															y: penCandidateNode.y + penHandles[handle].y,
+														}
+														return (
+															<Group key={`pen-${handle}`}>
+																<Line
+																	name={`pen-${handle}-line`}
+																	points={[
+																		penCandidateNode.x,
+																		penCandidateNode.y,
+																		endpoint.x,
+																		endpoint.y,
+																	]}
+																	stroke={palette.handleLine}
+																	strokeWidth={inverseScale}
+																/>
+																<Circle
+																	name={`pen-${handle}-handle`}
+																	x={endpoint.x}
+																	y={endpoint.y}
+																	radius={3.5 * inverseScale}
+																	fill={palette.accent}
+																	stroke={palette.nodeStroke}
+																	strokeWidth={inverseScale}
+																/>
+															</Group>
+														)
+													})}
 											<Circle
 												name="pen-placement-preview"
-												x={penPlacement.x}
-												y={penPlacement.y}
+												x={penCandidateNode.x}
+												y={penCandidateNode.y}
 												radius={5 * inverseScale}
 												fill={palette.surface}
 												stroke={palette.accent}
@@ -1752,14 +2013,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											listening={
 												activeTool === "select" || activeTool === "pen"
 											}
+											onPointerDown={(event) => {
+												if (activeTool !== "pen") return
+												event.cancelBubble = true
+												if (penPointerAction("segment") === "split")
+													splitContourSegment(contour, event)
+											}}
 											onMouseDown={(event) => {
+												if (activeTool !== "select") return
 												const action = segmentPointerAction(
 													activeTool,
 													event.evt,
 												)
-												if (action === "split") {
-													splitContourSegment(contour, event)
-												} else if (action === "add-handles") {
+												if (action === "add-handles") {
 													addHandlesToSegment(contour, event)
 												}
 											}}
@@ -1838,18 +2104,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															}
 															const selectPoint = (
 																event?: KonvaEventObject<
-																	MouseEvent | TouchEvent
+																	MouseEvent | PointerEvent | TouchEvent
 																>,
 															): void => {
-																if (
-																	activeTool === "pen" &&
-																	contour.id === penContourId &&
-																	pointIndex === 0 &&
-																	contour.nodes.length >= 3
-																) {
+																if (activeTool === "pen") {
 																	if (event !== undefined)
 																		event.cancelBubble = true
-																	closePenContour(contour.id)
 																	return
 																}
 																selectTarget(nodeTarget, event?.evt)
@@ -1857,9 +2117,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															const selectHandle = (
 																handle: EditorHandleKind,
 																event?: KonvaEventObject<
-																	MouseEvent | TouchEvent
+																	MouseEvent | PointerEvent | TouchEvent
 																>,
-															): void =>
+															): void => {
+																if (activeTool === "pen") {
+																	if (event !== undefined)
+																		event.cancelBubble = true
+																	return
+																}
 																selectTarget(
 																	{
 																		kind: "handle",
@@ -1868,6 +2133,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																	},
 																	event?.evt,
 																)
+															}
 															const togglePointMode = (): void => {
 																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
@@ -1931,6 +2197,27 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																stroke: palette.nodeStroke,
 																strokeWidth: 1.25 * inverseScale,
 																draggable: activeTool === "select",
+																onPointerDown: (
+																	event: KonvaEventObject<PointerEvent>,
+																) => {
+																	if (activeTool !== "pen") return
+																	event.cancelBubble = true
+																	if (
+																		penPointerAction(
+																			contour.id === penContourId &&
+																				pointIndex === 0 &&
+																				contour.nodes.length >= 3
+																				? "first-node"
+																				: "control",
+																		) === "close"
+																	) {
+																		beginPenGesture(event, {
+																			pointId: point.pointId,
+																			x: point.x,
+																			y: point.y,
+																		})
+																	}
+																},
 																onClick: selectPoint,
 																onTap: selectPoint,
 																onDblClick: togglePointMode,
@@ -2015,7 +2302,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				fill={palette.accent}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
-																				draggable
+																				draggable={activeTool === "select"}
+																				onPointerDown={(
+																					event: KonvaEventObject<PointerEvent>,
+																				) => {
+																					if (activeTool === "pen")
+																						selectHandle("incoming", event)
+																				}}
 																				onClick={(
 																					event: KonvaEventObject<MouseEvent>,
 																				) => selectHandle("incoming", event)}
@@ -2089,7 +2382,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				fill={palette.accent}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
-																				draggable
+																				draggable={activeTool === "select"}
+																				onPointerDown={(
+																					event: KonvaEventObject<PointerEvent>,
+																				) => {
+																					if (activeTool === "pen")
+																						selectHandle("outgoing", event)
+																				}}
 																				onClick={(
 																					event: KonvaEventObject<MouseEvent>,
 																				) => selectHandle("outgoing", event)}
@@ -2339,20 +2638,22 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
 				outline. Double-click an outline segment to select its path; use the Pen
 				Tool on a segment to insert a point, or Option/Alt-click a straight
-				segment to add curve handles. Hold Shift to constrain node drags or Pen
-				placement horizontally or vertically. Press Escape to return to typing
-				or cancel a transform. Drag an empty area to box-select controls; press
-				Command or Control+A to select all, Shift+A to align, and Delete to
-				remove the selection. Use Command or Control+C and V to copy and paste
-				outline selections. Hold Option or Alt while deleting nodes to break
-				paths open, or while deleting a handle to remove its adjoining segment.
+				segment to add curve handles. Click with the Pen for a corner or press
+				and drag for opposite Bézier handles. Hold Shift to constrain node drags
+				or Pen placement horizontally or vertically. Press Escape to cancel a
+				Pen gesture, return to typing, or cancel a transform. Drag an empty area
+				to box-select controls; press Command or Control+A to select all,
+				Shift+A to align, and Delete to remove the selection. Use Command or
+				Control+C and V to copy and paste outline selections. Hold Option or Alt
+				while deleting nodes to break paths open, or while deleting a handle to
+				remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
 					(editingTextIndex === null
 						? `Typing mode at text position ${caretIndex}.`
 						: activeTool === "pen" && penPlacement !== null
-							? `Pen preview at ${penPlacement.x}, ${penPlacement.y}.`
+							? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
 							: selection.length === 0
 								? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
 								: selection.length === 1 && selectedPoint !== undefined

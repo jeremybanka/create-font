@@ -4,6 +4,7 @@ import {
 	createFontEditorState,
 	evaluateCubicCurve,
 	straightSegmentHandles,
+	type CreateContourInput,
 } from "../src/index.ts"
 import {
 	blackMasterId,
@@ -60,6 +61,72 @@ function makeStraightSegmentFixture(options?: {
 		segmentIndex,
 		startPointId: start.id,
 		endPointId: end.id,
+	}
+}
+
+const penContourId = "contour:glyph:O:pen" as const
+const penPointIds = [
+	"point:glyph:O:pen:0",
+	"point:glyph:O:pen:1",
+	"point:glyph:O:pen:2",
+] as const
+
+const hardPenFirstPoint = {
+	mode: "hard",
+	coordinates: [
+		{ masterId: razorMasterId, x: 200, y: 100 },
+		{ masterId: blackMasterId, x: 220, y: 80 },
+	],
+} as const satisfies Readonly<{
+	mode: CreateContourInput["point"]["mode"]
+	coordinates: CreateContourInput["coordinates"]
+}>
+
+const softPenFirstPoint = {
+	mode: "soft",
+	coordinates: [
+		{
+			masterId: razorMasterId,
+			x: 200,
+			y: 100,
+			incoming: { x: -40, y: -20 },
+			outgoing: { x: 80, y: 40 },
+		},
+		{
+			masterId: blackMasterId,
+			x: 220,
+			y: 80,
+			incoming: { x: -30, y: 10 },
+			outgoing: { x: 60, y: -20 },
+		},
+	],
+} as const satisfies Readonly<{
+	mode: CreateContourInput["point"]["mode"]
+	coordinates: CreateContourInput["coordinates"]
+}>
+
+function createOpenPenContour(
+	editor: ReturnType<typeof createLoadedEditor>,
+	firstPoint:
+		| typeof hardPenFirstPoint
+		| typeof softPenFirstPoint = hardPenFirstPoint,
+): void {
+	editor.actions.createContour({
+		glyphId: oGlyphId,
+		contourId: penContourId,
+		point: { id: penPointIds[0], mode: firstPoint.mode },
+		coordinates: firstPoint.coordinates,
+	})
+	for (const [index, pointId] of penPointIds.slice(1).entries()) {
+		editor.actions.insertPoint({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+			point: { id: pointId, mode: "hard" },
+			coordinates: [
+				{ masterId: razorMasterId, x: 400 + index * 100, y: 300 },
+				{ masterId: blackMasterId, x: 430 + index * 110, y: 280 },
+			],
+		})
 	}
 }
 
@@ -1055,53 +1122,369 @@ describe("font editor state", () => {
 		).not.toContain("point:glyph:O:inserted")
 	})
 
-	it("creates and closes a pen contour with shared master coordinates", () => {
-		const editor = createLoadedEditor("test/create-contour")
-		const contourId = "contour:glyph:O:pen"
-		const pointIds = [
-			"point:glyph:O:pen:0",
-			"point:glyph:O:pen:1",
-			"point:glyph:O:pen:2",
-		] as const
+	it("creates hard and valid soft contour points across every master", () => {
+		const hardEditor = createLoadedEditor("test/create-hard-contour")
+		createOpenPenContour(hardEditor)
+		expect(
+			hardEditor.silo.getState(hardEditor.atoms.point, [
+				oGlyphId,
+				penPointIds[0],
+			]),
+		).toEqual({ mode: "hard" })
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const node = hardEditor.read.layerNode(masterId, oGlyphId, penPointIds[0])
+			expect(node).toMatchObject({ ok: true, value: { mode: "hard" } })
+			if (!node.ok) continue
+			expect(node.value.incoming).toBeUndefined()
+			expect(node.value.outgoing).toBeUndefined()
+		}
 
-		editor.actions.createContour({
-			glyphId: oGlyphId,
-			contourId,
-			point: { id: pointIds[0], mode: "hard" },
-			coordinates: [
-				{ masterId: razorMasterId, x: 200, y: 100 },
-				{ masterId: blackMasterId, x: 200, y: 100 },
-			],
-		})
-		for (const [index, pointId] of pointIds.slice(1).entries()) {
-			editor.actions.insertPoint({
-				glyphId: oGlyphId,
-				contourId,
-				point: { id: pointId, mode: "hard" },
-				coordinates: [
-					{ masterId: razorMasterId, x: 400 + index * 100, y: 300 },
-					{ masterId: blackMasterId, x: 400 + index * 100, y: 300 },
-				],
+		const softEditor = createLoadedEditor("test/create-soft-contour")
+		createOpenPenContour(softEditor, softPenFirstPoint)
+		expect(
+			softEditor.silo.getState(softEditor.atoms.point, [
+				oGlyphId,
+				penPointIds[0],
+			]),
+		).toEqual({ mode: "soft" })
+		for (const coordinate of softPenFirstPoint.coordinates) {
+			const node = softEditor.read.layerNode(
+				coordinate.masterId,
+				oGlyphId,
+				penPointIds[0],
+			)
+			expect(node).toMatchObject({
+				ok: true,
+				value: {
+					mode: "soft",
+					incoming: coordinate.incoming,
+					outgoing: coordinate.outgoing,
+				},
 			})
 		}
-		editor.actions.setContourClosed({
+	})
+
+	it("rejects invalid soft contour creation without partial mutation", () => {
+		const expectRejected = (
+			key: string,
+			coordinates: CreateContourInput["coordinates"],
+		): void => {
+			const editor = createLoadedEditor(`test/create-soft-${key}`)
+			const before = editor.read.editorSource()
+			expect(() =>
+				editor.actions.createContour({
+					glyphId: oGlyphId,
+					contourId: penContourId,
+					point: { id: penPointIds[0], mode: "soft" },
+					coordinates,
+				}),
+			).toThrow()
+			expect(editor.read.editorSource()).toEqual(before)
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+			).toMatchObject({ at: 0, length: 0 })
+		}
+
+		expectRejected("handleless", hardPenFirstPoint.coordinates)
+		expectRejected("unaligned", [
+			{
+				masterId: razorMasterId,
+				x: 200,
+				y: 100,
+				incoming: { x: -20, y: 0 },
+				outgoing: { x: 0, y: 20 },
+			},
+			softPenFirstPoint.coordinates[1],
+		])
+		expectRejected("nonfinite", [
+			{
+				...softPenFirstPoint.coordinates[0],
+				incoming: { x: Number.NaN, y: -20 },
+			},
+			softPenFirstPoint.coordinates[1],
+		])
+		expectRejected("missing-master", [softPenFirstPoint.coordinates[0]])
+	})
+
+	it("closes without replacing the first point or adding a duplicate", () => {
+		const editor = createLoadedEditor("test/close-contour-preserve")
+		createOpenPenContour(editor, softPenFirstPoint)
+		editor.clearHistory(oGlyphId)
+		const beforeNodes = new Map(
+			[razorMasterId, blackMasterId].map((masterId) => [
+				masterId,
+				editor.read.layerNode(masterId, oGlyphId, penPointIds[0]),
+			]),
+		)
+
+		editor.actions.closeContour({
 			glyphId: oGlyphId,
-			contourId,
-			closed: true,
+			contourId: penContourId,
 		})
 
 		expect(
-			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
-		).toEqual(pointIds)
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toEqual(penPointIds)
 		expect(
-			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contourId]),
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
 		).toBe(true)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			expect(editor.read.layerNode(masterId, oGlyphId, penPointIds[0])).toEqual(
+				beforeNodes.get(masterId),
+			)
+		}
 		expect(editor.read.compilation().stage).toBe("compiled")
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toMatchObject({ at: 1, length: 1 })
 
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.contourClosed, [oGlyphId, contourId]),
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
 		).toBe(false)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			expect(editor.read.layerNode(masterId, oGlyphId, penPointIds[0])).toEqual(
+				beforeNodes.get(masterId),
+			)
+		}
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toBe(true)
+	})
+
+	it("replaces the first point handles and closes as one history entry", () => {
+		const editor = createLoadedEditor("test/close-contour-replace")
+		createOpenPenContour(editor)
+		editor.clearHistory(oGlyphId)
+		const replacement = [
+			{
+				masterId: razorMasterId,
+				incoming: { x: -30, y: -60 },
+				outgoing: { x: 15, y: 30 },
+			},
+			{
+				masterId: blackMasterId,
+				incoming: { x: -80, y: 0 },
+				outgoing: { x: 40, y: 0 },
+			},
+		] as const
+
+		editor.actions.closeContour({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+			firstPoint: {
+				pointId: penPointIds[0],
+				mode: "soft",
+				coordinates: replacement,
+			},
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toEqual(penPointIds)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toBe(true)
+		for (const coordinate of replacement) {
+			expect(
+				editor.read.layerNode(coordinate.masterId, oGlyphId, penPointIds[0]),
+			).toMatchObject({
+				ok: true,
+				value: {
+					mode: "soft",
+					incoming: coordinate.incoming,
+					outgoing: coordinate.outgoing,
+				},
+			})
+		}
+		expect(editor.read.compilation().stage).toBe("compiled")
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toMatchObject({ at: 1, length: 1 })
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toBe(false)
+		expect(
+			editor.silo.getState(editor.atoms.point, [oGlyphId, penPointIds[0]]),
+		).toEqual({ mode: "hard" })
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const node = editor.read.layerNode(masterId, oGlyphId, penPointIds[0])
+			if (!node.ok) throw new Error("Undone first point did not project.")
+			expect(node.value.incoming).toBeUndefined()
+			expect(node.value.outgoing).toBeUndefined()
+		}
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toBe(true)
+		expect(
+			editor.silo.getState(editor.atoms.point, [oGlyphId, penPointIds[0]]),
+		).toEqual({ mode: "soft" })
+	})
+
+	it("rejects invalid closure plans without partial mutation", () => {
+		const editor = createLoadedEditor("test/close-contour-invalid-plan")
+		createOpenPenContour(editor)
+		editor.clearHistory(oGlyphId)
+		const before = editor.read.editorSource()
+		const validCoordinates = [
+			{
+				masterId: razorMasterId,
+				incoming: { x: -20, y: 0 },
+				outgoing: { x: 40, y: 0 },
+			},
+			{
+				masterId: blackMasterId,
+				incoming: { x: -30, y: 0 },
+				outgoing: { x: 60, y: 0 },
+			},
+		] as const
+		const invalidInputs = [
+			{
+				glyphId: oGlyphId,
+				contourId: penContourId,
+				firstPoint: {
+					pointId: penPointIds[1],
+					mode: "soft" as const,
+					coordinates: validCoordinates,
+				},
+			},
+			{
+				glyphId: oGlyphId,
+				contourId: penContourId,
+				firstPoint: {
+					pointId: penPointIds[0],
+					mode: "soft" as const,
+					coordinates: [validCoordinates[0]],
+				},
+			},
+			{
+				glyphId: oGlyphId,
+				contourId: penContourId,
+				firstPoint: {
+					pointId: penPointIds[0],
+					mode: "soft" as const,
+					coordinates: [validCoordinates[0], validCoordinates[0]],
+				},
+			},
+			{
+				glyphId: oGlyphId,
+				contourId: penContourId,
+				firstPoint: {
+					pointId: penPointIds[0],
+					mode: "soft" as const,
+					coordinates: [
+						{
+							...validCoordinates[0],
+							outgoing: { x: 0, y: 40 },
+						},
+						validCoordinates[1],
+					],
+				},
+			},
+			{
+				glyphId: oGlyphId,
+				contourId: penContourId,
+				firstPoint: {
+					pointId: penPointIds[0],
+					mode: "soft" as const,
+					coordinates: [
+						{
+							...validCoordinates[0],
+							incoming: { x: Number.POSITIVE_INFINITY, y: 0 },
+						},
+						validCoordinates[1],
+					],
+				},
+			},
+		] as const
+
+		for (const input of invalidInputs) {
+			expect(() => editor.actions.closeContour(input)).toThrow()
+			expect(editor.read.editorSource()).toEqual(before)
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+			).toMatchObject({ at: 0, length: 0 })
+		}
+	})
+
+	it("rejects incomplete closure topology before writing", () => {
+		const shortEditor = createLoadedEditor("test/close-contour-short")
+		shortEditor.actions.createContour({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+			point: { id: penPointIds[0], mode: "hard" },
+			coordinates: hardPenFirstPoint.coordinates,
+		})
+		shortEditor.clearHistory(oGlyphId)
+		expect(() =>
+			shortEditor.actions.closeContour({
+				glyphId: oGlyphId,
+				contourId: penContourId,
+			}),
+		).toThrow("at least three points")
+		expect(
+			shortEditor.silo.inspectTimeline(
+				shortEditor.glyphHistoryTimelines,
+				oGlyphId,
+			),
+		).toMatchObject({ at: 0, length: 0 })
+
+		const missingLayerEditor = createLoadedEditor(
+			"test/close-contour-missing-layer",
+		)
+		createOpenPenContour(missingLayerEditor)
+		missingLayerEditor.silo.setState(
+			missingLayerEditor.atoms.pointPosition,
+			[blackMasterId, oGlyphId, penPointIds[0]],
+			null,
+		)
+		missingLayerEditor.clearHistory(oGlyphId)
+		expect(() =>
+			missingLayerEditor.actions.closeContour({
+				glyphId: oGlyphId,
+				contourId: penContourId,
+			}),
+		).toThrow("invalid in layer")
+		expect(
+			missingLayerEditor.silo.getState(missingLayerEditor.atoms.contourClosed, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toBe(false)
+		expect(
+			missingLayerEditor.silo.inspectTimeline(
+				missingLayerEditor.glyphHistoryTimelines,
+				oGlyphId,
+			),
+		).toMatchObject({ at: 0, length: 0 })
 	})
 
 	it("derives horizontal phantom deltas from layer metrics", () => {
