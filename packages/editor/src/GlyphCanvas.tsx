@@ -5,8 +5,9 @@ import type {
 	PointId,
 } from "@create-font/states"
 import {
-	matchingVerticalMetrics,
+	resolveVerticalMetricAlignment,
 	resolveVerticalMetricGuides,
+	resolveVerticalOvershootBandSegments,
 	type VerticalMetricLine,
 } from "@create-font/states"
 import {
@@ -346,6 +347,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			metricGuides.filter(
 				(guide): guide is VerticalMetricLine => guide.kind === "line",
 			),
+		[metricGuides],
+	)
+	const overshootBandSegments = useMemo(
+		() => resolveVerticalOvershootBandSegments(metricGuides),
 		[metricGuides],
 	)
 	const groupedMetricLines = useMemo(() => {
@@ -1752,6 +1757,22 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									y={editingPosition.baseline}
 									scaleY={-1}
 								>
+									{overshootBandSegments.map((segment) => {
+										const metricIds = segment.lines.map((line) => line.id)
+										return (
+											<Rect
+												key={`overshoot-band:${segment.minY}:${segment.maxY}:${metricIds.join(":")}`}
+												name={`overshoot-band ${metricIds.map((id) => `overshoot-${id}`).join(" ")}`}
+												x={-200}
+												y={segment.minY}
+												width={advanceWidth + 400}
+												height={segment.maxY - segment.minY}
+												fill={palette.accent}
+												opacity={0.09}
+												listening={false}
+											/>
+										)
+									})}
 									{metricGuides.flatMap((guide) =>
 										guide.kind === "band"
 											? [
@@ -2062,10 +2083,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		contour.closed,
 																	) ?? { x: 0, y: 1 })
 																: null
-															const metricMatches = matchingVerticalMetrics(
-																point.y,
-																metricGuides,
-															)
+															const metricAlignment =
+																resolveVerticalMetricAlignment(
+																	point.y,
+																	metricGuides,
+																)
 															const nodeTarget: EditorSelectionTarget = {
 																kind: "node",
 																pointId: point.pointId,
@@ -2239,11 +2261,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															}
 															return (
 																<Group key={`node:${point.pointId}`}>
-																	{metricMatches.length === 0 ? null : (
+																	{metricAlignment?.kind === "line" ? (
 																		<Rect
-																			name={metricMatches
+																			name={`metric-alignment metric-alignment-line ${metricAlignment.lines
 																				.map((match) => `metric-${match.id}`)
-																				.join(" ")}
+																				.join(" ")}`}
 																			x={point.x}
 																			y={point.y}
 																			width={14 * inverseScale}
@@ -2256,7 +2278,20 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																			opacity={0.82}
 																			listening={false}
 																		/>
-																	)}
+																	) : metricAlignment?.kind === "overshoot" ? (
+																		<Circle
+																			name={`metric-alignment metric-alignment-overshoot ${metricAlignment.lines
+																				.map((match) => `metric-${match.id}`)
+																				.join(" ")}`}
+																			x={point.x}
+																			y={point.y}
+																			radius={7.5 * inverseScale}
+																			stroke={palette.accent}
+																			strokeWidth={1.5 * inverseScale}
+																			opacity={0.82}
+																			listening={false}
+																		/>
+																	) : null}
 																	{point.incoming === undefined ? null : (
 																		<Group
 																			key={`incoming-control:${point.pointId}`}
