@@ -48,7 +48,14 @@ export function EditorApplicationRoot({
 			timeout = null
 			if (applyingSource.current) return
 			const nextSource = workspace.font.read.editorSource()
-			if (nextSource !== null) void onSourceChange(nextSource)
+			if (nextSource !== null) {
+				// The parent renders this same source object again when the save is
+				// acknowledged so that validation can update. Record its identity now;
+				// otherwise the acknowledgement looks like an external replacement and
+				// clears the glyph timeline and selection.
+				currentSource.current = nextSource
+				void onSourceChange(nextSource)
+			}
 		}
 		const unsubscribe = workspace.font.silo.subscribe(
 			workspace.font.atoms.documentRevision,
