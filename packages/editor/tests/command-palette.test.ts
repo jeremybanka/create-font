@@ -29,6 +29,7 @@ const commands = [
 		category: "Tools",
 		icon: "Pencil1Icon",
 		disabled: true,
+		disabledReason: "Open a glyph to use the Pen tool.",
 		do: vi.fn(),
 	},
 ] satisfies readonly PaletteCommand[]
@@ -53,6 +54,11 @@ function keyboardEvent(
 }
 
 describe("command palette", () => {
+	it("retains contextual reasons for disabled commands", () => {
+		expect(commands[2]?.disabledReason).toBe(
+			"Open a glyph to use the Pen tool.",
+		)
+	})
 	it("recognizes the platform-specific Mod+Shift+P shortcut", () => {
 		expect(
 			isCommandPaletteKeyboardEvent(

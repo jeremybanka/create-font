@@ -28,6 +28,7 @@ import {
 	restoreCancelledGroupDragTarget,
 	type CancelledGroupDrag,
 } from "./canvas-group-drag.ts"
+import { transformHandleCursor, type TransformHandle } from "./canvas-cursor.ts"
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import {
 	incidentStraightProjectionCandidates,
@@ -58,6 +59,8 @@ import {
 	nearestEditorSegment,
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
+import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
+import { keyboardStepMultiplier } from "./keyboard-step.ts"
 import {
 	canStartBoxSelectionOn,
 	boundsOfControls,
@@ -80,6 +83,11 @@ import {
 	type PenGestureResolution,
 	type PenPoint,
 } from "./pen-gesture.ts"
+import {
+	isEditablePreviewTarget,
+	isMomentaryPreviewKey,
+	shouldStartMomentaryPreview,
+} from "./momentary-preview.ts"
 import { useI, useO, useOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
@@ -141,17 +149,6 @@ interface SelectionBox {
 	readonly endY: number
 	readonly additive: boolean
 }
-
-type TransformHandle =
-	| "inside"
-	| "north"
-	| "north-east"
-	| "east"
-	| "south-east"
-	| "south"
-	| "south-west"
-	| "west"
-	| "north-west"
 
 interface TransformDrag {
 	readonly handle: TransformHandle
@@ -231,6 +228,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [penGesture, setPenGesture] = useState<PenPlacementGesture | null>(null)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
+	const [transformCursor, setTransformCursor] = useState<string | null>(null)
+	const [momentaryPreview, setMomentaryPreview] = useState(false)
 	const [transformPreview, setTransformPreview] =
 		useState<SelectionTransformResult | null>(null)
 	const groupDragRef = useRef<GroupDrag | null>(null)
@@ -556,6 +555,50 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}, [])
 
 	useEffect(() => {
+		const resetCursor = (): void => setTransformCursor(null)
+		window.addEventListener("blur", resetCursor)
+		return () => window.removeEventListener("blur", resetCursor)
+	}, [])
+
+	useEffect(() => {
+		if (editingTextIndex === null) {
+			setMomentaryPreview(false)
+			return
+		}
+		const clear = (): void => setMomentaryPreview(false)
+		const handleKeyDown = (event: KeyboardEvent): void => {
+			if (
+				!shouldStartMomentaryPreview(event) ||
+				isEditablePreviewTarget(event.target) ||
+				groupDragRef.current !== null ||
+				penGestureRef.current !== null ||
+				transformDrag !== null ||
+				selectionBox !== null
+			)
+				return
+			event.preventDefault()
+			setTransformCursor(null)
+			setMomentaryPreview(true)
+		}
+		const handleKeyUp = (event: KeyboardEvent): void => {
+			if (isMomentaryPreviewKey(event)) clear()
+		}
+		const handleVisibility = (): void => {
+			if (document.visibilityState !== "visible") clear()
+		}
+		window.addEventListener("keydown", handleKeyDown)
+		window.addEventListener("keyup", handleKeyUp)
+		window.addEventListener("blur", clear)
+		document.addEventListener("visibilitychange", handleVisibility)
+		return () => {
+			window.removeEventListener("keydown", handleKeyDown)
+			window.removeEventListener("keyup", handleKeyUp)
+			window.removeEventListener("blur", clear)
+			document.removeEventListener("visibilitychange", handleVisibility)
+		}
+	}, [editingTextIndex, selectionBox, transformDrag])
+
+	useEffect(() => {
 		const gesture = penGestureRef.current
 		penGestureRef.current = null
 		if (
@@ -583,6 +626,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		pointDragRef.current = null
 		groupDragRef.current = null
 		setTransformPreview(null)
+		setTransformCursor(null)
+		setMomentaryPreview(false)
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
@@ -1214,7 +1259,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+V Control+V Shift+A ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onCopy={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
 				if (
@@ -1437,7 +1482,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				)
 					return
 				event.preventDefault()
-				const multiplier = event.shiftKey ? 10 : 1
+				const multiplier = keyboardStepMultiplier(event, IS_MAC_LIKE)
 				workspace.font.actions.movePoints({
 					masterId: activeMasterId,
 					glyphId: activeGlyphId,
@@ -1542,7 +1587,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					)}
 				</canvas-controls>
 			</canvas-toolbar>
-			<canvas-surface ref={ref} data-tool={activeTool}>
+			<canvas-surface
+				ref={ref}
+				data-tool={activeTool}
+				data-editing={editingTextIndex === null ? "false" : "true"}
+				style={
+					transformCursor === null ? undefined : { cursor: transformCursor }
+				}
+			>
 				<Stage
 					width={width}
 					height={height}
@@ -1571,6 +1623,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						}))
 					}}
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
+						if (momentaryPreview) return
 						if (editingTextIndex !== null) {
 							if (activeTool === "pen") return
 							if (!canStartBoxSelectionOn(event.target.name())) return
@@ -1598,6 +1651,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					}}
 					onMouseMove={(event: KonvaEventObject<MouseEvent>) => {
+						if (momentaryPreview) return
 						if (editingTextIndex !== null && activeTool === "pen") return
 						if (selectionBox === null) return
 						const point = pointerInEditingGlyph(event)
@@ -1613,10 +1667,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							setPenPointer(null)
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
+						if (momentaryPreview) return
 						if (editingTextIndex !== null && activeTool === "pen")
 							updatePenPointer(event)
 					}}
 					onPointerUp={(event: KonvaEventObject<PointerEvent>) => {
+						if (momentaryPreview) return
 						if (activeTool === "pen") finishPenGesture(event)
 					}}
 					onPointerCancel={(event: KonvaEventObject<PointerEvent>) => {
@@ -1628,6 +1684,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							cancelPenGesture()
 					}}
 					onMouseUp={() => {
+						if (momentaryPreview) return
 						if (selectionBox === null) return
 						const boxed = targetsInside(selectionBox)
 						setSelection((current) => {
@@ -1642,6 +1699,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						setSelectionBox(null)
 					}}
 					onTouchStart={(event: KonvaEventObject<TouchEvent>) => {
+						if (momentaryPreview) return
 						if (
 							editingTextIndex !== null &&
 							event.target.name() === "canvas-background"
@@ -1656,6 +1714,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							height={height}
 							fill={palette.surface}
 							onPointerDown={(event: KonvaEventObject<PointerEvent>) => {
+								if (momentaryPreview) return
 								if (editingTextIndex === null || activeTool !== "pen") return
 								if (penPointerAction("background") === "place")
 									beginPenGesture(event)
@@ -1746,7 +1805,25 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									listening={false}
 								/>
 							) : null}
-							{editingPosition === undefined || layer === null ? null : (
+							{editingPosition === undefined ||
+							layer === null ||
+							!momentaryPreview ? null : (
+								<Group
+									x={editingPosition.x}
+									y={editingPosition.baseline}
+									scaleY={-1}
+								>
+									<Path
+										name="momentary-glyph-preview"
+										data={combinedPreview.path}
+										fill={palette.previewInk}
+										listening={false}
+									/>
+								</Group>
+							)}
+							{editingPosition === undefined ||
+							layer === null ||
+							momentaryPreview ? null : (
 								<Group
 									x={editingPosition.x}
 									y={editingPosition.baseline}
@@ -2575,9 +2652,21 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 													strokeWidth={1.5 * inverseScale}
 													hitStrokeWidth={12 * inverseScale}
 													draggable
-													onDragStart={() => beginTransform(handle)}
+													onDragStart={() => {
+														setTransformCursor(transformHandleCursor(handle))
+														beginTransform(handle)
+													}}
 													onDragMove={previewTransformDrag}
-													onDragEnd={commitTransform}
+													onDragEnd={() => {
+														commitTransform()
+														setTransformCursor(null)
+													}}
+													onMouseEnter={() =>
+														setTransformCursor(transformHandleCursor(handle))
+													}
+													onMouseLeave={() => {
+														if (transformDrag === null) setTransformCursor(null)
+													}}
 												/>
 											))}
 										</Group>
@@ -2608,25 +2697,27 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				Tool on a segment to insert a point, or Option/Alt-click a straight
 				segment to add curve handles. Click with the Pen for a corner or press
 				and drag for opposite Bézier handles. Hold Shift to constrain node drags
-				or Pen placement horizontally or vertically. Press Escape to cancel a
-				Pen gesture, return to typing, or cancel a transform. Drag an empty area
-				to box-select controls; press Command or Control+A to select all,
-				Shift+A to align, and Delete to remove the selection. Use Command or
-				Control+C and V to copy and paste outline selections. Hold Option or Alt
-				while deleting nodes to break paths open, or while deleting a handle to
-				remove its adjoining segment.
+				or Pen placement horizontally or vertically. Hold E for a clean glyph
+				preview. Press Escape to cancel a Pen gesture, return to typing, or
+				cancel a transform. Drag an empty area to box-select controls; press
+				Command or Control+A to select all, Shift+A to align, and Delete to
+				remove the selection. Use Command or Control+C and V to copy and paste
+				outline selections. Hold Option or Alt while deleting nodes to break
+				paths open, or while deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
-					(editingTextIndex === null
-						? `Typing mode at text position ${caretIndex}.`
-						: activeTool === "pen" && penPlacement !== null
-							? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
-							: selection.length === 0
-								? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-								: selection.length === 1 && selectedPoint !== undefined
-									? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-									: `${selection.length} outline controls selected.`)}
+					(momentaryPreview
+						? `Momentary preview of ${glyph?.name ?? "glyph"}.`
+						: editingTextIndex === null
+							? `Typing mode at text position ${caretIndex}.`
+							: activeTool === "pen" && penPlacement !== null
+								? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
+								: selection.length === 0
+									? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+									: selection.length === 1 && selectedPoint !== undefined
+										? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+										: `${selection.length} outline controls selected.`)}
 			</output>
 		</glyph-canvas>
 	)

@@ -5,6 +5,7 @@ import {
 	formatHotkey,
 	isMacLike,
 	TOOLS,
+	toolDisabledReason,
 	toolForKeyboardEvent,
 } from "../src/editor-tools-and-hotkeys.ts"
 
@@ -28,6 +29,21 @@ function keyboardEvent(
 }
 
 describe("editor tools and hotkeys", () => {
+	it("explains disabled tool states with an actionable remedy", () => {
+		const context = {
+			editingTextIndex: null,
+			activeTool: "select",
+			history: { at: 0, length: 0 },
+			selection: [],
+			activeLayer: null,
+		} as unknown as Parameters<typeof toolDisabledReason>[1]
+		expect(toolDisabledReason(TOOLS.PEN, context)).toBe(
+			"Double-click a glyph to enter outline editing.",
+		)
+		expect(toolDisabledReason(TOOLS.UNDO, context)).toBe(
+			"There are no edits to undo.",
+		)
+	})
 	it("matches exact platform-specific shortcuts", () => {
 		expect(
 			toolForKeyboardEvent(keyboardEvent({ metaKey: true }), true)?.id,

@@ -33,9 +33,10 @@ describe(`tooltip interaction intent`, () => {
 		).toBe(false)
 	})
 
-	it(`never opens for disabled controls and resets disabled intent`, () => {
+	it(`only suppresses controls without tooltip content and resets intent`, () => {
 		const focused = nextTooltipIntent(INITIAL_TOOLTIP_INTENT, `focus`)
 		expect(tooltipWantsToOpen(focused, true)).toBe(false)
+		expect(tooltipWantsToOpen(focused, false)).toBe(true)
 		expect(nextTooltipIntent(focused, `disable`)).toBe(INITIAL_TOOLTIP_INTENT)
 	})
 })

@@ -1,6 +1,15 @@
 tooltip-button.class {
 	display: contents;
 
+	&[data-disabled-reason="true"] {
+		display: inline-grid;
+
+		&:focus-visible > button {
+			outline: 2px solid var(--accent);
+			outline-offset: 2px;
+		}
+	}
+
 	> tooltip-popover {
 		position: fixed;
 		display: grid;

@@ -18,6 +18,7 @@ import {
 	type ToolContext,
 	TOOLS,
 	TOOLBAR_LAYOUT,
+	toolDisabledReason,
 	useHotkeys,
 } from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
@@ -113,6 +114,10 @@ export function AppShell({ workspace }: AppShellProps) {
 			shortcut: formatHotkey(tool.hotkey).join("+"),
 			disabled:
 				routeName !== "canvas" || tool.status(toolContext) === "disabled",
+			disabledReason:
+				routeName !== "canvas"
+					? "Open the canvas to use this editor command."
+					: toolDisabledReason(tool, toolContext),
 			do: () => tool.do(toolContext),
 		})),
 	]
@@ -248,6 +253,7 @@ function EditorToolbar({ context }: { readonly context: ToolContext }) {
 				<tool-island key={tools.map((tool) => tool.id).join("-")}>
 					{tools.map((tool) => {
 						const status = tool.status(context)
+						const disabledReason = toolDisabledReason(tool, context)
 						return (
 							<TooltipButton
 								key={tool.id}
@@ -257,6 +263,7 @@ function EditorToolbar({ context }: { readonly context: ToolContext }) {
 								aria-pressed={status === "active"}
 								data-status={status}
 								disabled={status === "disabled"}
+								disabledReason={disabledReason}
 								onClick={() => tool.do(context)}
 							>
 								<EditorIcon name={tool.icon} />
