@@ -1,10 +1,10 @@
 [
 	{
-		"id": "instance:razor",
-		"path": "instances/instance%3Arazor~e8094f74.json"
+		"id": "instance:text",
+		"path": "instances/instance%3Atext~99a4dbdf.json"
 	},
 	{
-		"id": "instance:black",
-		"path": "instances/instance%3Ablack~9b4bfa3b.json"
+		"id": "instance:heavy",
+		"path": "instances/instance%3Aheavy~81e4e617.json"
 	}
 ]

@@ -1,9 +1,9 @@
 {
-	"id": "master:black",
+	"id": "master:heavy",
 	"kind": "source",
-	"name": "Black",
+	"name": "Heavy",
 	"location": {
-		"axis:wght": 900
+		"axis:wght": 800
 	},
 	"support": {
 		"kind": "non-intermediate"

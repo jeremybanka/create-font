@@ -5,13 +5,13 @@
 	"contours": [],
 	"layers": [
 		{
-			"masterId": "master:razor",
-			"advanceWidth": 320,
+			"masterId": "master:text",
+			"advanceWidth": 360,
 			"leftSideBearing": 0,
 			"points": []
 		},
 		{
-			"masterId": "master:black",
+			"masterId": "master:heavy",
 			"advanceWidth": 360,
 			"leftSideBearing": 0,
 			"points": []

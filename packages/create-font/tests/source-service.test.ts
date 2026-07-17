@@ -8,6 +8,8 @@ import {
 	SourceValidationError,
 	type SourceChangedEvent,
 } from "@create-font/server"
+import { assembleEditorFontSource } from "@create-font/source"
+import { createFontEditorState } from "@create-font/states"
 
 import { createFileSystemSourceService } from "../src/source-service.ts"
 import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
@@ -62,7 +64,7 @@ describe(`filesystem font source service`, () => {
 
 		expect(manifest.units.length).toBeGreaterThan(20)
 		expect(names.value).toEqual(
-			expect.objectContaining({ family: `Create Font Sans` }),
+			expect.objectContaining({ family: `Workbench Sans` }),
 		)
 
 		const updated = await source.writeUnit({
@@ -71,17 +73,17 @@ describe(`filesystem font source service`, () => {
 			path: `names.json`,
 			value: {
 				...(names.value as Record<string, string>),
-				family: `Create Font Sans Test`,
+				family: `Workbench Sans Test`,
 			},
 		})
 
 		expect(updated.revision).not.toBe(names.revision)
 		expect(updated.value).toEqual(
-			expect.objectContaining({ family: `Create Font Sans Test` }),
+			expect.objectContaining({ family: `Workbench Sans Test` }),
 		)
 		expect(
 			await readFile(resolve(projectRoot, `names.json`), `utf8`),
-		).toContain(`"family": "Create Font Sans Test"`)
+		).toContain(`"family": "Workbench Sans Test"`)
 	})
 
 	it(`rejects stale revisions and invalid whole-project updates`, async () => {
@@ -96,7 +98,7 @@ describe(`filesystem font source service`, () => {
 			path: names.path,
 			value: {
 				...(names.value as Record<string, string>),
-				family: `Create Font Sans Changed`,
+				family: `Workbench Sans Changed`,
 			},
 		})
 		await expect(
@@ -177,8 +179,8 @@ describe(`filesystem font source service`, () => {
 		await writeFile(
 			namesPath,
 			namesText.replace(
-				`"family": "Create Font Sans"`,
-				`"family": "Create Font Sans External"`,
+				`"family": "Workbench Sans"`,
+				`"family": "Workbench Sans External"`,
 			),
 		)
 
@@ -194,7 +196,46 @@ describe(`filesystem font source service`, () => {
 		expect(event.type).toBe(`source.changed`)
 		expect(event.manifest.revision).not.toBe(before.revision)
 		expect((await source.readUnit(`names.json`)).value).toEqual(
-			expect.objectContaining({ family: `Create Font Sans External` }),
+			expect.objectContaining({ family: `Workbench Sans External` }),
 		)
+	})
+
+	it(`loads and compiles the complete two-master printable ASCII family`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot)
+		const manifest = await source.readManifest()
+		const entries = await Promise.all(
+			manifest.units.map(
+				async ({ path }) =>
+					[
+						path,
+						JSON.parse(
+							await readFile(resolve(projectRoot, path), `utf8`),
+						) as unknown,
+					] as const,
+			),
+		)
+		const assembled = assembleEditorFontSource(Object.fromEntries(entries))
+		expect(assembled.ok).toBe(true)
+		if (!assembled.ok) return
+
+		expect(assembled.value.names.family).toBe(`Workbench Sans`)
+		expect(assembled.value.cmap).toHaveLength(95)
+		expect(assembled.value.cmap.map(({ codePoint }) => codePoint)).toEqual(
+			Array.from({ length: 95 }, (_, index) => 0x20 + index),
+		)
+		expect(assembled.value.glyphs).toHaveLength(96)
+		expect(
+			assembled.value.glyphs.every((glyph) => glyph.layers.length === 2),
+		).toBe(true)
+
+		const editor = createFontEditorState({ key: `test/workbench-sans` })
+		editor.actions.load(assembled.value)
+		const compilation = editor.read.compilation()
+		expect(compilation.stage).toBe(`compiled`)
+		expect(compilation.ok).toBe(true)
+		if (!compilation.ok) return
+		expect(compilation.source.cmap).toHaveLength(95)
+		expect(compilation.source.glyphs).toHaveLength(96)
 	})
 })

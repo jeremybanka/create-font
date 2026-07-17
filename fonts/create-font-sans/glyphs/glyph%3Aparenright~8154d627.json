@@ -1,0 +1,148 @@
+{
+	"id": "glyph:parenright",
+	"name": "parenright",
+	"export": true,
+	"overlap": true,
+	"contours": [
+		{
+			"id": "contour:glyph:parenright:0",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:parenright:0:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:0:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:0:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:0:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:parenright:1",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:parenright:1:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:1:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:1:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:parenright:1:3",
+					"mode": "hard"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 460,
+			"leftSideBearing": 251,
+			"points": [
+				{
+					"pointId": "point:glyph:parenright:0:0",
+					"x": 309,
+					"y": 714
+				},
+				{
+					"pointId": "point:glyph:parenright:0:1",
+					"x": 479,
+					"y": 364
+				},
+				{
+					"pointId": "point:glyph:parenright:0:2",
+					"x": 421,
+					"y": 336
+				},
+				{
+					"pointId": "point:glyph:parenright:0:3",
+					"x": 251,
+					"y": 686
+				},
+				{
+					"pointId": "point:glyph:parenright:1:0",
+					"x": 479,
+					"y": 336
+				},
+				{
+					"pointId": "point:glyph:parenright:1:1",
+					"x": 309,
+					"y": -14
+				},
+				{
+					"pointId": "point:glyph:parenright:1:2",
+					"x": 251,
+					"y": 14
+				},
+				{
+					"pointId": "point:glyph:parenright:1:3",
+					"x": 421,
+					"y": 364
+				}
+			]
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 460,
+			"leftSideBearing": 213,
+			"points": [
+				{
+					"pointId": "point:glyph:parenright:0:0",
+					"x": 347,
+					"y": 733
+				},
+				{
+					"pointId": "point:glyph:parenright:0:1",
+					"x": 517,
+					"y": 383
+				},
+				{
+					"pointId": "point:glyph:parenright:0:2",
+					"x": 383,
+					"y": 317
+				},
+				{
+					"pointId": "point:glyph:parenright:0:3",
+					"x": 213,
+					"y": 667
+				},
+				{
+					"pointId": "point:glyph:parenright:1:0",
+					"x": 517,
+					"y": 317
+				},
+				{
+					"pointId": "point:glyph:parenright:1:1",
+					"x": 347,
+					"y": -33
+				},
+				{
+					"pointId": "point:glyph:parenright:1:2",
+					"x": 213,
+					"y": 33
+				},
+				{
+					"pointId": "point:glyph:parenright:1:3",
+					"x": 383,
+					"y": 383
+				}
+			]
+		}
+	]
+}

@@ -2,273 +2,393 @@
 	"id": "glyph:.notdef",
 	"name": ".notdef",
 	"export": true,
-	"color": "#807c73",
+	"overlap": true,
 	"contours": [
 		{
-			"id": "contour:glyph:.notdef:outer",
+			"id": "contour:glyph:.notdef:0",
 			"closed": true,
 			"points": [
 				{
-					"id": "point:glyph:.notdef:00",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:0:0",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:02",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:0:1",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:04",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:0:2",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:06",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:0:3",
+					"mode": "hard"
 				}
 			]
 		},
 		{
-			"id": "contour:glyph:.notdef:counter",
+			"id": "contour:glyph:.notdef:1",
 			"closed": true,
 			"points": [
 				{
-					"id": "point:glyph:.notdef:08",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:1:0",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:10",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:1:1",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:12",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:1:2",
+					"mode": "hard"
 				},
 				{
-					"id": "point:glyph:.notdef:14",
-					"mode": "soft"
+					"id": "point:glyph:.notdef:1:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:.notdef:2",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:2:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:2:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:2:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:2:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:.notdef:3",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:3:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:3:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:3:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:3:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:.notdef:4",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:4:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:4:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:4:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:4:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:.notdef:5",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:.notdef:5:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:5:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:5:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:.notdef:5:3",
+					"mode": "hard"
 				}
 			]
 		}
 	],
 	"layers": [
 		{
-			"masterId": "master:razor",
-			"advanceWidth": 1000,
-			"leftSideBearing": 80,
+			"masterId": "master:text",
+			"advanceWidth": 700,
+			"leftSideBearing": 48,
 			"points": [
 				{
-					"pointId": "point:glyph:.notdef:00",
-					"x": 500,
-					"y": 820,
-					"incoming": {
-						"x": -280,
-						"y": 0
-					},
-					"outgoing": {
-						"x": 280,
-						"y": 0
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:02",
-					"x": 920,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": 280
-					},
-					"outgoing": {
-						"x": 0,
-						"y": -280
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:04",
-					"x": 500,
-					"y": -20,
-					"incoming": {
-						"x": 280,
-						"y": 0
-					},
-					"outgoing": {
-						"x": -280,
-						"y": 0
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:06",
+					"pointId": "point:glyph:.notdef:0:0",
 					"x": 80,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": -280
-					},
-					"outgoing": {
-						"x": 0,
-						"y": 280
-					}
+					"y": -68
 				},
 				{
-					"pointId": "point:glyph:.notdef:08",
-					"x": 500,
-					"y": 752,
-					"incoming": {
-						"x": 234.66666666666666,
-						"y": 0
-					},
-					"outgoing": {
-						"x": -234.66666666666666,
-						"y": 0
-					}
+					"pointId": "point:glyph:.notdef:0:1",
+					"x": 620,
+					"y": -68
 				},
 				{
-					"pointId": "point:glyph:.notdef:10",
-					"x": 148,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": 234.66666666666666
-					},
-					"outgoing": {
-						"x": 0,
-						"y": -234.66666666666666
-					}
+					"pointId": "point:glyph:.notdef:0:2",
+					"x": 620,
+					"y": -132
 				},
 				{
-					"pointId": "point:glyph:.notdef:12",
-					"x": 500,
-					"y": 48,
-					"incoming": {
-						"x": -234.66666666666666,
-						"y": 0
-					},
-					"outgoing": {
-						"x": 234.66666666666666,
-						"y": 0
-					}
+					"pointId": "point:glyph:.notdef:0:3",
+					"x": 80,
+					"y": -132
 				},
 				{
-					"pointId": "point:glyph:.notdef:14",
-					"x": 852,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": -234.66666666666666
-					},
-					"outgoing": {
-						"x": 0,
-						"y": 234.66666666666666
-					}
+					"pointId": "point:glyph:.notdef:1:0",
+					"x": 588,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:1",
+					"x": 588,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:2",
+					"x": 652,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:3",
+					"x": 652,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:0",
+					"x": 620,
+					"y": 728
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:1",
+					"x": 80,
+					"y": 728
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:2",
+					"x": 80,
+					"y": 792
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:3",
+					"x": 620,
+					"y": 792
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:0",
+					"x": 112,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:1",
+					"x": 112,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:2",
+					"x": 48,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:3",
+					"x": 48,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:0",
+					"x": 53,
+					"y": -83
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:1",
+					"x": 593,
+					"y": 777
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:2",
+					"x": 647,
+					"y": 743
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:3",
+					"x": 107,
+					"y": -117
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:0",
+					"x": 107,
+					"y": 777
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:1",
+					"x": 647,
+					"y": -83
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:2",
+					"x": 593,
+					"y": -117
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:3",
+					"x": 53,
+					"y": 743
 				}
 			]
 		},
 		{
-			"masterId": "master:black",
-			"advanceWidth": 1000,
-			"leftSideBearing": 80,
+			"masterId": "master:heavy",
+			"advanceWidth": 700,
+			"leftSideBearing": 5,
 			"points": [
 				{
-					"pointId": "point:glyph:.notdef:00",
-					"x": 500,
-					"y": 820,
-					"incoming": {
-						"x": -280,
-						"y": 0
-					},
-					"outgoing": {
-						"x": 280,
-						"y": 0
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:02",
-					"x": 920,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": 280
-					},
-					"outgoing": {
-						"x": 0,
-						"y": -280
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:04",
-					"x": 500,
-					"y": -20,
-					"incoming": {
-						"x": 280,
-						"y": 0
-					},
-					"outgoing": {
-						"x": -280,
-						"y": 0
-					}
-				},
-				{
-					"pointId": "point:glyph:.notdef:06",
+					"pointId": "point:glyph:.notdef:0:0",
 					"x": 80,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": -280
-					},
-					"outgoing": {
-						"x": 0,
-						"y": 280
-					}
+					"y": -25
 				},
 				{
-					"pointId": "point:glyph:.notdef:08",
-					"x": 500,
-					"y": 448,
-					"incoming": {
-						"x": 32,
-						"y": 0
-					},
-					"outgoing": {
-						"x": -32,
-						"y": 0
-					}
+					"pointId": "point:glyph:.notdef:0:1",
+					"x": 620,
+					"y": -25
 				},
 				{
-					"pointId": "point:glyph:.notdef:10",
-					"x": 452,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": 32
-					},
-					"outgoing": {
-						"x": 0,
-						"y": -32
-					}
+					"pointId": "point:glyph:.notdef:0:2",
+					"x": 620,
+					"y": -175
 				},
 				{
-					"pointId": "point:glyph:.notdef:12",
-					"x": 500,
-					"y": 352,
-					"incoming": {
-						"x": -32,
-						"y": 0
-					},
-					"outgoing": {
-						"x": 32,
-						"y": 0
-					}
+					"pointId": "point:glyph:.notdef:0:3",
+					"x": 80,
+					"y": -175
 				},
 				{
-					"pointId": "point:glyph:.notdef:14",
-					"x": 548,
-					"y": 400,
-					"incoming": {
-						"x": 0,
-						"y": -32
-					},
-					"outgoing": {
-						"x": 0,
-						"y": 32
-					}
+					"pointId": "point:glyph:.notdef:1:0",
+					"x": 545,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:1",
+					"x": 545,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:2",
+					"x": 695,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:1:3",
+					"x": 695,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:0",
+					"x": 620,
+					"y": 685
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:1",
+					"x": 80,
+					"y": 685
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:2",
+					"x": 80,
+					"y": 835
+				},
+				{
+					"pointId": "point:glyph:.notdef:2:3",
+					"x": 620,
+					"y": 835
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:0",
+					"x": 155,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:1",
+					"x": 155,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:2",
+					"x": 5,
+					"y": -100
+				},
+				{
+					"pointId": "point:glyph:.notdef:3:3",
+					"x": 5,
+					"y": 760
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:0",
+					"x": 16,
+					"y": -60
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:1",
+					"x": 556,
+					"y": 800
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:2",
+					"x": 684,
+					"y": 720
+				},
+				{
+					"pointId": "point:glyph:.notdef:4:3",
+					"x": 144,
+					"y": -140
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:0",
+					"x": 144,
+					"y": 800
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:1",
+					"x": 684,
+					"y": -60
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:2",
+					"x": 556,
+					"y": -140
+				},
+				{
+					"pointId": "point:glyph:.notdef:5:3",
+					"x": 16,
+					"y": 720
 				}
 			]
 		}

@@ -1,11 +1,11 @@
 {
-	"ascender": 820,
-	"descender": -200,
-	"lineGap": 0,
-	"winAscent": 820,
-	"winDescent": 200,
+	"ascender": 780,
+	"descender": -220,
+	"lineGap": 80,
+	"winAscent": 850,
+	"winDescent": 300,
 	"xHeight": 500,
-	"capHeight": 820,
-	"underlinePosition": -100,
-	"underlineThickness": 50
+	"capHeight": 700,
+	"underlinePosition": -120,
+	"underlineThickness": 60
 }

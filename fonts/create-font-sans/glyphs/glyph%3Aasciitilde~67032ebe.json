@@ -1,0 +1,210 @@
+{
+	"id": "glyph:asciitilde",
+	"name": "asciitilde",
+	"export": true,
+	"overlap": true,
+	"contours": [
+		{
+			"id": "contour:glyph:asciitilde:0",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:asciitilde:0:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:0:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:0:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:0:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:asciitilde:1",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:asciitilde:1:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:1:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:1:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:1:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:asciitilde:2",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:asciitilde:2:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:2:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:2:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:asciitilde:2:3",
+					"mode": "hard"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 700,
+			"leftSideBearing": 99,
+			"points": [
+				{
+					"pointId": "point:glyph:asciitilde:0:0",
+					"x": 99,
+					"y": 324
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:1",
+					"x": 239,
+					"y": 444
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:2",
+					"x": 281,
+					"y": 396
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:3",
+					"x": 141,
+					"y": 276
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:0",
+					"x": 280,
+					"y": 445
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:1",
+					"x": 460,
+					"y": 305
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:2",
+					"x": 420,
+					"y": 255
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:3",
+					"x": 240,
+					"y": 395
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:0",
+					"x": 419,
+					"y": 304
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:1",
+					"x": 559,
+					"y": 424
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:2",
+					"x": 601,
+					"y": 376
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:3",
+					"x": 461,
+					"y": 256
+				}
+			]
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 700,
+			"leftSideBearing": 71,
+			"points": [
+				{
+					"pointId": "point:glyph:asciitilde:0:0",
+					"x": 71,
+					"y": 357
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:1",
+					"x": 211,
+					"y": 477
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:2",
+					"x": 309,
+					"y": 363
+				},
+				{
+					"pointId": "point:glyph:asciitilde:0:3",
+					"x": 169,
+					"y": 243
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:0",
+					"x": 306,
+					"y": 479
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:1",
+					"x": 486,
+					"y": 339
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:2",
+					"x": 394,
+					"y": 221
+				},
+				{
+					"pointId": "point:glyph:asciitilde:1:3",
+					"x": 214,
+					"y": 361
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:0",
+					"x": 391,
+					"y": 337
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:1",
+					"x": 531,
+					"y": 457
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:2",
+					"x": 629,
+					"y": 343
+				},
+				{
+					"pointId": "point:glyph:asciitilde:2:3",
+					"x": 489,
+					"y": 223
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,85 @@
+{
+	"id": "glyph:period",
+	"name": "period",
+	"export": true,
+	"contours": [
+		{
+			"id": "contour:glyph:period:0",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:period:0:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:period:0:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:period:0:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:period:0:3",
+					"mode": "hard"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 460,
+			"leftSideBearing": 315,
+			"points": [
+				{
+					"pointId": "point:glyph:period:0:0",
+					"x": 315,
+					"y": 32
+				},
+				{
+					"pointId": "point:glyph:period:0:1",
+					"x": 385,
+					"y": 32
+				},
+				{
+					"pointId": "point:glyph:period:0:2",
+					"x": 385,
+					"y": -32
+				},
+				{
+					"pointId": "point:glyph:period:0:3",
+					"x": 315,
+					"y": -32
+				}
+			]
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 460,
+			"leftSideBearing": 315,
+			"points": [
+				{
+					"pointId": "point:glyph:period:0:0",
+					"x": 315,
+					"y": 75
+				},
+				{
+					"pointId": "point:glyph:period:0:1",
+					"x": 385,
+					"y": 75
+				},
+				{
+					"pointId": "point:glyph:period:0:2",
+					"x": 385,
+					"y": -75
+				},
+				{
+					"pointId": "point:glyph:period:0:3",
+					"x": 315,
+					"y": -75
+				}
+			]
+		}
+	]
+}
