@@ -39,7 +39,8 @@
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
 		"dev": "bun --watch ./src/font-cli.ts dev --root=../..",
-		"test": "bun test"
+		"test": "bun run test:browser-bundle && bun test --path-ignore-patterns='**/preact-compat.test.ts'",
+		"test:browser-bundle": "bun test ./tests/preact-compat.test.ts"
 	},
 	"dependencies": {
 		"@elysia/static": "1.4.11",
