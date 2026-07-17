@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest"
 import { resolveVerticalMetricGuides } from "@create-font/states"
 
 import {
+	incidentStraightProjectionCandidates,
+	projectionGuidePoints,
 	snapDraggedPoint,
 	snapDraggedTarget,
 	type DragPositionTarget,
+	type SegmentProjectionCandidate,
 } from "../src/canvas-snapping.ts"
 import { makeDemoFont } from "../src/demo-font.ts"
 import { parseNumericInput } from "../src/numeric-input.ts"
@@ -13,6 +16,30 @@ import { parseNumericInput } from "../src/numeric-input.ts"
 const metricLines = resolveVerticalMetricGuides(makeDemoFont().metrics).filter(
 	(guide) => guide.kind === "line",
 )
+
+const diagonalProjection: SegmentProjectionCandidate = {
+	id: "contour:test/0",
+	label: "Straight segment projection",
+	origin: { x: 0, y: 0 },
+	neighbor: { x: 100, y: 100 },
+}
+
+const projectionInput = (
+	x: number,
+	y: number,
+	projectionCandidates: readonly SegmentProjectionCandidate[] = [
+		diagonalProjection,
+	],
+) => ({
+	pointId: "point:dragged" as const,
+	x,
+	y,
+	nodes: [],
+	metrics: [],
+	worldScale: 1,
+	thresholdPixels: 10,
+	projectionCandidates,
+})
 
 describe("canvas snapping", () => {
 	it("snaps axes independently and excludes the dragged node", () => {
@@ -81,6 +108,186 @@ describe("canvas snapping", () => {
 		position = { x: 120, y: 480 }
 		expect(snapDraggedTarget(target, context)).toMatchObject({ x: 120, y: 480 })
 		expect(position).toEqual({ x: 120, y: 480 })
+	})
+
+	it("snapshots only non-degenerate incident straight segments", () => {
+		const next = { pointId: "point:next" as const, x: 100, y: 100 }
+		const openCandidates = incidentStraightProjectionCandidates(
+			[
+				{
+					id: "contour:open",
+					closed: false,
+					nodes: [
+						{ pointId: "point:previous", x: 0, y: 0 },
+						next,
+						{
+							pointId: "point:curved",
+							x: 200,
+							y: 50,
+							incoming: { x: -20, y: 10 },
+						},
+					],
+				},
+			],
+			"point:next",
+		)
+		expect(openCandidates).toEqual([
+			{
+				id: "contour:open/0",
+				label: "Straight segment projection",
+				origin: { x: 100, y: 100 },
+				neighbor: { x: 0, y: 0 },
+			},
+		])
+		next.x = 900
+		expect(openCandidates[0]?.origin).toEqual({ x: 100, y: 100 })
+
+		const closedCandidates = incidentStraightProjectionCandidates(
+			[
+				{
+					id: "contour:closed",
+					closed: true,
+					nodes: [
+						{ pointId: "point:dragged", x: 0, y: 0 },
+						{ pointId: "point:next", x: 100, y: 100 },
+						{ pointId: "point:previous", x: -100, y: 100 },
+					],
+				},
+			],
+			"point:dragged",
+		)
+		expect(closedCandidates.map((candidate) => candidate.id)).toEqual([
+			"contour:closed/0",
+			"contour:closed/2",
+		])
+		expect(
+			incidentStraightProjectionCandidates(
+				[
+					{
+						id: "contour:degenerate",
+						closed: false,
+						nodes: [
+							{ pointId: "point:dragged", x: 0, y: 0 },
+							{ pointId: "point:same", x: 0, y: 0 },
+						],
+					},
+				],
+				"point:dragged",
+			),
+		).toEqual([])
+	})
+
+	it.each([
+		{
+			name: "horizontal",
+			candidate: { ...diagonalProjection, neighbor: { x: 100, y: 0 } },
+			point: { x: 60, y: 6 },
+			expected: { x: 60, y: 0, amount: 0.6 },
+		},
+		{
+			name: "vertical",
+			candidate: { ...diagonalProjection, neighbor: { x: 0, y: 100 } },
+			point: { x: -6, y: 60 },
+			expected: { x: 0, y: 60, amount: 0.6 },
+		},
+		{
+			name: "reversed diagonal",
+			candidate: {
+				...diagonalProjection,
+				origin: { x: 100, y: 100 },
+				neighbor: { x: 0, y: 0 },
+			},
+			point: { x: 40, y: 50 },
+			expected: { x: 45, y: 45, amount: 0.55 },
+		},
+	])(
+		"projects onto an eligible $name line",
+		({ candidate, point, expected }) => {
+			const result = snapDraggedPoint(
+				projectionInput(point.x, point.y, [candidate]),
+			)
+			expect(result.x).toBeCloseTo(expected.x)
+			expect(result.y).toBeCloseTo(expected.y)
+			expect(result.snaps[0]).toMatchObject({
+				axis: "projection",
+				kind: "segment-projection",
+				amount: expected.amount,
+			})
+		},
+	)
+
+	it("leaves projection amounts unbounded for interpolation and extrapolation", () => {
+		const inward = snapDraggedPoint(projectionInput(40, 30))
+		expect(inward).toMatchObject({ x: 35, y: 35 })
+		expect(inward.snaps[0]).toMatchObject({ amount: 0.35 })
+
+		const beforeOrigin = snapDraggedPoint(projectionInput(-50, -40))
+		expect(beforeOrigin).toMatchObject({ x: -45, y: -45 })
+		expect(beforeOrigin.snaps[0]).toMatchObject({ amount: -0.45 })
+
+		const pastNeighbor = snapDraggedPoint(projectionInput(150, 160))
+		expect(pastNeighbor).toMatchObject({ x: 155, y: 155 })
+		expect(pastNeighbor.snaps[0]).toMatchObject({ amount: 1.55 })
+	})
+
+	it("uses screen distance, stable ties, and explicit constraint precedence", () => {
+		const outsideAtOneToOne = snapDraggedPoint({
+			...projectionInput(50, 60),
+			thresholdPixels: 7,
+		})
+		expect(outsideAtOneToOne).toMatchObject({ x: 50, y: 60, snaps: [] })
+		const insideWhenZoomedOut = snapDraggedPoint({
+			...projectionInput(50, 60),
+			thresholdPixels: 7,
+			worldScale: 0.5,
+		})
+		expect(insideWhenZoomedOut.x).toBeCloseTo(55)
+		expect(insideWhenZoomedOut.y).toBeCloseTo(55)
+
+		const tied = snapDraggedPoint(
+			projectionInput(5, 5, [
+				{
+					...diagonalProjection,
+					id: "segment:z-horizontal",
+					neighbor: { x: 100, y: 0 },
+				},
+				{
+					...diagonalProjection,
+					id: "segment:a-vertical",
+					neighbor: { x: 0, y: 100 },
+				},
+			]),
+		)
+		expect(tied).toMatchObject({ x: 0, y: 5 })
+		expect(tied.snaps[0]).toMatchObject({ id: "segment:a-vertical" })
+
+		const explicit = snapDraggedPoint({
+			...projectionInput(5, 5),
+			explicitConstraint: () => ({ x: 20, y: 30, snaps: [] }),
+		})
+		expect(explicit).toEqual({ x: 20, y: 30, snaps: [] })
+	})
+
+	it("keeps the live target on the coupled projection and extends its guide", () => {
+		let position = { x: 150, y: 160 }
+		const target: DragPositionTarget = {
+			x: () => position.x,
+			y: () => position.y,
+			position: (next) => {
+				position = { ...next }
+			},
+		}
+		const result = snapDraggedTarget(target, {
+			...projectionInput(position.x, position.y),
+		})
+		expect(position).toEqual({ x: 155, y: 155 })
+		const snap = result.snaps[0]
+		expect(snap?.axis).toBe("projection")
+		if (snap?.axis !== "projection") throw new Error("Missing projection snap.")
+		expect(projectionGuidePoints(snap, 1_000)).toEqual([
+			-707.1067811865474, -707.1067811865474, 707.1067811865474,
+			707.1067811865474,
+		])
 	})
 })
 
