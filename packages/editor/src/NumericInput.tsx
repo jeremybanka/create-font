@@ -1,7 +1,9 @@
 import type { JSX } from "preact"
 import { useEffect, useRef, useState } from "preact/hooks"
 
-import { parseNumericInput } from "./numeric-input.ts"
+import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
+import { keyboardStepMultiplier } from "./keyboard-step.ts"
+import { parseNumericInput, stepNumericInput } from "./numeric-input.ts"
 
 export interface NumericInputProps {
 	readonly "aria-label": string
@@ -42,7 +44,19 @@ export function NumericInput(props: NumericInputProps) {
 				onInput={(event) => setDraft(event.currentTarget.value)}
 				onBlur={commit}
 				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
-					if (event.key === "Enter") {
+					if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+						event.preventDefault()
+						const value = stepNumericInput(
+							draft,
+							props.value,
+							event.key === "ArrowUp" ? 1 : -1,
+							keyboardStepMultiplier(event, IS_MAC_LIKE),
+							props.min,
+							props.max,
+						)
+						setDraft(String(value))
+						if (value !== props.value) props.onCommit(value)
+					} else if (event.key === "Enter") {
 						event.preventDefault()
 						commit()
 						event.currentTarget.blur()

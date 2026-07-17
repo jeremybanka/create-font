@@ -8,6 +8,7 @@ export interface PaletteCommand {
 	readonly keywords?: readonly string[]
 	readonly shortcut?: string
 	readonly disabled?: boolean
+	readonly disabledReason?: string | undefined
 	readonly do: () => void
 }
 

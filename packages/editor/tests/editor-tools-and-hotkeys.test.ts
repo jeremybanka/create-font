@@ -5,6 +5,7 @@ import {
 	formatHotkey,
 	isMacLike,
 	TOOLS,
+	toolDisabledReason,
 	toolForKeyboardEvent,
 } from "../src/editor-tools-and-hotkeys.ts"
 
@@ -15,6 +16,7 @@ function keyboardEvent(
 		ctrlKey: boolean
 		shiftKey: boolean
 		altKey: boolean
+		defaultPrevented: boolean
 	}> = {},
 ) {
 	return {
@@ -23,11 +25,27 @@ function keyboardEvent(
 		ctrlKey: false,
 		shiftKey: false,
 		altKey: false,
+		defaultPrevented: false,
 		...overrides,
 	}
 }
 
 describe("editor tools and hotkeys", () => {
+	it("explains disabled tool states with an actionable remedy", () => {
+		const context = {
+			editingTextIndex: null,
+			activeTool: "select",
+			history: { at: 0, length: 0 },
+			selection: [],
+			activeLayer: null,
+		} as unknown as Parameters<typeof toolDisabledReason>[1]
+		expect(toolDisabledReason(TOOLS.PEN, context)).toBe(
+			"Double-click a glyph to enter outline editing.",
+		)
+		expect(toolDisabledReason(TOOLS.UNDO, context)).toBe(
+			"There are no edits to undo.",
+		)
+	})
 	it("matches exact platform-specific shortcuts", () => {
 		expect(
 			toolForKeyboardEvent(keyboardEvent({ metaKey: true }), true)?.id,
@@ -52,6 +70,21 @@ describe("editor tools and hotkeys", () => {
 		)
 		expect(TOOLS.PEN.hotkey).toEqual({ key: "q" })
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
+	})
+
+	it("ignores shortcuts already consumed by an interaction mode", () => {
+		expect(
+			toolForKeyboardEvent(
+				keyboardEvent({ key: "q", defaultPrevented: true }),
+				true,
+			),
+		).toBeUndefined()
+		expect(
+			toolForKeyboardEvent(
+				keyboardEvent({ metaKey: true, defaultPrevented: true }),
+				true,
+			),
+		).toBeUndefined()
 	})
 
 	it("maps transform and path commands to exact shortcuts", () => {

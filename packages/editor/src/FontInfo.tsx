@@ -4,9 +4,12 @@ import {
 	type EditorFontSource,
 	type VerticalAlignmentMetricId,
 } from "@create-font/states"
+import type { JSX } from "preact"
 
+import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontInfo.module.css"
+import { stepBoundedNumber } from "./keyboard-step.ts"
 import { useO } from "./state-hooks.ts"
 
 export interface FontInfoProps {
@@ -382,6 +385,24 @@ function NumberField({
 					onInput={(event) => {
 						const next = event.currentTarget.valueAsNumber
 						if (Number.isFinite(next)) onInput(next)
+					}}
+					onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+						if (
+							(event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
+							(!event.shiftKey && !event.metaKey && !event.ctrlKey)
+						)
+							return
+						event.preventDefault()
+						const direction = event.key === "ArrowUp" ? 1 : -1
+						const next = stepBoundedNumber(
+							value,
+							direction,
+							event,
+							IS_MAC_LIKE,
+							min,
+							max,
+						)
+						if (next !== value) onInput(next)
 					}}
 				/>
 			</label>

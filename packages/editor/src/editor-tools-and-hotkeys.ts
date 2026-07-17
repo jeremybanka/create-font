@@ -75,6 +75,33 @@ export interface Tool {
 	readonly do: (context: ToolContext) => void
 }
 
+export function toolDisabledReason(
+	tool: Tool,
+	context: ToolContext,
+): string | undefined {
+	if (tool.status(context) !== "disabled") return undefined
+	if (
+		context.editingTextIndex === null &&
+		tool.id !== "undo" &&
+		tool.id !== "redo"
+	)
+		return "Double-click a glyph to enter outline editing."
+	switch (tool.id) {
+		case "align-selection":
+			return "Select at least two nodes or handles to align."
+		case "reverse-path":
+			return "Select controls from exactly one closed path."
+		case "make-node-first":
+			return "Select one non-first node on a closed path."
+		case "undo":
+			return "There are no edits to undo."
+		case "redo":
+			return "There are no edits to redo."
+		default:
+			return "This action is unavailable in the current editor state."
+	}
+}
+
 function selectedContour(context: ToolContext): EditorCanvasContour | null {
 	const selectedIds = new Set(context.selection.map((target) => target.pointId))
 	const contours = (context.activeLayer?.contours ?? []).filter((contour) =>
@@ -267,6 +294,7 @@ function buildQuickLookup(
 const HOTKEY_QUICK_LOOKUP = buildQuickLookup(TOOLS)
 
 interface KeyboardShortcutEvent {
+	readonly defaultPrevented?: boolean
 	readonly key: string
 	readonly metaKey: boolean
 	readonly ctrlKey: boolean
@@ -278,6 +306,7 @@ export function toolForKeyboardEvent(
 	event: KeyboardShortcutEvent,
 	macLike = IS_MAC_LIKE,
 ): Tool | undefined {
+	if (event.defaultPrevented) return undefined
 	// Treat the non-platform modifier as an extra modifier, not as Mod.
 	if (macLike ? event.ctrlKey : event.metaKey) return undefined
 	return HOTKEY_QUICK_LOOKUP[

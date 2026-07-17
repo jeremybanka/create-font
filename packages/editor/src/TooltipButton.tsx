@@ -38,6 +38,7 @@ type TooltipButtonProps = Omit<
 		buttonRef?: Ref<HTMLButtonElement>
 		description: string
 		disabled?: boolean
+		disabledReason?: string | undefined
 		hotkey?: Hotkey
 		label: string
 		placement?: Placement
@@ -56,6 +57,7 @@ export function TooltipButton({
 	children,
 	description,
 	disabled = false,
+	disabledReason,
 	hotkey,
 	label,
 	onBlur,
@@ -66,7 +68,7 @@ export function TooltipButton({
 	...buttonProps
 }: TooltipButtonProps) {
 	const id = `tooltip-${useId().replaceAll(`:`, ``)}`
-	const triggerRef = useRef<HTMLButtonElement>(null)
+	const buttonElementRef = useRef<HTMLButtonElement>(null)
 	const tooltipRef = useRef<HTMLElement>(null)
 	const [intent, setIntent] = useState(INITIAL_TOOLTIP_INTENT)
 	const [visible, setVisible] = useState(false)
@@ -74,16 +76,21 @@ export function TooltipButton({
 		Readonly<{ left: number; top: number }> | undefined
 	>()
 	const keycaps = hotkey === undefined ? [] : formatHotkey(hotkey)
-	const wantsToOpen = tooltipWantsToOpen(intent, disabled)
+	const explainedDisabled = disabled && disabledReason !== undefined
+	const tooltipDescription = explainedDisabled ? disabledReason : description
+	const wantsToOpen = tooltipWantsToOpen(
+		intent,
+		disabled && disabledReason === undefined,
+	)
 	const dispatch = (event: TooltipIntentEvent): void => {
 		setIntent((current) => nextTooltipIntent(current, event))
 	}
 
 	useEffect(() => {
-		if (!disabled) return
+		if (!disabled || explainedDisabled) return
 		dispatch("disable")
 		setVisible(false)
-	}, [disabled])
+	}, [disabled, explainedDisabled])
 
 	useEffect(() => {
 		if (!wantsToOpen) {
@@ -100,7 +107,7 @@ export function TooltipButton({
 	}, [visible, wantsToOpen])
 
 	useLayoutEffect(() => {
-		const trigger = triggerRef.current
+		const trigger = buttonElementRef.current
 		const tooltip = tooltipRef.current
 		if (!visible || trigger === null || tooltip === null) return
 		try {
@@ -129,17 +136,36 @@ export function TooltipButton({
 	return (
 		<tooltip-button
 			className={css.class}
+			data-disabled-reason={explainedDisabled ? "true" : "false"}
+			role={explainedDisabled ? "group" : undefined}
+			aria-label={explainedDisabled ? `${label} unavailable` : undefined}
+			aria-disabled={explainedDisabled ? "true" : undefined}
+			aria-describedby={explainedDisabled && visible ? id : undefined}
+			tabIndex={explainedDisabled ? 0 : undefined}
 			onPointerEnter={() => dispatch("pointer-enter")}
 			onPointerLeave={() => dispatch("pointer-leave")}
+			onFocus={() => {
+				if (explainedDisabled) dispatch("focus")
+			}}
+			onBlur={() => {
+				if (explainedDisabled) dispatch("blur")
+			}}
+			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+				if (!explainedDisabled || event.key !== "Escape") return
+				dispatch("escape")
+				setVisible(false)
+				event.stopPropagation()
+			}}
 		>
 			<button
 				{...buttonProps}
 				ref={(node) => {
-					triggerRef.current = node
+					buttonElementRef.current = node
 					assignRef(buttonRef, node)
 				}}
 				type={buttonProps.type ?? "button"}
 				aria-label={label}
+				aria-hidden={explainedDisabled ? "true" : undefined}
 				aria-describedby={visible ? id : buttonProps["aria-describedby"]}
 				aria-keyshortcuts={
 					hotkey === undefined
@@ -182,7 +208,7 @@ export function TooltipButton({
 					style={position}
 				>
 					<strong aria-hidden="true">{label}</strong>
-					<span>{description}</span>
+					<span>{tooltipDescription}</span>
 					{keycaps.length === 0 ? null : (
 						<shortcut-keycaps aria-hidden="true">
 							{keycaps.map((keycap) => (

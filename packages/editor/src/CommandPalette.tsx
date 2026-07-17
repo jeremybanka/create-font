@@ -137,7 +137,7 @@ export function CommandPalette({
 									<small>{command.category}</small>
 								</command-name>
 								{command.disabled ? (
-									<small>Unavailable</small>
+									<small>{command.disabledReason ?? "Unavailable"}</small>
 								) : command.shortcut === undefined ? null : (
 									<kbd>{command.shortcut}</kbd>
 								)}

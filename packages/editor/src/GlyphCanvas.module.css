@@ -149,8 +149,8 @@ glyph-canvas.class {
 		overflow: hidden;
 		cursor: text;
 
-		&[data-tool="pen"] {
-			cursor: crosshair;
+		&[data-editing="true"] {
+			cursor: default;
 		}
 	}
 
