@@ -25,7 +25,7 @@ import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
-import { snapDraggedPoint, type ActiveSnap } from "./canvas-snapping.ts"
+import { snapDraggedTarget, type ActiveSnap } from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
 	previewHandleDrag,
@@ -1261,14 +1261,15 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															const dragPoint = (
 																event: KonvaEventObject<DragEvent>,
 															) => {
-																const snapped = snapDraggedPoint({
-																	pointId: point.pointId,
-																	x: Math.round(event.target.x()),
-																	y: Math.round(event.target.y()),
-																	nodes: allPoints,
-																	metrics: metricLines,
-																	worldScale,
-																})
+																const snapped = snapDraggedTarget(
+																	event.target,
+																	{
+																		pointId: point.pointId,
+																		nodes: allPoints,
+																		metrics: metricLines,
+																		worldScale,
+																	},
+																)
 																return {
 																	point: {
 																		pointId: point.pointId,
