@@ -31,11 +31,14 @@ import {
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import {
 	incidentStraightProjectionCandidates,
+	orthogonalConstraint,
 	projectionGuidePoints,
-	snapDraggedTarget,
+	resolveGesturePoint,
 	snapGroupTranslation,
 	type ActiveSnap,
+	type DragPositionTarget,
 	type SegmentProjectionCandidate,
+	type SnappedPoint,
 } from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
@@ -100,8 +103,11 @@ interface DraggedPoint {
 
 interface PointDrag {
 	readonly pointId: PointId
+	readonly origin: Readonly<{ x: number; y: number }>
+	readonly startPointer: Readonly<{ x: number; y: number }>
 	readonly projectionCandidates: readonly SegmentProjectionCandidate[]
-	lastPoint: DraggedPoint | null
+	readonly target: DragPositionTarget
+	lastRawPoint: Readonly<{ x: number; y: number }> | null
 }
 
 interface DraggedHandle {
@@ -143,6 +149,7 @@ interface GroupDrag {
 	readonly controls: readonly ResolvedSelectionControl[]
 	readonly bounds: SelectionBounds
 	readonly selectedPointIds: ReadonlySet<PointId>
+	lastRawDelta: Readonly<{ x: number; y: number }> | null
 }
 
 interface LiveGroupDragTarget {
@@ -198,6 +205,11 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
 	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
+	const [shiftHeld, setShiftHeld] = useState(false)
+	const [penPointer, setPenPointer] = useState<Readonly<{
+		x: number
+		y: number
+	}> | null>(null)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
 	const [transformPreview, setTransformPreview] =
@@ -362,7 +374,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		)
 	}
 	const pointerInEditingGlyph = (
-		event: KonvaEventObject<MouseEvent>,
+		event: KonvaEventObject<MouseEvent | DragEvent>,
 	): Readonly<{ x: number; y: number }> | null => {
 		if (editingPosition === undefined) return null
 		const pointer = event.target.getStage()?.getPointerPosition() ?? {
@@ -373,6 +385,65 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			x: (pointer.x - view.x) / worldScale - editingPosition.x,
 			y: editingPosition.baseline - (pointer.y - view.y) / worldScale,
 		}
+	}
+	const currentPenContour =
+		penContourId === null
+			? undefined
+			: visibleContours.find((contour) => contour.id === penContourId)
+	const penAnchor = currentPenContour?.nodes.at(-1) ?? null
+	const resolveCanvasGesturePoint = (
+		pointId: PointId,
+		anchor: Readonly<{ x: number; y: number }> | null,
+		candidate: Readonly<{ x: number; y: number }>,
+		shiftKey: boolean,
+		projectionCandidates: readonly SegmentProjectionCandidate[] = [],
+	): SnappedPoint =>
+		resolveGesturePoint({
+			pointId,
+			anchor,
+			candidate: {
+				x: Math.round(candidate.x),
+				y: Math.round(candidate.y),
+			},
+			shiftKey,
+			nodes: allPoints,
+			metrics: metricLines,
+			worldScale,
+			projectionCandidates,
+		})
+	const penPlacement =
+		activeTool === "pen" && editingTextIndex !== null && penPointer !== null
+			? resolveCanvasGesturePoint(
+					"point:pen-placement-preview" as PointId,
+					penAnchor,
+					penPointer,
+					shiftHeld,
+				)
+			: null
+	const visibleSnaps =
+		activeTool === "pen" ? (penPlacement?.snaps ?? []) : activeSnaps
+	const applyPointDrag = (
+		drag: PointDrag,
+		rawPoint: Readonly<{ x: number; y: number }>,
+		shiftKey: boolean,
+	): DraggedPoint => {
+		const snapped = resolveCanvasGesturePoint(
+			drag.pointId,
+			drag.origin,
+			rawPoint,
+			shiftKey,
+			drag.projectionCandidates,
+		)
+		const point = {
+			pointId: drag.pointId,
+			x: snapped.x,
+			y: snapped.y,
+		}
+		drag.target.position({ x: point.x, y: point.y })
+		drag.lastRawPoint = rawPoint
+		setDraggedPoint(point)
+		setActiveSnaps(snapped.snaps)
+		return point
 	}
 	const targetsInside = (
 		box: SelectionBox,
@@ -398,7 +469,23 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}, [setCaretIndex])
 
 	useEffect(() => {
+		const updateShift = (event: KeyboardEvent): void => {
+			if (event.key === "Shift") setShiftHeld(event.type === "keydown")
+		}
+		const resetShift = (): void => setShiftHeld(false)
+		window.addEventListener("keydown", updateShift)
+		window.addEventListener("keyup", updateShift)
+		window.addEventListener("blur", resetShift)
+		return () => {
+			window.removeEventListener("keydown", updateShift)
+			window.removeEventListener("keyup", updateShift)
+			window.removeEventListener("blur", resetShift)
+		}
+	}, [])
+
+	useEffect(() => {
 		setPenContourId(null)
+		setPenPointer(null)
 		setActiveSnaps([])
 		pointDragRef.current = null
 		setGroupDrag(null)
@@ -420,6 +507,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		live.node.position({ x: control.x, y: control.y })
 		live.node.getLayer()?.batchDraw()
 	}, [contours, groupDrag, transformPreview])
+
+	useEffect(() => {
+		const drag = pointDragRef.current
+		if (drag?.lastRawPoint === null || drag?.lastRawPoint === undefined) return
+		applyPointDrag(drag, drag.lastRawPoint, shiftHeld)
+	}, [shiftHeld])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -544,6 +637,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				closed: true,
 			})
 			setPenContourId(null)
+			setPenPointer(null)
 			return
 		}
 		const pointId = nextPenEntityId("point") as PointId
@@ -566,6 +660,22 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		}
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
 		setShowNodes(true)
+		setPenPointer(null)
+	}
+	const placePenPoint = (event: KonvaEventObject<MouseEvent>): void => {
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return
+		const placement = resolveCanvasGesturePoint(
+			"point:pen-placement-preview" as PointId,
+			penAnchor,
+			pointer,
+			event.evt.shiftKey,
+		)
+		addPenPoint(placement.x, placement.y)
+	}
+	const previewPenPoint = (event: KonvaEventObject<MouseEvent>): void => {
+		setPenPointer(pointerInEditingGlyph(event))
+		if (shiftHeld !== event.evt.shiftKey) setShiftHeld(event.evt.shiftKey)
 	}
 	const closePenContour = (contourId: ContourId): void => {
 		workspace.font.actions.setContourClosed({
@@ -574,6 +684,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			closed: true,
 		})
 		setPenContourId(null)
+		setPenPointer(null)
 	}
 	const roundedTransform = (
 		result: SelectionTransformResult,
@@ -611,29 +722,45 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			controls,
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
+			lastRawDelta: null,
 		}
 		groupDragRef.current = nextGroupDrag
 		setGroupDrag(nextGroupDrag)
 		return true
 	}
-	const resolveGroupDrag = (
-		event: KonvaEventObject<DragEvent>,
+	const applyGroupDrag = (
+		currentGroupDrag: GroupDrag,
+		rawDelta: Readonly<{ x: number; y: number }>,
+		shiftKey: boolean,
 	): Readonly<{
 		preview: SelectionTransformResult
 		snaps: readonly ActiveSnap[]
-	}> | null => {
-		const currentGroupDrag = groupDragRef.current
-		if (currentGroupDrag === null) return null
+	}> => {
+		const deltaConstraint = orthogonalConstraint(
+			{ x: 0, y: 0 },
+			rawDelta,
+			shiftKey,
+		)
 		const snapped = snapGroupTranslation({
 			bounds: currentGroupDrag.bounds,
-			deltaX: Math.round(event.target.x() - currentGroupDrag.targetX),
-			deltaY: Math.round(event.target.y() - currentGroupDrag.targetY),
+			deltaX: Math.round(rawDelta.x),
+			deltaY: Math.round(rawDelta.y),
 			selectedPointIds: currentGroupDrag.selectedPointIds,
 			nodes: allPoints,
 			metrics: metricLines,
 			worldScale,
+			axisConstraint:
+				deltaConstraint === null
+					? null
+					: {
+							axis: deltaConstraint.axis,
+							value:
+								deltaConstraint.axis === "x"
+									? currentGroupDrag.targetX
+									: currentGroupDrag.targetY,
+						},
 		})
-		event.target.position({
+		currentGroupDrag.node.position({
 			x: currentGroupDrag.targetX + snapped.deltaX,
 			y: currentGroupDrag.targetY + snapped.deltaY,
 		})
@@ -646,6 +773,31 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			snaps: snapped.snaps,
 		}
 	}
+	const resolveGroupDrag = (
+		event: KonvaEventObject<DragEvent>,
+	): ReturnType<typeof applyGroupDrag> | null => {
+		const currentGroupDrag = groupDragRef.current
+		if (currentGroupDrag === null) return null
+		const rawDelta = {
+			x: event.target.x() - currentGroupDrag.targetX,
+			y: event.target.y() - currentGroupDrag.targetY,
+		}
+		currentGroupDrag.lastRawDelta = rawDelta
+		return applyGroupDrag(currentGroupDrag, rawDelta, event.evt.shiftKey)
+	}
+	useEffect(() => {
+		const currentGroupDrag = groupDragRef.current
+		if (currentGroupDrag?.lastRawDelta === null || currentGroupDrag === null)
+			return
+		const resolved = applyGroupDrag(
+			currentGroupDrag,
+			currentGroupDrag.lastRawDelta,
+			shiftHeld,
+		)
+		setTransformPreview(resolved.preview)
+		setActiveSnaps(resolved.snaps)
+		currentGroupDrag.node.getLayer()?.batchDraw()
+	}, [shiftHeld])
 	const previewGroupDrag = (event: KonvaEventObject<DragEvent>): boolean => {
 		const cancellation = cancelledGroupDrag.current
 		if (
@@ -819,6 +971,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			amount: nearest.amount,
 		})
 		setPenContourId(null)
+		setPenPointer(null)
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
 		setShowNodes(true)
 	}
@@ -1142,7 +1295,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							: activeTool === "pen"
 								? penContourId === null
 									? "Pen · click to start a contour"
-									: "Pen · click the first point to close"
+									: "Pen · Shift constrains · click the first point to close"
 								: `${master?.name ?? "No master"} layer · Escape returns to typing`}
 					</span>
 				</canvas-title>
@@ -1239,8 +1392,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (editingTextIndex !== null) {
 							if (activeTool === "pen") {
-								const point = pointerInEditingGlyph(event)
-								if (point !== null) addPenPoint(point.x, point.y)
+								placePenPoint(event)
 								return
 							}
 							if (!canStartBoxSelectionOn(event.target.name())) return
@@ -1268,6 +1420,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					}}
 					onMouseMove={(event: KonvaEventObject<MouseEvent>) => {
+						if (editingTextIndex !== null && activeTool === "pen") {
+							previewPenPoint(event)
+							return
+						}
 						if (selectionBox === null) return
 						const point = pointerInEditingGlyph(event)
 						if (point === null) return
@@ -1276,6 +1432,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 								? null
 								: { ...current, endX: point.x, endY: point.y },
 						)
+					}}
+					onMouseLeave={() => {
+						if (activeTool === "pen") setPenPointer(null)
 					}}
 					onMouseUp={() => {
 						if (selectionBox === null) return
@@ -1308,8 +1467,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 							onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 								if (editingTextIndex === null || activeTool !== "pen") return
 								event.cancelBubble = true
-								const point = pointerInEditingGlyph(event)
-								if (point !== null) addPenPoint(point.x, point.y)
+								placePenPoint(event)
 							}}
 						/>
 						<Group
@@ -1468,7 +1626,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											listening={false}
 										/>
 									))}
-									{activeSnaps.map((snap) => {
+									{visibleSnaps.map((snap) => {
 										const anchorLabel =
 											snap.axis === "projection" || snap.anchor === undefined
 												? snap.label
@@ -1555,6 +1713,33 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 										strokeWidth={1.25 * inverseScale}
 										listening={false}
 									/>
+									{penPlacement === null ? null : (
+										<Group listening={false}>
+											{penAnchor === null ? null : (
+												<Line
+													name="pen-placement-segment"
+													points={[
+														penAnchor.x,
+														penAnchor.y,
+														penPlacement.x,
+														penPlacement.y,
+													]}
+													stroke={palette.accent}
+													strokeWidth={1.5 * inverseScale}
+													dash={[5 * inverseScale, 4 * inverseScale]}
+												/>
+											)}
+											<Circle
+												name="pen-placement-preview"
+												x={penPlacement.x}
+												y={penPlacement.y}
+												radius={5 * inverseScale}
+												fill={palette.surface}
+												stroke={palette.accent}
+												strokeWidth={1.5 * inverseScale}
+											/>
+										</Group>
+									)}
 									{visibleContours.map((contour) => (
 										<Path
 											key={`segment-hit:${contour.id}`}
@@ -1698,45 +1883,43 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																	y: Math.round(event.target.y() - point.y),
 																},
 															})
-															const dragPoint = (
+															const rawPointForDrag = (
+																drag: PointDrag,
 																event: KonvaEventObject<DragEvent>,
-															) => {
-																const snapped = snapDraggedTarget(
-																	event.target,
-																	{
-																		pointId: point.pointId,
-																		nodes: allPoints,
-																		metrics: metricLines,
-																		worldScale,
-																		projectionCandidates:
-																			pointDragRef.current?.pointId ===
-																			point.pointId
-																				? pointDragRef.current
-																						.projectionCandidates
-																				: [],
-																	},
-																)
-																return {
-																	point: {
-																		pointId: point.pointId,
-																		x: snapped.x,
-																		y: snapped.y,
-																	},
-																	snaps: snapped.snaps,
-																}
+															): Readonly<{ x: number; y: number }> => {
+																const pointer = pointerInEditingGlyph(event)
+																return pointer === null
+																	? { x: event.target.x(), y: event.target.y() }
+																	: {
+																			x:
+																				drag.origin.x +
+																				(pointer.x - drag.startPointer.x),
+																			y:
+																				drag.origin.y +
+																				(pointer.y - drag.startPointer.y),
+																		}
 															}
 															const beginPointDrag = (
 																event: KonvaEventObject<DragEvent>,
 															): void => {
 																selectPoint(event)
+																const startPointer = pointerInEditingGlyph(
+																	event,
+																) ?? {
+																	x: point.x,
+																	y: point.y,
+																}
 																pointDragRef.current = {
 																	pointId: point.pointId,
+																	origin: { x: point.x, y: point.y },
+																	startPointer,
 																	projectionCandidates:
 																		incidentStraightProjectionCandidates(
 																			contours,
 																			point.pointId,
 																		),
-																	lastPoint: null,
+																	target: event.target,
+																	lastRawPoint: null,
 																}
 															}
 															const nodeProps = {
@@ -1770,28 +1953,25 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																	event: KonvaEventObject<DragEvent>,
 																) => {
 																	if (previewGroupDrag(event)) return
-																	const dragged = dragPoint(event)
-																	if (
-																		pointDragRef.current?.pointId ===
-																		point.pointId
-																	) {
-																		pointDragRef.current.lastPoint =
-																			dragged.point
-																	}
-																	setDraggedPoint(dragged.point)
-																	setActiveSnaps(dragged.snaps)
+																	const drag = pointDragRef.current
+																	if (drag?.pointId !== point.pointId) return
+																	applyPointDrag(
+																		drag,
+																		rawPointForDrag(drag, event),
+																		event.evt.shiftKey,
+																	)
 																},
 																onDragEnd: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
 																	if (commitGroupDrag(event)) return
-																	const preview =
-																		pointDragRef.current?.pointId ===
-																		point.pointId
-																			? pointDragRef.current.lastPoint
-																			: null
-																	const committed =
-																		preview ?? dragPoint(event).point
+																	const drag = pointDragRef.current
+																	if (drag?.pointId !== point.pointId) return
+																	const committed = applyPointDrag(
+																		drag,
+																		rawPointForDrag(drag, event),
+																		event.evt.shiftKey,
+																	)
 																	event.target.position({
 																		x: committed.x,
 																		y: committed.y,
@@ -2159,22 +2339,25 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
 				outline. Double-click an outline segment to select its path; use the Pen
 				Tool on a segment to insert a point, or Option/Alt-click a straight
-				segment to add curve handles. Press Escape to return to typing or cancel
-				a transform. Drag an empty area to box-select controls; press Command or
-				Control+A to select all, Shift+A to align, and Delete to remove the
-				selection. Use Command or Control+C and V to copy and paste outline
-				selections. Hold Option or Alt while deleting nodes to break paths open,
-				or while deleting a handle to remove its adjoining segment.
+				segment to add curve handles. Hold Shift to constrain node drags or Pen
+				placement horizontally or vertically. Press Escape to return to typing
+				or cancel a transform. Drag an empty area to box-select controls; press
+				Command or Control+A to select all, Shift+A to align, and Delete to
+				remove the selection. Use Command or Control+C and V to copy and paste
+				outline selections. Hold Option or Alt while deleting nodes to break
+				paths open, or while deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
 					(editingTextIndex === null
 						? `Typing mode at text position ${caretIndex}.`
-						: selection.length === 0
-							? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-							: selection.length === 1 && selectedPoint !== undefined
-								? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-								: `${selection.length} outline controls selected.`)}
+						: activeTool === "pen" && penPlacement !== null
+							? `Pen preview at ${penPlacement.x}, ${penPlacement.y}.`
+							: selection.length === 0
+								? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+								: selection.length === 1 && selectedPoint !== undefined
+									? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+									: `${selection.length} outline controls selected.`)}
 			</output>
 		</glyph-canvas>
 	)

@@ -10,7 +10,7 @@ export interface SnapNode {
 
 export interface ActiveAxisSnap {
 	readonly axis: "x" | "y"
-	readonly kind: "node" | "metric"
+	readonly kind: "node" | "metric" | "orthogonal-constraint"
 	readonly id: string
 	readonly label: string
 	readonly value: number
@@ -21,6 +21,12 @@ export interface SnappedGroupTranslation {
 	readonly deltaX: number
 	readonly deltaY: number
 	readonly snaps: readonly ActiveSnap[]
+}
+
+export interface AxisConstraint {
+	/** The coordinate held fixed by the gesture. */
+	readonly axis: "x" | "y"
+	readonly value: number
 }
 
 export interface SegmentProjectionCandidate {
@@ -57,6 +63,8 @@ export interface DraggedPointSnapContext {
 	readonly worldScale: number
 	readonly thresholdPixels?: number
 	readonly projectionCandidates?: readonly SegmentProjectionCandidate[]
+	/** Fixed-axis gesture constraints suppress projection snaps and own this axis. */
+	readonly axisConstraint?: AxisConstraint | null
 	/** Explicit gesture constraints such as Shift take precedence over automatic snaps. */
 	readonly explicitConstraint?: (
 		point: Readonly<{ x: number; y: number }>,
@@ -75,10 +83,45 @@ export interface ProjectionContour {
 }
 
 interface Candidate {
-	readonly kind: ActiveAxisSnap["kind"]
+	readonly kind: "node" | "metric"
 	readonly id: string
 	readonly label: string
 	readonly value: number
+}
+
+export interface GesturePointInput extends DraggedPointSnapContext {
+	readonly anchor: Readonly<{ x: number; y: number }> | null
+	readonly candidate: Readonly<{ x: number; y: number }>
+	readonly shiftKey: boolean
+}
+
+/**
+ * Locks the minor delta axis through an immutable gesture anchor. Exact diagonal
+ * ties choose horizontal motion, so y remains fixed.
+ */
+export function orthogonalConstraint(
+	anchor: Readonly<{ x: number; y: number }> | null,
+	candidate: Readonly<{ x: number; y: number }>,
+	enabled: boolean,
+): AxisConstraint | null {
+	if (!enabled || anchor === null) return null
+	return Math.abs(candidate.x - anchor.x) >= Math.abs(candidate.y - anchor.y)
+		? { axis: "y", value: anchor.y }
+		: { axis: "x", value: anchor.x }
+}
+
+/** Resolves Shift constraints and automatic snapping through one coordinate path. */
+export function resolveGesturePoint(input: GesturePointInput): SnappedPoint {
+	return snapDraggedPoint({
+		...input,
+		x: input.candidate.x,
+		y: input.candidate.y,
+		axisConstraint: orthogonalConstraint(
+			input.anchor,
+			input.candidate,
+			input.shiftKey,
+		),
+	})
 }
 
 interface ProjectedCandidate {
@@ -229,7 +272,15 @@ export function snapDraggedPoint(
 	const threshold = (input.thresholdPixels ?? 7) / input.worldScale
 	const explicit = input.explicitConstraint?.({ x: input.x, y: input.y })
 	if (explicit !== undefined && explicit !== null) return explicit
-	const projection = (input.projectionCandidates ?? [])
+	const constrainedX =
+		input.axisConstraint?.axis === "x" ? input.axisConstraint.value : input.x
+	const constrainedY =
+		input.axisConstraint?.axis === "y" ? input.axisConstraint.value : input.y
+	const projection = (
+		input.axisConstraint === null || input.axisConstraint === undefined
+			? (input.projectionCandidates ?? [])
+			: []
+	)
 		.map((candidate) => projectToCandidate(input, candidate))
 		.filter(
 			(candidate): candidate is ProjectedCandidate =>
@@ -257,7 +308,7 @@ export function snapDraggedPoint(
 		(node) => node.pointId !== input.pointId,
 	)
 	const xCandidate = nearest(
-		input.x,
+		constrainedX,
 		otherNodes.map((node) => ({
 			kind: "node",
 			id: node.pointId,
@@ -267,7 +318,7 @@ export function snapDraggedPoint(
 		threshold,
 	)
 	const yCandidate = nearest(
-		input.y,
+		constrainedY,
 		[
 			...otherNodes.map((node) => ({
 				kind: "node" as const,
@@ -285,11 +336,31 @@ export function snapDraggedPoint(
 		threshold,
 	)
 	const snaps: ActiveSnap[] = []
-	if (xCandidate !== null) snaps.push({ axis: "x", ...xCandidate })
-	if (yCandidate !== null) snaps.push({ axis: "y", ...yCandidate })
+	if (input.axisConstraint !== null && input.axisConstraint !== undefined) {
+		snaps.push({
+			axis: input.axisConstraint.axis,
+			kind: "orthogonal-constraint",
+			id: `shift-${input.axisConstraint.axis}`,
+			label:
+				input.axisConstraint.axis === "x"
+					? "Shift vertical constraint"
+					: "Shift horizontal constraint",
+			value: input.axisConstraint.value,
+		})
+	}
+	if (input.axisConstraint?.axis !== "x" && xCandidate !== null)
+		snaps.push({ axis: "x", ...xCandidate })
+	if (input.axisConstraint?.axis !== "y" && yCandidate !== null)
+		snaps.push({ axis: "y", ...yCandidate })
 	return Object.freeze({
-		x: xCandidate?.value ?? input.x,
-		y: yCandidate?.value ?? input.y,
+		x:
+			input.axisConstraint?.axis === "x"
+				? constrainedX
+				: (xCandidate?.value ?? constrainedX),
+		y:
+			input.axisConstraint?.axis === "y"
+				? constrainedY
+				: (yCandidate?.value ?? constrainedY),
 		snaps: Object.freeze(snaps),
 	})
 }
@@ -318,50 +389,74 @@ export function snapGroupTranslation(input: {
 	readonly metrics: readonly VerticalMetricLine[]
 	readonly worldScale: number
 	readonly thresholdPixels?: number
+	/** Locks one translation axis while leaving group snapping active on the other. */
+	readonly axisConstraint?: AxisConstraint | null
 }): SnappedGroupTranslation {
 	const threshold = (input.thresholdPixels ?? 7) / input.worldScale
+	const constrainedDeltaX =
+		input.axisConstraint?.axis === "x" ? 0 : input.deltaX
+	const constrainedDeltaY =
+		input.axisConstraint?.axis === "y" ? 0 : input.deltaY
 	const stationaryNodes = input.nodes.filter(
 		(node) => !input.selectedPointIds.has(node.pointId),
 	)
 	const centerX = (input.bounds.minX + input.bounds.maxX) / 2
 	const centerY = (input.bounds.minY + input.bounds.maxY) / 2
-	const xCandidate = nearestGroupCandidate(
-		[
-			{ anchor: "min", value: input.bounds.minX + input.deltaX },
-			{ anchor: "center", value: centerX + input.deltaX },
-			{ anchor: "max", value: input.bounds.maxX + input.deltaX },
-		],
-		stationaryNodes.map((node) => ({
-			kind: "node",
-			id: node.pointId,
-			label: "Node x",
-			value: node.x,
-		})),
-		threshold,
-	)
-	const yCandidate = nearestGroupCandidate(
-		[
-			{ anchor: "min", value: input.bounds.minY + input.deltaY },
-			{ anchor: "center", value: centerY + input.deltaY },
-			{ anchor: "max", value: input.bounds.maxY + input.deltaY },
-		],
-		[
-			...stationaryNodes.map((node) => ({
-				kind: "node" as const,
-				id: node.pointId,
-				label: "Node y",
-				value: node.y,
-			})),
-			...input.metrics.map((metric) => ({
-				kind: "metric" as const,
-				id: metric.id,
-				label: metric.label,
-				value: metric.y,
-			})),
-		],
-		threshold,
-	)
+	const xCandidate =
+		input.axisConstraint?.axis === "x"
+			? null
+			: nearestGroupCandidate(
+					[
+						{ anchor: "min", value: input.bounds.minX + constrainedDeltaX },
+						{ anchor: "center", value: centerX + constrainedDeltaX },
+						{ anchor: "max", value: input.bounds.maxX + constrainedDeltaX },
+					],
+					stationaryNodes.map((node) => ({
+						kind: "node",
+						id: node.pointId,
+						label: "Node x",
+						value: node.x,
+					})),
+					threshold,
+				)
+	const yCandidate =
+		input.axisConstraint?.axis === "y"
+			? null
+			: nearestGroupCandidate(
+					[
+						{ anchor: "min", value: input.bounds.minY + constrainedDeltaY },
+						{ anchor: "center", value: centerY + constrainedDeltaY },
+						{ anchor: "max", value: input.bounds.maxY + constrainedDeltaY },
+					],
+					[
+						...stationaryNodes.map((node) => ({
+							kind: "node" as const,
+							id: node.pointId,
+							label: "Node y",
+							value: node.y,
+						})),
+						...input.metrics.map((metric) => ({
+							kind: "metric" as const,
+							id: metric.id,
+							label: metric.label,
+							value: metric.y,
+						})),
+					],
+					threshold,
+				)
 	const snaps: ActiveSnap[] = []
+	if (input.axisConstraint !== null && input.axisConstraint !== undefined) {
+		snaps.push({
+			axis: input.axisConstraint.axis,
+			kind: "orthogonal-constraint",
+			id: `shift-group-${input.axisConstraint.axis}`,
+			label:
+				input.axisConstraint.axis === "x"
+					? "Shift vertical constraint"
+					: "Shift horizontal constraint",
+			value: input.axisConstraint.value,
+		})
+	}
 	if (xCandidate !== null) {
 		snaps.push({
 			axis: "x",
@@ -383,8 +478,8 @@ export function snapGroupTranslation(input: {
 		})
 	}
 	return Object.freeze({
-		deltaX: input.deltaX + (xCandidate?.adjustment ?? 0),
-		deltaY: input.deltaY + (yCandidate?.adjustment ?? 0),
+		deltaX: constrainedDeltaX + (xCandidate?.adjustment ?? 0),
+		deltaY: constrainedDeltaY + (yCandidate?.adjustment ?? 0),
 		snaps: Object.freeze(snaps),
 	})
 }
