@@ -35,7 +35,7 @@
 	"dependencies": {
 		"@create-font/server": "workspace:*",
 		"@create-font/target": "workspace:*",
-		"atom.io": "0.50.0"
+		"atom.io": "0.50.1"
 	},
 	"devDependencies": {
 		"@typescript-eslint/parser": "8.64.0",
