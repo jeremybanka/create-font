@@ -29,6 +29,9 @@ import {
 	type SourceResult,
 } from "./types.ts"
 
+const LEGACY_EDITOR_VERSION = 3 as const
+const MAX_OVERSHOOT_DEPTH = 16_383
+
 type TimestampMode = "file" | "state"
 type SafeRecord = Readonly<Record<string, unknown>>
 
@@ -510,6 +513,7 @@ function parseNames(
 function parseMetrics(
 	value: unknown,
 	path: string,
+	editorVersion: number,
 	context: ValidationContext,
 ): EditorFontSource["metrics"] {
 	const record = objectValue(value, path, context)
@@ -524,6 +528,16 @@ function parseMetrics(
 			capHeight: 0,
 			underlinePosition: 0,
 			underlineThickness: 0,
+			overshoots: {
+				baseline: 0,
+				ascender: 0,
+				descender: 0,
+				winAscent: 0,
+				winDescent: 0,
+				xHeight: 0,
+				capHeight: 0,
+				underlinePosition: 0,
+			},
 		}
 	}
 	checkShape(
@@ -538,10 +552,63 @@ function parseMetrics(
 			"capHeight",
 			"underlinePosition",
 			"underlineThickness",
+			...(editorVersion === LEGACY_EDITOR_VERSION ? [] : ["overshoots"]),
 		],
 		path,
 		context,
 	)
+	const overshootKeys = [
+		"baseline",
+		"ascender",
+		"descender",
+		"winAscent",
+		"winDescent",
+		"xHeight",
+		"capHeight",
+		"underlinePosition",
+	] as const
+	const overshoots: Record<(typeof overshootKeys)[number], number> = {
+		baseline: 0,
+		ascender: 0,
+		descender: 0,
+		winAscent: 0,
+		winDescent: 0,
+		xHeight: 0,
+		capHeight: 0,
+		underlinePosition: 0,
+	}
+	if (editorVersion !== LEGACY_EDITOR_VERSION) {
+		const overshootValue = requiredField(record, "overshoots", path, context)
+		const overshootRecord = objectValue(
+			overshootValue === ABSENT ? {} : overshootValue,
+			`${path}.overshoots`,
+			context,
+		)
+		if (overshootRecord !== null) {
+			checkShape(overshootRecord, overshootKeys, `${path}.overshoots`, context)
+			for (const key of overshootKeys) {
+				const depth = requiredNumber(
+					overshootRecord,
+					key,
+					`${path}.overshoots`,
+					context,
+				)
+				if (
+					!Number.isInteger(depth) ||
+					depth < 0 ||
+					depth > MAX_OVERSHOOT_DEPTH
+				) {
+					add(
+						context,
+						"source.number",
+						`${path}.overshoots.${key}`,
+						`Expected an integer overshoot depth from 0 through ${MAX_OVERSHOOT_DEPTH}.`,
+					)
+				}
+				overshoots[key] = depth
+			}
+		}
+	}
 	return {
 		ascender: requiredNumber(record, "ascender", path, context),
 		descender: requiredNumber(record, "descender", path, context),
@@ -562,6 +629,7 @@ function parseMetrics(
 			path,
 			context,
 		),
+		overshoots,
 	}
 }
 
@@ -1018,6 +1086,16 @@ function parseRoot(
 				capHeight: 0,
 				underlinePosition: 0,
 				underlineThickness: 0,
+				overshoots: {
+					baseline: 0,
+					ascender: 0,
+					descender: 0,
+					winAscent: 0,
+					winDescent: 0,
+					xHeight: 0,
+					capHeight: 0,
+					underlinePosition: 0,
+				},
 			},
 			style: {
 				weightClass: 0,
@@ -1064,7 +1142,9 @@ function parseRoot(
 		)
 	}
 	const editorVersion = requiredNumber(record, "editorVersion", "$", context)
-	if (editorVersion !== CREATE_FONT_EDITOR_VERSION) {
+	const migratesLegacy =
+		mode === "file" && editorVersion === LEGACY_EDITOR_VERSION
+	if (editorVersion !== CREATE_FONT_EDITOR_VERSION && !migratesLegacy) {
 		add(
 			context,
 			"source.version",
@@ -1095,6 +1175,7 @@ function parseRoot(
 		metrics: parseMetrics(
 			metrics === ABSENT ? {} : metrics,
 			"$.metrics",
+			editorVersion,
 			context,
 		),
 		style: parseStyle(style === ABSENT ? {} : style, "$.style", context),

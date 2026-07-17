@@ -326,6 +326,15 @@ export interface MovePointsInput {
 	readonly points: readonly MovePointInput[]
 }
 
+export type SetHorizontalMetricsInput = Readonly<{
+	masterId: MasterId
+	glyphId: GlyphId
+}> &
+	(
+		| Readonly<{ advanceWidth: number; leftSideBearing?: number }>
+		| Readonly<{ advanceWidth?: number; leftSideBearing: number }>
+	)
+
 export interface MoveHandleInput {
 	readonly masterId: MasterId
 	readonly glyphId: GlyphId
@@ -2335,6 +2344,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			const projected: Record<string, number> = {}
 			const errors: ProjectionError[] = []
 			const warnings: ProjectionWarning[] = []
+			for (const [field, depth] of Object.entries(metrics.overshoots)) {
+				if (!Number.isInteger(depth) || depth < 0 || depth > 16_383) {
+					errors.push(
+						projectionError(
+							"metrics.overshoot_range",
+							`$.metrics.overshoots.${field}`,
+							"Expected an integer overshoot depth from 0 through 16383.",
+						),
+					)
+				}
+			}
 			for (const field of signedFields) {
 				const result = projectRoundedInteger(
 					metrics[field],
@@ -2358,7 +2378,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				else errors.push(...result.errors)
 			}
 			if (errors.length > 0) return projectionFailure(errors, warnings)
-			const value = (field: keyof typeof metrics): number => {
+			const value = (
+				field: (typeof signedFields)[number] | (typeof unsignedFields)[number],
+			): number => {
 				const result = projected[field]
 				if (result === undefined) {
 					throw new Error(`Metric projection omitted ${field}.`)
@@ -3187,6 +3209,52 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const setHorizontalMetricsTransaction = silo.transaction<
+		(input: SetHorizontalMetricsInput) => void
+	>({
+		key: "setHorizontalMetrics",
+		do: ({ get, set }, input) => {
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (layerMasterIds === null || !layerMasterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			if (input.advanceWidth !== undefined) {
+				if (
+					!Number.isInteger(input.advanceWidth) ||
+					input.advanceWidth < 0 ||
+					input.advanceWidth > MAX_UINT16
+				) {
+					throw new TypeError(
+						"Advance width must be an integer from 0 through 65535.",
+					)
+				}
+				set(
+					advanceWidthAtoms,
+					[input.masterId, input.glyphId],
+					input.advanceWidth,
+				)
+			}
+			if (input.leftSideBearing !== undefined) {
+				if (
+					!Number.isInteger(input.leftSideBearing) ||
+					input.leftSideBearing < MIN_INT16 ||
+					input.leftSideBearing > MAX_INT16
+				) {
+					throw new TypeError(
+						"Left side bearing must be an integer from -32768 through 32767.",
+					)
+				}
+				set(
+					leftSideBearingAtoms,
+					[input.masterId, input.glyphId],
+					input.leftSideBearing,
+				)
+			}
+		},
+	})
+
 	const moveHandleTransaction = silo.transaction<
 		(input: MoveHandleInput) => void
 	>({
@@ -3865,6 +3933,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 
 	const runReplaceFont = silo.runTransaction(replaceFontTransaction)
 	const runMovePoints = silo.runTransaction(movePointsTransaction)
+	const runSetHorizontalMetrics = silo.runTransaction(
+		setHorizontalMetricsTransaction,
+	)
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
@@ -3944,6 +4015,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		transactions: {
 			replaceFont: replaceFontTransaction,
 			movePoints: movePointsTransaction,
+			setHorizontalMetrics: setHorizontalMetricsTransaction,
 			moveHandle: moveHandleTransaction,
 			setNodeMode: setNodeModeTransaction,
 			insertPoint: insertPointTransaction,
@@ -3969,6 +4041,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			movePoints(input: MovePointsInput): void {
 				runMovePoints(input)
+			},
+			setHorizontalMetrics(input: SetHorizontalMetricsInput): void {
+				runSetHorizontalMetrics(input)
 			},
 			moveHandle(input: MoveHandleInput): void {
 				runMoveHandle(input)

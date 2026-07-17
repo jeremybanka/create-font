@@ -241,7 +241,7 @@ function makeGeometricA(): EditorGlyphSource {
 export function makeDemoFont(): EditorFontSource {
 	return {
 		format: "create-font.editor",
-		editorVersion: 3,
+		editorVersion: 4,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,
@@ -268,6 +268,16 @@ export function makeDemoFont(): EditorFontSource {
 			capHeight: 820,
 			underlinePosition: -100,
 			underlineThickness: 50,
+			overshoots: {
+				baseline: 12,
+				ascender: 0,
+				descender: 0,
+				winAscent: 0,
+				winDescent: 0,
+				xHeight: 12,
+				capHeight: 12,
+				underlinePosition: 0,
+			},
 		},
 		style: {
 			weightClass: 100,

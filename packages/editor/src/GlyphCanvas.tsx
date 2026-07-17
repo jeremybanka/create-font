@@ -5,6 +5,11 @@ import type {
 	PointId,
 } from "@create-font/states"
 import {
+	matchingVerticalMetrics,
+	resolveVerticalMetricGuides,
+	type VerticalMetricLine,
+} from "@create-font/states"
+import {
 	Circle,
 	Group,
 	type KonvaEventObject,
@@ -13,12 +18,14 @@ import {
 	Path,
 	Rect,
 	Stage,
+	Text,
 } from "@create-font/preact-konva"
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
+import { snapDraggedPoint, type ActiveSnap } from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
 	previewHandleDrag,
@@ -105,6 +112,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
+	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
@@ -158,6 +166,26 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	)
 	const selectedPoint = selectedPoints.at(-1)
 	const metrics = source.metrics
+	const metricGuides = useMemo(
+		() => resolveVerticalMetricGuides(metrics),
+		[metrics],
+	)
+	const metricLines = useMemo(
+		() =>
+			metricGuides.filter(
+				(guide): guide is VerticalMetricLine => guide.kind === "line",
+			),
+		[metricGuides],
+	)
+	const groupedMetricLines = useMemo(() => {
+		const groups = new Map<number, VerticalMetricLine[]>()
+		for (const line of metricLines) {
+			const group = groups.get(line.y) ?? []
+			group.push(line)
+			groups.set(line.y, group)
+		}
+		return [...groups.entries()].map(([y, lines]) => ({ y, lines }))
+	}, [metricLines])
 	const advanceWidth = layer?.advanceWidth ?? 1_000
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
@@ -220,7 +248,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 
 	useEffect(() => {
 		setPenContourId(null)
-	}, [activeGlyphId, activeTool, editingTextIndex])
+		setActiveSnaps([])
+	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -769,25 +798,97 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									y={editingPosition.baseline}
 									scaleY={-1}
 								>
-									{[
-										{ y: 0, color: palette.guideStrong, width: 1.1 },
-										{ y: metrics.xHeight, color: palette.guideSoft, width: 1 },
-										{ y: metrics.capHeight, color: palette.guideMid, width: 1 },
-									].map((guide) => (
-										<Line
-											key={`horizontal-guide:${guide.y}`}
-											points={[-200, guide.y, advanceWidth + 200, guide.y]}
-											stroke={guide.color}
-											strokeWidth={guide.width * inverseScale}
-											listening={false}
-										/>
-									))}
+									{metricGuides.flatMap((guide) =>
+										guide.kind === "band"
+											? [
+													<Group key={`metric-band:${guide.id}`}>
+														<Rect
+															x={-200}
+															y={guide.minY}
+															width={advanceWidth + 400}
+															height={Math.max(
+																guide.maxY - guide.minY,
+																inverseScale,
+															)}
+															fill={palette.guideSoft}
+															opacity={0.12}
+															listening={false}
+														/>
+														<Text
+															x={advanceWidth + 12 * inverseScale}
+															y={guide.maxY - 4 * inverseScale}
+															scaleY={-1}
+															text={guide.label}
+															fontSize={9 * inverseScale}
+															fill={palette.guideStrong}
+															listening={false}
+														/>
+													</Group>,
+												]
+											: [],
+									)}
+									{groupedMetricLines.map(({ y, lines }) => {
+										const isBaseline = lines.some(
+											(line) => line.id === "baseline",
+										)
+										const isPrimary = lines.some(
+											(line) =>
+												line.id === "capHeight" || line.id === "xHeight",
+										)
+										return (
+											<Group key={`metric-lines:${y}`}>
+												<Line
+													points={[-200, y, advanceWidth + 200, y]}
+													stroke={
+														isBaseline
+															? palette.guideStrong
+															: isPrimary
+																? palette.guideMid
+																: palette.guideSoft
+													}
+													strokeWidth={(isBaseline ? 1.2 : 1) * inverseScale}
+													{...(isBaseline || isPrimary
+														? {}
+														: { dash: [5 * inverseScale, 4 * inverseScale] })}
+													listening={false}
+												/>
+												<Text
+													x={-195}
+													y={y - 4 * inverseScale}
+													scaleY={-1}
+													text={lines.map((line) => line.label).join(" · ")}
+													fontSize={10 * inverseScale}
+													fill={palette.guideStrong}
+													listening={false}
+												/>
+											</Group>
+										)
+									})}
 									{[0, advanceWidth].map((x) => (
 										<Line
 											key={`vertical-guide:${x}`}
 											points={[x, metrics.descender, x, metrics.ascender]}
 											stroke={palette.guideSoft}
 											strokeWidth={inverseScale}
+											listening={false}
+										/>
+									))}
+									{activeSnaps.map((snap) => (
+										<Line
+											key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
+											points={
+												snap.axis === "x"
+													? [
+															snap.value,
+															metrics.descender - 100,
+															snap.value,
+															metrics.ascender + metrics.lineGap + 100,
+														]
+													: [-200, snap.value, advanceWidth + 200, snap.value]
+											}
+											stroke={palette.accent}
+											strokeWidth={1.5 * inverseScale}
+											dash={[7 * inverseScale, 4 * inverseScale]}
 											listening={false}
 										/>
 									))}
@@ -849,6 +950,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		contour.closed,
 																	) ?? { x: 0, y: 1 })
 																: null
+															const metricMatches = matchingVerticalMetrics(
+																point.y,
+																metricGuides,
+															)
 															const nodeTarget: EditorSelectionTarget = {
 																kind: "node",
 																pointId: point.pointId,
@@ -902,11 +1007,24 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															})
 															const dragPoint = (
 																event: KonvaEventObject<DragEvent>,
-															): DraggedPoint => ({
-																pointId: point.pointId,
-																x: Math.round(event.target.x()),
-																y: Math.round(event.target.y()),
-															})
+															) => {
+																const snapped = snapDraggedPoint({
+																	pointId: point.pointId,
+																	x: Math.round(event.target.x()),
+																	y: Math.round(event.target.y()),
+																	nodes: allPoints,
+																	metrics: metricLines,
+																	worldScale,
+																})
+																return {
+																	point: {
+																		pointId: point.pointId,
+																		x: snapped.x,
+																		y: snapped.y,
+																	},
+																	snaps: snapped.snaps,
+																}
+															}
 															const nodeProps = {
 																name: "outline-point",
 																x: point.x,
@@ -923,16 +1041,40 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																onDragStart: selectPoint,
 																onDragMove: (
 																	event: KonvaEventObject<DragEvent>,
-																) => setDraggedPoint(dragPoint(event)),
+																) => {
+																	const dragged = dragPoint(event)
+																	setDraggedPoint(dragged.point)
+																	setActiveSnaps(dragged.snaps)
+																},
 																onDragEnd: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
-																	commitPoint(dragPoint(event))
+																	const dragged = dragPoint(event)
+																	commitPoint(dragged.point)
 																	setDraggedPoint(null)
+																	setActiveSnaps([])
 																},
 															}
 															return (
 																<Group key={`node:${point.pointId}`}>
+																	{metricMatches.length === 0 ? null : (
+																		<Rect
+																			name={metricMatches
+																				.map((match) => `metric-${match.id}`)
+																				.join(" ")}
+																			x={point.x}
+																			y={point.y}
+																			width={14 * inverseScale}
+																			height={14 * inverseScale}
+																			offsetX={7 * inverseScale}
+																			offsetY={7 * inverseScale}
+																			rotation={45}
+																			stroke={palette.accent}
+																			strokeWidth={1.5 * inverseScale}
+																			opacity={0.82}
+																			listening={false}
+																		/>
+																	)}
 																	{point.incoming === undefined ? null : (
 																		<Group
 																			key={`incoming-control:${point.pointId}`}

@@ -170,6 +170,59 @@ describe("editor workspace", () => {
 		expect(previewGlyph(workspace, 0)?.contours[1]?.[0]?.y).toBe(448)
 	})
 
+	it("derives active-layer bounds and right side bearing after edits", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.activeGlyphId, oGlyphId)
+		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
+		const before = workspace.font.silo.getState(workspace.ui.activeLayer)
+		if (before === null) throw new Error("Missing active fixture layer.")
+		expect(before.outlineWidth).toBe(before.xMax - before.xMin)
+		expect(before.rightSideBearing).toBe(
+			before.advanceWidth - before.leftSideBearing - before.outlineWidth,
+		)
+
+		workspace.font.actions.setHorizontalMetrics({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			advanceWidth: before.advanceWidth + 25,
+		})
+		const afterWidth = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(afterWidth?.rightSideBearing).toBe(before.rightSideBearing + 25)
+
+		const firstPoint = before.contours[0]?.nodes[0]
+		if (firstPoint === undefined) throw new Error("Missing fixture point.")
+		workspace.font.actions.movePoints({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{ pointId: firstPoint.pointId, x: firstPoint.x - 20, y: firstPoint.y },
+			],
+		})
+		const afterMove = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(afterMove?.outlineWidth).toBeGreaterThanOrEqual(before.outlineWidth)
+		expect(afterMove?.rightSideBearing).toBe(
+			(afterMove?.advanceWidth ?? 0) -
+				(afterMove?.leftSideBearing ?? 0) -
+				(afterMove?.outlineWidth ?? 0),
+		)
+	})
+
+	it("uses zero outline width when deriving empty-glyph bearings", () => {
+		const workspace = createEditorWorkspace()
+		const [emptyGlyphId] = workspace.actions.addGlyphs(["empty-bearing-test"])
+		if (emptyGlyphId === undefined) throw new Error("Glyph was not added.")
+		const layer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(layer).toMatchObject({
+			glyphId: emptyGlyphId,
+			xMin: 0,
+			xMax: 0,
+			outlineWidth: 0,
+		})
+		expect(layer?.rightSideBearing).toBe(
+			(layer?.advanceWidth ?? 0) - (layer?.leftSideBearing ?? 0),
+		)
+	})
+
 	it("does not invalidate an O preview when an unrelated glyph changes", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "O")

@@ -36,6 +36,7 @@ import {
 import { Line as KonvaLine, type LineConfig } from "konva/lib/shapes/Line"
 import { Path as KonvaPath, type PathConfig } from "konva/lib/shapes/Path"
 import { Rect as KonvaRect, type RectConfig } from "konva/lib/shapes/Rect"
+import { Text as KonvaText, type TextConfig } from "konva/lib/shapes/Text"
 import { type StageConfig } from "konva/lib/Stage"
 import {
 	applyNodeProps,
@@ -301,4 +302,8 @@ export const Line = createNodeComponent<KonvaLine, LineConfig>(
 export const Path = createNodeComponent<KonvaPath, PathConfig>(
 	"Path",
 	KonvaPath,
+)
+export const Text = createNodeComponent<KonvaText, TextConfig>(
+	"Text",
+	KonvaText,
 )

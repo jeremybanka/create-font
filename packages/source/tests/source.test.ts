@@ -115,7 +115,7 @@ describe("@create-font/source", () => {
 			format: "create-font.source",
 			sourceVersion: 1,
 			editorFormat: "create-font.editor",
-			editorVersion: 3,
+			editorVersion: 4,
 		})
 		expect(split.value["glyphs/glyph%3AO~e48dd026.json"]).toEqual(
 			source.glyphs[1],
@@ -297,6 +297,27 @@ describe("@create-font/source", () => {
 		}
 	})
 
+	test("validates versioned overshoot depths in the metrics unit", () => {
+		const metrics = makeGeometricOEditorFont().metrics
+		expect(validateSourceUnit("metrics", metrics, "metrics.json").ok).toBe(true)
+		const invalid = validateSourceUnit(
+			"metrics",
+			{
+				...metrics,
+				overshoots: { ...metrics.overshoots, xHeight: -1 },
+			},
+			"metrics.json",
+		)
+		expect(invalid.ok).toBe(false)
+		if (!invalid.ok) {
+			expect(invalid.errors[0]).toMatchObject({
+				code: "source.schema",
+				unitPath: "metrics.json",
+				path: "$.overshoots.xHeight",
+			})
+		}
+	})
+
 	test("diagnoses missing, duplicate, and unindexed source units", () => {
 		const split = splitEditorFontSource(makeGeometricOEditorFont())
 		if (!split.ok) throw new Error("fixture did not split")
@@ -399,7 +420,7 @@ describe("@create-font/source", () => {
 		expect(file.ok).toBe(true)
 		if (!file.ok) return
 		expect(file.value.format).toBe("create-font.editor")
-		expect(file.value.editorVersion).toBe(3)
+		expect(file.value.editorVersion).toBe(4)
 		expect(file.value).not.toHaveProperty("document")
 		expect(file.value).not.toHaveProperty("sourceVersion")
 		expect(file.value.metadata.createdAt).toBe("-1")
@@ -695,7 +716,7 @@ describe("@create-font/source", () => {
 			"source.unknown_property",
 			"$.surprise",
 		)
-		const future = { ...file.value, editorVersion: 4 }
+		const future = { ...file.value, editorVersion: 5 }
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(future)),
 			"source.version",
@@ -707,6 +728,54 @@ describe("@create-font/source", () => {
 			"source.version",
 			"$.editorVersion",
 		)
+	})
+
+	test("migrates editor v3 metrics to zero overshoot zones", () => {
+		const file = toEditorFontFile(makeGeometricOEditorFont())
+		if (!file.ok) throw new Error("fixture did not convert")
+		const { overshoots: _overshoots, ...legacyMetrics } = file.value.metrics
+		const legacy = {
+			...file.value,
+			editorVersion: 3,
+			metrics: legacyMetrics,
+		}
+		const decoded = decodeEditorFontSource(JSON.stringify(legacy))
+		expect(decoded.ok).toBe(true)
+		if (!decoded.ok) return
+		expect(decoded.value.editorVersion).toBe(4)
+		expect(decoded.value.metrics.overshoots).toEqual({
+			baseline: 0,
+			ascender: 0,
+			descender: 0,
+			winAscent: 0,
+			winDescent: 0,
+			xHeight: 0,
+			capHeight: 0,
+			underlinePosition: 0,
+		})
+	})
+
+	test("migrates v3 directory sources in server and browser assemblers", () => {
+		const split = splitEditorFontSource(makeGeometricOEditorFont())
+		if (!split.ok) throw new Error("fixture did not split")
+		const project = split.value["create-font.json"] as Record<string, unknown>
+		const metrics = split.value["metrics.json"] as Record<string, unknown>
+		const { overshoots: _overshoots, ...legacyMetrics } = metrics
+		const legacy = {
+			...split.value,
+			"create-font.json": { ...project, editorVersion: 3 },
+			"metrics.json": legacyMetrics,
+		}
+		for (const assemble of [
+			assembleEditorFontSource,
+			assembleBrowserEditorFontSource,
+		]) {
+			const result = assemble(legacy)
+			expect(result.ok).toBe(true)
+			if (!result.ok) continue
+			expect(result.value.editorVersion).toBe(4)
+			expect(result.value.metrics.overshoots.xHeight).toBe(0)
+		}
 	})
 
 	test("allows one-sided soft nodes and enforces alignment when both handles exist", () => {
