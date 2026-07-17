@@ -1,0 +1,9 @@
+{
+	"id": "instance:text",
+	"name": "Text",
+	"coordinates": {
+		"axis:wght": 350
+	},
+	"postScriptName": "WorkbenchSans-Text",
+	"elidable": true
+}

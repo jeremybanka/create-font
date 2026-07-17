@@ -54,6 +54,63 @@ describe("editor tools and hotkeys", () => {
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
 	})
 
+	it("maps transform and path commands to exact shortcuts", () => {
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "t" }), true)?.id).toBe(
+			"transform",
+		)
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "a", shiftKey: true }), true)
+				?.id,
+		).toBe("align-selection")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "r", shiftKey: true }), true)
+				?.id,
+		).toBe("reverse-path")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "f", shiftKey: true }), true)
+				?.id,
+		).toBe("make-node-first")
+	})
+
+	it("dispatches alignment as one mixed-control state action", () => {
+		const transformControls = vi.fn()
+		const context = {
+			activeGlyphId: "glyph:test",
+			activeMasterId: "master:test",
+			activeTool: "select",
+			editingTextIndex: 0,
+			selection: [
+				{ kind: "node", pointId: "point:a" },
+				{ kind: "node", pointId: "point:b" },
+			],
+			activeLayer: {
+				contours: [
+					{
+						id: "contour:test",
+						closed: true,
+						nodes: [
+							{ pointId: "point:a", mode: "hard", x: 10, y: 0 },
+							{ pointId: "point:b", mode: "hard", x: 12, y: 100 },
+						],
+					},
+				],
+			},
+			workspace: { font: { actions: { transformControls } } },
+		} as unknown as Parameters<(typeof TOOLS)["ALIGN"]["do"]>[0]
+
+		expect(TOOLS.ALIGN.status(context)).toBe("ready")
+		TOOLS.ALIGN.do(context)
+		expect(transformControls).toHaveBeenCalledWith({
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			points: [
+				{ pointId: "point:a", x: 11, y: 0 },
+				{ pointId: "point:b", x: 11, y: 100 },
+			],
+			handles: [],
+		})
+	})
+
 	it("does not match missing, extra, or foreign-platform modifiers", () => {
 		expect(toolForKeyboardEvent(keyboardEvent(), true)).toBeUndefined()
 		expect(

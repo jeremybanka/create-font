@@ -1,4 +1,5 @@
 import type {
+	ReadableFamilyToken,
 	ReadableToken,
 	Silo,
 	TimelineFamilyToken,
@@ -13,6 +14,8 @@ import {
 	useMemo,
 	useSyncExternalStore,
 } from "preact/compat"
+
+import { subscribeToSettledState } from "./settled-subscription.ts"
 
 export const EditorStateContext = createContext<Silo | null>(null)
 
@@ -40,11 +43,20 @@ export function useO<T, E = never>(
 	const silo = useEditorSilo()
 	const subscribe = useCallback(
 		(notify: () => void) =>
-			silo.subscribe(token as ReadableToken<T>, () => notify()),
+			subscribeToSettledState(silo, token as ReadableToken<T>, notify),
 		[silo, token],
 	)
 	const getSnapshot = useCallback(() => silo.getState(token), [silo, token])
 	return useSyncExternalStore(subscribe, getSnapshot)
+}
+
+export function useOF<T, K extends Canonical>(
+	family: ReadableFamilyToken<T, K>,
+	key: K,
+): ViewOf<T> {
+	const silo = useEditorSilo()
+	const token = useMemo(() => silo.findState(family, key), [family, key, silo])
+	return useO(token)
 }
 
 export type TimelineMeta = Readonly<{
@@ -58,6 +70,7 @@ export type TimelineMeta = Readonly<{
 export function useTL<K extends Canonical>(
 	family: TimelineFamilyToken<K, any>,
 	key: K,
+	onChange?: () => void,
 ): TimelineMeta {
 	const silo = useEditorSilo()
 	const token = silo.findTimeline(family, key)
@@ -76,9 +89,15 @@ export function useTL<K extends Canonical>(
 		return {
 			at,
 			length,
-			undo: () => silo.undo(token),
-			redo: () => silo.redo(token),
+			undo: () => {
+				silo.undo(token)
+				onChange?.()
+			},
+			redo: () => {
+				silo.redo(token)
+				onChange?.()
+			},
 			clear: () => silo.clearTimeline(token),
 		}
-	}, [silo, snapshot, token])
+	}, [onChange, silo, snapshot, token])
 }

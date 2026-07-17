@@ -1,0 +1,334 @@
+{
+	"id": "glyph:n",
+	"name": "n",
+	"export": true,
+	"overlap": true,
+	"contours": [
+		{
+			"id": "contour:glyph:n:0",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:n:0:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:0:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:0:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:0:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:n:1",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:n:1:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:1:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:1:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:1:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:n:2",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:n:2:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:2:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:2:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:2:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:n:3",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:n:3:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:3:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:3:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:3:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:n:4",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:n:4:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:4:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:4:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:n:4:3",
+					"mode": "hard"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 700,
+			"leftSideBearing": 112,
+			"points": [
+				{
+					"pointId": "point:glyph:n:0:0",
+					"x": 176,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:0:1",
+					"x": 176,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:0:2",
+					"x": 112,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:0:3",
+					"x": 112,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:1:0",
+					"x": 176,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:1:1",
+					"x": 176,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:1:2",
+					"x": 112,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:1:3",
+					"x": 112,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:0",
+					"x": 586,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:2:1",
+					"x": 586,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:2",
+					"x": 522,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:3",
+					"x": 522,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:3:0",
+					"x": 586,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:3:1",
+					"x": 586,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:3:2",
+					"x": 522,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:3:3",
+					"x": 522,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:4:0",
+					"x": 169,
+					"y": 520
+				},
+				{
+					"pointId": "point:glyph:n:4:1",
+					"x": 579,
+					"y": 20
+				},
+				{
+					"pointId": "point:glyph:n:4:2",
+					"x": 529,
+					"y": -20
+				},
+				{
+					"pointId": "point:glyph:n:4:3",
+					"x": 119,
+					"y": 480
+				}
+			]
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 700,
+			"leftSideBearing": 69,
+			"points": [
+				{
+					"pointId": "point:glyph:n:0:0",
+					"x": 219,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:0:1",
+					"x": 219,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:0:2",
+					"x": 69,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:0:3",
+					"x": 69,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:1:0",
+					"x": 219,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:1:1",
+					"x": 219,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:1:2",
+					"x": 69,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:1:3",
+					"x": 69,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:0",
+					"x": 629,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:2:1",
+					"x": 629,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:2",
+					"x": 479,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:2:3",
+					"x": 479,
+					"y": 500
+				},
+				{
+					"pointId": "point:glyph:n:3:0",
+					"x": 629,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:3:1",
+					"x": 629,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:3:2",
+					"x": 479,
+					"y": 0
+				},
+				{
+					"pointId": "point:glyph:n:3:3",
+					"x": 479,
+					"y": 250
+				},
+				{
+					"pointId": "point:glyph:n:4:0",
+					"x": 202,
+					"y": 548
+				},
+				{
+					"pointId": "point:glyph:n:4:1",
+					"x": 612,
+					"y": 48
+				},
+				{
+					"pointId": "point:glyph:n:4:2",
+					"x": 496,
+					"y": -48
+				},
+				{
+					"pointId": "point:glyph:n:4:3",
+					"x": 86,
+					"y": 452
+				}
+			]
+		}
+	]
+}

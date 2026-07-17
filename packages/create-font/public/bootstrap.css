@@ -1,0 +1,316 @@
+:root {
+	--bootstrap-paper: #111210;
+	--bootstrap-panel: #1d1e1b;
+	--bootstrap-line: #34352f;
+	--bootstrap-ink: #efeee8;
+	--bootstrap-muted: #9c9a91;
+	--bootstrap-faint: #66675f;
+	--bootstrap-accent: #e17352;
+	color-scheme: dark;
+}
+
+html,
+body,
+#app {
+	display: block;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bootstrap-paper);
+}
+
+bootstrap-screen {
+	position: relative;
+	display: grid;
+	place-items: center;
+	min-height: 100%;
+	padding: clamp(24px, 7vw, 88px);
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 22% 18%, rgb(225 115 82 / 10%), transparent 32%),
+		linear-gradient(
+		135deg,
+		#151613 0%,
+		var(--bootstrap-paper) 54%,
+		#171815 100%
+	);
+	color: var(--bootstrap-ink);
+	font-family:
+		Inter,
+		ui-sans-serif,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		sans-serif;
+	font-synthesis: none;
+}
+
+bootstrap-screen::before {
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
+		linear-gradient(90deg, rgb(255 255 255 / 2%) 1px, transparent 1px);
+	background-size: 42px 42px;
+	content: "";
+	mask-image: linear-gradient(to bottom, black, transparent 78%);
+	pointer-events: none;
+}
+
+bootstrap-card {
+	position: relative;
+	display: grid;
+	gap: clamp(32px, 7vh, 72px);
+	width: min(680px, 100%);
+	padding: clamp(28px, 6vw, 64px);
+	border: 1px solid var(--bootstrap-line);
+	border-radius: 22px;
+	background: color-mix(in srgb, var(--bootstrap-panel) 92%, transparent);
+	box-shadow: 0 36px 100px rgb(0 0 0 / 38%);
+	backdrop-filter: blur(16px);
+}
+
+bootstrap-brand {
+	display: flex;
+	align-items: center;
+	gap: 13px;
+}
+
+bootstrap-brand > brand-symbol {
+	display: grid;
+	grid-template-columns: repeat(3, 5px);
+	align-items: end;
+	gap: 3px;
+	padding: 10px;
+	border-radius: 9px;
+	background: var(--bootstrap-ink);
+}
+
+bootstrap-brand > brand-symbol > i {
+	display: block;
+	width: 5px;
+	height: 19px;
+	border-radius: 5px;
+	background: var(--bootstrap-paper);
+}
+
+bootstrap-brand > brand-symbol > i:nth-child(2) {
+	height: 13px;
+	background: var(--bootstrap-accent);
+}
+
+bootstrap-brand > strong {
+	font-size: 15px;
+	font-weight: 720;
+	letter-spacing: -0.02em;
+}
+
+bootstrap-copy {
+	display: grid;
+	gap: 12px;
+}
+
+bootstrap-copy > p,
+bootstrap-copy > h1,
+bootstrap-copy > span {
+	margin: 0;
+}
+
+bootstrap-copy > p {
+	font-size: 10px;
+	font-weight: 720;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--bootstrap-accent);
+}
+
+bootstrap-copy > h1 {
+	max-width: 580px;
+	font-size: clamp(32px, 7vw, 66px);
+	font-weight: 660;
+	letter-spacing: -0.055em;
+	line-height: 0.98;
+}
+
+bootstrap-copy > span {
+	max-width: 510px;
+	font-size: clamp(12px, 2vw, 15px);
+	line-height: 1.65;
+	color: var(--bootstrap-muted);
+}
+
+loading-meter {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 8px;
+}
+
+loading-meter > i {
+	display: block;
+	height: 3px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--bootstrap-line);
+}
+
+loading-meter > i::after {
+	display: block;
+	width: 55%;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--bootstrap-accent);
+	content: "";
+	animation: bootstrap-progress 1.8s ease-in-out infinite;
+}
+
+loading-meter > i:nth-child(2)::after {
+	animation-delay: 160ms;
+}
+
+loading-meter > i:nth-child(3)::after {
+	animation-delay: 320ms;
+}
+
+bootstrap-actions {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+bootstrap-actions > button {
+	flex: none;
+	padding: 10px 15px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--bootstrap-ink);
+	font: 680 12px/1 inherit;
+	color: var(--bootstrap-paper);
+	cursor: pointer;
+}
+
+bootstrap-actions > button:hover {
+	background: white;
+}
+
+bootstrap-actions > button:focus-visible {
+	outline: 2px solid var(--bootstrap-accent);
+	outline-offset: 3px;
+}
+
+bootstrap-actions > small {
+	font-size: 10px;
+	line-height: 1.5;
+	color: var(--bootstrap-muted);
+}
+
+bootstrap-detail {
+	position: absolute;
+	right: clamp(18px, 4vw, 54px);
+	bottom: clamp(16px, 4vw, 40px);
+	display: flex;
+	gap: 16px;
+	font-size: 9px;
+	font-weight: 650;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+	color: var(--bootstrap-faint);
+}
+
+bootstrap-screen[data-state="error"] bootstrap-card {
+	border-color: color-mix(
+		in srgb,
+		var(--bootstrap-accent) 42%,
+		var(--bootstrap-line)
+	);
+}
+
+@keyframes bootstrap-progress {
+	0%,
+	100% {
+		transform: translateX(-110%);
+		opacity: 0.35;
+	}
+
+	50% {
+		transform: translateX(85%);
+		opacity: 1;
+	}
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--bootstrap-paper: #f4f3ef;
+		--bootstrap-panel: #eeede8;
+		--bootstrap-line: #d5d2c9;
+		--bootstrap-ink: #1c1b17;
+		--bootstrap-muted: #69665f;
+		--bootstrap-faint: #969187;
+		--bootstrap-accent: #ce5d3d;
+		color-scheme: light;
+	}
+
+	bootstrap-screen {
+		background:
+			radial-gradient(circle at 22% 18%, rgb(206 93 61 / 9%), transparent 32%),
+			linear-gradient(
+			135deg,
+			#f8f7f3 0%,
+			var(--bootstrap-paper) 54%,
+			#eeece5 100%
+		);
+	}
+
+	bootstrap-card {
+		box-shadow: 0 36px 100px rgb(38 35 29 / 12%);
+	}
+
+	bootstrap-brand > brand-symbol > i {
+		background: #f4f3ef;
+	}
+
+	bootstrap-actions > button:hover {
+		background: #383731;
+	}
+}
+
+@media (width <= 560px) {
+	bootstrap-screen {
+		place-items: stretch;
+		padding: 14px;
+	}
+
+	bootstrap-card {
+		align-content: space-between;
+		gap: 30px;
+		min-height: calc(100dvh - 28px);
+		padding: 26px;
+		border-radius: 16px;
+	}
+
+	bootstrap-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	bootstrap-detail {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	loading-meter > i::after {
+		width: 100%;
+		animation: none;
+		opacity: 0.72;
+	}
+}
+
+@media (forced-colors: active) {
+	bootstrap-card,
+	bootstrap-actions > button {
+		border: 1px solid CanvasText;
+	}
+}

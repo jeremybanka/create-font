@@ -1,0 +1,11 @@
+{
+	"id": "master:heavy",
+	"kind": "source",
+	"name": "Heavy",
+	"location": {
+		"axis:wght": 800
+	},
+	"support": {
+		"kind": "non-intermediate"
+	}
+}

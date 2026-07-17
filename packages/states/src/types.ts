@@ -10,7 +10,7 @@ import type {
 } from "@create-font/target"
 
 export const CREATE_FONT_EDITOR_FORMAT = "create-font.editor" as const
-export const CREATE_FONT_EDITOR_VERSION = 3 as const
+export const CREATE_FONT_EDITOR_VERSION = 4 as const
 
 /** Stable, serialization-safe identifiers scoped by editor entity kind. */
 export type AxisId = `axis:${string}`
@@ -99,6 +99,29 @@ export interface EditorInstanceSource {
 export type EditorNodeMode = "soft" | "hard"
 export type EditorHandleKind = "incoming" | "outgoing"
 
+export const VERTICAL_ALIGNMENT_METRIC_IDS = [
+	"baseline",
+	"ascender",
+	"descender",
+	"winAscent",
+	"winDescent",
+	"xHeight",
+	"capHeight",
+	"underlinePosition",
+] as const
+
+export type VerticalAlignmentMetricId =
+	(typeof VERTICAL_ALIGNMENT_METRIC_IDS)[number]
+
+export type EditorOvershootSource = Readonly<
+	Record<VerticalAlignmentMetricId, number>
+>
+
+export interface EditorFontMetricsSource extends FontMetricsSource {
+	/** Editor-only alignment zones; omitted from the unhinted target v1 IR. */
+	readonly overshoots: EditorOvershootSource
+}
+
 /** A handle endpoint expressed as a vector relative to its owning node. */
 export interface EditorHandleVectorSource {
 	readonly x: number
@@ -176,7 +199,7 @@ export interface EditorFontSource {
 	readonly editorVersion: typeof CREATE_FONT_EDITOR_VERSION
 	readonly metadata: FontMetadataSource
 	readonly names: FontNamesSource
-	readonly metrics: FontMetricsSource
+	readonly metrics: EditorFontMetricsSource
 	readonly style: FontStyleSource
 	readonly axes: readonly EditorAxisSource[]
 	readonly masters: readonly EditorMasterSource[]

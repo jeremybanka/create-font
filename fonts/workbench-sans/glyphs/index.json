@@ -1,0 +1,386 @@
+[
+	{
+		"id": "glyph:.notdef",
+		"path": "glyphs/glyph%3A.notdef~b88a7b05.json"
+	},
+	{
+		"id": "glyph:space",
+		"path": "glyphs/glyph%3Aspace~84969a7d.json"
+	},
+	{
+		"id": "glyph:exclam",
+		"path": "glyphs/glyph%3Aexclam~0e9ea025.json"
+	},
+	{
+		"id": "glyph:quotedbl",
+		"path": "glyphs/glyph%3Aquotedbl~ab8ec62f.json"
+	},
+	{
+		"id": "glyph:numbersign",
+		"path": "glyphs/glyph%3Anumbersign~17a8fef9.json"
+	},
+	{
+		"id": "glyph:dollar",
+		"path": "glyphs/glyph%3Adollar~46638777.json"
+	},
+	{
+		"id": "glyph:percent",
+		"path": "glyphs/glyph%3Apercent~65d8df42.json"
+	},
+	{
+		"id": "glyph:ampersand",
+		"path": "glyphs/glyph%3Aampersand~c9e12d1c.json"
+	},
+	{
+		"id": "glyph:quotesingle",
+		"path": "glyphs/glyph%3Aquotesingle~bfb9c797.json"
+	},
+	{
+		"id": "glyph:parenleft",
+		"path": "glyphs/glyph%3Aparenleft~467593da.json"
+	},
+	{
+		"id": "glyph:parenright",
+		"path": "glyphs/glyph%3Aparenright~8154d627.json"
+	},
+	{
+		"id": "glyph:asterisk",
+		"path": "glyphs/glyph%3Aasterisk~0d048d29.json"
+	},
+	{
+		"id": "glyph:plus",
+		"path": "glyphs/glyph%3Aplus~247cec2d.json"
+	},
+	{
+		"id": "glyph:comma",
+		"path": "glyphs/glyph%3Acomma~8c459960.json"
+	},
+	{
+		"id": "glyph:hyphen",
+		"path": "glyphs/glyph%3Ahyphen~804eb1a9.json"
+	},
+	{
+		"id": "glyph:period",
+		"path": "glyphs/glyph%3Aperiod~8f7c89ec.json"
+	},
+	{
+		"id": "glyph:slash",
+		"path": "glyphs/glyph%3Aslash~5a206e82.json"
+	},
+	{
+		"id": "glyph:zero",
+		"path": "glyphs/glyph%3Azero~d7f3f44b.json"
+	},
+	{
+		"id": "glyph:one",
+		"path": "glyphs/glyph%3Aone~2671fb67.json"
+	},
+	{
+		"id": "glyph:two",
+		"path": "glyphs/glyph%3Atwo~c8635f11.json"
+	},
+	{
+		"id": "glyph:three",
+		"path": "glyphs/glyph%3Athree~8409d56b.json"
+	},
+	{
+		"id": "glyph:four",
+		"path": "glyphs/glyph%3Afour~a8d5823d.json"
+	},
+	{
+		"id": "glyph:five",
+		"path": "glyphs/glyph%3Afive~2a9a392d.json"
+	},
+	{
+		"id": "glyph:six",
+		"path": "glyphs/glyph%3Asix~f497b363.json"
+	},
+	{
+		"id": "glyph:seven",
+		"path": "glyphs/glyph%3Aseven~0de521a6.json"
+	},
+	{
+		"id": "glyph:eight",
+		"path": "glyphs/glyph%3Aeight~537fe168.json"
+	},
+	{
+		"id": "glyph:nine",
+		"path": "glyphs/glyph%3Anine~c329a06d.json"
+	},
+	{
+		"id": "glyph:colon",
+		"path": "glyphs/glyph%3Acolon~2579f074.json"
+	},
+	{
+		"id": "glyph:semicolon",
+		"path": "glyphs/glyph%3Asemicolon~f9f96576.json"
+	},
+	{
+		"id": "glyph:less",
+		"path": "glyphs/glyph%3Aless~973c32d0.json"
+	},
+	{
+		"id": "glyph:equal",
+		"path": "glyphs/glyph%3Aequal~4cdc7017.json"
+	},
+	{
+		"id": "glyph:greater",
+		"path": "glyphs/glyph%3Agreater~e231e7f1.json"
+	},
+	{
+		"id": "glyph:question",
+		"path": "glyphs/glyph%3Aquestion~5018aa5d.json"
+	},
+	{
+		"id": "glyph:at",
+		"path": "glyphs/glyph%3Aat~19a6a190.json"
+	},
+	{
+		"id": "glyph:A",
+		"path": "glyphs/glyph%3AA~ee8ddfe4.json"
+	},
+	{
+		"id": "glyph:B",
+		"path": "glyphs/glyph%3AB~f18de49d.json"
+	},
+	{
+		"id": "glyph:C",
+		"path": "glyphs/glyph%3AC~f08de30a.json"
+	},
+	{
+		"id": "glyph:D",
+		"path": "glyphs/glyph%3AD~eb8ddb2b.json"
+	},
+	{
+		"id": "glyph:E",
+		"path": "glyphs/glyph%3AE~ea8dd998.json"
+	},
+	{
+		"id": "glyph:F",
+		"path": "glyphs/glyph%3AF~ed8dde51.json"
+	},
+	{
+		"id": "glyph:G",
+		"path": "glyphs/glyph%3AG~ec8ddcbe.json"
+	},
+	{
+		"id": "glyph:H",
+		"path": "glyphs/glyph%3AH~e78dd4df.json"
+	},
+	{
+		"id": "glyph:I",
+		"path": "glyphs/glyph%3AI~e68dd34c.json"
+	},
+	{
+		"id": "glyph:J",
+		"path": "glyphs/glyph%3AJ~e98dd805.json"
+	},
+	{
+		"id": "glyph:K",
+		"path": "glyphs/glyph%3AK~e88dd672.json"
+	},
+	{
+		"id": "glyph:L",
+		"path": "glyphs/glyph%3AL~e38dce93.json"
+	},
+	{
+		"id": "glyph:M",
+		"path": "glyphs/glyph%3AM~e28dcd00.json"
+	},
+	{
+		"id": "glyph:N",
+		"path": "glyphs/glyph%3AN~e58dd1b9.json"
+	},
+	{
+		"id": "glyph:O",
+		"path": "glyphs/glyph%3AO~e48dd026.json"
+	},
+	{
+		"id": "glyph:P",
+		"path": "glyphs/glyph%3AP~ff8dfaa7.json"
+	},
+	{
+		"id": "glyph:Q",
+		"path": "glyphs/glyph%3AQ~fe8df914.json"
+	},
+	{
+		"id": "glyph:R",
+		"path": "glyphs/glyph%3AR~018dfdcd.json"
+	},
+	{
+		"id": "glyph:S",
+		"path": "glyphs/glyph%3AS~008dfc3a.json"
+	},
+	{
+		"id": "glyph:T",
+		"path": "glyphs/glyph%3AT~fb8df45b.json"
+	},
+	{
+		"id": "glyph:U",
+		"path": "glyphs/glyph%3AU~fa8df2c8.json"
+	},
+	{
+		"id": "glyph:V",
+		"path": "glyphs/glyph%3AV~fd8df781.json"
+	},
+	{
+		"id": "glyph:W",
+		"path": "glyphs/glyph%3AW~fc8df5ee.json"
+	},
+	{
+		"id": "glyph:X",
+		"path": "glyphs/glyph%3AX~f78dee0f.json"
+	},
+	{
+		"id": "glyph:Y",
+		"path": "glyphs/glyph%3AY~f68dec7c.json"
+	},
+	{
+		"id": "glyph:Z",
+		"path": "glyphs/glyph%3AZ~f98df135.json"
+	},
+	{
+		"id": "glyph:bracketleft",
+		"path": "glyphs/glyph%3Abracketleft~abaae362.json"
+	},
+	{
+		"id": "glyph:backslash",
+		"path": "glyphs/glyph%3Abackslash~a7f6c19f.json"
+	},
+	{
+		"id": "glyph:bracketright",
+		"path": "glyphs/glyph%3Abracketright~bac4854f.json"
+	},
+	{
+		"id": "glyph:asciicircum",
+		"path": "glyphs/glyph%3Aasciicircum~fdcbf5f1.json"
+	},
+	{
+		"id": "glyph:underscore",
+		"path": "glyphs/glyph%3Aunderscore~0e376405.json"
+	},
+	{
+		"id": "glyph:grave",
+		"path": "glyphs/glyph%3Agrave~a510544a.json"
+	},
+	{
+		"id": "glyph:a",
+		"path": "glyphs/glyph%3Aa~0e8e1244.json"
+	},
+	{
+		"id": "glyph:b",
+		"path": "glyphs/glyph%3Ab~118e16fd.json"
+	},
+	{
+		"id": "glyph:c",
+		"path": "glyphs/glyph%3Ac~108e156a.json"
+	},
+	{
+		"id": "glyph:d",
+		"path": "glyphs/glyph%3Ad~0b8e0d8b.json"
+	},
+	{
+		"id": "glyph:e",
+		"path": "glyphs/glyph%3Ae~0a8e0bf8.json"
+	},
+	{
+		"id": "glyph:f",
+		"path": "glyphs/glyph%3Af~0d8e10b1.json"
+	},
+	{
+		"id": "glyph:g",
+		"path": "glyphs/glyph%3Ag~0c8e0f1e.json"
+	},
+	{
+		"id": "glyph:h",
+		"path": "glyphs/glyph%3Ah~078e073f.json"
+	},
+	{
+		"id": "glyph:i",
+		"path": "glyphs/glyph%3Ai~068e05ac.json"
+	},
+	{
+		"id": "glyph:j",
+		"path": "glyphs/glyph%3Aj~098e0a65.json"
+	},
+	{
+		"id": "glyph:k",
+		"path": "glyphs/glyph%3Ak~088e08d2.json"
+	},
+	{
+		"id": "glyph:l",
+		"path": "glyphs/glyph%3Al~038e00f3.json"
+	},
+	{
+		"id": "glyph:m",
+		"path": "glyphs/glyph%3Am~028dff60.json"
+	},
+	{
+		"id": "glyph:n",
+		"path": "glyphs/glyph%3An~058e0419.json"
+	},
+	{
+		"id": "glyph:o",
+		"path": "glyphs/glyph%3Ao~048e0286.json"
+	},
+	{
+		"id": "glyph:p",
+		"path": "glyphs/glyph%3Ap~1f8e2d07.json"
+	},
+	{
+		"id": "glyph:q",
+		"path": "glyphs/glyph%3Aq~1e8e2b74.json"
+	},
+	{
+		"id": "glyph:r",
+		"path": "glyphs/glyph%3Ar~218e302d.json"
+	},
+	{
+		"id": "glyph:s",
+		"path": "glyphs/glyph%3As~208e2e9a.json"
+	},
+	{
+		"id": "glyph:t",
+		"path": "glyphs/glyph%3At~1b8e26bb.json"
+	},
+	{
+		"id": "glyph:u",
+		"path": "glyphs/glyph%3Au~1a8e2528.json"
+	},
+	{
+		"id": "glyph:v",
+		"path": "glyphs/glyph%3Av~1d8e29e1.json"
+	},
+	{
+		"id": "glyph:w",
+		"path": "glyphs/glyph%3Aw~1c8e284e.json"
+	},
+	{
+		"id": "glyph:x",
+		"path": "glyphs/glyph%3Ax~178e206f.json"
+	},
+	{
+		"id": "glyph:y",
+		"path": "glyphs/glyph%3Ay~168e1edc.json"
+	},
+	{
+		"id": "glyph:z",
+		"path": "glyphs/glyph%3Az~198e2395.json"
+	},
+	{
+		"id": "glyph:braceleft",
+		"path": "glyphs/glyph%3Abraceleft~0eb31ef1.json"
+	},
+	{
+		"id": "glyph:bar",
+		"path": "glyphs/glyph%3Abar~91461f12.json"
+	},
+	{
+		"id": "glyph:braceright",
+		"path": "glyphs/glyph%3Abraceright~3a492f92.json"
+	},
+	{
+		"id": "glyph:asciitilde",
+		"path": "glyphs/glyph%3Aasciitilde~67032ebe.json"
+	}
+]

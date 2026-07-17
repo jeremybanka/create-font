@@ -75,6 +75,42 @@ glyph-inspector.class {
 			}
 		}
 
+		> metric-fields {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+			gap: 7px;
+			margin-top: 15px;
+
+			> label {
+				display: grid;
+				gap: 5px;
+				min-width: 0;
+
+				> span {
+					font-size: 9px;
+					font-weight: 690;
+					color: var(--ink-muted);
+				}
+
+				> numeric-input {
+					display: contents;
+
+					> input {
+						box-sizing: border-box;
+						width: 100%;
+						min-width: 0;
+						padding: 6px;
+						border: 1px solid var(--line);
+						border-radius: 5px;
+						background: var(--paper);
+						font: 570 10px/1 var(--ui-font);
+						font-variant-numeric: tabular-nums;
+						color: var(--ink);
+					}
+				}
+			}
+		}
+
 		> selection-details {
 			display: grid;
 			gap: 14px;

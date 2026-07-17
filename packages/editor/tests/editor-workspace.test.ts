@@ -1,3 +1,4 @@
+import { Silo } from "atom.io"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -17,17 +18,27 @@ import {
 	createEditorWorkspace,
 	type EditorWorkspace,
 } from "../src/editor-workspace.ts"
+import { subscribeToSettledState } from "../src/settled-subscription.ts"
 import {
+	combinedEditorPathPreview,
 	contourEndpointNormal,
 	contourStartDirection,
 	contourToPath,
+	editorSegmentCubic,
 	editorContourToPath,
+	nearestEditorSegment,
 	resolveVariableGlyph,
 } from "../src/geometry.ts"
 import { layoutTextRun, nearestCaretIndex } from "../src/text-layout.ts"
 import {
 	canStartBoxSelectionOn,
+	boundsOfControls,
+	contourSelectionTargets,
 	controlsInsideBounds,
+	nearestAxisAlignment,
+	resolveSelectionControls,
+	scaleSelectionControls,
+	translateSelectionControls,
 } from "../src/outline-selection.ts"
 
 function previewGlyph(workspace: EditorWorkspace, index: number) {
@@ -36,6 +47,112 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
+	it("coalesces a transaction into one external-store notification", async () => {
+		const silo = new Silo({
+			name: "test/settled-selector",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const firstAtom = silo.atom({ key: "first", default: 1 })
+		const secondAtom = silo.atom({ key: "second", default: 2 })
+		let computations = 0
+		const sumSelector = silo.selector({
+			key: "sum",
+			get: ({ get }) => {
+				computations += 1
+				return get(firstAtom) + get(secondAtom)
+			},
+		})
+		const setBoth = silo.runTransaction(
+			silo.transaction<() => void>({
+				key: "setBoth",
+				do: ({ set }) => {
+					set(firstAtom, 3)
+					set(secondAtom, 4)
+				},
+			}),
+		)
+		expect(silo.getState(sumSelector)).toBe(3)
+		let notifications = 0
+		const unsubscribe = subscribeToSettledState(silo, sumSelector, () => {
+			notifications += 1
+			expect(silo.getState(sumSelector)).toBe(7)
+		})
+
+		setBoth()
+		await Promise.resolve()
+		unsubscribe()
+
+		expect(notifications).toBe(1)
+		expect(computations).toBe(3)
+	})
+
+	it("shares selector work and coalesces same-turn timeline-style updates", async () => {
+		const silo = new Silo({
+			name: "test/shared-settled-selector",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const firstAtom = silo.atom({ key: "first", default: 1 })
+		const secondAtom = silo.atom({ key: "second", default: 2 })
+		let computations = 0
+		const sumSelector = silo.selector({
+			key: "sum",
+			get: ({ get }) => {
+				computations += 1
+				return get(firstAtom) + get(secondAtom)
+			},
+		})
+		expect(silo.getState(sumSelector)).toBe(3)
+		let firstNotifications = 0
+		let secondNotifications = 0
+		const unsubscribeFirst = subscribeToSettledState(silo, sumSelector, () => {
+			firstNotifications += 1
+		})
+		const unsubscribeSecond = subscribeToSettledState(silo, sumSelector, () => {
+			secondNotifications += 1
+		})
+
+		silo.setState(firstAtom, 3)
+		silo.setState(secondAtom, 4)
+		await Promise.resolve()
+		unsubscribeFirst()
+		unsubscribeSecond()
+
+		expect(firstNotifications).toBe(1)
+		expect(secondNotifications).toBe(1)
+		expect(computations).toBe(3)
+	})
+
+	it("notifies external-store subscribers once after replacing a source", async () => {
+		const workspace = createEditorWorkspace()
+		const selector = workspace.font.selectors.editorSource
+		const source = workspace.font.silo.getState(selector)
+		if (source === null) throw new Error("The editor source is missing.")
+		const replacement = structuredClone(source)
+		const layer = replacement.glyphs[0]?.layers[0]
+		if (layer === undefined) throw new Error("The glyph layer is missing.")
+		Object.assign(layer, { advanceWidth: layer.advanceWidth + 1 })
+		const snapshots: Array<typeof source> = []
+		const unsubscribe = subscribeToSettledState(
+			workspace.font.silo,
+			selector,
+			() => {
+				const snapshot = workspace.font.silo.getState(selector)
+				if (snapshot !== null) snapshots.push(snapshot)
+			},
+		)
+
+		workspace.actions.replaceSource(replacement)
+		await Promise.resolve()
+		unsubscribe()
+
+		expect(snapshots).toHaveLength(1)
+		expect(snapshots[0]?.glyphs[0]?.layers[0]?.advanceWidth).toBe(
+			layer.advanceWidth,
+		)
+	})
+
 	it("loads a compiled demo font with a variable A", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "A")
@@ -170,6 +287,59 @@ describe("editor workspace", () => {
 		expect(previewGlyph(workspace, 0)?.contours[1]?.[0]?.y).toBe(448)
 	})
 
+	it("derives active-layer bounds and right side bearing after edits", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.activeGlyphId, oGlyphId)
+		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
+		const before = workspace.font.silo.getState(workspace.ui.activeLayer)
+		if (before === null) throw new Error("Missing active fixture layer.")
+		expect(before.outlineWidth).toBe(before.xMax - before.xMin)
+		expect(before.rightSideBearing).toBe(
+			before.advanceWidth - before.leftSideBearing - before.outlineWidth,
+		)
+
+		workspace.font.actions.setHorizontalMetrics({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			advanceWidth: before.advanceWidth + 25,
+		})
+		const afterWidth = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(afterWidth?.rightSideBearing).toBe(before.rightSideBearing + 25)
+
+		const firstPoint = before.contours[0]?.nodes[0]
+		if (firstPoint === undefined) throw new Error("Missing fixture point.")
+		workspace.font.actions.movePoints({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{ pointId: firstPoint.pointId, x: firstPoint.x - 20, y: firstPoint.y },
+			],
+		})
+		const afterMove = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(afterMove?.outlineWidth).toBeGreaterThanOrEqual(before.outlineWidth)
+		expect(afterMove?.rightSideBearing).toBe(
+			(afterMove?.advanceWidth ?? 0) -
+				(afterMove?.leftSideBearing ?? 0) -
+				(afterMove?.outlineWidth ?? 0),
+		)
+	})
+
+	it("uses zero outline width when deriving empty-glyph bearings", () => {
+		const workspace = createEditorWorkspace()
+		const [emptyGlyphId] = workspace.actions.addGlyphs(["empty-bearing-test"])
+		if (emptyGlyphId === undefined) throw new Error("Glyph was not added.")
+		const layer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		expect(layer).toMatchObject({
+			glyphId: emptyGlyphId,
+			xMin: 0,
+			xMax: 0,
+			outlineWidth: 0,
+		})
+		expect(layer?.rightSideBearing).toBe(
+			(layer?.advanceWidth ?? 0) - (layer?.leftSideBearing ?? 0),
+		)
+	})
+
 	it("does not invalidate an O preview when an unrelated glyph changes", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "O")
@@ -191,6 +361,28 @@ describe("editor workspace", () => {
 		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toBe(
 			layerBefore,
 		)
+	})
+
+	it("caches editor-source projection independently for each glyph", () => {
+		const workspace = createEditorWorkspace()
+		const aBefore = workspace.font.read.editorGlyphSource(aGlyphId)
+		const oBefore = workspace.font.read.editorGlyphSource(oGlyphId)
+		const point = oBefore?.contours[0]?.points[0]
+		const layerPoint = oBefore?.layers[0]?.points.find(
+			(item) => item.pointId === point?.id,
+		)
+		if (oBefore === null || point === undefined || layerPoint === undefined) {
+			throw new Error("Missing O fixture point.")
+		}
+
+		workspace.font.actions.movePoints({
+			masterId: oBefore.layers[0]?.masterId ?? razorMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: layerPoint.x + 1, y: layerPoint.y }],
+		})
+
+		expect(workspace.font.read.editorGlyphSource(aGlyphId)).toBe(aBefore)
+		expect(workspace.font.read.editorGlyphSource(oGlyphId)).not.toBe(oBefore)
 	})
 
 	it("writes valid closed quadratic SVG paths", () => {
@@ -243,6 +435,36 @@ describe("editor workspace", () => {
 		expect(path).toBe("M 0 0 C 20 0 40 20 40 40")
 	})
 
+	it("derives a deterministic non-destructive overlap preview", () => {
+		const contours = [
+			{
+				closed: true,
+				nodes: [
+					{ x: 0, y: 0 },
+					{ x: 100, y: 0 },
+					{ x: 100, y: 100 },
+				],
+			},
+			{
+				closed: true,
+				nodes: [
+					{ x: 50, y: 0 },
+					{ x: 150, y: 0 },
+					{ x: 150, y: 100 },
+				],
+			},
+		]
+		const first = combinedEditorPathPreview(contours)
+		const second = combinedEditorPathPreview(contours)
+		expect(first).toEqual(second)
+		expect(first).toMatchObject({
+			fillRule: "nonzero",
+			sourceContourCount: 2,
+			nonDestructive: true,
+		})
+		expect(first.path.match(/M /g)).toHaveLength(2)
+	})
+
 	it("derives endpoint markers from the normal to an open path's tangent", () => {
 		const contour = [
 			{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
@@ -286,6 +508,112 @@ describe("editor workspace", () => {
 			{ kind: "node", pointId: "point:test" },
 			{ kind: "handle", pointId: "point:test", handle: "incoming" },
 		])
+	})
+
+	it("resolves, bounds, aligns, translates, and scales mixed controls deterministically", () => {
+		const nodes = [
+			{
+				pointId: "point:first" as const,
+				mode: "hard" as const,
+				x: 10,
+				y: 20,
+				outgoing: { x: 12, y: 0 },
+			},
+			{
+				pointId: "point:second" as const,
+				mode: "hard" as const,
+				x: 12,
+				y: 80,
+			},
+		]
+		const selection = [
+			{ kind: "handle", pointId: nodes[0]!.pointId, handle: "outgoing" },
+			{ kind: "node", pointId: nodes[1]!.pointId },
+		] as const
+		const controls = resolveSelectionControls(nodes, selection)
+
+		expect(controls.map(({ x, y }) => ({ x, y }))).toEqual([
+			{ x: 22, y: 20 },
+			{ x: 12, y: 80 },
+		])
+		expect(boundsOfControls(controls)).toEqual({
+			minX: 12,
+			minY: 20,
+			maxX: 22,
+			maxY: 80,
+		})
+		expect(nearestAxisAlignment(controls)).toMatchObject({
+			axis: "vertical",
+			coordinate: 17,
+			handles: [{ x: 17, y: 20 }],
+			points: [{ x: 17, y: 80 }],
+		})
+		expect(nearestAxisAlignment([...controls].reverse())).toMatchObject({
+			axis: "vertical",
+			coordinate: 17,
+		})
+		expect(translateSelectionControls(controls, 3, -4)).toMatchObject({
+			handles: [{ x: 25, y: 16 }],
+			points: [{ x: 15, y: 76 }],
+		})
+		expect(
+			scaleSelectionControls(controls, {
+				anchorX: 12,
+				anchorY: 20,
+				scaleX: 2,
+				scaleY: 0.5,
+			}),
+		).toMatchObject({
+			handles: [{ x: 32, y: 20 }],
+			points: [{ x: 12, y: 50 }],
+		})
+	})
+
+	it("uses a stable vertical tie break and returns complete contour targets", () => {
+		const nodes = [
+			{ pointId: "point:a" as const, mode: "hard" as const, x: 0, y: 0 },
+			{
+				pointId: "point:b" as const,
+				mode: "hard" as const,
+				x: 10,
+				y: 10,
+				incoming: { x: -2, y: 0 },
+			},
+		]
+		const controls = resolveSelectionControls(nodes, [
+			{ kind: "node", pointId: nodes[0]!.pointId },
+			{ kind: "node", pointId: nodes[1]!.pointId },
+		])
+		expect(nearestAxisAlignment(controls)?.axis).toBe("vertical")
+		expect(contourSelectionTargets(nodes)).toEqual([
+			{ kind: "node", pointId: "point:a" },
+			{ kind: "node", pointId: "point:b" },
+			{ kind: "handle", pointId: "point:b", handle: "incoming" },
+		])
+	})
+
+	it("finds nearest line and cubic segments in authored geometry", () => {
+		const line = [
+			{ x: 0, y: 0 },
+			{ x: 100, y: 0 },
+		]
+		expect(nearestEditorSegment(line, false, { x: 25, y: 7 })).toMatchObject({
+			segmentIndex: 0,
+			amount: 0.25,
+			x: 25,
+			y: 0,
+			distance: 7,
+		})
+		const curve = [
+			{ x: 0, y: 0, outgoing: { x: 0, y: 100 } },
+			{ x: 100, y: 0, incoming: { x: 0, y: 100 } },
+		]
+		const nearest = nearestEditorSegment(curve, false, { x: 50, y: 76 })
+		expect(nearest?.segmentIndex).toBe(0)
+		expect(nearest?.amount).toBeCloseTo(0.5, 3)
+		expect(nearest?.x).toBeCloseTo(50, 3)
+		expect(nearest?.y).toBeCloseTo(75, 3)
+		expect(editorSegmentCubic(curve, 0, false)).not.toBeNull()
 	})
 
 	it("starts box selection over inactive glyph occurrences", () => {

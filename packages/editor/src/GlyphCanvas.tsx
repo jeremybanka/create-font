@@ -5,6 +5,11 @@ import type {
 	PointId,
 } from "@create-font/states"
 import {
+	matchingVerticalMetrics,
+	resolveVerticalMetricGuides,
+	type VerticalMetricLine,
+} from "@create-font/states"
+import {
 	Circle,
 	Group,
 	type KonvaEventObject,
@@ -13,12 +18,14 @@ import {
 	Path,
 	Rect,
 	Stage,
+	Text,
 } from "@create-font/preact-konva"
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
+import { snapDraggedPoint, type ActiveSnap } from "./canvas-snapping.ts"
 import {
 	deriveOneSidedSoftHandles,
 	previewHandleDrag,
@@ -26,22 +33,34 @@ import {
 } from "./curve-editing.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
+	combinedEditorPathPreview,
 	contourEndpointNormal,
 	contoursToPath,
 	contourStartDirection,
+	editorContourToPath,
 	editorContoursToPath,
+	nearestEditorSegment,
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
 import {
 	canStartBoxSelectionOn,
+	boundsOfControls,
+	contourSelectionTargets,
 	controlsInsideBounds,
+	resolveSelectionControls,
+	scaleSelectionControls,
 	selectionKey,
+	translateSelectionControls,
 	type EditorSelectionTarget,
+	type ResolvedSelectionControl,
+	type SelectionBounds,
+	type SelectionTransformResult,
 } from "./outline-selection.ts"
-import { useI, useO } from "./state-hooks.ts"
+import { useI, useO, useOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
@@ -67,6 +86,23 @@ interface SelectionBox {
 	readonly additive: boolean
 }
 
+type TransformHandle =
+	| "inside"
+	| "north"
+	| "north-east"
+	| "east"
+	| "south-east"
+	| "south"
+	| "south-west"
+	| "west"
+	| "north-west"
+
+interface TransformDrag {
+	readonly handle: TransformHandle
+	readonly controls: readonly ResolvedSelectionControl[]
+	readonly bounds: SelectionBounds
+}
+
 const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowLeft: [-1, 0],
 	ArrowRight: [1, 0],
@@ -86,8 +122,6 @@ interface CanvasView {
 
 export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
 	const caretIndex = useO(workspace.ui.caretIndex)
@@ -98,6 +132,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const location = useO(workspace.ui.previewLocation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const metrics =
+		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
+	const metadata =
+		useO(workspace.font.atoms.metadata) ?? workspace.document.metadata
+	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const masterIds = useO(workspace.font.atoms.masterIds)
 	const layer = useO(workspace.ui.activeLayer)
 	const selection = useO(workspace.ui.selection)
 	const setSelection = useI(workspace.ui.selection)
@@ -105,18 +147,20 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
+	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
+	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
+	const [transformPreview, setTransformPreview] =
+		useState<SelectionTransformResult | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const penEntitySequence = useRef(0)
 	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const { ref, width, height } = useElementSize<HTMLElement>()
-	const glyph = source.glyphs.find((item) => item.id === activeGlyphId)
-	const master = source.masters.find((item) => item.id === activeMasterId)
 	const layout = useMemo(
-		() => layoutTextRun(run, source.metrics, source.metadata.unitsPerEm),
-		[run, source.metadata.unitsPerEm, source.metrics],
+		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
+		[run, metadata.unitsPerEm, metrics],
 	)
 	const editingPosition = layout.glyphs.find(
 		(position) => position.item.textStart === editingTextIndex,
@@ -125,11 +169,54 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const visibleContours = useMemo(
 		() =>
 			contours.map((contour) => {
-				const positionedNodes = contour.nodes.map((point) =>
-					point.pointId === draggedPoint?.pointId
-						? { ...point, x: draggedPoint.x, y: draggedPoint.y }
-						: point,
+				const transformedPoints = new Map(
+					(transformPreview?.points ?? []).map((point) => [
+						point.pointId,
+						point,
+					]),
 				)
+				const transformedHandles = new Map(
+					(transformPreview?.handles ?? []).map((handle) => [
+						`${handle.pointId}/${handle.handle}`,
+						handle,
+					]),
+				)
+				const positionedNodes = contour.nodes.map((point) => {
+					const transformed = transformedPoints.get(point.pointId)
+					const x =
+						transformed?.x ??
+						(point.pointId === draggedPoint?.pointId ? draggedPoint.x : point.x)
+					const y =
+						transformed?.y ??
+						(point.pointId === draggedPoint?.pointId ? draggedPoint.y : point.y)
+					const incoming = transformedHandles.get(`${point.pointId}/incoming`)
+					const outgoing = transformedHandles.get(`${point.pointId}/outgoing`)
+					let next = {
+						...point,
+						x,
+						y,
+						...(incoming === undefined
+							? {}
+							: { incoming: { x: incoming.x - x, y: incoming.y - y } }),
+						...(outgoing === undefined
+							? {}
+							: { outgoing: { x: outgoing.x - x, y: outgoing.y - y } }),
+					}
+					if (
+						next.mode === "soft" &&
+						incoming !== undefined &&
+						next.incoming !== undefined
+					) {
+						next = previewHandleDrag(next, "incoming", next.incoming)
+					} else if (
+						next.mode === "soft" &&
+						outgoing !== undefined &&
+						next.outgoing !== undefined
+					) {
+						next = previewHandleDrag(next, "outgoing", next.outgoing)
+					}
+					return next
+				})
 				return {
 					id: contour.id,
 					closed: contour.closed,
@@ -145,7 +232,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					),
 				}
 			}),
-		[contours, draggedHandle, draggedPoint],
+		[contours, draggedHandle, draggedPoint, transformPreview],
 	)
 	const allPoints = visibleContours.flatMap((contour) => contour.nodes)
 	const selectedNodeIds = new Set(
@@ -157,7 +244,29 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		selectedNodeIds.has(point.pointId),
 	)
 	const selectedPoint = selectedPoints.at(-1)
-	const metrics = source.metrics
+	const selectedControls = resolveSelectionControls(allPoints, selection)
+	const transformBounds = boundsOfControls(selectedControls)
+	const combinedPreview = combinedEditorPathPreview(visibleContours)
+	const metricGuides = useMemo(
+		() => resolveVerticalMetricGuides(metrics),
+		[metrics],
+	)
+	const metricLines = useMemo(
+		() =>
+			metricGuides.filter(
+				(guide): guide is VerticalMetricLine => guide.kind === "line",
+			),
+		[metricGuides],
+	)
+	const groupedMetricLines = useMemo(() => {
+		const groups = new Map<number, VerticalMetricLine[]>()
+		for (const line of metricLines) {
+			const group = groups.get(line.y) ?? []
+			group.push(line)
+			groups.set(line.y, group)
+		}
+		return [...groups.entries()].map(([y, lines]) => ({ y, lines }))
+	}, [metricLines])
 	const advanceWidth = layer?.advanceWidth ?? 1_000
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
@@ -220,7 +329,8 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 
 	useEffect(() => {
 		setPenContourId(null)
-	}, [activeGlyphId, activeTool, editingTextIndex])
+		setActiveSnaps([])
+	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
 	const commitPoint = (point: DraggedPoint): void => {
 		workspace.font.actions.movePoints({
@@ -296,10 +406,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		}
 	}
 	const penCoordinates = (x: number, y: number) =>
-		source.masters.map((sourceMaster) => ({
-			masterId: sourceMaster.id,
+		masterIds.map((sourceMasterId) => ({
+			masterId: sourceMasterId,
 			x:
-				sourceMaster.id === activeMasterId
+				sourceMasterId === activeMasterId
 					? x
 					: Math.round(
 							500 + (x - 500) * (master?.kind === "default" ? 0.94 : 1 / 0.94),
@@ -357,6 +467,140 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		})
 		setPenContourId(null)
 	}
+	const roundedTransform = (
+		result: SelectionTransformResult,
+	): SelectionTransformResult => ({
+		points: result.points.map((point) => ({
+			...point,
+			x: Math.round(point.x),
+			y: Math.round(point.y),
+		})),
+		handles: result.handles.map((handle) => ({
+			...handle,
+			x: Math.round(handle.x),
+			y: Math.round(handle.y),
+		})),
+	})
+	const beginTransform = (handle: TransformHandle): void => {
+		const controls = resolveSelectionControls(allPoints, selection)
+		const bounds = boundsOfControls(controls)
+		if (bounds === null) return
+		setTransformDrag({ handle, controls, bounds })
+	}
+	const previewTransformDrag = (event: KonvaEventObject<DragEvent>): void => {
+		if (transformDrag === null) return
+		const { bounds, controls, handle } = transformDrag
+		if (handle === "inside") {
+			setTransformPreview(
+				roundedTransform(
+					translateSelectionControls(
+						controls,
+						event.target.x() - bounds.minX,
+						event.target.y() - bounds.minY,
+					),
+				),
+			)
+			return
+		}
+		const movesWest = handle.includes("west")
+		const movesEast = handle.includes("east")
+		const movesNorth = handle.includes("north")
+		const movesSouth = handle.includes("south")
+		const anchorX = movesWest ? bounds.maxX : bounds.minX
+		const anchorY = movesSouth ? bounds.maxY : bounds.minY
+		const sourceX = movesWest ? bounds.minX : bounds.maxX
+		const sourceY = movesSouth ? bounds.minY : bounds.maxY
+		let scaleX =
+			movesWest || movesEast
+				? sourceX === anchorX
+					? 1
+					: (event.target.x() - anchorX) / (sourceX - anchorX)
+				: 1
+		let scaleY =
+			movesNorth || movesSouth
+				? sourceY === anchorY
+					? 1
+					: (event.target.y() - anchorY) / (sourceY - anchorY)
+				: 1
+		if (
+			event.evt.shiftKey &&
+			(movesWest || movesEast) &&
+			(movesNorth || movesSouth)
+		) {
+			const uniform =
+				Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY
+			scaleX = uniform
+			scaleY = uniform
+		}
+		setTransformPreview(
+			roundedTransform(
+				scaleSelectionControls(controls, {
+					anchorX,
+					anchorY,
+					scaleX,
+					scaleY,
+				}),
+			),
+		)
+	}
+	const commitTransform = (): void => {
+		if (transformPreview !== null) {
+			workspace.font.actions.transformControls({
+				masterId: activeMasterId,
+				glyphId: activeGlyphId,
+				...transformPreview,
+			})
+		}
+		setTransformPreview(null)
+		setTransformDrag(null)
+	}
+	const selectWholeContour = (
+		contour: (typeof visibleContours)[number],
+		event: MouseEvent,
+	): void => {
+		const targets = contourSelectionTargets(contour.nodes)
+		const additive = event.metaKey || event.ctrlKey || event.shiftKey
+		if (!additive) {
+			setSelection(Object.freeze(targets))
+		} else {
+			setSelection((current) => {
+				const next = new Map(
+					current.map((target) => [selectionKey(target), target]),
+				)
+				const allSelected = targets.every((target) =>
+					next.has(selectionKey(target)),
+				)
+				for (const target of targets) {
+					if (allSelected) next.delete(selectionKey(target))
+					else next.set(selectionKey(target), target)
+				}
+				return Object.freeze([...next.values()])
+			})
+		}
+		setShowNodes(true)
+	}
+	const splitContourSegment = (
+		contour: (typeof visibleContours)[number],
+		event: KonvaEventObject<MouseEvent>,
+	): void => {
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return
+		const nearest = nearestEditorSegment(contour.nodes, contour.closed, pointer)
+		if (nearest === null || nearest.amount <= 0.001 || nearest.amount >= 0.999)
+			return
+		event.cancelBubble = true
+		const pointId = nextPenEntityId("point") as PointId
+		workspace.font.actions.splitSegment({
+			glyphId: activeGlyphId,
+			contourId: contour.id,
+			segmentIndex: nearest.segmentIndex,
+			pointId,
+			amount: nearest.amount,
+		})
+		setPenContourId(null)
+		setSelection(Object.freeze([{ kind: "node", pointId }]))
+		setShowNodes(true)
+	}
 	const zoomCanvas = (
 		nextZoom: number,
 		focalX = width / 2,
@@ -383,9 +627,15 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Shift+A ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+				if (event.key === "Escape" && transformDrag !== null) {
+					event.preventDefault()
+					setTransformDrag(null)
+					setTransformPreview(null)
+					return
+				}
 				if (event.key === "Escape" && editingTextIndex !== null) {
 					event.preventDefault()
 					exitGlyphEdit()
@@ -526,7 +776,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					</span>
 				</canvas-title>
 				<canvas-controls>
-					{source.axes.map((axis) => {
+					{axes.map((axis) => {
 						const coordinate = location[axis.id] ?? axis.default
 						return (
 							<label key={axis.id}>
@@ -550,27 +800,30 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 						)
 					})}
 					<zoom-controls aria-label="Canvas zoom">
-						<button
-							type="button"
-							aria-label="Zoom out"
+						<TooltipButton
+							label="Zoom out"
+							description="Reduce the canvas magnification."
+							placement="bottom"
 							onClick={() => zoomCanvas(view.zoom / 1.2)}
 						>
 							<MinusIcon aria-hidden="true" />
-						</button>
-						<button
-							type="button"
-							title="Reset canvas view"
+						</TooltipButton>
+						<TooltipButton
+							label="Reset canvas view"
+							description="Return to 100% zoom and reset the canvas pan."
+							placement="bottom"
 							onClick={() => setView({ x: 72, y: 72, zoom: 1 })}
 						>
 							{Math.round(view.zoom * 100)}%
-						</button>
-						<button
-							type="button"
-							aria-label="Zoom in"
+						</TooltipButton>
+						<TooltipButton
+							label="Zoom in"
+							description="Increase the canvas magnification."
+							placement="bottom"
 							onClick={() => zoomCanvas(view.zoom * 1.2)}
 						>
 							<PlusIcon aria-hidden="true" />
-						</button>
+						</TooltipButton>
 					</zoom-controls>
 					{editingTextIndex === null ? null : (
 						<button
@@ -769,19 +1022,72 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 									y={editingPosition.baseline}
 									scaleY={-1}
 								>
-									{[
-										{ y: 0, color: palette.guideStrong, width: 1.1 },
-										{ y: metrics.xHeight, color: palette.guideSoft, width: 1 },
-										{ y: metrics.capHeight, color: palette.guideMid, width: 1 },
-									].map((guide) => (
-										<Line
-											key={`horizontal-guide:${guide.y}`}
-											points={[-200, guide.y, advanceWidth + 200, guide.y]}
-											stroke={guide.color}
-											strokeWidth={guide.width * inverseScale}
-											listening={false}
-										/>
-									))}
+									{metricGuides.flatMap((guide) =>
+										guide.kind === "band"
+											? [
+													<Group key={`metric-band:${guide.id}`}>
+														<Rect
+															x={-200}
+															y={guide.minY}
+															width={advanceWidth + 400}
+															height={Math.max(
+																guide.maxY - guide.minY,
+																inverseScale,
+															)}
+															fill={palette.guideSoft}
+															opacity={0.12}
+															listening={false}
+														/>
+														<Text
+															x={advanceWidth + 12 * inverseScale}
+															y={guide.maxY - 4 * inverseScale}
+															scaleY={-1}
+															text={guide.label}
+															fontSize={9 * inverseScale}
+															fill={palette.guideStrong}
+															listening={false}
+														/>
+													</Group>,
+												]
+											: [],
+									)}
+									{groupedMetricLines.map(({ y, lines }) => {
+										const isBaseline = lines.some(
+											(line) => line.id === "baseline",
+										)
+										const isPrimary = lines.some(
+											(line) =>
+												line.id === "capHeight" || line.id === "xHeight",
+										)
+										return (
+											<Group key={`metric-lines:${y}`}>
+												<Line
+													points={[-200, y, advanceWidth + 200, y]}
+													stroke={
+														isBaseline
+															? palette.guideStrong
+															: isPrimary
+																? palette.guideMid
+																: palette.guideSoft
+													}
+													strokeWidth={(isBaseline ? 1.2 : 1) * inverseScale}
+													{...(isBaseline || isPrimary
+														? {}
+														: { dash: [5 * inverseScale, 4 * inverseScale] })}
+													listening={false}
+												/>
+												<Text
+													x={-195}
+													y={y - 4 * inverseScale}
+													scaleY={-1}
+													text={lines.map((line) => line.label).join(" · ")}
+													fontSize={10 * inverseScale}
+													fill={palette.guideStrong}
+													listening={false}
+												/>
+											</Group>
+										)
+									})}
 									{[0, advanceWidth].map((x) => (
 										<Line
 											key={`vertical-guide:${x}`}
@@ -791,6 +1097,31 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											listening={false}
 										/>
 									))}
+									{activeSnaps.map((snap) => (
+										<Line
+											key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
+											points={
+												snap.axis === "x"
+													? [
+															snap.value,
+															metrics.descender - 100,
+															snap.value,
+															metrics.ascender + metrics.lineGap + 100,
+														]
+													: [-200, snap.value, advanceWidth + 200, snap.value]
+											}
+											stroke={palette.accent}
+											strokeWidth={1.5 * inverseScale}
+											dash={[7 * inverseScale, 4 * inverseScale]}
+											listening={false}
+										/>
+									))}
+									<Path
+										data={combinedPreview.path}
+										fill={palette.previewInk}
+										opacity={0.1}
+										listening={false}
+									/>
 									<Path
 										data={editorContoursToPath(visibleContours)}
 										fillEnabled={false}
@@ -798,6 +1129,29 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 										strokeWidth={1.25 * inverseScale}
 										listening={false}
 									/>
+									{visibleContours.map((contour) => (
+										<Path
+											key={`segment-hit:${contour.id}`}
+											name="outline-segment"
+											data={editorContourToPath(contour.nodes, contour.closed)}
+											fillEnabled={false}
+											stroke="rgb(0 0 0 / 0.001)"
+											strokeWidth={inverseScale}
+											hitStrokeWidth={14 * inverseScale}
+											listening={
+												activeTool === "select" || activeTool === "pen"
+											}
+											onMouseDown={(event) => {
+												if (activeTool === "pen")
+													splitContourSegment(contour, event)
+											}}
+											onDblClick={(event) => {
+												if (activeTool !== "select") return
+												event.cancelBubble = true
+												selectWholeContour(contour, event.evt)
+											}}
+										/>
+									))}
 									{showNodes
 										? visibleContours.map((contour, contourIndex) => {
 												const direction = contourStartDirection(contour.nodes)
@@ -849,6 +1203,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		contour.closed,
 																	) ?? { x: 0, y: 1 })
 																: null
+															const metricMatches = matchingVerticalMetrics(
+																point.y,
+																metricGuides,
+															)
 															const nodeTarget: EditorSelectionTarget = {
 																kind: "node",
 																pointId: point.pointId,
@@ -902,11 +1260,24 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 															})
 															const dragPoint = (
 																event: KonvaEventObject<DragEvent>,
-															): DraggedPoint => ({
-																pointId: point.pointId,
-																x: Math.round(event.target.x()),
-																y: Math.round(event.target.y()),
-															})
+															) => {
+																const snapped = snapDraggedPoint({
+																	pointId: point.pointId,
+																	x: Math.round(event.target.x()),
+																	y: Math.round(event.target.y()),
+																	nodes: allPoints,
+																	metrics: metricLines,
+																	worldScale,
+																})
+																return {
+																	point: {
+																		pointId: point.pointId,
+																		x: snapped.x,
+																		y: snapped.y,
+																	},
+																	snaps: snapped.snaps,
+																}
+															}
 															const nodeProps = {
 																name: "outline-point",
 																x: point.x,
@@ -923,16 +1294,40 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																onDragStart: selectPoint,
 																onDragMove: (
 																	event: KonvaEventObject<DragEvent>,
-																) => setDraggedPoint(dragPoint(event)),
+																) => {
+																	const dragged = dragPoint(event)
+																	setDraggedPoint(dragged.point)
+																	setActiveSnaps(dragged.snaps)
+																},
 																onDragEnd: (
 																	event: KonvaEventObject<DragEvent>,
 																) => {
-																	commitPoint(dragPoint(event))
+																	const dragged = dragPoint(event)
+																	commitPoint(dragged.point)
 																	setDraggedPoint(null)
+																	setActiveSnaps([])
 																},
 															}
 															return (
 																<Group key={`node:${point.pointId}`}>
+																	{metricMatches.length === 0 ? null : (
+																		<Rect
+																			name={metricMatches
+																				.map((match) => `metric-${match.id}`)
+																				.join(" ")}
+																			x={point.x}
+																			y={point.y}
+																			width={14 * inverseScale}
+																			height={14 * inverseScale}
+																			offsetX={7 * inverseScale}
+																			offsetY={7 * inverseScale}
+																			rotation={45}
+																			stroke={palette.accent}
+																			strokeWidth={1.5 * inverseScale}
+																			opacity={0.82}
+																			listening={false}
+																		/>
+																	)}
 																	{point.incoming === undefined ? null : (
 																		<Group
 																			key={`incoming-control:${point.pointId}`}
@@ -1132,6 +1527,92 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 												)
 											})
 										: null}
+									{activeTool !== "transform" ||
+									transformBounds === null ? null : (
+										<Group>
+											<Rect
+												name="transform-selection-box"
+												x={transformBounds.minX}
+												y={transformBounds.minY}
+												width={Math.max(
+													transformBounds.maxX - transformBounds.minX,
+													2 * inverseScale,
+												)}
+												height={Math.max(
+													transformBounds.maxY - transformBounds.minY,
+													2 * inverseScale,
+												)}
+												fill={palette.accent}
+												opacity={0.06}
+												stroke={palette.accent}
+												strokeWidth={1.5 * inverseScale}
+												draggable
+												onDragStart={() => beginTransform("inside")}
+												onDragMove={previewTransformDrag}
+												onDragEnd={commitTransform}
+											/>
+											{(
+												[
+													[
+														"north-west",
+														transformBounds.minX,
+														transformBounds.maxY,
+													],
+													[
+														"north",
+														(transformBounds.minX + transformBounds.maxX) / 2,
+														transformBounds.maxY,
+													],
+													[
+														"north-east",
+														transformBounds.maxX,
+														transformBounds.maxY,
+													],
+													[
+														"east",
+														transformBounds.maxX,
+														(transformBounds.minY + transformBounds.maxY) / 2,
+													],
+													[
+														"south-east",
+														transformBounds.maxX,
+														transformBounds.minY,
+													],
+													[
+														"south",
+														(transformBounds.minX + transformBounds.maxX) / 2,
+														transformBounds.minY,
+													],
+													[
+														"south-west",
+														transformBounds.minX,
+														transformBounds.minY,
+													],
+													[
+														"west",
+														transformBounds.minX,
+														(transformBounds.minY + transformBounds.maxY) / 2,
+													],
+												] as const
+											).map(([handle, x, y]) => (
+												<Circle
+													key={`transform:${handle}`}
+													name={`transform-${handle}`}
+													x={x}
+													y={y}
+													radius={5.5 * inverseScale}
+													fill={palette.surface}
+													stroke={palette.accent}
+													strokeWidth={1.5 * inverseScale}
+													hitStrokeWidth={12 * inverseScale}
+													draggable
+													onDragStart={() => beginTransform(handle)}
+													onDragMove={previewTransformDrag}
+													onDragEnd={commitTransform}
+												/>
+											))}
+										</Group>
+									)}
 									{selectionBox === null ? null : (
 										<Rect
 											x={Math.min(selectionBox.startX, selectionBox.endX)}
@@ -1154,11 +1635,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			<p id="canvas-instructions">
 				Type and add line breaks normally. Scroll to pan; use Command, Control,
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
-				outline. Press Escape to return to typing. Drag an empty area to
-				box-select controls; press Command or Control+A to select all, and
-				Delete to remove the selection. Hold Option or Alt while deleting nodes
-				to break paths open, or while deleting a handle to remove its adjoining
-				segment.
+				outline. Double-click an outline segment to select its path; use the Pen
+				Tool on a segment to insert a point. Press Escape to return to typing or
+				cancel a transform. Drag an empty area to box-select controls; press
+				Command or Control+A to select all, Shift+A to align, and Delete to
+				remove the selection. Hold Option or Alt while deleting nodes to break
+				paths open, or while deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{editingTextIndex === null

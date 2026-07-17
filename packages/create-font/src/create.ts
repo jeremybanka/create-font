@@ -114,6 +114,16 @@ function initialFontFiles(name: string): FontSourceDirectoryFiles {
 			capHeight: 700,
 			underlinePosition: -100,
 			underlineThickness: 50,
+			overshoots: {
+				baseline: 0,
+				ascender: 0,
+				descender: 0,
+				winAscent: 0,
+				winDescent: 0,
+				xHeight: 0,
+				capHeight: 0,
+				underlinePosition: 0,
+			},
 		},
 		"style.json": {
 			weightClass: 400,

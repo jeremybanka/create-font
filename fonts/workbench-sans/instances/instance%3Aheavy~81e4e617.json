@@ -1,0 +1,8 @@
+{
+	"id": "instance:heavy",
+	"name": "Heavy",
+	"coordinates": {
+		"axis:wght": 800
+	},
+	"postScriptName": "WorkbenchSans-Heavy"
+}

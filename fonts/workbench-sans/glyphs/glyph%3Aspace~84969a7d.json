@@ -1,0 +1,20 @@
+{
+	"id": "glyph:space",
+	"name": "space",
+	"export": true,
+	"contours": [],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 360,
+			"leftSideBearing": 0,
+			"points": []
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 360,
+			"leftSideBearing": 0,
+			"points": []
+		}
+	]
+}

@@ -1,0 +1,10 @@
+[
+	{
+		"id": "instance:text",
+		"path": "instances/instance%3Atext~99a4dbdf.json"
+	},
+	{
+		"id": "instance:heavy",
+		"path": "instances/instance%3Aheavy~81e4e617.json"
+	}
+]

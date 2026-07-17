@@ -139,7 +139,7 @@ describe(`create-font workspace RPC`, () => {
 						{
 							expectedRevision: `names-1`,
 							path: `names.json`,
-							value: { family: `Create Font Sans` },
+							value: { family: `Workbench Sans` },
 						},
 						{
 							expectedRevision: `style-1`,

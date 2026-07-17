@@ -11,6 +11,10 @@ import {
 } from "@create-font/states"
 
 import { makeDemoFont } from "./demo-font.ts"
+import {
+	createFontFaviconHref,
+	FALLBACK_FAVICON_HREF,
+} from "./document-metadata.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
@@ -21,6 +25,10 @@ export interface EditorCanvasLayer {
 	readonly contours: readonly EditorCanvasContour[]
 	readonly advanceWidth: number
 	readonly leftSideBearing: number
+	readonly xMin: number
+	readonly xMax: number
+	readonly outlineWidth: number
+	readonly rightSideBearing: number
 }
 
 export interface EditorCanvasContour {
@@ -45,10 +53,33 @@ export interface PreviewRunLineBreak {
 }
 
 export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
-export type EditorToolId = "select" | "pen"
+export type EditorToolId = "select" | "pen" | "transform"
+
+export interface EditorValidationStatus {
+	readonly ok: boolean
+	readonly issueCount: number
+}
+
+function validationStatus(
+	compilation: ReturnType<
+		ReturnType<typeof createFontEditorState>["read"]["compilation"]
+	>,
+): EditorValidationStatus {
+	const issueCount = compilation.ok
+		? compilation.projectionWarnings.length +
+			compilation.ingestionWarnings.length
+		: compilation.stage === "projection-failed"
+			? compilation.projectionErrors.length +
+				compilation.projectionWarnings.length
+			: compilation.projectionWarnings.length +
+				compilation.ingestionErrors.length +
+				compilation.ingestionWarnings.length
+	return Object.freeze({ ok: compilation.ok, issueCount })
+}
 
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
+	initialValidation?: EditorValidationStatus,
 ) {
 	const font = createFontEditorState({ key: "create-font/editor/font" })
 	font.actions.load(source)
@@ -98,6 +129,10 @@ export function createEditorWorkspace(
 	const showNodesAtom = font.silo.atom<boolean>({
 		key: "showNodes",
 		default: true,
+	})
+	const validationAtom = font.silo.atom<EditorValidationStatus>({
+		key: "validation",
+		default: initialValidation ?? validationStatus(font.read.compilation()),
 	})
 	const pathnameAtom = font.silo.atom<string>({
 		key: "pathname",
@@ -225,12 +260,22 @@ export function createEditorWorkspace(
 					}),
 				)
 			}
+			const xCoordinates = contours.flatMap((contour) =>
+				contour.nodes.map((node) => node.x),
+			)
+			const xMin = xCoordinates.length === 0 ? 0 : Math.min(...xCoordinates)
+			const xMax = xCoordinates.length === 0 ? 0 : Math.max(...xCoordinates)
+			const outlineWidth = xMax - xMin
 			return Object.freeze({
 				masterId,
 				glyphId,
 				contours: Object.freeze(contours),
 				advanceWidth,
 				leftSideBearing,
+				xMin,
+				xMax,
+				outlineWidth,
+				rightSideBearing: advanceWidth - leftSideBearing - outlineWidth,
 			})
 		},
 	})
@@ -298,6 +343,52 @@ export function createEditorWorkspace(
 			return Object.freeze(run)
 		},
 	})
+	const glyphIndexSelector = font.silo.selector<
+		readonly Readonly<{ id: GlyphId; name: string; export: boolean }>[]
+	>({
+		key: "glyphIndex",
+		get: ({ get }) =>
+			Object.freeze(
+				get(font.atoms.glyphIds).flatMap((glyphId) => {
+					const glyph = get(font.atoms.glyph, glyphId)
+					return glyph === null
+						? []
+						: [
+								Object.freeze({
+									id: glyphId,
+									name: glyph.name,
+									export: glyph.export,
+								}),
+							]
+				}),
+			),
+	})
+	const faviconHrefSelector = font.silo.selector<string>({
+		key: "faviconHref",
+		get: ({ get }) => {
+			const glyphId = get(font.atoms.cmapGlyph, 0x61)
+			const metadata = get(font.atoms.metadata)
+			const metrics = get(font.atoms.metrics)
+			const defaultMasterId = get(font.atoms.defaultMasterId)
+			if (
+				glyphId === null ||
+				metadata === null ||
+				metrics === null ||
+				defaultMasterId === null
+			)
+				return FALLBACK_FAVICON_HREF
+			const glyph = get(font.selectors.editorGlyphSource, glyphId)
+			if (glyph === null) return FALLBACK_FAVICON_HREF
+			return createFontFaviconHref({
+				...source,
+				metadata,
+				metrics,
+				defaultMasterId,
+				glyphs: [glyph],
+				cmap: [{ codePoint: 0x61, glyphId }],
+			})
+		},
+	})
 
 	const setLocation = (location: EditorLocationSource): void => {
 		const currentDocument = font.read.editorSource()
@@ -325,11 +416,14 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			validation: validationAtom,
 			pathname: pathnameAtom,
 			route: routeSelector,
 			routeName: routeNameSelector,
 			activeLayer: activeLayerSelector,
 			previewRun: previewRunSelector,
+			glyphIndex: glyphIndexSelector,
+			faviconHref: faviconHrefSelector,
 		},
 		actions: {
 			navigate(pathname: Pathname): void {

@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from "preact/hooks"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphLibrary.module.css"
 import { createGlyphPreview } from "./glyph-preview.ts"
-import { useO } from "./state-hooks.ts"
+import { useO, useOF } from "./state-hooks.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface GlyphLibraryProps {
 	readonly addingGlyphs: boolean
@@ -22,15 +23,14 @@ export function GlyphLibrary({
 	onAddingGlyphsChange,
 	workspace,
 }: GlyphLibraryProps) {
-	const source =
-		useO(workspace.font.selectors.editorSource) ?? workspace.document
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const glyphIndex = useO(workspace.ui.glyphIndex)
 	const [query, setQuery] = useState("")
 	const [glyphNames, setGlyphNames] = useState("")
 	const addButtonRef = useRef<HTMLButtonElement>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
-	const filteredGlyphs = source.glyphs.filter((glyph) =>
+	const filteredGlyphs = glyphIndex.filter((glyph) =>
 		glyph.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
 	)
 	const closeAddGlyphs = (): void => {
@@ -63,8 +63,8 @@ export function GlyphLibrary({
 					<p>Font source</p>
 					<h1>Glyphs</h1>
 					<span>
-						{source.glyphs.length} glyph
-						{source.glyphs.length === 1 ? "" : "s"}
+						{glyphIndex.length} glyph
+						{glyphIndex.length === 1 ? "" : "s"}
 					</span>
 				</view-title>
 				<library-actions>
@@ -97,47 +97,15 @@ export function GlyphLibrary({
 				</empty-library>
 			) : (
 				<glyph-grid aria-label="Glyph library">
-					{filteredGlyphs.map((glyph) => {
-						const preview = createGlyphPreview(
-							glyph,
-							activeMasterId,
-							source.metrics,
-							source.metadata.unitsPerEm,
-						)
-						return (
-							<button
-								key={glyph.id}
-								type="button"
-								aria-pressed={glyph.id === activeGlyphId}
-								aria-label={`Open ${glyph.name} in the canvas`}
-								onClick={() => {
-									workspace.actions.selectGlyph(glyph.id)
-									workspace.actions.navigate("/")
-								}}
-							>
-								<glyph-tile aria-hidden="true">
-									{preview === null ? null : (
-										<svg
-											viewBox={preview.viewBox}
-											preserveAspectRatio="xMidYMid meet"
-											focusable="false"
-										>
-											<path
-												d={preview.path}
-												fillRule="evenodd"
-												clipRule="evenodd"
-												transform="scale(1 -1)"
-											/>
-										</svg>
-									)}
-								</glyph-tile>
-								<glyph-label>
-									<strong>{glyph.name}</strong>
-									<span>{glyph.export ? "Exported" : "Not exported"}</span>
-								</glyph-label>
-							</button>
-						)
-					})}
+					{filteredGlyphs.map((glyph) => (
+						<GlyphLibraryItem
+							key={glyph.id}
+							workspace={workspace}
+							glyphId={glyph.id}
+							activeGlyphId={activeGlyphId}
+							activeMasterId={activeMasterId}
+						/>
+					))}
 				</glyph-grid>
 			)}
 
@@ -155,13 +123,14 @@ export function GlyphLibrary({
 					>
 						<dialog-heading>
 							<strong id="add-glyphs-heading">Add glyphs</strong>
-							<button
-								type="button"
-								aria-label="Cancel adding glyphs"
+							<TooltipButton
+								label="Cancel adding glyphs"
+								description="Close this dialog without adding glyphs."
+								placement="left"
 								onClick={closeAddGlyphs}
 							>
 								<Cross1Icon aria-hidden="true" />
-							</button>
+							</TooltipButton>
 						</dialog-heading>
 						<form
 							onSubmit={(event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
@@ -188,5 +157,67 @@ export function GlyphLibrary({
 				</dialog-backdrop>
 			) : null}
 		</glyph-library>
+	)
+}
+
+function GlyphLibraryItem({
+	workspace,
+	glyphId,
+	activeGlyphId,
+	activeMasterId,
+}: {
+	readonly workspace: EditorWorkspace
+	readonly glyphId: Parameters<EditorWorkspace["actions"]["selectGlyph"]>[0]
+	readonly activeGlyphId: Parameters<
+		EditorWorkspace["actions"]["selectGlyph"]
+	>[0]
+	readonly activeMasterId: Parameters<
+		EditorWorkspace["actions"]["selectMaster"]
+	>[0]
+}) {
+	const glyph = useOF(workspace.font.selectors.editorGlyphSource, glyphId)
+	const metrics =
+		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
+	const metadata =
+		useO(workspace.font.atoms.metadata) ?? workspace.document.metadata
+	const preview =
+		glyph === null
+			? null
+			: createGlyphPreview(glyph, activeMasterId, metrics, metadata.unitsPerEm)
+	return (
+		<glyph-library-item>
+			{glyph === null ? null : (
+				<button
+					type="button"
+					aria-pressed={glyph.id === activeGlyphId}
+					aria-label={`Open ${glyph.name} in the canvas`}
+					onClick={() => {
+						workspace.actions.selectGlyph(glyph.id)
+						workspace.actions.navigate("/")
+					}}
+				>
+					<glyph-tile aria-hidden="true">
+						{preview === null ? null : (
+							<svg
+								viewBox={preview.viewBox}
+								preserveAspectRatio="xMidYMid meet"
+								focusable="false"
+							>
+								<path
+									d={preview.path}
+									fillRule="evenodd"
+									clipRule="evenodd"
+									transform="scale(1 -1)"
+								/>
+							</svg>
+						)}
+					</glyph-tile>
+					<glyph-label>
+						<strong>{glyph.name}</strong>
+						<span>{glyph.export ? "Exported" : "Not exported"}</span>
+					</glyph-label>
+				</button>
+			)}
+		</glyph-library-item>
 	)
 }

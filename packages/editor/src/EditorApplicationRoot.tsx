@@ -10,13 +10,15 @@ import { EditorStateContext } from "./state-hooks.ts"
 export type EditorApplicationRootProps = Readonly<{
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
 	source: EditorFontSource
+	validation?: Readonly<{ ok: boolean; issueCount: number }>
 }>
 
 export function EditorApplicationRoot({
 	onSourceChange,
 	source,
+	validation,
 }: EditorApplicationRootProps) {
-	const [workspace] = useState(() => createEditorWorkspace(source))
+	const [workspace] = useState(() => createEditorWorkspace(source, validation))
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
 
@@ -32,15 +34,46 @@ export function EditorApplicationRoot({
 	}, [source, workspace])
 
 	useEffect(() => {
+		if (validation !== undefined) {
+			workspace.font.silo.setState(workspace.ui.validation, validation)
+		}
+	}, [validation, workspace])
+
+	useEffect(() => {
 		if (onSourceChange === undefined) return
-		return workspace.font.silo.subscribe(
-			workspace.font.selectors.editorSource,
-			({ newValue: nextSource }) => {
-				if (nextSource !== null && !applyingSource.current) {
-					void onSourceChange(nextSource)
+		let idleCallback: number | null = null
+		let timeout: ReturnType<typeof setTimeout> | null = null
+		const flush = (): void => {
+			idleCallback = null
+			timeout = null
+			if (applyingSource.current) return
+			const nextSource = workspace.font.read.editorSource()
+			if (nextSource !== null) {
+				// The parent renders this same source object again when the save is
+				// acknowledged so that validation can update. Record its identity now;
+				// otherwise the acknowledgement looks like an external replacement and
+				// clears the glyph timeline and selection.
+				currentSource.current = nextSource
+				void onSourceChange(nextSource)
+			}
+		}
+		const unsubscribe = workspace.font.silo.subscribe(
+			workspace.font.atoms.documentRevision,
+			() => {
+				if (applyingSource.current || idleCallback !== null || timeout !== null)
+					return
+				if (typeof requestIdleCallback === "function") {
+					idleCallback = requestIdleCallback(flush, { timeout: 500 })
+				} else {
+					timeout = setTimeout(flush, 0)
 				}
 			},
 		)
+		return () => {
+			unsubscribe()
+			if (idleCallback !== null) cancelIdleCallback(idleCallback)
+			if (timeout !== null) clearTimeout(timeout)
+		}
 	}, [onSourceChange, workspace])
 
 	return (

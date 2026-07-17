@@ -1,8 +1,18 @@
-import type { GlyphId } from "@create-font/states"
+import type { GlyphId, MasterId } from "@create-font/states"
 import { useEffect } from "preact/hooks"
 
 import type { EditorIconName } from "./EditorIcon.tsx"
-import type { EditorToolId, EditorWorkspace } from "./editor-workspace.ts"
+import type {
+	EditorCanvasContour,
+	EditorCanvasLayer,
+	EditorToolId,
+	EditorWorkspace,
+} from "./editor-workspace.ts"
+import {
+	nearestAxisAlignment,
+	resolveSelectionControls,
+	type EditorSelectionTarget,
+} from "./outline-selection.ts"
 import type { TimelineMeta } from "./state-hooks.ts"
 
 type Alphabetical =
@@ -47,12 +57,16 @@ export type ToolStatus = "active" | "disabled" | "ready"
 export interface ToolContext {
 	readonly workspace: EditorWorkspace
 	readonly activeGlyphId: GlyphId
+	readonly activeMasterId: MasterId
 	readonly activeTool: EditorToolId
+	readonly activeLayer: EditorCanvasLayer | null
 	readonly editingTextIndex: number | null
 	readonly history: TimelineMeta
+	readonly selection: readonly EditorSelectionTarget[]
 }
 
 export interface Tool {
+	readonly description: string
 	readonly id: string
 	readonly displayName: string
 	readonly hotkey: Hotkey
@@ -61,20 +75,30 @@ export interface Tool {
 	readonly do: (context: ToolContext) => void
 }
 
+function selectedContour(context: ToolContext): EditorCanvasContour | null {
+	const selectedIds = new Set(context.selection.map((target) => target.pointId))
+	const contours = (context.activeLayer?.contours ?? []).filter((contour) =>
+		contour.nodes.some((node) => selectedIds.has(node.pointId)),
+	)
+	return contours.length === 1 ? (contours[0] ?? null) : null
+}
+
 export const TOOLS = {
 	SELECT: {
+		description: "Select and edit outline nodes and Bézier handles.",
 		id: "select",
 		displayName: "Select",
 		hotkey: { key: "v" },
-		icon: "select",
+		icon: "CursorArrowIcon",
 		status: ({ activeTool }) => (activeTool === "select" ? "active" : "ready"),
 		do: ({ workspace }) => workspace.actions.selectTool("select"),
 	},
 	PEN: {
+		description: "Draw a new contour one node at a time.",
 		id: "pen",
 		displayName: "Pen",
 		hotkey: { key: "q" },
-		icon: "pen",
+		icon: "Pencil1Icon",
 		status: ({ activeTool, editingTextIndex }) =>
 			editingTextIndex === null
 				? "disabled"
@@ -83,19 +107,115 @@ export const TOOLS = {
 					: "ready",
 		do: ({ workspace }) => workspace.actions.selectTool("pen"),
 	},
+	TRANSFORM: {
+		description:
+			"Move or resize selected nodes and handles with a bounding box.",
+		id: "transform",
+		displayName: "Transform Selection",
+		hotkey: { key: "t" },
+		icon: "TransformIcon",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "transform"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("transform"),
+	},
+	ALIGN: {
+		description: "Align selected nodes and handles along their nearest axis.",
+		id: "align-selection",
+		displayName: "Align Selection",
+		hotkey: { key: "a", shift: true },
+		icon: "AlignCenterVerticallyIcon",
+		status: ({ activeLayer, editingTextIndex, selection }) =>
+			editingTextIndex === null ||
+			activeLayer === null ||
+			resolveSelectionControls(
+				activeLayer.contours.flatMap(({ nodes }) => nodes),
+				selection,
+			).length < 2
+				? "disabled"
+				: "ready",
+		do: (context) => {
+			const nodes =
+				context.activeLayer?.contours.flatMap(({ nodes }) => nodes) ?? []
+			const plan = nearestAxisAlignment(
+				resolveSelectionControls(nodes, context.selection),
+			)
+			if (plan === null) return
+			context.workspace.font.actions.transformControls({
+				masterId: context.activeMasterId,
+				glyphId: context.activeGlyphId,
+				points: plan.points,
+				handles: plan.handles,
+			})
+		},
+	},
+	REVERSE: {
+		description:
+			"Reverse the selected closed path while keeping its first node.",
+		id: "reverse-path",
+		displayName: "Reverse Path",
+		hotkey: { key: "r", shift: true },
+		icon: "ShuffleIcon",
+		status: (context) =>
+			context.editingTextIndex !== null && selectedContour(context)?.closed
+				? "ready"
+				: "disabled",
+		do: (context) => {
+			const contour = selectedContour(context)
+			if (contour === null || !contour.closed) return
+			context.workspace.font.actions.reverseContour({
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+			})
+		},
+	},
+	MAKE_FIRST: {
+		description: "Make the selected node the first node of its closed path.",
+		id: "make-node-first",
+		displayName: "Make Node First",
+		hotkey: { key: "f", shift: true },
+		icon: "StarIcon",
+		status: (context) => {
+			const nodes = context.selection.filter((target) => target.kind === "node")
+			const contour = selectedContour(context)
+			return context.editingTextIndex !== null &&
+				nodes.length === 1 &&
+				contour?.closed &&
+				contour.nodes[0]?.pointId !== nodes[0]?.pointId
+				? "ready"
+				: "disabled"
+		},
+		do: (context) => {
+			const target = context.selection.find(
+				(candidate) => candidate.kind === "node",
+			)
+			const contour = selectedContour(context)
+			if (target?.kind !== "node" || contour === null || !contour.closed) return
+			context.workspace.font.actions.makeNodeFirst({
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+				pointId: target.pointId,
+			})
+		},
+	},
 	UNDO: {
+		description: "Undo the latest edit to the active glyph.",
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
-		icon: "undo",
+		icon: "DoubleArrowLeftIcon",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
 		do: ({ history }) => history.undo(),
 	},
 	REDO: {
+		description: "Restore the next edit to the active glyph.",
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
-		icon: "redo",
+		icon: "DoubleArrowRightIcon",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
 		do: ({ history }) => history.redo(),
@@ -103,8 +223,9 @@ export const TOOLS = {
 } as const satisfies Record<string, Tool>
 
 export const TOOLBAR_LAYOUT = [
-	[TOOLS.SELECT, TOOLS.PEN],
+	[TOOLS.SELECT, TOOLS.PEN, TOOLS.TRANSFORM],
 	[TOOLS.UNDO, TOOLS.REDO],
+	[TOOLS.ALIGN, TOOLS.REVERSE, TOOLS.MAKE_FIRST],
 ] as const satisfies readonly (readonly Tool[])[]
 
 type ToolsThatExist = (typeof TOOLS)[keyof typeof TOOLS]["id"]
@@ -200,15 +321,26 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function useHotkeys(context: ToolContext, enabled = true): void {
-	const { activeGlyphId, activeTool, editingTextIndex, history, workspace } =
-		context
+	const {
+		activeGlyphId,
+		activeLayer,
+		activeMasterId,
+		activeTool,
+		editingTextIndex,
+		history,
+		selection,
+		workspace,
+	} = context
 	useEffect(() => {
 		if (!enabled) return
 		const currentContext = {
 			activeGlyphId,
+			activeLayer,
+			activeMasterId,
 			activeTool,
 			editingTextIndex,
 			history,
+			selection,
 			workspace,
 		}
 		const handleKeyDown = (event: KeyboardEvent): void => {
@@ -222,10 +354,13 @@ export function useHotkeys(context: ToolContext, enabled = true): void {
 		return () => window.removeEventListener("keydown", handleKeyDown)
 	}, [
 		activeGlyphId,
+		activeLayer,
+		activeMasterId,
 		activeTool,
 		editingTextIndex,
 		history.at,
 		history.length,
+		selection,
 		enabled,
 		workspace,
 	])

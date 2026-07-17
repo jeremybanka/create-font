@@ -112,12 +112,12 @@ describe(`font CLI`, () => {
 	it(`runs the preliminary build command for a selected font`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli(
-			[`bun`, `font`, `build`, `create-font-sans`, `--root`, `../..`],
+			[`bun`, `font`, `build`, `workbench-sans`, `--root`, `../..`],
 			captured.io,
 		)
 
 		expect(exitCode).toBe(1)
 		expect(captured.stderr.join(``)).toContain(`build.not_implemented`)
-		expect(captured.stderr.join(``)).toContain(`fonts/create-font-sans`)
+		expect(captured.stderr.join(``)).toContain(`fonts/workbench-sans`)
 	})
 })

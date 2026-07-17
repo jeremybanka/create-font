@@ -1,9 +1,0 @@
-{
-	"id": "instance:razor",
-	"name": "Razor",
-	"coordinates": {
-		"axis:wght": 100
-	},
-	"postScriptName": "CreateFontGeometricO-Razor",
-	"elidable": true
-}

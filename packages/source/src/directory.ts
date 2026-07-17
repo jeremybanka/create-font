@@ -7,7 +7,6 @@ import { failure, success } from "./result.ts"
 import {
 	CREATE_FONT_EDITOR_FORMAT,
 	CREATE_FONT_EDITOR_VERSION,
-	type EditorFontFile,
 	type SourceDiagnostic,
 	type SourceResult,
 } from "./types.ts"
@@ -43,7 +42,10 @@ export const projectFileSchema = z
 		format: z.literal(CREATE_FONT_SOURCE_FORMAT),
 		sourceVersion: z.literal(CREATE_FONT_SOURCE_VERSION),
 		editorFormat: z.literal(CREATE_FONT_EDITOR_FORMAT),
-		editorVersion: z.literal(CREATE_FONT_EDITOR_VERSION),
+		editorVersion: z.union([
+			z.literal(3),
+			z.literal(CREATE_FONT_EDITOR_VERSION),
+		]),
 	})
 	.strict()
 	.meta({ title: "create-font project manifest" })
@@ -85,6 +87,19 @@ export const metricsFileSchema = z
 		capHeight: finiteNumberSchema,
 		underlinePosition: finiteNumberSchema,
 		underlineThickness: finiteNumberSchema,
+		overshoots: z
+			.object({
+				baseline: finiteNumberSchema.int().min(0).max(16_383),
+				ascender: finiteNumberSchema.int().min(0).max(16_383),
+				descender: finiteNumberSchema.int().min(0).max(16_383),
+				winAscent: finiteNumberSchema.int().min(0).max(16_383),
+				winDescent: finiteNumberSchema.int().min(0).max(16_383),
+				xHeight: finiteNumberSchema.int().min(0).max(16_383),
+				capHeight: finiteNumberSchema.int().min(0).max(16_383),
+				underlinePosition: finiteNumberSchema.int().min(0).max(16_383),
+			})
+			.strict()
+			.optional(),
 	})
 	.strict()
 	.meta({ title: "create-font font metrics" })
@@ -1050,7 +1065,7 @@ export function assembleEditorFontSource(
 		}
 	}
 
-	const assembled: EditorFontFile = {
+	const assembled = {
 		format: project.value.editorFormat,
 		editorVersion: project.value.editorVersion,
 		metadata: metadata.value,

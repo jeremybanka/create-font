@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { createFontEditorState } from "../src/index.ts"
+import { createFontEditorState, evaluateCubicCurve } from "../src/index.ts"
 import {
 	blackMasterId,
 	makeGeometricOEditorFont,
@@ -56,6 +56,27 @@ describe("font editor state", () => {
 		})
 	})
 
+	it("reports invalid overshoot metadata without passing it to target v1", () => {
+		const editor = createFontEditorState({ key: "test/overshoot-projection" })
+		const source = makeGeometricOEditorFont()
+		editor.actions.load({
+			...source,
+			metrics: {
+				...source.metrics,
+				overshoots: { ...source.metrics.overshoots, xHeight: -1 },
+			},
+		})
+		const compilation = editor.read.compilation()
+		expect(compilation.stage).toBe("projection-failed")
+		if (compilation.stage !== "projection-failed") return
+		expect(compilation.projectionErrors).toContainEqual(
+			expect.objectContaining({
+				code: "metrics.overshoot_range",
+				path: "$.metrics.overshoots.xHeight",
+			}),
+		)
+	})
+
 	it("round-trips serializable editor state", () => {
 		const source = makeGeometricOEditorFont()
 		const editor = createFontEditorState({ key: "test/round-trip" })
@@ -71,8 +92,8 @@ describe("font editor state", () => {
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[1]?.points[1]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
-		expect(first.atoms.pointX.key).toBe("pointX")
-		expect(second.atoms.pointX.key).toBe("pointX")
+		expect(first.atoms.pointPosition.key).toBe("pointPosition")
+		expect(second.atoms.pointPosition.key).toBe("pointPosition")
 
 		second.actions.movePoints({
 			masterId: blackMasterId,
@@ -81,19 +102,19 @@ describe("font editor state", () => {
 		})
 
 		expect(
-			first.silo.getState(first.atoms.pointX, [
+			first.silo.getState(first.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(460)
+		).toEqual({ x: 460, y: 400 })
 		expect(
-			second.silo.getState(second.atoms.pointX, [
+			second.silo.getState(second.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(777)
+		).toEqual({ x: 777, y: 444 })
 	})
 
 	it("records a multi-coordinate drag as undoable document history", () => {
@@ -101,6 +122,13 @@ describe("font editor state", () => {
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[1]?.points[1]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		let recordedUpdates = 0
+		const unsubscribe = editor.silo.subscribe(
+			editor.transactions.movePoints,
+			(event) => {
+				recordedUpdates = event.subEvents.length
+			},
+		)
 
 		editor.actions.movePoints({
 			masterId: blackMasterId,
@@ -108,44 +136,94 @@ describe("font editor state", () => {
 			points: [{ pointId, x: 700, y: 350 }],
 		})
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(700)
-		expect(
-			editor.silo.getState(editor.atoms.pointY, [
-				blackMasterId,
-				oGlyphId,
-				pointId,
-			]),
-		).toBe(350)
+		).toEqual({ x: 700, y: 350 })
+		expect(recordedUpdates).toBe(1)
+		unsubscribe()
 
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(460)
-		expect(
-			editor.silo.getState(editor.atoms.pointY, [
-				blackMasterId,
-				oGlyphId,
-				pointId,
-			]),
-		).toBe(400)
+		).toEqual({ x: 460, y: 400 })
 
 		editor.redo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				pointId,
 			]),
-		).toBe(700)
+		).toEqual({ x: 700, y: 350 })
+	})
+
+	it("edits horizontal metrics atomically in glyph history", () => {
+		const editor = createLoadedEditor("test/horizontal-metrics")
+		const before = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		if (before === undefined) throw new Error("Missing fixture layer.")
+
+		editor.actions.setHorizontalMetrics({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+		const changed = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(changed).toMatchObject({
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+
+		editor.undo(oGlyphId)
+		const undone = editor.read
+			.editorSource()
+			?.glyphs.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)
+		expect(undone).toMatchObject({
+			advanceWidth: before.advanceWidth,
+			leftSideBearing: before.leftSideBearing,
+		})
+		editor.redo(oGlyphId)
+		expect(
+			editor.read
+				.editorSource()
+				?.glyphs.find((glyph) => glyph.id === oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId),
+		).toMatchObject({
+			advanceWidth: before.advanceWidth + 40,
+			leftSideBearing: before.leftSideBearing - 10,
+		})
+	})
+
+	it("rejects horizontal metrics outside their storage domains", () => {
+		const editor = createLoadedEditor("test/horizontal-metric-bounds")
+		expect(() =>
+			editor.actions.setHorizontalMetrics({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				advanceWidth: 65_536,
+			}),
+		).toThrow(/0 through 65535/u)
+		expect(() =>
+			editor.actions.setHorizontalMetrics({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				leftSideBearing: -32_769,
+			}),
+		).toThrow(/-32768 through 32767/u)
 	})
 
 	it("keeps one independent timeline per glyph", () => {
@@ -190,12 +268,12 @@ describe("font editor state", () => {
 
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				notdefGlyphId,
 				notdefPointId,
 			]),
-		).toBe(520)
+		).toEqual({ x: 520, y: 800 })
 	})
 
 	it("keeps relative handles anchored when their owning node moves", () => {
@@ -812,12 +890,12 @@ describe("font editor state", () => {
 		})
 		editor.undo(oGlyphId)
 		expect(
-			editor.silo.getState(editor.atoms.pointX, [
+			editor.silo.getState(editor.atoms.pointPosition, [
 				blackMasterId,
 				oGlyphId,
 				"point:glyph:O:inserted",
 			]),
-		).toBe(700)
+		).toEqual({ x: 700, y: 800 })
 		expect(
 			editor.silo.getState(editor.atoms.contourPointIds, [oGlyphId, contourId]),
 		).toContain("point:glyph:O:inserted")
@@ -1008,19 +1086,25 @@ describe("font editor state", () => {
 		).toThrow()
 	})
 
-	it("does not serialize a half-present coordinate pair", () => {
+	it("does not serialize a missing point position", () => {
 		const editor = createLoadedEditor("test/partial-coordinate")
 		const pointId =
 			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
 		if (pointId === undefined) throw new Error("Fixture point is missing.")
 
 		editor.silo.setState(
-			editor.atoms.pointY,
+			editor.atoms.pointPosition,
 			[blackMasterId, oGlyphId, pointId],
 			null,
 		)
 
-		expect(editor.read.editorSource()).toBeNull()
+		expect(
+			editor.read
+				.editorSource()
+				?.glyphs[1]?.layers[1]?.points.some(
+					(point) => point.pointId === pointId,
+				),
+		).toBe(false)
 		expect(editor.read.compilation().stage).toBe("projection-failed")
 	})
 
@@ -1078,5 +1162,222 @@ describe("font editor state", () => {
 
 		expect(() => editor.actions.load(malformed)).toThrow(/Glyph IDs/)
 		expect(editor.read.editorSource()?.glyphs[1]?.id).toBe(oGlyphId)
+	})
+
+	it("transforms mixed nodes and absolute handle endpoints in one history entry", () => {
+		const editor = createLoadedEditor("test/transform-controls")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (
+			!before.ok ||
+			before.value.incoming === undefined ||
+			before.value.outgoing === undefined
+		)
+			throw new Error("Fixture handles are missing.")
+
+		editor.actions.transformControls({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId, x: before.value.x + 30, y: before.value.y - 40 }],
+			handles: [
+				{
+					pointId,
+					handle: "incoming",
+					x: before.value.x + before.value.incoming.x + 30,
+					y: before.value.y + before.value.incoming.y - 40,
+				},
+				{
+					pointId,
+					handle: "outgoing",
+					x: before.value.x + before.value.outgoing.x + 30,
+					y: before.value.y + before.value.outgoing.y - 40,
+				},
+			],
+		})
+
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!after.ok) throw new Error("Transformed node did not project.")
+		expect(after.value.x).toBe(before.value.x + 30)
+		expect(after.value.y).toBe(before.value.y - 40)
+		expect(after.value.incoming?.x).toBeCloseTo(before.value.incoming.x, 10)
+		expect(after.value.incoming?.y).toBeCloseTo(before.value.incoming.y, 10)
+		expect(after.value.outgoing?.x).toBeCloseTo(before.value.outgoing.x, 10)
+		expect(after.value.outgoing?.y).toBeCloseTo(before.value.outgoing.y, 10)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+
+		editor.undo(oGlyphId)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			before,
+		)
+	})
+
+	it("splits a curved segment at one shared parameter across all masters", () => {
+		const editor = createLoadedEditor("test/split-segment")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const startPointId = contour?.points[0]?.id
+		const endPointId = contour?.points[1]?.id
+		if (
+			contour === undefined ||
+			startPointId === undefined ||
+			endPointId === undefined
+		) {
+			throw new Error("Fixture segment is missing.")
+		}
+		const insertedId = "point:glyph:O:split-test" as const
+		const amount = 0.35
+		const before = new Map(
+			[razorMasterId, blackMasterId].map((masterId) => {
+				const start = editor.read.layerNode(masterId, oGlyphId, startPointId)
+				const end = editor.read.layerNode(masterId, oGlyphId, endPointId)
+				if (!start.ok || !end.ok)
+					throw new Error("Fixture nodes did not project.")
+				return [masterId, { start: start.value, end: end.value }] as const
+			}),
+		)
+
+		editor.actions.splitSegment({
+			glyphId: oGlyphId,
+			contourId: contour.id,
+			segmentIndex: 0,
+			pointId: insertedId,
+			amount,
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			])?.[1],
+		).toBe(insertedId)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const original = before.get(masterId)
+			const inserted = editor.read.layerNode(masterId, oGlyphId, insertedId)
+			if (original === undefined || !inserted.ok)
+				throw new Error("Split node is missing.")
+			const cubic = {
+				p0: original.start,
+				c1: {
+					x: original.start.x + (original.start.outgoing?.x ?? 0),
+					y: original.start.y + (original.start.outgoing?.y ?? 0),
+				},
+				c2: {
+					x: original.end.x + (original.end.incoming?.x ?? 0),
+					y: original.end.y + (original.end.incoming?.y ?? 0),
+				},
+				p3: original.end,
+			}
+			const expected = evaluateCubicCurve(cubic, amount)
+			expect(inserted.value.x).toBeCloseTo(expected.x, 10)
+			expect(inserted.value.y).toBeCloseTo(expected.y, 10)
+			expect(inserted.value.incoming).toBeDefined()
+			expect(inserted.value.outgoing).toBeDefined()
+		}
+		expect(editor.read.compilation().stage).toBe("compiled")
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual(contour.points.map(({ id }) => id))
+	})
+
+	it("reverses a closed contour while preserving its first node and geometry handles", () => {
+		const editor = createLoadedEditor("test/reverse-contour")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		if (contour === undefined) throw new Error("Fixture contour is missing.")
+		const order = contour.points.map(({ id }) => id)
+		const handles = new Map(
+			[razorMasterId, blackMasterId].flatMap((masterId) =>
+				order.map((pointId) => {
+					const node = editor.read.layerNode(masterId, oGlyphId, pointId)
+					if (!node.ok) throw new Error("Fixture node did not project.")
+					return [`${masterId}/${pointId}`, node.value] as const
+				}),
+			),
+		)
+
+		editor.actions.reverseContour({ glyphId: oGlyphId, contourId: contour.id })
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual([order[0], ...order.slice(1).reverse()])
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			for (const pointId of order) {
+				const before = handles.get(`${masterId}/${pointId}`)
+				const after = editor.read.layerNode(masterId, oGlyphId, pointId)
+				if (before === undefined || !after.ok)
+					throw new Error("Reversed node is missing.")
+				expect(after.value.incoming).toEqual(before.outgoing)
+				expect(after.value.outgoing).toEqual(before.incoming)
+			}
+		}
+		expect(editor.read.compilation().stage).toBe("compiled")
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual(order)
+	})
+
+	it("rotates a closed contour to make a selected node first", () => {
+		const editor = createLoadedEditor("test/make-node-first")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[2]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+		const order = contour.points.map(({ id }) => id)
+
+		editor.actions.makeNodeFirst({
+			glyphId: oGlyphId,
+			contourId: contour.id,
+			pointId,
+		})
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual([...order.slice(2), ...order.slice(0, 2)])
+		expect(editor.read.compilation().stage).toBe("compiled")
+		editor.undo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual(order)
+	})
+
+	it("diagnoses deferred overlap union without destroying editable topology", () => {
+		const source = makeGeometricOEditorFont()
+		const glyph = source.glyphs.find((candidate) => candidate.id === oGlyphId)
+		if (glyph === undefined) throw new Error("Fixture glyph is missing.")
+		Object.assign(glyph, { overlap: true })
+		const editor = createFontEditorState({ key: "test/overlap-union-deferred" })
+		editor.actions.load(source)
+
+		const compilation = editor.read.compilation()
+		expect(compilation.stage).toBe("compiled")
+		expect(compilation.projectionWarnings).toContainEqual(
+			expect.objectContaining({
+				code: "overlap.union_deferred",
+				entityId: oGlyphId,
+				path: `$.glyphs[${oGlyphId}].overlap`,
+			}),
+		)
+		expect(editor.read.editorSource()?.glyphs[1]?.contours).toEqual(
+			glyph.contours,
+		)
 	})
 })

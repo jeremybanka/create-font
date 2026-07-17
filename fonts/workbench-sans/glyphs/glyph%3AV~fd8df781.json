@@ -1,0 +1,148 @@
+{
+	"id": "glyph:V",
+	"name": "V",
+	"export": true,
+	"overlap": true,
+	"contours": [
+		{
+			"id": "contour:glyph:V:0",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:V:0:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:0:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:0:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:0:3",
+					"mode": "hard"
+				}
+			]
+		},
+		{
+			"id": "contour:glyph:V:1",
+			"closed": true,
+			"points": [
+				{
+					"id": "point:glyph:V:1:0",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:1:1",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:1:2",
+					"mode": "hard"
+				},
+				{
+					"id": "point:glyph:V:1:3",
+					"mode": "hard"
+				}
+			]
+		}
+	],
+	"layers": [
+		{
+			"masterId": "master:text",
+			"advanceWidth": 700,
+			"leftSideBearing": 70,
+			"points": [
+				{
+					"pointId": "point:glyph:V:0:0",
+					"x": 130,
+					"y": 711
+				},
+				{
+					"pointId": "point:glyph:V:0:1",
+					"x": 380,
+					"y": 11
+				},
+				{
+					"pointId": "point:glyph:V:0:2",
+					"x": 320,
+					"y": -11
+				},
+				{
+					"pointId": "point:glyph:V:0:3",
+					"x": 70,
+					"y": 689
+				},
+				{
+					"pointId": "point:glyph:V:1:0",
+					"x": 320,
+					"y": 11
+				},
+				{
+					"pointId": "point:glyph:V:1:1",
+					"x": 570,
+					"y": 711
+				},
+				{
+					"pointId": "point:glyph:V:1:2",
+					"x": 630,
+					"y": 689
+				},
+				{
+					"pointId": "point:glyph:V:1:3",
+					"x": 380,
+					"y": -11
+				}
+			]
+		},
+		{
+			"masterId": "master:heavy",
+			"advanceWidth": 700,
+			"leftSideBearing": 29,
+			"points": [
+				{
+					"pointId": "point:glyph:V:0:0",
+					"x": 171,
+					"y": 725
+				},
+				{
+					"pointId": "point:glyph:V:0:1",
+					"x": 421,
+					"y": 25
+				},
+				{
+					"pointId": "point:glyph:V:0:2",
+					"x": 279,
+					"y": -25
+				},
+				{
+					"pointId": "point:glyph:V:0:3",
+					"x": 29,
+					"y": 675
+				},
+				{
+					"pointId": "point:glyph:V:1:0",
+					"x": 279,
+					"y": 25
+				},
+				{
+					"pointId": "point:glyph:V:1:1",
+					"x": 529,
+					"y": 725
+				},
+				{
+					"pointId": "point:glyph:V:1:2",
+					"x": 671,
+					"y": 675
+				},
+				{
+					"pointId": "point:glyph:V:1:3",
+					"x": 421,
+					"y": -25
+				}
+			]
+		}
+	]
+}

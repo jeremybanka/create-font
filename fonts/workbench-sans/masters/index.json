@@ -1,0 +1,13 @@
+{
+	"defaultMasterId": "master:text",
+	"entries": [
+		{
+			"id": "master:text",
+			"path": "masters/master%3Atext~77e54e5c.json"
+		},
+		{
+			"id": "master:heavy",
+			"path": "masters/master%3Aheavy~e99bc446.json"
+		}
+	]
+}

@@ -17,7 +17,7 @@ export type ProjectFile = Readonly<{
 	format: typeof CREATE_FONT_SOURCE_FORMAT
 	sourceVersion: typeof CREATE_FONT_SOURCE_VERSION
 	editorFormat: typeof CREATE_FONT_EDITOR_FORMAT
-	editorVersion: typeof CREATE_FONT_EDITOR_VERSION
+	editorVersion: 3 | typeof CREATE_FONT_EDITOR_VERSION
 }>
 export type MetadataFile = EditorFontFile["metadata"]
 export type NamesFile = EditorFontFile["names"]
@@ -382,7 +382,8 @@ export function assembleEditorFontSource(
 		projectRecord.value.format !== CREATE_FONT_SOURCE_FORMAT ||
 		projectRecord.value.sourceVersion !== CREATE_FONT_SOURCE_VERSION ||
 		projectRecord.value.editorFormat !== CREATE_FONT_EDITOR_FORMAT ||
-		projectRecord.value.editorVersion !== CREATE_FONT_EDITOR_VERSION
+		(projectRecord.value.editorVersion !== 3 &&
+			projectRecord.value.editorVersion !== CREATE_FONT_EDITOR_VERSION)
 	) {
 		return failure([
 			directoryDiagnostic(
@@ -614,9 +615,9 @@ export function assembleEditorFontSource(
 		}
 	}
 
-	const assembled: EditorFontFile = {
+	const assembled = {
 		format: CREATE_FONT_EDITOR_FORMAT,
-		editorVersion: CREATE_FONT_EDITOR_VERSION,
+		editorVersion: projectRecord.value.editorVersion,
 		metadata: metadata.value,
 		names: names.value,
 		metrics: metrics.value,

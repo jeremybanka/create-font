@@ -1,0 +1,21 @@
+{
+	"ascender": 780,
+	"descender": -220,
+	"lineGap": 80,
+	"winAscent": 850,
+	"winDescent": 300,
+	"xHeight": 500,
+	"capHeight": 700,
+	"underlinePosition": -120,
+	"underlineThickness": 60,
+	"overshoots": {
+		"baseline": 12,
+		"ascender": 0,
+		"descender": 0,
+		"winAscent": 0,
+		"winDescent": 0,
+		"xHeight": 12,
+		"capHeight": 12,
+		"underlinePosition": 0
+	}
+}

@@ -49,7 +49,7 @@ serves its validated source units through the workspace RPC. With multiple font
 projects, select one by directory name:
 
 ```sh
-bun font dev create-font-sans --port=4173
+bun font dev workbench-sans --port=4173
 ```
 
 `font serve` remains an alias for `font dev`.
