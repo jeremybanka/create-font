@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/editor",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "Interactive variable-font editor for the create-font state model",
 	"repository": {
 		"type": "git",
@@ -11,7 +11,9 @@
 	"publishConfig": {
 		"access": "public"
 	},
-	"files": ["src"],
+	"files": [
+		"src"
+	],
 	"exports": {
 		".": "./src/EditorApplicationRoot.tsx",
 		"./package.json": "./package.json"
