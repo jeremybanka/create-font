@@ -30,6 +30,20 @@ import {
 	type CancelledGroupDrag,
 } from "./canvas-group-drag.ts"
 import { transformHandleCursor, type TransformHandle } from "./canvas-cursor.ts"
+import {
+	circularHitRegion,
+	CONTROL_HIT_RADIUS_PX,
+	editorControlHitCandidates,
+	editorControlHitRadii,
+	nearestEditorControlHit,
+	resolveEditorCanvasHit,
+	SEGMENT_HIT_RADIUS_PX,
+} from "./canvas-hit-testing.ts"
+import {
+	BASE_CANVAS_SCALE,
+	type CanvasView,
+	zoomCanvasView,
+} from "./canvas-view.ts"
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import {
 	incidentStraightProjectionCandidates,
@@ -181,16 +195,6 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowRight: [1, 0],
 	ArrowUp: [0, 1],
 	ArrowDown: [0, -1],
-}
-
-const BASE_CANVAS_SCALE = 0.18
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 4
-
-interface CanvasView {
-	readonly x: number
-	readonly y: number
-	readonly zoom: number
 }
 
 export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
@@ -369,6 +373,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
+	const hitControlCandidates = useMemo(
+		() => (showNodes ? editorControlHitCandidates(visibleContours) : []),
+		[showNodes, visibleContours],
+	)
+	const hitControlRadii = useMemo(
+		() => editorControlHitRadii(hitControlCandidates, worldScale),
+		[hitControlCandidates, worldScale],
+	)
 	const caret =
 		layout.carets.find((candidate) => candidate.textIndex === caretIndex) ??
 		layout.carets.at(-1)
@@ -397,13 +409,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		)
 	}
 	const pointerInEditingGlyph = (
-		event: KonvaEventObject<MouseEvent | PointerEvent | DragEvent>,
+		event: KonvaEventObject<MouseEvent | PointerEvent | DragEvent | TouchEvent>,
 	): Readonly<{ x: number; y: number }> | null => {
 		if (editingPosition === undefined) return null
-		const pointer = event.target.getStage()?.getPointerPosition() ?? {
-			x: event.evt.offsetX,
-			y: event.evt.offsetY,
-		}
+		const stagePointer = event.target.getStage()?.getPointerPosition()
+		const pointer =
+			stagePointer ??
+			("offsetX" in event.evt
+				? { x: event.evt.offsetX, y: event.evt.offsetY }
+				: null)
+		if (pointer === null) return null
 		return {
 			x: (pointer.x - view.x) / worldScale - editingPosition.x,
 			y: editingPosition.baseline - (pointer.y - view.y) / worldScale,
@@ -1163,7 +1178,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	}
 	const selectWholeContour = (
 		contour: (typeof visibleContours)[number],
-		event: MouseEvent,
+		event: MouseEvent | TouchEvent,
 	): void => {
 		const targets = contourSelectionTargets(contour.nodes)
 		const additive = event.metaKey || event.ctrlKey || event.shiftKey
@@ -1185,6 +1200,54 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			})
 		}
 		setShowNodes(true)
+	}
+	const selectNearestCanvasControl = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	): void => {
+		if (editingTextIndex === null || activeTool === "pen") return
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return
+		const hit = nearestEditorControlHit(
+			hitControlCandidates,
+			pointer,
+			worldScale,
+		)
+		if (hit === null) return
+		event.cancelBubble = true
+		selectTarget(hit.target, event.evt)
+	}
+	const activateNearestCanvasDoubleClick = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	): void => {
+		if (editingTextIndex === null || activeTool === "pen") return
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return
+		const hit = resolveEditorCanvasHit({
+			controls: hitControlCandidates,
+			contours: visibleContours,
+			pointer,
+			worldScale,
+		})
+		if (hit === null) return
+		event.cancelBubble = true
+		if (hit.kind === "control") {
+			if (hit.target.kind === "handle") {
+				selectTarget(hit.target, event.evt)
+				return
+			}
+			const point = allPoints.find(
+				(candidate) => candidate.pointId === hit.target.pointId,
+			)
+			if (point === undefined) return
+			setSelection(Object.freeze([hit.target]))
+			toggleNodeMode(point.pointId, point.mode)
+			return
+		}
+		if (!shouldSelectContourOnSegmentDoubleClick(activeTool, event.evt)) return
+		const contour = visibleContours.find(
+			(candidate) => candidate.id === hit.contourId,
+		)
+		if (contour !== undefined) selectWholeContour(contour, event.evt)
 	}
 	const splitContourSegment = (
 		contour: (typeof visibleContours)[number],
@@ -1250,18 +1313,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		focalX = width / 2,
 		focalY = height / 2,
 	): void => {
-		setView((current) => {
-			const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom))
-			const oldScale = BASE_CANVAS_SCALE * current.zoom
-			const nextScale = BASE_CANVAS_SCALE * zoom
-			const worldX = (focalX - current.x) / oldScale
-			const worldY = (focalY - current.y) / oldScale
-			return {
-				x: focalX - worldX * nextScale,
-				y: focalY - worldY * nextScale,
-				zoom,
-			}
-		})
+		setView((current) =>
+			zoomCanvasView(current, nextZoom, { x: focalX, y: focalY }),
+		)
 	}
 
 	return (
@@ -1619,6 +1673,10 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 				<Stage
 					width={width}
 					height={height}
+					onClick={selectNearestCanvasControl}
+					onTap={selectNearestCanvasControl}
+					onDblClick={activateNearestCanvasDoubleClick}
+					onDblTap={activateNearestCanvasDoubleClick}
 					onWheel={(event: KonvaEventObject<WheelEvent>) => {
 						event.evt.preventDefault()
 						const pointer = event.target.getStage()?.getPointerPosition()
@@ -2091,7 +2149,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 											fillEnabled={false}
 											stroke="rgb(0 0 0 / 0.001)"
 											strokeWidth={inverseScale}
-											hitStrokeWidth={14 * inverseScale}
+											hitStrokeWidth={SEGMENT_HIT_RADIUS_PX * 2 * inverseScale}
 											listening={
 												activeTool === "select" || activeTool === "pen"
 											}
@@ -2110,18 +2168,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 												if (action === "add-handles") {
 													addHandlesToSegment(contour, event)
 												}
-											}}
-											onDblClick={(event) => {
-												if (
-													!shouldSelectContourOnSegmentDoubleClick(
-														activeTool,
-														event.evt,
-													)
-												) {
-													return
-												}
-												event.cancelBubble = true
-												selectWholeContour(contour, event.evt)
 											}}
 										/>
 									))}
@@ -2185,6 +2231,15 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																kind: "node",
 																pointId: point.pointId,
 															}
+															const controlHitRadius = (
+																target: EditorSelectionTarget,
+																penRadiusPx: number,
+															): number =>
+																(activeTool === "pen"
+																	? penRadiusPx
+																	: (hitControlRadii.get(
+																			selectionKey(target),
+																		) ?? CONTROL_HIT_RADIUS_PX)) * inverseScale
 															const selectPoint = (
 																event?: KonvaEventObject<
 																	MouseEvent | PointerEvent | TouchEvent
@@ -2217,7 +2272,12 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																	event?.evt,
 																)
 															}
-															const togglePointMode = (): void => {
+															const togglePointMode = (
+																event: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															): void => {
+																event.cancelBubble = true
 																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
 															}
@@ -2301,8 +2361,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																		})
 																	}
 																},
-																onClick: selectPoint,
-																onTap: selectPoint,
 																onDblClick: togglePointMode,
 																onDblTap: togglePointMode,
 																onDragStart: (
@@ -2398,6 +2456,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				fill={palette.accent}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
+																				hitFunc={circularHitRegion(
+																					controlHitRadius(
+																						{
+																							kind: "handle",
+																							pointId: point.pointId,
+																							handle: "incoming",
+																						},
+																						3.5,
+																					),
+																				)}
 																				draggable={activeTool === "select"}
 																				onPointerDown={(
 																					event: KonvaEventObject<PointerEvent>,
@@ -2405,14 +2473,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																					if (activeTool === "pen")
 																						selectHandle("incoming", event)
 																				}}
-																				onClick={(
-																					event: KonvaEventObject<MouseEvent>,
-																				) => selectHandle("incoming", event)}
-																				onTap={(
-																					event: KonvaEventObject<
-																						MouseEvent | TouchEvent
-																					>,
-																				) => selectHandle("incoming", event)}
+																				onDblClick={(event) => {
+																					event.cancelBubble = true
+																					selectHandle("incoming", event)
+																				}}
+																				onDblTap={(event) => {
+																					event.cancelBubble = true
+																					selectHandle("incoming", event)
+																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
 																				) => {
@@ -2478,6 +2546,16 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				fill={palette.accent}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
+																				hitFunc={circularHitRegion(
+																					controlHitRadius(
+																						{
+																							kind: "handle",
+																							pointId: point.pointId,
+																							handle: "outgoing",
+																						},
+																						3.5,
+																					),
+																				)}
 																				draggable={activeTool === "select"}
 																				onPointerDown={(
 																					event: KonvaEventObject<PointerEvent>,
@@ -2485,14 +2563,14 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																					if (activeTool === "pen")
 																						selectHandle("outgoing", event)
 																				}}
-																				onClick={(
-																					event: KonvaEventObject<MouseEvent>,
-																				) => selectHandle("outgoing", event)}
-																				onTap={(
-																					event: KonvaEventObject<
-																						MouseEvent | TouchEvent
-																					>,
-																				) => selectHandle("outgoing", event)}
+																				onDblClick={(event) => {
+																					event.cancelBubble = true
+																					selectHandle("outgoing", event)
+																				}}
+																				onDblTap={(event) => {
+																					event.cancelBubble = true
+																					selectHandle("outgoing", event)
+																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
 																				) => {
@@ -2567,7 +2645,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																				endpointNormal.y * 6 * inverseScale,
 																			]}
 																			strokeWidth={2 * inverseScale}
-																			hitStrokeWidth={12 * inverseScale}
+																			hitFunc={circularHitRegion(
+																				controlHitRadius(nodeTarget, 6),
+																			)}
 																			lineCap="round"
 																		/>
 																	) : point.mode === "soft" ? (
@@ -2575,6 +2655,9 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																			key={`point:${point.pointId}`}
 																			{...nodeProps}
 																			radius={5 * inverseScale}
+																			hitFunc={circularHitRegion(
+																				controlHitRadius(nodeTarget, 5),
+																			)}
 																		/>
 																	) : (
 																		<Rect
@@ -2584,6 +2667,13 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 																			height={9 * inverseScale}
 																			offsetX={4.5 * inverseScale}
 																			offsetY={4.5 * inverseScale}
+																			hitFunc={circularHitRegion(
+																				controlHitRadius(nodeTarget, 6.5),
+																				{
+																					x: 4.5 * inverseScale,
+																					y: 4.5 * inverseScale,
+																				},
+																			)}
 																		/>
 																	)}
 																	{pointIndex === 0 && direction !== null ? (
