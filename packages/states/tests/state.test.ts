@@ -164,6 +164,107 @@ describe("font editor state", () => {
 		).toEqual({ x: 700, y: 350 })
 	})
 
+	it("pastes complete multi-master contours as one undoable glyph edit", () => {
+		const editor = createLoadedEditor("test/paste-contours")
+		const contourId = "contour:pasted" as const
+		const firstPointId = "point:pasted:first" as const
+		const secondPointId = "point:pasted:second" as const
+
+		editor.actions.pasteContours({
+			glyphId: oGlyphId,
+			contours: [
+				{
+					id: contourId,
+					closed: false,
+					points: [
+						{ id: firstPointId, mode: "hard" },
+						{ id: secondPointId, mode: "hard" },
+					],
+				},
+			],
+			layers: [
+				{
+					masterId: razorMasterId,
+					points: [
+						{ pointId: firstPointId, x: 10, y: 20, outgoing: { x: 30, y: 0 } },
+						{
+							pointId: secondPointId,
+							x: 100,
+							y: 20,
+							incoming: { x: -30, y: 0 },
+						},
+					],
+				},
+				{
+					masterId: blackMasterId,
+					points: [
+						{ pointId: firstPointId, x: 15, y: 25, outgoing: { x: 35, y: 0 } },
+						{
+							pointId: secondPointId,
+							x: 120,
+							y: 25,
+							incoming: { x: -35, y: 0 },
+						},
+					],
+				},
+			],
+		})
+
+		expect(editor.read.editorGlyphSource(oGlyphId)?.contours.at(-1)).toEqual({
+			id: contourId,
+			closed: false,
+			points: [
+				{ id: firstPointId, mode: "hard" },
+				{ id: secondPointId, mode: "hard" },
+			],
+		})
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, firstPointId),
+		).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({
+					x: 15,
+					y: 25,
+					outgoing: { x: 35, y: 0 },
+				}),
+			}),
+		)
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.read.editorGlyphSource(oGlyphId)?.contours,
+		).not.toContainEqual(expect.objectContaining({ id: contourId }))
+		editor.redo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)?.contours.at(-1)?.id).toBe(
+			contourId,
+		)
+	})
+
+	it("rejects incomplete pasted master data before changing a glyph", () => {
+		const editor = createLoadedEditor("test/paste-contours-incomplete")
+		const before = editor.read.editorGlyphSource(oGlyphId)
+		expect(() =>
+			editor.actions.pasteContours({
+				glyphId: oGlyphId,
+				contours: [
+					{
+						id: "contour:incomplete",
+						closed: false,
+						points: [{ id: "point:incomplete", mode: "hard" }],
+					},
+				],
+				layers: [
+					{
+						masterId: razorMasterId,
+						points: [{ pointId: "point:incomplete", x: 10, y: 20 }],
+					},
+				],
+			}),
+		).toThrow("every destination glyph layer")
+		expect(editor.read.editorGlyphSource(oGlyphId)).toBe(before)
+	})
+
 	it("edits horizontal metrics atomically in glyph history", () => {
 		const editor = createLoadedEditor("test/horizontal-metrics")
 		const before = editor.read
