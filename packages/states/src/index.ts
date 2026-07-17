@@ -1,4 +1,5 @@
 export * from "./remote.ts"
+export * from "./curve-geometry.ts"
 export * from "./state.ts"
 export * from "./types.ts"
 export {
