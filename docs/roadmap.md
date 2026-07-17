@@ -20,7 +20,7 @@ The repository already contains:
   by individual source-unit paths;
 - filesystem discovery for `fonts/*/create-font.json`, validated content-hash
   reads, and journaled conditional single- and multi-unit writes;
-- a checked-in `fonts/create-font-sans` development source with two masters and
+- a checked-in `fonts/workbench-sans` development source with two masters and
   seven glyphs; and
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history, now hydrated from and persisted to that source over RPC.

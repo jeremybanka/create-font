@@ -21,12 +21,12 @@ async function copyDevelopmentFont() {
 	temporaryRoots.push(root)
 	const fontsRoot = resolve(root, `fonts`)
 	await cp(
-		resolve(import.meta.dir, `../../../fonts/create-font-sans`),
-		resolve(fontsRoot, `create-font-sans`),
+		resolve(import.meta.dir, `../../../fonts/workbench-sans`),
+		resolve(fontsRoot, `workbench-sans`),
 		{ recursive: true },
 	)
 	return {
-		projectRoot: resolve(fontsRoot, `create-font-sans`),
+		projectRoot: resolve(fontsRoot, `workbench-sans`),
 		workspaceRoot: root,
 	}
 }
@@ -45,12 +45,12 @@ describe(`font workspace discovery`, () => {
 
 		expect(await discoverFontProjects(workspaceRoot)).toEqual([
 			expect.objectContaining({
-				name: `create-font-sans`,
-				path: `fonts/create-font-sans`,
+				name: `workbench-sans`,
+				path: `fonts/workbench-sans`,
 			}),
 		])
 		expect(await selectFontProject(workspaceRoot)).toEqual(
-			expect.objectContaining({ name: `create-font-sans` }),
+			expect.objectContaining({ name: `workbench-sans` }),
 		)
 	})
 })

@@ -86,7 +86,7 @@ loadables:
 
 ```text
 fonts/
-  create-font-sans/
+  workbench-sans/
     create-font.json
     metadata.json
     names.json

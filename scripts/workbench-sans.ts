@@ -618,7 +618,7 @@ export function makeWorkbenchSans(): EditorFontSource {
 	}
 }
 
-const projectRoot = resolve(import.meta.dir, "..", "fonts", "create-font-sans")
+const projectRoot = resolve(import.meta.dir, "..", "fonts", "workbench-sans")
 const split = splitEditorFontSource(makeWorkbenchSans())
 if (!split.ok) throw new Error(split.errors[0].message)
 
@@ -634,5 +634,5 @@ for (const [path, value] of Object.entries(split.value)) {
 }
 await writeFile(
 	resolve(projectRoot, "README.md"),
-	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef and every printable\nASCII character from U+0020 through U+007E, with compatible topology across\nweights and reviewable per-entity JSON source units.\n\nRegenerate the checked-in source with \`bun scripts/create-font-sans.ts\`.\n`,
+	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef and every printable\nASCII character from U+0020 through U+007E, with compatible topology across\nweights and reviewable per-entity JSON source units.\n\nRegenerate the checked-in source with \`bun scripts/workbench-sans.ts\`.\n`,
 )

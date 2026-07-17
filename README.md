@@ -22,7 +22,7 @@ ordinary: run `font dev` in the remote checkout, forward its loopback port over
 SSH, and use a local browser.
 
 Canonical structured font data lives below `fonts/<project>/` in reviewable
-JSON files. The checked-in `fonts/create-font-sans` project is the development
+JSON files. The checked-in `fonts/workbench-sans` project is the development
 font served by `pnpm dev`. Generated intermediates, binary outputs, and local
 editor state remain separate. Programmable behavior such as OpenType Layout
 rules may live in ordinary code files referenced by the project and compile to

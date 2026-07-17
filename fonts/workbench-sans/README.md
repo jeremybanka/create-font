@@ -5,4 +5,4 @@ display sans with Text and Heavy masters. It includes .notdef and every printabl
 ASCII character from U+0020 through U+007E, with compatible topology across
 weights and reviewable per-entity JSON source units.
 
-Regenerate the checked-in source with `bun scripts/create-font-sans.ts`.
+Regenerate the checked-in source with `bun scripts/workbench-sans.ts`.
