@@ -2,6 +2,11 @@
 	"name": "create-font",
 	"version": "0.0.0",
 	"description": "Repository-local CLI and browser server for create-font font projects",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-font"
+	},
 	"type": "module",
 	"bin": {
 		"create-font": "./dist/create-font-cli.js",

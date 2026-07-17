@@ -2,6 +2,11 @@
 	"name": "@create-font/source",
 	"version": "0.0.0",
 	"description": "A deterministic, versioned JSON source format for create-font editor state",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/source"
+	},
 	"publishConfig": {
 		"access": "public"
 	},

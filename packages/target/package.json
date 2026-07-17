@@ -2,6 +2,11 @@
 	"name": "@create-font/target",
 	"version": "0.0.0",
 	"description": "A rigorously validated logical SFNT compilation target for OpenType variable TrueType fonts",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/target"
+	},
 	"type": "module",
 	"sideEffects": false,
 	"publishConfig": {

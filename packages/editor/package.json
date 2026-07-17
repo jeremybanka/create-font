@@ -2,6 +2,11 @@
 	"name": "@create-font/editor",
 	"version": "0.0.0",
 	"description": "Interactive variable-font editor for the create-font state model",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/editor"
+	},
 	"type": "module",
 	"publishConfig": {
 		"access": "public"
