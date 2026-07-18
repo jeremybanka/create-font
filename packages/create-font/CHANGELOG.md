@@ -1,5 +1,20 @@
 # create-font
 
+## 0.3.1
+
+### Patch Changes
+
+- 4365720: Publish the editor as a standalone browser artifact and load it from create-font's production dependency instead of embedding it in the CLI bundle.
+- Updated dependencies [adb48ef]
+- Updated dependencies [4365720]
+- Updated dependencies [b4028b3]
+- Updated dependencies [7c44ab6]
+- Updated dependencies [d2446a5]
+- Updated dependencies [6f81421]
+  - @create-font/editor@0.4.0
+  - @create-font/states@0.4.0
+  - @create-font/source@0.1.3
+
 ## 0.3.0
 
 ### Minor Changes
