@@ -1,0 +1,111 @@
+{
+	"environment": {
+		"baseCommit": "6f81421",
+		"browser": "Playwright Chromium 147.0.0.0",
+		"host": "Linux aarch64",
+		"mode": "direct font dev bundle without watch mode",
+		"project": "disposable copy of fonts/workbench-sans",
+		"viewport": "1280x720",
+		"persistence": "connected same-origin source service",
+		"startingGlyph": "O, 6 contours, 24 points, 2 masters"
+	},
+	"workload": {
+		"idleSeconds": 5,
+		"hoverMoves": 240,
+		"heldDragMoves": 240,
+		"mixedCommits": 48,
+		"curveCommitInterval": 3
+	},
+	"base": {
+		"idle": {
+			"durationMs": 5016.8,
+			"frameP95Ms": 16.7,
+			"maxFrameMs": 16.8,
+			"missedFrames": 0,
+			"canvasClears": 4,
+			"strokes": 170,
+			"fills": 154
+		},
+		"hover": {
+			"durationMs": 5029.7,
+			"frameP95Ms": 16.7,
+			"maxFrameMs": 166.6,
+			"missedFrames": 2,
+			"canvasClears": 432,
+			"strokes": 18638,
+			"fills": 16847
+		},
+		"heldDrag": {
+			"durationMs": 5124.7,
+			"frameP95Ms": 16.8,
+			"maxFrameMs": 66.7,
+			"missedFrames": 1,
+			"canvasClears": 484,
+			"strokes": 21783,
+			"fills": 19361
+		},
+		"mixedCommits": {
+			"durationMs": 12568.8,
+			"frameP95Ms": 66.7,
+			"maxFrameMs": 133.3,
+			"missedFrames": 42,
+			"longTasks": 36,
+			"largestLongTasksMs": [2888, 3300],
+			"canvasClears": 190,
+			"strokes": 16431,
+			"fills": 12813,
+			"usedHeapBytesBeforeReload": 117371446
+		},
+		"postReload": {
+			"usedHeapBytesAfterForcedGc": 39467163,
+			"canvasCount": 1,
+			"domNodeCount": 310
+		}
+	},
+	"bezierV2Branch": {
+		"idle": {
+			"durationMs": 5008.5,
+			"frameP95Ms": 16.7,
+			"maxFrameMs": 16.8,
+			"missedFrames": 0,
+			"canvasClears": 4,
+			"strokes": 170,
+			"fills": 154
+		},
+		"hover": {
+			"durationMs": 5011.9,
+			"frameP95Ms": 16.8,
+			"maxFrameMs": 16.8,
+			"missedFrames": 0,
+			"canvasClears": 432,
+			"strokes": 18638,
+			"fills": 16847
+		},
+		"heldDrag": {
+			"durationMs": 5203.5,
+			"frameP95Ms": 16.7,
+			"maxFrameMs": 66.6,
+			"missedFrames": 1,
+			"canvasClears": 484,
+			"strokes": 21783,
+			"fills": 19361
+		},
+		"mixedCommits": {
+			"durationMs": 12631.6,
+			"frameP95Ms": 66.7,
+			"maxFrameMs": 150,
+			"missedFrames": 41,
+			"longTasks": 36,
+			"largestLongTasksMs": [2899, 3254],
+			"canvasClears": 182,
+			"strokes": 15690,
+			"fills": 12240,
+			"usedHeapBytesBeforeReload": 105647789
+		}
+	},
+	"finding": {
+		"classification": "pointer-frequency redraw amplification plus connected persistence bursts",
+		"unboundedGrowthObserved": false,
+		"followUpIssue": 113
+	}
+}
