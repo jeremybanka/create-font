@@ -16,6 +16,12 @@ export const HOTBAR_KEYS = [
 export type HotbarKey = (typeof HOTBAR_KEYS)[number]
 export type HotbarSlot = string | null
 export type HotbarSlots = readonly HotbarSlot[]
+export type HotbarAssignmentMethod = "drag" | "keyboard"
+
+export interface HotbarAssignmentResult {
+	readonly slots: HotbarSlots
+	readonly closePalette: boolean
+}
 
 export const HOTBAR_STORAGE_KEY = "create-font:action-hotbar:v1"
 export const HOTBAR_COMMAND_MIME = "application/x-create-font-command"
@@ -99,6 +105,18 @@ export function assignHotbarSlot(
 	return slots.map((slot, slotIndex) =>
 		slotIndex === index ? commandId : slot,
 	)
+}
+
+export function assignPaletteCommandToHotbar(
+	slots: HotbarSlots,
+	index: number,
+	commandId: string,
+	method: HotbarAssignmentMethod,
+): HotbarAssignmentResult {
+	return {
+		slots: assignHotbarSlot(slots, index, commandId),
+		closePalette: method === "keyboard",
+	}
 }
 
 export function swapHotbarSlots(

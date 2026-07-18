@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	assignHotbarSlot,
+	assignPaletteCommandToHotbar,
 	DEFAULT_HOTBAR_SLOTS,
 	hotbarSlotIndexForKeyboardEvent,
 	normalizeHotbarSlots,
@@ -60,5 +61,32 @@ describe("action hotbar", () => {
 			normalizeHotbarSlots([...DEFAULT_HOTBAR_SLOTS.slice(0, 11), 42]),
 		).toBeNull()
 		expect(parseHotbarSlots("not json")).toBeNull()
+	})
+
+	it("keeps drag assignment open while keyboard assignment completes the palette", () => {
+		const firstDrag = assignPaletteCommandToHotbar(
+			DEFAULT_HOTBAR_SLOTS,
+			10,
+			"add-glyphs",
+			"drag",
+		)
+		const secondDrag = assignPaletteCommandToHotbar(
+			firstDrag.slots,
+			11,
+			"rect",
+			"drag",
+		)
+		const keyboard = assignPaletteCommandToHotbar(
+			secondDrag.slots,
+			0,
+			"pen",
+			"keyboard",
+		)
+
+		expect(firstDrag.closePalette).toBe(false)
+		expect(secondDrag.slots.slice(10)).toEqual(["add-glyphs", "rect"])
+		expect(secondDrag.closePalette).toBe(false)
+		expect(keyboard.closePalette).toBe(true)
+		expect(keyboard.slots[0]).toBe("pen")
 	})
 })
