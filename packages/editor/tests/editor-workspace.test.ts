@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
 	aGlyphId,
 	blackMasterId,
+	makeDemoFont,
 	notdefGlyphId,
 	oGlyphId,
 	razorMasterId,
@@ -21,6 +22,7 @@ import {
 import { subscribeToSettledState } from "../src/settled-subscription.ts"
 import {
 	combinedEditorPathPreview,
+	editorContourPaintPaths,
 	contourEndpointNormal,
 	contourStartDirection,
 	contourToPath,
@@ -229,6 +231,37 @@ describe("editor workspace", () => {
 		expect(
 			run.flatMap((item) => (item.kind === "glyph" ? [item.glyphId] : [])),
 		).toEqual([aGlyphId, oGlyphId, notdefGlyphId])
+	})
+
+	it("keeps authoring paint and metrics available when open contours block projection", () => {
+		const source = makeDemoFont()
+		const workspace = createEditorWorkspace({
+			...source,
+			glyphs: source.glyphs.map((glyph) =>
+				glyph.id === oGlyphId
+					? {
+							...glyph,
+							contours: glyph.contours.map((contour, index) =>
+								index === 0 ? { ...contour, closed: false } : contour,
+							),
+						}
+					: glyph,
+			),
+		})
+		workspace.font.silo.setState(workspace.ui.previewText, "O")
+		const item = workspace.font.silo.getState(workspace.ui.previewRun)[0]
+		if (item?.kind !== "glyph") throw new Error("Missing typing preview item.")
+
+		expect(item.glyph).toBeNull()
+		expect(item.sourcePreview?.path).not.toContain("M 500 820")
+		expect(item.sourcePreview?.openPath).toContain("M 500 820")
+		expect(
+			layoutTextRun(
+				[item],
+				workspace.document.metrics,
+				workspace.document.metadata.unitsPerEm,
+			).glyphs[0]?.advance,
+		).toBe(item.sourcePreview?.advanceWidth)
 	})
 
 	it("starts without an explicit glyph selection and derives typing focus from the caret", () => {
@@ -569,6 +602,51 @@ describe("editor workspace", () => {
 			nonDestructive: true,
 		})
 		expect(first.path.match(/M /g)).toHaveLength(2)
+	})
+
+	it("partitions closed fill paths from open stroke paths", () => {
+		const closed = {
+			closed: true,
+			nodes: [
+				{ x: 0, y: 0 },
+				{ x: 100, y: 0 },
+				{ x: 100, y: 100 },
+			],
+		}
+		const open = {
+			closed: false,
+			nodes: [
+				{ x: 200, y: 0, outgoing: { x: 20, y: 0 } },
+				{ x: 240, y: 40, incoming: { x: 0, y: -20 } },
+			],
+		}
+
+		expect(editorContourPaintPaths([closed, open])).toEqual({
+			closedPath: "M 0 0 L 100 0 L 100 100 L 0 0 Z",
+			openPath: "M 200 0 C 220 0 240 20 240 40",
+		})
+		expect(combinedEditorPathPreview([closed, open]).path).toBe(
+			"M 0 0 L 100 0 L 100 100 L 0 0 Z",
+		)
+	})
+
+	it("keeps open-only and single-node contours out of fill previews", () => {
+		const openContours = [
+			{
+				closed: false,
+				nodes: [
+					{ x: 0, y: 0 },
+					{ x: 80, y: 20 },
+				],
+			},
+			{ closed: false, nodes: [{ x: 100, y: 100 }] },
+		]
+
+		expect(combinedEditorPathPreview(openContours).path).toBe("")
+		expect(editorContourPaintPaths(openContours)).toEqual({
+			closedPath: "",
+			openPath: "M 0 0 L 80 20 M 100 100",
+		})
 	})
 
 	it("derives endpoint markers from the normal to an open path's tangent", () => {

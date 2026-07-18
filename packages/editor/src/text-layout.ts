@@ -48,7 +48,10 @@ export function layoutTextRun(
 			carets.set(item.textEnd, { textIndex: item.textEnd, x, baseline })
 			continue
 		}
-		const advance = item.glyph?.advanceWidth ?? fallbackAdvance
+		const advance =
+			item.glyph?.advanceWidth ??
+			item.sourcePreview?.advanceWidth ??
+			fallbackAdvance
 		glyphs.push({ item, x, baseline, advance })
 		x += advance
 		carets.set(item.textEnd, { textIndex: item.textEnd, x, baseline })

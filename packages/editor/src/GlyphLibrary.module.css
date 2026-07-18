@@ -142,6 +142,10 @@ glyph-library.class {
 
 						> path {
 							fill: currentcolor;
+
+							&[data-open-contour] {
+								fill: none;
+							}
 						}
 					}
 				}

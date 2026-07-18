@@ -209,6 +209,15 @@ function GlyphLibraryItem({
 									clipRule="evenodd"
 									transform="scale(1 -1)"
 								/>
+								<path
+									data-open-contour=""
+									d={preview.openPath}
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="1.25"
+									vectorEffect="non-scaling-stroke"
+									transform="scale(1 -1)"
+								/>
 							</svg>
 						)}
 					</glyph-tile>

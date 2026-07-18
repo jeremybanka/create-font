@@ -81,6 +81,7 @@ import {
 	contoursToPath,
 	contourStartDirection,
 	editorContourToPath,
+	editorContourPaintPaths,
 	editorContoursToPath,
 	nearestEditorSegment,
 } from "./geometry.ts"
@@ -583,6 +584,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		.join("|")
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
+	const contourPaintPaths = editorContourPaintPaths(visibleContours)
 	const metricGuides = useMemo(
 		() => resolveVerticalMetricGuides(metrics),
 		[metrics],
@@ -3074,6 +3076,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						>
 							{layout.glyphs.map((position) => {
 								const isEditing = position.item.textStart === editingTextIndex
+								const typingFillPath =
+									position.item.glyph === null
+										? (position.item.sourcePreview?.path ?? "")
+										: contoursToPath(position.item.glyph.contours)
+								const typingOpenPath =
+									position.item.sourcePreview?.openPath ?? ""
 								const placeCaret = (
 									event: KonvaEventObject<MouseEvent | TouchEvent>,
 								): void => {
@@ -3094,13 +3102,25 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										y={position.baseline}
 										scaleY={-1}
 									>
-										{isEditing || position.item.glyph === null ? null : (
-											<Path
-												data={contoursToPath(position.item.glyph.contours)}
-												fill={palette.previewInk}
-												opacity={editingTextIndex === null ? 1 : 0.42}
-												listening={false}
-											/>
+										{isEditing ? null : (
+											<>
+												<Path
+													name="typing-glyph-fill"
+													data={typingFillPath}
+													fill={palette.previewInk}
+													opacity={editingTextIndex === null ? 1 : 0.42}
+													listening={false}
+												/>
+												<Path
+													name="typing-open-contour-stroke"
+													data={typingOpenPath}
+													fillEnabled={false}
+													stroke={palette.outline}
+													strokeWidth={1.25 * inverseScale}
+													opacity={editingTextIndex === null ? 1 : 0.42}
+													listening={false}
+												/>
+											</>
 										)}
 										{isEditing ? null : (
 											<Rect
@@ -3163,6 +3183,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										name="momentary-glyph-preview"
 										data={combinedPreview.path}
 										fill={palette.previewInk}
+										listening={false}
+									/>
+									<Path
+										name="momentary-open-contour-stroke"
+										data={contourPaintPaths.openPath}
+										fillEnabled={false}
+										stroke={palette.outline}
+										strokeWidth={1.25 * inverseScale}
 										listening={false}
 									/>
 								</Group>
@@ -3402,7 +3430,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										listening={false}
 									/>
 									<Path
-										data={editorContoursToPath(visibleContours)}
+										name="closed-contour-outline"
+										data={contourPaintPaths.closedPath}
+										fillEnabled={false}
+										stroke={palette.outline}
+										strokeWidth={1.25 * inverseScale}
+										listening={false}
+									/>
+									<Path
+										name="open-contour-stroke"
+										data={contourPaintPaths.openPath}
 										fillEnabled={false}
 										stroke={palette.outline}
 										strokeWidth={1.25 * inverseScale}
