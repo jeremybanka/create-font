@@ -21,7 +21,6 @@ type RationalResult =
 
 const MAX_EXPRESSION_LENGTH = 1_000
 const MAX_EXPRESSION_DEPTH = 100
-const REPEATING_SIGNIFICANT_DIGITS = 15
 const DECIMAL_LITERAL = /^(?:\d+(?:\.\d*)?|\.\d+)/
 
 class ArithmeticParser {
@@ -142,7 +141,9 @@ class ArithmeticParser {
 	}
 }
 
-function invalid(error: string): NumericInputValidation {
+function invalid(
+	error: string,
+): Extract<NumericInputValidation, { readonly ok: false }> {
 	return { ok: false, error }
 }
 
@@ -166,6 +167,21 @@ export function validateNumericInput(
 	const parsed = new ArithmeticParser(text).parse()
 	if (!parsed.ok) return parsed
 	const value = parsed.value
+	const exactError = validateRationalContract(value, contract)
+	if (exactError !== null) return invalid(exactError)
+	const finalized = finalizeRational(value)
+	if (!finalized.ok) return finalized
+	const representedError = validateRationalContract(
+		numberToRational(finalized.value),
+		contract,
+	)
+	return representedError === null ? finalized : invalid(representedError)
+}
+
+function validateRationalContract(
+	value: Rational,
+	contract: NumericInputContract,
+): string | null {
 	const min = contract.min ?? Number.NEGATIVE_INFINITY
 	const max = contract.max ?? Number.POSITIVE_INFINITY
 	const step = contract.step ?? 1
@@ -175,27 +191,23 @@ export function validateNumericInput(
 		Number.isFinite(max) && compareRational(value, numberToRational(max)) > 0
 	if (belowMin || aboveMax) {
 		if (Number.isFinite(min) && Number.isFinite(max))
-			return invalid(
-				`Result must be between ${formatNumericInput(min)} and ${formatNumericInput(max)}.`,
-			)
+			return `Result must be between ${formatNumericInput(min)} and ${formatNumericInput(max)}.`
 		if (Number.isFinite(min))
-			return invalid(`Result must be at least ${formatNumericInput(min)}.`)
-		return invalid(`Result must be at most ${formatNumericInput(max)}.`)
+			return `Result must be at least ${formatNumericInput(min)}.`
+		return `Result must be at most ${formatNumericInput(max)}.`
 	}
 	if (step !== "any") {
 		if (!(step > 0) || !Number.isFinite(step))
-			return invalid("Numeric field has an invalid step.")
+			return "Numeric field has an invalid step."
 		if (step === 1 && value.numerator % value.denominator !== 0n)
-			return invalid("Result must be a whole number.")
+			return "Result must be a whole number."
 		const stepValue = numberToRational(step)
 		const ratioNumerator = value.numerator * stepValue.denominator
 		const ratioDenominator = value.denominator * stepValue.numerator
 		if (ratioNumerator % ratioDenominator !== 0n)
-			return invalid(
-				`Result must use increments of ${formatNumericInput(step)}.`,
-			)
+			return `Result must use increments of ${formatNumericInput(step)}.`
 	}
-	return finalizeRational(value)
+	return null
 }
 
 export function parseNumericInput(
@@ -259,21 +271,65 @@ export function formatNumericInput(value: number): string {
 }
 
 function finalizeRational(value: Rational): NumericInputValidation {
-	const terminating = isTerminatingRational(value)
-	const rationalText = terminating
-		? formatTerminatingRational(value)
-		: formatRepeatingRational(value)
-	const numberValue = Number(rationalText)
-	if (!Number.isFinite(numberValue)) return invalid("Result must be finite.")
-	const exactNumber = equalRational(numberToRational(numberValue), value)
+	const converted = rationalToNumber(value)
+	if (!converted.ok) return converted
 	return {
 		ok: true,
-		value: numberValue,
-		normalized:
-			terminating && !exactNumber
-				? formatNumericInput(numberValue)
-				: rationalText,
+		value: converted.value,
+		normalized: formatNumericInput(converted.value),
 	}
+}
+
+function rationalToNumber(
+	value: Rational,
+):
+	| { readonly ok: true; readonly value: number }
+	| { readonly ok: false; readonly error: string } {
+	if (value.numerator === 0n) return { ok: true, value: 0 }
+	const negative = value.numerator < 0n
+	const numerator = negative ? -value.numerator : value.numerator
+	const denominator = value.denominator
+	let exponent = bitLength(numerator) - bitLength(denominator)
+	if (
+		(exponent >= 0 && numerator < denominator << BigInt(exponent)) ||
+		(exponent < 0 && numerator << BigInt(-exponent) < denominator)
+	)
+		exponent -= 1
+
+	let magnitude: number
+	if (exponent >= -1_022) {
+		if (exponent > 1_023) return invalid("Result must be finite.")
+		const shift = 52 - exponent
+		let significand =
+			shift >= 0
+				? divideRoundToEven(numerator << BigInt(shift), denominator)
+				: divideRoundToEven(numerator, denominator << BigInt(-shift))
+		if (significand === 2n ** 53n) {
+			significand >>= 1n
+			exponent += 1
+		}
+		if (exponent > 1_023) return invalid("Result must be finite.")
+		magnitude = Number(significand) * 2 ** (exponent - 52)
+	} else {
+		const significand = divideRoundToEven(numerator << 1_074n, denominator)
+		if (significand === 0n) return invalid("Result is too small to represent.")
+		magnitude = Number(significand) * Number.MIN_VALUE
+	}
+	if (!Number.isFinite(magnitude)) return invalid("Result must be finite.")
+	return { ok: true, value: negative ? -magnitude : magnitude }
+}
+
+function bitLength(value: bigint): number {
+	return value.toString(2).length
+}
+
+function divideRoundToEven(numerator: bigint, denominator: bigint): bigint {
+	let quotient = numerator / denominator
+	const remainder = numerator % denominator
+	const comparison = remainder * 2n - denominator
+	if (comparison > 0n || (comparison === 0n && quotient % 2n !== 0n))
+		quotient += 1n
+	return quotient
 }
 
 function decimalToRational(text: string): Rational {
@@ -345,71 +401,4 @@ function compareRational(left: Rational, right: Rational): number {
 	const difference =
 		left.numerator * right.denominator - right.numerator * left.denominator
 	return difference < 0n ? -1 : difference > 0n ? 1 : 0
-}
-
-function equalRational(left: Rational, right: Rational): boolean {
-	return (
-		left.numerator === right.numerator && left.denominator === right.denominator
-	)
-}
-
-function isTerminatingRational(value: Rational): boolean {
-	let denominator = value.denominator
-	while (denominator % 2n === 0n) denominator /= 2n
-	while (denominator % 5n === 0n) denominator /= 5n
-	return denominator === 1n
-}
-
-function formatTerminatingRational(value: Rational): string {
-	const negative = value.numerator < 0n
-	let numerator = negative ? -value.numerator : value.numerator
-	let denominator = value.denominator
-	let twos = 0
-	let fives = 0
-	while (denominator % 2n === 0n) {
-		denominator /= 2n
-		twos += 1
-	}
-	while (denominator % 5n === 0n) {
-		denominator /= 5n
-		fives += 1
-	}
-	const scale = Math.max(twos, fives)
-	numerator *= 2n ** BigInt(scale - twos)
-	numerator *= 5n ** BigInt(scale - fives)
-	const digits = numerator.toString().padStart(scale + 1, "0")
-	const unsigned =
-		scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`
-	return negative ? `-${unsigned}` : unsigned
-}
-
-function formatRepeatingRational(value: Rational): string {
-	const negative = value.numerator < 0n
-	const numerator = negative ? -value.numerator : value.numerator
-	const integer = numerator / value.denominator
-	let remainder = numerator % value.denominator
-	const integerText = integer.toString()
-	const fraction: string[] = []
-	if (integer !== 0n) {
-		const count = Math.max(0, REPEATING_SIGNIFICANT_DIGITS - integerText.length)
-		for (let index = 0; index < count; index += 1) {
-			remainder *= 10n
-			fraction.push((remainder / value.denominator).toString())
-			remainder %= value.denominator
-		}
-	} else {
-		let significant = 0
-		let started = false
-		while (significant < REPEATING_SIGNIFICANT_DIGITS) {
-			remainder *= 10n
-			const digit = remainder / value.denominator
-			fraction.push(digit.toString())
-			remainder %= value.denominator
-			if (digit !== 0n) started = true
-			if (started) significant += 1
-		}
-	}
-	const unsigned =
-		fraction.length === 0 ? integerText : `${integerText}.${fraction.join("")}`
-	return negative ? `-${unsigned}` : unsigned
 }

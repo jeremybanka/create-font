@@ -66,13 +66,39 @@ describe("numeric expressions", () => {
 	it("formats repeating division deterministically", () => {
 		expect(evaluateNumericExpression("1 / 3")).toEqual({
 			ok: true,
-			value: 0.333333333333333,
-			normalized: "0.333333333333333",
+			value: 0.3333333333333333,
+			normalized: "0.3333333333333333",
 		})
 		expect(evaluateNumericExpression("1 / 6")).toEqual({
 			ok: true,
-			value: 0.166666666666666,
-			normalized: "0.166666666666666",
+			value: 0.16666666666666666,
+			normalized: "0.16666666666666666",
+		})
+	})
+
+	it("keeps normalized text canonical for the stored Number", () => {
+		for (const expression of ["1 / 3", "-1 / 7", "1000 - 999.9"]) {
+			const result = evaluateNumericExpression(expression)
+			expect(result.ok).toBe(true)
+			if (!result.ok) continue
+			expect(Number(result.normalized)).toBe(result.value)
+			expect(result.normalized).toBe(formatNumericInput(result.value))
+		}
+	})
+
+	it("rejects nonzero results that underflow binary64", () => {
+		expect(evaluateNumericExpression(`1 / ${"9".repeat(400)}`)).toEqual({
+			ok: false,
+			error: "Result is too small to represent.",
+		})
+	})
+
+	it("retains the smallest representable subnormal", () => {
+		const result = evaluateNumericExpression(`0.${"0".repeat(323)}5`)
+		expect(result).toEqual({
+			ok: true,
+			value: Number.MIN_VALUE,
+			normalized: formatNumericInput(Number.MIN_VALUE),
 		})
 	})
 
@@ -123,8 +149,8 @@ describe("numeric field contracts", () => {
 		})
 		expect(validateNumericInput("1 / 3", { step: "any" })).toEqual({
 			ok: true,
-			value: 0.333333333333333,
-			normalized: "0.333333333333333",
+			value: 0.3333333333333333,
+			normalized: "0.3333333333333333",
 		})
 	})
 
@@ -158,6 +184,29 @@ describe("numeric field contracts", () => {
 			ok: true,
 			value: 0.3,
 			normalized: "0.3",
+		})
+	})
+
+	it("keeps rounded repeating values inside representable bounds", () => {
+		expect(
+			validateNumericInput("1 / 3", {
+				min: 0.3333333333333333,
+				step: "any",
+			}),
+		).toEqual({
+			ok: true,
+			value: 0.3333333333333333,
+			normalized: "0.3333333333333333",
+		})
+		expect(
+			validateNumericInput("-1 / 3", {
+				max: -0.3333333333333333,
+				step: "any",
+			}),
+		).toEqual({
+			ok: true,
+			value: -0.3333333333333333,
+			normalized: "-0.3333333333333333",
 		})
 	})
 

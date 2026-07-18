@@ -204,6 +204,31 @@ describe("NumericInput", () => {
 		expect(onCommit).toHaveBeenLastCalledWith(-109.9)
 	})
 
+	it("commits a correctly rounded repeating result at its bound", () => {
+		const { input, onCommit } = mount({
+			value: 0.5,
+			min: 0.3333333333333333,
+			max: 1,
+			step: "any",
+		})
+		focus(input)
+		type(input, "1 / 3")
+		key(input, "Enter")
+		expect(input.value).toBe("0.3333333333333333")
+		expect(onCommit).toHaveBeenCalledWith(0.3333333333333333)
+	})
+
+	it("retains focus and rejects a nonzero underflow", () => {
+		const { input, output, onCommit } = mount({ step: "any" })
+		focus(input)
+		type(input, `1 / ${"9".repeat(400)}`)
+		key(input, "Enter")
+		expect(onCommit).not.toHaveBeenCalled()
+		expect(document.activeElement).toBe(input)
+		expect(input.getAttribute("aria-invalid")).toBe("true")
+		expect(output.textContent).toBe("Result is too small to represent.")
+	})
+
 	it("exposes text editing with deliberate spinbutton semantics", () => {
 		const { input } = mount({ min: -20, max: 20, step: 0.1 })
 		expect(input.type).toBe("text")
