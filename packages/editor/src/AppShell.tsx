@@ -2,7 +2,7 @@ import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
 import { useCallback, useEffect, useRef, useState } from "preact/hooks"
 
 import {
-	assignHotbarSlot,
+	assignPaletteCommandToHotbar,
 	DEFAULT_HOTBAR_SLOTS,
 	HOTBAR_STORAGE_KEY,
 	parseHotbarSlots,
@@ -261,10 +261,15 @@ export function AppShell({ workspace }: AppShellProps) {
 							paletteOpen={commandPaletteOpen}
 							slots={hotbarSlots}
 							onAssignCommand={(commandId, slotIndex) => {
-								setHotbarSlots((current) =>
-									assignHotbarSlot(current, slotIndex, commandId),
+								setHotbarSlots(
+									(current) =>
+										assignPaletteCommandToHotbar(
+											current,
+											slotIndex,
+											commandId,
+											"drag",
+										).slots,
 								)
-								closeCommandPalette()
 							}}
 							onOpenCommands={openCommandPalette}
 							onSlotsChange={setHotbarSlots}
@@ -325,10 +330,14 @@ export function AppShell({ workspace }: AppShellProps) {
 						command.do()
 					}}
 					onAssign={(command, slotIndex) => {
-						setHotbarSlots((current) =>
-							assignHotbarSlot(current, slotIndex, command.id),
+						const assignment = assignPaletteCommandToHotbar(
+							hotbarSlots,
+							slotIndex,
+							command.id,
+							"keyboard",
 						)
-						closeCommandPalette()
+						setHotbarSlots(assignment.slots)
+						if (assignment.closePalette) closeCommandPalette()
 					}}
 				/>
 			) : null}
