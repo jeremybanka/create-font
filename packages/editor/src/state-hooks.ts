@@ -59,6 +59,28 @@ export function useOF<T, K extends Canonical>(
 	return useO(token)
 }
 
+/** Reads a family member without constructing a family token for a null key. */
+export function useOptionalOF<T, K extends Canonical>(
+	family: ReadableFamilyToken<T, K>,
+	key: K | null,
+): ViewOf<T> | null {
+	const silo = useEditorSilo()
+	const token = useMemo(
+		() => (key === null ? null : silo.findState(family, key)),
+		[family, key, silo],
+	)
+	const subscribe = useCallback(
+		(notify: () => void) =>
+			token === null ? () => {} : subscribeToSettledState(silo, token, notify),
+		[silo, token],
+	)
+	const getSnapshot = useCallback(
+		() => (token === null ? null : silo.getState(token)),
+		[silo, token],
+	)
+	return useSyncExternalStore(subscribe, getSnapshot)
+}
+
 export type TimelineMeta = Readonly<{
 	at: number
 	length: number
@@ -66,6 +88,14 @@ export type TimelineMeta = Readonly<{
 	redo: () => void
 	clear: () => void
 }>
+
+const EMPTY_TIMELINE: TimelineMeta = Object.freeze({
+	at: 0,
+	length: 0,
+	undo: () => {},
+	redo: () => {},
+	clear: () => {},
+})
 
 export function useTL<K extends Canonical>(
 	family: TimelineFamilyToken<K, any>,
@@ -85,6 +115,48 @@ export function useTL<K extends Canonical>(
 	const snapshot = useSyncExternalStore(subscribe, getSnapshot)
 
 	return useMemo(() => {
+		const { at, length } = silo.inspectTimeline(token)
+		return {
+			at,
+			length,
+			undo: () => {
+				silo.undo(token)
+				onChange?.()
+			},
+			redo: () => {
+				silo.redo(token)
+				onChange?.()
+			},
+			clear: () => silo.clearTimeline(token),
+		}
+	}, [onChange, silo, snapshot, token])
+}
+
+/** Reads a timeline only when its canonical family key exists. */
+export function useOptionalTL<K extends Canonical>(
+	family: TimelineFamilyToken<K, any>,
+	key: K | null,
+	onChange?: () => void,
+): TimelineMeta {
+	const silo = useEditorSilo()
+	const token = useMemo(
+		() => (key === null ? null : silo.findTimeline(family, key)),
+		[family, key, silo],
+	)
+	const subscribe = useCallback(
+		(notify: () => void) =>
+			token === null ? () => {} : silo.subscribe(token, () => notify()),
+		[silo, token],
+	)
+	const getSnapshot = useCallback(() => {
+		if (token === null) return "empty"
+		const { at, length } = silo.inspectTimeline(token)
+		return `${at}:${length}`
+	}, [silo, token])
+	const snapshot = useSyncExternalStore(subscribe, getSnapshot)
+
+	return useMemo(() => {
+		if (token === null) return EMPTY_TIMELINE
 		const { at, length } = silo.inspectTimeline(token)
 		return {
 			at,
