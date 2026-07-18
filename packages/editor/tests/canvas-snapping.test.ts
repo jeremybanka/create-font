@@ -611,4 +611,10 @@ describe("numeric input parsing", () => {
 		expect(parseNumericInput("Infinity", 0, 100)).toBeNull()
 		expect(parseNumericInput("101", 0, 100)).toBeNull()
 	})
+
+	it("allows explicitly configured half-unit selection coordinates", () => {
+		expect(parseNumericInput("2.5", -100, 100, 0.5)).toBe(2.5)
+		expect(parseNumericInput("2.25", -100, 100, 0.5)).toBeNull()
+		expect(parseNumericInput("2.25", -100, 100, "any")).toBe(2.25)
+	})
 })

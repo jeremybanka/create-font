@@ -4,6 +4,7 @@ import { oGlyphId, razorMasterId, blackMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import {
 	copyOutlineSelection,
+	outlinePasteSelectionTargets,
 	outlineClipboardPlainText,
 	parseOutlineClipboard,
 	prepareOutlinePaste,
@@ -99,6 +100,14 @@ describe("outline clipboard", () => {
 		expect(
 			prepared.value.contours[0]?.points.map((point) => point.id),
 		).not.toEqual(contour.points.map((point) => point.id))
+		expect(
+			outlinePasteSelectionTargets(prepared.value.selectedPointIds),
+		).toEqual(
+			prepared.value.selectedPointIds.map((pointId) => ({
+				kind: "node",
+				pointId,
+			})),
+		)
 
 		expect(parseOutlineClipboard("{not-json")).toEqual(
 			expect.objectContaining({ ok: false }),

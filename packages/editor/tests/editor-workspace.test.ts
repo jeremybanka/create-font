@@ -39,6 +39,8 @@ import {
 	resolveSelectionControls,
 	scaleSelectionControls,
 	selectionForRigidTranslation,
+	selectionOriginPosition,
+	selectionScaleForDimension,
 	translateSelectionControls,
 } from "../src/outline-selection.ts"
 
@@ -693,6 +695,38 @@ describe("editor workspace", () => {
 				},
 			],
 		})
+	})
+
+	it("derives all nine selection origins including half-unit centers", () => {
+		const bounds = { minX: -10, minY: -21, maxX: 91, maxY: 80 }
+		expect(selectionOriginPosition(bounds, "bottom-left")).toEqual({
+			x: -10,
+			y: -21,
+		})
+		expect(selectionOriginPosition(bounds, "center")).toEqual({
+			x: 40.5,
+			y: 29.5,
+		})
+		expect(selectionOriginPosition(bounds, "top-right")).toEqual({
+			x: 91,
+			y: 80,
+		})
+		expect(
+			selectionScaleForDimension(bounds, "top-right", "width", 202),
+		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 1 })
+	})
+
+	it("rejects undefined scaling from degenerate selection bounds", () => {
+		const vertical = { minX: 12, minY: -5, maxX: 12, maxY: 25 }
+		expect(
+			selectionScaleForDimension(vertical, "center", "width", 20),
+		).toBeNull()
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", 60),
+		).toEqual({ anchorX: 12, anchorY: 10, scaleX: 1, scaleY: 2 })
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", Infinity),
+		).toBeNull()
 	})
 
 	it("uses a stable vertical tie break and returns complete contour targets", () => {

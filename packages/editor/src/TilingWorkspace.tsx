@@ -16,6 +16,7 @@ import type { EditorWorkspace } from "./editor-workspace.ts"
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
+import { SelectionDimensions } from "./SelectionDimensions.tsx"
 import css from "./TilingWorkspace.module.css"
 import {
 	addTile,
@@ -94,6 +95,11 @@ const TILE_DEFINITIONS: readonly TileDefinition[] = [
 		kind: "glyph-attributes",
 		name: "Glyph attributes",
 		description: "Inspect glyph metrics, selection, and preview state.",
+	},
+	{
+		kind: "selection-dimensions",
+		name: "Selection dimensions",
+		description: "Inspect and transform a selection from nine origins.",
 	},
 ]
 
@@ -750,8 +756,10 @@ export function TilingWorkspace({
 					<FontNavigator workspace={workspace} />
 				) : tile.kind === "canvas-toolbar" ? (
 					<CanvasToolbar workspace={workspace} />
-				) : (
+				) : tile.kind === "glyph-attributes" ? (
 					<GlyphInspector workspace={workspace} />
+				) : (
+					<SelectionDimensions workspace={workspace} />
 				)}
 			</tile-content>
 		</workspace-tile>
