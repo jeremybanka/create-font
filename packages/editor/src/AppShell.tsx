@@ -208,7 +208,10 @@ export function AppShell({ workspace }: AppShellProps) {
 				{routeName === "canvas" ? (
 					<editor-workspace>
 						<EditorToolbar context={toolContext} />
-						<GlyphCanvas workspace={workspace} />
+						<GlyphCanvas
+							workspace={workspace}
+							disabled={tilingStatus.management}
+						/>
 						<TilingWorkspace
 							workspace={workspace}
 							enabled={!commandPaletteOpen}

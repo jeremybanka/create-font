@@ -6,7 +6,9 @@ import {
 	DragHandleDots2Icon,
 	EnterFullScreenIcon,
 	ExitFullScreenIcon,
+	MagnifyingGlassIcon,
 	PlusIcon,
+	QuestionMarkCircledIcon,
 } from "@radix-ui/react-icons"
 import { useEffect, useReducer, useRef, useState } from "preact/hooks"
 
@@ -106,13 +108,14 @@ const TILE_SHORTCUTS: readonly TileShortcut[] = [
 	{ keys: "C", action: "Collapse or expand column" },
 	{ keys: "F", action: "Toggle fill affinity" },
 	{ keys: "N", action: "Focus tile pool" },
-	{ keys: "← / →", action: "Choose tile type in pool" },
+	{ keys: "↑ / ↓ · Enter", action: "Choose and add tile from pool" },
 	{ keys: "D", action: "Duplicate selected tile" },
 	{ keys: "X · Del · ⌫", action: "Remove selected tile" },
 	{ keys: "⌘/Ctrl Z", action: "Undo layout edit" },
 	{ keys: "⌘/Ctrl ⇧ Z", action: "Redo layout edit" },
 	{ keys: "S", action: "Save workspace" },
 	{ keys: "R", action: "Revert to saved workspace" },
+	{ keys: "?", action: "Toggle keyboard help" },
 	{ keys: "Esc", action: "Cancel pending command" },
 ]
 
@@ -177,6 +180,28 @@ function tileName(kind: TileKind): string {
 	)
 }
 
+function matchesTypeahead(query: string, value: string): boolean {
+	let previous = -1
+	for (const character of query) {
+		const index = value.indexOf(character, previous + 1)
+		if (index < 0) return false
+		previous = index
+	}
+	return true
+}
+
+function filterTileDefinitions(query: string): readonly TileDefinition[] {
+	const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+	if (tokens.length === 0) return TILE_DEFINITIONS
+	return TILE_DEFINITIONS.filter((definition) => {
+		const searchable =
+			`${definition.name} ${definition.description} ${definition.kind}`
+				.toLowerCase()
+				.replaceAll("-", " ")
+		return tokens.every((token) => matchesTypeahead(token, searchable))
+	})
+}
+
 export function TilingWorkspace({
 	workspace,
 	enabled = true,
@@ -194,15 +219,20 @@ export function TilingWorkspace({
 	)
 	const [pending, setPending] = useState<PendingCommand>(null)
 	const [poolFocused, setPoolFocused] = useState(false)
+	const [poolQuery, setPoolQuery] = useState("")
 	const [poolIndex, setPoolIndex] = useState(0)
+	const [helpOpen, setHelpOpen] = useState(false)
 	const [viewportWidth, setViewportWidth] = useState(() =>
 		typeof window === "undefined" ? 1_200 : window.innerWidth,
 	)
 	const [dragging, setDragging] = useState(false)
 	const dragPayload = useRef<DragPayload | null>(null)
+	const poolInputRef = useRef<HTMLInputElement>(null)
 	const layout = history.present
 	const dirty = serializeTilingLayout(layout) !== saved
 	const allocation = columnSlotAllocation(viewportWidth)
+	const filteredTileDefinitions = filterTileDefinitions(poolQuery)
+	const activeTileDefinition = filteredTileDefinitions[poolIndex]
 
 	const selectColumn = (columnId: TileColumnId): void => {
 		setSelectedColumn(columnId)
@@ -229,6 +259,7 @@ export function TilingWorkspace({
 		selectColumn(columnId)
 		setSelectedTileId(added.tileId)
 		setPoolFocused(false)
+		setPoolQuery("")
 	}
 
 	const moveSelectedTile = (columnId: TileColumnId): void => {
@@ -275,6 +306,8 @@ export function TilingWorkspace({
 		if (!enabled && !management) return
 		setManagement((active) => !active)
 		setPoolFocused(false)
+		setPoolQuery("")
+		setHelpOpen(false)
 		setPending(null)
 	}
 
@@ -324,7 +357,18 @@ export function TilingWorkspace({
 		setManagement(false)
 		setPending(null)
 		setPoolFocused(false)
+		setPoolQuery("")
+		setHelpOpen(false)
 	}, [enabled, management])
+
+	useEffect(() => {
+		if (!poolFocused) return
+		const frame = requestAnimationFrame(() => {
+			poolInputRef.current?.focus()
+			poolInputRef.current?.select()
+		})
+		return () => cancelAnimationFrame(frame)
+	}, [poolFocused])
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
@@ -341,6 +385,7 @@ export function TilingWorkspace({
 				return
 			}
 			if (!management) return
+			if (poolFocused && event.target === poolInputRef.current) return
 			event.stopImmediatePropagation()
 
 			const digit = event.code.startsWith("Digit")
@@ -357,8 +402,8 @@ export function TilingWorkspace({
 					moveSelectedTile(digit)
 					setPending(null)
 				} else if (poolFocused) {
-					const definition = TILE_DEFINITIONS[poolIndex]
-					if (definition !== undefined) addTileToColumn(definition.kind, digit)
+					if (activeTileDefinition !== undefined)
+						addTileToColumn(activeTileDefinition.kind, digit)
 				} else {
 					selectColumn(digit)
 				}
@@ -387,25 +432,28 @@ export function TilingWorkspace({
 			}
 			if (event.key === "Escape") {
 				event.preventDefault()
-				setPending(null)
-				setPoolFocused(false)
+				if (helpOpen) setHelpOpen(false)
+				else {
+					setPending(null)
+					setPoolFocused(false)
+					setPoolQuery("")
+				}
 				return
 			}
-			if (
-				poolFocused &&
-				(event.key === "ArrowLeft" || event.key === "ArrowRight")
-			) {
+			if (event.key === "?") {
 				event.preventDefault()
-				setPoolIndex((index) =>
-					event.key === "ArrowLeft"
-						? (index - 1 + TILE_DEFINITIONS.length) % TILE_DEFINITIONS.length
-						: (index + 1) % TILE_DEFINITIONS.length,
-				)
+				setHelpOpen((open) => !open)
+				setPoolFocused(false)
+				setPoolQuery("")
+				setPending(null)
 				return
 			}
 			if (key === "n") {
 				event.preventDefault()
 				setPoolFocused(true)
+				setPoolQuery("")
+				setPoolIndex(0)
+				setHelpOpen(false)
 				setPending(null)
 				return
 			}
@@ -506,9 +554,10 @@ export function TilingWorkspace({
 		enabled,
 		layout,
 		management,
+		helpOpen,
 		pending,
 		poolFocused,
-		poolIndex,
+		activeTileDefinition,
 		saved,
 		selectedColumn,
 		selectedTileId,
@@ -538,7 +587,7 @@ export function TilingWorkspace({
 				<collapsed-column
 					key={column.id}
 					data-side={column.id <= 2 ? "left" : "right"}
-					data-selected={selected ? "true" : "false"}
+					data-selected={management && selected ? "true" : "false"}
 				>
 					<button
 						type="button"
@@ -566,7 +615,7 @@ export function TilingWorkspace({
 		return (
 			<tile-column
 				key={column.id}
-				data-selected={selected ? "true" : "false"}
+				data-selected={management && selected ? "true" : "false"}
 				data-alignment={column.alignment}
 				onClick={() => management && selectColumn(column.id)}
 				onDragOver={(event: DragEvent) => {
@@ -739,13 +788,89 @@ export function TilingWorkspace({
 							<span>Tile pool</span>
 							<kbd>N</kbd>
 						</pool-heading>
-						<pool-items>
-							{TILE_DEFINITIONS.map((definition, index) => (
+						<pool-search>
+							<MagnifyingGlassIcon aria-hidden="true" />
+							<input
+								ref={poolInputRef}
+								type="search"
+								role="combobox"
+								aria-label="Search tile types"
+								aria-controls="tile-pool-results"
+								aria-expanded="true"
+								aria-activedescendant={
+									activeTileDefinition === undefined
+										? undefined
+										: `tile-pool-${activeTileDefinition.kind}`
+								}
+								placeholder="Search tiles…"
+								value={poolQuery}
+								onFocus={() => setPoolFocused(true)}
+								onBlur={() => setPoolFocused(false)}
+								onInput={(event) => {
+									setPoolQuery(event.currentTarget.value)
+									setPoolIndex(0)
+								}}
+								onKeyDown={(event) => {
+									if (event.key === "Escape") {
+										event.preventDefault()
+										setPoolFocused(false)
+										setPoolQuery("")
+										event.currentTarget.blur()
+										return
+									}
+									if (event.key === "?") {
+										event.preventDefault()
+										setHelpOpen(true)
+										setPoolFocused(false)
+										setPoolQuery("")
+										event.currentTarget.blur()
+										return
+									}
+									if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+										event.preventDefault()
+										if (filteredTileDefinitions.length === 0) return
+										const direction = event.key === "ArrowDown" ? 1 : -1
+										setPoolIndex(
+											(index) =>
+												(index + direction + filteredTileDefinitions.length) %
+												filteredTileDefinitions.length,
+										)
+										return
+									}
+									if (event.key === "Enter") {
+										event.preventDefault()
+										if (activeTileDefinition !== undefined)
+											addTileToColumn(activeTileDefinition.kind, selectedColumn)
+										return
+									}
+									const digit = event.code.startsWith("Digit")
+										? Number(event.code.slice("Digit".length))
+										: Number.NaN
+									if (
+										isColumnId(digit) &&
+										!event.metaKey &&
+										!event.ctrlKey &&
+										!event.altKey
+									) {
+										event.preventDefault()
+										if (activeTileDefinition !== undefined)
+											addTileToColumn(activeTileDefinition.kind, digit)
+									}
+								}}
+							/>
+							<kbd>N</kbd>
+						</pool-search>
+						<pool-items id="tile-pool-results" role="listbox">
+							{filteredTileDefinitions.map((definition, index) => (
 								<button
 									key={definition.kind}
+									id={`tile-pool-${definition.kind}`}
 									type="button"
+									role="option"
+									aria-selected={poolIndex === index}
 									data-selected={poolIndex === index ? "true" : "false"}
 									draggable
+									onMouseEnter={() => setPoolIndex(index)}
 									onClick={() => {
 										setPoolIndex(index)
 										addTileToColumn(definition.kind, selectedColumn)
@@ -770,13 +895,30 @@ export function TilingWorkspace({
 									<span>{definition.description}</span>
 								</button>
 							))}
+							{filteredTileDefinitions.length === 0 ? (
+								<pool-empty>No tiles match “{poolQuery}”</pool-empty>
+							) : null}
 						</pool-items>
 						<small>
-							Click to add to column {selectedColumn}, or drag to a numbered
-							target.
+							Enter adds to column {selectedColumn}. Press 1–4 for another
+							destination, or drag a result.
 						</small>
-						<command-view aria-label="Tile management shortcuts">
-							<strong>Keyboard commands</strong>
+					</tile-pool>
+					{helpOpen ? (
+						<tile-help role="dialog" aria-label="Tile management shortcuts">
+							<help-heading>
+								<help-title>
+									<strong>Keyboard commands</strong>
+									<span>Tile management</span>
+								</help-title>
+								<button
+									type="button"
+									aria-label="Close keyboard help"
+									onClick={() => setHelpOpen(false)}
+								>
+									<Cross2Icon aria-hidden="true" />
+								</button>
+							</help-heading>
 							<dl>
 								{TILE_SHORTCUTS.map((shortcut) => (
 									<shortcut-command key={shortcut.keys}>
@@ -787,8 +929,8 @@ export function TilingWorkspace({
 									</shortcut-command>
 								))}
 							</dl>
-						</command-view>
-					</tile-pool>
+						</tile-help>
+					) : null}
 					<management-hud>
 						<column-targets aria-label="Column targets">
 							{ALL_COLUMNS.map((columnId) => (
@@ -818,14 +960,23 @@ export function TilingWorkspace({
 											? "Choose a tile, then 1–4"
 											: `Column ${selectedColumn}`}
 							</strong>
-							<span>
-								X remove · N new · S save · full reference in the tile pool
-							</span>
+							<span>X remove · N new · S save · ? help</span>
 						</command-status>
-						<button type="button" data-save onClick={save} disabled={!dirty}>
-							<BookmarkFilledIcon aria-hidden="true" />
-							{dirty ? "Save" : "Saved"}
-						</button>
+						<hud-actions>
+							<button
+								type="button"
+								data-help
+								aria-label="Keyboard commands"
+								aria-pressed={helpOpen}
+								onClick={() => setHelpOpen((open) => !open)}
+							>
+								<QuestionMarkCircledIcon aria-hidden="true" />
+							</button>
+							<button type="button" data-save onClick={save} disabled={!dirty}>
+								<BookmarkFilledIcon aria-hidden="true" />
+								{dirty ? "Save" : "Saved"}
+							</button>
+						</hud-actions>
 					</management-hud>
 				</>
 			) : null}

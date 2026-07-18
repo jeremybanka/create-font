@@ -118,6 +118,7 @@ import { visualDebugControlRegions } from "./visual-debug.ts"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
+	readonly disabled?: boolean
 }
 
 interface DraggedPoint {
@@ -192,7 +193,7 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowDown: [0, -1],
 }
 
-export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
+export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
@@ -1579,6 +1580,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			<textarea
 				ref={textareaRef}
 				value={text}
+				disabled={disabled}
 				spellcheck={false}
 				aria-label="Text canvas contents"
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {

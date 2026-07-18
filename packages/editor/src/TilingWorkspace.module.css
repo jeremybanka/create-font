@@ -343,7 +343,7 @@ tiling-workspace.class {
 		left: 50%;
 		display: grid;
 		gap: 10px;
-		width: min(430px, calc(100% - 520px));
+		width: min(390px, calc(100% - 520px));
 		min-width: 320px;
 		max-height: calc(100% - 124px);
 		padding: 12px;
@@ -374,12 +374,55 @@ tiling-workspace.class {
 				letter-spacing: 0.08em;
 				text-transform: uppercase;
 			}
+		}
+
+		> pool-search {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 8px;
+			height: 36px;
+			padding: 0 9px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: var(--panel);
+
+			&:focus-within {
+				border-color: var(--line-selected);
+				box-shadow: 0 0 0 2px
+					color-mix(in srgb, var(--accent) 18%, transparent);
+			}
+
+			> svg {
+				width: 14px;
+				height: 14px;
+				color: var(--ink-faint);
+			}
+
+			> input {
+				width: 100%;
+				min-width: 0;
+				padding: 0;
+				border: 0;
+				outline: 0;
+				background: transparent;
+				font: 500 10px/1 var(--ui-font);
+				color: var(--ink);
+
+				&::placeholder {
+					color: var(--ink-faint);
+				}
+
+				&::-webkit-search-cancel-button {
+					display: none;
+				}
+			}
 
 			> kbd {
 				padding: 3px 6px;
 				border: 1px solid var(--line);
 				border-radius: 5px;
-				background: var(--panel);
+				background: var(--paper);
 				font-size: 9px;
 				color: var(--ink-muted);
 			}
@@ -387,31 +430,33 @@ tiling-workspace.class {
 
 		> pool-items {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 8px;
+			gap: 4px;
+			max-height: min(320px, calc(100vh - 250px));
+			overflow-y: auto;
+			scrollbar-width: thin;
 
 			> button {
 				display: grid;
 				grid-template-columns: auto minmax(0, 1fr);
-				gap: 5px 8px;
-				padding: 11px;
-				border: 1px solid var(--line);
-				border-radius: 9px;
-				background: var(--panel);
+				gap: 3px 9px;
+				padding: 9px;
+				border: 1px solid transparent;
+				border-radius: 7px;
+				background: transparent;
 				text-align: left;
 				color: var(--ink);
 				cursor: grab;
 
 				&:hover,
 				&[data-selected="true"] {
-					border-color: var(--line-selected);
+					border-color: var(--line);
 					background: var(--selected);
 				}
 
 				> svg {
 					grid-row: 1 / span 2;
-					width: 16px;
-					height: 16px;
+					width: 15px;
+					height: 15px;
 					color: var(--accent);
 				}
 
@@ -425,55 +470,106 @@ tiling-workspace.class {
 					color: var(--ink-faint);
 				}
 			}
+
+			> pool-empty {
+				display: grid;
+				place-items: center;
+				min-height: 82px;
+				padding: 14px;
+				font-size: 9px;
+				color: var(--ink-faint);
+			}
 		}
 
 		> small {
 			font-size: 9px;
 			color: var(--ink-faint);
 		}
+	}
 
-		> command-view {
-			display: grid;
-			gap: 7px;
-			padding-top: 10px;
-			border-top: 1px solid var(--line);
+	> tile-help {
+		position: absolute;
+		bottom: 62px;
+		left: 50%;
+		display: grid;
+		gap: 11px;
+		width: min(520px, calc(100% - 32px));
+		max-height: calc(100% - 88px);
+		padding: 13px;
+		border: 1px solid var(--line-strong);
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--paper) 97%, transparent);
+		box-shadow: 0 20px 64px rgb(0 0 0 / 46%);
+		overflow: auto;
+		pointer-events: auto;
+		transform: translateX(-50%);
+		z-index: 9;
 
-			> strong {
-				font-size: 9px;
-				font-weight: 720;
-				letter-spacing: 0.07em;
-				text-transform: uppercase;
-				color: var(--ink-muted);
+		> help-heading {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+
+			> help-title {
+				display: grid;
+				gap: 3px;
+
+				> strong {
+					font-size: 11px;
+				}
+
+				> span {
+					font-size: 9px;
+					color: var(--ink-faint);
+				}
 			}
 
-			> dl {
+			> button {
 				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 5px 12px;
-				margin: 0;
+				place-items: center;
+				width: 25px;
+				height: 25px;
+				padding: 0;
+				border: 0;
+				border-radius: 6px;
+				background: transparent;
+				color: var(--ink-muted);
+				cursor: pointer;
 
-				> shortcut-command {
-					display: grid;
-					grid-template-columns: minmax(68px, auto) minmax(0, 1fr);
-					align-items: baseline;
-					gap: 6px;
+				&:hover {
+					background: var(--hover);
+					color: var(--ink);
+				}
+			}
+		}
 
-					> dt,
-					> dd {
-						margin: 0;
-					}
+		> dl {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 7px 16px;
+			margin: 0;
 
-					> dt > kbd {
-						font: 650 8px/1.2 var(--ui-font);
-						white-space: nowrap;
-						color: var(--ink);
-					}
+			> shortcut-command {
+				display: grid;
+				grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+				align-items: baseline;
+				gap: 7px;
 
-					> dd {
-						font-size: 8px;
-						line-height: 1.25;
-						color: var(--ink-faint);
-					}
+				> dt,
+				> dd {
+					margin: 0;
+				}
+
+				> dt > kbd {
+					font: 650 8px/1.2 var(--ui-font);
+					white-space: nowrap;
+					color: var(--ink);
+				}
+
+				> dd {
+					font-size: 8px;
+					line-height: 1.25;
+					color: var(--ink-faint);
 				}
 			}
 		}
@@ -546,27 +642,50 @@ tiling-workspace.class {
 			}
 		}
 
-		> button[data-save] {
+		> hud-actions {
 			display: flex;
 			align-items: center;
-			gap: 6px;
-			padding: 7px 9px;
-			border: 1px solid var(--line-selected);
-			border-radius: 7px;
-			background: var(--selected);
-			font-size: 9px;
-			font-weight: 680;
-			color: var(--ink);
-			cursor: pointer;
+			gap: 5px;
 
-			&:disabled {
-				opacity: 0.45;
-				cursor: default;
-			}
+			> button {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 6px;
+				height: 29px;
+				padding: 0 9px;
+				border: 1px solid var(--line-selected);
+				border-radius: 7px;
+				background: var(--selected);
+				font-size: 9px;
+				font-weight: 680;
+				color: var(--ink);
+				cursor: pointer;
 
-			> svg {
-				width: 13px;
-				height: 13px;
+				&[data-help] {
+					width: 29px;
+					padding: 0;
+					border-color: var(--line);
+					background: var(--paper);
+					color: var(--ink-muted);
+
+					&:hover,
+					&[aria-pressed="true"] {
+						border-color: var(--line-selected);
+						background: var(--selected);
+						color: var(--ink);
+					}
+				}
+
+				&:disabled {
+					opacity: 0.45;
+					cursor: default;
+				}
+
+				> svg {
+					width: 13px;
+					height: 13px;
+				}
 			}
 		}
 	}
@@ -616,7 +735,6 @@ tiling-workspace.class {
 
 	&[data-management="true"] {
 		> tile-lane {
-			top: 50px;
 			bottom: 58px;
 		}
 
@@ -640,14 +758,6 @@ tiling-workspace.class {
 			width: calc(100% - var(--tile-column-width) - 44px);
 			min-width: 220px;
 			transform: translateY(-50%);
-
-			> pool-items {
-				grid-template-columns: 1fr;
-			}
-
-			> command-view > dl {
-				grid-template-columns: 1fr;
-			}
 		}
 
 		> management-hud {
@@ -673,7 +783,6 @@ tiling-workspace.class {
 		}
 
 		> tile-lane {
-			top: 48px;
 			bottom: 212px;
 		}
 
@@ -683,6 +792,10 @@ tiling-workspace.class {
 			}
 
 			grid-template-columns: 1fr auto;
+		}
+
+		> tile-help > dl {
+			grid-template-columns: 1fr;
 		}
 	}
 }
