@@ -90,7 +90,9 @@ export function toolDisabledReason(
 		case "align-selection":
 			return "Select at least two nodes or handles to align."
 		case "reverse-path":
-			return "Select controls from exactly one closed path."
+		case "invert-horizontal":
+		case "invert-vertical":
+			return "Select controls from exactly one path."
 		case "make-node-first":
 			return "Select one non-first node on a closed path."
 		case "undo":
@@ -181,21 +183,65 @@ export const TOOLS = {
 	},
 	REVERSE: {
 		description:
-			"Reverse the selected closed path while keeping its first node.",
+			"Reverse the selected path; closed paths keep their first node.",
 		id: "reverse-path",
 		displayName: "Reverse Path",
 		hotkey: { key: "r", shift: true },
 		icon: "ShuffleIcon",
 		status: (context) =>
-			context.editingTextIndex !== null && selectedContour(context)?.closed
+			context.editingTextIndex !== null && selectedContour(context) !== null
 				? "ready"
 				: "disabled",
 		do: (context) => {
 			const contour = selectedContour(context)
-			if (contour === null || !contour.closed) return
+			if (contour === null) return
 			context.workspace.font.actions.reverseContour({
 				glyphId: context.activeGlyphId,
 				contourId: contour.id,
+			})
+		},
+	},
+	INVERT_HORIZONTAL: {
+		description:
+			"Mirror the selected path horizontally and preserve its direction.",
+		id: "invert-horizontal",
+		displayName: "Invert Horizontally",
+		hotkey: { key: "h", shift: true },
+		icon: "TransformIcon",
+		status: (context) =>
+			context.editingTextIndex !== null && selectedContour(context) !== null
+				? "ready"
+				: "disabled",
+		do: (context) => {
+			const contour = selectedContour(context)
+			if (contour === null) return
+			context.workspace.font.actions.invertContour({
+				masterId: context.activeMasterId,
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+				axis: "horizontal",
+			})
+		},
+	},
+	INVERT_VERTICAL: {
+		description:
+			"Mirror the selected path vertically and preserve its direction.",
+		id: "invert-vertical",
+		displayName: "Invert Vertically",
+		hotkey: { key: "v", shift: true },
+		icon: "TransformIcon",
+		status: (context) =>
+			context.editingTextIndex !== null && selectedContour(context) !== null
+				? "ready"
+				: "disabled",
+		do: (context) => {
+			const contour = selectedContour(context)
+			if (contour === null) return
+			context.workspace.font.actions.invertContour({
+				masterId: context.activeMasterId,
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+				axis: "vertical",
 			})
 		},
 	},
@@ -252,7 +298,13 @@ export const TOOLS = {
 export const TOOLBAR_LAYOUT = [
 	[TOOLS.SELECT, TOOLS.PEN, TOOLS.TRANSFORM],
 	[TOOLS.UNDO, TOOLS.REDO],
-	[TOOLS.ALIGN, TOOLS.REVERSE, TOOLS.MAKE_FIRST],
+	[
+		TOOLS.ALIGN,
+		TOOLS.REVERSE,
+		TOOLS.MAKE_FIRST,
+		TOOLS.INVERT_HORIZONTAL,
+		TOOLS.INVERT_VERTICAL,
+	],
 ] as const satisfies readonly (readonly Tool[])[]
 
 type ToolsThatExist = (typeof TOOLS)[keyof typeof TOOLS]["id"]

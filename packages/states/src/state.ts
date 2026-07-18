@@ -393,6 +393,11 @@ export interface ReverseContourInput {
 	readonly contourId: ContourId
 }
 
+export interface InvertContourInput extends ReverseContourInput {
+	readonly masterId: MasterId
+	readonly axis: "horizontal" | "vertical"
+}
+
 export interface MakeNodeFirstInput extends ReverseContourInput {
 	readonly pointId: PointId
 }
@@ -4524,17 +4529,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			if (pointIds === null || closed === null || masterIds === null) {
 				throw new TypeError(`Unknown contour ${input.contourId}.`)
 			}
-			if (!closed)
-				throw new TypeError(
-					"Only closed contours can preserve their first node when reversed.",
-				)
 			if (pointIds.length < 2) return
 			const first = pointIds[0]
 			if (first === undefined) return
 			set(
 				contourPointIdsAtoms,
 				[input.glyphId, input.contourId],
-				deepFreeze([first, ...pointIds.slice(1).reverse()]),
+				deepFreeze(
+					closed
+						? [first, ...pointIds.slice(1).reverse()]
+						: [...pointIds].reverse(),
+				),
 			)
 			for (const masterId of masterIds) {
 				for (const pointId of pointIds) {
@@ -4548,6 +4553,170 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					set(outgoingHandleXAtoms, atomKey, incomingX)
 					set(outgoingHandleYAtoms, atomKey, incomingY)
 				}
+			}
+		},
+	})
+
+	const invertContourTransaction = silo.transaction<
+		(input: InvertContourInput) => void
+	>({
+		key: "invertContour",
+		do: ({ get, set }, input) => {
+			if (input.axis !== "horizontal" && input.axis !== "vertical") {
+				throw new TypeError('Invert axis must be "horizontal" or "vertical".')
+			}
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const masterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (pointIds === null || closed === null || masterIds === null) {
+				throw new TypeError(`Unknown contour ${input.contourId}.`)
+			}
+			if (!masterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			if (pointIds.length === 0) return
+
+			const activeGeometry = new Map<
+				PointId,
+				{
+					readonly position: Vector2
+					readonly incoming: Vector2 | null
+					readonly outgoing: Vector2 | null
+				}
+			>()
+			let minX = Number.POSITIVE_INFINITY
+			let minY = Number.POSITIVE_INFINITY
+			let maxX = Number.NEGATIVE_INFINITY
+			let maxY = Number.NEGATIVE_INFINITY
+			const includeInBounds = (point: Vector2): void => {
+				minX = Math.min(minX, point.x)
+				minY = Math.min(minY, point.y)
+				maxX = Math.max(maxX, point.x)
+				maxY = Math.max(maxY, point.y)
+			}
+			const readHandle = (
+				atomKey: LayerPointKey,
+				handle: EditorHandleKind,
+			): Vector2 | null => {
+				const x = get(
+					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+					atomKey,
+				)
+				const y = get(
+					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+					atomKey,
+				)
+				if ((x === null) !== (y === null)) {
+					throw new TypeError(
+						`The ${handle} handle on ${atomKey[2]} is incomplete.`,
+					)
+				}
+				return x === null || y === null ? null : { x, y }
+			}
+			for (const pointId of pointIds) {
+				if (get(pointAtoms, [input.glyphId, pointId]) === null) {
+					throw new TypeError(
+						`Unknown point ${pointId} in contour ${input.contourId}.`,
+					)
+				}
+				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
+				const position = readPointPosition(get, atomKey)
+				if (position === null) {
+					throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
+				}
+				const incoming = readHandle(atomKey, "incoming")
+				const outgoing = readHandle(atomKey, "outgoing")
+				activeGeometry.set(pointId, { position, incoming, outgoing })
+				includeInBounds(position)
+				if (incoming !== null) {
+					includeInBounds({
+						x: position.x + incoming.x,
+						y: position.y + incoming.y,
+					})
+				}
+				if (outgoing !== null) {
+					includeInBounds({
+						x: position.x + outgoing.x,
+						y: position.y + outgoing.y,
+					})
+				}
+			}
+			const centerX = (minX + maxX) / 2
+			const centerY = (minY + maxY) / 2
+			if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) {
+				throw new TypeError("Contour control bounds must be finite.")
+			}
+
+			const plans: {
+				readonly atomKey: LayerPointKey
+				readonly position?: Vector2
+				readonly incoming: Vector2 | null
+				readonly outgoing: Vector2 | null
+			}[] = []
+			const reflectVector = (vector: Vector2 | null): Vector2 | null =>
+				vector === null
+					? null
+					: input.axis === "horizontal"
+						? { x: -vector.x, y: vector.y }
+						: { x: vector.x, y: -vector.y }
+			for (const masterId of masterIds) {
+				for (const pointId of pointIds) {
+					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
+					const incoming = readHandle(atomKey, "incoming")
+					const outgoing = readHandle(atomKey, "outgoing")
+					if (masterId !== input.masterId) {
+						plans.push({
+							atomKey,
+							incoming: outgoing,
+							outgoing: incoming,
+						})
+						continue
+					}
+					const geometry = activeGeometry.get(pointId)
+					if (geometry === undefined)
+						throw new Error("Missing active geometry.")
+					plans.push({
+						atomKey,
+						position:
+							input.axis === "horizontal"
+								? {
+										x: 2 * centerX - geometry.position.x,
+										y: geometry.position.y,
+									}
+								: {
+										x: geometry.position.x,
+										y: 2 * centerY - geometry.position.y,
+									},
+						incoming: reflectVector(outgoing),
+						outgoing: reflectVector(incoming),
+					})
+				}
+			}
+
+			const first = pointIds[0]
+			if (first === undefined) return
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contourId],
+				deepFreeze(
+					closed
+						? [first, ...pointIds.slice(1).reverse()]
+						: [...pointIds].reverse(),
+				),
+			)
+			for (const plan of plans) {
+				if (plan.position !== undefined) {
+					set(pointPositionSelectors, plan.atomKey, deepFreeze(plan.position))
+				}
+				set(incomingHandleXAtoms, plan.atomKey, plan.incoming?.x ?? null)
+				set(incomingHandleYAtoms, plan.atomKey, plan.incoming?.y ?? null)
+				set(outgoingHandleXAtoms, plan.atomKey, plan.outgoing?.x ?? null)
+				set(outgoingHandleYAtoms, plan.atomKey, plan.outgoing?.y ?? null)
 			}
 		},
 	})
@@ -5159,6 +5328,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runAddSegmentHandles = silo.runTransaction(addSegmentHandlesTransaction)
 	const runSplitSegment = silo.runTransaction(splitSegmentTransaction)
 	const runReverseContour = silo.runTransaction(reverseContourTransaction)
+	const runInvertContour = silo.runTransaction(invertContourTransaction)
 	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
 	const runCreateContour = silo.runTransaction(createContourTransaction)
 	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
@@ -5255,6 +5425,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			addSegmentHandles: addSegmentHandlesTransaction,
 			splitSegment: splitSegmentTransaction,
 			reverseContour: reverseContourTransaction,
+			invertContour: invertContourTransaction,
 			makeNodeFirst: makeNodeFirstTransaction,
 			createContour: createContourTransaction,
 			setContourClosed: setContourClosedTransaction,
@@ -5315,6 +5486,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			reverseContour(input: ReverseContourInput): void {
 				runReverseContour(input)
+				markDocumentChanged()
+			},
+			invertContour(input: InvertContourInput): void {
+				runInvertContour(input)
 				markDocumentChanged()
 			},
 			makeNodeFirst(input: MakeNodeFirstInput): void {

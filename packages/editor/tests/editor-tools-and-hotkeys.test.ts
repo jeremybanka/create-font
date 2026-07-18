@@ -103,6 +103,61 @@ describe("editor tools and hotkeys", () => {
 			toolForKeyboardEvent(keyboardEvent({ key: "f", shiftKey: true }), true)
 				?.id,
 		).toBe("make-node-first")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "h", shiftKey: true }), true)
+				?.id,
+		).toBe("invert-horizontal")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "v", shiftKey: true }), true)
+				?.id,
+		).toBe("invert-vertical")
+	})
+
+	it("reverses open paths and dispatches both contour inversions", () => {
+		const reverseContour = vi.fn()
+		const invertContour = vi.fn()
+		const context = {
+			activeGlyphId: "glyph:test",
+			activeMasterId: "master:test",
+			activeTool: "select",
+			editingTextIndex: 0,
+			selection: [{ kind: "node", pointId: "point:a" }],
+			activeLayer: {
+				contours: [
+					{
+						id: "contour:test",
+						closed: false,
+						nodes: [
+							{ pointId: "point:a", mode: "hard", x: 10, y: 0 },
+							{ pointId: "point:b", mode: "hard", x: 40, y: 100 },
+						],
+					},
+				],
+			},
+			workspace: { font: { actions: { reverseContour, invertContour } } },
+		} as unknown as Parameters<(typeof TOOLS)["REVERSE"]["do"]>[0]
+
+		expect(TOOLS.REVERSE.status(context)).toBe("ready")
+		TOOLS.REVERSE.do(context)
+		TOOLS.INVERT_HORIZONTAL.do(context)
+		TOOLS.INVERT_VERTICAL.do(context)
+
+		expect(reverseContour).toHaveBeenCalledWith({
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+		})
+		expect(invertContour).toHaveBeenNthCalledWith(1, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+			axis: "horizontal",
+		})
+		expect(invertContour).toHaveBeenNthCalledWith(2, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+			axis: "vertical",
+		})
 	})
 
 	it("dispatches alignment as one mixed-control state action", () => {
