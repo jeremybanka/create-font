@@ -19,6 +19,8 @@ export interface NumericInputProps {
 	readonly step?: NumericStep
 	/** The unmodified Arrow key increment. Defaults to the validation step. */
 	readonly arrowStep?: number
+	/** The unit multiplied by 10/100 for modified Arrow keys. */
+	readonly modifiedArrowStep?: number
 	readonly disabled?: boolean
 	readonly onCommit: (value: number) => void
 }
@@ -114,6 +116,7 @@ export function NumericInput(props: NumericInputProps) {
 							max,
 							step,
 							props.arrowStep,
+							props.modifiedArrowStep,
 						)
 						setDraft(formatNumericInput(value))
 						setError(null)

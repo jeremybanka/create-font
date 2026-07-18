@@ -205,10 +205,13 @@ export function stepNumericInput(
 	max: number,
 	step: NumericStep = 1,
 	arrowStep: number = step === "any" ? 1 : step,
+	modifiedArrowStep: number = arrowStep,
 ): number {
 	const parsed = parseNumericInput(text, min, max, step) ?? current
+	const increment =
+		multiplier === 1 ? arrowStep : multiplier * modifiedArrowStep
 	return stableNumericValue(
-		Math.min(max, Math.max(min, parsed + direction * multiplier * arrowStep)),
+		Math.min(max, Math.max(min, parsed + direction * increment)),
 	)
 }
 

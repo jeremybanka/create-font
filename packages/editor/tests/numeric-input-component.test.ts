@@ -165,6 +165,45 @@ describe("NumericInput", () => {
 		expect(onCommit).toHaveBeenLastCalledWith(110)
 	})
 
+	it("keeps 0.001 base stepping with absolute modified jumps", () => {
+		const { input, onCommit } = mount({
+			value: 1.125,
+			max: 1_000,
+			step: 0.001,
+			modifiedArrowStep: 1,
+		})
+		focus(input)
+		key(input, "ArrowUp")
+		expect(input.value).toBe("1.126")
+		expect(onCommit).toHaveBeenLastCalledWith(1.126)
+		key(input, "ArrowUp", { shiftKey: true })
+		expect(input.value).toBe("11.126")
+		expect(onCommit).toHaveBeenLastCalledWith(11.126)
+		key(input, "ArrowUp", { ctrlKey: true })
+		expect(input.value).toBe("111.126")
+		expect(onCommit).toHaveBeenLastCalledWith(111.126)
+	})
+
+	it("keeps 0.1 base stepping with absolute modified jumps", () => {
+		const { input, onCommit } = mount({
+			value: 1.1,
+			min: -1_000,
+			max: 1_000,
+			step: 0.1,
+			modifiedArrowStep: 1,
+		})
+		focus(input)
+		key(input, "ArrowDown")
+		expect(input.value).toBe("1")
+		expect(onCommit).toHaveBeenLastCalledWith(1)
+		key(input, "ArrowDown", { shiftKey: true })
+		expect(input.value).toBe("-9")
+		expect(onCommit).toHaveBeenLastCalledWith(-9)
+		key(input, "ArrowDown", { ctrlKey: true })
+		expect(input.value).toBe("-109")
+		expect(onCommit).toHaveBeenLastCalledWith(-109)
+	})
+
 	it("exposes text editing with deliberate spinbutton semantics", () => {
 		const { input } = mount({ min: -20, max: 20, step: 0.1 })
 		expect(input.type).toBe("text")

@@ -117,8 +117,27 @@ describe("numeric field contracts", () => {
 		expect(parseNumericInput("5 / 2", 0, 100)).toBeNull()
 		expect(stepNumericInput("10 + 2", 5, 1, 10, -100, 100)).toBe(22)
 		expect(stepNumericInput("1 +", 5, -1, 100, -20, 20)).toBe(-20)
-		expect(stepNumericInput("1.125", 1.125, 1, 10, -100, 100, 0.001, 1)).toBe(
-			11.125,
+	})
+
+	it("preserves decimal base steps and absolute 10/100 modified steps", () => {
+		expect(stepNumericInput("1.125", 1.125, 1, 1, -1_000, 1_000, 0.001)).toBe(
+			1.126,
 		)
+		expect(
+			stepNumericInput(
+				"1.125",
+				1.125,
+				1,
+				10,
+				-1_000,
+				1_000,
+				0.001,
+				undefined,
+				1,
+			),
+		).toBe(11.125)
+		expect(
+			stepNumericInput("1.1", 1.1, -1, 100, -1_000, 1_000, 0.1, undefined, 1),
+		).toBe(-98.9)
 	})
 })
