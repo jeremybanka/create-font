@@ -197,6 +197,34 @@ export const TOOLS = {
 					: "ready",
 		do: ({ workspace }) => workspace.actions.selectTool("pen"),
 	},
+	RECT: {
+		description: "Draw an editable rectangular contour.",
+		id: "rect",
+		displayName: "Rect",
+		hotkey: { key: "r" },
+		icon: "SquareIcon",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "rect"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("rect"),
+	},
+	ELLIPSE: {
+		description: "Draw an editable elliptical contour.",
+		id: "ellipse",
+		displayName: "Ellipse",
+		hotkey: { key: "o" },
+		icon: "CircleIcon",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "ellipse"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("ellipse"),
+	},
 	TRANSFORM: {
 		description:
 			"Move or resize selected nodes and handles with a bounding box.",
@@ -389,7 +417,7 @@ export const TOOLS = {
 } as const satisfies Record<string, Tool>
 
 export const TOOLBAR_LAYOUT = [
-	[TOOLS.SELECT, TOOLS.PEN, TOOLS.TRANSFORM],
+	[TOOLS.SELECT, TOOLS.PEN, TOOLS.RECT, TOOLS.ELLIPSE, TOOLS.TRANSFORM],
 	[TOOLS.UNDO, TOOLS.REDO],
 	[
 		TOOLS.ALIGN,

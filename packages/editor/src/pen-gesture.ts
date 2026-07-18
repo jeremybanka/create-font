@@ -1,6 +1,10 @@
 import type { MasterId } from "@create-font/states"
 
 import { constrainVectorToEightRays } from "./curve-editing.ts"
+import {
+	projectAuthoringPoint,
+	type AuthoringLayerTransform,
+} from "./authoring-projection.ts"
 
 export interface PenPoint {
 	readonly x: number
@@ -28,10 +32,7 @@ export type PenGestureResolution =
 			readonly distancePixels: number
 	  }
 
-export interface PenLayerTransform {
-	readonly masterId: MasterId
-	readonly xScale: number
-}
+export type PenLayerTransform = AuthoringLayerTransform
 
 export interface PenLayerCoordinate extends PenPoint {
 	readonly masterId: MasterId
@@ -237,17 +238,27 @@ export function penLayerCoordinates(
 	const handles = penGestureHandles(gesture, draggedHandle)
 	return Object.freeze(
 		transforms.map(({ masterId, xScale }) => {
-			if (!Number.isFinite(xScale) || xScale <= 0) {
+			const transform = { masterId, xScale }
+			let projected: PenPoint
+			try {
+				projected = projectAuthoringPoint(point, transform)
+			} catch {
 				throw new TypeError(
 					"Pen layer transform scale must be positive and finite.",
 				)
 			}
-			const mapX = (x: number): number => 500 + (x - 500) * xScale
-			const x = Math.round(mapX(point.x))
-			const y = Math.round(point.y)
+			const x = Math.round(projected.x)
+			const y = Math.round(projected.y)
 			if (handles === null) return { masterId, x, y }
+			const projectedIncoming = projectAuthoringPoint(
+				{
+					x: point.x + handles.incoming.x,
+					y: point.y + handles.incoming.y,
+				},
+				transform,
+			)
 			const incoming = {
-				x: canonicalZero(mapX(point.x + handles.incoming.x) - x),
+				x: canonicalZero(projectedIncoming.x - x),
 				y: canonicalZero(handles.incoming.y),
 			}
 			return {

@@ -7,10 +7,12 @@ import {
 	LinkBreak1Icon,
 	Pencil1Icon,
 	PlusIcon,
+	CircleIcon,
 	DoubleArrowLeftIcon,
 	DoubleArrowRightIcon,
 	ShuffleIcon,
 	StarIcon,
+	SquareIcon,
 	TransformIcon,
 } from "@radix-ui/react-icons"
 import type * as Radix from "@radix-ui/react-icons"
@@ -28,10 +30,12 @@ const EDITOR_ICONS = {
 	LinkBreak1Icon,
 	Pencil1Icon,
 	PlusIcon,
+	CircleIcon,
 	DoubleArrowLeftIcon,
 	DoubleArrowRightIcon,
 	ShuffleIcon,
 	StarIcon,
+	SquareIcon,
 	TransformIcon,
 } as const satisfies Partial<typeof Radix>
 

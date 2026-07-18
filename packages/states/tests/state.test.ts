@@ -356,6 +356,100 @@ describe("font editor state", () => {
 		)
 	})
 
+	it("creates one validated complete contour across masters as one edit", () => {
+		const editor = createLoadedEditor("test/create-complete-contour")
+		const contourId = "contour:shape" as const
+		const pointIds = [
+			"point:shape:0",
+			"point:shape:1",
+			"point:shape:2",
+			"point:shape:3",
+		] as const
+		let transactionEvents = 0
+		const unsubscribe = editor.silo.subscribe(
+			editor.transactions.createCompleteContour,
+			() => {
+				transactionEvents += 1
+			},
+		)
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+
+		editor.actions.createCompleteContour({
+			glyphId: oGlyphId,
+			contour: {
+				id: contourId,
+				closed: true,
+				points: pointIds.map((id) => ({ id, mode: "hard" })),
+			},
+			layers: [razorMasterId, blackMasterId].map((masterId, layerIndex) => ({
+				masterId,
+				points: pointIds.map((pointId, index) => ({
+					pointId,
+					x: layerIndex * 10 + (index === 1 || index === 2 ? 100 : 0),
+					y: index < 2 ? 200 : 0,
+				})),
+			})),
+		})
+		unsubscribe()
+
+		expect(transactionEvents).toBe(1)
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(
+			revision + 1,
+		)
+		expect(editor.read.editorGlyphSource(oGlyphId)?.contours.at(-1)).toEqual({
+			id: contourId,
+			closed: true,
+			points: pointIds.map((id) => ({ id, mode: "hard" })),
+		})
+		for (const masterId of [razorMasterId, blackMasterId]) {
+			for (const pointId of pointIds) {
+				expect(editor.read.layerNode(masterId, oGlyphId, pointId).ok).toBe(true)
+			}
+		}
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.contours.some((contour) => contour.id === contourId),
+		).toBe(false)
+		editor.redo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)?.contours.at(-1)?.id).toBe(
+			contourId,
+		)
+		expect(editor.read.compilation().ok).toBe(true)
+	})
+
+	it("rolls back invalid complete-contour input before mutating the glyph", () => {
+		const editor = createLoadedEditor("test/create-complete-contour-invalid")
+		const before = editor.read.editorSource()
+		expect(() =>
+			editor.actions.createCompleteContour({
+				glyphId: oGlyphId,
+				contour: {
+					id: "contour:shape:invalid",
+					closed: true,
+					points: [
+						{ id: "point:shape:invalid:0", mode: "soft" },
+						{ id: "point:shape:invalid:1", mode: "soft" },
+						{ id: "point:shape:invalid:2", mode: "soft" },
+					],
+				},
+				layers: [
+					{
+						masterId: razorMasterId,
+						points: [
+							{ pointId: "point:shape:invalid:0", x: 0, y: 0 },
+							{ pointId: "point:shape:invalid:1", x: 10, y: 0 },
+							{ pointId: "point:shape:invalid:2", x: 0, y: 10 },
+						],
+					},
+				],
+			}),
+		).toThrow("every glyph layer")
+		expect(editor.read.editorSource()).toBe(before)
+	})
+
 	it("rejects incomplete pasted master data before changing a glyph", () => {
 		const editor = createLoadedEditor("test/paste-contours-incomplete")
 		const before = editor.read.editorGlyphSource(oGlyphId)

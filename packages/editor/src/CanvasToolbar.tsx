@@ -49,7 +49,11 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 						? "Double-click a glyph to edit its outline."
 						: activeTool === "pen"
 							? "Pen · click for a corner · drag for a curve."
-							: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
+							: activeTool === "rect"
+								? "Rect · drag a box · hold Shift for a square."
+								: activeTool === "ellipse"
+									? "Ellipse · drag an oval · hold Shift for a circle."
+									: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
 				</span>
 			</toolbar-context>
 
