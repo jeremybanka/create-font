@@ -4,12 +4,9 @@ import {
 	type EditorFontSource,
 	type VerticalAlignmentMetricId,
 } from "@create-font/states"
-import type { JSX } from "preact"
-
-import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontInfo.module.css"
-import { stepBoundedNumber } from "./keyboard-step.ts"
+import { NumericInput } from "./NumericInput.tsx"
 import { useO } from "./state-hooks.ts"
 
 export interface FontInfoProps {
@@ -156,7 +153,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 						/>
 						<NumberField
 							label="Font revision"
-							step="0.001"
+							step={0.001}
 							value={metadata.fontRevision}
 							onInput={(value) => setMetadata("fontRevision", value)}
 						/>
@@ -182,7 +179,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 						/>
 						<NumberField
 							label="Italic angle"
-							step="0.1"
+							step={0.1}
 							value={style.italicAngle}
 							onInput={(value) => setStyle("italicAngle", value)}
 						/>
@@ -362,48 +359,28 @@ function NumberField({
 	max,
 	min,
 	onInput,
-	step = "1",
+	step = 1,
 	value,
 }: {
 	readonly label: string
 	readonly max?: number
 	readonly min?: number
 	readonly onInput: (value: number) => void
-	readonly step?: string
+	readonly step?: number | "any"
 	readonly value: number
 }) {
 	return (
 		<number-field>
 			<label>
 				<span>{label}</span>
-				<input
-					type="number"
-					min={min}
-					max={max}
+				<NumericInput
+					aria-label={label}
+					{...(min === undefined ? {} : { min })}
+					{...(max === undefined ? {} : { max })}
 					step={step}
+					arrowStep={1}
 					value={value}
-					onInput={(event) => {
-						const next = event.currentTarget.valueAsNumber
-						if (Number.isFinite(next)) onInput(next)
-					}}
-					onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
-						if (
-							(event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
-							(!event.shiftKey && !event.metaKey && !event.ctrlKey)
-						)
-							return
-						event.preventDefault()
-						const direction = event.key === "ArrowUp" ? 1 : -1
-						const next = stepBoundedNumber(
-							value,
-							direction,
-							event,
-							IS_MAC_LIKE,
-							min,
-							max,
-						)
-						if (next !== value) onInput(next)
-					}}
+					onCommit={onInput}
 				/>
 			</label>
 		</number-field>
