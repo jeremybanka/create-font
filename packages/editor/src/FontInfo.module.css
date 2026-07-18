@@ -97,17 +97,18 @@ font-info.class {
 						letter-spacing: 0.04em;
 						color: var(--ink-muted);
 					}
+				}
 
-					> input {
-						min-width: 0;
-						width: 100%;
-						padding: 9px 10px;
-						border: 1px solid var(--line-strong);
-						border-radius: 6px;
-						background: var(--paper);
-						font: 500 11px/1.2 var(--ui-font);
-						color: var(--ink);
-					}
+				> text-field > label > input,
+				> number-field > label > numeric-input > input {
+					min-width: 0;
+					width: 100%;
+					padding: 9px 10px;
+					border: 1px solid var(--line-strong);
+					border-radius: 6px;
+					background: var(--paper);
+					font: 500 11px/1.2 var(--ui-font);
+					color: var(--ink);
 				}
 
 				> flag-group {
