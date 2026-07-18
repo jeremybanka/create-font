@@ -8,27 +8,18 @@ import { createFontRpc, type CreateFontRpcOptions } from "./rpc.ts"
 const isBundledApplication = basename(import.meta.dir) === `dist`
 const editorAssets = resolve(
 	import.meta.dir,
-	isBundledApplication ? `public` : `../public`,
+	isBundledApplication ? `public` : `../dist/dev/public`,
 )
 
 const editorApplication = await staticPlugin({
-	alwaysStatic: isBundledApplication,
+	alwaysStatic: true,
 	assets: editorAssets,
-	bunFullstack: !isBundledApplication,
 	indexHTML: true,
 	prefix: `/`,
 })
-const sourceSessionWorker = isBundledApplication
-	? Bun.file(resolve(editorAssets, `source-session.worker.js`))
-	: (
-			await Bun.build({
-				entrypoints: [resolve(editorAssets, `source-session.worker.ts`)],
-				target: `browser`,
-			})
-		).outputs[0]
-if (sourceSessionWorker === undefined) {
-	throw new Error(`Bun did not build the source session worker.`)
-}
+const sourceSessionWorker = Bun.file(
+	resolve(editorAssets, `source-session.worker.js`),
+)
 
 export type CreateFontServerOptions = CreateFontRpcOptions
 
@@ -61,8 +52,6 @@ export function startCreateFontServer(
 	const app = createFontServerApp(options).listen({
 		development: {
 			console: true,
-			// Bun 1.3.14 drops CSS Module imports from its HMR chunks.
-			// Runtime full-stack bundling works correctly without that transform.
 			hmr: false,
 		},
 		hostname: options.hostname ?? `127.0.0.1`,

@@ -21,6 +21,7 @@
 	"sideEffects": false,
 	"exports": {
 		".": {
+			"development": "./src/index.ts",
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
 		},

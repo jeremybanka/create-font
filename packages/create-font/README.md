@@ -80,16 +80,14 @@ assembles them into editor state, and persists changed units back through the
 multi-write route. It uses the browser-only `@create-font/source/browser`
 entrypoint, leaving Zod schemas and per-unit validation in the server process.
 
-The Elysia server awaits `@elysia/static` with `bunFullstack: true` and serves
-that application at `/`. Bun therefore owns TypeScript/JSX and CSS bundling,
-CSS Modules, and the same-origin application/API development server; Vite is
-not part of the serving path.
+The package build emits a self-contained HTML, JavaScript, and CSS application
+under `dist/public`, which is what the compiled Elysia server serves after
+installation.
 
-Development runs use `public/index.tsx` directly so Bun can follow the
-`@create-font/editor` workspace export. The package build emits a self-contained
-HTML, JavaScript, and CSS application under `dist/public`, which is what the
-compiled server serves after installation.
-
-Bun 1.3.14's HMR transform omits CSS Module bindings from generated client
-chunks. `font dev` therefore keeps Bun's full-stack runtime bundling
-active but sets `hmr: false` until that regression is fixed.
+The repository's `pnpm dev` command splits the development serving path at a
+deliberate boundary. Bun runs the Elysia API and SharedWorker endpoint with
+runtime `--hot` on port 3001. Vite serves `public/index.tsx` on port 3000 with
+Preact and CSS HMR, resolves workspace packages through their `development`
+exports, and proxies `/api` and `/source-session.worker.js` to Bun. This avoids
+requiring package builds while keeping browser HMR independent from Bun's
+full-stack CSS Module transform.
