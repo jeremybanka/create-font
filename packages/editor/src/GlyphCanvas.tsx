@@ -943,6 +943,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		gesture: PenGestureResolution,
 		altKey: boolean,
 	): void => {
+		if (activeGlyphId === null) return
 		const resolution = resolvePenEndpoint({
 			side: target.side,
 			mode: target.mode,
