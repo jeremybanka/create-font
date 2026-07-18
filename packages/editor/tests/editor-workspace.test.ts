@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
 	aGlyphId,
 	blackMasterId,
+	makeDemoFont,
 	notdefGlyphId,
 	oGlyphId,
 	razorMasterId,
@@ -230,6 +231,37 @@ describe("editor workspace", () => {
 		expect(
 			run.flatMap((item) => (item.kind === "glyph" ? [item.glyphId] : [])),
 		).toEqual([aGlyphId, oGlyphId, notdefGlyphId])
+	})
+
+	it("keeps authoring paint and metrics available when open contours block projection", () => {
+		const source = makeDemoFont()
+		const workspace = createEditorWorkspace({
+			...source,
+			glyphs: source.glyphs.map((glyph) =>
+				glyph.id === oGlyphId
+					? {
+							...glyph,
+							contours: glyph.contours.map((contour, index) =>
+								index === 0 ? { ...contour, closed: false } : contour,
+							),
+						}
+					: glyph,
+			),
+		})
+		workspace.font.silo.setState(workspace.ui.previewText, "O")
+		const item = workspace.font.silo.getState(workspace.ui.previewRun)[0]
+		if (item?.kind !== "glyph") throw new Error("Missing typing preview item.")
+
+		expect(item.glyph).toBeNull()
+		expect(item.sourcePreview?.path).not.toContain("M 500 820")
+		expect(item.sourcePreview?.openPath).toContain("M 500 820")
+		expect(
+			layoutTextRun(
+				[item],
+				workspace.document.metrics,
+				workspace.document.metadata.unitsPerEm,
+			).glyphs[0]?.advance,
+		).toBe(item.sourcePreview?.advanceWidth)
 	})
 
 	it("starts without an explicit glyph selection and derives typing focus from the caret", () => {

@@ -32,7 +32,11 @@ afterEach(() => {
 	vi.restoreAllMocks()
 })
 
-function mountSelectedContour({ withOpenContour = false, zoom = 1 } = {}) {
+function mountSelectedContour({
+	withOpenContour = false,
+	zoom = 1,
+	editing = true,
+} = {}) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
 			const context = {
@@ -79,7 +83,8 @@ function mountSelectedContour({ withOpenContour = false, zoom = 1 } = {}) {
 			],
 		})
 	}
-	workspace.actions.enterGlyphEdit(2, oGlyphId)
+	if (editing) workspace.actions.enterGlyphEdit(2, oGlyphId)
+	else workspace.font.silo.setState(workspace.ui.previewText, "O")
 	workspace.font.silo.setState(workspace.ui.canvasView, {
 		...workspace.font.silo.getState(workspace.ui.canvasView),
 		zoom,
@@ -168,6 +173,34 @@ function expectCancelledSession(
 }
 
 describe("GlyphCanvas group drag cancellation", () => {
+	it("renders open authoring contours in the typing view", () => {
+		const { stage, workspace } = mountSelectedContour({
+			withOpenContour: true,
+			editing: false,
+		})
+		const previewItem = workspace.font.silo.getState(workspace.ui.previewRun)[0]
+		expect(
+			previewItem?.kind === "glyph"
+				? previewItem.sourcePreview?.openPath
+				: null,
+		).toContain("M 200 200 L 500 350")
+		const fills = stage.find(".typing-glyph-fill")
+		const openStroke = stage
+			.find(".typing-open-contour-stroke")
+			.find((path: { data(): string }) => path.data() === "M 200 200 L 500 350")
+		if (fills.length === 0 || openStroke === undefined)
+			throw new Error("Typing paint layers were not rendered.")
+
+		expect(
+			fills.every(
+				(path: { data(): string }) => !path.data().includes("M 200 200"),
+			),
+		).toBe(true)
+		expect(openStroke.data()).toBe("M 200 200 L 500 350")
+		expect(openStroke.fillEnabled()).toBe(false)
+		expect(openStroke.strokeWidth()).toBeCloseTo(1.25 / 0.18)
+	})
+
 	it("paints open contours only as screen-constant strokes", () => {
 		const { stage } = mountSelectedContour({ withOpenContour: true })
 		const fill = stage.findOne(".momentary-glyph-preview")

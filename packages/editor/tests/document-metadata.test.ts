@@ -64,6 +64,8 @@ describe(`font favicon`, () => {
 	it(`falls back safely and escapes serialized SVG attributes`, () => {
 		expect(createFontFaviconHref(makeDemoFont())).toBe(FALLBACK_FAVICON_HREF)
 		const svg = serializeFaviconSvg({
+			advanceWidth: 10,
+			openPath: "",
 			path: `M 0 0"><script>alert(1)</script>`,
 			viewBox: `0 0 10 "10`,
 		})

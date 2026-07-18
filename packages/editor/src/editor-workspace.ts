@@ -16,6 +16,7 @@ import {
 	createFontFaviconHref,
 	FALLBACK_FAVICON_HREF,
 } from "./document-metadata.ts"
+import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
@@ -53,6 +54,8 @@ export interface PreviewRunGlyph {
 	readonly textEnd: number
 	readonly glyphId: GlyphId
 	readonly glyph: ResolvedGlyph | null
+	/** Authoring geometry used when open contours prevent compiled preview. */
+	readonly sourcePreview: GlyphPreview | null
 }
 
 export interface PreviewRunLineBreak {
@@ -254,6 +257,7 @@ export function createEditorWorkspace(
 	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
 		key: "previewRun",
 		get: ({ get }) => {
+			const activeMasterId = get(activeMasterIdAtom)
 			const axes = get(font.atoms.axisIds).flatMap((axisId) => {
 				const axis = get(font.atoms.axis, axisId)
 				if (axis === null) return []
@@ -301,6 +305,7 @@ export function createEditorWorkspace(
 						? fallbackId
 						: (byCodePoint.get(codePoint) ?? fallbackId)
 				const result = get(font.selectors.glyphSource, glyphId)
+				const editorGlyph = get(font.selectors.editorGlyphSource, glyphId)
 				run.push({
 					kind: "glyph",
 					character,
@@ -310,6 +315,15 @@ export function createEditorWorkspace(
 					glyph: result.ok
 						? resolveVariableGlyph(glyphId, result.value, axes, location)
 						: null,
+					sourcePreview:
+						editorGlyph === null
+							? null
+							: createGlyphPreview(
+									editorGlyph,
+									activeMasterId,
+									document.metrics,
+									document.metadata.unitsPerEm,
+								),
 				})
 			}
 			return Object.freeze(run)

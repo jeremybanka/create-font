@@ -31,6 +31,7 @@ describe(`glyph preview`, () => {
 		expect(razor?.path).toContain(`M 500 752`)
 		expect(black?.path).toContain(`M 500 448`)
 		expect(razor?.path).not.toBe(black?.path)
+		expect(razor?.openPath).toBe("")
 	})
 
 	it(`keeps blank glyphs blank inside a finite square viewport`, () => {
@@ -59,8 +60,32 @@ describe(`glyph preview`, () => {
 		const viewBox = preview?.viewBox.split(` `).map(Number)
 
 		expect(preview?.path).toBe(``)
+		expect(preview?.openPath).toBe(``)
 		expect(viewBox).toHaveLength(4)
 		expect(viewBox?.every(Number.isFinite)).toBe(true)
 		expect(viewBox?.[2]).toBe(viewBox?.[3])
+	})
+
+	it(`separates open contours from glyph-tile fill paths`, () => {
+		const source = makeDemoFont()
+		const glyph = source.glyphs.find((candidate) => candidate.id === oGlyphId)
+		if (glyph === undefined) throw new Error("Missing preview fixture glyph.")
+		const openGlyph = {
+			...glyph,
+			contours: glyph.contours.map((contour, index) =>
+				index === 0 ? { ...contour, closed: false } : contour,
+			),
+		}
+
+		const preview = createGlyphPreview(
+			openGlyph,
+			razorMasterId,
+			source.metrics,
+			source.metadata.unitsPerEm,
+		)
+
+		expect(preview?.path).not.toContain("M 500 820")
+		expect(preview?.openPath).toContain("M 500 820")
+		expect(preview?.openPath).not.toContain("Z")
 	})
 })

@@ -1,9 +1,11 @@
 import type { EditorGlyphSource, MasterId } from "@create-font/states"
 
-import { editorContoursToPath } from "./geometry.ts"
+import { editorContourPaintPaths } from "./geometry.ts"
 
 export type GlyphPreview = Readonly<{
+	advanceWidth: number
 	path: string
+	openPath: string
 	viewBox: string
 }>
 
@@ -74,8 +76,11 @@ export function createGlyphPreview(
 	const size =
 		Math.max(unitsPerEm, maxX - minX, maxY - minY, 1) *
 		(1 + PREVIEW_PADDING * 2)
+	const paintPaths = editorContourPaintPaths(contours)
 	return {
-		path: editorContoursToPath(contours),
+		advanceWidth: layer.advanceWidth,
+		path: paintPaths.closedPath,
+		openPath: paintPaths.openPath,
 		viewBox: [centerX - size / 2, -centerY - size / 2, size, size].join(` `),
 	}
 }
