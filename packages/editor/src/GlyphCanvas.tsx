@@ -34,6 +34,7 @@ import {
 
 import {
 	finalizeGroupDragPreview,
+	isCancelledGroupDragEnd,
 	restoreCancelledGroupDragTarget,
 	type CancelledGroupDrag,
 } from "./canvas-group-drag.ts"
@@ -2189,6 +2190,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		return true
 	}
 	const commitGroupDrag = (event: KonvaEventObject<DragEvent>): boolean => {
+		if (isCancelledGroupDragEnd(event.evt) && cancelGroupDrag()) return true
 		const cancellation = cancelledGroupDrag.current
 		if (
 			cancellation !== null &&

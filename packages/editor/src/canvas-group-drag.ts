@@ -28,6 +28,14 @@ export interface GroupDragPreview<Target extends GroupDragPositionTarget> {
 	joinCandidate: unknown | null
 }
 
+/** Recognizes native cancellation events that Konva may forward as dragend. */
+export function isCancelledGroupDragEnd(event: unknown): boolean {
+	if (typeof event !== "object" || event === null || !("type" in event))
+		return false
+	const type = event.type
+	return typeof type === "string" && type.toLowerCase().endsWith("cancel")
+}
+
 /** Clears a group preview and optionally restores its live Konva target. */
 export function finalizeGroupDragPreview(
 	drag: GroupDragPreview<GroupDragPositionTarget>,
