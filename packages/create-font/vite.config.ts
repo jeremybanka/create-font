@@ -1,0 +1,24 @@
+import { resolve } from "node:path"
+
+import preact from "@preact/preset-vite"
+import { defineConfig } from "vite-plus"
+
+const backendPort = Number(process.env.CREATE_FONT_BACKEND_PORT ?? 3001)
+if (!Number.isInteger(backendPort) || backendPort < 1 || backendPort > 65_535) {
+	throw new Error(`CREATE_FONT_BACKEND_PORT must be a valid TCP port.`)
+}
+const backend = `http://127.0.0.1:${backendPort}`
+
+export default defineConfig({
+	plugins: [preact()],
+	resolve: {
+		conditions: [`development`],
+	},
+	root: resolve(import.meta.dirname, `public`),
+	server: {
+		proxy: {
+			"/api": backend,
+			"/source-session.worker.js": backend,
+		},
+	},
+})
