@@ -155,6 +155,7 @@ export function AppShell({ workspace }: AppShellProps) {
 				"pen",
 				"rect",
 				"ellipse",
+				"knife",
 				"transform",
 			].includes(tool.id)
 			return {
@@ -308,7 +309,7 @@ export function AppShell({ workspace }: AppShellProps) {
 					{routeName === "canvas"
 						? tilingStatus.management
 							? "Tile management · 1–4 columns · J/K tiles · M move · A align · N new · S save · Shift+Space done"
-							: `1–= Hotbar · Shift+1–4 Columns · Q Pen · R Rect · O Ellipse · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+H/V Invert · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
+							: `1–= Hotbar · Shift+1–4 Columns · Q Pen · R Rect · O Ellipse · K Knife · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+H/V Invert · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>

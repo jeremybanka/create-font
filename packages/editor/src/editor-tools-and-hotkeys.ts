@@ -225,6 +225,20 @@ export const TOOLS = {
 					: "ready",
 		do: ({ workspace }) => workspace.actions.selectTool("ellipse"),
 	},
+	KNIFE: {
+		description: "Break a path into open pieces at the clicked point.",
+		id: "knife",
+		displayName: "Knife",
+		hotkey: { key: "k" },
+		icon: "HobbyKnifeIcon",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "knife"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("knife"),
+	},
 	TRANSFORM: {
 		description:
 			"Move or resize selected nodes and handles with a bounding box.",
@@ -417,7 +431,14 @@ export const TOOLS = {
 } as const satisfies Record<string, Tool>
 
 export const TOOLBAR_LAYOUT = [
-	[TOOLS.SELECT, TOOLS.PEN, TOOLS.RECT, TOOLS.ELLIPSE, TOOLS.TRANSFORM],
+	[
+		TOOLS.SELECT,
+		TOOLS.PEN,
+		TOOLS.RECT,
+		TOOLS.ELLIPSE,
+		TOOLS.KNIFE,
+		TOOLS.TRANSFORM,
+	],
 	[TOOLS.UNDO, TOOLS.REDO],
 	[
 		TOOLS.ALIGN,

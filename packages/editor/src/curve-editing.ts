@@ -25,6 +25,11 @@ export function shouldSelectContourOnSegmentDoubleClick(
 	return tool === "select" && !event.altKey
 }
 
+/** Keeps non-Select tools from selecting or mutating nodes and handles. */
+export function shouldActivateEditorControl(tool: EditorToolId): boolean {
+	return tool === "select"
+}
+
 export function toggledNodeMode(mode: EditorNodeMode): EditorNodeMode {
 	return mode === "soft" ? "hard" : "soft"
 }

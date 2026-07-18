@@ -33,7 +33,7 @@ glyph-canvas.class {
 			cursor: default;
 		}
 
-		&[data-editing="true"]:is([data-tool="rect"], [data-tool="ellipse"]) {
+		&[data-editing="true"]:is([data-tool="rect"], [data-tool="ellipse"], [data-tool="knife"]) {
 			cursor: crosshair;
 		}
 	}
