@@ -107,7 +107,11 @@ implement SSH or synchronize a second checkout. See the repository
   Bézier handles in one gesture.
 - Choose Pen in the floating toolbar (or press Q), click to place hard corner
   nodes, and click the first node after placing at least three points to close
-  the contour. Press V to return to Select.
+  the contour. Shift-drag constrains a new handle to 45° rays. Click or drag
+  either loose endpoint to resume its contour; soft endpoints preserve the
+  connected handle length and shared tangent, hard endpoints keep independent
+  handles, and Option/Alt-drag breaks a soft tangent. Press V to return to
+  Select.
 - Use the + button in the glyph panel or Command/Control-Shift-N to add one or
   more space-separated glyph names. Enter confirms and Escape cancels.
 - Drag an empty canvas region to box-select nodes and handle endpoints. Hold

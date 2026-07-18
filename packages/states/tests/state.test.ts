@@ -380,6 +380,103 @@ describe("font editor state", () => {
 		expect(editor.read.editorGlyphSource(oGlyphId)).toBe(before)
 	})
 
+	it("authors dangling Pen handles across masters as one endpoint history edit", () => {
+		const editor = createLoadedEditor("test/author-pen-endpoint")
+		const contourId = "contour:pen-endpoint" as const
+		const firstPointId = "point:pen-endpoint:first" as const
+		const lastPointId = "point:pen-endpoint:last" as const
+		editor.actions.pasteContours({
+			glyphId: oGlyphId,
+			contours: [
+				{
+					id: contourId,
+					closed: false,
+					points: [
+						{ id: firstPointId, mode: "hard" },
+						{ id: lastPointId, mode: "soft" },
+					],
+				},
+			],
+			layers: [
+				{
+					masterId: razorMasterId,
+					points: [
+						{ pointId: firstPointId, x: 0, y: 0 },
+						{
+							pointId: lastPointId,
+							x: 100,
+							y: 0,
+							incoming: { x: -30, y: 0 },
+							outgoing: { x: 20, y: 0 },
+						},
+					],
+				},
+				{
+					masterId: blackMasterId,
+					points: [
+						{ pointId: firstPointId, x: 0, y: 10 },
+						{
+							pointId: lastPointId,
+							x: 120,
+							y: 10,
+							incoming: { x: -45, y: 0 },
+							outgoing: { x: 25, y: 0 },
+						},
+					],
+				},
+			],
+		})
+		editor.clearHistory(oGlyphId)
+		editor.actions.authorPenEndpoint({
+			glyphId: oGlyphId,
+			contourId,
+			pointId: lastPointId,
+			forwardHandle: "outgoing",
+			mode: "soft",
+			coordinates: [
+				{ masterId: razorMasterId, forward: { x: 0, y: 50 } },
+				{ masterId: blackMasterId, forward: { x: 0, y: 60 } },
+			],
+		})
+		expect(editor.read.layerNode(razorMasterId, oGlyphId, lastPointId)).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({
+					mode: "soft",
+					incoming: { x: 0, y: -30 },
+					outgoing: { x: 0, y: 50 },
+				}),
+			}),
+		)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, lastPointId)).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({
+					incoming: { x: 0, y: -45 },
+					outgoing: { x: 0, y: 60 },
+				}),
+			}),
+		)
+
+		editor.undo(oGlyphId)
+		expect(editor.read.layerNode(razorMasterId, oGlyphId, lastPointId)).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({
+					incoming: { x: -30, y: 0 },
+					outgoing: { x: 20, y: 0 },
+				}),
+			}),
+		)
+		editor.redo(oGlyphId)
+		expect(editor.read.layerNode(razorMasterId, oGlyphId, lastPointId)).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({ outgoing: { x: 0, y: 50 } }),
+			}),
+		)
+	})
+
 	it("edits advance width in glyph history while deriving the sidebearing", () => {
 		const editor = createLoadedEditor("test/horizontal-metrics")
 		const before = editor.read

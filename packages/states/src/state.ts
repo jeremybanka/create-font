@@ -420,6 +420,18 @@ export interface InsertPointInput {
 	}[]
 }
 
+export interface AuthorPenEndpointInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly pointId: PointId
+	readonly forwardHandle: EditorHandleKind
+	readonly mode: EditorNodeMode
+	readonly coordinates: readonly {
+		readonly masterId: MasterId
+		readonly forward: EditorHandleVectorSource | null
+	}[]
+}
+
 export interface CreateContourInput {
 	readonly glyphId: GlyphId
 	readonly contourId: ContourId
@@ -457,6 +469,16 @@ export interface CloseContourInput {
 	readonly contourId: ContourId
 	/** Omit for a click closure that preserves the first point's authored handles. */
 	readonly firstPoint?: {
+		readonly pointId: PointId
+		readonly mode: "soft"
+		readonly coordinates: readonly {
+			readonly masterId: MasterId
+			readonly incoming: EditorHandleVectorSource
+			readonly outgoing: EditorHandleVectorSource
+		}[]
+	}
+	/** Omit for a click closure that preserves the last point's authored handles. */
+	readonly lastPoint?: {
 		readonly pointId: PointId
 		readonly mode: "soft"
 		readonly coordinates: readonly {
@@ -4086,6 +4108,145 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const authorPenEndpointTransaction = silo.transaction<
+		(input: AuthorPenEndpointInput) => void
+	>({
+		key: "authorPenEndpoint",
+		do: ({ get, set }, input) => {
+			if (input.mode !== "soft" && input.mode !== "hard") {
+				throw new TypeError('Node mode must be "soft" or "hard".')
+			}
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			const point = get(pointAtoms, [input.glyphId, input.pointId])
+			if (
+				pointIds === null ||
+				closed === null ||
+				layerMasterIds === null ||
+				point === null
+			) {
+				throw new TypeError(
+					`Unknown endpoint ${input.pointId} in contour ${input.contourId}.`,
+				)
+			}
+			if (closed)
+				throw new TypeError("A closed contour has no dangling endpoint.")
+			const pointIndex = pointIds.indexOf(input.pointId)
+			const expectedHandle =
+				pointIndex === 0
+					? "incoming"
+					: pointIndex === pointIds.length - 1
+						? "outgoing"
+						: null
+			if (expectedHandle === null || expectedHandle !== input.forwardHandle) {
+				throw new TypeError(
+					`Point ${input.pointId} is not the requested dangling endpoint.`,
+				)
+			}
+			assertUnique(
+				input.coordinates.map((coordinate) => coordinate.masterId),
+				"Pen endpoint coordinate master IDs",
+			)
+			const coordinateByMaster = new Map(
+				input.coordinates.map((coordinate) => [
+					coordinate.masterId,
+					coordinate,
+				]),
+			)
+			if (
+				coordinateByMaster.size !== layerMasterIds.length ||
+				layerMasterIds.some((masterId) => !coordinateByMaster.has(masterId))
+			) {
+				throw new TypeError(
+					"Endpoint authoring requires coordinates for every glyph layer.",
+				)
+			}
+			const connectedHandle =
+				input.forwardHandle === "incoming" ? "outgoing" : "incoming"
+			const atomFamilies = (handle: EditorHandleKind) => ({
+				x: handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+				y: handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+			})
+			const forwardAtoms = atomFamilies(input.forwardHandle)
+			const connectedAtoms = atomFamilies(connectedHandle)
+			const plans: {
+				readonly atomKey: LayerPointKey
+				readonly forward: Vector2 | null
+				readonly connected: Vector2 | null
+			}[] = []
+			for (const masterId of layerMasterIds) {
+				const coordinate = coordinateByMaster.get(masterId)
+				if (coordinate === undefined) throw new Error("Missing endpoint layer.")
+				if (coordinate.forward !== null) {
+					assertFiniteVector(coordinate.forward, "Forward Pen handle")
+				}
+				const atomKey: LayerPointKey = [masterId, input.glyphId, input.pointId]
+				const forwardX = get(forwardAtoms.x, atomKey)
+				const forwardY = get(forwardAtoms.y, atomKey)
+				const connectedX = get(connectedAtoms.x, atomKey)
+				const connectedY = get(connectedAtoms.y, atomKey)
+				if (
+					(forwardX === null) !== (forwardY === null) ||
+					(connectedX === null) !== (connectedY === null)
+				) {
+					throw new TypeError("The endpoint has an incomplete handle.")
+				}
+				const connected =
+					connectedX === null || connectedY === null
+						? null
+						: { x: connectedX, y: connectedY }
+				if (
+					input.mode === "soft" &&
+					coordinate.forward === null &&
+					connected === null
+				) {
+					throw new TypeError("A soft endpoint requires at least one handle.")
+				}
+				let nextConnected = connected
+				if (
+					input.mode === "soft" &&
+					coordinate.forward !== null &&
+					connected !== null
+				) {
+					const forwardLength = Math.hypot(
+						coordinate.forward.x,
+						coordinate.forward.y,
+					)
+					const connectedLength = Math.hypot(connected.x, connected.y)
+					if (forwardLength !== 0) {
+						nextConnected = {
+							x: (-coordinate.forward.x / forwardLength) * connectedLength || 0,
+							y: (-coordinate.forward.y / forwardLength) * connectedLength || 0,
+						}
+					}
+				}
+				plans.push({
+					atomKey,
+					forward: coordinate.forward,
+					connected: nextConnected,
+				})
+			}
+
+			for (const plan of plans) {
+				set(forwardAtoms.x, plan.atomKey, plan.forward?.x ?? null)
+				set(forwardAtoms.y, plan.atomKey, plan.forward?.y ?? null)
+				if (plan.connected !== null) {
+					set(connectedAtoms.x, plan.atomKey, plan.connected.x)
+					set(connectedAtoms.y, plan.atomKey, plan.connected.y)
+				}
+			}
+			set(
+				pointAtoms,
+				[input.glyphId, input.pointId],
+				deepFreeze({ mode: input.mode }),
+			)
+		},
+	})
+
 	const insertPointTransaction = silo.transaction<
 		(input: InsertPointInput) => void
 	>({
@@ -4748,12 +4909,32 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 			}
 
-			const replacement = input.firstPoint
+			if (input.firstPoint !== undefined && input.lastPoint !== undefined) {
+				throw new TypeError("A closure can replace only one endpoint.")
+			}
+			const replacement = input.firstPoint ?? input.lastPoint
+			const replacementPointId =
+				input.lastPoint === undefined ? firstPointId : pointIds.at(-1)
 			if (replacement !== undefined) {
-				if (replacement.pointId !== firstPointId) {
+				if (
+					replacementPointId === undefined ||
+					replacement.pointId !== replacementPointId
+				) {
 					throw new TypeError(
-						`Point ${replacement.pointId} is not the contour's first point.`,
+						`Point ${replacement.pointId} is not the requested closure endpoint.`,
 					)
+				}
+				for (const masterId of layerMasterIds) {
+					const endpoint = get(layerNodeSelectors, [
+						masterId,
+						input.glyphId,
+						replacement.pointId,
+					])
+					if (!endpoint.ok) {
+						throw new TypeError(
+							`The closure endpoint is invalid in layer ${masterId}.`,
+						)
+					}
 				}
 				if (replacement.mode !== "soft") {
 					throw new TypeError('A replacement closure point must be "soft".')
@@ -4789,14 +4970,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			if (replacement !== undefined) {
 				set(
 					pointAtoms,
-					[input.glyphId, firstPointId],
+					[input.glyphId, replacement.pointId],
 					deepFreeze({ mode: replacement.mode }),
 				)
 				for (const coordinate of replacement.coordinates) {
 					const atomKey: LayerPointKey = [
 						coordinate.masterId,
 						input.glyphId,
-						firstPointId,
+						replacement.pointId,
 					]
 					set(incomingHandleXAtoms, atomKey, coordinate.incoming.x)
 					set(incomingHandleYAtoms, atomKey, coordinate.incoming.y)
@@ -5155,6 +5336,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
 	const runTransformControls = silo.runTransaction(transformControlsTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
+	const runAuthorPenEndpoint = silo.runTransaction(authorPenEndpointTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
 	const runAddSegmentHandles = silo.runTransaction(addSegmentHandlesTransaction)
 	const runSplitSegment = silo.runTransaction(splitSegmentTransaction)
@@ -5251,6 +5433,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			moveHandle: moveHandleTransaction,
 			transformControls: transformControlsTransaction,
 			setNodeMode: setNodeModeTransaction,
+			authorPenEndpoint: authorPenEndpointTransaction,
 			insertPoint: insertPointTransaction,
 			addSegmentHandles: addSegmentHandlesTransaction,
 			splitSegment: splitSegmentTransaction,
@@ -5298,6 +5481,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			setNodeMode(input: SetNodeModeInput): void {
 				runSetNodeMode(input)
+				markDocumentChanged()
+			},
+			authorPenEndpoint(input: AuthorPenEndpointInput): void {
+				runAuthorPenEndpoint(input)
 				markDocumentChanged()
 			},
 			insertPoint(input: InsertPointInput): void {

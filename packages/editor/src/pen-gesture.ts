@@ -40,8 +40,22 @@ export type PenPointerTarget =
 	| "typed-glyph"
 	| "control"
 	| "first-node"
+	| "open-endpoint"
 	| "segment"
-export type PenPointerAction = "close" | "consume" | "place" | "split"
+export type PenPointerAction =
+	| "close"
+	| "consume"
+	| "place"
+	| "resume"
+	| "split"
+
+export type PenEndpointSide = "first" | "last"
+
+export interface PenEndpointResolution {
+	readonly mode: "soft" | "hard"
+	readonly incoming?: PenPoint
+	readonly outgoing?: PenPoint
+}
 
 export const PEN_DRAG_THRESHOLD_PIXELS = 4
 
@@ -51,12 +65,25 @@ const canonicalZero = (value: number): number =>
 const finitePoint = (point: PenPoint): boolean =>
 	Number.isFinite(point.x) && Number.isFinite(point.y)
 
+const constrainedHandleVector = (vector: PenPoint): PenPoint => {
+	const length = Math.hypot(vector.x, vector.y)
+	if (length === 0) return { x: 0, y: 0 }
+	const step = Math.PI / 4
+	const angle = Math.atan2(vector.y, vector.x)
+	const ray = Math.floor(angle / step + 0.5) * step
+	return {
+		x: canonicalZero(Math.cos(ray) * length),
+		y: canonicalZero(Math.sin(ray) * length),
+	}
+}
+
 /** Resolves click versus curve from CSS-pixel movement and converts y to font space. */
 export function resolvePenGesture(input: {
 	readonly downScreen: PenPoint
 	readonly currentScreen: PenPoint
 	readonly worldScale: number
 	readonly thresholdPixels?: number
+	readonly shiftKey?: boolean
 }): PenGestureResolution {
 	if (
 		!finitePoint(input.downScreen) ||
@@ -72,10 +99,13 @@ export function resolvePenGesture(input: {
 	if (distancePixels < (input.thresholdPixels ?? PEN_DRAG_THRESHOLD_PIXELS)) {
 		return { kind: "click", mode: "hard", handles: null, distancePixels }
 	}
-	const outgoing = {
+	const rawOutgoing = {
 		x: canonicalZero(dxPixels / input.worldScale),
 		y: canonicalZero(-dyPixels / input.worldScale),
 	}
+	const outgoing = input.shiftKey
+		? constrainedHandleVector(rawOutgoing)
+		: rawOutgoing
 	return {
 		kind: "curve",
 		mode: "soft",
@@ -87,6 +117,68 @@ export function resolvePenGesture(input: {
 			outgoing,
 		},
 		distancePixels,
+	}
+}
+
+/** Resolves endpoint handle authoring without assuming which end is active. */
+export function resolvePenEndpoint(input: {
+	readonly side: PenEndpointSide
+	readonly mode: "soft" | "hard"
+	readonly incoming?: PenPoint
+	readonly outgoing?: PenPoint
+	readonly gesture: PenGestureResolution
+	readonly altKey?: boolean
+}): PenEndpointResolution {
+	if (input.incoming !== undefined && !finitePoint(input.incoming)) {
+		throw new TypeError("Incoming endpoint handle must be finite.")
+	}
+	if (input.outgoing !== undefined && !finitePoint(input.outgoing)) {
+		throw new TypeError("Outgoing endpoint handle must be finite.")
+	}
+	const forwardKind = input.side === "first" ? "incoming" : "outgoing"
+	const connectedKind = input.side === "first" ? "outgoing" : "incoming"
+	const forward = input[forwardKind]
+	const connected = input[connectedKind]
+	if (input.gesture.kind === "click") {
+		if (input.mode === "hard") {
+			return {
+				mode: "hard",
+				...(input.incoming === undefined ? {} : { incoming: input.incoming }),
+				...(input.outgoing === undefined ? {} : { outgoing: input.outgoing }),
+			}
+		}
+		return {
+			mode: connected === undefined ? "hard" : "soft",
+			...(connected === undefined ? {} : { [connectedKind]: connected }),
+		}
+	}
+
+	const dragged = input.gesture.handles.outgoing
+	const harden =
+		input.mode === "hard" || (input.altKey === true && forward !== undefined)
+	if (harden) {
+		return {
+			mode: "hard",
+			...(connected === undefined ? {} : { [connectedKind]: connected }),
+			[forwardKind]: dragged,
+		}
+	}
+	if (connected === undefined) {
+		return { mode: "soft", [forwardKind]: dragged }
+	}
+	const connectedLength = Math.hypot(connected.x, connected.y)
+	const draggedLength = Math.hypot(dragged.x, dragged.y)
+	const rotatedConnected =
+		draggedLength === 0
+			? connected
+			: {
+					x: canonicalZero((-dragged.x / draggedLength) * connectedLength),
+					y: canonicalZero((-dragged.y / draggedLength) * connectedLength),
+				}
+	return {
+		mode: "soft",
+		[connectedKind]: rotatedConnected,
+		[forwardKind]: dragged,
 	}
 }
 
@@ -133,6 +225,8 @@ export function penPointerAction(target: PenPointerTarget): PenPointerAction {
 			return "split"
 		case "first-node":
 			return "close"
+		case "open-endpoint":
+			return "resume"
 		case "control":
 			return "consume"
 		case "background":
