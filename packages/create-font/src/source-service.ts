@@ -19,6 +19,7 @@ import {
 	type JsonValue,
 	type SourceManifest,
 	type SourceChangedEvent,
+	type SourceProjectSnapshot,
 	type SourceUnitSnapshot,
 	type CreateFontSourceService,
 	type WriteSourceUnitInput,
@@ -41,6 +42,29 @@ type LoadedProject = Readonly<{
 	source: EditorFontSource
 	texts: ReadonlyMap<string, string>
 	values: FontSourceDirectoryFiles
+}>
+
+export type SourceProjectLoadTrigger =
+	| `initialization`
+	| `read-manifest`
+	| `read-snapshot`
+	| `read-unit`
+	| `standalone-load`
+	| `watch-refresh`
+	| `write-before`
+	| `write-after`
+
+export type SourceProjectLoadDiagnostic = Readonly<{
+	assembleDuration: number
+	collectPathsDuration: number
+	readParseDuration: number
+	totalDuration: number
+	trigger: SourceProjectLoadTrigger
+	unitCount: number
+}>
+
+export type FileSystemSourceServiceOptions = Readonly<{
+	onProjectLoad?: (diagnostic: SourceProjectLoadDiagnostic) => void
 }>
 
 type TransactionEntry = Readonly<{
@@ -209,11 +233,16 @@ async function recoverTransactions(projectRoot: string): Promise<void> {
 
 async function loadProjectDirectory(
 	projectRoot: string,
+	trigger: SourceProjectLoadTrigger,
+	onProjectLoad?: (diagnostic: SourceProjectLoadDiagnostic) => void,
 ): Promise<LoadedProject> {
+	const startedAt = onProjectLoad === undefined ? undefined : performance.now()
 	const values: Record<string, unknown> = {}
 	const revisions = new Map<string, string>()
 	const texts = new Map<string, string>()
 	const paths = await collectJsonPaths(projectRoot)
+	const collectedAt =
+		onProjectLoad === undefined ? undefined : performance.now()
 	for (const path of paths) {
 		const kind = sourceUnitKindForPath(path)
 		if (kind === null) {
@@ -242,13 +271,16 @@ async function loadProjectDirectory(
 		texts.set(path, text)
 		revisions.set(path, revisionForText(text))
 	}
+	const readAt = onProjectLoad === undefined ? undefined : performance.now()
 	const assembled = assembleEditorFontSource(values)
 	if (!assembled.ok) throw validationError(assembled.errors)
+	const assembledAt =
+		onProjectLoad === undefined ? undefined : performance.now()
 	const units = paths.map((path) => ({
 		path,
 		revision: revisions.get(path) ?? revisionForText(``),
 	}))
-	return {
+	const project = {
 		manifest: {
 			revision: manifestRevision(units),
 			units,
@@ -258,6 +290,29 @@ async function loadProjectDirectory(
 		texts,
 		values,
 	}
+	if (
+		onProjectLoad !== undefined &&
+		startedAt !== undefined &&
+		collectedAt !== undefined &&
+		readAt !== undefined &&
+		assembledAt !== undefined
+	) {
+		try {
+			onProjectLoad(
+				Object.freeze({
+					assembleDuration: assembledAt - readAt,
+					collectPathsDuration: collectedAt - startedAt,
+					readParseDuration: readAt - collectedAt,
+					totalDuration: performance.now() - startedAt,
+					trigger,
+					unitCount: paths.length,
+				}),
+			)
+		} catch {
+			// Diagnostic observers must not affect source-service behavior.
+		}
+	}
+	return project
 }
 
 /** Loads one validated directory project without starting filesystem watchers. */
@@ -266,11 +321,12 @@ export async function loadEditorFontSourceDirectory(
 ): Promise<EditorFontSource> {
 	const projectRoot = await realpath(resolve(projectRootInput))
 	await recoverTransactions(projectRoot)
-	return (await loadProjectDirectory(projectRoot)).source
+	return (await loadProjectDirectory(projectRoot, `standalone-load`)).source
 }
 
 export async function createFileSystemSourceService(
 	projectRootInput: string,
+	options: FileSystemSourceServiceOptions = {},
 ): Promise<CreateFontSourceService> {
 	const projectRoot = await realpath(resolve(projectRootInput))
 	await recoverTransactions(projectRoot)
@@ -291,8 +347,10 @@ export async function createFileSystemSourceService(
 	const sourceListeners = new Set<(event: SourceChangedEvent) => void>()
 	let publishedRevision: string | null = null
 
-	const loadProject = (): Promise<LoadedProject> =>
-		loadProjectDirectory(projectRoot)
+	const loadProject = (
+		trigger: SourceProjectLoadTrigger,
+	): Promise<LoadedProject> =>
+		loadProjectDirectory(projectRoot, trigger, options.onProjectLoad)
 
 	const snapshot = (
 		project: LoadedProject,
@@ -305,6 +363,11 @@ export async function createFileSystemSourceService(
 		}
 		return { path, revision, value: value as JsonValue }
 	}
+
+	const projectSnapshot = (project: LoadedProject): SourceProjectSnapshot => ({
+		revision: project.manifest.revision,
+		units: project.manifest.units.map(({ path }) => snapshot(project, path)),
+	})
 
 	const writeUnitsUnlocked = async (
 		input: WriteSourceUnitsInput,
@@ -320,7 +383,7 @@ export async function createFileSystemSourceService(
 			return previous.result
 		}
 
-		const project = await loadProject()
+		const project = await loadProject(`write-before`)
 		const paths = new Set<string>()
 		const formatted = new Map<string, string>()
 		const candidate = { ...project.values }
@@ -389,7 +452,7 @@ export async function createFileSystemSourceService(
 			throw error
 		}
 
-		const updated = await loadProject()
+		const updated = await loadProject(`write-after`)
 		const units = input.writes.map((write) =>
 			snapshot(updated, normalizeUnitPath(write.path)),
 		) as unknown as readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
@@ -411,14 +474,14 @@ export async function createFileSystemSourceService(
 		for (const listener of sourceListeners) listener(event)
 	}
 
-	publishedRevision = (await loadProject()).manifest.revision
+	publishedRevision = (await loadProject(`initialization`)).manifest.revision
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined
 	const scheduleRefresh = (): void => {
 		if (refreshTimer !== undefined) clearTimeout(refreshTimer)
 		refreshTimer = setTimeout(() => {
 			refreshTimer = undefined
 			void withLock(async () => {
-				publishManifest((await loadProject()).manifest)
+				publishManifest((await loadProject(`watch-refresh`)).manifest)
 			}).catch(() => undefined)
 		}, 50)
 	}
@@ -428,10 +491,13 @@ export async function createFileSystemSourceService(
 	for (const watcher of watchers) watcher.unref()
 
 	return {
-		readManifest: () => withLock(async () => (await loadProject()).manifest),
+		readManifest: () =>
+			withLock(async () => (await loadProject(`read-manifest`)).manifest),
+		readSnapshot: () =>
+			withLock(async () => projectSnapshot(await loadProject(`read-snapshot`))),
 		readUnit: (path) =>
 			withLock(async () =>
-				snapshot(await loadProject(), normalizeUnitPath(path)),
+				snapshot(await loadProject(`read-unit`), normalizeUnitPath(path)),
 			),
 		writeUnit: (input: WriteSourceUnitInput) =>
 			withLock(async () => {

@@ -1,7 +1,4 @@
-import {
-	createFontRpcClient,
-	type CreateFontRpcClient,
-} from "@create-font/server/client"
+import { createFontRpcClient } from "@create-font/server/client"
 import type {
 	JsonValue,
 	SourceManifest,
@@ -33,7 +30,14 @@ import type {
 	FontValidationStatus,
 	SourceSessionEvent,
 	SourceSessionRequest,
+	SourceSessionStartupProfile,
 } from "./source-session.ts"
+import { createSourceSnapshotRefreshController } from "./source-session-refresh.ts"
+import { sourceProjectSnapshotFromResponse } from "./source-session-snapshot.ts"
+import {
+	createStartupTimeline,
+	startupResourceTimings,
+} from "./startup-profile.ts"
 
 type SharedWorkerScope = Readonly<{
 	location: Location
@@ -42,6 +46,8 @@ type SharedWorkerScope = Readonly<{
 }
 
 const scope = globalThis as unknown as SharedWorkerScope
+const startupTimeline = createStartupTimeline(`shared-worker`)
+startupTimeline.mark(`module-evaluated`)
 const client = createFontRpcClient(scope.location.origin)
 const ports = new Set<MessagePort>()
 let sourceUnits = new Map<string, SourceUnitSnapshot>()
@@ -49,8 +55,7 @@ let source: EditorFontSource | null = null
 let revision: string | null = null
 let validation: FontValidationStatus | null = null
 let writeQueue = Promise.resolve()
-let refreshQueue: Promise<void> | null = null
-let pendingManifest: SourceManifest | undefined
+let startupProfile: SourceSessionStartupProfile | null = null
 
 function assertData<Value>(
 	result: Readonly<{ data: Value | null; error: { status: number } | null }>,
@@ -62,24 +67,6 @@ function assertData<Value>(
 		)
 	}
 	return result.data
-}
-
-async function loadSourceUnits(
-	rpc: CreateFontRpcClient,
-	manifest: SourceManifest,
-): Promise<readonly SourceUnitSnapshot[]> {
-	return Promise.all(
-		manifest.units.map(async ({ path }) => {
-			const snapshot = assertData(
-				await rpc.api.source.unit.get({ query: { path } }),
-				`Read ${path}`,
-			)
-			if (`code` in snapshot) {
-				throw new Error(`Source unit ${path} is unavailable.`)
-			}
-			return snapshot
-		}),
-	)
 }
 
 function pathOptions(files: FontSourceDirectoryFiles): SplitFontSourceOptions {
@@ -124,8 +111,21 @@ function broadcast(event: SourceSessionEvent, except?: MessagePort): void {
 }
 
 function currentSourceEvent(): SourceSessionEvent | null {
-	if (source === null || revision === null || validation === null) return null
-	return { type: `source`, revision, source, validation }
+	if (
+		source === null ||
+		revision === null ||
+		validation === null ||
+		startupProfile === null
+	)
+		return null
+	return {
+		type: `source`,
+		sentAtEpochMilliseconds: performance.timeOrigin + performance.now(),
+		revision,
+		source,
+		startup: startupProfile,
+		validation,
+	}
 }
 
 const validationState = createFontEditorState({
@@ -149,43 +149,64 @@ function compileValidation(
 	return { ok: compilation.ok, issueCount }
 }
 
-async function refresh(manifest?: SourceManifest): Promise<void> {
-	if (manifest?.revision === revision) return
-	if (manifest !== undefined) pendingManifest = manifest
-	if (refreshQueue !== null) return refreshQueue
-	refreshQueue = (async () => {
-		do {
-			const requested = pendingManifest
-			pendingManifest = undefined
-			const inventory =
-				requested ??
-				assertData(await client.api.source.get(), `Read source inventory`)
-			if (`code` in inventory) {
-				throw new Error(`Font source is not available.`)
-			}
-			if (inventory.revision === revision) continue
-			const snapshots = await loadSourceUnits(client, inventory)
-			const files = Object.fromEntries(
-				snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
-			)
-			const assembled = assembleEditorFontSource(files)
-			if (!assembled.ok) throw new Error(assembled.errors[0].message)
-			sourceUnits = new Map(
-				snapshots.map((snapshot) => [snapshot.path, snapshot]),
-			)
-			source = assembled.value
-			revision = inventory.revision
-			validation = compileValidation(source)
-			const event = currentSourceEvent()
-			if (event !== null) broadcast(event)
-		} while (
-			pendingManifest !== undefined &&
-			pendingManifest.revision !== revision
+const refreshController = createSourceSnapshotRefreshController({
+	applySnapshot(project, initialLoad) {
+		const snapshots = project.units
+		const files = Object.fromEntries(
+			snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
 		)
-	})().finally(() => {
-		refreshQueue = null
-	})
-	return refreshQueue
+		const finishAssembly = initialLoad
+			? startupTimeline.startPhase(`source-assembly`)
+			: undefined
+		const assembled = assembleEditorFontSource(files)
+		finishAssembly?.()
+		if (!assembled.ok) throw new Error(assembled.errors[0].message)
+		sourceUnits = new Map(
+			snapshots.map((snapshot) => [snapshot.path, snapshot]),
+		)
+		source = assembled.value
+		revision = project.revision
+		const finishValidation = initialLoad
+			? startupTimeline.startPhase(`source-validation-compilation`)
+			: undefined
+		validation = compileValidation(source)
+		finishValidation?.()
+		if (initialLoad) {
+			startupTimeline.mark(`source-ready`)
+			const resources = startupResourceTimings(
+				performance
+					.getEntriesByType(`resource`)
+					.filter((entry) => entry.name.includes(`/api/source`)),
+			)
+			startupProfile = Object.freeze({
+				resources,
+				sourceRequestCount: resources.filter((entry) =>
+					entry.name.includes(`/api/source/snapshot`),
+				).length,
+				sourceUnitCount: snapshots.length,
+				timeline: startupTimeline.snapshot(),
+				unitRequests: Object.freeze([]),
+			})
+		}
+		const event = currentSourceEvent()
+		if (event !== null) broadcast(event)
+	},
+	currentRevision: () => revision,
+	async readSnapshot(initialLoad) {
+		if (initialLoad) startupTimeline.mark(`refresh-start`)
+		const finishSnapshot = initialLoad
+			? startupTimeline.startPhase(`source-snapshot-rpc`)
+			: undefined
+		const project = sourceProjectSnapshotFromResponse(
+			await client.api.source.snapshot.get(),
+		)
+		finishSnapshot?.()
+		return project
+	},
+})
+
+function refresh(manifest?: SourceManifest): Promise<void> {
+	return refreshController.refresh(manifest?.revision)
 }
 
 async function save(
@@ -277,6 +298,7 @@ function handleRequest(port: MessagePort, request: SourceSessionRequest): void {
 }
 
 scope.onconnect = (event) => {
+	startupTimeline.mark(`port-connected`)
 	const port = event.ports[0]
 	if (port === undefined) return
 	ports.add(port)

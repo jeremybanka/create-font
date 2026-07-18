@@ -12,7 +12,7 @@ import type { CreateFontRpcClient } from "@create-font/server/client"
 
 export type FontSourceRemoteClient = Pick<
 	CreateFontSourceService,
-	"readManifest" | "readUnit" | "writeUnit" | "writeUnits"
+	"readManifest" | "readSnapshot" | "readUnit" | "writeUnit" | "writeUnits"
 >
 
 export class CreateFontRpcRequestError extends Error {
@@ -30,6 +30,19 @@ export function createEdenFontSourceClient(
 	client: CreateFontRpcClient,
 ): FontSourceRemoteClient {
 	return {
+		async readSnapshot() {
+			const result = await client.api.source.snapshot.get()
+			if (result.error !== null || result.data === null) {
+				throw new CreateFontRpcRequestError(
+					`readSnapshot`,
+					result.error?.status ?? 500,
+				)
+			}
+			if (`code` in result.data) {
+				throw new CreateFontRpcRequestError(`readSnapshot`, 501)
+			}
+			return result.data
+		},
 		async readManifest() {
 			const result = await client.api.source.get()
 			if (result.error !== null || result.data === null) {

@@ -1,4 +1,5 @@
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -11,10 +12,17 @@ import {
 import { assembleEditorFontSource } from "@create-font/source"
 import { createFontEditorState } from "@create-font/states"
 
-import { createFileSystemSourceService } from "../src/source-service.ts"
+import {
+	createFileSystemSourceService,
+	type SourceProjectLoadDiagnostic,
+} from "../src/source-service.ts"
 import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
+
+function revisionForText(text: string): string {
+	return `sha256:${createHash(`sha256`).update(text).digest(`hex`)}`
+}
 
 async function copyDevelopmentFont() {
 	const root = await mkdtemp(resolve(tmpdir(), `create-font-source-`))
@@ -56,6 +64,95 @@ describe(`font workspace discovery`, () => {
 })
 
 describe(`filesystem font source service`, () => {
+	it(`reports project-load phases and their operation triggers`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const diagnostics: SourceProjectLoadDiagnostic[] = []
+		const source = await createFileSystemSourceService(projectRoot, {
+			onProjectLoad: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const manifest = await source.readManifest()
+		await source.readUnit(`names.json`)
+
+		expect(diagnostics.map(({ trigger }) => trigger)).toEqual([
+			`initialization`,
+			`read-manifest`,
+			`read-unit`,
+		])
+		for (const diagnostic of diagnostics) {
+			expect(diagnostic.unitCount).toBe(manifest.units.length)
+			expect(diagnostic.totalDuration).toBeGreaterThanOrEqual(
+				diagnostic.collectPathsDuration +
+					diagnostic.readParseDuration +
+					diagnostic.assembleDuration,
+			)
+		}
+	})
+
+	it(`ignores project-load diagnostic observer failures`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot, {
+			onProjectLoad: () => {
+				throw new Error(`diagnostic observer failure`)
+			},
+		})
+
+		await expect(source.readManifest()).resolves.toMatchObject({
+			units: expect.any(Array),
+		})
+	})
+
+	it(`returns one coherent snapshot where legacy fan-out can tear`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const diagnostics: SourceProjectLoadDiagnostic[] = []
+		const source = await createFileSystemSourceService(projectRoot, {
+			onProjectLoad: (diagnostic) => diagnostics.push(diagnostic),
+		})
+		const legacyManifest = await source.readManifest()
+		const oldNames = legacyManifest.units.find(
+			({ path }) => path === `names.json`,
+		)
+		expect(oldNames).toBeDefined()
+
+		const namesPath = resolve(projectRoot, `names.json`)
+		const namesText = await readFile(namesPath, `utf8`)
+		await writeFile(
+			namesPath,
+			namesText.replace(
+				`"family": "Workbench Sans"`,
+				`"family": "Workbench Sans Snapshot"`,
+			),
+		)
+		const legacyNames = await source.readUnit(`names.json`)
+		expect(legacyNames.revision).not.toBe(oldNames?.revision)
+
+		const project = await source.readSnapshot()
+		const snapshotNames = project.units.find(
+			({ path }) => path === `names.json`,
+		)
+		expect(snapshotNames).toEqual(legacyNames)
+		for (const unit of project.units) {
+			expect(unit.revision).toBe(
+				revisionForText(
+					await readFile(resolve(projectRoot, unit.path), `utf8`),
+				),
+			)
+		}
+		const assembled = assembleEditorFontSource(
+			Object.fromEntries(project.units.map((unit) => [unit.path, unit.value])),
+		)
+		expect(assembled.ok).toBe(true)
+		expect(project.revision).toBe(
+			revisionForText(
+				project.units
+					.map((unit) => `${unit.path}\0${unit.revision}\n`)
+					.join(``),
+			),
+		)
+		expect(
+			diagnostics.filter(({ trigger }) => trigger === `read-snapshot`),
+		).toHaveLength(1)
+	})
+
 	it(`reads a validated project and writes one revisioned unit`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)

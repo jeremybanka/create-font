@@ -1,8 +1,26 @@
 import type { EditorFontSource } from "@create-font/states"
 
+import type {
+	StartupResourceTiming,
+	StartupTimelineSnapshot,
+} from "./startup-profile.ts"
+
 export type FontValidationStatus = Readonly<{
 	ok: boolean
 	issueCount: number
+}>
+
+export type SourceUnitRequestTiming = Readonly<{
+	duration: number
+	path: string
+}>
+
+export type SourceSessionStartupProfile = Readonly<{
+	resources: readonly StartupResourceTiming[]
+	sourceRequestCount: number
+	sourceUnitCount: number
+	timeline: StartupTimelineSnapshot
+	unitRequests: readonly SourceUnitRequestTiming[]
 }>
 
 export type SourceSessionRequest =
@@ -19,8 +37,10 @@ export type SourceSessionRequest =
 export type SourceSessionEvent =
 	| Readonly<{
 			type: `source`
+			sentAtEpochMilliseconds: number
 			revision: string
 			source: EditorFontSource
+			startup: SourceSessionStartupProfile
 			validation: FontValidationStatus
 	  }>
 	| Readonly<{

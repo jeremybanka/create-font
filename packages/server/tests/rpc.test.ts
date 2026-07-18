@@ -5,12 +5,23 @@ import {
 	createFontRpc,
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
+	SourceValidationError,
 	type CreateFontSourceService,
 } from "../src/index.ts"
 
 describe(`create-font workspace RPC`, () => {
 	it(`serves individual source units through the typed contract`, async () => {
 		const source: CreateFontSourceService = {
+			readSnapshot: vi.fn(async () => ({
+				revision: `manifest-1`,
+				units: [
+					{
+						path: `glyphs/a.json`,
+						revision: `glyph-a-1`,
+						value: { id: `glyph:a` },
+					},
+				],
+			})),
 			readManifest: vi.fn(async () => ({
 				revision: `manifest-1`,
 				units: [{ path: `glyphs/a.json`, revision: `glyph-a-1` }],
@@ -57,9 +68,77 @@ describe(`create-font workspace RPC`, () => {
 		expect(source.readUnit).toHaveBeenCalledExactlyOnceWith(`glyphs/a.json`)
 	})
 
+	it(`serves every source unit through one revision-consistent snapshot`, async () => {
+		const project = {
+			revision: `manifest-1`,
+			units: [
+				{
+					path: `glyphs/a.json`,
+					revision: `glyph-a-1`,
+					value: { id: `glyph:a` },
+				},
+			],
+		}
+		const source: CreateFontSourceService = {
+			readManifest: vi.fn(),
+			readSnapshot: vi.fn(async () => project),
+			readUnit: vi.fn(),
+			writeUnit: vi.fn(),
+			writeUnits: vi.fn(),
+		}
+		const app = createFontRpc({ build: vi.fn(), source })
+		const response = await app.handle(
+			new Request(`http://localhost/api/source/snapshot`),
+		)
+
+		expect(response.status).toBe(200)
+		expect(await response.json()).toEqual(project)
+		expect(source.readSnapshot).toHaveBeenCalledTimes(1)
+		expect(source.readManifest).not.toHaveBeenCalled()
+		expect(source.readUnit).not.toHaveBeenCalled()
+	})
+
+	it(`returns snapshot validation failures through the typed error contract`, async () => {
+		const source: CreateFontSourceService = {
+			readManifest: vi.fn(),
+			readSnapshot: vi.fn(async () => {
+				throw new SourceValidationError([
+					{
+						code: `source.invalid_json`,
+						message: `The source unit is not valid JSON.`,
+						path: `$`,
+						unitPath: `names.json`,
+					},
+				])
+			}),
+			readUnit: vi.fn(),
+			writeUnit: vi.fn(),
+			writeUnits: vi.fn(),
+		}
+		const app = createFontRpc({ build: vi.fn(), source })
+		const response = await app.handle(
+			new Request(`http://localhost/api/source/snapshot`),
+		)
+
+		expect(response.status).toBe(422)
+		expect(await response.json()).toEqual({
+			code: `source.validation_failed`,
+			issues: [
+				{
+					code: `source.invalid_json`,
+					message: `The source unit is not valid JSON.`,
+					path: `$`,
+					unitPath: `names.json`,
+				},
+			],
+			message: `The proposed font source is not valid.`,
+		})
+	})
+
 	it(`returns a typed revision conflict for a stale idempotent write`, async () => {
 		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
+			readSnapshot: vi.fn(),
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(async (input) => {
 				throw new SourceUnitConflictError(
@@ -105,6 +184,7 @@ describe(`create-font workspace RPC`, () => {
 	it(`writes several related units through one typed transaction`, async () => {
 		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
+			readSnapshot: vi.fn(),
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(),
 			writeUnits: vi.fn(async (input) => ({
@@ -169,6 +249,7 @@ describe(`create-font workspace RPC`, () => {
 	it(`returns a typed not-found response for a missing unit`, async () => {
 		const source: CreateFontSourceService = {
 			readManifest: vi.fn(),
+			readSnapshot: vi.fn(),
 			readUnit: vi.fn(async (path) => {
 				throw new SourceUnitNotFoundError(path)
 			}),
@@ -205,6 +286,15 @@ describe(`create-font workspace RPC`, () => {
 
 		expect(response.status).toBe(501)
 		expect(await response.json()).toEqual({
+			code: `source.not_ready`,
+			message: `The font source service has not been configured yet.`,
+		})
+
+		const snapshotResponse = await app.handle(
+			new Request(`http://localhost/api/source/snapshot`),
+		)
+		expect(snapshotResponse.status).toBe(501)
+		expect(await snapshotResponse.json()).toEqual({
 			code: `source.not_ready`,
 			message: `The font source service has not been configured yet.`,
 		})

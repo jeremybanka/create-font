@@ -1,0 +1,421 @@
+{
+	"environment": {
+		"baseCommit": "378274696ed7a141b5cc76d916ad8e3ff92e673d",
+		"browser": "Playwright MCP bundled Chromium (exact build unavailable)",
+		"bun": "1.3.14",
+		"host": "Linux 7.1.3 aarch64, 6 Apple CPU cores",
+		"mode": "font dev",
+		"project": "fonts/workbench-sans",
+		"sourceUnitCount": 206
+	},
+	"cold": [
+		{
+			"editorUsable": 21321.7,
+			"sourceMessageReceived": 20918.1,
+			"manifestRpc": 423.4,
+			"unitRpcFanout": 19902.9,
+			"assembly": 14.9,
+			"validation": 471.6,
+			"hydration": 366.6,
+			"totalBlockingTime": 333,
+			"messageTransit": 3.8,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13530.3,
+			"sourceMessageReceived": 13111.3,
+			"manifestRpc": 64.8,
+			"unitRpcFanout": 12396.8,
+			"assembly": 15.7,
+			"validation": 544.7,
+			"hydration": 382.9,
+			"totalBlockingTime": 349,
+			"messageTransit": 3,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13948.3,
+			"sourceMessageReceived": 13543.6,
+			"manifestRpc": 71.1,
+			"unitRpcFanout": 12881.3,
+			"assembly": 15.2,
+			"validation": 486.8,
+			"hydration": 369.2,
+			"totalBlockingTime": 335,
+			"messageTransit": 2.9,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 14000.8,
+			"sourceMessageReceived": 13609.2,
+			"manifestRpc": 68.5,
+			"unitRpcFanout": 12918.8,
+			"assembly": 16.5,
+			"validation": 516.2,
+			"hydration": 357.8,
+			"totalBlockingTime": 323,
+			"messageTransit": 3.1,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13706,
+			"sourceMessageReceived": 13285.6,
+			"manifestRpc": 66.6,
+			"unitRpcFanout": 12596.2,
+			"assembly": 16.2,
+			"validation": 521,
+			"hydration": 386.9,
+			"totalBlockingTime": 352,
+			"messageTransit": 3.0002,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13372.3,
+			"sourceMessageReceived": 12965.7,
+			"manifestRpc": 69.6,
+			"unitRpcFanout": 12265.4,
+			"assembly": 17.2,
+			"validation": 522.2,
+			"hydration": 372.3,
+			"totalBlockingTime": 337,
+			"messageTransit": 3.3999,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13507.7,
+			"sourceMessageReceived": 13115,
+			"manifestRpc": 68.1,
+			"unitRpcFanout": 12468.4,
+			"assembly": 14.8,
+			"validation": 472.8,
+			"hydration": 359.8,
+			"totalBlockingTime": 323,
+			"messageTransit": 3.2,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13722.6,
+			"sourceMessageReceived": 13298.5,
+			"manifestRpc": 71.5,
+			"unitRpcFanout": 12575.6,
+			"assembly": 17.9,
+			"validation": 549.7,
+			"hydration": 389.9,
+			"totalBlockingTime": 355,
+			"messageTransit": 3.2,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 14062.3,
+			"sourceMessageReceived": 13613.8,
+			"manifestRpc": 69.1,
+			"unitRpcFanout": 12933.9,
+			"assembly": 15.8,
+			"validation": 471.9,
+			"hydration": 408.1,
+			"totalBlockingTime": 377,
+			"messageTransit": 3.3,
+			"rpcTransferBytes": 387137
+		},
+		{
+			"editorUsable": 13996.2,
+			"sourceMessageReceived": 13537.7,
+			"manifestRpc": 65.5,
+			"unitRpcFanout": 12807.9,
+			"assembly": 17.9,
+			"validation": 556.8,
+			"hydration": 417.1,
+			"totalBlockingTime": 384,
+			"messageTransit": 3.1,
+			"rpcTransferBytes": 387137
+		}
+	],
+	"productionColdConfirmation": {
+		"assembly": 17,
+		"bootstrapRendered": 53.9,
+		"editorUsable": 13585.3,
+		"firstContentfulPaint": 88,
+		"firstPaint": 28,
+		"hydration": 345.8,
+		"longTask": 363,
+		"manifestRpc": 89.5,
+		"sourceMessageReceived": 13211.8,
+		"sourceUnitCount": 206,
+		"totalBlockingTime": 313,
+		"unitRpcFanout": 12540.3,
+		"validation": 481.3
+	},
+	"bulkSnapshotImplementation": {
+		"developmentCold": [
+			{
+				"assembly": 16.5,
+				"editorUsable": 1089.3,
+				"hydration": 404.4,
+				"messageTransit": 3.1002,
+				"serverProjectLoad": 71.57,
+				"snapshotResource": 78,
+				"snapshotRpc": 88.3,
+				"sourceMessageReceived": 684.9,
+				"totalBlockingTime": 334,
+				"validation": 478.8
+			},
+			{
+				"assembly": 15.2,
+				"editorUsable": 1074.7,
+				"hydration": 403,
+				"messageTransit": 2.7998,
+				"serverProjectLoad": 72.51,
+				"snapshotResource": 76,
+				"snapshotRpc": 86.4,
+				"sourceMessageReceived": 671.7,
+				"totalBlockingTime": 334,
+				"validation": 481.3
+			},
+			{
+				"assembly": 14.9,
+				"editorUsable": 1087.9,
+				"hydration": 401.8,
+				"messageTransit": 3.4,
+				"serverProjectLoad": 68.18,
+				"snapshotResource": 71.8,
+				"snapshotRpc": 82.1,
+				"sourceMessageReceived": 686.1,
+				"totalBlockingTime": 332,
+				"validation": 500.4
+			},
+			{
+				"assembly": 14.5,
+				"editorUsable": 1048.8,
+				"hydration": 403.6,
+				"messageTransit": 2.9998,
+				"serverProjectLoad": 69.51,
+				"snapshotResource": 73.2,
+				"snapshotRpc": 82.6,
+				"sourceMessageReceived": 645.2,
+				"totalBlockingTime": 334,
+				"validation": 465.8
+			},
+			{
+				"assembly": 15.9,
+				"editorUsable": 1102.3,
+				"hydration": 414,
+				"messageTransit": 2.8,
+				"serverProjectLoad": 72.85,
+				"snapshotResource": 77.5,
+				"snapshotRpc": 87.7,
+				"sourceMessageReceived": 688.3,
+				"totalBlockingTime": 344,
+				"validation": 486.5
+			},
+			{
+				"assembly": 15,
+				"editorUsable": 1034.4,
+				"hydration": 396.4,
+				"messageTransit": 2.8999,
+				"serverProjectLoad": 65.43,
+				"snapshotResource": 68.7,
+				"snapshotRpc": 79.1,
+				"sourceMessageReceived": 638,
+				"totalBlockingTime": 327,
+				"validation": 456.7
+			},
+			{
+				"assembly": 15.4,
+				"editorUsable": 1051.7,
+				"hydration": 402,
+				"messageTransit": 3,
+				"serverProjectLoad": 65,
+				"snapshotResource": 69.7,
+				"snapshotRpc": 78.8,
+				"sourceMessageReceived": 649.7,
+				"totalBlockingTime": 334,
+				"validation": 472.3
+			},
+			{
+				"assembly": 15.4,
+				"editorUsable": 1042.2,
+				"hydration": 381,
+				"messageTransit": 3.3,
+				"serverProjectLoad": 64.56,
+				"snapshotResource": 67.9,
+				"snapshotRpc": 77.8,
+				"sourceMessageReceived": 661.2,
+				"totalBlockingTime": 312,
+				"validation": 470.9
+			},
+			{
+				"assembly": 14.6,
+				"editorUsable": 1066.8,
+				"hydration": 397.4,
+				"messageTransit": 2.9,
+				"serverProjectLoad": 66.23,
+				"snapshotResource": 70.5,
+				"snapshotRpc": 80.5,
+				"sourceMessageReceived": 669.4,
+				"totalBlockingTime": 328,
+				"validation": 489.3
+			},
+			{
+				"assembly": 15.3,
+				"editorUsable": 1042.8,
+				"hydration": 409.6,
+				"messageTransit": 3.4,
+				"serverProjectLoad": 61.66,
+				"snapshotResource": 65.6,
+				"snapshotRpc": 75.2,
+				"sourceMessageReceived": 633.2,
+				"totalBlockingTime": 340,
+				"validation": 461.2
+			}
+		],
+		"directSnapshotProfile": {
+			"encodedPayloadBytes": 300477,
+			"serializationDuration": 1.927072,
+			"snapshotLoadP50": 59.319631,
+			"snapshotLoadP95": 72.664304,
+			"snapshotWallP50": 59.473877,
+			"snapshotWallP95": 72.716533
+		},
+		"productionColdConfirmation": {
+			"assembly": 14.6,
+			"bootstrapRendered": 36.8,
+			"consoleErrorCount": 0,
+			"editorUsable": 1044,
+			"hydration": 387.3,
+			"messageTransit": 2.8,
+			"snapshotEncodedBodyBytes": 300477,
+			"snapshotRequestCount": 1,
+			"snapshotResource": 81,
+			"snapshotRpc": 90.8,
+			"snapshotTransferBytes": 300777,
+			"sourceMessageReceived": 656.7,
+			"sourceUnitCount": 206,
+			"totalBlockingTime": 318,
+			"unitRequestCount": 0,
+			"validation": 475.1
+		},
+		"summary": {
+			"assemblyP50": 15.25,
+			"assemblyP95": 16.23,
+			"editorUsableP50": 1059.25,
+			"editorUsableP95": 1096.45,
+			"hydrationP50": 402.5,
+			"hydrationP95": 412.02,
+			"improvementFromBaselineP50Percent": 92.34,
+			"legacySourceRequestCount": 0,
+			"messageTransitP50": 3,
+			"messageTransitP95": 3.4,
+			"serverProjectLoadP50": 67.205,
+			"serverProjectLoadP95": 72.697,
+			"snapshotEncodedBodyBytes": 300477,
+			"snapshotRequestCount": 1,
+			"snapshotResourceP50": 71.15,
+			"snapshotResourceP95": 77.78,
+			"snapshotRpcP50": 81.3,
+			"snapshotRpcP95": 88.03,
+			"snapshotTransferBytes": 300777,
+			"sourceMessageP50": 665.3,
+			"sourceMessageP95": 687.31,
+			"sourceUnitCount": 206,
+			"totalBlockingTimeP50": 334,
+			"totalBlockingTimeP95": 342.2,
+			"validationP50": 475.55,
+			"validationP95": 495.4
+		}
+	},
+	"sourceServiceProfile": {
+		"bulkPayloadBytes": 325266,
+		"bulkSerializationDuration": 2.171209,
+		"estimatedSingleLoadAndSerialization": 70.011094,
+		"manifestWallDuration": 67.979213,
+		"projectLoads": {
+			"initialization": 1,
+			"readManifest": 1,
+			"readUnit": 206,
+			"total": 208
+		},
+		"readUnitLoad": {
+			"assembleP50": 12.650221,
+			"assembleP95": 15.355058,
+			"collectPathsP50": 2.317963,
+			"collectPathsP95": 3.395471,
+			"readParseP50": 43.97613,
+			"readParseP95": 50.318253,
+			"totalP50": 59.807689,
+			"totalP95": 66.085826
+		},
+		"unitReadsWallDuration": 12498.924439
+	},
+	"warm": [
+		{
+			"editorUsable": 330.6,
+			"sourceMessageReceived": 41.7,
+			"hydration": 269.8,
+			"totalBlockingTime": 229,
+			"messageTransit": 9.9998
+		},
+		{
+			"editorUsable": 320,
+			"sourceMessageReceived": 32.1,
+			"hydration": 266.5,
+			"totalBlockingTime": 227,
+			"messageTransit": 3
+		},
+		{
+			"editorUsable": 335.2,
+			"sourceMessageReceived": 35.3,
+			"hydration": 278.7,
+			"totalBlockingTime": 239,
+			"messageTransit": 3.2
+		},
+		{
+			"editorUsable": 352.8,
+			"sourceMessageReceived": 33.3,
+			"hydration": 297.6,
+			"totalBlockingTime": 258,
+			"messageTransit": 3.1
+		},
+		{
+			"editorUsable": 363.5,
+			"sourceMessageReceived": 48.7,
+			"hydration": 292.3,
+			"totalBlockingTime": 253,
+			"messageTransit": 3.3
+		},
+		{
+			"editorUsable": 352.3,
+			"sourceMessageReceived": 54,
+			"hydration": 277.5,
+			"totalBlockingTime": 237,
+			"messageTransit": 3.1
+		},
+		{
+			"editorUsable": 329.2,
+			"sourceMessageReceived": 46.2,
+			"hydration": 258.7,
+			"totalBlockingTime": 219,
+			"messageTransit": 2.9
+		},
+		{
+			"editorUsable": 347.7,
+			"sourceMessageReceived": 52.9,
+			"hydration": 272.5,
+			"totalBlockingTime": 233,
+			"messageTransit": 3
+		},
+		{
+			"editorUsable": 337.1,
+			"sourceMessageReceived": 49.9,
+			"hydration": 264.7,
+			"totalBlockingTime": 225,
+			"messageTransit": 3
+		},
+		{
+			"editorUsable": 339.5,
+			"sourceMessageReceived": 42.2,
+			"hydration": 274.7,
+			"totalBlockingTime": 235,
+			"messageTransit": 3
+		}
+	]
+}

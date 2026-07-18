@@ -11,7 +11,7 @@ describe(`create-font RPC`, () => {
 			.then((response) => response.json())
 		expect(health).toEqual({
 			ok: true,
-			rpcVersion: 3,
+			rpcVersion: 4,
 		})
 
 		const workspace = await app

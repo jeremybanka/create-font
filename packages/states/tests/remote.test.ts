@@ -7,6 +7,16 @@ import {
 
 function createClient(): FontSourceRemoteClient {
 	return {
+		readSnapshot: vi.fn(async () => ({
+			revision: `manifest-1`,
+			units: [
+				{
+					path: `glyphs/a.json`,
+					revision: `glyph-a-1`,
+					value: { path: `glyphs/a.json` },
+				},
+			],
+		})),
 		readManifest: vi.fn(async () => ({
 			revision: `manifest-1`,
 			units: [
