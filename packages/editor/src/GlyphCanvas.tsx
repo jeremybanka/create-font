@@ -528,8 +528,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		penGesture?.endpoint,
 		penGestureResolution,
 	)
-	const penPlacementDraggedHandle: PenHandleKind =
-		penContourId !== null && penDirection === "append" ? "incoming" : "outgoing"
 	const penPlacement =
 		activeTool !== "pen" || editingTextIndex === null
 			? null
@@ -549,7 +547,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						)
 	const penHandles =
 		penEndpointResolution === null
-			? penGestureHandles(penGestureResolution, penPlacementDraggedHandle)
+			? penGestureHandles(penGestureResolution, "outgoing")
 			: {
 					...(penEndpointResolution.incoming === undefined
 						? {}
@@ -937,11 +935,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				contourId: penContourId,
 				...(penDirection === "prepend" ? { at: 0 } : {}),
 				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(
-					point,
-					gesture,
-					penDirection === "prepend" ? "outgoing" : "incoming",
-				),
+				coordinates: penCoordinates(point, gesture, "outgoing"),
 			})
 			penContourResumeRef.current = penContourId
 		}
@@ -1014,7 +1008,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 							coordinates: penCoordinates(
 								closurePoint,
 								gesture,
-								penDirection === "prepend" ? "outgoing" : "incoming",
+								"outgoing",
 							).map(({ masterId, incoming, outgoing }) => ({
 								masterId,
 								incoming: incoming!,
