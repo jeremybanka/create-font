@@ -2,7 +2,6 @@ import type { GlyphId, MasterId } from "@create-font/states"
 import { useEffect } from "preact/hooks"
 
 import type { EditorIconName } from "./EditorIcon.tsx"
-import { deriveOneSidedSoftHandles } from "./curve-editing.ts"
 import type {
 	EditorCanvasContour,
 	EditorCanvasLayer,
@@ -150,11 +149,10 @@ function inversionCenter(contour: EditorCanvasContour): {
 	readonly centerX: number
 	readonly centerY: number
 } | null {
-	const visibleNodes = deriveOneSidedSoftHandles(contour.nodes, contour.closed)
 	const bounds = boundsOfControls(
 		resolveSelectionControls(
-			visibleNodes,
-			contourSelectionTargets(visibleNodes),
+			contour.nodes,
+			contourSelectionTargets(contour.nodes),
 		),
 	)
 	return bounds === null

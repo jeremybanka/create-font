@@ -2130,6 +2130,430 @@ describe("font editor state", () => {
 		)
 	})
 
+	it("slides one soft node while preserving absolute handles and master isolation", () => {
+		const editor = createLoadedEditor("test/slide-soft-node")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const otherBefore = editor.read.layerNode(razorMasterId, oGlyphId, pointId)
+		if (
+			!before.ok ||
+			!otherBefore.ok ||
+			before.value.incoming === undefined ||
+			before.value.outgoing === undefined
+		) {
+			throw new Error("Fixture soft node is incomplete.")
+		}
+		const incoming = {
+			x: before.value.x + before.value.incoming.x,
+			y: before.value.y + before.value.incoming.y,
+		}
+		const outgoing = {
+			x: before.value.x + before.value.outgoing.x,
+			y: before.value.y + before.value.outgoing.y,
+		}
+		const next = {
+			x: incoming.x + (outgoing.x - incoming.x) * 0.3,
+			y: incoming.y + (outgoing.y - incoming.y) * 0.3,
+		}
+
+		editor.actions.slideSoftNode({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			...next,
+			handles: [
+				{ handle: "incoming", ...incoming },
+				{ handle: "outgoing", ...outgoing },
+			],
+		})
+
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		expect(after.ok).toBe(true)
+		if (!after.ok) return
+		expect(after.value).toMatchObject({ ...next, mode: "soft" })
+		expect({
+			x: after.value.x + (after.value.incoming?.x ?? 0),
+			y: after.value.y + (after.value.incoming?.y ?? 0),
+		}).toEqual(incoming)
+		expect({
+			x: after.value.x + (after.value.outgoing?.x ?? 0),
+			y: after.value.y + (after.value.outgoing?.y ?? 0),
+		}).toEqual(outgoing)
+		expect(editor.read.layerNode(razorMasterId, oGlyphId, pointId)).toEqual(
+			otherBefore,
+		)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+
+		editor.undo(oGlyphId)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			before,
+		)
+		editor.redo(oGlyphId)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			after,
+		)
+	})
+
+	it("rejects stale soft-node endpoints without geometry or history changes", () => {
+		const editor = createLoadedEditor("test/slide-soft-node-stale")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (
+			!before.ok ||
+			before.value.incoming === undefined ||
+			before.value.outgoing === undefined
+		) {
+			throw new Error("Fixture soft node is incomplete.")
+		}
+		const historyLength = editor.silo.inspectTimeline(
+			editor.glyphHistoryTimelines,
+			oGlyphId,
+		).length
+		expect(() =>
+			editor.actions.slideSoftNode({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointId,
+				x: before.value.x,
+				y: before.value.y,
+				handles: [
+					{
+						handle: "incoming",
+						x: before.value.x + before.value.incoming.x + 1,
+						y: before.value.y + before.value.incoming.y,
+					},
+					{
+						handle: "outgoing",
+						x: before.value.x + before.value.outgoing.x,
+						y: before.value.y + before.value.outgoing.y,
+					},
+				],
+			}),
+		).toThrow(/endpoint changed/)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			before,
+		)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(historyLength)
+	})
+
+	it("validates both one-sided tangent bounds including a zero handle", () => {
+		for (const handle of ["incoming", "outgoing"] as const) {
+			const editor = createLoadedEditor(`test/slide-one-sided-${handle}`)
+			const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+			const pointId = contour?.points[0]?.id
+			const neighborId =
+				handle === "incoming"
+					? contour?.points[1]?.id
+					: contour?.points.at(-1)?.id
+			if (pointId === undefined || neighborId === undefined) {
+				throw new Error("Fixture tangent nodes are missing.")
+			}
+			const removed = handle === "incoming" ? "outgoing" : "incoming"
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				editor.actions.moveHandle({
+					masterId,
+					glyphId: oGlyphId,
+					pointId,
+					handle: removed,
+					vector: null,
+				})
+			}
+			editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "soft" })
+			const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+			const neighbor = editor.read.layerNode(
+				blackMasterId,
+				oGlyphId,
+				neighborId,
+			)
+			if (!before.ok || !neighbor.ok || before.value[handle] === undefined) {
+				throw new Error("One-sided fixture did not project.")
+			}
+			const vector = before.value[handle]
+			if (vector === undefined) throw new Error("Authored handle is missing.")
+			const authored = {
+				x: before.value.x + vector.x,
+				y: before.value.y + vector.y,
+			}
+			const neighborVector = neighbor.value[handle]
+			const reference = {
+				x: neighbor.value.x + (neighborVector?.x ?? 0),
+				y: neighbor.value.y + (neighborVector?.y ?? 0),
+			}
+			editor.actions.slideSoftNode({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointId,
+				...authored,
+				handles: [{ handle, ...authored }],
+			})
+			const atZero = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+			if (!atZero.ok || atZero.value[handle] === undefined) {
+				throw new Error("Zero-bound node did not project.")
+			}
+			expect(atZero.value[handle]).toEqual({ x: 0, y: 0 })
+			const midpoint = {
+				x: authored.x + (reference.x - authored.x) * 0.5,
+				y: authored.y + (reference.y - authored.y) * 0.5,
+			}
+			editor.actions.slideSoftNode({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointId,
+				...midpoint,
+				handles: [{ handle, ...authored }],
+			})
+			const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+			if (!after.ok || after.value[handle] === undefined) {
+				throw new Error("Bounded one-sided slide did not project.")
+			}
+			expect(after.value.x + after.value[handle]!.x).toBeCloseTo(authored.x)
+			expect(after.value.y + after.value[handle]!.y).toBeCloseTo(authored.y)
+			const historyLength = editor.silo.inspectTimeline(
+				editor.glyphHistoryTimelines,
+				oGlyphId,
+			).length
+			const tangent = {
+				x: reference.x - authored.x,
+				y: reference.y - authored.y,
+			}
+			const tangentLength = Math.hypot(tangent.x, tangent.y)
+			expect(() =>
+				editor.actions.slideSoftNode({
+					masterId: blackMasterId,
+					glyphId: oGlyphId,
+					pointId,
+					x: midpoint.x - tangent.y / tangentLength,
+					y: midpoint.y + tangent.x / tangentLength,
+					handles: [{ handle, ...authored }],
+				}),
+			).toThrow(/tangent bounds/)
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+					.length,
+			).toBe(historyLength)
+		}
+	})
+
+	it("prevalidates malformed handle state before move or transform writes", () => {
+		const editor = createLoadedEditor("test/handle-preflight")
+		const points = makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points
+		const pointId = points?.[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const atomKey = [blackMasterId, oGlyphId, pointId] as const
+		const beforePosition = editor.silo.getState(
+			editor.atoms.pointPosition,
+			atomKey,
+		)
+		const beforeIncomingX = editor.silo.getState(
+			editor.atoms.incomingHandleX,
+			atomKey,
+		)
+		editor.silo.setState(editor.atoms.outgoingHandleY, atomKey, null)
+		expect(() =>
+			editor.actions.moveHandle({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "incoming",
+				vector: { x: 999, y: 999 },
+			}),
+		).toThrow(/invalid layer geometry/)
+		expect(editor.silo.getState(editor.atoms.incomingHandleX, atomKey)).toBe(
+			beforeIncomingX,
+		)
+		expect(() =>
+			editor.actions.transformControls({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				points: [{ pointId, x: 321, y: 654 }],
+				handles: [],
+			}),
+		).toThrow(/invalid layer geometry/)
+		expect(editor.silo.getState(editor.atoms.pointPosition, atomKey)).toEqual(
+			beforePosition,
+		)
+	})
+
+	it("reuses an explicit ray after an unbounded one-sided handle reaches zero", () => {
+		const editor = createLoadedEditor("test/slide-open-zero-ray")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		const pointId = contour?.points[0]?.id
+		if (contour === undefined || pointId === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+		editor.silo.setState(
+			editor.atoms.contourClosed,
+			[oGlyphId, contour.id],
+			false,
+		)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			editor.actions.moveHandle({
+				masterId,
+				glyphId: oGlyphId,
+				pointId,
+				handle: "incoming",
+				vector: null,
+			})
+		}
+		editor.silo.setState(
+			editor.atoms.point,
+			[oGlyphId, pointId],
+			Object.freeze({ mode: "soft" }),
+		)
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!before.ok || before.value.outgoing === undefined) {
+			throw new Error("Open one-sided node did not project.")
+		}
+		const authored = {
+			x: before.value.x + before.value.outgoing.x,
+			y: before.value.y + before.value.outgoing.y,
+		}
+		const direction = {
+			x: before.value.x - authored.x,
+			y: before.value.y - authored.y,
+		}
+		editor.actions.slideSoftNode({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			...authored,
+			handles: [{ handle: "outgoing", ...authored }],
+			unboundedDirection: direction,
+		})
+		const length = Math.hypot(direction.x, direction.y)
+		const next = {
+			x: authored.x + (direction.x / length) * 10,
+			y: authored.y + (direction.y / length) * 10,
+		}
+		editor.actions.slideSoftNode({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			...next,
+			handles: [{ handle: "outgoing", ...authored }],
+			unboundedDirection: direction,
+		})
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		if (!after.ok || after.value.outgoing === undefined) {
+			throw new Error("Repeated unbounded slide did not project.")
+		}
+		expect(after.value.x + after.value.outgoing.x).toBeCloseTo(authored.x)
+		expect(after.value.y + after.value.outgoing.y).toBeCloseTo(authored.y)
+		expect(() =>
+			editor.actions.slideSoftNode({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				pointId,
+				x: authored.x - direction.x,
+				y: authored.y - direction.y,
+				handles: [{ handle: "outgoing", ...authored }],
+				unboundedDirection: direction,
+			}),
+		).toThrow(/original tangent ray/)
+	})
+
+	it("uses the raw adjacent control as the one-sided tangent bound", () => {
+		const editor = createLoadedEditor("test/slide-adjacent-one-sided")
+		const points = makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points
+		const pointId = points?.[0]?.id
+		const neighborId = points?.[1]?.id
+		if (pointId === undefined || neighborId === undefined) {
+			throw new Error("Fixture points are missing.")
+		}
+		for (const targetId of [pointId, neighborId]) {
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				editor.actions.moveHandle({
+					masterId,
+					glyphId: oGlyphId,
+					pointId: targetId,
+					handle: "outgoing",
+					vector: null,
+				})
+			}
+			editor.actions.setNodeMode({
+				glyphId: oGlyphId,
+				pointId: targetId,
+				mode: "soft",
+			})
+		}
+		const neighborBefore = editor.read.layerNode(
+			blackMasterId,
+			oGlyphId,
+			neighborId,
+		)
+		if (!neighborBefore.ok) throw new Error("Neighbor did not project.")
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{
+					pointId: neighborId,
+					x: neighborBefore.value.x + 37,
+					y: neighborBefore.value.y + 53,
+				},
+			],
+		})
+		const current = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const neighborPosition = editor.silo.getState(editor.atoms.pointPosition, [
+			blackMasterId,
+			oGlyphId,
+			neighborId,
+		])
+		const rawX = editor.silo.getState(editor.atoms.incomingHandleX, [
+			blackMasterId,
+			oGlyphId,
+			neighborId,
+		])
+		const rawY = editor.silo.getState(editor.atoms.incomingHandleY, [
+			blackMasterId,
+			oGlyphId,
+			neighborId,
+		])
+		if (
+			!current.ok ||
+			current.value.incoming === undefined ||
+			neighborPosition === null ||
+			rawX === null ||
+			rawY === null
+		) {
+			throw new Error("Adjacent one-sided geometry is incomplete.")
+		}
+		const authored = {
+			x: current.value.x + current.value.incoming.x,
+			y: current.value.y + current.value.incoming.y,
+		}
+		const rawReference = {
+			x: neighborPosition.x + rawX,
+			y: neighborPosition.y + rawY,
+		}
+		const midpoint = {
+			x: (authored.x + rawReference.x) / 2,
+			y: (authored.y + rawReference.y) / 2,
+		}
+		editor.actions.slideSoftNode({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			...midpoint,
+			handles: [{ handle: "incoming", ...authored }],
+		})
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		expect(after.ok).toBe(true)
+		if (!after.ok || after.value.incoming === undefined) return
+		expect(after.value.x + after.value.incoming.x).toBeCloseTo(authored.x)
+		expect(after.value.y + after.value.incoming.y).toBeCloseTo(authored.y)
+	})
+
 	it("splits a curved segment at one shared parameter across all masters", () => {
 		const editor = createLoadedEditor("test/split-segment")
 		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
