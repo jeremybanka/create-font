@@ -73,21 +73,24 @@ or roll back.
 
 ## Editor application boundary
 
-The consumer package owns `public/index.html` and `public/index.tsx`. Its browser
-entry imports `EditorApplicationRoot` from `@create-font/editor`
-workspace package, loads the selected project's source units through Eden,
+The consumer package owns `public/index.html` and `public/index.tsx`. Its small
+browser bootstrap loads the selected project's source units through Eden,
 assembles them into editor state, and persists changed units back through the
 multi-write route. It uses the browser-only `@create-font/source/browser`
 entrypoint, leaving Zod schemas and per-unit validation in the server process.
 
-The package build emits a self-contained HTML, JavaScript, and CSS application
-under `dist/public`, which is what the compiled Elysia server serves after
-installation.
+`@create-font/editor` publishes its own browser-ready `editor.js` and
+`editor.css`. The Elysia server resolves those files from the installed
+production dependency and serves them under `/editor/`. Once a source is ready,
+the bootstrap dynamically imports the editor and calls its `mountEditor`
+boundary. The editor artifact owns its Preact renderer and hooks; it never
+shares component state with the bootstrap bundle.
 
 The repository's `pnpm dev` command splits the development serving path at a
 deliberate boundary. Bun runs the Elysia API and SharedWorker endpoint with
 runtime `--hot` on port 3001. Vite serves `public/index.tsx` on port 3000 with
-Preact and CSS HMR, resolves workspace packages through their `development`
-exports, and proxies `/api` and `/source-session.worker.js` to Bun. This avoids
-requiring package builds while keeping browser HMR independent from Bun's
-full-stack CSS Module transform.
+Preact and CSS HMR. Vite aliases the editor browser entry to its workspace
+source and proxies `/api` and `/source-session.worker.js` to Bun, so editor
+changes retain HMR without requiring a package build. Production emits only
+the bootstrap under `dist/public`; the editor implementation remains in the
+dependency package instead of being duplicated there.

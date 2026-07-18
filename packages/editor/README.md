@@ -71,17 +71,19 @@ pnpm --filter @create-font/editor check
 pnpm --filter @create-font/editor build
 ```
 
-The editor is no longer a self-starting Vite application. Its package root
-exports `EditorApplicationRoot`; `create-font/public/index.tsx` owns the browser
-mount and imports that component.
+The editor is not a self-starting application. Its package build publishes
+`dist/browser/editor.js` and `editor.css`. The `@create-font/editor/browser`
+entry exposes `mountEditor`, `update`, and `unmount` through an imperative
+boundary so this artifact owns its Preact renderer. `create-font` serves and
+dynamically imports these files from its installed production dependency.
 
 The initial slice intentionally has no inert save or export affordances. The UI
 currently loads its self-contained `EditorFontSource` fixture and edits that
 live state.
 
-In the product architecture, this application is bundled with the public
-`create-font` npm package and served by `create-font serve` from beside the font
-repository. The same CLI process owns project discovery, filesystem access,
+In the product architecture, this application is served by `create-font` from
+the installed editor package beside the font repository. The same CLI process
+owns project discovery, filesystem access,
 watching, conditional persistence, compilation, and diagnostics. The browser
 uses a versioned same-origin workspace protocol; it never receives arbitrary
 filesystem or process access.

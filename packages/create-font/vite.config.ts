@@ -12,7 +12,16 @@ const backend = `http://127.0.0.1:${backendPort}`
 export default defineConfig({
 	plugins: [preact()],
 	resolve: {
+		alias: {
+			"@create-font/editor/browser": resolve(
+				import.meta.dirname,
+				`../editor/src/browser.ts`,
+			),
+		},
 		conditions: [`development`],
+	},
+	define: {
+		__CREATE_FONT_DEVELOPMENT__: `true`,
 	},
 	root: resolve(import.meta.dirname, `public`),
 	server: {
