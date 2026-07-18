@@ -103,6 +103,106 @@ describe("editor tools and hotkeys", () => {
 			toolForKeyboardEvent(keyboardEvent({ key: "f", shiftKey: true }), true)
 				?.id,
 		).toBe("make-node-first")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "h", shiftKey: true }), true)
+				?.id,
+		).toBe("invert-horizontal")
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "v", shiftKey: true }), true)
+				?.id,
+		).toBe("invert-vertical")
+	})
+
+	it("reverses open paths and dispatches both contour inversions", () => {
+		const reverseContour = vi.fn()
+		const invertContour = vi.fn()
+		const setState = vi.fn()
+		const selectionToken = Symbol("selection")
+		const context = {
+			activeGlyphId: "glyph:test",
+			activeMasterId: "master:test",
+			activeTool: "select",
+			editingTextIndex: 0,
+			history: { at: 0, length: 0 },
+			selection: [{ kind: "handle", pointId: "point:a", handle: "incoming" }],
+			activeLayer: {
+				contours: [
+					{
+						id: "contour:test",
+						closed: false,
+						nodes: [
+							{
+								pointId: "point:a",
+								mode: "soft",
+								x: 10,
+								y: 0,
+								incoming: { x: -20, y: 0 },
+							},
+							{ pointId: "point:b", mode: "hard", x: 10, y: 100 },
+						],
+					},
+				],
+			},
+			workspace: {
+				font: {
+					actions: { reverseContour, invertContour },
+					silo: { setState },
+				},
+				ui: { selection: selectionToken },
+			},
+		} as unknown as Parameters<(typeof TOOLS)["REVERSE"]["do"]>[0]
+
+		expect(TOOLS.REVERSE.status(context)).toBe("ready")
+		TOOLS.REVERSE.do(context)
+		TOOLS.INVERT_HORIZONTAL.do(context)
+		TOOLS.INVERT_VERTICAL.do(context)
+
+		expect(reverseContour).toHaveBeenCalledWith({
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+		})
+		expect(invertContour).toHaveBeenNthCalledWith(1, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+			axis: "horizontal",
+			centerX: 10,
+			centerY: 40,
+		})
+		expect(invertContour).toHaveBeenNthCalledWith(2, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			contourId: "contour:test",
+			axis: "vertical",
+			centerX: 10,
+			centerY: 40,
+		})
+		expect(setState).toHaveBeenCalledTimes(3)
+		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
+			{ kind: "handle", pointId: "point:a", handle: "outgoing" },
+		])
+
+		const undo = vi.fn()
+		const redo = vi.fn()
+		const clear = vi.fn()
+		TOOLS.UNDO.do({
+			...context,
+			history: { at: 1, length: 1, undo, redo, clear },
+			selection: [{ kind: "handle", pointId: "point:a", handle: "outgoing" }],
+		})
+		expect(undo).toHaveBeenCalledOnce()
+		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
+			{ kind: "handle", pointId: "point:a", handle: "incoming" },
+		])
+		TOOLS.REDO.do({
+			...context,
+			history: { at: 0, length: 1, undo, redo, clear },
+			selection: [{ kind: "handle", pointId: "point:a", handle: "incoming" }],
+		})
+		expect(redo).toHaveBeenCalledOnce()
+		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
+			{ kind: "handle", pointId: "point:a", handle: "outgoing" },
+		])
 	})
 
 	it("dispatches alignment as one mixed-control state action", () => {

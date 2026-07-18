@@ -2,6 +2,7 @@ import type { GlyphId, MasterId } from "@create-font/states"
 import { useEffect } from "preact/hooks"
 
 import type { EditorIconName } from "./EditorIcon.tsx"
+import { deriveOneSidedSoftHandles } from "./curve-editing.ts"
 import type {
 	EditorCanvasContour,
 	EditorCanvasLayer,
@@ -9,7 +10,10 @@ import type {
 	EditorWorkspace,
 } from "./editor-workspace.ts"
 import {
+	boundsOfControls,
+	contourSelectionTargets,
 	nearestAxisAlignment,
+	reverseSelectionHandles,
 	resolveSelectionControls,
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
@@ -90,7 +94,9 @@ export function toolDisabledReason(
 		case "align-selection":
 			return "Select at least two nodes or handles to align."
 		case "reverse-path":
-			return "Select controls from exactly one closed path."
+		case "invert-horizontal":
+		case "invert-vertical":
+			return "Select controls from exactly one path."
 		case "make-node-first":
 			return "Select one non-first node on a closed path."
 		case "undo":
@@ -108,6 +114,63 @@ function selectedContour(context: ToolContext): EditorCanvasContour | null {
 		contour.nodes.some((node) => selectedIds.has(node.pointId)),
 	)
 	return contours.length === 1 ? (contours[0] ?? null) : null
+}
+
+const directionChanges = new WeakMap<
+	EditorWorkspace,
+	Map<GlyphId, Set<number>>
+>()
+
+function rememberDirectionChange(context: ToolContext): void {
+	let byGlyph = directionChanges.get(context.workspace)
+	if (byGlyph === undefined) {
+		byGlyph = new Map()
+		directionChanges.set(context.workspace, byGlyph)
+	}
+	let entries = byGlyph.get(context.activeGlyphId)
+	if (entries === undefined) {
+		entries = new Set()
+		byGlyph.set(context.activeGlyphId, entries)
+	}
+	for (const entry of entries) {
+		if (entry > context.history.at) entries.delete(entry)
+	}
+	entries.add(context.history.at + 1)
+}
+
+function remapSelectionHandles(context: ToolContext): void {
+	context.workspace.font.silo.setState(
+		context.workspace.ui.selection,
+		reverseSelectionHandles(context.selection),
+	)
+}
+
+function inversionCenter(contour: EditorCanvasContour): {
+	readonly centerX: number
+	readonly centerY: number
+} | null {
+	const visibleNodes = deriveOneSidedSoftHandles(contour.nodes, contour.closed)
+	const bounds = boundsOfControls(
+		resolveSelectionControls(
+			visibleNodes,
+			contourSelectionTargets(visibleNodes),
+		),
+	)
+	return bounds === null
+		? null
+		: {
+				centerX: (bounds.minX + bounds.maxX) / 2,
+				centerY: (bounds.minY + bounds.maxY) / 2,
+			}
+}
+
+function directionChangeAt(context: ToolContext, entry: number): boolean {
+	return (
+		directionChanges
+			.get(context.workspace)
+			?.get(context.activeGlyphId)
+			?.has(entry) ?? false
+	)
 }
 
 export const TOOLS = {
@@ -182,23 +245,79 @@ export const TOOLS = {
 	},
 	REVERSE: {
 		description:
-			"Reverse the selected closed path while keeping its first node.",
+			"Reverse the selected path; closed paths keep their first node.",
 		id: "reverse-path",
 		displayName: "Reverse Path",
 		hotkey: { key: "r", shift: true },
 		icon: "ShuffleIcon",
 		status: (context) =>
-			context.editingTextIndex !== null && selectedContour(context)?.closed
+			context.editingTextIndex !== null && selectedContour(context) !== null
 				? "ready"
 				: "disabled",
 		do: (context) => {
 			if (context.activeGlyphId === null) return
 			const contour = selectedContour(context)
-			if (contour === null || !contour.closed) return
+			if (contour === null) return
 			context.workspace.font.actions.reverseContour({
 				glyphId: context.activeGlyphId,
 				contourId: contour.id,
 			})
+			rememberDirectionChange(context)
+			remapSelectionHandles(context)
+		},
+	},
+	INVERT_HORIZONTAL: {
+		description:
+			"Mirror the selected path horizontally and preserve its direction.",
+		id: "invert-horizontal",
+		displayName: "Invert Horizontally",
+		hotkey: { key: "h", shift: true },
+		icon: "TransformIcon",
+		status: (context) =>
+			context.editingTextIndex !== null && selectedContour(context) !== null
+				? "ready"
+				: "disabled",
+		do: (context) => {
+			const contour = selectedContour(context)
+			if (contour === null) return
+			const center = inversionCenter(contour)
+			if (center === null) return
+			context.workspace.font.actions.invertContour({
+				masterId: context.activeMasterId,
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+				axis: "horizontal",
+				...center,
+			})
+			rememberDirectionChange(context)
+			remapSelectionHandles(context)
+		},
+	},
+	INVERT_VERTICAL: {
+		description:
+			"Mirror the selected path vertically and preserve its direction.",
+		id: "invert-vertical",
+		displayName: "Invert Vertically",
+		hotkey: { key: "v", shift: true },
+		icon: "TransformIcon",
+		status: (context) =>
+			context.editingTextIndex !== null && selectedContour(context) !== null
+				? "ready"
+				: "disabled",
+		do: (context) => {
+			const contour = selectedContour(context)
+			if (contour === null) return
+			const center = inversionCenter(contour)
+			if (center === null) return
+			context.workspace.font.actions.invertContour({
+				masterId: context.activeMasterId,
+				glyphId: context.activeGlyphId,
+				contourId: contour.id,
+				axis: "vertical",
+				...center,
+			})
+			rememberDirectionChange(context)
+			remapSelectionHandles(context)
 		},
 	},
 	MAKE_FIRST: {
@@ -238,7 +357,11 @@ export const TOOLS = {
 		hotkey: { key: "z", mod: true },
 		icon: "DoubleArrowLeftIcon",
 		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
-		do: ({ history }) => history.undo(),
+		do: (context) => {
+			const remap = directionChangeAt(context, context.history.at)
+			context.history.undo()
+			if (remap) remapSelectionHandles(context)
+		},
 	},
 	REDO: {
 		description: "Restore the next edit to the active glyph.",
@@ -248,14 +371,24 @@ export const TOOLS = {
 		icon: "DoubleArrowRightIcon",
 		status: ({ history }) =>
 			history.at === history.length ? "disabled" : "ready",
-		do: ({ history }) => history.redo(),
+		do: (context) => {
+			const remap = directionChangeAt(context, context.history.at + 1)
+			context.history.redo()
+			if (remap) remapSelectionHandles(context)
+		},
 	},
 } as const satisfies Record<string, Tool>
 
 export const TOOLBAR_LAYOUT = [
 	[TOOLS.SELECT, TOOLS.PEN, TOOLS.TRANSFORM],
 	[TOOLS.UNDO, TOOLS.REDO],
-	[TOOLS.ALIGN, TOOLS.REVERSE, TOOLS.MAKE_FIRST],
+	[
+		TOOLS.ALIGN,
+		TOOLS.REVERSE,
+		TOOLS.MAKE_FIRST,
+		TOOLS.INVERT_HORIZONTAL,
+		TOOLS.INVERT_VERTICAL,
+	],
 ] as const satisfies readonly (readonly Tool[])[]
 
 type ToolsThatExist = (typeof TOOLS)[keyof typeof TOOLS]["id"]
