@@ -100,10 +100,9 @@ export function createEditorWorkspace(
 			"The editor requires at least one glyph and one master.",
 		)
 	}
-	const activeGlyphIdAtom = font.silo.atom<GlyphId>({
-		key: "activeGlyphId",
-		default:
-			document.glyphs.find((glyph) => glyph.name === "O")?.id ?? firstGlyph,
+	const selectedGlyphIdAtom = font.silo.atom<GlyphId | null>({
+		key: "selectedGlyphId",
+		default: null,
 	})
 	const activeMasterIdAtom = font.silo.atom<MasterId>({
 		key: "activeMasterId",
@@ -240,55 +239,6 @@ export function createEditorWorkspace(
 		},
 	})
 
-	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
-		key: "activeLayer",
-		get: ({ get }) => {
-			const masterId = get(activeMasterIdAtom)
-			const glyphId = get(activeGlyphIdAtom)
-			const contourIds = get(font.atoms.glyphContourIds, glyphId)
-			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
-			const bounds = get(font.selectors.layerBounds, [masterId, glyphId])
-			if (contourIds === null || advanceWidth === null || !bounds.ok) {
-				return null
-			}
-			const contours: EditorCanvasContour[] = []
-			for (const contourId of contourIds) {
-				const pointIds = get(font.atoms.contourPointIds, [glyphId, contourId])
-				const closed = get(font.atoms.contourClosed, [glyphId, contourId])
-				if (pointIds === null || closed === null) return null
-				const contour: EditorLayerNode[] = []
-				for (const pointId of pointIds) {
-					const node = get(font.selectors.layerNode, [
-						masterId,
-						glyphId,
-						pointId,
-					])
-					if (!node.ok) return null
-					contour.push(node.value)
-				}
-				contours.push(
-					Object.freeze({
-						id: contourId,
-						closed,
-						nodes: Object.freeze(contour),
-					}),
-				)
-			}
-			const { xMin, xMax } = bounds.value
-			const outlineWidth = xMax - xMin
-			return Object.freeze({
-				masterId,
-				glyphId,
-				contours: Object.freeze(contours),
-				advanceWidth,
-				leftSideBearing: xMin,
-				xMin,
-				xMax,
-				outlineWidth,
-				rightSideBearing: advanceWidth - xMax,
-			})
-		},
-	})
 	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
 		key: "previewRun",
 		get: ({ get }) => {
@@ -351,6 +301,69 @@ export function createEditorWorkspace(
 				})
 			}
 			return Object.freeze(run)
+		},
+	})
+	const activeGlyphIdSelector = font.silo.selector<GlyphId | null>({
+		key: "activeGlyphId",
+		get: ({ get }) => {
+			if (get(editingTextIndexAtom) !== null) return get(selectedGlyphIdAtom)
+			if (get(routeNameSelector) !== "canvas") return get(selectedGlyphIdAtom)
+			const caretIndex = get(caretIndexAtom)
+			const nextGlyph = get(previewRunSelector).find(
+				(item): item is PreviewRunGlyph =>
+					item.kind === "glyph" && item.textStart >= caretIndex,
+			)
+			return nextGlyph?.glyphId ?? null
+		},
+	})
+	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
+		key: "activeLayer",
+		get: ({ get }) => {
+			const masterId = get(activeMasterIdAtom)
+			const glyphId = get(activeGlyphIdSelector)
+			if (glyphId === null) return null
+			const contourIds = get(font.atoms.glyphContourIds, glyphId)
+			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
+			const bounds = get(font.selectors.layerBounds, [masterId, glyphId])
+			if (contourIds === null || advanceWidth === null || !bounds.ok) {
+				return null
+			}
+			const contours: EditorCanvasContour[] = []
+			for (const contourId of contourIds) {
+				const pointIds = get(font.atoms.contourPointIds, [glyphId, contourId])
+				const closed = get(font.atoms.contourClosed, [glyphId, contourId])
+				if (pointIds === null || closed === null) return null
+				const contour: EditorLayerNode[] = []
+				for (const pointId of pointIds) {
+					const node = get(font.selectors.layerNode, [
+						masterId,
+						glyphId,
+						pointId,
+					])
+					if (!node.ok) return null
+					contour.push(node.value)
+				}
+				contours.push(
+					Object.freeze({
+						id: contourId,
+						closed,
+						nodes: Object.freeze(contour),
+					}),
+				)
+			}
+			const { xMin, xMax } = bounds.value
+			const outlineWidth = xMax - xMin
+			return Object.freeze({
+				masterId,
+				glyphId,
+				contours: Object.freeze(contours),
+				advanceWidth,
+				leftSideBearing: xMin,
+				xMin,
+				xMax,
+				outlineWidth,
+				rightSideBearing: advanceWidth - xMax,
+			})
 		},
 	})
 	const glyphIndexSelector = font.silo.selector<
@@ -416,7 +429,8 @@ export function createEditorWorkspace(
 		font,
 		document,
 		ui: {
-			activeGlyphId: activeGlyphIdAtom,
+			selectedGlyphId: selectedGlyphIdAtom,
+			activeGlyphId: activeGlyphIdSelector,
 			activeMasterId: activeMasterIdAtom,
 			selection: selectionAtom,
 			previewText: previewTextAtom,
@@ -454,7 +468,7 @@ export function createEditorWorkspace(
 				const currentDocument = font.read.editorSource()
 				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))
 					return
-				font.silo.setState(activeGlyphIdAtom, glyphId)
+				font.silo.setState(selectedGlyphIdAtom, glyphId)
 				font.silo.setState(selectionAtom, Object.freeze([]))
 				font.silo.setState(editingTextIndexAtom, null)
 				font.silo.setState(activeToolAtom, "select")
@@ -463,7 +477,7 @@ export function createEditorWorkspace(
 				const currentDocument = font.read.editorSource()
 				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))
 					return
-				font.silo.setState(activeGlyphIdAtom, glyphId)
+				font.silo.setState(selectedGlyphIdAtom, glyphId)
 				font.silo.setState(editingTextIndexAtom, textStart)
 				font.silo.setState(selectionAtom, Object.freeze([]))
 				font.silo.setState(activeToolAtom, "select")
@@ -526,7 +540,7 @@ export function createEditorWorkspace(
 				font.actions.load({ ...currentDocument, glyphs, cmap })
 				const selectedId = addedIds.at(-1)
 				if (selectedId !== undefined) {
-					font.silo.setState(activeGlyphIdAtom, selectedId)
+					font.silo.setState(selectedGlyphIdAtom, selectedId)
 					font.silo.setState(editingTextIndexAtom, null)
 					font.silo.setState(selectionAtom, Object.freeze([]))
 					font.silo.setState(activeToolAtom, "select")
@@ -574,12 +588,9 @@ export function createEditorWorkspace(
 						font.silo.setState(previewCoordinateAtoms, axis.id, axis.default)
 					}
 				}
-				const currentGlyphId = font.silo.getState(activeGlyphIdAtom)
+				const currentGlyphId = font.silo.getState(selectedGlyphIdAtom)
 				if (!source.glyphs.some((glyph) => glyph.id === currentGlyphId)) {
-					const fallbackGlyph = source.glyphs[0]?.id
-					if (fallbackGlyph !== undefined) {
-						font.silo.setState(activeGlyphIdAtom, fallbackGlyph)
-					}
+					font.silo.setState(selectedGlyphIdAtom, null)
 				}
 				const currentMasterId = font.silo.getState(activeMasterIdAtom)
 				if (!source.masters.some((master) => master.id === currentMasterId)) {

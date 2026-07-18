@@ -1,7 +1,7 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphInspector.module.css"
 import { NumericInput } from "./NumericInput.tsx"
-import { useO, useOF } from "./state-hooks.ts"
+import { useO, useOF, useOptionalOF } from "./state-hooks.ts"
 
 export interface GlyphInspectorProps {
 	readonly workspace: EditorWorkspace
@@ -10,7 +10,10 @@ export interface GlyphInspectorProps {
 export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const glyph = useOptionalOF(
+		workspace.font.selectors.editorGlyphSource,
+		activeGlyphId,
+	)
 	const master = useOF(workspace.font.atoms.master, activeMasterId)
 	const selection = useO(workspace.ui.selection)
 	const selectedPointId = selection.at(-1)?.pointId
@@ -36,7 +39,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 			: undefined
 	const projectionIssueCount = validation.issueCount
 	const setWidth = (advanceWidth: number): void => {
-		if (layer === null) return
+		if (layer === null || activeGlyphId === null) return
 		workspace.font.actions.setHorizontalMetrics({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -44,6 +47,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 		})
 	}
 	const setLeftSideBearing = (leftSideBearing: number): void => {
+		if (activeGlyphId === null) return
 		workspace.font.silo.setState(
 			workspace.font.selectors.leftSideBearing,
 			[activeMasterId, activeGlyphId],
@@ -51,6 +55,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 		)
 	}
 	const setRightSideBearing = (rightSideBearing: number): void => {
+		if (activeGlyphId === null) return
 		workspace.font.silo.setState(
 			workspace.font.selectors.rightSideBearing,
 			[activeMasterId, activeGlyphId],
@@ -145,26 +150,28 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 							<button
 								type="button"
 								aria-pressed={selectedPoint.mode === "soft"}
-								onClick={() =>
+								onClick={() => {
+									if (activeGlyphId === null) return
 									workspace.font.actions.setNodeMode({
 										glyphId: activeGlyphId,
 										pointId: selectedPoint.pointId,
 										mode: "soft",
 									})
-								}
+								}}
 							>
 								Soft
 							</button>
 							<button
 								type="button"
 								aria-pressed={selectedPoint.mode === "hard"}
-								onClick={() =>
+								onClick={() => {
+									if (activeGlyphId === null) return
 									workspace.font.actions.setNodeMode({
 										glyphId: activeGlyphId,
 										pointId: selectedPoint.pointId,
 										mode: "hard",
 									})
-								}
+								}}
 							>
 								Hard
 							</button>

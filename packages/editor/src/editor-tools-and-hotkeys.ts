@@ -56,7 +56,7 @@ export type ToolStatus = "active" | "disabled" | "ready"
 
 export interface ToolContext {
 	readonly workspace: EditorWorkspace
-	readonly activeGlyphId: GlyphId
+	readonly activeGlyphId: GlyphId | null
 	readonly activeMasterId: MasterId
 	readonly activeTool: EditorToolId
 	readonly activeLayer: EditorCanvasLayer | null
@@ -165,6 +165,7 @@ export const TOOLS = {
 				? "disabled"
 				: "ready",
 		do: (context) => {
+			if (context.activeGlyphId === null) return
 			const nodes =
 				context.activeLayer?.contours.flatMap(({ nodes }) => nodes) ?? []
 			const plan = nearestAxisAlignment(
@@ -191,6 +192,7 @@ export const TOOLS = {
 				? "ready"
 				: "disabled",
 		do: (context) => {
+			if (context.activeGlyphId === null) return
 			const contour = selectedContour(context)
 			if (contour === null || !contour.closed) return
 			context.workspace.font.actions.reverseContour({
@@ -216,6 +218,7 @@ export const TOOLS = {
 				: "disabled"
 		},
 		do: (context) => {
+			if (context.activeGlyphId === null) return
 			const target = context.selection.find(
 				(candidate) => candidate.kind === "node",
 			)
