@@ -1103,6 +1103,20 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			}),
 		)
 	}
+	const writePointPositions = (
+		get: WriterToolkit["get"],
+		set: WriterToolkit["set"],
+		key: LayerKey,
+		nextPositions: readonly Readonly<{ pointId: PointId; position: Vector2 }>[],
+	): void => {
+		if (nextPositions.length === 0) return
+		const geometry = get(layerGeometryAtoms, key)
+		const pointPositions = { ...geometry.pointPositions }
+		for (const { pointId, position } of nextPositions) {
+			pointPositions[pointId] = position
+		}
+		set(layerGeometryAtoms, key, deepFreeze({ ...geometry, pointPositions }))
+	}
 	const pointPositionSelectors = silo.selectorFamily<
 		Vector2 | null,
 		LayerPointKey
@@ -3775,13 +3789,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					throw new TypeError("Point coordinates must be finite numbers.")
 				}
 			}
-			for (const point of input.points) {
-				set(
-					pointPositionSelectors,
-					[input.masterId, input.glyphId, point.pointId],
-					deepFreeze({ x: point.x, y: point.y }),
-				)
-			}
+			writePointPositions(
+				get,
+				set,
+				[input.masterId, input.glyphId],
+				input.points.map((point) => ({
+					pointId: point.pointId,
+					position: deepFreeze({ x: point.x, y: point.y }),
+				})),
+			)
 		},
 	})
 
@@ -4087,18 +4103,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			})
 		}
 
-		for (const point of input.points) {
-			const atomKey: LayerPointKey = [
-				input.masterId,
-				input.glyphId,
-				point.pointId,
-			]
-			set(
-				pointPositionSelectors,
-				atomKey,
-				deepFreeze({ x: point.x, y: point.y }),
-			)
-		}
+		writePointPositions(
+			get,
+			set,
+			[input.masterId, input.glyphId],
+			input.points.map((point) => ({
+				pointId: point.pointId,
+				position: deepFreeze({ x: point.x, y: point.y }),
+			})),
+		)
 		for (const plan of handlePlans) {
 			if (plan.incoming !== undefined)
 				writeHandle(plan.atomKey, "incoming", plan.incoming)

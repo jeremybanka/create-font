@@ -2831,8 +2831,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						return
 					}
 				}
+				const committedPoints =
+					workspace.font.silo
+						.getState(workspace.ui.activeLayer)
+						?.contours.flatMap((contour) => contour.nodes) ?? allPoints
 				const plan = planSelectionNudge(
-					allPoints,
+					committedPoints,
 					selection,
 					delta[0] * multiplier,
 					delta[1] * multiplier,

@@ -2224,6 +2224,64 @@ describe("font editor state", () => {
 		)
 	})
 
+	it("transforms multiple point positions without dropping earlier writes", () => {
+		const editor = createLoadedEditor("test/transform-multiple-points")
+		const pointIds = makeGeometricOEditorFont()
+			.glyphs[1]?.contours[0]?.points.slice(0, 2)
+			.map((point) => point.id)
+		if (pointIds === undefined || pointIds.length !== 2)
+			throw new Error("Fixture points are missing.")
+		const before = pointIds.map((pointId) =>
+			editor.read.layerNode(blackMasterId, oGlyphId, pointId),
+		)
+		const otherBefore = pointIds.map((pointId) =>
+			editor.read.layerNode(razorMasterId, oGlyphId, pointId),
+		)
+		if (before.some((node) => !node.ok))
+			throw new Error("Fixture nodes are invalid.")
+
+		editor.actions.transformControls({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: before.map((node, index) => {
+				if (!node.ok) throw new Error("Fixture node is invalid.")
+				return {
+					pointId: pointIds[index]!,
+					x: node.value.x + 10,
+					y: node.value.y - 20,
+				}
+			}),
+			handles: [],
+		})
+
+		for (const [index, pointId] of pointIds.entries()) {
+			const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+			const original = before[index]
+			if (!after.ok || original === undefined || !original.ok)
+				throw new Error("Transformed node is invalid.")
+			expect(after.value).toMatchObject({
+				x: original.value.x + 10,
+				y: original.value.y - 20,
+			})
+		}
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+		expect(
+			pointIds.map((pointId) =>
+				editor.read.layerNode(razorMasterId, oGlyphId, pointId),
+			),
+		).toEqual(otherBefore)
+
+		editor.undo(oGlyphId)
+		expect(
+			pointIds.map((pointId) =>
+				editor.read.layerNode(blackMasterId, oGlyphId, pointId),
+			),
+		).toEqual(before)
+	})
+
 	it("slides one soft node while preserving absolute handles and master isolation", () => {
 		const editor = createLoadedEditor("test/slide-soft-node")
 		const pointId =
