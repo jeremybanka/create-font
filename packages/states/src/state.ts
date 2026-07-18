@@ -385,6 +385,8 @@ export interface SlideSoftNodeInput {
 		readonly x: number
 		readonly y: number
 	}[]
+	/** Stable ray for an otherwise directionless zero-length open endpoint. */
+	readonly unboundedDirection?: Readonly<{ x: number; y: number }>
 }
 
 export interface SplitSegmentInput {
@@ -666,9 +668,11 @@ function vectorWithLengthAlong(
 ): Vector2 | null {
 	const directionLength = Math.hypot(direction.x, direction.y)
 	if (directionLength === 0) return null
+	const x = (direction.x / directionLength) * length
+	const y = (direction.y / directionLength) * length
 	return {
-		x: (direction.x / directionLength) * length,
-		y: (direction.y / directionLength) * length,
+		x: Object.is(x, -0) ? 0 : x,
+		y: Object.is(y, -0) ? 0 : y,
 	}
 }
 
@@ -3776,6 +3780,20 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				input.handle === "incoming"
 					? outgoingHandleYAtoms
 					: incomingHandleYAtoms
+			const current = get(layerNodeSelectors, atomKey)
+			if (!current.ok) {
+				throw new TypeError("Cannot edit a handle on invalid layer geometry.")
+			}
+			const selectedCurrentX = get(selectedX, atomKey)
+			const selectedCurrentY = get(selectedY, atomKey)
+			const oldOppositeX = get(oppositeX, atomKey)
+			const oldOppositeY = get(oppositeY, atomKey)
+			if ((selectedCurrentX === null) !== (selectedCurrentY === null)) {
+				throw new TypeError("The selected handle is incomplete.")
+			}
+			if ((oldOppositeX === null) !== (oldOppositeY === null)) {
+				throw new TypeError("The opposite handle is incomplete.")
+			}
 
 			if (input.vector === null) {
 				set(selectedX, atomKey, null)
@@ -3787,26 +3805,28 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				)
 				return
 			}
-
+			let nextOpposite: Vector2 | null = null
+			if (
+				point.mode === "soft" &&
+				oldOppositeX !== null &&
+				oldOppositeY !== null
+			) {
+				const movedLength = Math.hypot(input.vector.x, input.vector.y)
+				const oppositeLength = Math.hypot(oldOppositeX, oldOppositeY)
+				nextOpposite =
+					movedLength === 0
+						? { x: oldOppositeX, y: oldOppositeY }
+						: {
+								x: (-input.vector.x / movedLength) * oppositeLength,
+								y: (-input.vector.y / movedLength) * oppositeLength,
+							}
+			}
 			set(selectedX, atomKey, input.vector.x)
 			set(selectedY, atomKey, input.vector.y)
-			if (point.mode === "hard") return
-
-			const oldOppositeX = get(oppositeX, atomKey)
-			const oldOppositeY = get(oppositeY, atomKey)
-			if ((oldOppositeX === null) !== (oldOppositeY === null)) {
-				throw new TypeError("The opposite soft-node handle is incomplete.")
+			if (nextOpposite !== null) {
+				set(oppositeX, atomKey, nextOpposite.x)
+				set(oppositeY, atomKey, nextOpposite.y)
 			}
-			if (oldOppositeX === null || oldOppositeY === null) return
-			const movedLength = Math.hypot(input.vector.x, input.vector.y)
-			const oppositeLength = Math.hypot(oldOppositeX, oldOppositeY)
-			if (movedLength === 0) {
-				set(oppositeX, atomKey, oldOppositeX)
-				set(oppositeY, atomKey, oldOppositeY)
-				return
-			}
-			set(oppositeX, atomKey, (-input.vector.x / movedLength) * oppositeLength)
-			set(oppositeY, atomKey, (-input.vector.y / movedLength) * oppositeLength)
 		},
 	})
 
@@ -3843,6 +3863,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const position = readPointPosition(get, atomKey)
 				if (position === null) {
 					throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
+				}
+				if (!get(layerNodeSelectors, atomKey).ok) {
+					throw new TypeError(`Point ${pointId} has invalid layer geometry.`)
 				}
 				nextPositions.set(pointId, position)
 			}
@@ -3892,19 +3915,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				selectedHandles.set(handle.pointId, byKind)
 			}
 
-			for (const point of input.points) {
-				const atomKey: LayerPointKey = [
-					input.masterId,
-					input.glyphId,
-					point.pointId,
-				]
-				set(
-					pointPositionSelectors,
-					atomKey,
-					deepFreeze({ x: point.x, y: point.y }),
-				)
-			}
-
 			const writeHandle = (
 				atomKey: LayerPointKey,
 				handle: EditorHandleKind,
@@ -3921,14 +3931,27 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					vector.y,
 				)
 			}
+			const handlePlans: {
+				readonly atomKey: LayerPointKey
+				readonly incoming?: Vector2
+				readonly outgoing?: Vector2
+			}[] = []
 			for (const [pointId, selected] of selectedHandles) {
 				const topology = get(pointAtoms, [input.glyphId, pointId])
-				if (topology === null) continue
+				if (topology === null) {
+					throw new TypeError(`Unknown transformed point ${pointId}.`)
+				}
 				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
 				const incomingX = get(incomingHandleXAtoms, atomKey)
 				const incomingY = get(incomingHandleYAtoms, atomKey)
 				const outgoingX = get(outgoingHandleXAtoms, atomKey)
 				const outgoingY = get(outgoingHandleYAtoms, atomKey)
+				if (
+					(incomingX === null) !== (incomingY === null) ||
+					(outgoingX === null) !== (outgoingY === null)
+				) {
+					throw new TypeError(`Point ${pointId} has an incomplete handle.`)
+				}
 				const oldIncoming =
 					incomingX === null || incomingY === null
 						? undefined
@@ -3970,8 +3993,42 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 									}
 					}
 				}
-				if (incoming !== undefined) writeHandle(atomKey, "incoming", incoming)
-				if (outgoing !== undefined) writeHandle(atomKey, "outgoing", outgoing)
+				const finalIncoming = incoming ?? oldIncoming
+				const finalOutgoing = outgoing ?? oldOutgoing
+				if (
+					topology.mode === "soft" &&
+					(finalIncoming === undefined || finalOutgoing === undefined
+						? finalIncoming === undefined && finalOutgoing === undefined
+						: !handlesShareOppositeRay(finalIncoming, finalOutgoing))
+				) {
+					throw new TypeError(
+						`Transformed soft node ${pointId} would have invalid handles.`,
+					)
+				}
+				handlePlans.push({
+					atomKey,
+					...(incoming === undefined ? {} : { incoming }),
+					...(outgoing === undefined ? {} : { outgoing }),
+				})
+			}
+
+			for (const point of input.points) {
+				const atomKey: LayerPointKey = [
+					input.masterId,
+					input.glyphId,
+					point.pointId,
+				]
+				set(
+					pointPositionSelectors,
+					atomKey,
+					deepFreeze({ x: point.x, y: point.y }),
+				)
+			}
+			for (const plan of handlePlans) {
+				if (plan.incoming !== undefined)
+					writeHandle(plan.atomKey, "incoming", plan.incoming)
+				if (plan.outgoing !== undefined)
+					writeHandle(plan.atomKey, "outgoing", plan.outgoing)
 			}
 		},
 	})
@@ -4008,58 +4065,188 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				input.glyphId,
 				input.pointId,
 			]
-			const existingKinds: EditorHandleKind[] = []
-			for (const handle of ["incoming", "outgoing"] as const) {
-				const x = get(
-					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
-					atomKey,
-				)
-				const y = get(
-					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
-					atomKey,
-				)
-				if ((x === null) !== (y === null)) {
-					throw new TypeError(`The ${handle} soft-node handle is incomplete.`)
-				}
-				if (x !== null) existingKinds.push(handle)
+			const currentResult = get(layerNodeSelectors, atomKey)
+			if (!currentResult.ok) {
+				throw new TypeError("The sliding soft node has invalid layer geometry.")
 			}
-			if (existingKinds.length === 0) {
+			const current = currentResult.value
+			const endpoints = new Map<EditorHandleKind, Vector2>(
+				(["incoming", "outgoing"] as const).flatMap((handle) => {
+					const vector = current[handle]
+					return vector === undefined
+						? []
+						: [
+								[
+									handle,
+									{ x: current.x + vector.x, y: current.y + vector.y },
+								] as const,
+							]
+				}),
+			)
+			if (endpoints.size === 0) {
 				throw new TypeError("A sliding soft node must have an authored handle.")
 			}
-			const endpoints = new Map<EditorHandleKind, Vector2>()
+			const approximatelyEqual = (left: number, right: number): boolean =>
+				Math.abs(left - right) <=
+				Math.max(1, Math.abs(left), Math.abs(right)) * 1e-9
+			const samePosition = (left: Vector2, right: Vector2): boolean =>
+				approximatelyEqual(left.x, right.x) &&
+				approximatelyEqual(left.y, right.y)
+			const supplied = new Map<EditorHandleKind, Vector2>()
 			for (const handle of input.handles) {
 				if (!Number.isFinite(handle.x) || !Number.isFinite(handle.y)) {
 					throw new TypeError("Soft-node handle endpoints must be finite.")
 				}
-				if (!existingKinds.includes(handle.handle)) {
+				const expected = endpoints.get(handle.handle)
+				if (expected === undefined) {
 					throw new TypeError(
 						`Cannot slide a missing ${handle.handle} handle on ${input.pointId}.`,
 					)
 				}
-				endpoints.set(handle.handle, { x: handle.x, y: handle.y })
+				const endpoint = { x: handle.x, y: handle.y }
+				if (!samePosition(endpoint, expected)) {
+					throw new TypeError(
+						`The ${handle.handle} endpoint changed before the soft-node slide committed.`,
+					)
+				}
+				supplied.set(handle.handle, endpoint)
 			}
-			if (
-				endpoints.size !== existingKinds.length ||
-				existingKinds.some((handle) => !endpoints.has(handle))
-			) {
+			if (supplied.size !== endpoints.size) {
 				throw new TypeError(
 					"A soft-node slide must preserve every authored handle endpoint.",
+				)
+			}
+			const candidate = { x: input.x, y: input.y }
+			const isOnRange = (
+				start: Vector2,
+				direction: Vector2,
+				maximum: number | null,
+			): boolean => {
+				const denominator = direction.x ** 2 + direction.y ** 2
+				if (!Number.isFinite(denominator) || denominator === 0)
+					return samePosition(candidate, start)
+				const amount =
+					((candidate.x - start.x) * direction.x +
+						(candidate.y - start.y) * direction.y) /
+					denominator
+				const projected = {
+					x: start.x + direction.x * amount,
+					y: start.y + direction.y * amount,
+				}
+				const amountTolerance = 1e-9
+				return (
+					samePosition(candidate, projected) &&
+					amount >= -amountTolerance &&
+					(maximum === null || amount <= maximum + amountTolerance)
 				)
 			}
 			const incoming = endpoints.get("incoming")
 			const outgoing = endpoints.get("outgoing")
 			if (incoming !== undefined && outgoing !== undefined) {
-				const left = { x: incoming.x - input.x, y: incoming.y - input.y }
-				const right = { x: outgoing.x - input.x, y: outgoing.y - input.y }
-				const product =
-					Math.hypot(left.x, left.y) * Math.hypot(right.x, right.y)
-				const tolerance = Math.max(1, product) * 1e-9
-				const cross = left.x * right.y - left.y * right.x
-				const dot = left.x * right.x + left.y * right.y
-				if (Math.abs(cross) > tolerance || dot > tolerance) {
+				if (
+					!isOnRange(
+						incoming,
+						{ x: outgoing.x - incoming.x, y: outgoing.y - incoming.y },
+						1,
+					)
+				) {
 					throw new TypeError(
 						"A two-sided soft node must remain between its collinear handles.",
 					)
+				}
+			} else {
+				const authored = incoming ?? outgoing
+				if (authored === undefined)
+					throw new Error("Missing authored endpoint.")
+				const contourId = (get(glyphContourIdsAtoms, input.glyphId) ?? []).find(
+					(candidateId) =>
+						(
+							get(contourPointIdsAtoms, [input.glyphId, candidateId]) ?? []
+						).includes(input.pointId),
+				)
+				if (contourId === undefined) {
+					throw new TypeError("The sliding soft node has no contour topology.")
+				}
+				const pointIds =
+					get(contourPointIdsAtoms, [input.glyphId, contourId]) ?? []
+				const closed =
+					get(contourClosedAtoms, [input.glyphId, contourId]) ?? false
+				const pointIndex = pointIds.indexOf(input.pointId)
+				const handle = incoming === undefined ? "outgoing" : "incoming"
+				const neighborId =
+					handle === "incoming"
+						? (pointIds[pointIndex + 1] ?? (closed ? pointIds[0] : undefined))
+						: (pointIds[pointIndex - 1] ??
+							(closed ? pointIds.at(-1) : undefined))
+				let reference: Vector2 | null = null
+				if (neighborId !== undefined) {
+					const neighborKey: LayerPointKey = [
+						input.masterId,
+						input.glyphId,
+						neighborId,
+					]
+					const neighbor = readPointPosition(get, neighborKey)
+					if (
+						neighbor === null ||
+						!Number.isFinite(neighbor.x) ||
+						!Number.isFinite(neighbor.y)
+					) {
+						throw new TypeError("The tangent neighbor has invalid coordinates.")
+					}
+					const neighborHandleX = get(
+						handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+						neighborKey,
+					)
+					const neighborHandleY = get(
+						handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+						neighborKey,
+					)
+					if ((neighborHandleX === null) !== (neighborHandleY === null)) {
+						throw new TypeError("The tangent neighbor handle is incomplete.")
+					}
+					reference = {
+						x: neighbor.x + (neighborHandleX ?? 0),
+						y: neighbor.y + (neighborHandleY ?? 0),
+					}
+					if (samePosition(reference, current)) {
+						reference = { x: neighbor.x, y: neighbor.y }
+					}
+				}
+				if (reference !== null && !samePosition(reference, authored)) {
+					if (
+						!isOnRange(
+							authored,
+							{
+								x: reference.x - authored.x,
+								y: reference.y - authored.y,
+							},
+							1,
+						)
+					) {
+						throw new TypeError(
+							"A one-sided soft node must remain within its tangent bounds.",
+						)
+					}
+				} else {
+					const currentDirection = {
+						x: current.x - authored.x,
+						y: current.y - authored.y,
+					}
+					const direction =
+						currentDirection.x !== 0 || currentDirection.y !== 0
+							? currentDirection
+							: input.unboundedDirection
+					if (
+						direction === undefined ||
+						!Number.isFinite(direction.x) ||
+						!Number.isFinite(direction.y) ||
+						(direction.x === 0 && direction.y === 0) ||
+						!isOnRange(authored, direction, null)
+					) {
+						throw new TypeError(
+							"An unbounded soft node must remain on its original tangent ray.",
+						)
+					}
 				}
 			}
 			set(
@@ -4068,15 +4255,17 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				deepFreeze({ x: input.x, y: input.y }),
 			)
 			for (const [handle, endpoint] of endpoints) {
+				const relativeX = endpoint.x - input.x
+				const relativeY = endpoint.y - input.y
 				set(
 					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
 					atomKey,
-					endpoint.x - input.x,
+					Object.is(relativeX, -0) ? 0 : relativeX,
 				)
 				set(
 					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
 					atomKey,
-					endpoint.y - input.y,
+					Object.is(relativeY, -0) ? 0 : relativeY,
 				)
 			}
 		},

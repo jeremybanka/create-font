@@ -43,11 +43,21 @@ export function constrainVectorToEightRays(
 	if (length === 0) return { x: 0, y: 0 }
 	const step = Math.PI / 4
 	const angle = Math.atan2(vector.y, vector.x)
-	const ray = Math.floor(angle / step + 0.5) * step
-	return {
-		x: canonicalZero(Math.cos(ray) * length),
-		y: canonicalZero(Math.sin(ray) * length),
-	}
+	const rayIndex = Math.floor(angle / step + 0.5)
+	const octant = ((rayIndex % 8) + 8) % 8
+	const diagonal = length / Math.SQRT2
+	return (
+		[
+			{ x: length, y: 0 },
+			{ x: diagonal, y: diagonal },
+			{ x: 0, y: length },
+			{ x: -diagonal, y: diagonal },
+			{ x: -length, y: 0 },
+			{ x: -diagonal, y: -diagonal },
+			{ x: 0, y: -length },
+			{ x: diagonal, y: -diagonal },
+		] as const
+	)[octant]!
 }
 
 function oppositeOnSameLine(
@@ -76,9 +86,34 @@ function withLengthAlong(
 }
 
 export interface HandleEditResolution {
-	readonly vector: Readonly<{ x: number; y: number }>
+	/** Integer coordinate vector written to editor state. */
+	readonly storageVector: Readonly<{ x: number; y: number }>
+	/** Vector rendered by the canvas after one-sided tangent derivation. */
+	readonly previewVector: Readonly<{ x: number; y: number }>
 	/** One-sided soft handles are length-only and therefore have no ray guide. */
 	readonly constrainedToEightRays: boolean
+}
+
+function roundVector(
+	vector: Readonly<{ x: number; y: number }>,
+): Readonly<{ x: number; y: number }> {
+	return {
+		x: canonicalZero(Math.round(vector.x)),
+		y: canonicalZero(Math.round(vector.y)),
+	}
+}
+
+/** Rounds a quantized vector without taking it off its cardinal/diagonal ray. */
+function roundEightRayVector(
+	vector: Readonly<{ x: number; y: number }>,
+): Readonly<{ x: number; y: number }> {
+	if (vector.x === 0) return { x: 0, y: canonicalZero(Math.round(vector.y)) }
+	if (vector.y === 0) return { x: canonicalZero(Math.round(vector.x)), y: 0 }
+	const component = Math.round(Math.max(Math.abs(vector.x), Math.abs(vector.y)))
+	return {
+		x: canonicalZero(Math.sign(vector.x) * component),
+		y: canonicalZero(Math.sign(vector.y) * component),
+	}
 }
 
 /**
@@ -98,15 +133,24 @@ export function resolveHandleEdit(
 	if (current === undefined) return null
 	const opposite = handle === "incoming" ? node.outgoing : node.incoming
 	if (node.mode === "soft" && opposite === undefined) {
+		const aligned = withLengthAlong(current, magnitude(rawVector)) ?? current
+		const storageVector = roundVector(aligned)
 		return {
-			vector: withLengthAlong(current, magnitude(rawVector)) ?? current,
+			storageVector,
+			previewVector:
+				withLengthAlong(current, magnitude(storageVector)) ?? storageVector,
 			constrainedToEightRays: false,
 		}
 	}
+	const constrained = constrainToEightRays
+		? constrainVectorToEightRays(rawVector)
+		: rawVector
+	const storageVector = constrainToEightRays
+		? roundEightRayVector(constrained)
+		: roundVector(constrained)
 	return {
-		vector: constrainToEightRays
-			? constrainVectorToEightRays(rawVector)
-			: rawVector,
+		storageVector,
+		previewVector: storageVector,
 		constrainedToEightRays: constrainToEightRays,
 	}
 }

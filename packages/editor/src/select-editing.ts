@@ -31,6 +31,12 @@ export interface TangentSlideResolution extends SelectionTransformResult {
 	readonly constraint: TangentSlideConstraint
 }
 
+export interface TangentSlideSelection {
+	readonly pointId: PointId
+	/** Null means the selection is eligible but its tangent is currently degenerate. */
+	readonly constraint: TangentSlideConstraint | null
+}
+
 const finitePoint = (point: Readonly<{ x: number; y: number }>): boolean =>
 	Number.isFinite(point.x) && Number.isFinite(point.y)
 
@@ -85,6 +91,7 @@ export function tangentSlideConstraint(
 	nodes: readonly EditorLayerNode[],
 	pointIndex: number,
 	closed: boolean,
+	unboundedDirection?: Readonly<{ x: number; y: number }>,
 ): TangentSlideConstraint | null {
 	const node = nodes[pointIndex]
 	if (node === undefined || node.mode !== "soft") return null
@@ -111,7 +118,7 @@ export function tangentSlideConstraint(
 		}
 	}
 	const authored = incoming ?? outgoing
-	if (authored === null || samePoint(authored, node)) return null
+	if (authored === null) return null
 	const handle = incoming === null ? "outgoing" : "incoming"
 	const reference = neighborTangentReference(nodes, pointIndex, closed, handle)
 	if (reference !== null && !samePoint(reference, authored)) {
@@ -124,13 +131,22 @@ export function tangentSlideConstraint(
 			direction: null,
 		}
 	}
+	const direction = samePoint(authored, node)
+		? unboundedDirection
+		: { x: node.x - authored.x, y: node.y - authored.y }
+	if (
+		direction === undefined ||
+		!finitePoint(direction) ||
+		(direction.x === 0 && direction.y === 0)
+	)
+		return null
 	return {
 		pointId: node.pointId,
 		origin: { x: node.x, y: node.y },
 		handles,
 		start: authored,
 		end: null,
-		direction: { x: node.x - authored.x, y: node.y - authored.y },
+		direction,
 	}
 }
 
@@ -239,8 +255,8 @@ export function planSelectionNudge(
 		handles.push({
 			pointId: node.pointId,
 			handle: control.target.handle,
-			x: node.x + resolved.vector.x,
-			y: node.y + resolved.vector.y,
+			x: node.x + resolved.storageVector.x,
+			y: node.y + resolved.storageVector.y,
 		})
 	}
 	return { selection: rigidSelection, result: { points, handles } }
@@ -253,7 +269,8 @@ export function selectedTangentSlideConstraint(
 		nodes: readonly EditorLayerNode[]
 	}>[],
 	selection: readonly EditorSelectionTarget[],
-): TangentSlideConstraint | null {
+	unboundedDirection?: Readonly<{ pointId: PointId; x: number; y: number }>,
+): TangentSlideSelection | null {
 	const unique = new Map(
 		selection.map((target) => [selectionKey(target), target]),
 	)
@@ -265,7 +282,24 @@ export function selectedTangentSlideConstraint(
 			(node) => node.pointId === target.pointId,
 		)
 		if (index !== -1) {
-			return tangentSlideConstraint(contour.nodes, index, contour.closed)
+			const node = contour.nodes[index]
+			if (
+				node === undefined ||
+				node.mode !== "soft" ||
+				(node.incoming === undefined && node.outgoing === undefined)
+			)
+				return null
+			return {
+				pointId: node.pointId,
+				constraint: tangentSlideConstraint(
+					contour.nodes,
+					index,
+					contour.closed,
+					unboundedDirection?.pointId === node.pointId
+						? unboundedDirection
+						: undefined,
+				),
+			}
 		}
 	}
 	return null

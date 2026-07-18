@@ -82,13 +82,13 @@ describe("Select handle editing", () => {
 		}
 		const hardEdit = resolveHandleEdit(hard, "outgoing", { x: 3, y: 9 }, true)
 		expect(hardEdit?.constrainedToEightRays).toBe(true)
-		expect(hardEdit?.vector.x).toBeCloseTo(0)
-		expect(hardEdit?.vector.y).toBeCloseTo(Math.sqrt(90))
+		expect(hardEdit?.storageVector).toEqual({ x: 0, y: 9 })
+		expect(hardEdit?.previewVector).toEqual({ x: 0, y: 9 })
 
 		const symmetric = previewHandleDrag(
 			{ ...hard, mode: "soft" },
 			"outgoing",
-			hardEdit?.vector ?? { x: 0, y: 0 },
+			hardEdit?.previewVector ?? { x: 0, y: 0 },
 		)
 		expect(symmetric.incoming?.x).toBeCloseTo(0)
 		expect(symmetric.incoming?.y).toBeCloseTo(-20)
@@ -102,9 +102,57 @@ describe("Select handle editing", () => {
 			true,
 		)
 		expect(asymmetricEdit).toEqual({
-			vector: { x: -40, y: 0 },
+			storageVector: { x: -40, y: 0 },
+			previewVector: { x: -40, y: 0 },
 			constrainedToEightRays: false,
 		})
+	})
+
+	it("quantizes the raw vector before ray-preserving integer rounding", () => {
+		const node: EditorLayerNode = {
+			pointId,
+			mode: "hard",
+			x: 0,
+			y: 0,
+			outgoing: { x: 10, y: 0 },
+		}
+		// Rounding first produces (1, 1), which would incorrectly choose diagonal.
+		expect(
+			resolveHandleEdit(node, "outgoing", { x: 1.4, y: 0.57 }, true)
+				?.storageVector,
+		).toEqual({ x: 2, y: 0 })
+		expect(
+			resolveHandleEdit(node, "outgoing", { x: 9, y: 8 }, true)?.storageVector,
+		).toEqual({ x: 9, y: 9 })
+	})
+
+	it("rounds one-sided storage while previewing its derived tangent length", () => {
+		for (const handle of ["incoming", "outgoing"] as const) {
+			const direction = handle === "incoming" ? -1 : 1
+			const node: EditorLayerNode = {
+				pointId,
+				mode: "soft",
+				x: 0,
+				y: 0,
+				[handle]: { x: direction * 3, y: direction * 4 },
+			}
+			const resolved = resolveHandleEdit(
+				node,
+				handle,
+				{ x: direction * 3.72, y: direction * 4.96 },
+				true,
+			)
+			expect(resolved?.storageVector).toEqual({
+				x: direction * 4,
+				y: direction * 5,
+			})
+			expect(resolved?.constrainedToEightRays).toBe(false)
+			const preview = resolved?.previewVector
+			expect(preview).toBeDefined()
+			if (preview === undefined) continue
+			expect(preview.x * 4 - preview.y * 3).toBeCloseTo(0)
+			expect(Math.hypot(preview.x, preview.y)).toBeCloseTo(Math.sqrt(41))
+		}
 	})
 })
 
@@ -188,6 +236,64 @@ describe("soft-node tangent slides", () => {
 		).toMatchObject({ x: -100, y: 0 })
 	})
 
+	it("keeps one-sided zero endpoints bounded or on a cached open ray", () => {
+		const bounded: readonly EditorLayerNode[] = [
+			{
+				pointId,
+				mode: "soft",
+				x: 100,
+				y: 0,
+				incoming: { x: 0, y: 0 },
+			},
+			{
+				pointId: "point:next" as const,
+				mode: "hard",
+				x: 200,
+				y: 0,
+				incoming: { x: -20, y: 0 },
+			},
+		]
+		const boundedConstraint = tangentSlideConstraint(bounded, 0, false)
+		expect(boundedConstraint).toMatchObject({
+			origin: { x: 100, y: 0 },
+			start: { x: 100, y: 0 },
+			end: { x: 180, y: 0 },
+		})
+		if (boundedConstraint === null) return
+		expect(
+			resolveTangentSlide(boundedConstraint, { x: 110, y: 40 })?.points[0],
+		).toMatchObject({ x: 110, y: 0 })
+
+		const unbounded: readonly EditorLayerNode[] = [
+			{
+				pointId,
+				mode: "soft",
+				x: 100,
+				y: 0,
+				outgoing: { x: 0, y: 0 },
+			},
+		]
+		expect(tangentSlideConstraint(unbounded, 0, false)).toBeNull()
+		expect(
+			selectedTangentSlideConstraint(
+				[{ closed: false, nodes: unbounded }],
+				[{ kind: "node", pointId }],
+			),
+		).toEqual({ pointId, constraint: null })
+		const cached = tangentSlideConstraint(unbounded, 0, false, {
+			x: -1,
+			y: 0,
+		})
+		expect(cached).toMatchObject({
+			start: { x: 100, y: 0 },
+			direction: { x: -1, y: 0 },
+		})
+		if (cached === null) return
+		expect(
+			resolveTangentSlide(cached, { x: 90, y: 20 })?.points[0],
+		).toMatchObject({ x: 90, y: 0 })
+	})
+
 	it("requires a single node selection for Alt-arrow precedence", () => {
 		const node: EditorLayerNode = {
 			pointId,
@@ -199,7 +305,8 @@ describe("soft-node tangent slides", () => {
 		}
 		const contours = [{ closed: false, nodes: [node] }]
 		expect(
-			selectedTangentSlideConstraint(contours, [{ kind: "node", pointId }]),
+			selectedTangentSlideConstraint(contours, [{ kind: "node", pointId }])
+				?.constraint,
 		).not.toBeNull()
 		expect(
 			selectedTangentSlideConstraint(contours, [
@@ -294,7 +401,7 @@ describe("selected control nudging", () => {
 				10,
 			)?.result.handles[0],
 		).toMatchObject({
-			x: -Math.sqrt(200),
+			x: -14,
 			y: 0,
 		})
 	})

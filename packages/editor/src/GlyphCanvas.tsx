@@ -168,6 +168,7 @@ interface PointDrag {
 	readonly startPointer: Readonly<{ x: number; y: number }>
 	readonly projectionCandidates: readonly SegmentProjectionCandidate[]
 	readonly target: DragPositionTarget
+	readonly tangentEligible: boolean
 	readonly tangentConstraint: TangentSlideConstraint | null
 	lastRawPoint: Readonly<{ x: number; y: number }> | null
 }
@@ -175,6 +176,7 @@ interface PointDrag {
 interface DraggedHandle {
 	readonly pointId: PointId
 	readonly handle: EditorHandleKind
+	readonly storageVector: Readonly<{ x: number; y: number }>
 	readonly vector: Readonly<{ x: number; y: number }>
 }
 
@@ -194,6 +196,7 @@ interface HandleDrag {
 type PointDragResolution =
 	| Readonly<{ kind: "point"; point: DraggedPoint }>
 	| Readonly<{ kind: "tangent"; resolution: TangentSlideResolution }>
+	| Readonly<{ kind: "blocked" }>
 
 interface PenPlacementGesture {
 	readonly pointerId: number
@@ -358,6 +361,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const handleDragRef = useRef<HandleDrag | null>(null)
 	const directDragPointerRef = useRef<number | null>(null)
 	const directDragCaptureTargetRef = useRef<HTMLCanvasElement | null>(null)
+	const tangentDirectionRef = useRef<Readonly<{
+		pointId: PointId
+		x: number
+		y: number
+	}> | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
 		LiveGroupDragTarget["node"]
 	> | null>(null)
@@ -462,6 +470,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	)
 	const selectedPoint = selectedPoints.at(-1)
 	const selectedControls = resolveSelectionControls(allPoints, selection)
+	const tangentSelectionIdentity = [...new Set(selection.map(selectionKey))]
+		.sort()
+		.join("|")
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
 	const metricGuides = useMemo(
@@ -706,6 +717,20 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}
 	const visibleSnaps =
 		activeTool === "pen" ? (penPlacement?.snaps ?? []) : activeSnaps
+	const rememberTangentDirection = (
+		constraint: TangentSlideConstraint,
+	): void => {
+		if (
+			constraint.end === null &&
+			constraint.direction !== null &&
+			(constraint.direction.x !== 0 || constraint.direction.y !== 0)
+		) {
+			tangentDirectionRef.current = {
+				pointId: constraint.pointId,
+				...constraint.direction,
+			}
+		}
+	}
 	const applyPointDrag = (
 		drag: PointDrag,
 		rawPoint: Readonly<{ x: number; y: number }>,
@@ -713,17 +738,26 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		altKey: boolean,
 	): PointDragResolution => {
 		drag.lastRawPoint = rawPoint
-		if (altKey && drag.tangentConstraint !== null) {
-			const resolution = resolveTangentSlide(drag.tangentConstraint, rawPoint)
-			const point = resolution?.points[0]
-			if (resolution !== null && point !== undefined) {
-				drag.target.position({ x: point.x, y: point.y })
-				setDraggedPoint(null)
-				setTransformPreview(resolution)
-				setTangentGuide(drag.tangentConstraint)
-				setActiveSnaps([])
-				return { kind: "tangent", resolution }
+		if (altKey && drag.tangentEligible) {
+			if (drag.tangentConstraint !== null) {
+				rememberTangentDirection(drag.tangentConstraint)
+				const resolution = resolveTangentSlide(drag.tangentConstraint, rawPoint)
+				const point = resolution?.points[0]
+				if (resolution !== null && point !== undefined) {
+					drag.target.position({ x: point.x, y: point.y })
+					setDraggedPoint(null)
+					setTransformPreview(resolution)
+					setTangentGuide(drag.tangentConstraint)
+					setActiveSnaps([])
+					return { kind: "tangent", resolution }
+				}
 			}
+			drag.target.position(drag.origin)
+			setDraggedPoint(null)
+			setTransformPreview(null)
+			setTangentGuide(null)
+			setActiveSnaps([])
+			return { kind: "blocked" }
 		}
 		const snapped = resolveCanvasGesturePoint(
 			drag.pointId,
@@ -751,8 +785,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	): DraggedHandle | null => {
 		drag.lastRawEndpoint = rawEndpoint
 		const rawVector = {
-			x: Math.round(rawEndpoint.x - drag.node.x),
-			y: Math.round(rawEndpoint.y - drag.node.y),
+			x: rawEndpoint.x - drag.node.x,
+			y: rawEndpoint.y - drag.node.y,
 		}
 		const resolution = resolveHandleEdit(
 			drag.node,
@@ -761,15 +795,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			shiftKey,
 		)
 		if (resolution === null) return null
-		const vector = resolution.constrainedToEightRays
-			? {
-					x: Math.round(resolution.vector.x),
-					y: Math.round(resolution.vector.y),
-				}
-			: resolution.vector
+		const vector = resolution.previewVector
 		const handle = {
 			pointId: drag.pointId,
 			handle: drag.handle,
+			storageVector: resolution.storageVector,
 			vector,
 		}
 		drag.target.position({
@@ -935,6 +965,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
+			if (event.key === "Alt" && !event.altKey) {
+				tangentDirectionRef.current = null
+			}
 			const gesture = penGestureRef.current
 			if (gesture !== null) {
 				gesture.shiftKey = event.shiftKey
@@ -1034,6 +1067,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}, [activeTool, transformBounds === null])
 
 	useLayoutEffect(() => {
+		tangentDirectionRef.current = null
 		penPreviewPublisher.cancel()
 		penHoverRef.current = null
 		const gesture = penGestureRef.current
@@ -1077,6 +1111,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		setMomentaryPreview(false)
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
+
+	useEffect(() => {
+		tangentDirectionRef.current = null
+	}, [tangentSelectionIdentity])
 
 	useEffect(() => {
 		if (penContourId !== null) {
@@ -1140,6 +1178,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				x,
 				y,
 			})),
+			...(resolution.constraint.end === null &&
+			resolution.constraint.direction !== null
+				? { unboundedDirection: resolution.constraint.direction }
+				: {}),
 		})
 	}
 	const commitHandle = (handle: DraggedHandle): void => {
@@ -1149,7 +1191,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			glyphId: activeGlyphId,
 			pointId: handle.pointId,
 			handle: handle.handle,
-			vector: handle.vector,
+			vector: handle.storageVector,
 		})
 	}
 	const toggleNodeMode = (pointId: PointId, mode: "soft" | "hard"): void => {
@@ -1916,6 +1958,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			aria-describedby="canvas-instructions"
 			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
+			onContextMenu={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
+				if (cancelDirectDrag()) event.preventDefault()
+			}}
 			onCopy={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
 				if (
 					editingTextIndex === null ||
@@ -2150,18 +2195,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					return
 				const multiplier = keyboardStepMultiplier(event, IS_MAC_LIKE)
 				if (event.altKey) {
-					const constraint = selectedTangentSlideConstraint(
+					const tangentSelection = selectedTangentSlideConstraint(
 						visibleContours,
 						selection,
+						tangentDirectionRef.current ?? undefined,
 					)
-					if (constraint !== null) {
+					if (tangentSelection !== null) {
+						event.preventDefault()
+						const constraint = tangentSelection.constraint
+						if (constraint === null) return
+						rememberTangentDirection(constraint)
 						const resolution = resolveTangentSlide(constraint, {
 							x: constraint.origin.x + delta[0] * multiplier,
 							y: constraint.origin.y + delta[1] * multiplier,
 						})
 						const point = resolution?.points[0]
 						if (resolution !== null && point !== undefined) {
-							event.preventDefault()
 							if (
 								point.x !== constraint.origin.x ||
 								point.y !== constraint.origin.y
@@ -2170,6 +2219,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 							}
 							return
 						}
+						return
 					}
 				}
 				const plan = planSelectionNudge(
@@ -3039,10 +3089,18 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																			point.pointId,
 																		),
 																	target: event.target,
+																	tangentEligible:
+																		point.mode === "soft" &&
+																		(point.incoming !== undefined ||
+																			point.outgoing !== undefined),
 																	tangentConstraint: tangentSlideConstraint(
 																		contour.nodes,
 																		pointIndex,
 																		contour.closed,
+																		tangentDirectionRef.current?.pointId ===
+																			point.pointId
+																			? tangentDirectionRef.current
+																			: undefined,
 																	),
 																	lastRawPoint: null,
 																}
@@ -3150,10 +3208,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		)
 																		if (committed.kind === "tangent") {
 																			commitTangentSlide(committed.resolution)
-																		} else {
+																			committedSuccessfully = true
+																		} else if (committed.kind === "point") {
 																			commitPoint(committed.point)
+																			committedSuccessfully = true
 																		}
-																		committedSuccessfully = true
 																	} catch (error) {
 																		reportGeometryCommitError(error)
 																	} finally {
