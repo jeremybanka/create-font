@@ -4,6 +4,8 @@ import type { EditorCanvasContour } from "../src/editor-workspace.ts"
 import {
 	ENDPOINT_JOIN_RADIUS_PX,
 	finalizePointDragPreview,
+	hasSelectedCoincidentEndpointPeer,
+	resolveMovedEndpointJoin,
 	resolveOpenEndpointTarget,
 	type OpenEndpointTarget,
 } from "../src/topology-tools.ts"
@@ -44,6 +46,33 @@ const contours: readonly EditorCanvasContour[] = [
 ]
 
 describe("open endpoint join targeting", () => {
+	it("separates either selected half of a coincident Knife cut", () => {
+		expect(
+			hasSelectedCoincidentEndpointPeer(
+				contours,
+				"point:source:first",
+				new Set(["point:source:first", "point:source:last"]),
+			),
+		).toBe(false)
+		const cutContours: readonly EditorCanvasContour[] = [
+			{
+				id: "contour:cut",
+				closed: false,
+				nodes: [
+					{ pointId: "point:cut:left", mode: "hard", x: 50, y: 60 },
+					{ pointId: "point:cut:middle", mode: "hard", x: 0, y: 0 },
+					{ pointId: "point:cut:right", mode: "hard", x: 50, y: 60 },
+				],
+			},
+		]
+		expect(
+			hasSelectedCoincidentEndpointPeer(
+				cutContours,
+				"point:cut:left",
+				new Set(["point:cut:left", "point:cut:right"]),
+			),
+		).toBe(true)
+	})
 	it("uses a zoom-stable radius and deterministic contour/point tie ordering", () => {
 		expect(
 			resolveOpenEndpointTarget(
@@ -79,13 +108,65 @@ describe("open endpoint join targeting", () => {
 		).toBeNull()
 	})
 
-	it("rejects the source contour, closed contours, and interior nodes", () => {
+	it("allows only the opposite endpoint from the source contour", () => {
+		expect(
+			resolveOpenEndpointTarget(
+				contours,
+				"contour:source",
+				"point:source:last",
+				{ x: 0, y: 0 },
+				1,
+				5,
+			),
+		).toEqual({
+			contourId: "contour:source",
+			pointId: "point:source:first",
+			x: 0,
+			y: 0,
+		})
 		expect(
 			resolveOpenEndpointTarget(
 				contours,
 				"contour:source",
 				"point:source:last",
 				{ x: 100, y: 0 },
+				1,
+				5,
+			),
+		).toBeNull()
+	})
+
+	it("assigns group joins to moved endpoints deterministically", () => {
+		expect(
+			resolveMovedEndpointJoin(
+				contours,
+				[
+					{ pointId: "point:source:last", x: 120, y: 0 },
+					{ pointId: "point:source:first", x: 500, y: 0 },
+				],
+				1,
+			),
+		).toEqual(
+			expect.objectContaining({
+				sourceContourId: "contour:source",
+				sourcePointId: "point:source:last",
+				target: expect.objectContaining({
+					contourId: "contour:target:a",
+					pointId: "point:target:a:first",
+				}),
+			}),
+		)
+	})
+
+	it("never targets another endpoint moved by the same group", () => {
+		expect(
+			resolveMovedEndpointJoin(
+				contours,
+				[
+					{ pointId: "point:source:last", x: 120, y: 0 },
+					{ pointId: "point:target:a:first", x: 120, y: 0 },
+					{ pointId: "point:target:b:first", x: 500, y: 0 },
+				],
 				1,
 				5,
 			),

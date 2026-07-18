@@ -434,6 +434,8 @@ export interface JoinOpenContoursInput {
 	readonly draggedPointId: PointId
 	readonly targetContourId: ContourId
 	readonly targetPointId: PointId
+	/** Optional group transform committed atomically before joining. */
+	readonly transform?: TransformControlsInput
 }
 
 export interface AddSegmentHandlesInput {
@@ -3903,207 +3905,212 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const applyTransformControls = (
+		get: WriterToolkit["get"],
+		set: WriterToolkit["set"],
+		input: TransformControlsInput,
+	): void => {
+		const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+		if (layerMasterIds === null || !layerMasterIds.includes(input.masterId)) {
+			throw new TypeError(
+				`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+			)
+		}
+		assertUnique(
+			input.points.map((point) => point.pointId),
+			"Transformed point IDs",
+		)
+		assertUnique(
+			input.handles.map((handle) => `${handle.pointId}/${handle.handle}`),
+			"Transformed handles",
+		)
+		const nextPositions = new Map<PointId, Vector2>()
+		const pointIds = new Set<PointId>()
+		for (const point of input.points) pointIds.add(point.pointId)
+		for (const handle of input.handles) pointIds.add(handle.pointId)
+		for (const pointId of pointIds) {
+			if (get(pointAtoms, [input.glyphId, pointId]) === null) {
+				throw new TypeError(
+					`Unknown point ${pointId} in glyph ${input.glyphId}.`,
+				)
+			}
+			const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
+			const position = readPointPosition(get, atomKey)
+			if (position === null) {
+				throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
+			}
+			if (!get(layerNodeSelectors, atomKey).ok) {
+				throw new TypeError(`Point ${pointId} has invalid layer geometry.`)
+			}
+			nextPositions.set(pointId, position)
+		}
+		for (const point of input.points) {
+			if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+				throw new TypeError("Point coordinates must be finite numbers.")
+			}
+			nextPositions.set(point.pointId, { x: point.x, y: point.y })
+		}
+		const selectedHandles = new Map<
+			PointId,
+			Partial<Record<EditorHandleKind, Vector2>>
+		>()
+		for (const handle of input.handles) {
+			if (!Number.isFinite(handle.x) || !Number.isFinite(handle.y)) {
+				throw new TypeError("Handle endpoints must be finite numbers.")
+			}
+			const owner = nextPositions.get(handle.pointId)
+			if (owner === undefined) throw new Error("Missing transformed owner.")
+			const atomKey: LayerPointKey = [
+				input.masterId,
+				input.glyphId,
+				handle.pointId,
+			]
+			const existingX = get(
+				handle.handle === "incoming"
+					? incomingHandleXAtoms
+					: outgoingHandleXAtoms,
+				atomKey,
+			)
+			const existingY = get(
+				handle.handle === "incoming"
+					? incomingHandleYAtoms
+					: outgoingHandleYAtoms,
+				atomKey,
+			)
+			if (existingX === null || existingY === null) {
+				throw new TypeError(
+					`Cannot transform missing ${handle.handle} handle on ${handle.pointId}.`,
+				)
+			}
+			const byKind = selectedHandles.get(handle.pointId) ?? {}
+			byKind[handle.handle] = {
+				x: handle.x - owner.x,
+				y: handle.y - owner.y,
+			}
+			selectedHandles.set(handle.pointId, byKind)
+		}
+
+		const writeHandle = (
+			atomKey: LayerPointKey,
+			handle: EditorHandleKind,
+			vector: Vector2,
+		): void => {
+			set(
+				handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+				atomKey,
+				vector.x,
+			)
+			set(
+				handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+				atomKey,
+				vector.y,
+			)
+		}
+		const handlePlans: {
+			readonly atomKey: LayerPointKey
+			readonly incoming?: Vector2
+			readonly outgoing?: Vector2
+		}[] = []
+		for (const [pointId, selected] of selectedHandles) {
+			const topology = get(pointAtoms, [input.glyphId, pointId])
+			if (topology === null) {
+				throw new TypeError(`Unknown transformed point ${pointId}.`)
+			}
+			const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
+			const incomingX = get(incomingHandleXAtoms, atomKey)
+			const incomingY = get(incomingHandleYAtoms, atomKey)
+			const outgoingX = get(outgoingHandleXAtoms, atomKey)
+			const outgoingY = get(outgoingHandleYAtoms, atomKey)
+			if (
+				(incomingX === null) !== (incomingY === null) ||
+				(outgoingX === null) !== (outgoingY === null)
+			) {
+				throw new TypeError(`Point ${pointId} has an incomplete handle.`)
+			}
+			const oldIncoming =
+				incomingX === null || incomingY === null
+					? undefined
+					: { x: incomingX, y: incomingY }
+			const oldOutgoing =
+				outgoingX === null || outgoingY === null
+					? undefined
+					: { x: outgoingX, y: outgoingY }
+			let incoming = selected.incoming
+			let outgoing = selected.outgoing
+			if (
+				topology.mode === "soft" &&
+				oldIncoming !== undefined &&
+				oldOutgoing !== undefined
+			) {
+				if (incoming !== undefined) {
+					const oppositeLength = Math.hypot(
+						...(outgoing === undefined
+							? [oldOutgoing.x, oldOutgoing.y]
+							: [outgoing.x, outgoing.y]),
+					)
+					const movedLength = Math.hypot(incoming.x, incoming.y)
+					outgoing =
+						movedLength === 0
+							? (outgoing ?? oldOutgoing)
+							: {
+									x: (-incoming.x / movedLength) * oppositeLength,
+									y: (-incoming.y / movedLength) * oppositeLength,
+								}
+				} else if (outgoing !== undefined) {
+					const movedLength = Math.hypot(outgoing.x, outgoing.y)
+					const oppositeLength = Math.hypot(oldIncoming.x, oldIncoming.y)
+					incoming =
+						movedLength === 0
+							? oldIncoming
+							: {
+									x: (-outgoing.x / movedLength) * oppositeLength,
+									y: (-outgoing.y / movedLength) * oppositeLength,
+								}
+				}
+			}
+			const finalIncoming = incoming ?? oldIncoming
+			const finalOutgoing = outgoing ?? oldOutgoing
+			if (
+				topology.mode === "soft" &&
+				(finalIncoming === undefined || finalOutgoing === undefined
+					? finalIncoming === undefined && finalOutgoing === undefined
+					: !handlesShareOppositeRay(finalIncoming, finalOutgoing))
+			) {
+				throw new TypeError(
+					`Transformed soft node ${pointId} would have invalid handles.`,
+				)
+			}
+			handlePlans.push({
+				atomKey,
+				...(incoming === undefined ? {} : { incoming }),
+				...(outgoing === undefined ? {} : { outgoing }),
+			})
+		}
+
+		for (const point of input.points) {
+			const atomKey: LayerPointKey = [
+				input.masterId,
+				input.glyphId,
+				point.pointId,
+			]
+			set(
+				pointPositionSelectors,
+				atomKey,
+				deepFreeze({ x: point.x, y: point.y }),
+			)
+		}
+		for (const plan of handlePlans) {
+			if (plan.incoming !== undefined)
+				writeHandle(plan.atomKey, "incoming", plan.incoming)
+			if (plan.outgoing !== undefined)
+				writeHandle(plan.atomKey, "outgoing", plan.outgoing)
+		}
+	}
 	const transformControlsTransaction = silo.transaction<
 		(input: TransformControlsInput) => void
 	>({
 		key: "transformControls",
-		do: ({ get, set }, input) => {
-			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
-			if (layerMasterIds === null || !layerMasterIds.includes(input.masterId)) {
-				throw new TypeError(
-					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
-				)
-			}
-			assertUnique(
-				input.points.map((point) => point.pointId),
-				"Transformed point IDs",
-			)
-			assertUnique(
-				input.handles.map((handle) => `${handle.pointId}/${handle.handle}`),
-				"Transformed handles",
-			)
-			const nextPositions = new Map<PointId, Vector2>()
-			const pointIds = new Set<PointId>()
-			for (const point of input.points) pointIds.add(point.pointId)
-			for (const handle of input.handles) pointIds.add(handle.pointId)
-			for (const pointId of pointIds) {
-				if (get(pointAtoms, [input.glyphId, pointId]) === null) {
-					throw new TypeError(
-						`Unknown point ${pointId} in glyph ${input.glyphId}.`,
-					)
-				}
-				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
-				const position = readPointPosition(get, atomKey)
-				if (position === null) {
-					throw new TypeError(`Point ${pointId} has incomplete coordinates.`)
-				}
-				if (!get(layerNodeSelectors, atomKey).ok) {
-					throw new TypeError(`Point ${pointId} has invalid layer geometry.`)
-				}
-				nextPositions.set(pointId, position)
-			}
-			for (const point of input.points) {
-				if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-					throw new TypeError("Point coordinates must be finite numbers.")
-				}
-				nextPositions.set(point.pointId, { x: point.x, y: point.y })
-			}
-			const selectedHandles = new Map<
-				PointId,
-				Partial<Record<EditorHandleKind, Vector2>>
-			>()
-			for (const handle of input.handles) {
-				if (!Number.isFinite(handle.x) || !Number.isFinite(handle.y)) {
-					throw new TypeError("Handle endpoints must be finite numbers.")
-				}
-				const owner = nextPositions.get(handle.pointId)
-				if (owner === undefined) throw new Error("Missing transformed owner.")
-				const atomKey: LayerPointKey = [
-					input.masterId,
-					input.glyphId,
-					handle.pointId,
-				]
-				const existingX = get(
-					handle.handle === "incoming"
-						? incomingHandleXAtoms
-						: outgoingHandleXAtoms,
-					atomKey,
-				)
-				const existingY = get(
-					handle.handle === "incoming"
-						? incomingHandleYAtoms
-						: outgoingHandleYAtoms,
-					atomKey,
-				)
-				if (existingX === null || existingY === null) {
-					throw new TypeError(
-						`Cannot transform missing ${handle.handle} handle on ${handle.pointId}.`,
-					)
-				}
-				const byKind = selectedHandles.get(handle.pointId) ?? {}
-				byKind[handle.handle] = {
-					x: handle.x - owner.x,
-					y: handle.y - owner.y,
-				}
-				selectedHandles.set(handle.pointId, byKind)
-			}
-
-			const writeHandle = (
-				atomKey: LayerPointKey,
-				handle: EditorHandleKind,
-				vector: Vector2,
-			): void => {
-				set(
-					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
-					atomKey,
-					vector.x,
-				)
-				set(
-					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
-					atomKey,
-					vector.y,
-				)
-			}
-			const handlePlans: {
-				readonly atomKey: LayerPointKey
-				readonly incoming?: Vector2
-				readonly outgoing?: Vector2
-			}[] = []
-			for (const [pointId, selected] of selectedHandles) {
-				const topology = get(pointAtoms, [input.glyphId, pointId])
-				if (topology === null) {
-					throw new TypeError(`Unknown transformed point ${pointId}.`)
-				}
-				const atomKey: LayerPointKey = [input.masterId, input.glyphId, pointId]
-				const incomingX = get(incomingHandleXAtoms, atomKey)
-				const incomingY = get(incomingHandleYAtoms, atomKey)
-				const outgoingX = get(outgoingHandleXAtoms, atomKey)
-				const outgoingY = get(outgoingHandleYAtoms, atomKey)
-				if (
-					(incomingX === null) !== (incomingY === null) ||
-					(outgoingX === null) !== (outgoingY === null)
-				) {
-					throw new TypeError(`Point ${pointId} has an incomplete handle.`)
-				}
-				const oldIncoming =
-					incomingX === null || incomingY === null
-						? undefined
-						: { x: incomingX, y: incomingY }
-				const oldOutgoing =
-					outgoingX === null || outgoingY === null
-						? undefined
-						: { x: outgoingX, y: outgoingY }
-				let incoming = selected.incoming
-				let outgoing = selected.outgoing
-				if (
-					topology.mode === "soft" &&
-					oldIncoming !== undefined &&
-					oldOutgoing !== undefined
-				) {
-					if (incoming !== undefined) {
-						const oppositeLength = Math.hypot(
-							...(outgoing === undefined
-								? [oldOutgoing.x, oldOutgoing.y]
-								: [outgoing.x, outgoing.y]),
-						)
-						const movedLength = Math.hypot(incoming.x, incoming.y)
-						outgoing =
-							movedLength === 0
-								? (outgoing ?? oldOutgoing)
-								: {
-										x: (-incoming.x / movedLength) * oppositeLength,
-										y: (-incoming.y / movedLength) * oppositeLength,
-									}
-					} else if (outgoing !== undefined) {
-						const movedLength = Math.hypot(outgoing.x, outgoing.y)
-						const oppositeLength = Math.hypot(oldIncoming.x, oldIncoming.y)
-						incoming =
-							movedLength === 0
-								? oldIncoming
-								: {
-										x: (-outgoing.x / movedLength) * oppositeLength,
-										y: (-outgoing.y / movedLength) * oppositeLength,
-									}
-					}
-				}
-				const finalIncoming = incoming ?? oldIncoming
-				const finalOutgoing = outgoing ?? oldOutgoing
-				if (
-					topology.mode === "soft" &&
-					(finalIncoming === undefined || finalOutgoing === undefined
-						? finalIncoming === undefined && finalOutgoing === undefined
-						: !handlesShareOppositeRay(finalIncoming, finalOutgoing))
-				) {
-					throw new TypeError(
-						`Transformed soft node ${pointId} would have invalid handles.`,
-					)
-				}
-				handlePlans.push({
-					atomKey,
-					...(incoming === undefined ? {} : { incoming }),
-					...(outgoing === undefined ? {} : { outgoing }),
-				})
-			}
-
-			for (const point of input.points) {
-				const atomKey: LayerPointKey = [
-					input.masterId,
-					input.glyphId,
-					point.pointId,
-				]
-				set(
-					pointPositionSelectors,
-					atomKey,
-					deepFreeze({ x: point.x, y: point.y }),
-				)
-			}
-			for (const plan of handlePlans) {
-				if (plan.incoming !== undefined)
-					writeHandle(plan.atomKey, "incoming", plan.incoming)
-				if (plan.outgoing !== undefined)
-					writeHandle(plan.atomKey, "outgoing", plan.outgoing)
-			}
-		},
+		do: ({ get, set }, input) => applyTransformControls(get, set, input),
 	})
 
 	const slideSoftNodeTransaction = silo.transaction<
@@ -5352,9 +5359,13 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	>({
 		key: "joinOpenContours",
 		do: ({ get, set }, input) => {
-			if (input.draggedContourId === input.targetContourId) {
-				throw new TypeError("Cannot join endpoints from the same contour.")
+			if (input.transform !== undefined) {
+				if (input.transform.glyphId !== input.glyphId) {
+					throw new TypeError("Join transform belongs to another glyph.")
+				}
+				applyTransformControls(get, set, input.transform)
 			}
+			const sameContour = input.draggedContourId === input.targetContourId
 			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
 			const sourceIds = get(contourPointIdsAtoms, [
 				input.glyphId,
@@ -5384,6 +5395,112 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				throw new TypeError("Cannot join unknown contours.")
 			if (sourceClosed || targetClosed)
 				throw new TypeError("Only open contours can be joined.")
+			if (sameContour) {
+				const draggedIsFirst = sourceIds[0] === input.draggedPointId
+				const draggedIsLast = sourceIds.at(-1) === input.draggedPointId
+				const targetIsFirst = sourceIds[0] === input.targetPointId
+				const targetIsLast = sourceIds.at(-1) === input.targetPointId
+				if (
+					sourceIds.length < 3 ||
+					!(
+						(draggedIsFirst && targetIsLast) ||
+						(draggedIsLast && targetIsFirst)
+					)
+				) {
+					throw new TypeError(
+						"Only opposite endpoints of one open contour can be rejoined.",
+					)
+				}
+				const targetTopology = get(pointAtoms, [
+					input.glyphId,
+					input.targetPointId,
+				])
+				if (targetTopology === null)
+					throw new TypeError("Target endpoint is missing.")
+				const plans: {
+					readonly masterId: MasterId
+					readonly incoming?: Vector2
+					readonly outgoing?: Vector2
+				}[] = []
+				let keepSoft = targetTopology.mode === "soft"
+				for (const masterId of masterIds) {
+					const draggedResult = get(layerNodeSelectors, [
+						masterId,
+						input.glyphId,
+						input.draggedPointId,
+					])
+					const targetResult = get(layerNodeSelectors, [
+						masterId,
+						input.glyphId,
+						input.targetPointId,
+					])
+					if (!draggedResult.ok || !targetResult.ok)
+						throw new TypeError("Cannot rejoin invalid layer nodes.")
+					const dragged = draggedResult.value
+					const target = targetResult.value
+					const reanchor = (
+						handle: Vector2 | undefined,
+					): Vector2 | undefined =>
+						handle === undefined
+							? undefined
+							: {
+									x: dragged.x + handle.x - target.x,
+									y: dragged.y + handle.y - target.y,
+								}
+					const incoming = targetIsFirst
+						? reanchor(dragged.incoming)
+						: target.incoming
+					const outgoing = targetIsLast
+						? reanchor(dragged.outgoing)
+						: target.outgoing
+					if (
+						(incoming === undefined && outgoing === undefined) ||
+						(incoming !== undefined &&
+							outgoing !== undefined &&
+							!handlesShareOppositeRay(incoming, outgoing))
+					)
+						keepSoft = false
+					plans.push({
+						masterId,
+						...(incoming === undefined ? {} : { incoming }),
+						...(outgoing === undefined ? {} : { outgoing }),
+					})
+				}
+				set(
+					contourPointIdsAtoms,
+					[input.glyphId, input.targetContourId],
+					deepFreeze(
+						targetIsFirst ? sourceIds.slice(0, -1) : sourceIds.slice(1),
+					),
+				)
+				set(contourClosedAtoms, [input.glyphId, input.targetContourId], true)
+				set(
+					pointAtoms,
+					[input.glyphId, input.targetPointId],
+					deepFreeze({ mode: keepSoft ? "soft" : "hard" }),
+				)
+				for (const plan of plans) {
+					writeHandleVector(
+						set,
+						[plan.masterId, input.glyphId, input.targetPointId],
+						"incoming",
+						plan.incoming,
+					)
+					writeHandleVector(
+						set,
+						[plan.masterId, input.glyphId, input.targetPointId],
+						"outgoing",
+						plan.outgoing,
+					)
+					clearLayerPoint(set, [
+						plan.masterId,
+						input.glyphId,
+						input.draggedPointId,
+					])
+				}
+				set(pointAtoms, [input.glyphId, input.draggedPointId], null)
+				return
+			}
 			const sourceOrientation = orientOpenContourEndpoint(
 				sourceIds,
 				input.draggedPointId,

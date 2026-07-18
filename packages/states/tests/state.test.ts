@@ -3732,6 +3732,225 @@ describe("font editor state", () => {
 		}
 	})
 
+	it("re-fuses opposite endpoints of one open contour across every master", () => {
+		const editor = createLoadedEditor("test/rejoin-open-contour")
+		editor.actions.pasteContours({
+			glyphId: oGlyphId,
+			contours: [
+				{
+					id: "contour:rejoin",
+					closed: false,
+					points: [
+						{ id: "point:rejoin:first", mode: "hard" },
+						{ id: "point:rejoin:middle", mode: "hard" },
+						{ id: "point:rejoin:last", mode: "hard" },
+					],
+				},
+			],
+			layers: [
+				{ masterId: razorMasterId, lastX: 100, incomingX: -20 },
+				{ masterId: blackMasterId, lastX: 120, incomingX: -30 },
+			].map(({ masterId, lastX, incomingX }) => ({
+				masterId,
+				points: [
+					{
+						pointId: "point:rejoin:first",
+						x: 0,
+						y: 0,
+						outgoing: { x: 20, y: 0 },
+					},
+					{ pointId: "point:rejoin:middle", x: 50, y: 50 },
+					{
+						pointId: "point:rejoin:last",
+						x: lastX,
+						y: 0,
+						incoming: { x: incomingX, y: 0 },
+					},
+				],
+			})),
+		})
+		editor.clearHistory(oGlyphId)
+		const before = editor.read.editorGlyphSource(oGlyphId)
+
+		editor.actions.joinOpenContours({
+			glyphId: oGlyphId,
+			draggedContourId: "contour:rejoin",
+			draggedPointId: "point:rejoin:last",
+			targetContourId: "contour:rejoin",
+			targetPointId: "point:rejoin:first",
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				"contour:rejoin",
+			]),
+		).toEqual(["point:rejoin:first", "point:rejoin:middle"])
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				"contour:rejoin",
+			]),
+		).toBe(true)
+		for (const [masterId, incomingX] of [
+			[razorMasterId, 80],
+			[blackMasterId, 90],
+		] as const) {
+			const node = editor.read.layerNode(
+				masterId,
+				oGlyphId,
+				"point:rejoin:first",
+			)
+			if (!node.ok) throw new Error("Rejoined node is missing.")
+			expect(node.value.incoming).toEqual({ x: incomingX, y: 0 })
+			expect(node.value.outgoing).toEqual({ x: 20, y: 0 })
+		}
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+		editor.undo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourClosed, [
+				oGlyphId,
+				"contour:rejoin",
+			]),
+		).toBe(true)
+		editor.undo(oGlyphId)
+		editor.clearHistory(oGlyphId)
+		editor.actions.joinOpenContours({
+			glyphId: oGlyphId,
+			draggedContourId: "contour:rejoin",
+			draggedPointId: "point:rejoin:first",
+			targetContourId: "contour:rejoin",
+			targetPointId: "point:rejoin:last",
+		})
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				"contour:rejoin",
+			]),
+		).toEqual(["point:rejoin:middle", "point:rejoin:last"])
+		const reverseSurvivor = editor.read.layerNode(
+			razorMasterId,
+			oGlyphId,
+			"point:rejoin:last",
+		)
+		if (!reverseSurvivor.ok) throw new Error("Reverse survivor is missing.")
+		expect(reverseSurvivor.value.incoming).toEqual({ x: -20, y: 0 })
+		expect(reverseSurvivor.value.outgoing).toEqual({ x: -80, y: 0 })
+	})
+
+	it("atomically translates a selected group and joins its moved endpoint", () => {
+		const editor = createLoadedEditor("test/group-join")
+		editor.actions.pasteContours({
+			glyphId: oGlyphId,
+			contours: [
+				{
+					id: "contour:group:a",
+					closed: false,
+					points: [
+						{ id: "point:group:a0", mode: "hard" },
+						{ id: "point:group:a1", mode: "hard" },
+					],
+				},
+				{
+					id: "contour:group:b",
+					closed: false,
+					points: [
+						{ id: "point:group:b0", mode: "hard" },
+						{ id: "point:group:b1", mode: "hard" },
+					],
+				},
+			],
+			layers: [razorMasterId, blackMasterId].map((masterId) => ({
+				masterId,
+				points: [
+					{ pointId: "point:group:a0", x: 0, y: 0 },
+					{ pointId: "point:group:a1", x: 100, y: 0 },
+					{ pointId: "point:group:b0", x: 200, y: 0 },
+					{ pointId: "point:group:b1", x: 300, y: 0 },
+				],
+			})),
+		})
+		editor.clearHistory(oGlyphId)
+		const before = editor.read.editorGlyphSource(oGlyphId)
+
+		editor.actions.joinOpenContours({
+			glyphId: oGlyphId,
+			draggedContourId: "contour:group:a",
+			draggedPointId: "point:group:a1",
+			targetContourId: "contour:group:b",
+			targetPointId: "point:group:b0",
+			transform: {
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				points: [
+					{ pointId: "point:group:a0", x: 100, y: 0 },
+					{ pointId: "point:group:a1", x: 200, y: 0 },
+				],
+				handles: [],
+			},
+		})
+
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				"contour:group:b",
+			]),
+		).toEqual(["point:group:a0", "point:group:b0", "point:group:b1"])
+		expect(
+			editor.read.layerNode(razorMasterId, oGlyphId, "point:group:a0"),
+		).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({ x: 100 }),
+			}),
+		)
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, "point:group:a0"),
+		).toEqual(
+			expect.objectContaining({
+				ok: true,
+				value: expect.objectContaining({ x: 0 }),
+			}),
+		)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+		editor.undo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.glyphContourIds, oGlyphId),
+		).toEqual(expect.arrayContaining(["contour:group:b"]))
+		editor.undo(oGlyphId)
+		editor.clearHistory(oGlyphId)
+		expect(() =>
+			editor.actions.joinOpenContours({
+				glyphId: oGlyphId,
+				draggedContourId: "contour:group:a",
+				draggedPointId: "point:group:a1",
+				targetContourId: "contour:group:b",
+				targetPointId: "point:group:a0",
+				transform: {
+					masterId: razorMasterId,
+					glyphId: oGlyphId,
+					points: [{ pointId: "point:group:a0", x: 999, y: 0 }],
+					handles: [],
+				},
+			}),
+		).toThrow()
+		expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(0)
+	})
+
 	it("preserves a valid soft join and hardens an incompatible one", () => {
 		for (const [caseIndex, sourceIncomingY, expectedMode] of [
 			[0, 0, "soft"],
