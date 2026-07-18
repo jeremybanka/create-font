@@ -53,7 +53,9 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 								? "Rect · drag a box · hold Shift for a square."
 								: activeTool === "ellipse"
 									? "Ellipse · drag an oval · hold Shift for a circle."
-									: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
+									: activeTool === "knife"
+										? "Knife · click a path to break it open."
+										: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
 				</span>
 			</toolbar-context>
 

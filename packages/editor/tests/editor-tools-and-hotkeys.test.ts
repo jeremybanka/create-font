@@ -61,14 +61,18 @@ describe("editor tools and hotkeys", () => {
 		).toBe("undo")
 	})
 
-	it("maps Q to pen and V to select", () => {
+	it("maps Q to pen, K to knife, and V to select", () => {
 		expect(toolForKeyboardEvent(keyboardEvent({ key: "q" }), true)?.id).toBe(
 			"pen",
 		)
 		expect(toolForKeyboardEvent(keyboardEvent({ key: "v" }), true)?.id).toBe(
 			"select",
 		)
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "k" }), true)?.id).toBe(
+			"knife",
+		)
 		expect(TOOLS.PEN.hotkey).toEqual({ key: "q" })
+		expect(TOOLS.KNIFE.hotkey).toEqual({ key: "k" })
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
 	})
 

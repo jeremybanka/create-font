@@ -25,13 +25,13 @@ export const DEFAULT_HOTBAR_SLOTS: HotbarSlots = [
 	"pen",
 	"rect",
 	"ellipse",
+	"knife",
 	"transform",
 	"undo",
 	"redo",
 	"align-selection",
 	"reverse-path",
 	"make-node-first",
-	null,
 	null,
 ]
 

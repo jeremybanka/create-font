@@ -3383,6 +3383,290 @@ describe("font editor state", () => {
 		).toEqual(order)
 	})
 
+	it("cuts closed cubic and open straight segments atomically across masters", () => {
+		const closedEditor = createLoadedEditor("test/cut-closed-cubic")
+		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
+		if (contour === undefined) throw new Error("Fixture contour is missing.")
+		const originalOrder = contour.points.map(({ id }) => id)
+		const startPointId = originalOrder[0]
+		const endPointId = originalOrder[1]
+		if (startPointId === undefined || endPointId === undefined) {
+			throw new Error("Fixture segment endpoints are missing.")
+		}
+		const originals = new Map(
+			[razorMasterId, blackMasterId].map((masterId) => {
+				const start = closedEditor.read.layerNode(
+					masterId,
+					oGlyphId,
+					startPointId,
+				)
+				const end = closedEditor.read.layerNode(masterId, oGlyphId, endPointId)
+				if (!start.ok || !end.ok) throw new Error("Fixture segment is invalid.")
+				return [masterId, { start: start.value, end: end.value }] as const
+			}),
+		)
+		const leftPointId = "point:cut:closed:left" as const
+		const rightPointId = "point:cut:closed:right" as const
+		closedEditor.actions.cutSegment({
+			glyphId: oGlyphId,
+			contourId: contour.id,
+			segmentIndex: 0,
+			leftPointId,
+			rightPointId,
+			amount: 0.4,
+		})
+		expect(
+			closedEditor.silo.getState(closedEditor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual([
+			rightPointId,
+			...originalOrder.slice(1),
+			originalOrder[0],
+			leftPointId,
+		])
+		expect(
+			closedEditor.silo.getState(closedEditor.atoms.contourClosed, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toBe(false)
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			const original = originals.get(masterId)
+			const start = closedEditor.read.layerNode(
+				masterId,
+				oGlyphId,
+				startPointId,
+			)
+			const end = closedEditor.read.layerNode(masterId, oGlyphId, endPointId)
+			const left = closedEditor.read.layerNode(masterId, oGlyphId, leftPointId)
+			const right = closedEditor.read.layerNode(
+				masterId,
+				oGlyphId,
+				rightPointId,
+			)
+			if (
+				original === undefined ||
+				!start.ok ||
+				!end.ok ||
+				!left.ok ||
+				!right.ok
+			)
+				throw new Error("Cut endpoints are missing.")
+			expect(left.value.x).toBeCloseTo(right.value.x, 10)
+			expect(left.value.y).toBeCloseTo(right.value.y, 10)
+			expect(left.value.incoming).toBeDefined()
+			expect(left.value.outgoing).toBeUndefined()
+			expect(right.value.incoming).toBeUndefined()
+			expect(right.value.outgoing).toBeDefined()
+			const cubic = (from: typeof start.value, to: typeof end.value) => ({
+				p0: from,
+				c1: {
+					x: from.x + (from.outgoing?.x ?? 0),
+					y: from.y + (from.outgoing?.y ?? 0),
+				},
+				c2: {
+					x: to.x + (to.incoming?.x ?? 0),
+					y: to.y + (to.incoming?.y ?? 0),
+				},
+				p3: to,
+			})
+			for (const amount of [0, 0.25, 0.5, 0.75, 1]) {
+				const originalLeft = evaluateCubicCurve(
+					cubic(original.start, original.end),
+					amount * 0.4,
+				)
+				const actualLeft = evaluateCubicCurve(
+					cubic(start.value, left.value),
+					amount,
+				)
+				expect(actualLeft.x).toBeCloseTo(originalLeft.x, 9)
+				expect(actualLeft.y).toBeCloseTo(originalLeft.y, 9)
+				const originalRight = evaluateCubicCurve(
+					cubic(original.start, original.end),
+					0.4 + amount * 0.6,
+				)
+				const actualRight = evaluateCubicCurve(
+					cubic(right.value, end.value),
+					amount,
+				)
+				expect(actualRight.x).toBeCloseTo(originalRight.x, 9)
+				expect(actualRight.y).toBeCloseTo(originalRight.y, 9)
+			}
+		}
+		expect(
+			closedEditor.silo.inspectTimeline(
+				closedEditor.glyphHistoryTimelines,
+				oGlyphId,
+			).length,
+		).toBe(1)
+		closedEditor.undo(oGlyphId)
+		expect(
+			closedEditor.silo.getState(closedEditor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual(originalOrder)
+		closedEditor.redo(oGlyphId)
+		expect(
+			closedEditor.silo.getState(closedEditor.atoms.contourClosed, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toBe(false)
+
+		const openFixture = makeStraightSegmentFixture({ closed: false })
+		const openEditor = createFontEditorState({ key: "test/cut-open-straight" })
+		openEditor.actions.load(openFixture.source)
+		const rightContourId = "contour:cut:open:right" as const
+		openEditor.actions.cutSegment({
+			glyphId: oGlyphId,
+			contourId: openFixture.contourId,
+			segmentIndex: openFixture.segmentIndex,
+			leftPointId: "point:cut:open:left",
+			rightPointId: "point:cut:open:right",
+			rightContourId,
+			amount: 0.5,
+		})
+		expect(
+			openEditor.silo.getState(openEditor.atoms.glyphContourIds, oGlyphId),
+		).toContain(rightContourId)
+		expect(
+			openEditor.silo.getState(openEditor.atoms.contourPointIds, [
+				oGlyphId,
+				rightContourId,
+			])?.[0],
+		).toBe("point:cut:open:right")
+	})
+
+	it("joins every dangling-end orientation only through the explicit transaction", () => {
+		const cases = [
+			[
+				"point:join:a:0",
+				"point:join:b:0",
+				["point:join:a:1", "point:join:b:0", "point:join:b:1"],
+			],
+			[
+				"point:join:a:0",
+				"point:join:b:1",
+				["point:join:a:1", "point:join:b:1", "point:join:b:0"],
+			],
+			[
+				"point:join:a:1",
+				"point:join:b:0",
+				["point:join:a:0", "point:join:b:0", "point:join:b:1"],
+			],
+			[
+				"point:join:a:1",
+				"point:join:b:1",
+				["point:join:a:0", "point:join:b:1", "point:join:b:0"],
+			],
+		] as const
+		for (const [
+			caseIndex,
+			[draggedPointId, targetPointId, expected],
+		] of cases.entries()) {
+			const editor = createLoadedEditor(`test/join-open-${caseIndex}`)
+			editor.actions.pasteContours({
+				glyphId: oGlyphId,
+				contours: [
+					{
+						id: "contour:join:a",
+						closed: false,
+						points: [
+							{ id: "point:join:a:0", mode: "hard" },
+							{ id: "point:join:a:1", mode: "hard" },
+						],
+					},
+					{
+						id: "contour:join:b",
+						closed: false,
+						points: [
+							{ id: "point:join:b:0", mode: "hard" },
+							{ id: "point:join:b:1", mode: "hard" },
+						],
+					},
+				],
+				layers: [razorMasterId, blackMasterId].map((masterId, masterIndex) => ({
+					masterId,
+					points: [
+						{
+							pointId: "point:join:a:0" as const,
+							x: 0,
+							y: masterIndex * 10,
+							outgoing: { x: 30, y: 0 },
+						},
+						{
+							pointId: "point:join:a:1" as const,
+							x: 100,
+							y: masterIndex * 10,
+							incoming: { x: -20, y: 0 },
+							outgoing: { x: 12, y: 12 },
+						},
+						{
+							pointId: "point:join:b:0" as const,
+							x: 110,
+							y: masterIndex * 10,
+							incoming: { x: -12, y: 12 },
+							outgoing: { x: 30, y: 0 },
+						},
+						{
+							pointId: "point:join:b:1" as const,
+							x: 210,
+							y: masterIndex * 10,
+							incoming: { x: -30, y: 0 },
+						},
+					],
+				})),
+			})
+			editor.clearHistory(oGlyphId)
+			const before = editor.read.editorGlyphSource(oGlyphId)
+			expect(before?.contours).toContainEqual(
+				expect.objectContaining({ id: "contour:join:a" }),
+			)
+			if (caseIndex === 0) {
+				editor.actions.movePoints({
+					masterId: razorMasterId,
+					glyphId: oGlyphId,
+					points: [{ pointId: draggedPointId, x: 110, y: 0 }],
+				})
+				expect(
+					editor.silo.getState(editor.atoms.glyphContourIds, oGlyphId),
+				).toEqual(expect.arrayContaining(["contour:join:a", "contour:join:b"]))
+				editor.undo(oGlyphId)
+				editor.redo(oGlyphId)
+				expect(
+					editor.silo.getState(editor.atoms.glyphContourIds, oGlyphId),
+				).toEqual(expect.arrayContaining(["contour:join:a", "contour:join:b"]))
+				editor.undo(oGlyphId)
+				editor.clearHistory(oGlyphId)
+			}
+			editor.actions.joinOpenContours({
+				glyphId: oGlyphId,
+				draggedContourId: "contour:join:a",
+				draggedPointId,
+				targetContourId: "contour:join:b",
+				targetPointId,
+			})
+			expect(
+				editor.silo.getState(editor.atoms.contourPointIds, [
+					oGlyphId,
+					"contour:join:b",
+				]),
+			).toEqual(expected)
+			expect(
+				editor.read.layerNode(razorMasterId, oGlyphId, draggedPointId).ok,
+			).toBe(false)
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+					.length,
+			).toBe(1)
+			editor.undo(oGlyphId)
+			expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		}
+	})
+
 	it("diagnoses deferred overlap union without destroying editable topology", () => {
 		const source = makeGeometricOEditorFont()
 		const glyph = source.glyphs.find((candidate) => candidate.id === oGlyphId)

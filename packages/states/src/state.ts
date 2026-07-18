@@ -211,6 +211,23 @@ function splitContourId(glyphId: GlyphId, firstPointId: PointId): ContourId {
 	return `contour:${glyphId}:split:${firstPointId}`
 }
 
+function orientOpenContourEndpoint(
+	pointIds: readonly PointId[],
+	pointId: PointId,
+	position: "first" | "last",
+): Readonly<{ pointIds: readonly PointId[]; reversed: boolean }> {
+	const index = pointIds.indexOf(pointId)
+	if (index !== 0 && index !== pointIds.length - 1) {
+		throw new TypeError(`Point ${pointId} is not a dangling endpoint.`)
+	}
+	const reversed =
+		position === "first" ? index === pointIds.length - 1 : index === 0
+	return {
+		pointIds: reversed ? [...pointIds].reverse() : [...pointIds],
+		reversed,
+	}
+}
+
 function remainingPointRuns(
 	pointIds: readonly PointId[],
 	deleted: ReadonlySet<PointId>,
@@ -396,6 +413,27 @@ export interface SplitSegmentInput {
 	readonly pointId: PointId
 	/** Shared curve parameter applied to every master. */
 	readonly amount: number
+}
+
+export interface CutSegmentInput {
+	readonly glyphId: GlyphId
+	readonly contourId: ContourId
+	readonly segmentIndex: number
+	/** Distinct endpoint IDs created at the same cut coordinate. */
+	readonly leftPointId: PointId
+	readonly rightPointId: PointId
+	/** Required when cutting an open contour; ignored for a closed contour. */
+	readonly rightContourId?: ContourId
+	/** Shared curve parameter applied to every master. */
+	readonly amount: number
+}
+
+export interface JoinOpenContoursInput {
+	readonly glyphId: GlyphId
+	readonly draggedContourId: ContourId
+	readonly draggedPointId: PointId
+	readonly targetContourId: ContourId
+	readonly targetPointId: PointId
 }
 
 export interface AddSegmentHandlesInput {
@@ -1093,6 +1131,31 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "outgoingHandleY",
 		default: null,
 	})
+	const writeHandleVector = (
+		set: WriterToolkit["set"],
+		key: LayerPointKey,
+		handle: EditorHandleKind,
+		vector: Vector2 | undefined,
+	): void => {
+		set(
+			handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+			key,
+			vector?.x ?? null,
+		)
+		set(
+			handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+			key,
+			vector?.y ?? null,
+		)
+	}
+	const clearLayerPoint = (
+		set: WriterToolkit["set"],
+		key: LayerPointKey,
+	): void => {
+		set(pointPositionSelectors, key, null)
+		writeHandleVector(set, key, "incoming", undefined)
+		writeHandleVector(set, key, "outgoing", undefined)
+	}
 	const cmapGlyphAtoms = silo.atomFamily<GlyphId | null, number>({
 		key: "cmapGlyph",
 		default: null,
@@ -5000,6 +5063,485 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const cutSegmentTransaction = silo.transaction<
+		(input: CutSegmentInput) => void
+	>({
+		key: "cutSegment",
+		do: ({ get, set }, input) => {
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const pointIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.contourId,
+			])
+			const closed = get(contourClosedAtoms, [input.glyphId, input.contourId])
+			const masterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (
+				contourIds === null ||
+				pointIds === null ||
+				closed === null ||
+				masterIds === null
+			) {
+				throw new TypeError(`Unknown contour ${input.contourId}.`)
+			}
+			const segmentCount = Math.max(0, pointIds.length - (closed ? 0 : 1))
+			if (
+				!Number.isInteger(input.segmentIndex) ||
+				input.segmentIndex < 0 ||
+				input.segmentIndex >= segmentCount
+			) {
+				throw new RangeError("Segment index is outside the contour.")
+			}
+			if (
+				!Number.isFinite(input.amount) ||
+				input.amount <= 0.001 ||
+				input.amount >= 0.999
+			) {
+				throw new RangeError("Segment cut must stay away from its endpoints.")
+			}
+			if (input.leftPointId === input.rightPointId) {
+				throw new TypeError("A cut requires two distinct endpoint IDs.")
+			}
+			const occupiedPointIds = new Set<PointId>()
+			const occupiedContourIds = new Set<ContourId>()
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					occupiedContourIds.add(contourId)
+					for (const pointId of get(contourPointIdsAtoms, [
+						glyphId,
+						contourId,
+					]) ?? []) {
+						occupiedPointIds.add(pointId)
+					}
+				}
+			}
+			if (
+				occupiedPointIds.has(input.leftPointId) ||
+				occupiedPointIds.has(input.rightPointId)
+			) {
+				throw new TypeError("A cut point ID is already in use.")
+			}
+			if (!closed) {
+				if (input.rightContourId === undefined) {
+					throw new TypeError(
+						"Cutting an open contour requires a second contour ID.",
+					)
+				}
+				if (occupiedContourIds.has(input.rightContourId)) {
+					throw new TypeError(
+						`Contour ID ${input.rightContourId} is already in use.`,
+					)
+				}
+			}
+
+			const startPointId = pointIds[input.segmentIndex]
+			const endPointId = closed
+				? pointIds[(input.segmentIndex + 1) % pointIds.length]
+				: pointIds[input.segmentIndex + 1]
+			if (startPointId === undefined || endPointId === undefined) {
+				throw new TypeError("Segment endpoints are missing.")
+			}
+			const plans: {
+				readonly masterId: MasterId
+				readonly point: Vector2
+				readonly startOutgoing?: Vector2
+				readonly leftIncoming?: Vector2
+				readonly rightOutgoing?: Vector2
+				readonly endIncoming?: Vector2
+			}[] = []
+			const startTopology = get(pointAtoms, [input.glyphId, startPointId])
+			const endTopology = get(pointAtoms, [input.glyphId, endPointId])
+			if (startTopology === null || endTopology === null) {
+				throw new TypeError("Cut endpoint topology is missing.")
+			}
+			let hardenStart = false
+			let hardenEnd = false
+			for (const masterId of masterIds) {
+				const start = get(layerNodeSelectors, [
+					masterId,
+					input.glyphId,
+					startPointId,
+				])
+				const end = get(layerNodeSelectors, [
+					masterId,
+					input.glyphId,
+					endPointId,
+				])
+				if (!start.ok || !end.ok) {
+					throw new TypeError("Cannot cut a segment with invalid endpoints.")
+				}
+				const straight =
+					start.value.outgoing === undefined && end.value.incoming === undefined
+				if (straight) {
+					plans.push({
+						masterId,
+						point: {
+							x: start.value.x + (end.value.x - start.value.x) * input.amount,
+							y: start.value.y + (end.value.y - start.value.y) * input.amount,
+						},
+					})
+					continue
+				}
+				const split = splitCubicCurve(
+					{
+						p0: start.value,
+						c1: {
+							x: start.value.x + (start.value.outgoing?.x ?? 0),
+							y: start.value.y + (start.value.outgoing?.y ?? 0),
+						},
+						c2: {
+							x: end.value.x + (end.value.incoming?.x ?? 0),
+							y: end.value.y + (end.value.incoming?.y ?? 0),
+						},
+						p3: end.value,
+					},
+					input.amount,
+				)
+				const nextStartOutgoing = {
+					x: split.left.c1.x - split.left.p0.x,
+					y: split.left.c1.y - split.left.p0.y,
+				}
+				const nextEndIncoming = {
+					x: split.right.c2.x - split.right.p3.x,
+					y: split.right.c2.y - split.right.p3.y,
+				}
+				if (
+					startTopology.mode === "soft" &&
+					start.value.incoming !== undefined &&
+					!handlesShareOppositeRay(start.value.incoming, nextStartOutgoing)
+				)
+					hardenStart = true
+				if (
+					endTopology.mode === "soft" &&
+					end.value.outgoing !== undefined &&
+					!handlesShareOppositeRay(nextEndIncoming, end.value.outgoing)
+				)
+					hardenEnd = true
+				plans.push({
+					masterId,
+					point: split.point,
+					startOutgoing: nextStartOutgoing,
+					leftIncoming: {
+						x: split.left.c2.x - split.point.x,
+						y: split.left.c2.y - split.point.y,
+					},
+					rightOutgoing: {
+						x: split.right.c1.x - split.point.x,
+						y: split.right.c1.y - split.point.y,
+					},
+					endIncoming: nextEndIncoming,
+				})
+			}
+
+			const leftIds = [
+				...pointIds.slice(0, input.segmentIndex + 1),
+				input.leftPointId,
+			]
+			const rightIds = [
+				input.rightPointId,
+				...pointIds.slice(input.segmentIndex + 1),
+			]
+			if (closed) {
+				set(
+					contourPointIdsAtoms,
+					[input.glyphId, input.contourId],
+					deepFreeze([...rightIds, ...leftIds]),
+				)
+				set(contourClosedAtoms, [input.glyphId, input.contourId], false)
+			} else {
+				const rightContourId = input.rightContourId
+				if (rightContourId === undefined)
+					throw new TypeError("Missing contour ID.")
+				set(
+					contourPointIdsAtoms,
+					[input.glyphId, input.contourId],
+					deepFreeze(leftIds),
+				)
+				set(
+					contourPointIdsAtoms,
+					[input.glyphId, rightContourId],
+					deepFreeze(rightIds),
+				)
+				set(contourClosedAtoms, [input.glyphId, rightContourId], false)
+				const sourceIndex = contourIds.indexOf(input.contourId)
+				set(
+					glyphContourIdsAtoms,
+					input.glyphId,
+					deepFreeze([
+						...contourIds.slice(0, sourceIndex + 1),
+						rightContourId,
+						...contourIds.slice(sourceIndex + 1),
+					]),
+				)
+			}
+			set(
+				pointAtoms,
+				[input.glyphId, input.leftPointId],
+				deepFreeze({ mode: "hard" }),
+			)
+			if (hardenStart) {
+				set(
+					pointAtoms,
+					[input.glyphId, startPointId],
+					deepFreeze({ mode: "hard" }),
+				)
+			}
+			if (hardenEnd) {
+				set(
+					pointAtoms,
+					[input.glyphId, endPointId],
+					deepFreeze({ mode: "hard" }),
+				)
+			}
+			set(
+				pointAtoms,
+				[input.glyphId, input.rightPointId],
+				deepFreeze({ mode: "hard" }),
+			)
+			for (const plan of plans) {
+				for (const pointId of [input.leftPointId, input.rightPointId]) {
+					set(
+						pointPositionSelectors,
+						[plan.masterId, input.glyphId, pointId],
+						deepFreeze(plan.point),
+					)
+				}
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.leftPointId],
+					"incoming",
+					plan.leftIncoming,
+				)
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.leftPointId],
+					"outgoing",
+					undefined,
+				)
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.rightPointId],
+					"incoming",
+					undefined,
+				)
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.rightPointId],
+					"outgoing",
+					plan.rightOutgoing,
+				)
+				if (plan.startOutgoing !== undefined) {
+					writeHandleVector(
+						set,
+						[plan.masterId, input.glyphId, startPointId],
+						"outgoing",
+						plan.startOutgoing,
+					)
+					writeHandleVector(
+						set,
+						[plan.masterId, input.glyphId, endPointId],
+						"incoming",
+						plan.endIncoming,
+					)
+				}
+			}
+		},
+	})
+
+	const joinOpenContoursTransaction = silo.transaction<
+		(input: JoinOpenContoursInput) => void
+	>({
+		key: "joinOpenContours",
+		do: ({ get, set }, input) => {
+			if (input.draggedContourId === input.targetContourId) {
+				throw new TypeError("Cannot join endpoints from the same contour.")
+			}
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const sourceIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.draggedContourId,
+			])
+			const targetIds = get(contourPointIdsAtoms, [
+				input.glyphId,
+				input.targetContourId,
+			])
+			const sourceClosed = get(contourClosedAtoms, [
+				input.glyphId,
+				input.draggedContourId,
+			])
+			const targetClosed = get(contourClosedAtoms, [
+				input.glyphId,
+				input.targetContourId,
+			])
+			const masterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (
+				contourIds === null ||
+				sourceIds === null ||
+				targetIds === null ||
+				sourceClosed === null ||
+				targetClosed === null ||
+				masterIds === null
+			)
+				throw new TypeError("Cannot join unknown contours.")
+			if (sourceClosed || targetClosed)
+				throw new TypeError("Only open contours can be joined.")
+			const sourceOrientation = orientOpenContourEndpoint(
+				sourceIds,
+				input.draggedPointId,
+				"last",
+			)
+			const targetOrientation = orientOpenContourEndpoint(
+				targetIds,
+				input.targetPointId,
+				"first",
+			)
+			const reverseSource = sourceOrientation.reversed
+			const reverseTarget = targetOrientation.reversed
+			const orientedSource = sourceOrientation.pointIds
+			const orientedTarget = targetOrientation.pointIds
+			const targetTopology = get(pointAtoms, [
+				input.glyphId,
+				input.targetPointId,
+			])
+			if (targetTopology === null)
+				throw new TypeError("Target endpoint is missing.")
+			const plans: {
+				readonly masterId: MasterId
+				readonly nodes: ReadonlyMap<PointId, EditorLayerNode>
+				readonly incoming?: Vector2
+				readonly outgoing?: Vector2
+			}[] = []
+			let keepSoft = targetTopology.mode === "soft"
+			for (const masterId of masterIds) {
+				const nodes = new Map<PointId, EditorLayerNode>()
+				for (const pointId of new Set([...sourceIds, ...targetIds])) {
+					const node = get(layerNodeSelectors, [
+						masterId,
+						input.glyphId,
+						pointId,
+					])
+					if (!node.ok)
+						throw new TypeError(
+							"Cannot join contours with invalid layer nodes.",
+						)
+					nodes.set(pointId, node.value)
+				}
+				const dragged = nodes.get(input.draggedPointId)
+				const target = nodes.get(input.targetPointId)
+				if (dragged === undefined || target === undefined)
+					throw new TypeError("Join endpoints are missing.")
+				const connectedSource = reverseSource
+					? dragged.outgoing
+					: dragged.incoming
+				const connectedTarget = reverseTarget
+					? target.incoming
+					: target.outgoing
+				const incoming =
+					connectedSource === undefined
+						? undefined
+						: {
+								x: dragged.x + connectedSource.x - target.x,
+								y: dragged.y + connectedSource.y - target.y,
+							}
+				const outgoing = connectedTarget
+				if (
+					(incoming === undefined && outgoing === undefined) ||
+					(incoming !== undefined &&
+						outgoing !== undefined &&
+						!handlesShareOppositeRay(incoming, outgoing))
+				)
+					keepSoft = false
+				plans.push({
+					masterId,
+					nodes,
+					...(incoming === undefined ? {} : { incoming }),
+					...(outgoing === undefined ? {} : { outgoing }),
+				})
+			}
+
+			const survivorPosition = Math.min(
+				contourIds.indexOf(input.draggedContourId),
+				contourIds.indexOf(input.targetContourId),
+			)
+			const remainingContours = contourIds.filter(
+				(contourId) =>
+					contourId !== input.draggedContourId &&
+					contourId !== input.targetContourId,
+			)
+			remainingContours.splice(survivorPosition, 0, input.targetContourId)
+			set(glyphContourIdsAtoms, input.glyphId, deepFreeze(remainingContours))
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.targetContourId],
+				deepFreeze([...orientedSource.slice(0, -1), ...orientedTarget]),
+			)
+			set(contourClosedAtoms, [input.glyphId, input.targetContourId], false)
+			set(contourPointIdsAtoms, [input.glyphId, input.draggedContourId], null)
+			set(contourClosedAtoms, [input.glyphId, input.draggedContourId], null)
+			set(
+				pointAtoms,
+				[input.glyphId, input.targetPointId],
+				deepFreeze({ mode: keepSoft ? "soft" : "hard" }),
+			)
+			for (const plan of plans) {
+				if (reverseSource) {
+					for (const pointId of sourceIds) {
+						const node = plan.nodes.get(pointId)
+						if (node === undefined) continue
+						writeHandleVector(
+							set,
+							[plan.masterId, input.glyphId, pointId],
+							"incoming",
+							node.outgoing,
+						)
+						writeHandleVector(
+							set,
+							[plan.masterId, input.glyphId, pointId],
+							"outgoing",
+							node.incoming,
+						)
+					}
+				}
+				if (reverseTarget) {
+					for (const pointId of targetIds) {
+						const node = plan.nodes.get(pointId)
+						if (node === undefined) continue
+						writeHandleVector(
+							set,
+							[plan.masterId, input.glyphId, pointId],
+							"incoming",
+							node.outgoing,
+						)
+						writeHandleVector(
+							set,
+							[plan.masterId, input.glyphId, pointId],
+							"outgoing",
+							node.incoming,
+						)
+					}
+				}
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.targetPointId],
+					"incoming",
+					plan.incoming,
+				)
+				writeHandleVector(
+					set,
+					[plan.masterId, input.glyphId, input.targetPointId],
+					"outgoing",
+					plan.outgoing,
+				)
+				const removedKey: LayerPointKey = [
+					plan.masterId,
+					input.glyphId,
+					input.draggedPointId,
+				]
+				clearLayerPoint(set, removedKey)
+			}
+			set(pointAtoms, [input.glyphId, input.draggedPointId], null)
+		},
+	})
+
 	const reverseContourTransaction = silo.transaction<
 		(input: ReverseContourInput) => void
 	>({
@@ -5952,6 +6494,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
 	const runAddSegmentHandles = silo.runTransaction(addSegmentHandlesTransaction)
 	const runSplitSegment = silo.runTransaction(splitSegmentTransaction)
+	const runCutSegment = silo.runTransaction(cutSegmentTransaction)
+	const runJoinOpenContours = silo.runTransaction(joinOpenContoursTransaction)
 	const runReverseContour = silo.runTransaction(reverseContourTransaction)
 	const runInvertContour = silo.runTransaction(invertContourTransaction)
 	const runMakeNodeFirst = silo.runTransaction(makeNodeFirstTransaction)
@@ -6054,6 +6598,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			insertPoint: insertPointTransaction,
 			addSegmentHandles: addSegmentHandlesTransaction,
 			splitSegment: splitSegmentTransaction,
+			cutSegment: cutSegmentTransaction,
+			joinOpenContours: joinOpenContoursTransaction,
 			reverseContour: reverseContourTransaction,
 			invertContour: invertContourTransaction,
 			makeNodeFirst: makeNodeFirstTransaction,
@@ -6121,6 +6667,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			splitSegment(input: SplitSegmentInput): void {
 				runSplitSegment(input)
+				markDocumentChanged()
+			},
+			cutSegment(input: CutSegmentInput): void {
+				runCutSegment(input)
+				markDocumentChanged()
+			},
+			joinOpenContours(input: JoinOpenContoursInput): void {
+				runJoinOpenContours(input)
 				markDocumentChanged()
 			},
 			reverseContour(input: ReverseContourInput): void {
