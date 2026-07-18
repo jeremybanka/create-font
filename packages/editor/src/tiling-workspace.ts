@@ -2,7 +2,11 @@ export const COLUMN_IDS = [1, 2, 3, 4] as const
 
 export type TileColumnId = (typeof COLUMN_IDS)[number]
 export type TileColumnAlignment = "top" | "bottom"
-export type TileKind = "font-navigation" | "canvas-toolbar" | "glyph-attributes"
+export type TileKind =
+	| "font-navigation"
+	| "canvas-toolbar"
+	| "glyph-attributes"
+	| "selection-dimensions"
 
 export interface TileInstance {
 	readonly id: string
@@ -40,6 +44,7 @@ const TILE_KINDS = new Set<TileKind>([
 	"font-navigation",
 	"canvas-toolbar",
 	"glyph-attributes",
+	"selection-dimensions",
 ])
 
 let nextTileId = 0

@@ -10,6 +10,8 @@ export interface NumericInputProps {
 	readonly value: number
 	readonly min: number
 	readonly max: number
+	readonly step?: number | "any"
+	readonly disabled?: boolean
 	readonly onCommit: (value: number) => void
 }
 
@@ -20,7 +22,8 @@ export function NumericInput(props: NumericInputProps) {
 		if (!editing.current) setDraft(String(props.value))
 	}, [props.value])
 	const commit = (): void => {
-		const value = parseNumericInput(draft, props.min, props.max)
+		if (!editing.current) return
+		const value = parseNumericInput(draft, props.min, props.max, props.step)
 		editing.current = false
 		if (value === null) {
 			setDraft(String(props.value))
@@ -33,7 +36,8 @@ export function NumericInput(props: NumericInputProps) {
 		<numeric-input>
 			<input
 				type="number"
-				step="1"
+				step={props.step ?? 1}
+				disabled={props.disabled}
 				aria-label={props["aria-label"]}
 				min={props.min}
 				max={props.max}
@@ -53,6 +57,7 @@ export function NumericInput(props: NumericInputProps) {
 							keyboardStepMultiplier(event, IS_MAC_LIKE),
 							props.min,
 							props.max,
+							props.step,
 						)
 						setDraft(String(value))
 						if (value !== props.value) props.onCommit(value)

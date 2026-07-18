@@ -417,3 +417,12 @@ export function prepareOutlinePaste(
 		},
 	}
 }
+
+/** Replaces any prior mixed selection with the freshly allocated paste nodes. */
+export function outlinePasteSelectionTargets(
+	selectedPointIds: readonly PointId[],
+): readonly EditorSelectionTarget[] {
+	return Object.freeze(
+		selectedPointIds.map((pointId) => ({ kind: "node" as const, pointId })),
+	)
+}

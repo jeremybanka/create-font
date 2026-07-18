@@ -39,6 +39,8 @@ import {
 	resolveSelectionControls,
 	scaleSelectionControls,
 	selectionForRigidTranslation,
+	selectionOriginPosition,
+	selectionScaleForDimension,
 	translateSelectionControls,
 } from "../src/outline-selection.ts"
 
@@ -48,6 +50,25 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
+	it("shares proportional scaling preference across editor lifecycle actions", () => {
+		const workspace = createEditorWorkspace()
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(false)
+
+		workspace.actions.toggleConstrainProportions()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.actions.exitGlyphEdit()
+
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(true)
+		workspace.actions.toggleConstrainProportions()
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(false)
+	})
+
 	it("keeps visual debug state across editor lifecycle actions", () => {
 		const workspace = createEditorWorkspace()
 		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({
@@ -693,6 +714,47 @@ describe("editor workspace", () => {
 				},
 			],
 		})
+	})
+
+	it("derives all nine selection origins including half-unit centers", () => {
+		const bounds = { minX: -10, minY: -21, maxX: 91, maxY: 80 }
+		expect(selectionOriginPosition(bounds, "bottom-left")).toEqual({
+			x: -10,
+			y: -21,
+		})
+		expect(selectionOriginPosition(bounds, "center")).toEqual({
+			x: 40.5,
+			y: 29.5,
+		})
+		expect(selectionOriginPosition(bounds, "top-right")).toEqual({
+			x: 91,
+			y: 80,
+		})
+		expect(
+			selectionScaleForDimension(bounds, "top-right", "width", 202),
+		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 1 })
+		expect(
+			selectionScaleForDimension(bounds, "top-right", "width", 202, true),
+		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 2 })
+		expect(
+			selectionScaleForDimension(bounds, "bottom-left", "height", 50.5, true),
+		).toEqual({ anchorX: -10, anchorY: -21, scaleX: 0.5, scaleY: 0.5 })
+	})
+
+	it("rejects undefined scaling from degenerate selection bounds", () => {
+		const vertical = { minX: 12, minY: -5, maxX: 12, maxY: 25 }
+		expect(
+			selectionScaleForDimension(vertical, "center", "width", 20),
+		).toBeNull()
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", 60),
+		).toEqual({ anchorX: 12, anchorY: 10, scaleX: 1, scaleY: 2 })
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", 60, true),
+		).toBeNull()
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", Infinity),
+		).toBeNull()
 	})
 
 	it("uses a stable vertical tie break and returns complete contour targets", () => {

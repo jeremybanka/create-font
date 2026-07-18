@@ -255,10 +255,26 @@ app-shell.class {
 @media (width <= 940px) {
 	app-shell.class {
 		> header {
-			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-columns: auto minmax(34px, 1fr) auto;
+			gap: 10px;
 
 			> command-center {
-				display: none;
+				display: block;
+				width: 100%;
+
+				> button {
+					display: grid;
+					grid-template-columns: minmax(0, 1fr);
+					place-items: center;
+					width: 100%;
+					height: 32px;
+					padding: 0;
+
+					> strong,
+					> kbd {
+						display: none;
+					}
+				}
 			}
 		}
 	}
@@ -267,7 +283,8 @@ app-shell.class {
 @media (width <= 620px) {
 	app-shell.class {
 		> header {
-			grid-template-columns: auto minmax(0, 1fr);
+			grid-template-columns: auto minmax(34px, 1fr) auto;
+			gap: 8px;
 			padding: 0 10px;
 
 			> brand-lockup > project-name > span,
@@ -279,14 +296,13 @@ app-shell.class {
 				min-width: 0;
 
 				> view-tabs {
-					width: 100%;
+					width: auto;
 
 					> app-anchor {
 						display: contents;
 					}
 
 					> app-anchor > a {
-						flex: 1;
 						padding-inline: 7px;
 						text-align: center;
 					}
@@ -300,6 +316,19 @@ app-shell.class {
 			> keyboard-help {
 				display: none;
 			}
+		}
+	}
+}
+
+@media (width <= 420px) {
+	app-shell.class > header {
+		> brand-lockup > project-name {
+			display: none;
+		}
+
+		> header-actions > view-tabs > app-anchor > a {
+			padding-inline: 5px;
+			font-size: 9px;
 		}
 	}
 }

@@ -67,6 +67,16 @@ describe("tiling workspace", () => {
 		expect(findTile(moved, added.tileId)?.tile.kind).toBe("glyph-attributes")
 	})
 
+	it("persists selection dimension tile instances in workspace layouts", () => {
+		const initial = createDefaultTilingLayout()
+		const added = addTile(initial, "selection-dimensions", 4)
+		const restored = parseTilingLayout(serializeTilingLayout(added.layout))
+		expect(findTile(restored!, added.tileId)?.tile).toMatchObject({
+			kind: "selection-dimensions",
+			fill: false,
+		})
+	})
+
 	it("supports relative reorder, duplication, fill affinity, and removal", () => {
 		const initial = createDefaultTilingLayout()
 		const first = addTile(initial, "font-navigation", 2)

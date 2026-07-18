@@ -136,6 +136,10 @@ export function createEditorWorkspace(
 		key: "showNodes",
 		default: true,
 	})
+	const constrainProportionsAtom = font.silo.atom<boolean>({
+		key: "constrainProportions",
+		default: false,
+	})
 	const canvasViewAtom = font.silo.atom<CanvasView>({
 		key: "canvasView",
 		default: { x: 72, y: 72, zoom: 1 },
@@ -440,6 +444,7 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			constrainProportions: constrainProportionsAtom,
 			canvasView: canvasViewAtom,
 			canvasViewport: canvasViewportAtom,
 			visualDebug: visualDebugAtom,
@@ -453,6 +458,9 @@ export function createEditorWorkspace(
 			faviconHref: faviconHrefSelector,
 		},
 		actions: {
+			toggleConstrainProportions(): void {
+				font.silo.setState(constrainProportionsAtom, (enabled) => !enabled)
+			},
 			toggleVisualDebug(id: VisualDebugToggleId): void {
 				font.silo.setState(visualDebugAtom, (state) =>
 					toggleVisualDebug(state, id),

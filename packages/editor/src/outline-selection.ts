@@ -47,6 +47,73 @@ export interface SelectionScale {
 	readonly scaleY: number
 }
 
+export const SELECTION_ORIGINS = [
+	"top-left",
+	"top-center",
+	"top-right",
+	"middle-left",
+	"center",
+	"middle-right",
+	"bottom-left",
+	"bottom-center",
+	"bottom-right",
+] as const
+
+export type SelectionOrigin = (typeof SELECTION_ORIGINS)[number]
+
+export interface SelectionOriginPosition {
+	readonly x: number
+	readonly y: number
+}
+
+const SELECTION_ORIGIN_FACTORS: Readonly<
+	Record<SelectionOrigin, SelectionOriginPosition>
+> = {
+	"top-left": { x: 0, y: 1 },
+	"top-center": { x: 0.5, y: 1 },
+	"top-right": { x: 1, y: 1 },
+	"middle-left": { x: 0, y: 0.5 },
+	center: { x: 0.5, y: 0.5 },
+	"middle-right": { x: 1, y: 0.5 },
+	"bottom-left": { x: 0, y: 0 },
+	"bottom-center": { x: 0.5, y: 0 },
+	"bottom-right": { x: 1, y: 0 },
+}
+
+export function selectionOriginPosition(
+	bounds: SelectionBounds,
+	origin: SelectionOrigin,
+): SelectionOriginPosition {
+	const factor = SELECTION_ORIGIN_FACTORS[origin]
+	return {
+		x: bounds.minX + (bounds.maxX - bounds.minX) * factor.x,
+		y: bounds.minY + (bounds.maxY - bounds.minY) * factor.y,
+	}
+}
+
+export function selectionScaleForDimension(
+	bounds: SelectionBounds,
+	origin: SelectionOrigin,
+	dimension: "width" | "height",
+	nextDimension: number,
+	constrainProportions = false,
+): SelectionScale | null {
+	if (!Number.isFinite(nextDimension) || nextDimension < 0) return null
+	const width = bounds.maxX - bounds.minX
+	const height = bounds.maxY - bounds.minY
+	const sourceDimension = dimension === "width" ? width : height
+	if (sourceDimension === 0) return null
+	if (constrainProportions && (width === 0 || height === 0)) return null
+	const anchor = selectionOriginPosition(bounds, origin)
+	const factor = nextDimension / sourceDimension
+	return {
+		anchorX: anchor.x,
+		anchorY: anchor.y,
+		scaleX: constrainProportions || dimension === "width" ? factor : 1,
+		scaleY: constrainProportions || dimension === "height" ? factor : 1,
+	}
+}
+
 export interface AlignmentPlan extends SelectionTransformResult {
 	readonly axis: "vertical" | "horizontal"
 	readonly coordinate: number

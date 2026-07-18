@@ -9,6 +9,7 @@ import {
 	nearestEditorControlHit,
 	nearestEditorSegmentHit,
 	resolveEditorCanvasHit,
+	selectionOwnsEditorSegment,
 	SEGMENT_HIT_RADIUS_PX,
 } from "../src/canvas-hit-testing.ts"
 import type { EditorCanvasContour } from "../src/editor-workspace.ts"
@@ -194,5 +195,40 @@ describe("canvas hit testing", () => {
 				worldScale: 1,
 			}),
 		).toMatchObject({ kind: "control", target: controls[0]?.target })
+	})
+
+	it("requires both segment endpoint nodes to own an edge drag", () => {
+		expect(
+			selectionOwnsEditorSegment(contours[0]!, 0, [
+				{ kind: "node", pointId: pointId("a") },
+				{ kind: "node", pointId: pointId("b") },
+				{
+					kind: "handle",
+					pointId: pointId("a"),
+					handle: "outgoing",
+				},
+			]),
+		).toBe(true)
+		expect(
+			selectionOwnsEditorSegment(contours[0]!, 0, [
+				{ kind: "node", pointId: pointId("a") },
+				{
+					kind: "handle",
+					pointId: pointId("a"),
+					handle: "outgoing",
+				},
+			]),
+		).toBe(false)
+		expect(selectionOwnsEditorSegment(contours[0]!, 1, [])).toBe(false)
+	})
+
+	it("recognizes the closing edge of a closed contour", () => {
+		const closed = { ...contours[0]!, closed: true }
+		expect(
+			selectionOwnsEditorSegment(closed, 1, [
+				{ kind: "node", pointId: pointId("a") },
+				{ kind: "node", pointId: pointId("b") },
+			]),
+		).toBe(true)
 	})
 })
