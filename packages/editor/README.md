@@ -129,10 +129,31 @@ implement SSH or synchronize a second checkout. See the repository
   nudge every selected node. Hold Shift for ten font units.
 - Use the toolbar, Command-Z / Shift-Command-Z, or Control-Z equivalents for
   undo and redo.
+- Press Shift-Space to enter the separate tile-management mode. Columns 1 and
+  2 belong to the left edge; columns 3 and 4 belong to the right. Use 1–4 to
+  select a column, J/K to select a tile, Shift-J/K to reorder, M then 1–4 to
+  move, A then T/B to pack a column, N to focus the tile pool, C to toggle a
+  column, F to give a tile fill affinity, X to remove a tile, and S to
+  explicitly save the workspace. R reverts to the explicitly saved layout;
+  Delete and Backspace remain removal aliases. Click a column heading to
+  collapse it at any time, or its compact heading to expand it. Tile-management
+  undo and redo remain separate from font editing history.
+- The tile pool is visible throughout management mode. Its entries can be
+  clicked into the selected column or dragged to any numbered column target;
+  existing tiles can likewise be dragged between columns. Unsaved layout edits
+  are recovered locally after a reload without being treated as an explicit
+  save.
+- The canvas toolbar is itself a tile in column 3. Its design-space, zoom, and
+  node-visibility controls share ephemeral viewport state with the canvas, so
+  cloned toolbar instances remain synchronized. Saved version-one layouts are
+  migrated with one toolbar instance automatically; after migration it can be
+  moved, cloned, or removed like any other tile.
 
-The layout hides the inspector first on narrower screens, then turns the left
-navigator into a horizontal strip. Native controls retain keyboard focus
-styles, the canvas exposes an application label and instructions, status is
-communicated with text as well as color, and all icon-only buttons have names.
-The dark palette is the default token set; a system light-mode preference
-activates the original light palette, including the Konva canvas.
+The canvas always spans the application beneath the tiled panes. Four stable
+logical columns page through one to four available edge slots as the viewport
+widens, with odd slot counts favoring the right side. Native controls retain
+keyboard focus styles, the canvas exposes an application label and
+instructions, status is communicated with text as well as color, and all
+icon-only buttons have names. The dark palette is the default token set; a
+system light-mode preference activates the original light palette, including
+the Konva canvas.

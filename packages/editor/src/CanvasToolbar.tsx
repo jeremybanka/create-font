@@ -1,0 +1,125 @@
+import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
+import { useId } from "preact/hooks"
+
+import { zoomCanvasView } from "./canvas-view.ts"
+import css from "./CanvasToolbar.module.css"
+import type { EditorWorkspace } from "./editor-workspace.ts"
+import { useI, useO, useOF } from "./state-hooks.ts"
+
+export interface CanvasToolbarProps {
+	readonly workspace: EditorWorkspace
+}
+
+export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
+	const instanceId = useId()
+	const editingTextIndex = useO(workspace.ui.editingTextIndex)
+	const activeTool = useO(workspace.ui.activeTool)
+	const activeGlyphId = useO(workspace.ui.activeGlyphId)
+	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const location = useO(workspace.ui.previewLocation)
+	const showNodes = useO(workspace.ui.showNodes)
+	const setShowNodes = useI(workspace.ui.showNodes)
+	const view = useO(workspace.ui.canvasView)
+	const setView = useI(workspace.ui.canvasView)
+	const viewport = useO(workspace.ui.canvasViewport)
+	const zoom = (nextZoom: number): void => {
+		const focal = {
+			x: viewport.width > 0 ? viewport.width / 2 : 400,
+			y: viewport.height > 0 ? viewport.height / 2 : 300,
+		}
+		setView((current) => zoomCanvasView(current, nextZoom, focal))
+	}
+
+	return (
+		<canvas-toolbar className={css.class}>
+			<toolbar-context>
+				<strong>
+					{editingTextIndex === null
+						? "Text canvas"
+						: `Editing ${glyph?.name ?? "glyph"}`}
+				</strong>
+				<span>
+					{editingTextIndex === null
+						? "Double-click a glyph to edit its outline."
+						: activeTool === "pen"
+							? "Pen · click for a corner · drag for a curve."
+							: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
+				</span>
+			</toolbar-context>
+
+			{axes.length === 0 ? null : (
+				<toolbar-section>
+					<h2>Design space</h2>
+					{axes.map((axis) => {
+						const coordinate = location[axis.id] ?? axis.default
+						return (
+							<axis-control key={axis.id}>
+								<label htmlFor={`${instanceId}:${axis.id}`}>
+									<span>{axis.name}</span>
+									<small>{axis.tag}</small>
+								</label>
+								<input
+									id={`${instanceId}:${axis.id}`}
+									type="range"
+									min={axis.min}
+									max={axis.max}
+									step={1}
+									value={coordinate}
+									aria-label={`${axis.name} coordinate`}
+									onInput={(event) =>
+										workspace.actions.setPreviewCoordinate(
+											axis.id,
+											event.currentTarget.valueAsNumber,
+										)
+									}
+								/>
+								<output>{Math.round(coordinate)}</output>
+							</axis-control>
+						)
+					})}
+				</toolbar-section>
+			)}
+
+			<toolbar-section>
+				<h2>View</h2>
+				<zoom-controls aria-label="Canvas zoom">
+					<button
+						type="button"
+						aria-label="Zoom out"
+						onClick={() => zoom(view.zoom / 1.2)}
+					>
+						<MinusIcon aria-hidden="true" />
+					</button>
+					<button
+						type="button"
+						aria-label="Reset canvas view"
+						onClick={() => setView({ x: 72, y: 72, zoom: 1 })}
+					>
+						{Math.round(view.zoom * 100)}%
+					</button>
+					<button
+						type="button"
+						aria-label="Zoom in"
+						onClick={() => zoom(view.zoom * 1.2)}
+					>
+						<PlusIcon aria-hidden="true" />
+					</button>
+				</zoom-controls>
+				{editingTextIndex === null ? null : (
+					<button
+						type="button"
+						data-nodes
+						aria-pressed={showNodes}
+						onClick={() => setShowNodes((visible) => !visible)}
+					>
+						<DotsHorizontalIcon aria-hidden="true" />
+						Nodes
+					</button>
+				)}
+			</toolbar-section>
+		</canvas-toolbar>
+	)
+}

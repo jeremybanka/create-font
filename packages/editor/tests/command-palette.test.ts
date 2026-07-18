@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
 	filterPaletteCommands,
 	isCommandPaletteKeyboardEvent,
+	nextCommandId,
 	nextEnabledCommandId,
 	type PaletteCommand,
 } from "../src/command-palette.ts"
@@ -96,5 +97,10 @@ describe("command palette", () => {
 		expect(nextEnabledCommandId(commands, "select", 1)).toBe("add-glyphs")
 		expect(nextEnabledCommandId(commands, "add-glyphs", -1)).toBe("select")
 		expect(nextEnabledCommandId([commands[2]!], null, 1)).toBeNull()
+	})
+
+	it("can navigate disabled commands when choosing a hotbar assignment", () => {
+		expect(nextCommandId(commands, "select", 1)).toBe("pen")
+		expect(nextCommandId(commands, "pen", 1)).toBe("add-glyphs")
 	})
 })

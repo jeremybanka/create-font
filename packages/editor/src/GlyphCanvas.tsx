@@ -21,7 +21,6 @@ import {
 	Stage,
 	Text,
 } from "@create-font/preact-konva"
-import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
 import type { JSX } from "preact"
 import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
@@ -39,11 +38,7 @@ import {
 	resolveEditorCanvasHit,
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
-import {
-	BASE_CANVAS_SCALE,
-	type CanvasView,
-	zoomCanvasView,
-} from "./canvas-view.ts"
+import { BASE_CANVAS_SCALE, zoomCanvasView } from "./canvas-view.ts"
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import {
 	incidentStraightProjectionCandidates,
@@ -119,11 +114,11 @@ import {
 	prepareOutlinePaste,
 	serializeOutlineClipboard,
 } from "./outline-clipboard.ts"
-import { TooltipButton } from "./TooltipButton.tsx"
 import { visualDebugControlRegions } from "./visual-debug.ts"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
+	readonly disabled?: boolean
 }
 
 interface DraggedPoint {
@@ -198,7 +193,7 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowDown: [0, -1],
 }
 
-export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
+export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
@@ -207,7 +202,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
 	const activeTool = useO(workspace.ui.activeTool)
 	const run = useO(workspace.ui.previewRun)
-	const location = useO(workspace.ui.previewLocation)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
@@ -216,7 +210,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
 	const metadata =
 		useO(workspace.font.atoms.metadata) ?? workspace.document.metadata
-	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
 	const masterIds = useO(workspace.font.atoms.masterIds)
 	const layer = useO(workspace.ui.activeLayer)
 	const selection = useO(workspace.ui.selection)
@@ -250,10 +243,19 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
 		LiveGroupDragTarget["node"]
 	> | null>(null)
-	const [view, setView] = useState<CanvasView>({ x: 72, y: 72, zoom: 1 })
+	const view = useO(workspace.ui.canvasView)
+	const setView = useI(workspace.ui.canvasView)
+	const setCanvasViewport = useI(workspace.ui.canvasViewport)
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const { ref, width, height } = useElementSize<HTMLElement>()
+	useEffect(() => {
+		setCanvasViewport((current) =>
+			current.width === width && current.height === height
+				? current
+				: { width, height },
+		)
+	}, [height, setCanvasViewport, width])
 	const layout = useMemo(
 		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
 		[run, metadata.unitsPerEm, metrics],
@@ -1578,6 +1580,7 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 			<textarea
 				ref={textareaRef}
 				value={text}
+				disabled={disabled}
 				spellcheck={false}
 				aria-label="Text canvas contents"
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
@@ -1589,85 +1592,6 @@ export function GlyphCanvas({ workspace }: GlyphCanvasProps) {
 					setCaretIndex(activeTextareaSelectionIndex(event.currentTarget))
 				}
 			/>
-			<canvas-toolbar>
-				<canvas-title>
-					<strong>
-						{editingTextIndex === null
-							? "Text canvas"
-							: `Editing ${glyph?.name ?? "glyph"}`}
-					</strong>
-					<span>
-						{editingTextIndex === null
-							? `${layout.lineCount} line${layout.lineCount === 1 ? "" : "s"} · double-click a glyph to edit`
-							: activeTool === "pen"
-								? penContourId === null
-									? "Pen · click for a corner · drag for a curve"
-									: "Pen · drag for curves · click or drag the first point to close"
-								: `${master?.name ?? "No master"} layer · Escape returns to typing`}
-					</span>
-				</canvas-title>
-				<canvas-controls>
-					{axes.map((axis) => {
-						const coordinate = location[axis.id] ?? axis.default
-						return (
-							<label key={axis.id}>
-								<span>{axis.tag}</span>
-								<input
-									type="range"
-									min={axis.min}
-									max={axis.max}
-									step={1}
-									value={coordinate}
-									aria-label={`${axis.name} coordinate`}
-									onInput={(event) =>
-										workspace.actions.setPreviewCoordinate(
-											axis.id,
-											event.currentTarget.valueAsNumber,
-										)
-									}
-								/>
-								<output>{Math.round(coordinate)}</output>
-							</label>
-						)
-					})}
-					<zoom-controls aria-label="Canvas zoom">
-						<TooltipButton
-							label="Zoom out"
-							description="Reduce the canvas magnification."
-							placement="bottom"
-							onClick={() => zoomCanvas(view.zoom / 1.2)}
-						>
-							<MinusIcon aria-hidden="true" />
-						</TooltipButton>
-						<TooltipButton
-							label="Reset canvas view"
-							description="Return to 100% zoom and reset the canvas pan."
-							placement="bottom"
-							onClick={() => setView({ x: 72, y: 72, zoom: 1 })}
-						>
-							{Math.round(view.zoom * 100)}%
-						</TooltipButton>
-						<TooltipButton
-							label="Zoom in"
-							description="Increase the canvas magnification."
-							placement="bottom"
-							onClick={() => zoomCanvas(view.zoom * 1.2)}
-						>
-							<PlusIcon aria-hidden="true" />
-						</TooltipButton>
-					</zoom-controls>
-					{editingTextIndex === null ? null : (
-						<button
-							type="button"
-							aria-pressed={showNodes}
-							onClick={() => setShowNodes((visible) => !visible)}
-						>
-							<DotsHorizontalIcon aria-hidden="true" />
-							Nodes
-						</button>
-					)}
-				</canvas-controls>
-			</canvas-toolbar>
 			<canvas-surface
 				ref={ref}
 				data-tool={activeTool}

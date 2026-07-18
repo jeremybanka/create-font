@@ -4,6 +4,7 @@ export interface PaletteCommand {
 	readonly id: string
 	readonly displayName: string
 	readonly category: string
+	readonly description?: string
 	readonly icon: EditorIconName
 	readonly keywords?: readonly string[]
 	readonly shortcut?: string
@@ -93,4 +94,20 @@ export function nextEnabledCommandId(
 				: enabled.length - 1
 			: (currentIndex + delta + enabled.length) % enabled.length
 	return enabled[nextIndex]?.id ?? null
+}
+
+export function nextCommandId(
+	commands: readonly PaletteCommand[],
+	activeId: string | null,
+	delta: -1 | 1,
+): string | null {
+	if (commands.length === 0) return null
+	const currentIndex = commands.findIndex((command) => command.id === activeId)
+	const nextIndex =
+		currentIndex === -1
+			? delta === 1
+				? 0
+				: commands.length - 1
+			: (currentIndex + delta + commands.length) % commands.length
+	return commands[nextIndex]?.id ?? null
 }

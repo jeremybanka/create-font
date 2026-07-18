@@ -1,6 +1,14 @@
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useCallback, useEffect, useRef, useState } from "preact/hooks"
 
+import {
+	assignHotbarSlot,
+	DEFAULT_HOTBAR_SLOTS,
+	HOTBAR_STORAGE_KEY,
+	parseHotbarSlots,
+	type HotbarSlots,
+} from "./action-hotbar.ts"
+import { ActionHotbar } from "./ActionHotbar.tsx"
 import {
 	isCommandPaletteKeyboardEvent,
 	type PaletteCommand,
@@ -8,36 +16,51 @@ import {
 import { AppAnchor } from "./AppAnchor.tsx"
 import { CommandPalette } from "./CommandPalette.tsx"
 import { useEditorDocumentMetadata } from "./document-metadata.ts"
-import { EditorIcon } from "./EditorIcon.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
-	ALT_KEY_LABEL,
 	formatHotkey,
 	IS_MAC_LIKE,
 	MOD_KEY_LABEL,
 	type ToolContext,
 	TOOLS,
-	TOOLBAR_LAYOUT,
 	toolDisabledReason,
 	useHotkeys,
 } from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
 import { FontInfo } from "./FontInfo.tsx"
-import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
-import { GlyphInspector } from "./GlyphInspector.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useOF, useTL } from "./state-hooks.ts"
-import { TooltipButton } from "./TooltipButton.tsx"
+import {
+	TilingWorkspace,
+	type TilingWorkspaceStatus,
+} from "./TilingWorkspace.tsx"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
 }
 
+function readInitialHotbarSlots(): HotbarSlots {
+	if (typeof window === "undefined") return DEFAULT_HOTBAR_SLOTS
+	try {
+		return (
+			parseHotbarSlots(localStorage.getItem(HOTBAR_STORAGE_KEY)) ??
+			DEFAULT_HOTBAR_SLOTS
+		)
+	} catch {
+		return DEFAULT_HOTBAR_SLOTS
+	}
+}
+
 export function AppShell({ workspace }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
+	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
+		dirty: false,
+		management: false,
+	})
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
@@ -58,7 +81,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		activeGlyphId,
 		workspace.font.actions.markDocumentChanged,
 	)
-	const toolContext = {
+	const toolContext: ToolContext = {
 		activeGlyphId,
 		activeLayer,
 		activeMasterId,
@@ -69,7 +92,14 @@ export function AppShell({ workspace }: AppShellProps) {
 		workspace,
 	}
 	useEditorDocumentMetadata(faviconHref, routeName, previewText)
-	useHotkeys(toolContext, routeName === "canvas")
+	useHotkeys(toolContext, routeName === "canvas" && !tilingStatus.management)
+	const updateTilingStatus = useCallback((status: TilingWorkspaceStatus) => {
+		setTilingStatus((current) =>
+			current.dirty === status.dirty && current.management === status.management
+				? current
+				: status,
+		)
+	}, [])
 	const openCommandPalette = (): void => {
 		setAddingGlyphs(false)
 		setCommandPaletteOpen(true)
@@ -80,20 +110,33 @@ export function AppShell({ workspace }: AppShellProps) {
 	}
 
 	useEffect(() => {
+		try {
+			localStorage.setItem(HOTBAR_STORAGE_KEY, JSON.stringify(hotbarSlots))
+		} catch {
+			// Hotbar persistence is best-effort in restricted browsing contexts.
+		}
+	}, [hotbarSlots])
+
+	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)) return
+			if (
+				tilingStatus.management ||
+				!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)
+			)
+				return
 			event.preventDefault()
 			openCommandPalette()
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [])
+	}, [tilingStatus.management])
 
 	const commands: readonly PaletteCommand[] = [
 		{
 			id: "add-glyphs",
 			displayName: "Add glyphs",
 			category: "Glyphs",
+			description: "Add one or more glyphs to the font.",
 			icon: "PlusIcon",
 			keywords: ["new", "create", "character"],
 			do: () => {
@@ -111,9 +154,11 @@ export function AppShell({ workspace }: AppShellProps) {
 				tool.id === "select" || tool.id === "pen" || tool.id === "transform"
 					? "Tools"
 					: "Edit",
+			description: tool.description,
 			icon: tool.icon,
 			keywords: [tool.id],
 			shortcut: formatHotkey(tool.hotkey).join("+"),
+			checked: tool.status(toolContext) === "active",
 			disabled:
 				routeName !== "canvas" || tool.status(toolContext) === "disabled",
 			disabledReason:
@@ -190,14 +235,31 @@ export function AppShell({ workspace }: AppShellProps) {
 			</header>
 			<main data-view={routeName}>
 				{routeName === "canvas" ? (
-					<>
-						<FontNavigator workspace={workspace} />
-						<editor-workspace>
-							<EditorToolbar context={toolContext} />
-							<GlyphCanvas workspace={workspace} />
-						</editor-workspace>
-						<GlyphInspector workspace={workspace} />
-					</>
+					<editor-workspace>
+						<GlyphCanvas
+							workspace={workspace}
+							disabled={tilingStatus.management}
+						/>
+						<ActionHotbar
+							commands={commands}
+							enabled={!tilingStatus.management && !commandPaletteOpen}
+							paletteOpen={commandPaletteOpen}
+							slots={hotbarSlots}
+							onAssignCommand={(commandId, slotIndex) => {
+								setHotbarSlots((current) =>
+									assignHotbarSlot(current, slotIndex, commandId),
+								)
+								closeCommandPalette()
+							}}
+							onOpenCommands={openCommandPalette}
+							onSlotsChange={setHotbarSlots}
+						/>
+						<TilingWorkspace
+							workspace={workspace}
+							enabled={!commandPaletteOpen}
+							onStatusChange={updateTilingStatus}
+						/>
+					</editor-workspace>
 				) : routeName === "glyphs" ? (
 					<GlyphLibrary
 						workspace={workspace}
@@ -230,7 +292,9 @@ export function AppShell({ workspace }: AppShellProps) {
 				</active-context>
 				<keyboard-help>
 					{routeName === "canvas"
-						? `Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
+						? tilingStatus.management
+							? "Tile management · 1–4 columns · J/K tiles · M move · A align · N new · S save · Shift+Space done"
+							: `1–= Hotbar · Shift+1–4 Columns · Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>
@@ -245,38 +309,14 @@ export function AppShell({ workspace }: AppShellProps) {
 						setCommandPaletteOpen(false)
 						command.do()
 					}}
+					onAssign={(command, slotIndex) => {
+						setHotbarSlots((current) =>
+							assignHotbarSlot(current, slotIndex, command.id),
+						)
+						closeCommandPalette()
+					}}
 				/>
 			) : null}
 		</app-shell>
-	)
-}
-
-function EditorToolbar({ context }: { readonly context: ToolContext }) {
-	return (
-		<editor-toolbar aria-label="Editor tools">
-			{TOOLBAR_LAYOUT.map((tools) => (
-				<tool-island key={tools.map((tool) => tool.id).join("-")}>
-					{tools.map((tool) => {
-						const status = tool.status(context)
-						const disabledReason = toolDisabledReason(tool, context)
-						return (
-							<TooltipButton
-								key={tool.id}
-								label={tool.displayName}
-								description={tool.description}
-								hotkey={tool.hotkey}
-								aria-pressed={status === "active"}
-								data-status={status}
-								disabled={status === "disabled"}
-								disabledReason={disabledReason}
-								onClick={() => tool.do(context)}
-							>
-								<EditorIcon name={tool.icon} />
-							</TooltipButton>
-						)
-					})}
-				</tool-island>
-			))}
-		</editor-toolbar>
 	)
 }
