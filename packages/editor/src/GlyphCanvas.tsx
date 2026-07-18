@@ -64,7 +64,6 @@ import {
 	type SnappedPoint,
 } from "./canvas-snapping.ts"
 import {
-	deriveOneSidedSoftHandles,
 	previewHandleDrag,
 	resolveHandleEdit,
 	segmentPointerAction,
@@ -102,10 +101,12 @@ import {
 import {
 	directDragOwnsPointer,
 	planSelectionNudge,
+	rememberedTangentDirection,
 	resolveTangentSlide,
 	selectedTangentSlideConstraint,
 	tangentSlideConstraint,
 	type TangentSlideConstraint,
+	type TangentDirectionMemory,
 	type TangentSlideResolution,
 } from "./select-editing.ts"
 import {
@@ -361,11 +362,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const handleDragRef = useRef<HandleDrag | null>(null)
 	const directDragPointerRef = useRef<number | null>(null)
 	const directDragCaptureTargetRef = useRef<HTMLCanvasElement | null>(null)
-	const tangentDirectionRef = useRef<Readonly<{
-		pointId: PointId
-		x: number
-		y: number
-	}> | null>(null)
+	const tangentDirectionRef = useRef<TangentDirectionMemory | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
 		LiveGroupDragTarget["node"]
 	> | null>(null)
@@ -445,15 +442,17 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				return {
 					id: contour.id,
 					closed: contour.closed,
-					nodes: deriveOneSidedSoftHandles(positionedNodes, contour.closed).map(
-						(point) =>
-							point.pointId === draggedHandle?.pointId
-								? previewHandleDrag(
-										point,
-										draggedHandle.handle,
-										draggedHandle.vector,
-									)
-								: point,
+					...(contour.tangentNodes === undefined
+						? {}
+						: { tangentNodes: contour.tangentNodes }),
+					nodes: positionedNodes.map((point) =>
+						point.pointId === draggedHandle?.pointId
+							? previewHandleDrag(
+									point,
+									draggedHandle.handle,
+									draggedHandle.vector,
+								)
+							: point,
 					),
 				}
 			}),
@@ -721,15 +720,35 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		constraint: TangentSlideConstraint,
 	): void => {
 		if (
+			activeGlyphId !== null &&
 			constraint.end === null &&
 			constraint.direction !== null &&
 			(constraint.direction.x !== 0 || constraint.direction.y !== 0)
 		) {
+			const handle = constraint.handles[0]?.handle
+			if (handle === undefined) return
 			tangentDirectionRef.current = {
+				glyphId: activeGlyphId,
+				masterId: activeMasterId,
 				pointId: constraint.pointId,
-				...constraint.direction,
+				handle,
+				anchor: constraint.start,
+				direction: constraint.direction,
 			}
 		}
+	}
+	const tangentDirectionFor = (
+		node: EditorLayerNode,
+	): Readonly<{ pointId: PointId; x: number; y: number }> | undefined => {
+		if (activeGlyphId === null) return undefined
+		const direction = rememberedTangentDirection(
+			tangentDirectionRef.current,
+			{ glyphId: activeGlyphId, masterId: activeMasterId },
+			node,
+		)
+		return direction === undefined
+			? undefined
+			: { pointId: node.pointId, ...direction }
 	}
 	const applyPointDrag = (
 		drag: PointDrag,
@@ -965,9 +984,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
-			if (event.key === "Alt" && !event.altKey) {
-				tangentDirectionRef.current = null
-			}
 			const gesture = penGestureRef.current
 			if (gesture !== null) {
 				gesture.shiftKey = event.shiftKey
@@ -2198,7 +2214,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					const tangentSelection = selectedTangentSlideConstraint(
 						visibleContours,
 						selection,
-						tangentDirectionRef.current ?? undefined,
+						selectedPoint === undefined
+							? undefined
+							: tangentDirectionFor(selectedPoint),
 					)
 					if (tangentSelection !== null) {
 						event.preventDefault()
@@ -3097,10 +3115,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		contour.nodes,
 																		pointIndex,
 																		contour.closed,
-																		tangentDirectionRef.current?.pointId ===
-																			point.pointId
-																			? tangentDirectionRef.current
-																			: undefined,
+																		tangentDirectionFor(point),
+																		contour.tangentNodes,
 																	),
 																	lastRawPoint: null,
 																}

@@ -136,7 +136,7 @@ describe("editor tools and hotkeys", () => {
 								mode: "soft",
 								x: 10,
 								y: 0,
-								incoming: { x: -20, y: 0 },
+								incoming: { x: 0, y: -20 },
 							},
 							{ pointId: "point:b", mode: "hard", x: 10, y: 100 },
 						],

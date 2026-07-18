@@ -1,4 +1,4 @@
-import type { EditorLayerNode } from "@create-font/states"
+import type { EditorLayerNode, GlyphId, MasterId } from "@create-font/states"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -9,6 +9,7 @@ import {
 import {
 	directDragOwnsPointer,
 	planSelectionNudge,
+	rememberedTangentDirection,
 	resolveTangentSlide,
 	selectedTangentSlideConstraint,
 	tangentSlideConstraint,
@@ -102,10 +103,35 @@ describe("Select handle editing", () => {
 			true,
 		)
 		expect(asymmetricEdit).toEqual({
-			storageVector: { x: -40, y: 0 },
+			storageVector: { x: 0, y: 40 },
 			previewVector: { x: -40, y: 0 },
 			constrainedToEightRays: false,
 		})
+	})
+
+	it("preserves off-tangent pointer radius for either one-sided handle", () => {
+		for (const handle of ["incoming", "outgoing"] as const) {
+			const direction = handle === "incoming" ? -1 : 1
+			const node: EditorLayerNode = {
+				pointId,
+				mode: "soft",
+				x: 0,
+				y: 0,
+				[handle]: { x: direction, y: direction },
+			}
+			const resolved = resolveHandleEdit(node, handle, { x: 2, y: 0 }, true)
+			expect(resolved?.storageVector).toEqual({ x: 2, y: 0 })
+			expect(
+				Math.hypot(
+					resolved?.previewVector.x ?? 0,
+					resolved?.previewVector.y ?? 0,
+				),
+			).toBeCloseTo(2)
+			expect((resolved?.previewVector.x ?? 0) * direction).toBeGreaterThan(0)
+			expect(resolved?.previewVector.x).toBeCloseTo(
+				resolved?.previewVector.y ?? Number.NaN,
+			)
+		}
 	})
 
 	it("quantizes the raw vector before ray-preserving integer rounding", () => {
@@ -294,6 +320,50 @@ describe("soft-node tangent slides", () => {
 		).toMatchObject({ x: 90, y: 0 })
 	})
 
+	it("keeps a zero-endpoint ray across modifier release and later gestures", () => {
+		const glyphId = "glyph:memory" as GlyphId
+		const masterId = "master:memory" as MasterId
+		const memory = {
+			glyphId,
+			masterId,
+			pointId,
+			handle: "outgoing" as const,
+			anchor: { x: 100, y: 20 },
+			direction: { x: -8, y: 3 },
+		}
+		const zeroNode: EditorLayerNode = {
+			pointId,
+			mode: "soft",
+			x: 100,
+			y: 20,
+			outgoing: { x: 0, y: 0 },
+		}
+		// Memory has no modifier lifecycle: releasing and repressing Alt reuses it.
+		expect(
+			rememberedTangentDirection(memory, { glyphId, masterId }, zeroNode),
+		).toEqual(memory.direction)
+		expect(
+			rememberedTangentDirection(memory, { glyphId, masterId }, zeroNode),
+		).toEqual(memory.direction)
+		expect(
+			rememberedTangentDirection(
+				memory,
+				{ glyphId: "glyph:other" as GlyphId, masterId },
+				zeroNode,
+			),
+		).toBeUndefined()
+		expect(
+			rememberedTangentDirection(
+				memory,
+				{ glyphId, masterId },
+				{
+					...zeroNode,
+					x: 101,
+				},
+			),
+		).toBeUndefined()
+	})
+
 	it("requires a single node selection for Alt-arrow precedence", () => {
 		const node: EditorLayerNode = {
 			pointId,
@@ -401,8 +471,8 @@ describe("selected control nudging", () => {
 				10,
 			)?.result.handles[0],
 		).toMatchObject({
-			x: -14,
-			y: 0,
+			x: -10,
+			y: 10,
 		})
 	})
 

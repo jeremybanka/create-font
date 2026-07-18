@@ -1,6 +1,8 @@
 import type {
 	EditorHandleKind,
 	EditorLayerNode,
+	GlyphId,
+	MasterId,
 	PointId,
 } from "@create-font/states"
 
@@ -37,6 +39,15 @@ export interface TangentSlideSelection {
 	readonly constraint: TangentSlideConstraint | null
 }
 
+export interface TangentDirectionMemory {
+	readonly glyphId: GlyphId
+	readonly masterId: MasterId
+	readonly pointId: PointId
+	readonly handle: EditorHandleKind
+	readonly anchor: Readonly<{ x: number; y: number }>
+	readonly direction: Readonly<{ x: number; y: number }>
+}
+
 const finitePoint = (point: Readonly<{ x: number; y: number }>): boolean =>
 	Number.isFinite(point.x) && Number.isFinite(point.y)
 
@@ -50,6 +61,32 @@ const samePoint = (
 	left: Readonly<{ x: number; y: number }>,
 	right: Readonly<{ x: number; y: number }>,
 ): boolean => left.x === right.x && left.y === right.y
+
+/** Reuses a zero-endpoint ray only while its glyph, layer, point, and anchor match. */
+export function rememberedTangentDirection(
+	memory: TangentDirectionMemory | null,
+	scope: Readonly<{ glyphId: GlyphId; masterId: MasterId }>,
+	node: EditorLayerNode,
+): Readonly<{ x: number; y: number }> | undefined {
+	const soleHandle =
+		node.incoming !== undefined && node.outgoing === undefined
+			? "incoming"
+			: node.outgoing !== undefined && node.incoming === undefined
+				? "outgoing"
+				: null
+	if (
+		memory === null ||
+		memory.glyphId !== scope.glyphId ||
+		memory.masterId !== scope.masterId ||
+		memory.pointId !== node.pointId ||
+		memory.handle !== soleHandle ||
+		!samePoint(memory.anchor, node) ||
+		!finitePoint(memory.direction) ||
+		(memory.direction.x === 0 && memory.direction.y === 0)
+	)
+		return undefined
+	return memory.direction
+}
 
 const absoluteHandle = (
 	node: EditorLayerNode,
@@ -92,9 +129,11 @@ export function tangentSlideConstraint(
 	pointIndex: number,
 	closed: boolean,
 	unboundedDirection?: Readonly<{ x: number; y: number }>,
+	tangentNodes: readonly EditorLayerNode[] = nodes,
 ): TangentSlideConstraint | null {
 	const node = nodes[pointIndex]
 	if (node === undefined || node.mode !== "soft") return null
+	if (tangentNodes[pointIndex]?.pointId !== node.pointId) return null
 	const incoming = absoluteHandle(node, "incoming")
 	const outgoing = absoluteHandle(node, "outgoing")
 	if (incoming === null && outgoing === null) return null
@@ -120,7 +159,12 @@ export function tangentSlideConstraint(
 	const authored = incoming ?? outgoing
 	if (authored === null) return null
 	const handle = incoming === null ? "outgoing" : "incoming"
-	const reference = neighborTangentReference(nodes, pointIndex, closed, handle)
+	const reference = neighborTangentReference(
+		tangentNodes,
+		pointIndex,
+		closed,
+		handle,
+	)
 	if (reference !== null && !samePoint(reference, authored)) {
 		return {
 			pointId: node.pointId,
@@ -267,6 +311,7 @@ export function selectedTangentSlideConstraint(
 	contours: readonly Readonly<{
 		closed: boolean
 		nodes: readonly EditorLayerNode[]
+		tangentNodes?: readonly EditorLayerNode[]
 	}>[],
 	selection: readonly EditorSelectionTarget[],
 	unboundedDirection?: Readonly<{ pointId: PointId; x: number; y: number }>,
@@ -298,6 +343,7 @@ export function selectedTangentSlideConstraint(
 					unboundedDirection?.pointId === node.pointId
 						? unboundedDirection
 						: undefined,
+					contour.tangentNodes,
 				),
 			}
 		}

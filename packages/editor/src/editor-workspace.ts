@@ -42,6 +42,8 @@ export interface EditorCanvasContour {
 	readonly id: ContourId
 	readonly closed: boolean
 	readonly nodes: readonly EditorLayerNode[]
+	/** Raw layer vectors used by state when deriving one-sided tangent bounds. */
+	readonly tangentNodes?: readonly EditorLayerNode[]
 }
 
 export interface PreviewRunGlyph {
@@ -338,6 +340,7 @@ export function createEditorWorkspace(
 				const closed = get(font.atoms.contourClosed, [glyphId, contourId])
 				if (pointIds === null || closed === null) return null
 				const contour: EditorLayerNode[] = []
+				const tangentNodes: EditorLayerNode[] = []
 				for (const pointId of pointIds) {
 					const node = get(font.selectors.layerNode, [
 						masterId,
@@ -346,12 +349,43 @@ export function createEditorWorkspace(
 					])
 					if (!node.ok) return null
 					contour.push(node.value)
+					const topology = get(font.atoms.point, [glyphId, pointId])
+					const position = get(font.atoms.pointPosition, [
+						masterId,
+						glyphId,
+						pointId,
+					])
+					if (topology === null || position === null) return null
+					const atomKey = [masterId, glyphId, pointId] as const
+					const incomingX = get(font.atoms.incomingHandleX, atomKey)
+					const incomingY = get(font.atoms.incomingHandleY, atomKey)
+					const outgoingX = get(font.atoms.outgoingHandleX, atomKey)
+					const outgoingY = get(font.atoms.outgoingHandleY, atomKey)
+					if (
+						(incomingX === null) !== (incomingY === null) ||
+						(outgoingX === null) !== (outgoingY === null)
+					) {
+						return null
+					}
+					tangentNodes.push({
+						pointId,
+						mode: topology.mode,
+						x: position.x,
+						y: position.y,
+						...(incomingX === null || incomingY === null
+							? {}
+							: { incoming: { x: incomingX, y: incomingY } }),
+						...(outgoingX === null || outgoingY === null
+							? {}
+							: { outgoing: { x: outgoingX, y: outgoingY } }),
+					})
 				}
 				contours.push(
 					Object.freeze({
 						id: contourId,
 						closed,
 						nodes: Object.freeze(contour),
+						tangentNodes: Object.freeze(tangentNodes),
 					}),
 				)
 			}

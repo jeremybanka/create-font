@@ -133,8 +133,9 @@ export function resolveHandleEdit(
 	if (current === undefined) return null
 	const opposite = handle === "incoming" ? node.outgoing : node.incoming
 	if (node.mode === "soft" && opposite === undefined) {
-		const aligned = withLengthAlong(current, magnitude(rawVector)) ?? current
-		const storageVector = roundVector(aligned)
+		// State treats a one-sided authored vector as a length carrier. Preserve the
+		// pointer's radial distance here; the projected layer supplies its tangent.
+		const storageVector = roundVector(rawVector)
 		return {
 			storageVector,
 			previewVector:
