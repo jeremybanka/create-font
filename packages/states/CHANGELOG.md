@@ -1,5 +1,27 @@
 # @create-font/states
 
+## 0.3.0
+
+### Minor Changes
+
+- f51bcf5: Add the revision-consistent `SourceProjectSnapshot` service contract and version
+  4 bulk snapshot RPC. Switch the editor SharedWorker to load and refresh every
+  validated source unit through one atomic snapshot request while preserving the
+  legacy manifest and individual-unit endpoints.
+
+  Add correlated browser, SharedWorker, and filesystem source-service startup
+  instrumentation, a reproducible profiling workflow, and measured development
+  and production baselines.
+
+- 0de6bd8: Visualize non-overlapping vertical-metric overshoot bands and distinguish exact
+  metric-line alignment from overshoot-only alignment with canonical state
+  classifiers and dedicated canvas halos.
+
+### Patch Changes
+
+- Updated dependencies [f51bcf5]
+  - @create-font/server@0.1.0
+
 ## 0.2.0
 
 ### Minor Changes
