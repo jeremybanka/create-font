@@ -1,5 +1,22 @@
 # @create-font/editor
 
+## 0.4.0
+
+### Minor Changes
+
+- 4365720: Publish the editor as a standalone browser artifact and load it from create-font's production dependency instead of embedding it in the CLI bundle.
+- 7c44ab6: Add modifier-aware Bézier Pen constraints, context-aware pointer-aligned drag-out handles, and atomic bidirectional endpoint handle authoring with clear replacement previews, drawing-direction-aware single-node path resumption, and click-to-harden dangling-handle cancellation for open contours.
+- 6f81421: Add a responsive tiling workspace and a persistent, command-backed action hotbar to the canvas editor.
+
+### Patch Changes
+
+- adb48ef: Make canvas Up/Down navigation follow variable-width text lines with native selection semantics, and derive nullable glyph focus from the typing caret instead of defaulting inspector state to O.
+- b4028b3: Keep pasted outlines selected, drag selected geometry from owned path segments, add a nine-origin selection dimensions tile with workspace-synchronized proportional scaling controls and command, and let the Command Palette trigger fill the available header space at narrow viewport widths.
+- d2446a5: Support reversing open contours and add atomic horizontal and vertical path inversion actions.
+- Updated dependencies [7c44ab6]
+- Updated dependencies [d2446a5]
+  - @create-font/states@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

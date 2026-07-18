@@ -1,5 +1,15 @@
 # @create-font/states
 
+## 0.4.0
+
+### Minor Changes
+
+- 7c44ab6: Add modifier-aware Bézier Pen constraints, context-aware pointer-aligned drag-out handles, and atomic bidirectional endpoint handle authoring with clear replacement previews, drawing-direction-aware single-node path resumption, and click-to-harden dangling-handle cancellation for open contours.
+
+### Patch Changes
+
+- d2446a5: Support reversing open contours and add atomic horizontal and vertical path inversion actions.
+
 ## 0.3.0
 
 ### Minor Changes

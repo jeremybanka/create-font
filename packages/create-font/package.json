@@ -1,6 +1,6 @@
 {
 	"name": "create-font",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Repository-local CLI and browser server for create-font font projects",
 	"repository": {
 		"type": "git",
