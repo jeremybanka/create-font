@@ -385,7 +385,7 @@ export function TilingWorkspace({
 				return
 			}
 			if (!management) return
-			if (poolFocused && event.target === poolInputRef.current) return
+			if (event.target === poolInputRef.current) return
 			event.stopImmediatePropagation()
 
 			const digit = event.code.startsWith("Digit")
@@ -786,7 +786,6 @@ export function TilingWorkspace({
 					<tile-pool data-focused={poolFocused ? "true" : "false"}>
 						<pool-heading>
 							<span>Tile pool</span>
-							<kbd>N</kbd>
 						</pool-heading>
 						<pool-search>
 							<MagnifyingGlassIcon aria-hidden="true" />

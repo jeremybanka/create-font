@@ -9,31 +9,41 @@ import { useEffect, useRef, useState } from "preact/hooks"
 
 import {
 	filterPaletteCommands,
-	nextEnabledCommandId,
+	nextCommandId,
 	type PaletteCommand,
 } from "./command-palette.ts"
+import {
+	HOTBAR_COMMAND_MIME,
+	HOTBAR_KEYS,
+	hotbarSlotIndexForKeyboardEvent,
+} from "./action-hotbar.ts"
 import css from "./CommandPalette.module.css"
 import { EditorIcon } from "./EditorIcon.tsx"
+import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./editor-tools-and-hotkeys.ts"
 
 export interface CommandPaletteProps {
 	readonly commands: readonly PaletteCommand[]
 	readonly onCancel: () => void
 	readonly onExecute: (command: PaletteCommand) => void
+	readonly onAssign: (command: PaletteCommand, slotIndex: number) => void
 }
 
 export function CommandPalette({
 	commands,
 	onCancel,
 	onExecute,
+	onAssign,
 }: CommandPaletteProps) {
 	const [query, setQuery] = useState("")
 	const [activeId, setActiveId] = useState<string | null>(
-		nextEnabledCommandId(commands, null, 1),
+		nextCommandId(commands, null, 1),
 	)
+	const [assignmentCommand, setAssignmentCommand] =
+		useState<PaletteCommand | null>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
 	const filteredCommands = filterPaletteCommands(commands, query)
 	const activeCommand = filteredCommands.find(
-		(command) => command.id === activeId && !command.disabled,
+		(command) => command.id === activeId,
 	)
 
 	useEffect(() => {
@@ -47,7 +57,7 @@ export function CommandPalette({
 	const updateQuery = (value: string): void => {
 		const matches = filterPaletteCommands(commands, value)
 		setQuery(value)
-		setActiveId(nextEnabledCommandId(matches, null, 1))
+		setActiveId(nextCommandId(matches, null, 1))
 	}
 	const execute = (command: PaletteCommand | undefined): void => {
 		if (command === undefined || command.disabled) return
@@ -56,6 +66,16 @@ export function CommandPalette({
 	const handleKeyDown = (
 		event: JSX.TargetedKeyboardEvent<HTMLInputElement>,
 	): void => {
+		if (assignmentCommand !== null) {
+			event.preventDefault()
+			if (event.key === "Escape") {
+				setAssignmentCommand(null)
+				return
+			}
+			const slotIndex = hotbarSlotIndexForKeyboardEvent(event)
+			if (slotIndex !== null) onAssign(assignmentCommand, slotIndex)
+			return
+		}
 		if (event.key === "Escape") {
 			event.preventDefault()
 			onCancel()
@@ -64,7 +84,7 @@ export function CommandPalette({
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault()
 			setActiveId(
-				nextEnabledCommandId(
+				nextCommandId(
 					filteredCommands,
 					activeId,
 					event.key === "ArrowDown" ? 1 : -1,
@@ -74,7 +94,14 @@ export function CommandPalette({
 		}
 		if (event.key === "Enter") {
 			event.preventDefault()
-			execute(activeCommand)
+			const mod = IS_MAC_LIKE
+				? event.metaKey && !event.ctrlKey
+				: event.ctrlKey && !event.metaKey
+			if (mod && !event.shiftKey && !event.altKey) {
+				if (activeCommand !== undefined) setAssignmentCommand(activeCommand)
+			} else {
+				execute(activeCommand)
+			}
 		}
 	}
 
@@ -85,11 +112,7 @@ export function CommandPalette({
 				if (event.target === event.currentTarget) onCancel()
 			}}
 		>
-			<command-palette-dialog
-				role="dialog"
-				aria-modal="true"
-				aria-label="Command Palette"
-			>
+			<command-palette-dialog role="dialog" aria-label="Command Palette">
 				<command-search>
 					<MagnifyingGlassIcon aria-hidden="true" />
 					<input
@@ -112,7 +135,22 @@ export function CommandPalette({
 					/>
 					<kbd>Esc</kbd>
 				</command-search>
-				<command-results id="command-palette-results" role="listbox">
+				{assignmentCommand === null ? null : (
+					<command-assignment role="status">
+						<strong>Assign {assignmentCommand.displayName}</strong>
+						<span>Press a hotbar key</span>
+						<hotbar-key-list aria-hidden="true">
+							{HOTBAR_KEYS.map((key) => (
+								<kbd key={key}>{key}</kbd>
+							))}
+						</hotbar-key-list>
+					</command-assignment>
+				)}
+				<command-results
+					id="command-palette-results"
+					role="listbox"
+					aria-hidden={assignmentCommand === null ? undefined : "true"}
+				>
 					{filteredCommands.length === 0 ? (
 						<command-empty>No matching commands</command-empty>
 					) : (
@@ -124,9 +162,13 @@ export function CommandPalette({
 								role="option"
 								aria-selected={command.id === activeCommand?.id}
 								aria-checked={command.checked}
-								disabled={command.disabled}
-								onMouseEnter={() => {
-									if (!command.disabled) setActiveId(command.id)
+								aria-disabled={command.disabled}
+								draggable
+								onMouseEnter={() => setActiveId(command.id)}
+								onDragStart={(event) => {
+									if (event.dataTransfer === null) return
+									event.dataTransfer.effectAllowed = "copy"
+									event.dataTransfer.setData(HOTBAR_COMMAND_MIME, command.id)
 								}}
 								onClick={() => execute(command)}
 							>
@@ -149,6 +191,10 @@ export function CommandPalette({
 					)}
 				</command-results>
 				<command-hint>
+					<span>
+						<EnterIcon aria-hidden="true" />
+						{MOD_KEY_LABEL}+Enter Assign
+					</span>
 					<span>
 						<ArrowUpIcon aria-hidden="true" />
 						<ArrowDownIcon aria-hidden="true" />
