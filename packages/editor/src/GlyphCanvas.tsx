@@ -101,6 +101,7 @@ import {
 import {
 	directDragOwnsPointer,
 	planSelectionNudge,
+	projectSelectionTransformPreview,
 	rememberedTangentDirection,
 	resolveTangentSlide,
 	selectedTangentSlideConstraint,
@@ -403,6 +404,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						handle,
 					]),
 				)
+				const projectedTransformNodes =
+					transformPreview === null || contour.tangentNodes === undefined
+						? null
+						: new Map(
+								projectSelectionTransformPreview(
+									contour.tangentNodes,
+									contour.closed,
+									transformPreview,
+								).map((node) => [node.pointId, node]),
+							)
 				const positionedNodes = contour.nodes.map((point) => {
 					const transformed = transformedPoints.get(point.pointId)
 					const x =
@@ -424,7 +435,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 							? {}
 							: { outgoing: { x: outgoing.x - x, y: outgoing.y - y } }),
 					}
+					const projected = projectedTransformNodes?.get(point.pointId)
 					if (
+						next.mode === "soft" &&
+						next.incoming !== undefined &&
+						next.outgoing === undefined &&
+						projected?.incoming !== undefined
+					) {
+						next = { ...next, incoming: projected.incoming }
+					} else if (
+						next.mode === "soft" &&
+						next.outgoing !== undefined &&
+						next.incoming === undefined &&
+						projected?.outgoing !== undefined
+					) {
+						next = { ...next, outgoing: projected.outgoing }
+					} else if (
 						next.mode === "soft" &&
 						incoming !== undefined &&
 						next.incoming !== undefined

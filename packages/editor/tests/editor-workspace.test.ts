@@ -44,6 +44,7 @@ import {
 	translateSelectionControls,
 } from "../src/outline-selection.ts"
 import {
+	projectSelectionTransformPreview,
 	resolveTangentSlide,
 	selectedTangentSlideConstraint,
 } from "../src/select-editing.ts"
@@ -1092,6 +1093,98 @@ describe("editor workspace", () => {
 		if (after?.incoming === undefined) return
 		expect(after.x + after.incoming.x).toBeCloseTo(constraint.start.x)
 		expect(after.y + after.incoming.y).toBeCloseTo(constraint.start.y)
+	})
+
+	it("matches isolated and mixed one-sided transform previews to commits", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
+		const contour = workspace.document.glyphs.find(
+			(glyph) => glyph.id === oGlyphId,
+		)?.contours[0]
+		const pointId = contour?.points[0]?.id
+		const neighborId = contour?.points[1]?.id
+		if (pointId === undefined || neighborId === undefined) {
+			throw new Error("Fixture nodes are missing.")
+		}
+		for (const targetId of [pointId, neighborId]) {
+			workspace.font.actions.deleteSelection({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				pointIds: [],
+				handles: [{ pointId: targetId, handle: "outgoing" }],
+			})
+			workspace.font.actions.setNodeMode({
+				glyphId: oGlyphId,
+				pointId: targetId,
+				mode: "soft",
+			})
+		}
+		const previewAndCommit = (
+			deltas: readonly Readonly<{
+				pointId: typeof pointId
+				x: number
+				y: number
+			}>[],
+		): void => {
+			const activeContour = workspace.font.silo.getState(
+				workspace.ui.activeLayer,
+			)?.contours[0]
+			if (activeContour?.tangentNodes === undefined) {
+				throw new Error("Canonical tangent geometry is missing.")
+			}
+			const handles = deltas.map((delta) => {
+				const node = activeContour.nodes.find(
+					(candidate) => candidate.pointId === delta.pointId,
+				)
+				if (node?.incoming === undefined) {
+					throw new Error("One-sided preview handle is missing.")
+				}
+				return {
+					pointId: delta.pointId,
+					handle: "incoming" as const,
+					x: node.x + node.incoming.x + delta.x,
+					y: node.y + node.incoming.y + delta.y,
+				}
+			})
+			const result = { points: [], handles }
+			const projected = projectSelectionTransformPreview(
+				activeContour.tangentNodes,
+				activeContour.closed,
+				result,
+			)
+			workspace.font.actions.transformControls({
+				masterId: razorMasterId,
+				glyphId: oGlyphId,
+				...result,
+			})
+			const committed = workspace.font.silo.getState(workspace.ui.activeLayer)
+				?.contours[0]?.nodes
+			for (const delta of deltas) {
+				const previewNode = projected.find(
+					(node) => node.pointId === delta.pointId,
+				)
+				const committedNode = committed?.find(
+					(node) => node.pointId === delta.pointId,
+				)
+				if (
+					previewNode?.incoming === undefined ||
+					committedNode?.incoming === undefined
+				) {
+					throw new Error("Preview or committed handle is missing.")
+				}
+				expect(committedNode.x).toBeCloseTo(previewNode.x)
+				expect(committedNode.y).toBeCloseTo(previewNode.y)
+				expect(committedNode.incoming.x).toBeCloseTo(previewNode.incoming.x)
+				expect(committedNode.incoming.y).toBeCloseTo(previewNode.incoming.y)
+			}
+		}
+
+		previewAndCommit([{ pointId, x: 37, y: 53 }])
+		previewAndCommit([
+			{ pointId, x: -29, y: 17 },
+			{ pointId: neighborId, x: 41, y: -23 },
+		])
 	})
 
 	it("derives sidebearing from the resolved xMin and left phantom origin", () => {

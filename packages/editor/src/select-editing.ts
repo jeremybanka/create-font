@@ -6,7 +6,11 @@ import type {
 	PointId,
 } from "@create-font/states"
 
-import { resolveHandleEdit } from "./curve-editing.ts"
+import {
+	deriveOneSidedSoftHandles,
+	previewHandleDrag,
+	resolveHandleEdit,
+} from "./curve-editing.ts"
 import {
 	resolveSelectionControls,
 	selectionForRigidTranslation,
@@ -46,6 +50,54 @@ export interface TangentDirectionMemory {
 	readonly handle: EditorHandleKind
 	readonly anchor: Readonly<{ x: number; y: number }>
 	readonly direction: Readonly<{ x: number; y: number }>
+}
+
+/** Projects pending absolute controls from authored geometry exactly once. */
+export function projectSelectionTransformPreview(
+	authoredNodes: readonly EditorLayerNode[],
+	closed: boolean,
+	preview: SelectionTransformResult,
+): readonly EditorLayerNode[] {
+	const points = new Map(preview.points.map((point) => [point.pointId, point]))
+	const handles = new Map(
+		preview.handles.map((handle) => [
+			`${handle.pointId}/${handle.handle}`,
+			handle,
+		]),
+	)
+	const transformed = authoredNodes.map((node) => {
+		const point = points.get(node.pointId)
+		const x = point?.x ?? node.x
+		const y = point?.y ?? node.y
+		const incoming = handles.get(`${node.pointId}/incoming`)
+		const outgoing = handles.get(`${node.pointId}/outgoing`)
+		let next: EditorLayerNode = {
+			...node,
+			x,
+			y,
+			...(incoming === undefined
+				? {}
+				: { incoming: { x: incoming.x - x, y: incoming.y - y } }),
+			...(outgoing === undefined
+				? {}
+				: { outgoing: { x: outgoing.x - x, y: outgoing.y - y } }),
+		}
+		if (
+			next.mode === "soft" &&
+			incoming !== undefined &&
+			next.incoming !== undefined
+		) {
+			next = previewHandleDrag(next, "incoming", next.incoming)
+		} else if (
+			next.mode === "soft" &&
+			outgoing !== undefined &&
+			next.outgoing !== undefined
+		) {
+			next = previewHandleDrag(next, "outgoing", next.outgoing)
+		}
+		return next
+	})
+	return deriveOneSidedSoftHandles(transformed, closed)
 }
 
 const finitePoint = (point: Readonly<{ x: number; y: number }>): boolean =>
