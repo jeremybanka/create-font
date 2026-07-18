@@ -50,6 +50,25 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 }
 
 describe("editor workspace", () => {
+	it("shares proportional scaling preference across editor lifecycle actions", () => {
+		const workspace = createEditorWorkspace()
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(false)
+
+		workspace.actions.toggleConstrainProportions()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.actions.exitGlyphEdit()
+
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(true)
+		workspace.actions.toggleConstrainProportions()
+		expect(
+			workspace.font.silo.getState(workspace.ui.constrainProportions),
+		).toBe(false)
+	})
+
 	it("keeps visual debug state across editor lifecycle actions", () => {
 		const workspace = createEditorWorkspace()
 		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({

@@ -110,28 +110,36 @@ selection-dimensions.class {
 
 	> selection-constraint {
 		display: grid;
-		gap: 4px;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 7px;
 		padding-top: 2px;
 
-		> label {
-			display: flex;
-			align-items: center;
-			gap: 7px;
-			font-size: 9px;
-			font-weight: 650;
-			color: var(--ink);
+		> tooltip-button > button {
+			display: grid;
+			place-items: center;
+			width: 28px;
+			height: 28px;
+			padding: 0;
+			border: 1px solid var(--line-strong);
+			border-radius: 6px;
+			background: var(--paper);
+			color: var(--ink-muted);
 			cursor: pointer;
 
-			> input {
-				width: 14px;
-				height: 14px;
-				margin: 0;
-				accent-color: var(--accent);
+			&:hover {
+				background: var(--hover);
 			}
 
-			&:has(input:disabled) {
-				color: var(--ink-faint);
-				cursor: not-allowed;
+			&[aria-pressed="true"] {
+				border-color: var(--accent);
+				background: var(--selected);
+				color: var(--accent);
+			}
+
+			> editor-icon {
+				width: 14px;
+				height: 14px;
 			}
 		}
 

@@ -2,6 +2,7 @@ import type { JSX } from "preact"
 import { useId, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
+import { EditorIcon } from "./EditorIcon.tsx"
 import { NumericInput } from "./NumericInput.tsx"
 import {
 	boundsOfControls,
@@ -16,6 +17,7 @@ import {
 } from "./outline-selection.ts"
 import css from "./SelectionDimensions.module.css"
 import { useO } from "./state-hooks.ts"
+import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface SelectionDimensionsProps {
 	readonly workspace: EditorWorkspace
@@ -55,9 +57,9 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const layer = useO(workspace.ui.activeLayer)
 	const selection = useO(workspace.ui.selection)
+	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const constraintStatusId = useId()
 	const [origin, setOrigin] = useState<SelectionOrigin>("center")
-	const [constrainProportions, setConstrainProportions] = useState(false)
 	const nodes = layer?.contours.flatMap((contour) => contour.nodes) ?? []
 	const controls = resolveSelectionControls(nodes, selection)
 	const bounds = boundsOfControls(controls)
@@ -125,21 +127,27 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 	}
 	const constraintControl = (
 		<selection-constraint>
-			<label>
-				<input
-					type="checkbox"
-					checked={constrainProportions}
-					disabled={!proportionsAvailable}
-					aria-describedby={constraintStatusId}
-					onChange={(event) =>
-						setConstrainProportions(event.currentTarget.checked)
-					}
+			<TooltipButton
+				label="Constrain proportions"
+				description={
+					proportionsAvailable
+						? "Scale width and height together from the selected origin."
+						: "Set the proportional-scaling preference; it applies when both dimensions are nonzero."
+				}
+				placement="top"
+				aria-pressed={constrainProportions}
+				aria-describedby={constraintStatusId}
+				onClick={workspace.actions.toggleConstrainProportions}
+			>
+				<EditorIcon
+					name={constrainProportions ? "Link1Icon" : "LinkBreak1Icon"}
 				/>
-				<span>Constrain proportions</span>
-			</label>
+			</TooltipButton>
 			<small id={constraintStatusId} aria-live="polite">
 				{!proportionsAvailable
-					? "Unavailable for empty or zero-dimension selections."
+					? constrainProportions
+						? "Linked; proportional scaling resumes for a nondegenerate selection."
+						: "Unlinked; proportional scaling is unavailable for this selection."
 					: constrainProportions
 						? `Width and height scale together from the ${ORIGIN_LABELS[origin].toLowerCase()} origin.`
 						: "Width and height scale independently."}
