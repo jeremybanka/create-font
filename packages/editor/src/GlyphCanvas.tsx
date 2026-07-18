@@ -22,12 +22,22 @@ import {
 	Text,
 } from "@create-font/preact-konva"
 import type { JSX } from "preact"
-import { useEffect, useMemo, useRef, useState } from "preact/hooks"
+import {
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks"
 
 import {
 	restoreCancelledGroupDragTarget,
 	type CancelledGroupDrag,
 } from "./canvas-group-drag.ts"
+import {
+	createAnimationFramePublisher,
+	type AnimationFramePublisher,
+} from "./animation-frame-publisher.ts"
 import { transformHandleCursor, type TransformHandle } from "./canvas-cursor.ts"
 import {
 	circularHitRegion,
@@ -167,6 +177,16 @@ interface PenPlacementGesture {
 	altKey: boolean
 }
 
+interface PenHoverPreview {
+	readonly pointer: PenPoint
+	shiftKey: boolean
+	altKey: boolean
+}
+
+type PenPreviewFrame =
+	| Readonly<{ kind: "hover"; preview: PenHoverPreview }>
+	| Readonly<{ kind: "gesture"; gesture: PenPlacementGesture }>
+
 interface PenEndpointTarget {
 	readonly contourId: ContourId
 	readonly pointId: PointId
@@ -270,6 +290,30 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
+	const penHoverRef = useRef<PenHoverPreview | null>(null)
+	const penPreviewPublisherRef =
+		useRef<AnimationFramePublisher<PenPreviewFrame> | null>(null)
+	if (penPreviewPublisherRef.current === null) {
+		penPreviewPublisherRef.current = createAnimationFramePublisher((frame) => {
+			if (frame.kind === "gesture") {
+				if (penGestureRef.current?.pointerId !== frame.gesture.pointerId) return
+				setPenGesture(frame.gesture)
+				return
+			}
+			if (penGestureRef.current !== null || penHoverRef.current === null) return
+			setShiftHeld(frame.preview.shiftKey)
+			setPenPointer(frame.preview.pointer)
+		})
+	}
+	const penPreviewPublisher = penPreviewPublisherRef.current
+	const schedulePenGesturePreview = (gesture: PenPlacementGesture): void => {
+		penPreviewPublisher.schedule({ kind: "gesture", gesture: { ...gesture } })
+	}
+	const clearPenHoverPreview = (): void => {
+		penPreviewPublisher.cancel()
+		penHoverRef.current = null
+		setPenPointer(null)
+	}
 	const pointDragRef = useRef<PointDrag | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
 		LiveGroupDragTarget["node"]
@@ -673,21 +717,33 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
-			if (event.key === "Shift") setShiftHeld(event.type === "keydown")
 			if (event.key !== "Shift" && event.key !== "Alt") return
 			const gesture = penGestureRef.current
-			if (gesture === null) return
-			gesture.shiftKey = event.shiftKey
-			gesture.altKey = event.altKey
-			setPenGesture({ ...gesture })
+			if (gesture !== null) {
+				gesture.shiftKey = event.shiftKey
+				gesture.altKey = event.altKey
+				schedulePenGesturePreview(gesture)
+				return
+			}
+			const hover = penHoverRef.current
+			if (hover !== null) {
+				hover.shiftKey = event.shiftKey
+				hover.altKey = event.altKey
+				penPreviewPublisher.schedule({
+					kind: "hover",
+					preview: { ...hover },
+				})
+				return
+			}
+			if (event.key === "Shift") setShiftHeld(event.type === "keydown")
 		}
 		const resetModifiers = (): void => {
 			setShiftHeld(false)
-			const gesture = penGestureRef.current
-			if (gesture === null) return
-			gesture.shiftKey = false
-			gesture.altKey = false
-			setPenGesture({ ...gesture })
+			if (penGestureRef.current !== null) {
+				cancelPenGesture()
+				return
+			}
+			clearPenHoverPreview()
 		}
 		window.addEventListener("keydown", updateModifier)
 		window.addEventListener("keyup", updateModifier)
@@ -696,6 +752,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			window.removeEventListener("keydown", updateModifier)
 			window.removeEventListener("keyup", updateModifier)
 			window.removeEventListener("blur", resetModifiers)
+			penPreviewPublisher.cancel()
+			penHoverRef.current = null
+			const gesture = penGestureRef.current
+			penGestureRef.current = null
+			if (gesture !== null) releasePenCapture(gesture)
 		}
 	}, [])
 
@@ -750,7 +811,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			setTransformCursor(null)
 	}, [activeTool, transformBounds === null])
 
-	useEffect(() => {
+	useLayoutEffect(() => {
+		penPreviewPublisher.cancel()
+		penHoverRef.current = null
 		const gesture = penGestureRef.current
 		penGestureRef.current = null
 		if (
@@ -1074,6 +1137,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		}
 	}
 	const cancelPenGesture = (): void => {
+		penPreviewPublisher.cancel()
+		penHoverRef.current = null
 		const gesture = penGestureRef.current
 		penGestureRef.current = null
 		setPenGesture(null)
@@ -1089,6 +1154,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		if (penGestureRef.current !== null) return
 		if (event.evt.button !== 0 || !event.evt.isPrimary) return
 		event.cancelBubble = true
+		penPreviewPublisher.cancel()
+		penHoverRef.current = null
 		const rawPoint = pointerInEditingGlyph(event)
 		if (rawPoint === null) return
 		const fixedPoint = endpoint ?? closingPoint
@@ -1133,28 +1200,48 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			gesture.currentScreen = pointerOnCanvas(event)
 			gesture.shiftKey = event.evt.shiftKey
 			gesture.altKey = event.evt.altKey
-			setPenGesture({ ...gesture })
+			schedulePenGesturePreview(gesture)
 			return
 		}
-		setPenPointer(pointerInEditingGlyph(event))
-		if (shiftHeld !== event.evt.shiftKey) setShiftHeld(event.evt.shiftKey)
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) {
+			clearPenHoverPreview()
+			return
+		}
+		const preview: PenHoverPreview = {
+			pointer,
+			shiftKey: event.evt.shiftKey,
+			altKey: event.evt.altKey,
+		}
+		penHoverRef.current = preview
+		penPreviewPublisher.schedule({ kind: "hover", preview })
 	}
 	const finishPenGesture = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = penGestureRef.current
 		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
 		gesture.currentScreen = pointerOnCanvas(event)
+		gesture.shiftKey = event.evt.shiftKey
+		gesture.altKey = event.evt.altKey
+		schedulePenGesturePreview(gesture)
+		const pending = penPreviewPublisher.consume()
+		const latestGesture =
+			pending?.kind === "gesture" ? pending.gesture : { ...gesture }
 		const resolution = resolvePenGesture({
-			downScreen: gesture.downScreen,
-			currentScreen: gesture.currentScreen,
+			downScreen: latestGesture.downScreen,
+			currentScreen: latestGesture.currentScreen,
 			worldScale,
-			shiftKey: event.evt.shiftKey,
+			shiftKey: latestGesture.shiftKey,
 		})
 		penGestureRef.current = null
 		setPenGesture(null)
-		if (gesture.endpoint !== null) {
-			commitPenEndpoint(gesture.endpoint, resolution, event.evt.altKey)
-		} else if (gesture.closingPointId === null) {
-			commitPenPoint(gesture.point, resolution)
+		if (latestGesture.endpoint !== null) {
+			commitPenEndpoint(
+				latestGesture.endpoint,
+				resolution,
+				latestGesture.altKey,
+			)
+		} else if (latestGesture.closingPointId === null) {
+			commitPenPoint(latestGesture.point, resolution)
 		} else {
 			commitPenClosure(resolution)
 		}
@@ -1521,7 +1608,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 		penContourResumeRef.current = null
 		setPenContourId(null)
-		setPenPointer(null)
+		clearPenHoverPreview()
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
 		setShowNodes(true)
 	}
@@ -1951,7 +2038,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					}}
 					onMouseLeave={() => {
 						if (activeTool === "pen" && penGestureRef.current === null)
-							setPenPointer(null)
+							clearPenHoverPreview()
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
