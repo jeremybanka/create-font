@@ -3347,6 +3347,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																>,
 															): void => {
 																event.cancelBubble = true
+																if (activeTool !== "select") return
 																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
 															}
@@ -3652,11 +3653,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				}}
 																				onDblClick={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("incoming", event)
+																					if (activeTool === "select")
+																						selectHandle("incoming", event)
 																				}}
 																				onDblTap={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("incoming", event)
+																					if (activeTool === "select")
+																						selectHandle("incoming", event)
 																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
@@ -3800,11 +3803,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				}}
 																				onDblClick={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("outgoing", event)
+																					if (activeTool === "select")
+																						selectHandle("outgoing", event)
 																				}}
 																				onDblTap={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("outgoing", event)
+																					if (activeTool === "select")
+																						selectHandle("outgoing", event)
 																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
@@ -4155,15 +4160,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				drags, Pen placement, or Pen and Select handles; click or drag a loose
 				endpoint to resume its path, and Option/Alt-drag to break its tangent.
 				Hold E for a clean glyph preview. Use Rect or Ellipse to drag a complete
-				shape, and hold Shift for a square or circle. Press Escape to cancel a Pen
-				or shape gesture, return to typing, or cancel a transform. Drag an empty
-				area to box-select controls; press Command or Control+A to select all, Shift+A
-				to align, and Delete to remove the selection. Arrow keys nudge selected
-				nodes and handles; Shift uses 10 units and Command or Control uses 100.
-				Option or Alt-drag or nudge one soft node to slide it between its fixed
-				handles. Use Command or Control+C and V to copy and paste outline
-				selections. Hold Option or Alt while deleting nodes to break paths open,
-				or while deleting a handle to remove its adjoining segment.
+				shape, and hold Shift for a square or circle. Press Escape to cancel a
+				Pen or shape gesture, return to typing, or cancel a transform. Drag an
+				empty area to box-select controls; press Command or Control+A to select
+				all, Shift+A to align, and Delete to remove the selection. Arrow keys
+				nudge selected nodes and handles; Shift uses 10 units and Command or
+				Control uses 100. Option or Alt-drag or nudge one soft node to slide it
+				between its fixed handles. Use Command or Control+C and V to copy and
+				paste outline selections. Hold Option or Alt while deleting nodes to
+				break paths open, or while deleting a handle to remove its adjoining
+				segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
