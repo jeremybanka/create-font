@@ -1,5 +1,26 @@
 # @create-font/editor
 
+## 0.3.0
+
+### Minor Changes
+
+- 2a4acc5: Add larger modifier-based numeric and node steps, explanatory disabled-control
+  tooltips, tool-appropriate canvas cursors, and a hold-E momentary glyph preview.
+- a5dc666: Make node, handle, and path selection and dragging more forgiving with
+  deterministic, zoom-stable hit resolution and a 24-screen-pixel maximum target
+  radius, and raise the canvas zoom limit to 1000%. Add an opt-in Visual Debug
+  command that overlays the effective selection targets for nodes, handles, and
+  paths.
+- 0de6bd8: Visualize non-overlapping vertical-metric overshoot bands and distinguish exact
+  metric-line alignment from overshoot-only alignment with canonical state
+  classifiers and dedicated canvas halos.
+
+### Patch Changes
+
+- Updated dependencies [f51bcf5]
+- Updated dependencies [0de6bd8]
+  - @create-font/states@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
