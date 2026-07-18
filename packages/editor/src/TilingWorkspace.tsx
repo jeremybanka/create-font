@@ -99,6 +99,7 @@ const TILE_DEFINITIONS: readonly TileDefinition[] = [
 
 const TILE_SHORTCUTS: readonly TileShortcut[] = [
 	{ keys: "⇧ Space", action: "Enter or exit management" },
+	{ keys: "⇧ 1–4", action: "Toggle column outside management" },
 	{ keys: "1–4", action: "Select column or destination" },
 	{ keys: "J / K · ↓ / ↑", action: "Select next or previous tile" },
 	{ keys: "⇧ J / ⇧ K", action: "Reorder selected tile" },
@@ -372,6 +373,9 @@ export function TilingWorkspace({
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
+			const digit = event.code.startsWith("Digit")
+				? Number(event.code.slice("Digit".length))
+				: Number.NaN
 			const isModeToggle =
 				event.code === "Space" &&
 				event.shiftKey &&
@@ -384,13 +388,31 @@ export function TilingWorkspace({
 				toggleManagement()
 				return
 			}
+			const editableTarget =
+				event.target instanceof HTMLInputElement ||
+				event.target instanceof HTMLTextAreaElement ||
+				event.target instanceof HTMLSelectElement ||
+				(event.target instanceof HTMLElement && event.target.isContentEditable)
+			if (
+				enabled &&
+				!management &&
+				event.shiftKey &&
+				!event.altKey &&
+				!event.ctrlKey &&
+				!event.metaKey &&
+				!editableTarget &&
+				isColumnId(digit)
+			) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				selectColumn(digit)
+				applyEdit(toggleColumnCollapsed(layout, digit))
+				return
+			}
 			if (!management) return
 			if (event.target === poolInputRef.current) return
 			event.stopImmediatePropagation()
 
-			const digit = event.code.startsWith("Digit")
-				? Number(event.code.slice("Digit".length))
-				: Number.NaN
 			if (
 				isColumnId(digit) &&
 				!event.metaKey &&
