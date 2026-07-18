@@ -30,7 +30,7 @@ import css from "./AppShell.module.css"
 import { FontInfo } from "./FontInfo.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
-import { useO, useOF, useTL } from "./state-hooks.ts"
+import { useO, useOF, useOptionalOF, useOptionalTL } from "./state-hooks.ts"
 import {
 	TilingWorkspace,
 	type TilingWorkspaceStatus,
@@ -64,7 +64,10 @@ export function AppShell({ workspace }: AppShellProps) {
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const glyph = useOptionalOF(
+		workspace.font.selectors.editorGlyphSource,
+		activeGlyphId,
+	)
 	const master = useOF(workspace.font.atoms.master, activeMasterId)
 	const names = useO(workspace.font.atoms.names) ?? workspace.document.names
 	const validation = useO(workspace.ui.validation)
@@ -76,7 +79,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const previewText = useO(workspace.ui.previewText)
 	const faviconHref = useO(workspace.ui.faviconHref)
 	const visualDebug = useO(workspace.ui.visualDebug)
-	const history = useTL(
+	const history = useOptionalTL(
 		workspace.font.glyphHistoryTimelines,
 		activeGlyphId,
 		workspace.font.actions.markDocumentChanged,

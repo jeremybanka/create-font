@@ -102,11 +102,12 @@ import {
 	isMomentaryPreviewKey,
 	shouldStartMomentaryPreview,
 } from "./momentary-preview.ts"
-import { useI, useO, useOF } from "./state-hooks.ts"
+import { useI, useO, useOF, useOptionalOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import {
 	activeTextareaSelectionIndex,
+	moveTextareaSelectionVertically,
 	observeTextareaSelection,
 } from "./textarea-selection.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
@@ -222,7 +223,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const run = useO(workspace.ui.previewRun)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOF(workspace.font.selectors.editorGlyphSource, activeGlyphId)
+	const glyph = useOptionalOF(
+		workspace.font.selectors.editorGlyphSource,
+		activeGlyphId,
+	)
 	const master = useOF(workspace.font.atoms.master, activeMasterId)
 	const metrics =
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
@@ -269,6 +273,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const setCanvasViewport = useI(workspace.ui.canvasViewport)
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const preferredCaretXRef = useRef<number | null>(null)
 	const { ref, width, height } = useElementSize<HTMLElement>()
 	useEffect(() => {
 		setCanvasViewport((current) =>
@@ -641,6 +646,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}, [editingTextIndex])
 
 	useEffect(() => {
+		if (caretIndex <= text.length) return
+		preferredCaretXRef.current = null
+		setCaretIndex(text.length)
+	}, [caretIndex, setCaretIndex, text.length])
+
+	useEffect(() => {
 		const textarea = textareaRef.current
 		if (textarea === null) return
 		return observeTextareaSelection(textarea, setCaretIndex)
@@ -791,6 +802,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}, [shiftHeld])
 
 	const commitPoint = (point: DraggedPoint): void => {
+		if (activeGlyphId === null) return
 		workspace.font.actions.movePoints({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -798,6 +810,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 	}
 	const commitHandle = (handle: DraggedHandle): void => {
+		if (activeGlyphId === null) return
 		workspace.font.actions.moveHandle({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -807,6 +820,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 	}
 	const toggleNodeMode = (pointId: PointId, mode: "soft" | "hard"): void => {
+		if (activeGlyphId === null) return
 		workspace.font.actions.setNodeMode({
 			glyphId: activeGlyphId,
 			pointId,
@@ -815,6 +829,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}
 	const focusTypingAt = (index: number): void => {
 		const next = Math.max(0, Math.min(text.length, index))
+		preferredCaretXRef.current = null
 		setCaretIndex(next)
 		requestAnimationFrame(() => {
 			const textarea = textareaRef.current
@@ -832,7 +847,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		focusTypingAt(nextCaret)
 	}
 	const deleteSelected = (breakPaths: boolean): void => {
-		if (selection.length === 0) return
+		if (selection.length === 0 || activeGlyphId === null) return
 		workspace.font.actions.deleteSelection({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -897,6 +912,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		point: PenPoint,
 		gesture: PenGestureResolution,
 	): void => {
+		if (activeGlyphId === null) return
 		const pointId = nextPenEntityId("point") as PointId
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
@@ -959,6 +975,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	}
 	const commitPenClosure = (gesture: PenGestureResolution): void => {
 		if (
+			activeGlyphId === null ||
 			penContourId === null ||
 			currentPenContour === undefined ||
 			currentPenContour.nodes.length < 3
@@ -1242,7 +1259,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		}
 		const currentGroupDrag = groupDragRef.current
 		const resolved = resolveGroupDrag(event)
-		if (resolved === null || currentGroupDrag === null) return false
+		if (
+			resolved === null ||
+			currentGroupDrag === null ||
+			activeGlyphId === null
+		)
+			return false
 		workspace.font.actions.transformControls({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -1319,7 +1341,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		)
 	}
 	const commitTransform = (): void => {
-		if (transformPreview !== null) {
+		if (transformPreview !== null && activeGlyphId !== null) {
 			workspace.font.actions.transformControls({
 				masterId: activeMasterId,
 				glyphId: activeGlyphId,
@@ -1406,6 +1428,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		contour: (typeof visibleContours)[number],
 		event: KonvaEventObject<MouseEvent | PointerEvent>,
 	): void => {
+		if (activeGlyphId === null) return
 		const pointer = pointerInEditingGlyph(event)
 		if (pointer === null) return
 		const nearest = nearestEditorSegment(contour.nodes, contour.closed, pointer)
@@ -1429,6 +1452,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		contour: (typeof visibleContours)[number],
 		event: KonvaEventObject<MouseEvent>,
 	): void => {
+		if (activeGlyphId === null) return
 		event.cancelBubble = true
 		const pointer = pointerInEditingGlyph(event)
 		if (pointer === null) return
@@ -1483,6 +1507,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			onCopy={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
 				if (
 					editingTextIndex === null ||
+					activeGlyphId === null ||
 					event.target instanceof HTMLTextAreaElement
 				)
 					return
@@ -1521,6 +1546,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				}
 				if (
 					editingTextIndex === null ||
+					activeGlyphId === null ||
 					event.target instanceof HTMLTextAreaElement
 				)
 					return
@@ -1705,6 +1731,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				const delta = ARROW_DELTAS[event.key]
 				if (
 					editingTextIndex === null ||
+					activeGlyphId === null ||
 					delta === undefined ||
 					selectedPoints.length === 0
 				)
@@ -1728,8 +1755,44 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				disabled={disabled}
 				spellcheck={false}
 				aria-label="Text canvas contents"
+				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLTextAreaElement>) => {
+					if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+						if (
+							event.key !== "Shift" &&
+							event.key !== "Control" &&
+							event.key !== "Alt" &&
+							event.key !== "Meta"
+						) {
+							preferredCaretXRef.current = null
+						}
+						return
+					}
+					if (event.metaKey || event.ctrlKey || event.altKey) {
+						preferredCaretXRef.current = null
+						return
+					}
+					const movement = moveTextareaSelectionVertically(
+						event.currentTarget,
+						layout.carets,
+						event.key === "ArrowUp" ? -1 : 1,
+						{
+							extend: event.shiftKey,
+							preferredX: preferredCaretXRef.current,
+						},
+					)
+					if (movement === null) return
+					event.preventDefault()
+					preferredCaretXRef.current = movement.preferredX
+					event.currentTarget.setSelectionRange(
+						movement.selectionStart,
+						movement.selectionEnd,
+						movement.selectionDirection,
+					)
+					setCaretIndex(movement.focus)
+				}}
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
 					const textarea = event.currentTarget
+					preferredCaretXRef.current = null
 					setText(textarea.value)
 					setCaretIndex(activeTextareaSelectionIndex(textarea))
 				}}

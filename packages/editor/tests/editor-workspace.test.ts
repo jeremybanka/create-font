@@ -205,6 +205,70 @@ describe("editor workspace", () => {
 		).toEqual([aGlyphId, oGlyphId, notdefGlyphId])
 	})
 
+	it("starts without an explicit glyph selection and derives typing focus from the caret", () => {
+		const workspace = createEditorWorkspace()
+		expect(
+			workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+		).toBeNull()
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			aGlyphId,
+		)
+
+		workspace.font.silo.setState(workspace.ui.previewText, "A\nO")
+		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+		workspace.font.silo.setState(workspace.ui.caretIndex, 3)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBeNull()
+		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toBeNull()
+	})
+
+	it("uses fallback glyphs as typing focus without manufacturing an O", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "X")
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			notdefGlyphId,
+		)
+		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBeNull()
+	})
+
+	it("keeps outline-edit focus explicit and recomputes typing focus on exit", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "AO")
+		workspace.font.silo.setState(workspace.ui.caretIndex, 0)
+		workspace.actions.enterGlyphEdit(1, oGlyphId)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+
+		workspace.actions.exitGlyphEdit()
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			aGlyphId,
+		)
+	})
+
+	it("clears an explicit selection when source replacement removes it", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.selectGlyph(oGlyphId)
+		workspace.actions.navigate("/glyphs")
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+		const source = workspace.font.read.editorSource()
+		if (source === null) throw new Error("Missing editor source.")
+		workspace.actions.replaceSource({
+			...source,
+			glyphs: source.glyphs.filter((glyph) => glyph.id !== oGlyphId),
+			cmap: source.cmap.filter((entry) => entry.glyphId !== oGlyphId),
+		})
+		expect(
+			workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+		).toBeNull()
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBeNull()
+	})
+
 	it("adds unique named glyphs and maps single characters", () => {
 		const workspace = createEditorWorkspace()
 		const added = workspace.actions.addGlyphs(["B", "C", "B", "Aacute"])
@@ -226,7 +290,7 @@ describe("editor workspace", () => {
 		expect(source?.cmap.some((entry) => entry.glyphId === "glyph:Aacute")).toBe(
 			false,
 		)
-		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+		expect(workspace.font.silo.getState(workspace.ui.selectedGlyphId)).toBe(
 			"glyph:Aacute",
 		)
 
@@ -304,7 +368,7 @@ describe("editor workspace", () => {
 
 	it("derives active-layer bounds and right side bearing after edits", () => {
 		const workspace = createEditorWorkspace()
-		workspace.font.silo.setState(workspace.ui.activeGlyphId, oGlyphId)
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
 		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
 		const before = workspace.font.silo.getState(workspace.ui.activeLayer)
 		if (before === null) throw new Error("Missing active fixture layer.")
@@ -343,6 +407,7 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		const [emptyGlyphId] = workspace.actions.addGlyphs(["empty-bearing-test"])
 		if (emptyGlyphId === undefined) throw new Error("Glyph was not added.")
+		workspace.actions.enterGlyphEdit(0, emptyGlyphId)
 		const layer = workspace.font.silo.getState(workspace.ui.activeLayer)
 		expect(layer).toMatchObject({
 			glyphId: emptyGlyphId,
@@ -758,6 +823,7 @@ describe("editor workspace", () => {
 
 	it("projects a mode toggle into the active layer and undo history", () => {
 		const workspace = createEditorWorkspace()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
 		const pointId = workspace.document.glyphs.find(
 			(glyph) => glyph.id === oGlyphId,
 		)?.contours[0]?.points[0]?.id
@@ -786,6 +852,7 @@ describe("editor workspace", () => {
 
 	it("keeps a deleted handle absent when toggling its node back to soft", () => {
 		const workspace = createEditorWorkspace()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
 		const contour = workspace.document.glyphs.find(
 			(glyph) => glyph.id === oGlyphId,
 		)?.contours[0]

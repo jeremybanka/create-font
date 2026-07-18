@@ -20,16 +20,19 @@
 	],
 	"exports": {
 		".": {
+			"development": "./src/server.ts",
 			"types": "./src/server.ts",
 			"bun": "./dist/server.js",
 			"import": "./dist/server.js"
 		},
 		"./rpc": {
+			"development": "./src/rpc.ts",
 			"types": "./src/rpc.ts",
 			"bun": "./dist/rpc.js",
 			"import": "./dist/rpc.js"
 		},
 		"./rpc-client": {
+			"development": "./src/rpc-client.ts",
 			"types": "./src/rpc-client.ts",
 			"browser": "./dist/rpc-client.js",
 			"import": "./dist/rpc-client.js"
@@ -38,12 +41,13 @@
 	},
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
-		"dev": "bun --watch ./src/font-cli.ts dev --root=../..",
-		"test": "bun run test:browser-bundle && bun test --path-ignore-patterns='**/preact-compat.test.ts'",
-		"test:browser-bundle": "bun test ./tests/preact-compat.test.ts"
+		"dev": "bun run ./scripts/build-development.ts && bun run ./scripts/dev.ts",
+		"test": "bun run ./scripts/build-development.ts && bun run test:browser-bundle && bun test --conditions=development --path-ignore-patterns='**/preact-compat.test.ts'",
+		"test:browser-bundle": "bun test --conditions=development ./tests/preact-compat.test.ts"
 	},
 	"dependencies": {
 		"@elysia/static": "1.4.11",
+		"@create-font/editor": "workspace:*",
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
@@ -54,7 +58,6 @@
 		"zod": "4.4.3"
 	},
 	"devDependencies": {
-		"@create-font/editor": "workspace:*",
 		"@types/bun": "npm:bun-types@1.3.14",
 		"@types/node": "25.9.5"
 	}

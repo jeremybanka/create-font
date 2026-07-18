@@ -21,10 +21,12 @@
 	"sideEffects": false,
 	"exports": {
 		".": {
+			"development": "./src/index.ts",
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
 		},
 		"./client": {
+			"development": "./src/client.ts",
 			"types": "./dist/client.d.mts",
 			"browser": "./dist/client.mjs",
 			"import": "./dist/client.mjs"

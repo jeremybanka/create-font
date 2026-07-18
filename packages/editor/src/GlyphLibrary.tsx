@@ -168,9 +168,9 @@ function GlyphLibraryItem({
 }: {
 	readonly workspace: EditorWorkspace
 	readonly glyphId: Parameters<EditorWorkspace["actions"]["selectGlyph"]>[0]
-	readonly activeGlyphId: Parameters<
-		EditorWorkspace["actions"]["selectGlyph"]
-	>[0]
+	readonly activeGlyphId:
+		| Parameters<EditorWorkspace["actions"]["selectGlyph"]>[0]
+		| null
 	readonly activeMasterId: Parameters<
 		EditorWorkspace["actions"]["selectMaster"]
 	>[0]

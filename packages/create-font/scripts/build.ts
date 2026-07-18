@@ -8,6 +8,7 @@ await rm(outdir, { force: true, recursive: true })
 
 const builds = await Promise.all([
 	Bun.build({
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [
 			resolve(packageRoot, `src/create-font-cli.ts`),
 			resolve(packageRoot, `src/font-cli.ts`),
@@ -21,6 +22,7 @@ const builds = await Promise.all([
 		target: `bun`,
 	}),
 	Bun.build({
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [resolve(packageRoot, `src/rpc-client.ts`)],
 		external: [`@create-font/*`],
 		outdir,
@@ -29,6 +31,7 @@ const builds = await Promise.all([
 		target: `browser`,
 	}),
 	Bun.build({
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [
 			resolve(packageRoot, `public/index.html`),
 			resolve(packageRoot, `public/info/index.html`),
@@ -39,6 +42,7 @@ const builds = await Promise.all([
 		target: `browser`,
 	}),
 	Bun.build({
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [resolve(packageRoot, `public/source-session.worker.ts`)],
 		outdir: resolve(outdir, `public`),
 		target: `browser`,

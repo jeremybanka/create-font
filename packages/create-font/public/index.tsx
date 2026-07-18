@@ -1,4 +1,7 @@
-import { EditorApplicationRoot } from "@create-font/editor"
+import type {
+	EditorBrowserOptions,
+	MountedEditor,
+} from "@create-font/editor/browser"
 import type { EditorFontSource } from "@create-font/states"
 import { render } from "preact"
 
@@ -24,6 +27,9 @@ import {
 } from "./startup-profile.ts"
 
 type StartupProfileStatus = `loading` | `error` | `editor-usable`
+type EditorBrowserModule = typeof import("@create-font/editor/browser")
+
+declare const __CREATE_FONT_DEVELOPMENT__: boolean
 
 type BrowserStartupProfile = Readonly<{
 	longTasks: readonly StartupPhase[]
@@ -61,6 +67,14 @@ declare global {
 
 const startupTimeline = createStartupTimeline(`browser-main`)
 startupTimeline.mark(`module-evaluated`)
+const editorBrowserUrl = `/editor/editor.js`
+const editorStyles = document.createElement(`link`)
+editorStyles.rel = `stylesheet`
+editorStyles.href = `/editor/editor.css`
+if (!__CREATE_FONT_DEVELOPMENT__) document.head.append(editorStyles)
+const editorModulePromise = __CREATE_FONT_DEVELOPMENT__
+	? import("@create-font/editor/browser")
+	: (import(editorBrowserUrl) as Promise<EditorBrowserModule>)
 const longTasks: StartupPhase[] = []
 let startupProfileStatus: StartupProfileStatus = `loading`
 let sourceSessionStartup: SourceSessionStartupProfile | undefined
@@ -155,6 +169,7 @@ let port: MessagePort | null = null
 let revision: string | null = null
 let saveQueue = Promise.resolve()
 let renderedSource = false
+let mountedEditor: MountedEditor | null = null
 let currentSource: EditorFontSource | null = null
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
 const pending = new Map<
@@ -193,24 +208,30 @@ function showBootstrapError(message: string): void {
 	renderBootstrap()
 }
 
-function showSource(
+async function showSource(
 	source: EditorFontSource,
 	validation: FontValidationStatus,
-): void {
+): Promise<void> {
+	const editorModule = await editorModulePromise
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
-	render(
-		<EditorApplicationRoot
-			source={source}
-			validation={validation}
-			onSourceChange={saveSource}
-		/>,
-		applicationMount,
-	)
+	const options: EditorBrowserOptions = {
+		onSourceChange: saveSource,
+		source,
+		validation,
+	}
+	if (mountedEditor === null) {
+		// The bootstrap and editor artifacts intentionally own separate Preact
+		// renderers. Fully unmount bootstrap before handing the host over.
+		render(null, applicationMount)
+		mountedEditor = editorModule.mountEditor(applicationMount, options)
+	} else {
+		mountedEditor.update(options)
+	}
 	finish?.()
 	if (initialRender) {
 		startupTimeline.mark(`editor-rendered`)
@@ -264,11 +285,25 @@ function handleSourceSessionEvent(
 				performance.timeOrigin + performance.now(),
 			)
 			revision = event.revision
-			showSource(event.source, event.validation)
+			void showSource(event.source, event.validation).catch(
+				(error: unknown) => {
+					showBootstrapError(
+						error instanceof Error
+							? error.message
+							: `The editor application did not load.`,
+					)
+				},
+			)
 			break
 		case `saved`: {
 			revision = event.revision
-			if (currentSource !== null) showSource(currentSource, event.validation)
+			if (currentSource !== null) {
+				void showSource(currentSource, event.validation).catch(
+					(error: unknown) => {
+						console.error(`Unable to update editor validation.`, error)
+					},
+				)
+			}
 			const request = pending.get(event.requestId)
 			pending.delete(event.requestId)
 			request?.resolve()
