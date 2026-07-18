@@ -2130,6 +2130,75 @@ describe("font editor state", () => {
 		)
 	})
 
+	it("slides one soft node while preserving absolute handles and master isolation", () => {
+		const editor = createLoadedEditor("test/slide-soft-node")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const before = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		const otherBefore = editor.read.layerNode(razorMasterId, oGlyphId, pointId)
+		if (
+			!before.ok ||
+			!otherBefore.ok ||
+			before.value.incoming === undefined ||
+			before.value.outgoing === undefined
+		) {
+			throw new Error("Fixture soft node is incomplete.")
+		}
+		const incoming = {
+			x: before.value.x + before.value.incoming.x,
+			y: before.value.y + before.value.incoming.y,
+		}
+		const outgoing = {
+			x: before.value.x + before.value.outgoing.x,
+			y: before.value.y + before.value.outgoing.y,
+		}
+		const next = {
+			x: incoming.x + (outgoing.x - incoming.x) * 0.3,
+			y: incoming.y + (outgoing.y - incoming.y) * 0.3,
+		}
+
+		editor.actions.slideSoftNode({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			pointId,
+			...next,
+			handles: [
+				{ handle: "incoming", ...incoming },
+				{ handle: "outgoing", ...outgoing },
+			],
+		})
+
+		const after = editor.read.layerNode(blackMasterId, oGlyphId, pointId)
+		expect(after.ok).toBe(true)
+		if (!after.ok) return
+		expect(after.value).toMatchObject({ ...next, mode: "soft" })
+		expect({
+			x: after.value.x + (after.value.incoming?.x ?? 0),
+			y: after.value.y + (after.value.incoming?.y ?? 0),
+		}).toEqual(incoming)
+		expect({
+			x: after.value.x + (after.value.outgoing?.x ?? 0),
+			y: after.value.y + (after.value.outgoing?.y ?? 0),
+		}).toEqual(outgoing)
+		expect(editor.read.layerNode(razorMasterId, oGlyphId, pointId)).toEqual(
+			otherBefore,
+		)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(1)
+
+		editor.undo(oGlyphId)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			before,
+		)
+		editor.redo(oGlyphId)
+		expect(editor.read.layerNode(blackMasterId, oGlyphId, pointId)).toEqual(
+			after,
+		)
+	})
+
 	it("splits a curved segment at one shared parameter across all masters", () => {
 		const editor = createLoadedEditor("test/split-segment")
 		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]

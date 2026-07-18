@@ -373,6 +373,20 @@ export interface TransformControlsInput {
 	}[]
 }
 
+export interface SlideSoftNodeInput {
+	readonly masterId: MasterId
+	readonly glyphId: GlyphId
+	readonly pointId: PointId
+	readonly x: number
+	readonly y: number
+	/** Immutable absolute endpoints captured by the editor gesture. */
+	readonly handles: readonly {
+		readonly handle: EditorHandleKind
+		readonly x: number
+		readonly y: number
+	}[]
+}
+
 export interface SplitSegmentInput {
 	readonly glyphId: GlyphId
 	readonly contourId: ContourId
@@ -3962,6 +3976,112 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const slideSoftNodeTransaction = silo.transaction<
+		(input: SlideSoftNodeInput) => void
+	>({
+		key: "slideSoftNode",
+		do: ({ get, set }, input) => {
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			const topology = get(pointAtoms, [input.glyphId, input.pointId])
+			if (topology === null || layerMasterIds === null) {
+				throw new TypeError(
+					`Unknown node ${input.pointId} in glyph ${input.glyphId}.`,
+				)
+			}
+			if (!layerMasterIds.includes(input.masterId)) {
+				throw new TypeError(
+					`Glyph ${input.glyphId} has no ${input.masterId} layer.`,
+				)
+			}
+			if (topology.mode !== "soft") {
+				throw new TypeError("Only a soft node can slide along its tangent.")
+			}
+			if (!Number.isFinite(input.x) || !Number.isFinite(input.y)) {
+				throw new TypeError("Soft-node slide coordinates must be finite.")
+			}
+			assertUnique(
+				input.handles.map((handle) => handle.handle),
+				"Soft-node slide handles",
+			)
+			const atomKey: LayerPointKey = [
+				input.masterId,
+				input.glyphId,
+				input.pointId,
+			]
+			const existingKinds: EditorHandleKind[] = []
+			for (const handle of ["incoming", "outgoing"] as const) {
+				const x = get(
+					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+					atomKey,
+				)
+				const y = get(
+					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+					atomKey,
+				)
+				if ((x === null) !== (y === null)) {
+					throw new TypeError(`The ${handle} soft-node handle is incomplete.`)
+				}
+				if (x !== null) existingKinds.push(handle)
+			}
+			if (existingKinds.length === 0) {
+				throw new TypeError("A sliding soft node must have an authored handle.")
+			}
+			const endpoints = new Map<EditorHandleKind, Vector2>()
+			for (const handle of input.handles) {
+				if (!Number.isFinite(handle.x) || !Number.isFinite(handle.y)) {
+					throw new TypeError("Soft-node handle endpoints must be finite.")
+				}
+				if (!existingKinds.includes(handle.handle)) {
+					throw new TypeError(
+						`Cannot slide a missing ${handle.handle} handle on ${input.pointId}.`,
+					)
+				}
+				endpoints.set(handle.handle, { x: handle.x, y: handle.y })
+			}
+			if (
+				endpoints.size !== existingKinds.length ||
+				existingKinds.some((handle) => !endpoints.has(handle))
+			) {
+				throw new TypeError(
+					"A soft-node slide must preserve every authored handle endpoint.",
+				)
+			}
+			const incoming = endpoints.get("incoming")
+			const outgoing = endpoints.get("outgoing")
+			if (incoming !== undefined && outgoing !== undefined) {
+				const left = { x: incoming.x - input.x, y: incoming.y - input.y }
+				const right = { x: outgoing.x - input.x, y: outgoing.y - input.y }
+				const product =
+					Math.hypot(left.x, left.y) * Math.hypot(right.x, right.y)
+				const tolerance = Math.max(1, product) * 1e-9
+				const cross = left.x * right.y - left.y * right.x
+				const dot = left.x * right.x + left.y * right.y
+				if (Math.abs(cross) > tolerance || dot > tolerance) {
+					throw new TypeError(
+						"A two-sided soft node must remain between its collinear handles.",
+					)
+				}
+			}
+			set(
+				pointPositionSelectors,
+				atomKey,
+				deepFreeze({ x: input.x, y: input.y }),
+			)
+			for (const [handle, endpoint] of endpoints) {
+				set(
+					handle === "incoming" ? incomingHandleXAtoms : outgoingHandleXAtoms,
+					atomKey,
+					endpoint.x - input.x,
+				)
+				set(
+					handle === "incoming" ? incomingHandleYAtoms : outgoingHandleYAtoms,
+					atomKey,
+					endpoint.y - input.y,
+				)
+			}
+		},
+	})
+
 	const setNodeModeTransaction = silo.transaction<
 		(input: SetNodeModeInput) => void
 	>({
@@ -5485,6 +5605,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	)
 	const runMoveHandle = silo.runTransaction(moveHandleTransaction)
 	const runTransformControls = silo.runTransaction(transformControlsTransaction)
+	const runSlideSoftNode = silo.runTransaction(slideSoftNodeTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
 	const runAuthorPenEndpoint = silo.runTransaction(authorPenEndpointTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
@@ -5583,6 +5704,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			setHorizontalMetrics: setHorizontalMetricsTransaction,
 			moveHandle: moveHandleTransaction,
 			transformControls: transformControlsTransaction,
+			slideSoftNode: slideSoftNodeTransaction,
 			setNodeMode: setNodeModeTransaction,
 			authorPenEndpoint: authorPenEndpointTransaction,
 			insertPoint: insertPointTransaction,
@@ -5629,6 +5751,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			transformControls(input: TransformControlsInput): void {
 				runTransformControls(input)
+				markDocumentChanged()
+			},
+			slideSoftNode(input: SlideSoftNodeInput): void {
+				runSlideSoftNode(input)
 				markDocumentChanged()
 			},
 			setNodeMode(input: SetNodeModeInput): void {

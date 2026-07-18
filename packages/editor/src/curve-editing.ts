@@ -35,6 +35,21 @@ const magnitude = (vector: Readonly<{ x: number; y: number }>): number =>
 const canonicalZero = (value: number): number =>
 	Object.is(value, -0) ? 0 : value
 
+/** Quantizes a vector to the nearest cardinal or diagonal ray. */
+export function constrainVectorToEightRays(
+	vector: Readonly<{ x: number; y: number }>,
+): Readonly<{ x: number; y: number }> {
+	const length = magnitude(vector)
+	if (length === 0) return { x: 0, y: 0 }
+	const step = Math.PI / 4
+	const angle = Math.atan2(vector.y, vector.x)
+	const ray = Math.floor(angle / step + 0.5) * step
+	return {
+		x: canonicalZero(Math.cos(ray) * length),
+		y: canonicalZero(Math.sin(ray) * length),
+	}
+}
+
 function oppositeOnSameLine(
 	moved: Readonly<{ x: number; y: number }>,
 	opposite: Readonly<{ x: number; y: number }>,
@@ -57,6 +72,42 @@ function withLengthAlong(
 	return {
 		x: canonicalZero((direction.x * length) / directionLength),
 		y: canonicalZero((direction.y * length) / directionLength),
+	}
+}
+
+export interface HandleEditResolution {
+	readonly vector: Readonly<{ x: number; y: number }>
+	/** One-sided soft handles are length-only and therefore have no ray guide. */
+	readonly constrainedToEightRays: boolean
+}
+
+/**
+ * Resolves direct and keyboard handle movement without violating soft-node
+ * invariants. One-sided soft handles retain their derived tangent and edit only
+ * their authored length; all other handles may use the shared eight-ray rule.
+ */
+export function resolveHandleEdit(
+	node: EditorLayerNode,
+	handle: EditorHandleKind,
+	rawVector: Readonly<{ x: number; y: number }>,
+	constrainToEightRays = false,
+): HandleEditResolution | null {
+	if (!Number.isFinite(rawVector.x) || !Number.isFinite(rawVector.y))
+		return null
+	const current = node[handle]
+	if (current === undefined) return null
+	const opposite = handle === "incoming" ? node.outgoing : node.incoming
+	if (node.mode === "soft" && opposite === undefined) {
+		return {
+			vector: withLengthAlong(current, magnitude(rawVector)) ?? current,
+			constrainedToEightRays: false,
+		}
+	}
+	return {
+		vector: constrainToEightRays
+			? constrainVectorToEightRays(rawVector)
+			: rawVector,
+		constrainedToEightRays: constrainToEightRays,
 	}
 }
 

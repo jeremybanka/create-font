@@ -1,5 +1,7 @@
 import type { MasterId } from "@create-font/states"
 
+import { constrainVectorToEightRays } from "./curve-editing.ts"
+
 export interface PenPoint {
 	readonly x: number
 	readonly y: number
@@ -106,18 +108,6 @@ const canonicalZero = (value: number): number =>
 const finitePoint = (point: PenPoint): boolean =>
 	Number.isFinite(point.x) && Number.isFinite(point.y)
 
-const constrainedHandleVector = (vector: PenPoint): PenPoint => {
-	const length = Math.hypot(vector.x, vector.y)
-	if (length === 0) return { x: 0, y: 0 }
-	const step = Math.PI / 4
-	const angle = Math.atan2(vector.y, vector.x)
-	const ray = Math.floor(angle / step + 0.5) * step
-	return {
-		x: canonicalZero(Math.cos(ray) * length),
-		y: canonicalZero(Math.sin(ray) * length),
-	}
-}
-
 /** Resolves click versus curve from CSS-pixel movement and converts y to font space. */
 export function resolvePenGesture(input: {
 	readonly downScreen: PenPoint
@@ -145,7 +135,7 @@ export function resolvePenGesture(input: {
 		y: canonicalZero(-dyPixels / input.worldScale),
 	}
 	const outgoing = input.shiftKey
-		? constrainedHandleVector(rawOutgoing)
+		? constrainVectorToEightRays(rawOutgoing)
 		: rawOutgoing
 	return {
 		kind: "curve",
