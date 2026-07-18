@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	PEN_DRAG_THRESHOLD_PIXELS,
+	penEndpointHandleBeingReplaced,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
@@ -32,8 +33,8 @@ describe("Pen gestures", () => {
 			mode: "soft",
 			distancePixels: PEN_DRAG_THRESHOLD_PIXELS,
 			handles: {
-				incoming: { x: -8, y: 0 },
-				outgoing: { x: 8, y: 0 },
+				incoming: { x: 8, y: 0 },
+				outgoing: { x: -8, y: 0 },
 			},
 		})
 	})
@@ -48,8 +49,8 @@ describe("Pen gestures", () => {
 		const commit = resolvePenGesture(input)
 		expect(commit).toEqual(preview)
 		expect(preview.handles).toEqual({
-			incoming: { x: -80, y: -80 },
-			outgoing: { x: 80, y: 80 },
+			incoming: { x: 80, y: 80 },
+			outgoing: { x: -80, y: -80 },
 		})
 	})
 
@@ -74,11 +75,11 @@ describe("Pen gestures", () => {
 			expect(result.kind).toBe("curve")
 			if (result.kind !== "curve") continue
 			const length = Math.hypot(dx, dy)
-			expect(result.handles.outgoing.x).toBeCloseTo(
+			expect(result.handles.incoming.x).toBeCloseTo(
 				expectedX *
 					(expectedX !== 0 && expectedY !== 0 ? length / Math.SQRT2 : length),
 			)
-			expect(result.handles.outgoing.y).toBeCloseTo(
+			expect(result.handles.incoming.y).toBeCloseTo(
 				expectedY *
 					(expectedX !== 0 && expectedY !== 0 ? length / Math.SQRT2 : length),
 			)
@@ -95,8 +96,8 @@ describe("Pen gestures", () => {
 		})
 		expect(tie.kind).toBe("curve")
 		if (tie.kind === "curve") {
-			expect(tie.handles.outgoing.x).toBeCloseTo(20 / Math.SQRT2)
-			expect(tie.handles.outgoing.y).toBeCloseTo(20 / Math.SQRT2)
+			expect(tie.handles.incoming.x).toBeCloseTo(20 / Math.SQRT2)
+			expect(tie.handles.incoming.y).toBeCloseTo(20 / Math.SQRT2)
 		}
 	})
 
@@ -177,21 +178,73 @@ describe("Pen gestures", () => {
 				masterId: "master:text",
 				x: 300,
 				y: 400,
-				incoming: { x: -100, y: -50 },
-				outgoing: { x: 100, y: 50 },
+				incoming: { x: 100, y: 50 },
+				outgoing: { x: -100, y: -50 },
 			},
 			{
 				masterId: "master:heavy",
 				x: 312,
 				y: 400,
-				incoming: { x: -94, y: -50 },
-				outgoing: { x: 94, y: 50 },
+				incoming: { x: 94, y: 50 },
+				outgoing: { x: -94, y: -50 },
 			},
 		])
 		for (const layer of layers) {
 			expect(layer.incoming?.x).toBe(-(layer.outgoing?.x ?? Number.NaN))
 			expect(layer.incoming?.y).toBe(-(layer.outgoing?.y ?? Number.NaN))
 		}
+	})
+
+	it("keeps the Shift-constrained dragged handle on the pointer ray", () => {
+		const result = resolvePenGesture({
+			downScreen: { x: 40, y: 40 },
+			currentScreen: { x: 70, y: 55 },
+			worldScale: 1,
+			shiftKey: true,
+		})
+		expect(result.kind).toBe("curve")
+		if (result.kind !== "curve") return
+		const pointerInFontSpace = { x: 30, y: -15 }
+		const pointerDotDragged =
+			pointerInFontSpace.x * result.handles.incoming.x +
+			pointerInFontSpace.y * result.handles.incoming.y
+		const pointerDotOpposite =
+			pointerInFontSpace.x * result.handles.outgoing.x +
+			pointerInFontSpace.y * result.handles.outgoing.y
+		expect(pointerDotDragged).toBeGreaterThan(0)
+		expect(pointerDotOpposite).toBeLessThan(0)
+	})
+
+	it("subdues only the previous forward endpoint handle during a curve drag", () => {
+		const curve = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 20, y: 0 },
+			worldScale: 1,
+		})
+		const click = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 1, y: 0 },
+			worldScale: 1,
+		})
+		expect(
+			penEndpointHandleBeingReplaced(
+				{ pointId: "point:first", side: "first" },
+				curve,
+			),
+		).toEqual({ pointId: "point:first", handle: "incoming" })
+		expect(
+			penEndpointHandleBeingReplaced(
+				{ pointId: "point:last", side: "last" },
+				curve,
+			),
+		).toEqual({ pointId: "point:last", handle: "outgoing" })
+		expect(
+			penEndpointHandleBeingReplaced(
+				{ pointId: "point:last", side: "last" },
+				click,
+			),
+		).toBeNull()
+		expect(penEndpointHandleBeingReplaced(null, curve)).toBeNull()
 	})
 
 	it("keeps layer handles exactly opposite when the mapped node rounds", () => {

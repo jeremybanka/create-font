@@ -57,6 +57,11 @@ export interface PenEndpointResolution {
 	readonly outgoing?: PenPoint
 }
 
+export interface PenEndpointHandleTarget {
+	readonly pointId: string
+	readonly handle: "incoming" | "outgoing"
+}
+
 export const PEN_DRAG_THRESHOLD_PIXELS = 4
 
 const canonicalZero = (value: number): number =>
@@ -99,22 +104,22 @@ export function resolvePenGesture(input: {
 	if (distancePixels < (input.thresholdPixels ?? PEN_DRAG_THRESHOLD_PIXELS)) {
 		return { kind: "click", mode: "hard", handles: null, distancePixels }
 	}
-	const rawOutgoing = {
+	const rawDragged = {
 		x: canonicalZero(dxPixels / input.worldScale),
 		y: canonicalZero(-dyPixels / input.worldScale),
 	}
-	const outgoing = input.shiftKey
-		? constrainedHandleVector(rawOutgoing)
-		: rawOutgoing
+	const dragged = input.shiftKey
+		? constrainedHandleVector(rawDragged)
+		: rawDragged
 	return {
 		kind: "curve",
 		mode: "soft",
 		handles: {
-			incoming: {
-				x: canonicalZero(-outgoing.x),
-				y: canonicalZero(-outgoing.y),
+			incoming: dragged,
+			outgoing: {
+				x: canonicalZero(-dragged.x),
+				y: canonicalZero(-dragged.y),
 			},
-			outgoing,
 		},
 		distancePixels,
 	}
@@ -153,7 +158,7 @@ export function resolvePenEndpoint(input: {
 		}
 	}
 
-	const dragged = input.gesture.handles.outgoing
+	const dragged = input.gesture.handles.incoming
 	const harden =
 		input.mode === "hard" || (input.altKey === true && forward !== undefined)
 	if (harden) {
@@ -200,22 +205,43 @@ export function penLayerCoordinates(
 			const x = Math.round(mapX(point.x))
 			const y = Math.round(point.y)
 			if (gesture.handles === null) return { masterId, x, y }
-			const outgoing = {
-				x: canonicalZero(mapX(point.x + gesture.handles.outgoing.x) - x),
-				y: canonicalZero(gesture.handles.outgoing.y),
+			const incoming = {
+				x: canonicalZero(mapX(point.x + gesture.handles.incoming.x) - x),
+				y: canonicalZero(gesture.handles.incoming.y),
 			}
 			return {
 				masterId,
 				x,
 				y,
-				incoming: {
-					x: canonicalZero(-outgoing.x),
-					y: canonicalZero(-outgoing.y),
+				incoming,
+				outgoing: {
+					x: canonicalZero(-incoming.x),
+					y: canonicalZero(-incoming.y),
 				},
-				outgoing,
 			}
 		}),
 	)
+}
+
+/** Identifies the existing endpoint control that remains visible while replaced. */
+export function penEndpointHandleBeingReplaced(
+	endpoint:
+		| Readonly<{ pointId: string; side: PenEndpointSide }>
+		| null
+		| undefined,
+	gesture: PenGestureResolution | null,
+): PenEndpointHandleTarget | null {
+	if (
+		endpoint === null ||
+		endpoint === undefined ||
+		gesture?.kind !== "curve"
+	) {
+		return null
+	}
+	return {
+		pointId: endpoint.pointId,
+		handle: endpoint.side === "first" ? "incoming" : "outgoing",
+	}
 }
 
 /** Makes Pen hit-target precedence explicit and independently testable. */

@@ -87,6 +87,7 @@ import {
 	type SelectionTransformResult,
 } from "./outline-selection.ts"
 import {
+	penEndpointHandleBeingReplaced,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
@@ -516,6 +517,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					gesture: penGestureResolution,
 					altKey: penGesture.altKey,
 				})
+	const replacedPenEndpointHandle = penEndpointHandleBeingReplaced(
+		penGesture?.endpoint,
+		penGestureResolution,
+	)
 	const penPlacement =
 		activeTool !== "pen" || editingTextIndex === null
 			? null
@@ -938,9 +943,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				forwardHandle: target.side === "first" ? "incoming" : "outgoing",
 				mode: resolution.mode,
 				coordinates: penCoordinates(target, gesture).map(
-					({ masterId, outgoing }) => ({
+					({ masterId, incoming }) => ({
 						masterId,
-						forward: gesture.kind === "click" ? null : outgoing!,
+						forward: gesture.kind === "click" ? null : incoming!,
 					}),
 				),
 			})
@@ -2263,6 +2268,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		]}
 																		stroke={palette.handleLine}
 																		strokeWidth={inverseScale}
+																		opacity={
+																			replacedPenEndpointHandle?.pointId ===
+																				point.pointId &&
+																			replacedPenEndpointHandle.handle ===
+																				"incoming"
+																				? 0.42
+																				: 1
+																		}
 																		listening={false}
 																	/>
 																)}
@@ -2277,6 +2290,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		]}
 																		stroke={palette.handleLine}
 																		strokeWidth={inverseScale}
+																		opacity={
+																			replacedPenEndpointHandle?.pointId ===
+																				point.pointId &&
+																			replacedPenEndpointHandle.handle ===
+																				"outgoing"
+																				? 0.42
+																				: 1
+																		}
 																		listening={false}
 																	/>
 																)}
@@ -2549,7 +2570,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				x={point.x + point.incoming.x}
 																				y={point.y + point.incoming.y}
 																				radius={3.5 * inverseScale}
-																				fill={palette.accent}
+																				fill={
+																					replacedPenEndpointHandle?.pointId ===
+																						point.pointId &&
+																					replacedPenEndpointHandle.handle ===
+																						"incoming"
+																						? palette.handleLine
+																						: palette.accent
+																				}
+																				opacity={
+																					replacedPenEndpointHandle?.pointId ===
+																						point.pointId &&
+																					replacedPenEndpointHandle.handle ===
+																						"incoming"
+																						? 0.55
+																						: 1
+																				}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
 																				hitFunc={circularHitRegion(
@@ -2639,7 +2675,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				x={point.x + point.outgoing.x}
 																				y={point.y + point.outgoing.y}
 																				radius={3.5 * inverseScale}
-																				fill={palette.accent}
+																				fill={
+																					replacedPenEndpointHandle?.pointId ===
+																						point.pointId &&
+																					replacedPenEndpointHandle.handle ===
+																						"outgoing"
+																						? palette.handleLine
+																						: palette.accent
+																				}
+																				opacity={
+																					replacedPenEndpointHandle?.pointId ===
+																						point.pointId &&
+																					replacedPenEndpointHandle.handle ===
+																						"outgoing"
+																						? 0.55
+																						: 1
+																				}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
 																				hitFunc={circularHitRegion(

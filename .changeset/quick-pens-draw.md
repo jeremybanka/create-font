@@ -3,4 +3,4 @@
 "@create-font/states": minor
 ---
 
-Add modifier-aware Bézier Pen constraints and atomic bidirectional endpoint handle authoring for open contours.
+Add modifier-aware Bézier Pen constraints, pointer-aligned drag-out handles, and atomic bidirectional endpoint handle authoring with clear replacement previews for open contours.
