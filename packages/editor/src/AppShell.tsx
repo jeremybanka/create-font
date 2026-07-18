@@ -1,5 +1,5 @@
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useCallback, useEffect, useRef, useState } from "preact/hooks"
 
 import {
 	isCommandPaletteKeyboardEvent,
@@ -11,7 +11,6 @@ import { useEditorDocumentMetadata } from "./document-metadata.ts"
 import { EditorIcon } from "./EditorIcon.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
-	ALT_KEY_LABEL,
 	formatHotkey,
 	IS_MAC_LIKE,
 	MOD_KEY_LABEL,
@@ -23,11 +22,13 @@ import {
 } from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
 import { FontInfo } from "./FontInfo.tsx"
-import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
-import { GlyphInspector } from "./GlyphInspector.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useOF, useTL } from "./state-hooks.ts"
+import {
+	TilingWorkspace,
+	type TilingWorkspaceStatus,
+} from "./TilingWorkspace.tsx"
 import { TooltipButton } from "./TooltipButton.tsx"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 
@@ -38,6 +39,10 @@ export interface AppShellProps {
 export function AppShell({ workspace }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
+		dirty: false,
+		management: false,
+	})
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
@@ -69,7 +74,14 @@ export function AppShell({ workspace }: AppShellProps) {
 		workspace,
 	}
 	useEditorDocumentMetadata(faviconHref, routeName, previewText)
-	useHotkeys(toolContext, routeName === "canvas")
+	useHotkeys(toolContext, routeName === "canvas" && !tilingStatus.management)
+	const updateTilingStatus = useCallback((status: TilingWorkspaceStatus) => {
+		setTilingStatus((current) =>
+			current.dirty === status.dirty && current.management === status.management
+				? current
+				: status,
+		)
+	}, [])
 	const openCommandPalette = (): void => {
 		setAddingGlyphs(false)
 		setCommandPaletteOpen(true)
@@ -81,13 +93,17 @@ export function AppShell({ workspace }: AppShellProps) {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)) return
+			if (
+				tilingStatus.management ||
+				!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)
+			)
+				return
 			event.preventDefault()
 			openCommandPalette()
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [])
+	}, [tilingStatus.management])
 
 	const commands: readonly PaletteCommand[] = [
 		{
@@ -190,14 +206,15 @@ export function AppShell({ workspace }: AppShellProps) {
 			</header>
 			<main data-view={routeName}>
 				{routeName === "canvas" ? (
-					<>
-						<FontNavigator workspace={workspace} />
-						<editor-workspace>
-							<EditorToolbar context={toolContext} />
-							<GlyphCanvas workspace={workspace} />
-						</editor-workspace>
-						<GlyphInspector workspace={workspace} />
-					</>
+					<editor-workspace>
+						<EditorToolbar context={toolContext} />
+						<GlyphCanvas workspace={workspace} />
+						<TilingWorkspace
+							workspace={workspace}
+							enabled={!commandPaletteOpen}
+							onStatusChange={updateTilingStatus}
+						/>
+					</editor-workspace>
 				) : routeName === "glyphs" ? (
 					<GlyphLibrary
 						workspace={workspace}
@@ -230,7 +247,9 @@ export function AppShell({ workspace }: AppShellProps) {
 				</active-context>
 				<keyboard-help>
 					{routeName === "canvas"
-						? `Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Esc to type · Scroll to pan · ${MOD_KEY_LABEL}/${ALT_KEY_LABEL}-wheel to zoom · ${MOD_KEY_LABEL}+Shift+P Commands`
+						? tilingStatus.management
+							? "Tile management · 1–4 columns · J/K tiles · M move · A align · N new · S save · Shift+Space done"
+							: `Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>

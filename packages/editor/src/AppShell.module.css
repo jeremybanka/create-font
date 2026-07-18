@@ -183,8 +183,7 @@ app-shell.class {
 		overflow: hidden;
 
 		&[data-view="canvas"] {
-			grid-template-columns: 204px minmax(480px, 1fr) 225px;
-			overflow: auto;
+			grid-template-columns: minmax(0, 1fr);
 		}
 
 		&[data-view="glyphs"],
@@ -304,10 +303,6 @@ app-shell.class {
 }
 
 @media (width <= 1120px) {
-	app-shell.class > main[data-view="canvas"] {
-		grid-template-columns: 190px minmax(480px, 1fr);
-	}
-
 	app-shell.class > header {
 		grid-template-columns: minmax(160px, 1fr) minmax(170px, 260px) auto;
 
@@ -319,11 +314,6 @@ app-shell.class {
 
 @media (width <= 940px) {
 	app-shell.class {
-		> main[data-view="canvas"] {
-			grid-template-columns: 1fr;
-			grid-template-rows: auto minmax(0, 1fr);
-		}
-
 		> header {
 			grid-template-columns: minmax(0, 1fr) auto;
 

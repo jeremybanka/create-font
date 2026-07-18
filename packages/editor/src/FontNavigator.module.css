@@ -1,9 +1,7 @@
 font-navigator.class {
 	display: block;
 	min-width: 0;
-	background: var(--panel);
-	border-right: 1px solid var(--line);
-	overflow: auto;
+	background: transparent;
 
 	> nav {
 		display: flex;
@@ -106,23 +104,6 @@ font-navigator.class {
 					border: 1px solid var(--ink-muted);
 					transform: rotate(45deg);
 				}
-			}
-		}
-	}
-}
-
-@media (width <= 940px) {
-	font-navigator.class {
-		border-right: 0;
-		border-bottom: 1px solid var(--line);
-
-		> nav {
-			flex-direction: row;
-			gap: 8px;
-			overflow-x: auto;
-
-			> navigation-section {
-				min-width: 190px;
 			}
 		}
 	}

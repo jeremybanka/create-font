@@ -11,6 +11,7 @@ import {
 } from "@create-font/states"
 
 import { makeDemoFont } from "./demo-font.ts"
+import type { CanvasView } from "./canvas-view.ts"
 import {
 	createFontFaviconHref,
 	FALLBACK_FAVICON_HREF,
@@ -135,6 +136,16 @@ export function createEditorWorkspace(
 	const showNodesAtom = font.silo.atom<boolean>({
 		key: "showNodes",
 		default: true,
+	})
+	const canvasViewAtom = font.silo.atom<CanvasView>({
+		key: "canvasView",
+		default: { x: 72, y: 72, zoom: 1 },
+	})
+	const canvasViewportAtom = font.silo.atom<
+		Readonly<{ width: number; height: number }>
+	>({
+		key: "canvasViewport",
+		default: { width: 0, height: 0 },
 	})
 	const visualDebugAtom = font.silo.atom<VisualDebugState>({
 		key: "visualDebug",
@@ -415,6 +426,8 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			canvasView: canvasViewAtom,
+			canvasViewport: canvasViewportAtom,
 			visualDebug: visualDebugAtom,
 			validation: validationAtom,
 			pathname: pathnameAtom,

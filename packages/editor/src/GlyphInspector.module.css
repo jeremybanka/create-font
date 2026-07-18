@@ -1,9 +1,7 @@
 glyph-inspector.class {
 	display: block;
 	min-width: 0;
-	background: var(--panel);
-	border-left: 1px solid var(--line);
-	overflow: auto;
+	background: transparent;
 
 	> inspector-heading {
 		display: flex;
@@ -184,11 +182,5 @@ glyph-inspector.class {
 				color: var(--ink-muted);
 			}
 		}
-	}
-}
-
-@media (width <= 1120px) {
-	glyph-inspector.class {
-		display: none;
 	}
 }
