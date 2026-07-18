@@ -22,6 +22,7 @@ export function NumericInput(props: NumericInputProps) {
 		if (!editing.current) setDraft(String(props.value))
 	}, [props.value])
 	const commit = (): void => {
+		if (!editing.current) return
 		const value = parseNumericInput(draft, props.min, props.max, props.step)
 		editing.current = false
 		if (value === null) {

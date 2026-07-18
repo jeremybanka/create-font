@@ -96,18 +96,21 @@ export function selectionScaleForDimension(
 	origin: SelectionOrigin,
 	dimension: "width" | "height",
 	nextDimension: number,
+	constrainProportions = false,
 ): SelectionScale | null {
 	if (!Number.isFinite(nextDimension) || nextDimension < 0) return null
 	const width = bounds.maxX - bounds.minX
 	const height = bounds.maxY - bounds.minY
 	const sourceDimension = dimension === "width" ? width : height
 	if (sourceDimension === 0) return null
+	if (constrainProportions && (width === 0 || height === 0)) return null
 	const anchor = selectionOriginPosition(bounds, origin)
+	const factor = nextDimension / sourceDimension
 	return {
 		anchorX: anchor.x,
 		anchorY: anchor.y,
-		scaleX: dimension === "width" ? nextDimension / width : 1,
-		scaleY: dimension === "height" ? nextDimension / height : 1,
+		scaleX: constrainProportions || dimension === "width" ? factor : 1,
+		scaleY: constrainProportions || dimension === "height" ? factor : 1,
 	}
 }
 

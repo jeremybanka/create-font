@@ -714,6 +714,12 @@ describe("editor workspace", () => {
 		expect(
 			selectionScaleForDimension(bounds, "top-right", "width", 202),
 		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 1 })
+		expect(
+			selectionScaleForDimension(bounds, "top-right", "width", 202, true),
+		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 2 })
+		expect(
+			selectionScaleForDimension(bounds, "bottom-left", "height", 50.5, true),
+		).toEqual({ anchorX: -10, anchorY: -21, scaleX: 0.5, scaleY: 0.5 })
 	})
 
 	it("rejects undefined scaling from degenerate selection bounds", () => {
@@ -724,6 +730,9 @@ describe("editor workspace", () => {
 		expect(
 			selectionScaleForDimension(vertical, "center", "height", 60),
 		).toEqual({ anchorX: 12, anchorY: 10, scaleX: 1, scaleY: 2 })
+		expect(
+			selectionScaleForDimension(vertical, "center", "height", 60, true),
+		).toBeNull()
 		expect(
 			selectionScaleForDimension(vertical, "center", "height", Infinity),
 		).toBeNull()

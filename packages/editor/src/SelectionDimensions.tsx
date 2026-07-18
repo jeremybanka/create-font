@@ -1,5 +1,5 @@
 import type { JSX } from "preact"
-import { useState } from "preact/hooks"
+import { useId, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { NumericInput } from "./NumericInput.tsx"
@@ -55,7 +55,9 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const layer = useO(workspace.ui.activeLayer)
 	const selection = useO(workspace.ui.selection)
+	const constraintStatusId = useId()
 	const [origin, setOrigin] = useState<SelectionOrigin>("center")
+	const [constrainProportions, setConstrainProportions] = useState(false)
 	const nodes = layer?.contours.flatMap((contour) => contour.nodes) ?? []
 	const controls = resolveSelectionControls(nodes, selection)
 	const bounds = boundsOfControls(controls)
@@ -63,8 +65,13 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 		bounds === null ? null : selectionOriginPosition(bounds, origin)
 	const width = bounds === null ? 0 : bounds.maxX - bounds.minX
 	const height = bounds === null ? 0 : bounds.maxY - bounds.minY
+	const proportionsAvailable = bounds !== null && width > 0 && height > 0
 	const commit = (result: SelectionTransformResult): void => {
-		if (result.points.length === 0 && result.handles.length === 0) return
+		if (
+			activeGlyphId === null ||
+			(result.points.length === 0 && result.handles.length === 0)
+		)
+			return
 		workspace.font.actions.transformControls({
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
@@ -83,7 +90,13 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 	}
 	const resize = (dimension: "width" | "height", value: number): void => {
 		if (bounds === null) return
-		const scale = selectionScaleForDimension(bounds, origin, dimension, value)
+		const scale = selectionScaleForDimension(
+			bounds,
+			origin,
+			dimension,
+			value,
+			constrainProportions && proportionsAvailable,
+		)
 		if (scale !== null) commit(scaleSelectionControls(controls, scale))
 	}
 	const movePickerFocus = (
@@ -110,6 +123,29 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 			?.querySelector<HTMLButtonElement>(`button[data-origin="${next}"]`)
 			?.focus()
 	}
+	const constraintControl = (
+		<selection-constraint>
+			<label>
+				<input
+					type="checkbox"
+					checked={constrainProportions}
+					disabled={!proportionsAvailable}
+					aria-describedby={constraintStatusId}
+					onChange={(event) =>
+						setConstrainProportions(event.currentTarget.checked)
+					}
+				/>
+				<span>Constrain proportions</span>
+			</label>
+			<small id={constraintStatusId} aria-live="polite">
+				{!proportionsAvailable
+					? "Unavailable for empty or zero-dimension selections."
+					: constrainProportions
+						? `Width and height scale together from the ${ORIGIN_LABELS[origin].toLowerCase()} origin.`
+						: "Width and height scale independently."}
+			</small>
+		</selection-constraint>
+	)
 
 	return (
 		<selection-dimensions className={css.class}>
@@ -134,6 +170,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							</label>
 						))}
 					</selection-fields>
+					{constraintControl}
 				</>
 			) : (
 				<>
@@ -206,6 +243,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							/>
 						</label>
 					</selection-fields>
+					{constraintControl}
 					{width === 0 || height === 0 ? (
 						<selection-degenerate role="status">
 							Zero dimensions cannot be expanded numerically; position and the
