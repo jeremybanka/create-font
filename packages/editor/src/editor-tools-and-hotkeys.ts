@@ -122,6 +122,7 @@ const directionChanges = new WeakMap<
 >()
 
 function rememberDirectionChange(context: ToolContext): void {
+	if (context.activeGlyphId === null) return
 	let byGlyph = directionChanges.get(context.workspace)
 	if (byGlyph === undefined) {
 		byGlyph = new Map()
@@ -165,6 +166,7 @@ function inversionCenter(contour: EditorCanvasContour): {
 }
 
 function directionChangeAt(context: ToolContext, entry: number): boolean {
+	if (context.activeGlyphId === null) return false
 	return (
 		directionChanges
 			.get(context.workspace)
@@ -251,7 +253,9 @@ export const TOOLS = {
 		hotkey: { key: "r", shift: true },
 		icon: "ShuffleIcon",
 		status: (context) =>
-			context.editingTextIndex !== null && selectedContour(context) !== null
+			context.activeGlyphId !== null &&
+			context.editingTextIndex !== null &&
+			selectedContour(context) !== null
 				? "ready"
 				: "disabled",
 		do: (context) => {
@@ -274,10 +278,13 @@ export const TOOLS = {
 		hotkey: { key: "h", shift: true },
 		icon: "TransformIcon",
 		status: (context) =>
-			context.editingTextIndex !== null && selectedContour(context) !== null
+			context.activeGlyphId !== null &&
+			context.editingTextIndex !== null &&
+			selectedContour(context) !== null
 				? "ready"
 				: "disabled",
 		do: (context) => {
+			if (context.activeGlyphId === null) return
 			const contour = selectedContour(context)
 			if (contour === null) return
 			const center = inversionCenter(contour)
@@ -301,10 +308,13 @@ export const TOOLS = {
 		hotkey: { key: "v", shift: true },
 		icon: "TransformIcon",
 		status: (context) =>
-			context.editingTextIndex !== null && selectedContour(context) !== null
+			context.activeGlyphId !== null &&
+			context.editingTextIndex !== null &&
+			selectedContour(context) !== null
 				? "ready"
 				: "disabled",
 		do: (context) => {
+			if (context.activeGlyphId === null) return
 			const contour = selectedContour(context)
 			if (contour === null) return
 			const center = inversionCenter(contour)
@@ -329,7 +339,8 @@ export const TOOLS = {
 		status: (context) => {
 			const nodes = context.selection.filter((target) => target.kind === "node")
 			const contour = selectedContour(context)
-			return context.editingTextIndex !== null &&
+			return context.activeGlyphId !== null &&
+				context.editingTextIndex !== null &&
 				nodes.length === 1 &&
 				contour?.closed &&
 				contour.nodes[0]?.pointId !== nodes[0]?.pointId

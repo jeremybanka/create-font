@@ -36,6 +36,7 @@ import {
 	editorControlHitRadii,
 	nearestEditorControlHit,
 	resolveEditorCanvasHit,
+	selectionOwnsEditorSegment,
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
 import { BASE_CANVAS_SCALE, zoomCanvasView } from "./canvas-view.ts"
@@ -110,6 +111,7 @@ import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
 import {
 	copyOutlineSelection,
 	OUTLINE_CLIPBOARD_MIME,
+	outlinePasteSelectionTargets,
 	outlineClipboardPlainText,
 	parseOutlineClipboard,
 	prepareOutlinePaste,
@@ -169,13 +171,13 @@ interface TransformDrag {
 }
 
 interface GroupDrag {
-	readonly target: EditorSelectionTarget
 	readonly targetX: number
 	readonly targetY: number
 	readonly node: LiveGroupDragTarget["node"]
 	readonly controls: readonly ResolvedSelectionControl[]
 	readonly bounds: SelectionBounds
 	readonly selectedPointIds: ReadonlySet<PointId>
+	readonly restoreTargetAfterCommit: boolean
 	lastRawDelta: Readonly<{ x: number; y: number }> | null
 }
 
@@ -670,6 +672,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		penContourResumeRef.current = null
 		setActiveSnaps([])
 		pointDragRef.current = null
+		const interruptedGroupDrag = groupDragRef.current
+		if (interruptedGroupDrag?.restoreTargetAfterCommit) {
+			interruptedGroupDrag.node.position({
+				x: interruptedGroupDrag.targetX,
+				y: interruptedGroupDrag.targetY,
+			})
+			interruptedGroupDrag.node.getLayer()?.batchDraw()
+		}
 		groupDragRef.current = null
 		setTransformPreview(null)
 		setTransformCursor(null)
@@ -1003,16 +1013,46 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			setSelection(rigidSelection)
 		}
 		const nextGroupDrag = {
-			target,
 			targetX,
 			targetY,
 			node,
 			controls,
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
+			restoreTargetAfterCommit: false,
 			lastRawDelta: null,
 		}
 		groupDragRef.current = nextGroupDrag
+		return true
+	}
+	const beginSegmentGroupDrag = (
+		contour: (typeof visibleContours)[number],
+		event: KonvaEventObject<DragEvent>,
+	): boolean => {
+		if (event.evt.altKey) return false
+		const pointer = pointerInEditingGlyph(event)
+		if (pointer === null) return false
+		const nearest = nearestEditorSegment(contour.nodes, contour.closed, pointer)
+		if (
+			nearest === null ||
+			!selectionOwnsEditorSegment(contour, nearest.segmentIndex, selection)
+		)
+			return false
+		const rigidSelection = selectionForRigidTranslation(allPoints, selection)
+		const controls = resolveSelectionControls(allPoints, rigidSelection)
+		const bounds = boundsOfControls(controls)
+		if (controls.length < 2 || bounds === null) return false
+		if (rigidSelection.length !== selection.length) setSelection(rigidSelection)
+		groupDragRef.current = {
+			targetX: 0,
+			targetY: 0,
+			node: event.target,
+			controls,
+			bounds,
+			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
+			restoreTargetAfterCommit: true,
+			lastRawDelta: null,
+		}
 		return true
 	}
 	const applyGroupDrag = (
@@ -1125,6 +1165,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			glyphId: activeGlyphId,
 			...resolved.preview,
 		})
+		if (currentGroupDrag.restoreTargetAfterCommit) {
+			currentGroupDrag.node.position({
+				x: currentGroupDrag.targetX,
+				y: currentGroupDrag.targetY,
+			})
+		}
 		groupDragRef.current = null
 		setTransformPreview(null)
 		setDraggedPoint(null)
@@ -1445,14 +1491,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					return
 				}
 				event.preventDefault()
-				setSelection(
-					Object.freeze(
-						paste.value.selectedPointIds.map((pointId) => ({
-							kind: "node" as const,
-							pointId,
-						})),
-					),
-				)
+				setSelection(outlinePasteSelectionTargets(paste.value.selectedPointIds))
 				setShowNodes(true)
 				setClipboardStatus(
 					`Pasted ${paste.value.selectedPointIds.length} outline node${paste.value.selectedPointIds.length === 1 ? "" : "s"}.`,
@@ -2146,6 +2185,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 											listening={
 												activeTool === "select" || activeTool === "pen"
 											}
+											draggable={activeTool === "select"}
 											onPointerDown={(event) => {
 												if (activeTool !== "pen") return
 												event.cancelBubble = true
@@ -2161,6 +2201,21 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 												if (action === "add-handles") {
 													addHandlesToSegment(contour, event)
 												}
+											}}
+											onDragStart={(event) => {
+												if (
+													activeTool !== "select" ||
+													!beginSegmentGroupDrag(contour, event)
+												) {
+													event.target.stopDrag()
+													event.target.position({ x: 0, y: 0 })
+												}
+											}}
+											onDragMove={(event) => {
+												previewGroupDrag(event)
+											}}
+											onDragEnd={(event) => {
+												commitGroupDrag(event)
 											}}
 										/>
 									))}

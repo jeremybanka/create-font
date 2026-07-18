@@ -53,6 +53,32 @@ export interface EditorSegmentHit {
 	readonly distancePx: number
 }
 
+/** A path segment belongs to a selection only when both endpoint nodes do. */
+export function selectionOwnsEditorSegment(
+	contour: Pick<EditorCanvasContour, "closed" | "nodes">,
+	segmentIndex: number,
+	selection: readonly EditorSelectionTarget[],
+): boolean {
+	const segmentCount = contour.closed
+		? contour.nodes.length
+		: Math.max(0, contour.nodes.length - 1)
+	if (
+		!Number.isInteger(segmentIndex) ||
+		segmentIndex < 0 ||
+		segmentIndex >= segmentCount
+	)
+		return false
+	const from = contour.nodes[segmentIndex]
+	const to = contour.nodes[(segmentIndex + 1) % contour.nodes.length]
+	if (from === undefined || to === undefined) return false
+	const selectedNodes = new Set(
+		selection.flatMap((target) =>
+			target.kind === "node" ? [target.pointId] : [],
+		),
+	)
+	return selectedNodes.has(from.pointId) && selectedNodes.has(to.pointId)
+}
+
 export type EditorCanvasHit = EditorControlHit | EditorSegmentHit
 
 const squaredDistance = (

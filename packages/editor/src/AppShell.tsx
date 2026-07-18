@@ -31,6 +31,7 @@ import { FontInfo } from "./FontInfo.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { useO, useOF, useOptionalOF, useOptionalTL } from "./state-hooks.ts"
+import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,
 	type TilingWorkspaceStatus,
@@ -79,6 +80,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const previewText = useO(workspace.ui.previewText)
 	const faviconHref = useO(workspace.ui.faviconHref)
 	const visualDebug = useO(workspace.ui.visualDebug)
+	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const history = useOptionalTL(
 		workspace.font.glyphHistoryTimelines,
 		activeGlyphId,
@@ -170,6 +172,10 @@ export function AppShell({ workspace }: AppShellProps) {
 					: toolDisabledReason(tool, toolContext),
 			do: () => tool.do(toolContext),
 		})),
+		selectionProportionPaletteCommand(
+			constrainProportions,
+			workspace.actions.toggleConstrainProportions,
+		),
 		...visualDebugPaletteCommands(visualDebug, (id) =>
 			workspace.actions.toggleVisualDebug(id),
 		),
