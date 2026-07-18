@@ -230,7 +230,7 @@ export const TOOLS = {
 		id: "knife",
 		displayName: "Knife",
 		hotkey: { key: "k" },
-		icon: "LinkBreak1Icon",
+		icon: "HobbyKnifeIcon",
 		status: ({ activeTool, editingTextIndex }) =>
 			editingTextIndex === null
 				? "disabled"

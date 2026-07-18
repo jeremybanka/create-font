@@ -73,6 +73,7 @@ describe("editor tools and hotkeys", () => {
 		)
 		expect(TOOLS.PEN.hotkey).toEqual({ key: "q" })
 		expect(TOOLS.KNIFE.hotkey).toEqual({ key: "k" })
+		expect(TOOLS.KNIFE.icon).toBe("HobbyKnifeIcon")
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
 	})
 
