@@ -126,6 +126,15 @@ import {
 	type PenPoint,
 } from "./pen-gesture.ts"
 import {
+	resolveShapeGesture,
+	shapeGeometry,
+	shapeLayerCoordinates,
+	shapeSnapsForDisplay,
+	type ShapeDragDirection,
+	type ShapeGestureResolution,
+	type ShapeToolKind,
+} from "./shape-gesture.ts"
+import {
 	isEditablePreviewTarget,
 	isMomentaryPreviewKey,
 	shouldStartMomentaryPreview,
@@ -218,6 +227,21 @@ interface PenHoverPreview {
 	readonly pointer: PenPoint
 	shiftKey: boolean
 	altKey: boolean
+}
+
+interface ShapeDragSession {
+	readonly pointerId: number
+	readonly kind: ShapeToolKind
+	readonly anchor: PenPoint
+	readonly downScreen: PenPoint
+	readonly captureTarget: HTMLCanvasElement | null
+	readonly captureCancelListener: ((event: PointerEvent) => void) | null
+	rawCandidate: PenPoint
+	snappedCandidate: PenPoint
+	snaps: readonly ActiveSnap[]
+	currentScreen: PenPoint
+	direction: ShapeDragDirection
+	shiftKey: boolean
 }
 
 type PenPreviewFrame =
@@ -319,6 +343,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		y: number
 	}> | null>(null)
 	const [penGesture, setPenGesture] = useState<PenPlacementGesture | null>(null)
+	const [shapeGesture, setShapeGesture] = useState<ShapeDragSession | null>(
+		null,
+	)
+	const [shapeHoverSnaps, setShapeHoverSnaps] = useState<readonly ActiveSnap[]>(
+		[],
+	)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
 	const [transformCursor, setTransformCursor] = useState<string | null>(null)
@@ -331,6 +361,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		"append",
 	)
 	const penEntitySequence = useRef(0)
+	const shapeEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
 	const penContourResumeRef = useRef<ContourId | null>(null)
@@ -351,6 +382,32 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 	}
 	const penPreviewPublisher = penPreviewPublisherRef.current
+	const shapeGestureRef = useRef<ShapeDragSession | null>(null)
+	const shapePreviewPublisherRef =
+		useRef<AnimationFramePublisher<ShapeDragSession> | null>(null)
+	if (shapePreviewPublisherRef.current === null) {
+		shapePreviewPublisherRef.current = createAnimationFramePublisher(
+			(gesture) => {
+				if (shapeGestureRef.current?.pointerId !== gesture.pointerId) return
+				setShapeGesture(gesture)
+			},
+		)
+	}
+	const shapePreviewPublisher = shapePreviewPublisherRef.current
+	const shapeHoverPublisherRef = useRef<AnimationFramePublisher<
+		readonly ActiveSnap[]
+	> | null>(null)
+	if (shapeHoverPublisherRef.current === null) {
+		shapeHoverPublisherRef.current = createAnimationFramePublisher((snaps) => {
+			if (shapeGestureRef.current !== null) return
+			setShapeHoverSnaps(snaps)
+		})
+	}
+	const shapeHoverPublisher = shapeHoverPublisherRef.current
+	const clearShapeHoverGuides = (): void => {
+		shapeHoverPublisher.cancel()
+		setShapeHoverSnaps([])
+	}
 	const schedulePenGesturePreview = (gesture: PenPlacementGesture): void => {
 		penPreviewPublisher.schedule({ kind: "gesture", gesture: { ...gesture } })
 	}
@@ -740,8 +797,42 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			)
 		}
 	}
+	const activeShapeKind: ShapeToolKind | null =
+		activeTool === "rect" || activeTool === "ellipse" ? activeTool : null
+	const resolveLiveShape = (
+		gesture: ShapeDragSession,
+	): ShapeGestureResolution =>
+		resolveShapeGesture({
+			anchor: gesture.anchor,
+			rawCandidate: gesture.rawCandidate,
+			snappedCandidate: gesture.snappedCandidate,
+			downScreen: gesture.downScreen,
+			currentScreen: gesture.currentScreen,
+			previousDirection: gesture.direction,
+			shiftKey: gesture.shiftKey,
+		})
+	const shapeGestureResolution =
+		shapeGesture === null ? null : resolveLiveShape(shapeGesture)
+	const shapePreviewGeometry =
+		shapeGestureResolution === null
+			? []
+			: shapeGeometry(
+					shapeGesture?.kind ?? "rect",
+					shapeGestureResolution.bounds,
+				)
+	const shapePreviewPath = editorContourToPath(
+		shapePreviewGeometry.map((point, index) => ({
+			...point,
+			pointId: `point:shape-preview:${index}` as PointId,
+		})),
+		true,
+	)
 	const visibleSnaps =
-		activeTool === "pen" ? (penPlacement?.snaps ?? []) : activeSnaps
+		activeTool === "pen"
+			? (penPlacement?.snaps ?? [])
+			: activeShapeKind !== null
+				? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
+				: activeSnaps
 	const rememberTangentDirection = (
 		constraint: TangentSlideConstraint,
 	): void => {
@@ -1010,6 +1101,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
+			const shape = shapeGestureRef.current
+			if (shape !== null) {
+				shape.shiftKey = event.shiftKey
+				shapePreviewPublisher.schedule({ ...shape })
+				return
+			}
 			const gesture = penGestureRef.current
 			if (gesture !== null) {
 				gesture.shiftKey = event.shiftKey
@@ -1033,11 +1130,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		const resetModifiers = (): void => {
 			setShiftHeld(false)
 			setAltHeld(false)
+			if (shapeGestureRef.current !== null) {
+				cancelShapeGesture()
+				return
+			}
 			if (penGestureRef.current !== null) {
 				cancelPenGesture()
 				return
 			}
 			clearPenHoverPreview()
+			clearShapeHoverGuides()
 			cancelPointDrag()
 			cancelHandleDrag()
 		}
@@ -1049,7 +1151,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			window.removeEventListener("keyup", updateModifier)
 			window.removeEventListener("blur", resetModifiers)
 			penPreviewPublisher.cancel()
+			shapePreviewPublisher.cancel()
+			shapeHoverPublisher.cancel()
 			penHoverRef.current = null
+			const shape = shapeGestureRef.current
+			shapeGestureRef.current = null
+			if (shape !== null) releaseShapeCapture(shape)
 			const gesture = penGestureRef.current
 			penGestureRef.current = null
 			if (gesture !== null) releasePenCapture(gesture)
@@ -1075,6 +1182,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				isEditablePreviewTarget(event.target) ||
 				groupDragRef.current !== null ||
 				penGestureRef.current !== null ||
+				shapeGestureRef.current !== null ||
 				pointDragRef.current !== null ||
 				draggedHandle !== null ||
 				transformDrag !== null ||
@@ -1111,7 +1219,28 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	useLayoutEffect(() => {
 		tangentDirectionRef.current = null
 		penPreviewPublisher.cancel()
+		shapePreviewPublisher.cancel()
+		shapeHoverPublisher.cancel()
 		penHoverRef.current = null
+		const shape = shapeGestureRef.current
+		shapeGestureRef.current = null
+		if (
+			shape !== null &&
+			shape.captureTarget !== null &&
+			shape.captureCancelListener !== null
+		) {
+			shape.captureTarget.removeEventListener(
+				"pointercancel",
+				shape.captureCancelListener,
+			)
+			shape.captureTarget.removeEventListener(
+				"lostpointercapture",
+				shape.captureCancelListener,
+			)
+		}
+		if (shape?.captureTarget?.hasPointerCapture(shape.pointerId)) {
+			shape.captureTarget.releasePointerCapture(shape.pointerId)
+		}
 		const gesture = penGestureRef.current
 		penGestureRef.current = null
 		if (
@@ -1135,6 +1264,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		setPenDirection("append")
 		setPenPointer(null)
 		setPenGesture(null)
+		setShapeGesture(null)
+		setShapeHoverSnaps([])
 		penContourResumeRef.current = null
 		setActiveSnaps([])
 		cancelPointDrag()
@@ -1295,6 +1426,23 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			}
 		}
 	}
+	const nextShapeEntityId = (
+		kind: "contour" | "point",
+		shapeKind: ShapeToolKind,
+	) => {
+		const occupied = new Set<string>([
+			...contours.map((contour) => contour.id),
+			...allPoints.map((point) => point.pointId),
+		])
+		while (true) {
+			const sequence = shapeEntitySequence.current
+			shapeEntitySequence.current += 1
+			const id = `${kind}:${activeGlyphId}:${shapeKind}:${sequence}`
+			if (!occupied.has(id)) {
+				return kind === "contour" ? (id as ContourId) : (id as PointId)
+			}
+		}
+	}
 	const nextClipboardEntityId = (kind: "contour" | "point") => {
 		const source = workspace.font.read.editorSource()
 		const occupied = new Set<string>(
@@ -1314,7 +1462,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			}
 		}
 	}
-	const penLayerTransforms = masterIds.map((sourceMasterId) => ({
+	const authoringLayerTransforms = masterIds.map((sourceMasterId) => ({
 		masterId: sourceMasterId,
 		xScale:
 			sourceMasterId === activeMasterId
@@ -1327,7 +1475,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		point: PenPoint,
 		gesture: PenGestureResolution,
 		draggedHandle: PenHandleKind,
-	) => penLayerCoordinates(point, gesture, penLayerTransforms, draggedHandle)
+	) =>
+		penLayerCoordinates(point, gesture, authoringLayerTransforms, draggedHandle)
 	const commitPenPoint = (
 		point: PenPoint,
 		gesture: PenGestureResolution,
@@ -1578,6 +1727,151 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			commitPenClosure(resolution)
 		}
 		releasePenCapture(gesture)
+	}
+	const releaseShapeCapture = (gesture: ShapeDragSession): void => {
+		if (
+			gesture.captureTarget !== null &&
+			gesture.captureCancelListener !== null
+		) {
+			gesture.captureTarget.removeEventListener(
+				"pointercancel",
+				gesture.captureCancelListener,
+			)
+			gesture.captureTarget.removeEventListener(
+				"lostpointercapture",
+				gesture.captureCancelListener,
+			)
+		}
+		if (gesture.captureTarget?.hasPointerCapture(gesture.pointerId)) {
+			gesture.captureTarget.releasePointerCapture(gesture.pointerId)
+		}
+	}
+	const cancelShapeGesture = (): void => {
+		shapePreviewPublisher.cancel()
+		const gesture = shapeGestureRef.current
+		shapeGestureRef.current = null
+		setShapeGesture(null)
+		setShapeHoverSnaps([])
+		if (gesture !== null) releaseShapeCapture(gesture)
+	}
+	const beginShapeGesture = (event: KonvaEventObject<PointerEvent>): void => {
+		if (editingTextIndex === null || activeShapeKind === null) return
+		if (shapeGestureRef.current !== null) return
+		if (event.evt.button !== 0 || !event.evt.isPrimary) return
+		const rawPoint = pointerInEditingGlyph(event)
+		if (rawPoint === null) return
+		event.cancelBubble = true
+		event.evt.preventDefault()
+		const placement = resolveCanvasGesturePoint(
+			"point:shape-placement-preview" as PointId,
+			null,
+			rawPoint,
+			false,
+		)
+		const anchor = { x: placement.x, y: placement.y }
+		clearShapeHoverGuides()
+		const nativeTarget =
+			event.evt.target instanceof HTMLCanvasElement ? event.evt.target : null
+		const captureCancelListener = (nativeEvent: PointerEvent): void => {
+			if (nativeEvent.pointerId === event.evt.pointerId) cancelShapeGesture()
+		}
+		const screen = pointerOnCanvas(event)
+		const gesture: ShapeDragSession = {
+			pointerId: event.evt.pointerId,
+			kind: activeShapeKind,
+			anchor,
+			downScreen: screen,
+			captureTarget: nativeTarget,
+			captureCancelListener,
+			rawCandidate: anchor,
+			snappedCandidate: anchor,
+			snaps: placement.snaps,
+			currentScreen: screen,
+			direction: { x: null, y: null },
+			shiftKey: event.evt.shiftKey,
+		}
+		shapeGestureRef.current = gesture
+		nativeTarget?.addEventListener("pointercancel", captureCancelListener)
+		nativeTarget?.addEventListener("lostpointercapture", captureCancelListener)
+		nativeTarget?.setPointerCapture(event.evt.pointerId)
+		setShapeGesture(gesture)
+	}
+	const updateShapePointer = (
+		event: KonvaEventObject<PointerEvent>,
+	): ShapeDragSession | null => {
+		const gesture = shapeGestureRef.current
+		const rawPoint = pointerInEditingGlyph(event)
+		if (rawPoint === null) {
+			if (gesture === null) clearShapeHoverGuides()
+			return null
+		}
+		const snapped = resolveCanvasGesturePoint(
+			"point:shape-placement-preview" as PointId,
+			null,
+			rawPoint,
+			false,
+		)
+		if (gesture === null) {
+			shapeHoverPublisher.schedule(snapped.snaps)
+			return null
+		}
+		if (gesture.pointerId !== event.evt.pointerId) return null
+		gesture.rawCandidate = rawPoint
+		gesture.snappedCandidate = { x: snapped.x, y: snapped.y }
+		gesture.snaps = snapped.snaps
+		gesture.currentScreen = pointerOnCanvas(event)
+		gesture.shiftKey = event.evt.shiftKey
+		gesture.direction = resolveLiveShape(gesture).direction
+		shapePreviewPublisher.schedule({ ...gesture })
+		return gesture
+	}
+	const finishShapeGesture = (event: KonvaEventObject<PointerEvent>): void => {
+		const liveGesture = updateShapePointer(event)
+		if (liveGesture === null) return
+		const pending = shapePreviewPublisher.consume()
+		const gesture = pending ?? { ...liveGesture }
+		const resolution = resolveLiveShape(gesture)
+		shapeGestureRef.current = null
+		setShapeGesture(null)
+		shapeHoverPublisher.schedule(
+			resolveCanvasGesturePoint(
+				"point:shape-placement-preview" as PointId,
+				null,
+				gesture.rawCandidate,
+				false,
+			).snaps,
+		)
+		releaseShapeCapture(liveGesture)
+		if (!resolution.valid || activeGlyphId === null) return
+
+		const geometry = shapeGeometry(gesture.kind, resolution.bounds)
+		if (geometry.length === 0) return
+		const contourId = nextShapeEntityId("contour", gesture.kind) as ContourId
+		const pointIds = geometry.map(
+			() => nextShapeEntityId("point", gesture.kind) as PointId,
+		)
+		workspace.font.actions.createCompleteContour({
+			glyphId: activeGlyphId,
+			contour: {
+				id: contourId,
+				closed: true,
+				points: geometry.map((point, index) => ({
+					id: pointIds[index]!,
+					mode: point.mode,
+				})),
+			},
+			layers: shapeLayerCoordinates(
+				geometry,
+				pointIds,
+				authoringLayerTransforms,
+			),
+		})
+		setSelection(
+			Object.freeze(
+				pointIds.map((pointId) => ({ kind: "node" as const, pointId })),
+			),
+		)
+		setShowNodes(true)
 	}
 	const roundedTransform = (
 		result: SelectionTransformResult,
@@ -1875,7 +2169,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const selectNearestCanvasControl = (
 		event: KonvaEventObject<MouseEvent | TouchEvent>,
 	): void => {
-		if (editingTextIndex === null || activeTool === "pen") return
+		if (
+			editingTextIndex === null ||
+			activeTool === "pen" ||
+			activeTool === "rect" ||
+			activeTool === "ellipse"
+		)
+			return
 		const pointer = pointerInEditingGlyph(event)
 		if (pointer === null) return
 		const hit = nearestEditorControlHit(
@@ -1890,7 +2190,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const activateNearestCanvasDoubleClick = (
 		event: KonvaEventObject<MouseEvent | TouchEvent>,
 	): void => {
-		if (editingTextIndex === null || activeTool === "pen") return
+		if (
+			editingTextIndex === null ||
+			activeTool === "pen" ||
+			activeTool === "rect" ||
+			activeTool === "ellipse"
+		)
+			return
 		const pointer = pointerInEditingGlyph(event)
 		if (pointer === null) return
 		const hit = resolveEditorCanvasHit({
@@ -2132,6 +2438,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					cancelPenGesture()
 					return
 				}
+				if (event.key === "Escape" && shapeGestureRef.current !== null) {
+					event.preventDefault()
+					cancelShapeGesture()
+					return
+				}
 				if (event.key === "Escape" && transformDrag !== null) {
 					event.preventDefault()
 					setTransformDrag(null)
@@ -2352,6 +2663,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				<Stage
 					width={width}
 					height={height}
+					onPointerDown={(event: KonvaEventObject<PointerEvent>) => {
+						if (momentaryPreview || activeShapeKind === null) return
+						beginShapeGesture(event)
+					}}
 					onClick={selectNearestCanvasControl}
 					onTap={selectNearestCanvasControl}
 					onDblClick={activateNearestCanvasDoubleClick}
@@ -2383,7 +2698,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (momentaryPreview) return
 						if (editingTextIndex !== null) {
-							if (activeTool === "pen") return
+							if (activeTool === "pen" || activeShapeKind !== null) return
 							if (!canStartBoxSelectionOn(event.target.name())) return
 							const point = pointerInEditingGlyph(event)
 							if (point === null) return
@@ -2410,7 +2725,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					}}
 					onMouseMove={(event: KonvaEventObject<MouseEvent>) => {
 						if (momentaryPreview) return
-						if (editingTextIndex !== null && activeTool === "pen") return
+						if (
+							editingTextIndex !== null &&
+							(activeTool === "pen" || activeShapeKind !== null)
+						)
+							return
 						if (selectionBox === null) return
 						const point = pointerInEditingGlyph(event)
 						if (point === null) return
@@ -2423,24 +2742,33 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					onMouseLeave={() => {
 						if (activeTool === "pen" && penGestureRef.current === null)
 							clearPenHoverPreview()
+						if (activeShapeKind !== null && shapeGestureRef.current === null)
+							clearShapeHoverGuides()
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
 						if (editingTextIndex !== null && activeTool === "pen")
 							updatePenPointer(event)
+						else if (editingTextIndex !== null && activeShapeKind !== null)
+							updateShapePointer(event)
 					}}
 					onPointerUp={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
 						if (activeTool === "pen") finishPenGesture(event)
+						else if (activeShapeKind !== null) finishShapeGesture(event)
 					}}
 					onPointerCancel={(event: KonvaEventObject<PointerEvent>) => {
 						if (penGestureRef.current?.pointerId === event.evt.pointerId)
 							cancelPenGesture()
+						if (shapeGestureRef.current?.pointerId === event.evt.pointerId)
+							cancelShapeGesture()
 						cancelDirectDrag(event.evt.pointerId)
 					}}
 					onLostPointerCapture={(event: KonvaEventObject<PointerEvent>) => {
 						if (penGestureRef.current?.pointerId === event.evt.pointerId)
 							cancelPenGesture()
+						if (shapeGestureRef.current?.pointerId === event.evt.pointerId)
+							cancelShapeGesture()
 						cancelDirectDrag(event.evt.pointerId)
 					}}
 					onMouseUp={() => {
@@ -2822,6 +3150,18 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										strokeWidth={1.25 * inverseScale}
 										listening={false}
 									/>
+									{shapePreviewPath === "" ? null : (
+										<Path
+											name="shape-placement-preview"
+											data={shapePreviewPath}
+											fill={palette.accent}
+											opacity={0.12}
+											stroke={palette.accent}
+											strokeWidth={1.5 * inverseScale}
+											dash={[5 * inverseScale, 4 * inverseScale]}
+											listening={false}
+										/>
+									)}
 									{penCandidateNode === null ? null : (
 										<Group listening={false}>
 											{penPendingPath === "" ? null : (
@@ -3051,6 +3391,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																>,
 															): void => {
 																event.cancelBubble = true
+																if (activeTool !== "select") return
 																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
 															}
@@ -3356,11 +3697,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				}}
 																				onDblClick={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("incoming", event)
+																					if (activeTool === "select")
+																						selectHandle("incoming", event)
 																				}}
 																				onDblTap={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("incoming", event)
+																					if (activeTool === "select")
+																						selectHandle("incoming", event)
 																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
@@ -3504,11 +3847,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																				}}
 																				onDblClick={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("outgoing", event)
+																					if (activeTool === "select")
+																						selectHandle("outgoing", event)
 																				}}
 																				onDblTap={(event) => {
 																					event.cancelBubble = true
-																					selectHandle("outgoing", event)
+																					if (activeTool === "select")
+																						selectHandle("outgoing", event)
 																				}}
 																				onDragStart={(
 																					event: KonvaEventObject<DragEvent>,
@@ -3858,15 +4203,17 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				and drag for opposite Bézier handles. Hold Shift to constrain node
 				drags, Pen placement, or Pen and Select handles; click or drag a loose
 				endpoint to resume its path, and Option/Alt-drag to break its tangent.
-				Hold E for a clean glyph preview. Press Escape to cancel a Pen gesture,
-				return to typing, or cancel a transform. Drag an empty area to
-				box-select controls; press Command or Control+A to select all, Shift+A
-				to align, and Delete to remove the selection. Arrow keys nudge selected
-				nodes and handles; Shift uses 10 units and Command or Control uses 100.
-				Option or Alt-drag or nudge one soft node to slide it between its fixed
-				handles. Use Command or Control+C and V to copy and paste outline
-				selections. Hold Option or Alt while deleting nodes to break paths open,
-				or while deleting a handle to remove its adjoining segment.
+				Hold E for a clean glyph preview. Use Rect or Ellipse to drag a complete
+				shape, and hold Shift for a square or circle. Press Escape to cancel a
+				Pen or shape gesture, return to typing, or cancel a transform. Drag an
+				empty area to box-select controls; press Command or Control+A to select
+				all, Shift+A to align, and Delete to remove the selection. Arrow keys
+				nudge selected nodes and handles; Shift uses 10 units and Command or
+				Control uses 100. Option or Alt-drag or nudge one soft node to slide it
+				between its fixed handles. Use Command or Control+C and V to copy and
+				paste outline selections. Hold Option or Alt while deleting nodes to
+				break paths open, or while deleting a handle to remove its adjoining
+				segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
@@ -3876,11 +4223,13 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 							? `Typing mode at text position ${caretIndex}.`
 							: activeTool === "pen" && penPlacement !== null
 								? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
-								: selection.length === 0
-									? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-									: selection.length === 1 && selectedPoint !== undefined
-										? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-										: `${selection.length} outline controls selected.`)}
+								: shapeGestureResolution !== null && shapeGesture !== null
+									? `${shapeGesture.kind === "rect" ? "Rect" : "Ellipse"} preview from ${shapeGestureResolution.bounds.minX}, ${shapeGestureResolution.bounds.minY} to ${shapeGestureResolution.bounds.maxX}, ${shapeGestureResolution.bounds.maxY}.`
+									: selection.length === 0
+										? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+										: selection.length === 1 && selectedPoint !== undefined
+											? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+											: `${selection.length} outline controls selected.`)}
 			</output>
 		</glyph-canvas>
 	)

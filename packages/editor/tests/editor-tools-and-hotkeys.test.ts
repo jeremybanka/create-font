@@ -72,6 +72,21 @@ describe("editor tools and hotkeys", () => {
 		expect(TOOLS.SELECT.hotkey).toEqual({ key: "v" })
 	})
 
+	it("maps R to Rect and O to Ellipse without breaking Shift+R", () => {
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "r" }), true)?.id).toBe(
+			"rect",
+		)
+		expect(toolForKeyboardEvent(keyboardEvent({ key: "o" }), true)?.id).toBe(
+			"ellipse",
+		)
+		expect(
+			toolForKeyboardEvent(keyboardEvent({ key: "r", shiftKey: true }), true)
+				?.id,
+		).toBe("reverse-path")
+		expect(TOOLS.RECT.hotkey).toEqual({ key: "r" })
+		expect(TOOLS.ELLIPSE.hotkey).toEqual({ key: "o" })
+	})
+
 	it("ignores shortcuts already consumed by an interaction mode", () => {
 		expect(
 			toolForKeyboardEvent(

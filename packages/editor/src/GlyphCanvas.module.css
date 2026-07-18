@@ -32,6 +32,10 @@ glyph-canvas.class {
 		&[data-editing="true"] {
 			cursor: default;
 		}
+
+		&[data-editing="true"]:is([data-tool="rect"], [data-tool="ellipse"]) {
+			cursor: crosshair;
+		}
 	}
 
 	> p,

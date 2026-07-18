@@ -19,6 +19,16 @@ const keyEvent = (code: string, modifiers: Partial<KeyboardEvent> = {}) => ({
 })
 
 describe("action hotbar", () => {
+	it("places both shape tools in the default authoring group", () => {
+		expect(DEFAULT_HOTBAR_SLOTS.slice(0, 5)).toEqual([
+			"select",
+			"pen",
+			"rect",
+			"ellipse",
+			"transform",
+		])
+	})
+
 	it("maps the twelve unmodified physical keys to stable slots", () => {
 		expect(hotbarSlotIndexForKeyboardEvent(keyEvent("Digit1"))).toBe(0)
 		expect(hotbarSlotIndexForKeyboardEvent(keyEvent("Digit0"))).toBe(9)

@@ -149,29 +149,34 @@ export function AppShell({ workspace }: AppShellProps) {
 				setAddingGlyphs(true)
 			},
 		},
-		...Object.values(TOOLS).map((tool) => ({
-			id: tool.id,
-			displayName:
-				tool.id === "select" || tool.id === "pen" || tool.id === "transform"
+		...Object.values(TOOLS).map((tool) => {
+			const editingTool = [
+				"select",
+				"pen",
+				"rect",
+				"ellipse",
+				"transform",
+			].includes(tool.id)
+			return {
+				id: tool.id,
+				displayName: editingTool
 					? `${tool.displayName} tool`
 					: tool.displayName,
-			category:
-				tool.id === "select" || tool.id === "pen" || tool.id === "transform"
-					? "Tools"
-					: "Edit",
-			description: tool.description,
-			icon: tool.icon,
-			keywords: [tool.id],
-			shortcut: formatHotkey(tool.hotkey).join("+"),
-			checked: tool.status(toolContext) === "active",
-			disabled:
-				routeName !== "canvas" || tool.status(toolContext) === "disabled",
-			disabledReason:
-				routeName !== "canvas"
-					? "Open the canvas to use this editor command."
-					: toolDisabledReason(tool, toolContext),
-			do: () => tool.do(toolContext),
-		})),
+				category: editingTool ? "Tools" : "Edit",
+				description: tool.description,
+				icon: tool.icon,
+				keywords: [tool.id],
+				shortcut: formatHotkey(tool.hotkey).join("+"),
+				checked: tool.status(toolContext) === "active",
+				disabled:
+					routeName !== "canvas" || tool.status(toolContext) === "disabled",
+				disabledReason:
+					routeName !== "canvas"
+						? "Open the canvas to use this editor command."
+						: toolDisabledReason(tool, toolContext),
+				do: () => tool.do(toolContext),
+			}
+		}),
 		selectionProportionPaletteCommand(
 			constrainProportions,
 			workspace.actions.toggleConstrainProportions,
@@ -303,7 +308,7 @@ export function AppShell({ workspace }: AppShellProps) {
 					{routeName === "canvas"
 						? tilingStatus.management
 							? "Tile management · 1–4 columns · J/K tiles · M move · A align · N new · S save · Shift+Space done"
-							: `1–= Hotbar · Shift+1–4 Columns · Q Pen · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+H/V Invert · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
+							: `1–= Hotbar · Shift+1–4 Columns · Q Pen · R Rect · O Ellipse · V Select · T Transform · Shift+A Align · Shift+R Reverse · Shift+H/V Invert · Shift+F Make First · Shift+Space Tiles${tilingStatus.dirty ? " (unsaved)" : ""} · ${MOD_KEY_LABEL}+Shift+P Commands`
 						: `${MOD_KEY_LABEL}+Shift+P Commands · Modified click opens a view in a new tab`}
 				</keyboard-help>
 				<format-label>

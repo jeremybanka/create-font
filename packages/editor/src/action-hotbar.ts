@@ -23,14 +23,14 @@ export const HOTBAR_COMMAND_MIME = "application/x-create-font-command"
 export const DEFAULT_HOTBAR_SLOTS: HotbarSlots = [
 	"select",
 	"pen",
+	"rect",
+	"ellipse",
 	"transform",
 	"undo",
 	"redo",
 	"align-selection",
 	"reverse-path",
 	"make-node-first",
-	null,
-	null,
 	null,
 	null,
 ]

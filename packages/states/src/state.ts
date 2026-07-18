@@ -482,6 +482,16 @@ export interface PasteContoursInput {
 	}[]
 }
 
+/** One complete closed contour ready to append as a single authoring edit. */
+export interface CreateCompleteContourInput {
+	readonly glyphId: GlyphId
+	readonly contour: EditorContourSource
+	readonly layers: readonly {
+		readonly masterId: MasterId
+		readonly points: readonly EditorLayerPointSource[]
+	}[]
+}
+
 export interface SetContourClosedInput {
 	readonly glyphId: GlyphId
 	readonly contourId: ContourId
@@ -5448,6 +5458,148 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const createCompleteContourTransaction = silo.transaction<
+		(input: CreateCompleteContourInput) => void
+	>({
+		key: "createCompleteContour",
+		do: ({ get, set }, input) => {
+			const contourIds = get(glyphContourIdsAtoms, input.glyphId)
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (contourIds === null || layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			if (!input.contour.closed || input.contour.points.length < 3) {
+				throw new TypeError(
+					"A complete authored contour must be closed with at least three points.",
+				)
+			}
+			const pointIds = input.contour.points.map((point) => point.id)
+			assertUnique(pointIds, "Complete contour point IDs")
+			for (const point of input.contour.points) {
+				if (point.mode !== "soft" && point.mode !== "hard") {
+					throw new TypeError('Node mode must be "soft" or "hard".')
+				}
+			}
+			const occupiedContours = new Set<ContourId>()
+			const occupiedPoints = new Set<PointId>()
+			for (const glyphId of get(glyphIdsAtom)) {
+				for (const contourId of get(glyphContourIdsAtoms, glyphId) ?? []) {
+					occupiedContours.add(contourId)
+					for (const pointId of get(contourPointIdsAtoms, [
+						glyphId,
+						contourId,
+					]) ?? []) {
+						occupiedPoints.add(pointId)
+					}
+				}
+			}
+			if (occupiedContours.has(input.contour.id)) {
+				throw new TypeError(`Contour ID ${input.contour.id} is already in use.`)
+			}
+			for (const pointId of pointIds) {
+				if (occupiedPoints.has(pointId)) {
+					throw new TypeError(`Point ID ${pointId} is already in use.`)
+				}
+			}
+
+			assertUnique(
+				input.layers.map((layer) => layer.masterId),
+				"Complete contour layer master IDs",
+			)
+			const layersByMaster = new Map(
+				input.layers.map((layer) => [layer.masterId, layer]),
+			)
+			if (
+				layersByMaster.size !== layerMasterIds.length ||
+				layerMasterIds.some((masterId) => !layersByMaster.has(masterId))
+			) {
+				throw new TypeError(
+					"A complete contour requires coordinates for every glyph layer.",
+				)
+			}
+			const pointIdSet = new Set(pointIds)
+			const modes = new Map(
+				input.contour.points.map((point) => [point.id, point.mode]),
+			)
+			for (const layer of input.layers) {
+				assertUnique(
+					layer.points.map((point) => point.pointId),
+					`Complete contour ${layer.masterId} point IDs`,
+				)
+				if (
+					layer.points.length !== pointIds.length ||
+					layer.points.some((point) => !pointIdSet.has(point.pointId))
+				) {
+					throw new TypeError(
+						`Complete contour layer ${layer.masterId} must contain every point exactly once.`,
+					)
+				}
+				for (const point of layer.points) {
+					if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+						throw new TypeError("Point coordinates must be finite numbers.")
+					}
+					if (point.incoming !== undefined) {
+						assertFiniteVector(point.incoming, "Incoming handle")
+					}
+					if (point.outgoing !== undefined) {
+						assertFiniteVector(point.outgoing, "Outgoing handle")
+					}
+					if (modes.get(point.pointId) === "soft") {
+						if (point.incoming === undefined && point.outgoing === undefined) {
+							throw new TypeError("A soft node requires at least one handle.")
+						}
+						if (
+							point.incoming !== undefined &&
+							point.outgoing !== undefined &&
+							!handlesShareOppositeRay(point.incoming, point.outgoing)
+						) {
+							throw new TypeError(
+								"A soft node's handles must be collinear and opposite.",
+							)
+						}
+					}
+				}
+			}
+
+			set(
+				glyphContourIdsAtoms,
+				input.glyphId,
+				deepFreeze([...contourIds, input.contour.id]),
+			)
+			set(
+				contourPointIdsAtoms,
+				[input.glyphId, input.contour.id],
+				deepFreeze(pointIds),
+			)
+			set(contourClosedAtoms, [input.glyphId, input.contour.id], true)
+			for (const point of input.contour.points) {
+				set(
+					pointAtoms,
+					[input.glyphId, point.id],
+					deepFreeze({ mode: point.mode }),
+				)
+			}
+			for (const layer of input.layers) {
+				for (const point of layer.points) {
+					const atomKey: LayerPointKey = [
+						layer.masterId,
+						input.glyphId,
+						point.pointId,
+					]
+					set(
+						pointPositionSelectors,
+						atomKey,
+						deepFreeze({ x: point.x, y: point.y }),
+					)
+					set(incomingHandleXAtoms, atomKey, point.incoming?.x ?? null)
+					set(incomingHandleYAtoms, atomKey, point.incoming?.y ?? null)
+					set(outgoingHandleXAtoms, atomKey, point.outgoing?.x ?? null)
+					set(outgoingHandleYAtoms, atomKey, point.outgoing?.y ?? null)
+				}
+			}
+		},
+	})
+
 	const pasteContoursTransaction = silo.transaction<
 		(input: PasteContoursInput) => void
 	>({
@@ -5806,6 +5958,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runCreateContour = silo.runTransaction(createContourTransaction)
 	const runSetContourClosed = silo.runTransaction(setContourClosedTransaction)
 	const runCloseContour = silo.runTransaction(closeContourTransaction)
+	const runCreateCompleteContour = silo.runTransaction(
+		createCompleteContourTransaction,
+	)
 	const runPasteContours = silo.runTransaction(pasteContoursTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
 
@@ -5905,6 +6060,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			createContour: createContourTransaction,
 			setContourClosed: setContourClosedTransaction,
 			closeContour: closeContourTransaction,
+			createCompleteContour: createCompleteContourTransaction,
 			pasteContours: pasteContoursTransaction,
 			deleteSelection: deleteSelectionTransaction,
 		},
@@ -5989,6 +6145,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			closeContour(input: CloseContourInput): void {
 				runCloseContour(input)
+				markDocumentChanged()
+			},
+			createCompleteContour(input: CreateCompleteContourInput): void {
+				runCreateCompleteContour(input)
 				markDocumentChanged()
 			},
 			pasteContours(input: PasteContoursInput): void {

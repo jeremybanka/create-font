@@ -62,7 +62,7 @@ export interface PreviewRunLineBreak {
 }
 
 export type PreviewRunItem = PreviewRunGlyph | PreviewRunLineBreak
-export type EditorToolId = "select" | "pen" | "transform"
+export type EditorToolId = "select" | "pen" | "rect" | "ellipse" | "transform"
 
 export interface EditorValidationStatus {
 	readonly ok: boolean
