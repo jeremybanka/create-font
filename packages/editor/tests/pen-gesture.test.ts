@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 
+import { contourStartDirection } from "../src/geometry.ts"
 import {
 	PEN_DRAG_THRESHOLD_PIXELS,
 	penEndpointHandleBeingReplaced,
+	penGestureHandles,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
@@ -33,8 +35,8 @@ describe("Pen gestures", () => {
 			mode: "soft",
 			distancePixels: PEN_DRAG_THRESHOLD_PIXELS,
 			handles: {
-				incoming: { x: 8, y: 0 },
-				outgoing: { x: -8, y: 0 },
+				incoming: { x: -8, y: 0 },
+				outgoing: { x: 8, y: 0 },
 			},
 		})
 	})
@@ -49,8 +51,8 @@ describe("Pen gestures", () => {
 		const commit = resolvePenGesture(input)
 		expect(commit).toEqual(preview)
 		expect(preview.handles).toEqual({
-			incoming: { x: 80, y: 80 },
-			outgoing: { x: -80, y: -80 },
+			incoming: { x: -80, y: -80 },
+			outgoing: { x: 80, y: 80 },
 		})
 	})
 
@@ -75,11 +77,11 @@ describe("Pen gestures", () => {
 			expect(result.kind).toBe("curve")
 			if (result.kind !== "curve") continue
 			const length = Math.hypot(dx, dy)
-			expect(result.handles.incoming.x).toBeCloseTo(
+			expect(result.handles.outgoing.x).toBeCloseTo(
 				expectedX *
 					(expectedX !== 0 && expectedY !== 0 ? length / Math.SQRT2 : length),
 			)
-			expect(result.handles.incoming.y).toBeCloseTo(
+			expect(result.handles.outgoing.y).toBeCloseTo(
 				expectedY *
 					(expectedX !== 0 && expectedY !== 0 ? length / Math.SQRT2 : length),
 			)
@@ -96,8 +98,8 @@ describe("Pen gestures", () => {
 		})
 		expect(tie.kind).toBe("curve")
 		if (tie.kind === "curve") {
-			expect(tie.handles.incoming.x).toBeCloseTo(20 / Math.SQRT2)
-			expect(tie.handles.incoming.y).toBeCloseTo(20 / Math.SQRT2)
+			expect(tie.handles.outgoing.x).toBeCloseTo(20 / Math.SQRT2)
+			expect(tie.handles.outgoing.y).toBeCloseTo(20 / Math.SQRT2)
 		}
 	})
 
@@ -178,15 +180,15 @@ describe("Pen gestures", () => {
 				masterId: "master:text",
 				x: 300,
 				y: 400,
-				incoming: { x: 100, y: 50 },
-				outgoing: { x: -100, y: -50 },
+				incoming: { x: -100, y: -50 },
+				outgoing: { x: 100, y: 50 },
 			},
 			{
 				masterId: "master:heavy",
 				x: 312,
 				y: 400,
-				incoming: { x: 94, y: 50 },
-				outgoing: { x: -94, y: -50 },
+				incoming: { x: -94, y: -50 },
+				outgoing: { x: 94, y: 50 },
 			},
 		])
 		for (const layer of layers) {
@@ -195,24 +197,116 @@ describe("Pen gestures", () => {
 		}
 	})
 
-	it("keeps the Shift-constrained dragged handle on the pointer ray", () => {
-		const result = resolvePenGesture({
-			downScreen: { x: 40, y: 40 },
-			currentScreen: { x: 70, y: 55 },
+	it.each([
+		["unconstrained", false],
+		["Shift-constrained", true],
+	] as const)(
+		"makes a first node's %s drag the eventual curve departure toward the pointer",
+		(_label, shiftKey) => {
+			const gesture = resolvePenGesture({
+				downScreen: { x: 40, y: 40 },
+				currentScreen: { x: 70, y: 55 },
+				worldScale: 1,
+				shiftKey,
+			})
+			const preview = penGestureHandles(gesture, "outgoing")
+			const [committedFirst] = penLayerCoordinates(
+				{ x: 100, y: 100 },
+				gesture,
+				[{ masterId: "master:text", xScale: 1 }],
+				"outgoing",
+			)
+			const secondPoint = { x: 240, y: 100 }
+			expect(preview).not.toBeNull()
+			expect(committedFirst?.outgoing?.x).toBeCloseTo(
+				preview?.outgoing.x ?? Number.NaN,
+			)
+			expect(committedFirst?.outgoing?.y).toBeCloseTo(
+				preview?.outgoing.y ?? Number.NaN,
+			)
+			const departure = contourStartDirection([
+				{
+					x: committedFirst?.x ?? 100,
+					y: committedFirst?.y ?? 100,
+					...(committedFirst?.outgoing === undefined
+						? {}
+						: { outgoing: committedFirst.outgoing }),
+				},
+				secondPoint,
+			])
+			const pointerInFontSpace = { x: 30, y: -15 }
+			const departureRadians =
+				((departure?.angle ?? Number.NaN) * Math.PI) / 180
+			expect(
+				Math.cos(departureRadians) * pointerInFontSpace.x +
+					Math.sin(departureRadians) * pointerInFontSpace.y,
+			).toBeGreaterThan(0)
+			expect(
+				secondPoint.x - (committedFirst?.x ?? secondPoint.x),
+			).toBeGreaterThan(0)
+		},
+	)
+
+	it("assigns subsequent append and prepend drags to their connected handles", () => {
+		const gesture = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 24, y: -12 },
 			worldScale: 1,
-			shiftKey: true,
 		})
-		expect(result.kind).toBe("curve")
-		if (result.kind !== "curve") return
-		const pointerInFontSpace = { x: 30, y: -15 }
-		const pointerDotDragged =
-			pointerInFontSpace.x * result.handles.incoming.x +
-			pointerInFontSpace.y * result.handles.incoming.y
-		const pointerDotOpposite =
-			pointerInFontSpace.x * result.handles.outgoing.x +
-			pointerInFontSpace.y * result.handles.outgoing.y
-		expect(pointerDotDragged).toBeGreaterThan(0)
-		expect(pointerDotOpposite).toBeLessThan(0)
+		const appendedPreview = penGestureHandles(gesture, "incoming")
+		const prependedPreview = penGestureHandles(gesture, "outgoing")
+		const [appendedCommit] = penLayerCoordinates(
+			{ x: 300, y: 400 },
+			gesture,
+			[{ masterId: "master:text", xScale: 1 }],
+			"incoming",
+		)
+		const [prependedCommit] = penLayerCoordinates(
+			{ x: 300, y: 400 },
+			gesture,
+			[{ masterId: "master:text", xScale: 1 }],
+			"outgoing",
+		)
+		expect(appendedCommit?.incoming).toEqual(appendedPreview?.incoming)
+		expect(prependedCommit?.outgoing).toEqual(prependedPreview?.outgoing)
+		expect(appendedPreview?.incoming).toEqual({ x: 24, y: 12 })
+		expect(prependedPreview?.outgoing).toEqual({ x: 24, y: 12 })
+		expect(appendedPreview?.outgoing).toEqual({ x: -24, y: -12 })
+		expect(prependedPreview?.incoming).toEqual({ x: -24, y: -12 })
+	})
+
+	it("keeps append and prepend endpoint forward handles toward the pointer", () => {
+		const gesture = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 30, y: -40 },
+			worldScale: 1,
+		})
+		const first = resolvePenEndpoint({
+			side: "first",
+			mode: "hard",
+			gesture,
+		})
+		const last = resolvePenEndpoint({
+			side: "last",
+			mode: "hard",
+			gesture,
+		})
+		expect(first.incoming).toEqual({ x: 30, y: 40 })
+		expect(last.outgoing).toEqual({ x: 30, y: 40 })
+		const [firstCommit] = penLayerCoordinates(
+			{ x: 100, y: 200 },
+			gesture,
+			[{ masterId: "master:text", xScale: 1 }],
+			"incoming",
+		)
+		const [lastCommit] = penLayerCoordinates(
+			{ x: 100, y: 200 },
+			gesture,
+			[{ masterId: "master:text", xScale: 1 }],
+			"outgoing",
+		)
+		expect(firstCommit?.incoming).toEqual(first.incoming)
+		expect(lastCommit?.outgoing).toEqual(last.outgoing)
 	})
 
 	it("subdues only the previous forward endpoint handle during a curve drag", () => {

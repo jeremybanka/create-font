@@ -10,6 +10,8 @@ export interface PenHandlePair {
 	readonly outgoing: PenPoint
 }
 
+export type PenHandleKind = keyof PenHandlePair
+
 export type PenGestureResolution =
 	| {
 			readonly kind: "click"
@@ -104,24 +106,37 @@ export function resolvePenGesture(input: {
 	if (distancePixels < (input.thresholdPixels ?? PEN_DRAG_THRESHOLD_PIXELS)) {
 		return { kind: "click", mode: "hard", handles: null, distancePixels }
 	}
-	const rawDragged = {
+	const rawOutgoing = {
 		x: canonicalZero(dxPixels / input.worldScale),
 		y: canonicalZero(-dyPixels / input.worldScale),
 	}
-	const dragged = input.shiftKey
-		? constrainedHandleVector(rawDragged)
-		: rawDragged
+	const outgoing = input.shiftKey
+		? constrainedHandleVector(rawOutgoing)
+		: rawOutgoing
 	return {
 		kind: "curve",
 		mode: "soft",
 		handles: {
-			incoming: dragged,
-			outgoing: {
-				x: canonicalZero(-dragged.x),
-				y: canonicalZero(-dragged.y),
+			incoming: {
+				x: canonicalZero(-outgoing.x),
+				y: canonicalZero(-outgoing.y),
 			},
+			outgoing,
 		},
 		distancePixels,
+	}
+}
+
+/** Assigns the pointer-side vector to the handle owned by the drawing context. */
+export function penGestureHandles(
+	gesture: PenGestureResolution | null,
+	draggedHandle: PenHandleKind,
+): PenHandlePair | null {
+	if (gesture === null || gesture.handles === null) return null
+	if (draggedHandle === "outgoing") return gesture.handles
+	return {
+		incoming: gesture.handles.outgoing,
+		outgoing: gesture.handles.incoming,
 	}
 }
 
@@ -158,7 +173,7 @@ export function resolvePenEndpoint(input: {
 		}
 	}
 
-	const dragged = input.gesture.handles.incoming
+	const dragged = input.gesture.handles.outgoing
 	const harden =
 		input.mode === "hard" || (input.altKey === true && forward !== undefined)
 	if (harden) {
@@ -192,8 +207,10 @@ export function penLayerCoordinates(
 	point: PenPoint,
 	gesture: PenGestureResolution,
 	transforms: readonly PenLayerTransform[],
+	draggedHandle: PenHandleKind = "outgoing",
 ): readonly PenLayerCoordinate[] {
 	if (!finitePoint(point)) throw new TypeError("Pen point must be finite.")
+	const handles = penGestureHandles(gesture, draggedHandle)
 	return Object.freeze(
 		transforms.map(({ masterId, xScale }) => {
 			if (!Number.isFinite(xScale) || xScale <= 0) {
@@ -204,10 +221,10 @@ export function penLayerCoordinates(
 			const mapX = (x: number): number => 500 + (x - 500) * xScale
 			const x = Math.round(mapX(point.x))
 			const y = Math.round(point.y)
-			if (gesture.handles === null) return { masterId, x, y }
+			if (handles === null) return { masterId, x, y }
 			const incoming = {
-				x: canonicalZero(mapX(point.x + gesture.handles.incoming.x) - x),
-				y: canonicalZero(gesture.handles.incoming.y),
+				x: canonicalZero(mapX(point.x + handles.incoming.x) - x),
+				y: canonicalZero(handles.incoming.y),
 			}
 			return {
 				masterId,

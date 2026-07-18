@@ -88,6 +88,7 @@ import {
 } from "./outline-selection.ts"
 import {
 	penEndpointHandleBeingReplaced,
+	penGestureHandles,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
@@ -95,6 +96,7 @@ import {
 	type PenEndpointResolution,
 	type PenEndpointSide,
 	type PenGestureResolution,
+	type PenHandleKind,
 	type PenPoint,
 } from "./pen-gesture.ts"
 import {
@@ -526,6 +528,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		penGesture?.endpoint,
 		penGestureResolution,
 	)
+	const penPlacementDraggedHandle: PenHandleKind =
+		penContourId !== null && penDirection === "append" ? "incoming" : "outgoing"
 	const penPlacement =
 		activeTool !== "pen" || editingTextIndex === null
 			? null
@@ -545,7 +549,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						)
 	const penHandles =
 		penEndpointResolution === null
-			? (penGestureResolution?.handles ?? null)
+			? penGestureHandles(penGestureResolution, penPlacementDraggedHandle)
 			: {
 					...(penEndpointResolution.incoming === undefined
 						? {}
@@ -906,8 +910,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					? 0.94
 					: 1 / 0.94,
 	}))
-	const penCoordinates = (point: PenPoint, gesture: PenGestureResolution) =>
-		penLayerCoordinates(point, gesture, penLayerTransforms)
+	const penCoordinates = (
+		point: PenPoint,
+		gesture: PenGestureResolution,
+		draggedHandle: PenHandleKind,
+	) => penLayerCoordinates(point, gesture, penLayerTransforms, draggedHandle)
 	const commitPenPoint = (
 		point: PenPoint,
 		gesture: PenGestureResolution,
@@ -920,7 +927,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				glyphId: activeGlyphId,
 				contourId,
 				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture),
+				coordinates: penCoordinates(point, gesture, "outgoing"),
 			})
 			penContourResumeRef.current = contourId
 			setPenContourId(contourId)
@@ -930,7 +937,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				contourId: penContourId,
 				...(penDirection === "prepend" ? { at: 0 } : {}),
 				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture),
+				coordinates: penCoordinates(
+					point,
+					gesture,
+					penDirection === "prepend" ? "outgoing" : "incoming",
+				),
 			})
 			penContourResumeRef.current = penContourId
 		}
@@ -952,17 +963,20 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			gesture,
 			altKey,
 		})
+		const forwardHandle: PenHandleKind =
+			target.side === "first" ? "incoming" : "outgoing"
 		if (!(target.mode === "hard" && gesture.kind === "click")) {
 			workspace.font.actions.authorPenEndpoint({
 				glyphId: activeGlyphId,
 				contourId: target.contourId,
 				pointId: target.pointId,
-				forwardHandle: target.side === "first" ? "incoming" : "outgoing",
+				forwardHandle,
 				mode: resolution.mode,
-				coordinates: penCoordinates(target, gesture).map(
-					({ masterId, incoming }) => ({
-						masterId,
-						forward: gesture.kind === "click" ? null : incoming!,
+				coordinates: penCoordinates(target, gesture, forwardHandle).map(
+					(coordinate) => ({
+						masterId: coordinate.masterId,
+						forward:
+							gesture.kind === "click" ? null : coordinate[forwardHandle]!,
 					}),
 				),
 			})
@@ -997,13 +1011,15 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						[penDirection === "prepend" ? "lastPoint" : "firstPoint"]: {
 							pointId: closurePoint.pointId,
 							mode: "soft" as const,
-							coordinates: penCoordinates(closurePoint, gesture).map(
-								({ masterId, incoming, outgoing }) => ({
-									masterId,
-									incoming: incoming!,
-									outgoing: outgoing!,
-								}),
-							),
+							coordinates: penCoordinates(
+								closurePoint,
+								gesture,
+								penDirection === "prepend" ? "outgoing" : "incoming",
+							).map(({ masterId, incoming, outgoing }) => ({
+								masterId,
+								incoming: incoming!,
+								outgoing: outgoing!,
+							})),
 						},
 					}),
 		})
