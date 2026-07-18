@@ -168,7 +168,7 @@ export function resolvePenEndpoint(input: {
 			}
 		}
 		return {
-			mode: connected === undefined ? "hard" : "soft",
+			mode: "hard",
 			...(connected === undefined ? {} : { [connectedKind]: connected }),
 		}
 	}

@@ -169,7 +169,71 @@ describe("Pen gestures", () => {
 				outgoing: { x: 8, y: 0 },
 				gesture: click,
 			}),
-		).toEqual({ mode: "soft", incoming: { x: -12, y: 0 } })
+		).toEqual({ mode: "hard", incoming: { x: -12, y: 0 } })
+	})
+
+	it("hardens soft endpoint clicks while preserving only the connected handle", () => {
+		const click = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 1, y: 1 },
+			worldScale: 1,
+		})
+
+		expect(
+			resolvePenEndpoint({
+				side: "first",
+				mode: "soft",
+				incoming: { x: -8, y: 3 },
+				outgoing: { x: 14, y: -2 },
+				gesture: click,
+			}),
+		).toEqual({ mode: "hard", outgoing: { x: 14, y: -2 } })
+		expect(
+			resolvePenEndpoint({
+				side: "last",
+				mode: "soft",
+				incoming: { x: -14, y: 2 },
+				outgoing: { x: 8, y: -3 },
+				gesture: click,
+			}),
+		).toEqual({ mode: "hard", incoming: { x: -14, y: 2 } })
+		expect(
+			resolvePenEndpoint({
+				side: "first",
+				mode: "soft",
+				incoming: { x: -8, y: 3 },
+				gesture: click,
+			}),
+		).toEqual({ mode: "hard" })
+		expect(
+			resolvePenEndpoint({
+				side: "last",
+				mode: "soft",
+				incoming: { x: -14, y: 2 },
+				gesture: click,
+			}),
+		).toEqual({ mode: "hard", incoming: { x: -14, y: 2 } })
+	})
+
+	it("leaves a clicked hard endpoint unchanged", () => {
+		const click = resolvePenGesture({
+			downScreen: { x: 0, y: 0 },
+			currentScreen: { x: 1, y: 1 },
+			worldScale: 1,
+		})
+		const endpoint = {
+			side: "first" as const,
+			mode: "hard" as const,
+			incoming: { x: -8, y: 3 },
+			outgoing: { x: 14, y: -2 },
+			gesture: click,
+		}
+
+		expect(resolvePenEndpoint(endpoint)).toEqual({
+			mode: "hard",
+			incoming: endpoint.incoming,
+			outgoing: endpoint.outgoing,
+		})
 	})
 
 	it("maps nodes and dragged endpoints into every master", () => {

@@ -477,6 +477,148 @@ describe("font editor state", () => {
 		)
 	})
 
+	it("hardens clicked soft endpoints and clears only their forward handles atomically", () => {
+		const cases = [
+			{
+				label: "first",
+				side: "first",
+				pointId: "point:pen-click:first",
+				otherPointId: "point:pen-click:first:other",
+				forwardHandle: "incoming",
+				connectedHandle: "outgoing",
+				razorEndpoint: {
+					pointId: "point:pen-click:first",
+					x: 0,
+					y: 0,
+					incoming: { x: -20, y: 5 },
+					outgoing: { x: 30, y: -7 },
+				},
+				blackEndpoint: {
+					pointId: "point:pen-click:first",
+					x: 0,
+					y: 10,
+					incoming: { x: -25, y: 8 },
+				},
+			},
+			{
+				label: "last",
+				side: "last",
+				pointId: "point:pen-click:last",
+				otherPointId: "point:pen-click:last:other",
+				forwardHandle: "outgoing",
+				connectedHandle: "incoming",
+				razorEndpoint: {
+					pointId: "point:pen-click:last",
+					x: 100,
+					y: 0,
+					incoming: { x: -30, y: 7 },
+					outgoing: { x: 20, y: -5 },
+				},
+				blackEndpoint: {
+					pointId: "point:pen-click:last",
+					x: 120,
+					y: 10,
+					incoming: { x: -45, y: 9 },
+				},
+			},
+		] as const
+
+		for (const testCase of cases) {
+			const editor = createLoadedEditor(
+				`test/pen-click-harden-${testCase.label}`,
+			)
+			const contourId = `contour:pen-click:${testCase.label}`
+			const points =
+				testCase.side === "first"
+					? [
+							{ id: testCase.pointId, mode: "soft" as const },
+							{ id: testCase.otherPointId, mode: "hard" as const },
+						]
+					: [
+							{ id: testCase.otherPointId, mode: "hard" as const },
+							{ id: testCase.pointId, mode: "soft" as const },
+						]
+			const layerPoints = (
+				endpoint: typeof testCase.razorEndpoint | typeof testCase.blackEndpoint,
+			) =>
+				testCase.side === "first"
+					? [
+							endpoint,
+							{ pointId: testCase.otherPointId, x: 100, y: endpoint.y },
+						]
+					: [{ pointId: testCase.otherPointId, x: 0, y: endpoint.y }, endpoint]
+			editor.actions.pasteContours({
+				glyphId: oGlyphId,
+				contours: [{ id: contourId, closed: false, points }],
+				layers: [
+					{
+						masterId: razorMasterId,
+						points: layerPoints(testCase.razorEndpoint),
+					},
+					{
+						masterId: blackMasterId,
+						points: layerPoints(testCase.blackEndpoint),
+					},
+				],
+			})
+			editor.clearHistory(oGlyphId)
+			const before = new Map(
+				[razorMasterId, blackMasterId].map((masterId) => [
+					masterId,
+					editor.read.layerNode(masterId, oGlyphId, testCase.pointId),
+				]),
+			)
+
+			editor.actions.authorPenEndpoint({
+				glyphId: oGlyphId,
+				contourId,
+				pointId: testCase.pointId,
+				forwardHandle: testCase.forwardHandle,
+				mode: "hard",
+				coordinates: [
+					{ masterId: razorMasterId, forward: null },
+					{ masterId: blackMasterId, forward: null },
+				],
+			})
+
+			const committed = new Map()
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				const node = editor.read.layerNode(masterId, oGlyphId, testCase.pointId)
+				expect(node.ok).toBe(true)
+				if (!node.ok) continue
+				expect(node.value.mode).toBe("hard")
+				expect(node.value[testCase.forwardHandle]).toBeUndefined()
+				const beforeNode = before.get(masterId)
+				if (beforeNode?.ok) {
+					expect(node.value[testCase.connectedHandle]).toEqual(
+						beforeNode.value[testCase.connectedHandle],
+					)
+				}
+				committed.set(masterId, node)
+			}
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+			).toMatchObject({ at: 1, length: 1 })
+
+			editor.undo(oGlyphId)
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				expect(
+					editor.read.layerNode(masterId, oGlyphId, testCase.pointId),
+				).toEqual(before.get(masterId))
+			}
+			expect(
+				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+			).toMatchObject({ at: 0, length: 1 })
+
+			editor.redo(oGlyphId)
+			for (const masterId of [razorMasterId, blackMasterId] as const) {
+				expect(
+					editor.read.layerNode(masterId, oGlyphId, testCase.pointId),
+				).toEqual(committed.get(masterId))
+			}
+		}
+	})
+
 	it("edits advance width in glyph history while deriving the sidebearing", () => {
 		const editor = createLoadedEditor("test/horizontal-metrics")
 		const before = editor.read
