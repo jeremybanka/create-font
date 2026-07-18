@@ -41,6 +41,15 @@ export interface ShapeGeometryPoint extends AuthoringPoint {
 export const SHAPE_DRAG_THRESHOLD_PIXELS = 4
 export const ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
+/** Keeps hover guides visible until a drag takes ownership of shape snapping. */
+export function shapeSnapsForDisplay<T>(
+	gesture: Readonly<{ shiftKey: boolean; snaps: readonly T[] }> | null,
+	hoverSnaps: readonly T[],
+): readonly T[] {
+	if (gesture === null) return hoverSnaps
+	return gesture.shiftKey ? [] : gesture.snaps
+}
+
 const canonicalZero = (value: number): number =>
 	Object.is(value, -0) ? 0 : value
 

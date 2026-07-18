@@ -5,6 +5,7 @@ import {
 	resolveShapeGesture,
 	shapeGeometry,
 	shapeLayerCoordinates,
+	shapeSnapsForDisplay,
 } from "../src/shape-gesture.ts"
 
 const resolve = (
@@ -21,6 +22,18 @@ const resolve = (
 	})
 
 describe("shape gestures", () => {
+	it("shows hover guides before a drag and hands them off to the live gesture", () => {
+		const hover = [{ id: "hover" }]
+		const drag = [{ id: "drag" }]
+		expect(shapeSnapsForDisplay(null, hover)).toBe(hover)
+		expect(shapeSnapsForDisplay({ shiftKey: false, snaps: drag }, hover)).toBe(
+			drag,
+		)
+		expect(
+			shapeSnapsForDisplay({ shiftKey: true, snaps: drag }, hover),
+		).toEqual([])
+	})
+
 	it.each([
 		[
 			{ x: 300, y: 500 },
