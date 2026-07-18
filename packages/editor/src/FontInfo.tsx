@@ -378,7 +378,7 @@ function NumberField({
 					{...(min === undefined ? {} : { min })}
 					{...(max === undefined ? {} : { max })}
 					step={step}
-					modifiedArrowStep={1}
+					arrowStep={1}
 					value={value}
 					onCommit={onInput}
 				/>

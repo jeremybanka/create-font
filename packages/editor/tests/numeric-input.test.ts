@@ -45,6 +45,37 @@ describe("numeric expressions", () => {
 		expect(formatNumericInput(-1e21)).toBe("-1000000000000000000000")
 	})
 
+	it("keeps decimal cancellation and safe integers exact", () => {
+		expect(evaluateNumericExpression("1000 - 999.9")).toEqual({
+			ok: true,
+			value: 0.1,
+			normalized: "0.1",
+		})
+		expect(evaluateNumericExpression("65535 - 65534.9")).toEqual({
+			ok: true,
+			value: 0.1,
+			normalized: "0.1",
+		})
+		expect(evaluateNumericExpression("9007199254740991")).toEqual({
+			ok: true,
+			value: 9_007_199_254_740_991,
+			normalized: "9007199254740991",
+		})
+	})
+
+	it("formats repeating division deterministically", () => {
+		expect(evaluateNumericExpression("1 / 3")).toEqual({
+			ok: true,
+			value: 0.333333333333333,
+			normalized: "0.333333333333333",
+		})
+		expect(evaluateNumericExpression("1 / 6")).toEqual({
+			ok: true,
+			value: 0.166666666666666,
+			normalized: "0.166666666666666",
+		})
+	})
+
 	it.each([
 		["", "Enter a number or expression."],
 		["1 +", "Enter a complete arithmetic expression."],
@@ -112,6 +143,24 @@ describe("numeric field contracts", () => {
 		})
 	})
 
+	it("validates exact results before converting or formatting", () => {
+		expect(
+			validateNumericInput("65535.00000000001", { min: 0, max: 65_535 }),
+		).toEqual({
+			ok: false,
+			error: "Result must be between 0 and 65535.",
+		})
+		expect(validateNumericInput("0.9999999999999999", { step: 1 })).toEqual({
+			ok: false,
+			error: "Result must be a whole number.",
+		})
+		expect(validateNumericInput("0.1 + 0.2", { step: 0.1 })).toEqual({
+			ok: true,
+			value: 0.3,
+			normalized: "0.3",
+		})
+	})
+
 	it("keeps the compatibility parser and expression-aware stepping", () => {
 		expect(parseNumericInput("(20 + 5) * 2", 0, 100)).toBe(50)
 		expect(parseNumericInput("5 / 2", 0, 100)).toBeNull()
@@ -119,25 +168,15 @@ describe("numeric field contracts", () => {
 		expect(stepNumericInput("1 +", 5, -1, 100, -20, 20)).toBe(-20)
 	})
 
-	it("preserves decimal base steps and absolute 10/100 modified steps", () => {
-		expect(stepNumericInput("1.125", 1.125, 1, 1, -1_000, 1_000, 0.001)).toBe(
-			1.126,
-		)
+	it("uses unified 1/10/100 stepping for decimal fields", () => {
 		expect(
-			stepNumericInput(
-				"1.125",
-				1.125,
-				1,
-				10,
-				-1_000,
-				1_000,
-				0.001,
-				undefined,
-				1,
-			),
+			stepNumericInput("1.125", 1.125, 1, 1, -1_000, 1_000, 0.001, 1),
+		).toBe(2.125)
+		expect(
+			stepNumericInput("1.125", 1.125, 1, 10, -1_000, 1_000, 0.001, 1),
 		).toBe(11.125)
-		expect(
-			stepNumericInput("1.1", 1.1, -1, 100, -1_000, 1_000, 0.1, undefined, 1),
-		).toBe(-98.9)
+		expect(stepNumericInput("1.1", 1.1, -1, 100, -1_000, 1_000, 0.1, 1)).toBe(
+			-98.9,
+		)
 	})
 })

@@ -165,43 +165,43 @@ describe("NumericInput", () => {
 		expect(onCommit).toHaveBeenLastCalledWith(110)
 	})
 
-	it("keeps 0.001 base stepping with absolute modified jumps", () => {
+	it("uses unified 1/10/100 stepping for a 0.001 field", () => {
 		const { input, onCommit } = mount({
 			value: 1.125,
 			max: 1_000,
 			step: 0.001,
-			modifiedArrowStep: 1,
+			arrowStep: 1,
 		})
 		focus(input)
 		key(input, "ArrowUp")
-		expect(input.value).toBe("1.126")
-		expect(onCommit).toHaveBeenLastCalledWith(1.126)
+		expect(input.value).toBe("2.125")
+		expect(onCommit).toHaveBeenLastCalledWith(2.125)
 		key(input, "ArrowUp", { shiftKey: true })
-		expect(input.value).toBe("11.126")
-		expect(onCommit).toHaveBeenLastCalledWith(11.126)
+		expect(input.value).toBe("12.125")
+		expect(onCommit).toHaveBeenLastCalledWith(12.125)
 		key(input, "ArrowUp", { ctrlKey: true })
-		expect(input.value).toBe("111.126")
-		expect(onCommit).toHaveBeenLastCalledWith(111.126)
+		expect(input.value).toBe("112.125")
+		expect(onCommit).toHaveBeenLastCalledWith(112.125)
 	})
 
-	it("keeps 0.1 base stepping with absolute modified jumps", () => {
+	it("uses unified 1/10/100 stepping for a 0.1 field", () => {
 		const { input, onCommit } = mount({
 			value: 1.1,
 			min: -1_000,
 			max: 1_000,
 			step: 0.1,
-			modifiedArrowStep: 1,
+			arrowStep: 1,
 		})
 		focus(input)
 		key(input, "ArrowDown")
-		expect(input.value).toBe("1")
-		expect(onCommit).toHaveBeenLastCalledWith(1)
+		expect(input.value).toBe("0.1")
+		expect(onCommit).toHaveBeenLastCalledWith(0.1)
 		key(input, "ArrowDown", { shiftKey: true })
-		expect(input.value).toBe("-9")
-		expect(onCommit).toHaveBeenLastCalledWith(-9)
+		expect(input.value).toBe("-9.9")
+		expect(onCommit).toHaveBeenLastCalledWith(-9.9)
 		key(input, "ArrowDown", { ctrlKey: true })
-		expect(input.value).toBe("-109")
-		expect(onCommit).toHaveBeenLastCalledWith(-109)
+		expect(input.value).toBe("-109.9")
+		expect(onCommit).toHaveBeenLastCalledWith(-109.9)
 	})
 
 	it("exposes text editing with deliberate spinbutton semantics", () => {
