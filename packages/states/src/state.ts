@@ -396,6 +396,9 @@ export interface ReverseContourInput {
 export interface InvertContourInput extends ReverseContourInput {
 	readonly masterId: MasterId
 	readonly axis: "horizontal" | "vertical"
+	/** Center of the visible control bounds on the active master. */
+	readonly centerX: number
+	readonly centerY: number
 }
 
 export interface MakeNodeFirstInput extends ReverseContourInput {
@@ -4581,6 +4584,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			}
 			if (pointIds.length === 0) return
 
+			if (!Number.isFinite(input.centerX) || !Number.isFinite(input.centerY)) {
+				throw new TypeError("Contour control bounds center must be finite.")
+			}
+
 			const activeGeometry = new Map<
 				PointId,
 				{
@@ -4589,16 +4596,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					readonly outgoing: Vector2 | null
 				}
 			>()
-			let minX = Number.POSITIVE_INFINITY
-			let minY = Number.POSITIVE_INFINITY
-			let maxX = Number.NEGATIVE_INFINITY
-			let maxY = Number.NEGATIVE_INFINITY
-			const includeInBounds = (point: Vector2): void => {
-				minX = Math.min(minX, point.x)
-				minY = Math.min(minY, point.y)
-				maxX = Math.max(maxX, point.x)
-				maxY = Math.max(maxY, point.y)
-			}
 			const readHandle = (
 				atomKey: LayerPointKey,
 				handle: EditorHandleKind,
@@ -4632,24 +4629,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const incoming = readHandle(atomKey, "incoming")
 				const outgoing = readHandle(atomKey, "outgoing")
 				activeGeometry.set(pointId, { position, incoming, outgoing })
-				includeInBounds(position)
-				if (incoming !== null) {
-					includeInBounds({
-						x: position.x + incoming.x,
-						y: position.y + incoming.y,
-					})
-				}
-				if (outgoing !== null) {
-					includeInBounds({
-						x: position.x + outgoing.x,
-						y: position.y + outgoing.y,
-					})
-				}
-			}
-			const centerX = (minX + maxX) / 2
-			const centerY = (minY + maxY) / 2
-			if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) {
-				throw new TypeError("Contour control bounds must be finite.")
 			}
 
 			const plans: {
@@ -4685,12 +4664,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						position:
 							input.axis === "horizontal"
 								? {
-										x: 2 * centerX - geometry.position.x,
+										x: 2 * input.centerX - geometry.position.x,
 										y: geometry.position.y,
 									}
 								: {
 										x: geometry.position.x,
-										y: 2 * centerY - geometry.position.y,
+										y: 2 * input.centerY - geometry.position.y,
 									},
 						incoming: reflectVector(outgoing),
 						outgoing: reflectVector(incoming),

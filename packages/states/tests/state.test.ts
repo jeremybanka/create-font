@@ -2340,6 +2340,53 @@ describe("font editor state", () => {
 				penContourId,
 			]),
 		).toEqual(penPointIds)
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toEqual([...penPointIds].reverse())
+	})
+
+	it("reverses one- and two-node open contours without losing endpoints", () => {
+		const editor = createLoadedEditor("test/reverse-short-open-contours")
+		editor.actions.createContour({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+			point: { id: penPointIds[0], mode: "hard" },
+			coordinates: hardPenFirstPoint.coordinates,
+		})
+		editor.actions.reverseContour({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+		})
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toEqual([penPointIds[0]])
+
+		editor.actions.insertPoint({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+			point: { id: penPointIds[1], mode: "hard" },
+			coordinates: [
+				{ masterId: razorMasterId, x: 400, y: 300 },
+				{ masterId: blackMasterId, x: 430, y: 280 },
+			],
+		})
+		editor.actions.reverseContour({
+			glyphId: oGlyphId,
+			contourId: penContourId,
+		})
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				penContourId,
+			]),
+		).toEqual([penPointIds[1], penPointIds[0]])
 	})
 
 	it("inverts a contour and reverses every master in one history entry", () => {
@@ -2383,6 +2430,10 @@ describe("font editor state", () => {
 			(Math.min(...activeControls.map(({ x }) => x)) +
 				Math.max(...activeControls.map(({ x }) => x))) /
 			2
+		const centerY =
+			(Math.min(...activeControls.map(({ y }) => y)) +
+				Math.max(...activeControls.map(({ y }) => y))) /
+			2
 		const historyLength = editor.silo.inspectTimeline(
 			editor.glyphHistoryTimelines,
 			oGlyphId,
@@ -2393,6 +2444,8 @@ describe("font editor state", () => {
 			glyphId: oGlyphId,
 			contourId: contour.id,
 			axis: "horizontal",
+			centerX,
+			centerY,
 		})
 
 		expect(
@@ -2446,46 +2499,65 @@ describe("font editor state", () => {
 				}
 			}
 		}
+		editor.redo(oGlyphId)
+		expect(
+			editor.silo.getState(editor.atoms.contourPointIds, [
+				oGlyphId,
+				contour.id,
+			]),
+		).toEqual([order[0], ...order.slice(1).reverse()])
 	})
 
 	it("inverts an open contour and makes its last node first", () => {
 		const editor = createLoadedEditor("test/invert-open-contour")
 		createOpenPenContour(editor, softPenFirstPoint)
 		const before = new Map(
-			penPointIds.map((pointId) => {
-				const node = editor.read.layerNode(razorMasterId, oGlyphId, pointId)
-				if (!node.ok) throw new Error("Open-contour node did not project.")
-				return [pointId, node.value] as const
-			}),
+			[razorMasterId, blackMasterId].flatMap((masterId) =>
+				penPointIds.map((pointId) => {
+					const node = editor.read.layerNode(masterId, oGlyphId, pointId)
+					if (!node.ok) throw new Error("Open-contour node did not project.")
+					return [`${masterId}/${pointId}`, node.value] as const
+				}),
+			),
 		)
-		const controls = [...before.values()].flatMap((node) => [
-			{ x: node.x, y: node.y },
-			...(node.incoming === undefined
-				? []
-				: [
-						{
-							x: node.x + node.incoming.x,
-							y: node.y + node.incoming.y,
-						},
-					]),
-			...(node.outgoing === undefined
-				? []
-				: [
-						{
-							x: node.x + node.outgoing.x,
-							y: node.y + node.outgoing.y,
-						},
-					]),
-		])
+		const controls = penPointIds.flatMap((pointId) => {
+			const node = before.get(`${razorMasterId}/${pointId}`)
+			if (node === undefined) throw new Error("Active contour node is missing.")
+			return [
+				{ x: node.x, y: node.y },
+				...(node.incoming === undefined
+					? []
+					: [
+							{
+								x: node.x + node.incoming.x,
+								y: node.y + node.incoming.y,
+							},
+						]),
+				...(node.outgoing === undefined
+					? []
+					: [
+							{
+								x: node.x + node.outgoing.x,
+								y: node.y + node.outgoing.y,
+							},
+						]),
+			]
+		})
 		const centerY =
 			(Math.min(...controls.map(({ y }) => y)) +
 				Math.max(...controls.map(({ y }) => y))) /
+			2
+		const centerX =
+			(Math.min(...controls.map(({ x }) => x)) +
+				Math.max(...controls.map(({ x }) => x))) /
 			2
 		editor.actions.invertContour({
 			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			contourId: penContourId,
 			axis: "vertical",
+			centerX,
+			centerY,
 		})
 		expect(
 			editor.silo.getState(editor.atoms.contourPointIds, [
@@ -2493,24 +2565,34 @@ describe("font editor state", () => {
 				penContourId,
 			]),
 		).toEqual([...penPointIds].reverse())
-		for (const pointId of penPointIds) {
-			const oldNode = before.get(pointId)
-			const node = editor.read.layerNode(razorMasterId, oGlyphId, pointId)
-			if (oldNode === undefined || !node.ok) {
-				throw new Error("Inverted open-contour node is missing.")
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			for (const pointId of penPointIds) {
+				const oldNode = before.get(`${masterId}/${pointId}`)
+				const node = editor.read.layerNode(masterId, oGlyphId, pointId)
+				if (oldNode === undefined || !node.ok) {
+					throw new Error("Inverted open-contour node is missing.")
+				}
+				if (masterId === razorMasterId) {
+					expect(node.value.x).toBe(oldNode.x)
+					expect(node.value.y).toBeCloseTo(2 * centerY - oldNode.y, 10)
+					expect(node.value.incoming).toEqual(
+						oldNode.outgoing === undefined
+							? undefined
+							: { x: oldNode.outgoing.x, y: -oldNode.outgoing.y },
+					)
+					expect(node.value.outgoing).toEqual(
+						oldNode.incoming === undefined
+							? undefined
+							: { x: oldNode.incoming.x, y: -oldNode.incoming.y },
+					)
+				} else {
+					expect(node.value).toEqual({
+						...oldNode,
+						incoming: oldNode.outgoing,
+						outgoing: oldNode.incoming,
+					})
+				}
 			}
-			expect(node.value.x).toBe(oldNode.x)
-			expect(node.value.y).toBeCloseTo(2 * centerY - oldNode.y, 10)
-			expect(node.value.incoming).toEqual(
-				oldNode.outgoing === undefined
-					? undefined
-					: { x: oldNode.outgoing.x, y: -oldNode.outgoing.y },
-			)
-			expect(node.value.outgoing).toEqual(
-				oldNode.incoming === undefined
-					? undefined
-					: { x: oldNode.incoming.x, y: -oldNode.incoming.y },
-			)
 		}
 	})
 

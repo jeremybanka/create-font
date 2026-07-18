@@ -58,6 +58,22 @@ export const selectionKey = (target: EditorSelectionTarget): string =>
 		? `node/${target.pointId}`
 		: `handle/${target.pointId}/${target.handle}`
 
+/** Keeps a selected geometric handle attached when path direction is reversed. */
+export function reverseSelectionHandles(
+	selection: readonly EditorSelectionTarget[],
+): readonly EditorSelectionTarget[] {
+	return Object.freeze(
+		selection.map((target) =>
+			target.kind === "node"
+				? target
+				: ({
+						...target,
+						handle: target.handle === "incoming" ? "outgoing" : "incoming",
+					} as const),
+		),
+	)
+}
+
 export const canStartBoxSelectionOn = (targetName: string): boolean =>
 	targetName === "canvas-background" || targetName === "typed-glyph"
 
