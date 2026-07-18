@@ -22,7 +22,13 @@ import {
 	Text,
 } from "@create-font/preact-konva"
 import type { JSX } from "preact"
-import { useEffect, useMemo, useRef, useState } from "preact/hooks"
+import {
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "preact/hooks"
 
 import {
 	restoreCancelledGroupDragTarget,
@@ -805,7 +811,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			setTransformCursor(null)
 	}, [activeTool, transformBounds === null])
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		penPreviewPublisher.cancel()
 		penHoverRef.current = null
 		const gesture = penGestureRef.current

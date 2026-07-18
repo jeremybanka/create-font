@@ -37,13 +37,14 @@ function controlledFrames() {
 describe("animation-frame publisher", () => {
 	it("publishes one latest-value update for a burst within a frame", () => {
 		const frames = controlledFrames()
-		const published: Readonly<{
+		type PointerPreview = Readonly<{
 			x: number
 			y: number
 			shiftKey: boolean
 			altKey: boolean
-		}>[] = []
-		const publisher = createAnimationFramePublisher(
+		}>
+		const published: PointerPreview[] = []
+		const publisher = createAnimationFramePublisher<PointerPreview>(
 			(value) => published.push(value),
 			frames.source,
 		)
@@ -108,5 +109,22 @@ describe("animation-frame publisher", () => {
 			expect(published, lifecycle).toEqual([])
 			expect(frames.pendingCount, lifecycle).toBe(0)
 		}
+	})
+
+	it("cannot publish a cancelled context after a replacement schedules work", () => {
+		const frames = controlledFrames()
+		const published: string[] = []
+		const publisher = createAnimationFramePublisher(
+			(value: string) => published.push(value),
+			frames.source,
+		)
+
+		publisher.schedule("old tool")
+		publisher.cancel()
+		publisher.schedule("new tool")
+		frames.publishFrame()
+
+		expect(published).toEqual(["new tool"])
+		expect(frames.pendingCount).toBe(0)
 	})
 })
