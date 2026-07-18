@@ -13,7 +13,10 @@ import {
 	type DragPositionTarget,
 	type SegmentProjectionCandidate,
 } from "../src/canvas-snapping.ts"
-import { restoreCancelledGroupDragTarget } from "../src/canvas-group-drag.ts"
+import {
+	finalizeGroupDragPreview,
+	restoreCancelledGroupDragTarget,
+} from "../src/canvas-group-drag.ts"
 import { makeDemoFont } from "../src/demo-font.ts"
 import { parseNumericInput } from "../src/numeric-input.ts"
 
@@ -63,6 +66,28 @@ describe("canvas snapping", () => {
 				{ position: () => undefined },
 			),
 		).toBe(false)
+	})
+
+	it("finalizes a cancelled group preview without leaving a join candidate", () => {
+		let position = { x: 80, y: 90 }
+		const drag = {
+			targetX: 10,
+			targetY: 20,
+			node: {
+				position: (next: Readonly<{ x: number; y: number }>) => {
+					position = { ...next }
+				},
+			},
+			lastRawDelta: { x: 70, y: 70 } as Readonly<{
+				x: number
+				y: number
+			}> | null,
+			joinCandidate: { pointId: "point:target" } as unknown | null,
+		}
+		finalizeGroupDragPreview(drag, true)
+		expect(position).toEqual({ x: 10, y: 20 })
+		expect(drag.lastRawDelta).toBeNull()
+		expect(drag.joinCandidate).toBeNull()
 	})
 
 	it.each([

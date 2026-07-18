@@ -33,6 +33,7 @@ import {
 } from "preact/hooks"
 
 import {
+	finalizeGroupDragPreview,
 	restoreCancelledGroupDragTarget,
 	type CancelledGroupDrag,
 } from "./canvas-group-drag.ts"
@@ -291,6 +292,9 @@ interface TransformDrag {
 }
 
 interface GroupDrag {
+	readonly pointerId: number | null
+	readonly captureTarget: HTMLCanvasElement | null
+	readonly captureCancelListener: ((event: PointerEvent) => void) | null
 	readonly glyphId: GlyphId
 	readonly masterId: MasterId
 	readonly targetX: number
@@ -1313,15 +1317,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		setActiveSnaps([])
 		cancelPointDrag()
 		cancelHandleDrag()
-		const interruptedGroupDrag = groupDragRef.current
-		if (interruptedGroupDrag !== null) {
-			interruptedGroupDrag.node.position({
-				x: interruptedGroupDrag.targetX,
-				y: interruptedGroupDrag.targetY,
-			})
-			interruptedGroupDrag.node.getLayer()?.batchDraw()
-		}
-		groupDragRef.current = null
+		cancelGroupDrag()
 		setDraggedHandle(null)
 		setTransformPreview(null)
 		setJoinTarget(null)
@@ -1950,6 +1946,65 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			y: Math.round(handle.y),
 		})),
 	})
+	const releaseGroupDragCapture = (drag: GroupDrag): void => {
+		if (drag.captureTarget === null || drag.captureCancelListener === null)
+			return
+		drag.captureTarget.removeEventListener(
+			"pointercancel",
+			drag.captureCancelListener,
+			true,
+		)
+		drag.captureTarget.removeEventListener(
+			"lostpointercapture",
+			drag.captureCancelListener,
+			true,
+		)
+	}
+	const cancelGroupDrag = (pointerId?: number): boolean => {
+		const drag = groupDragRef.current
+		if (
+			drag === null ||
+			(pointerId !== undefined &&
+				!directDragOwnsPointer(drag.pointerId, pointerId))
+		)
+			return false
+		releaseGroupDragCapture(drag)
+		finalizeGroupDragPreview(drag, true)
+		drag.node.getLayer()?.batchDraw()
+		groupDragRef.current = null
+		directDragPointerRef.current = null
+		directDragCaptureTargetRef.current = null
+		setTransformPreview(null)
+		setDraggedPoint(null)
+		setDraggedHandle(null)
+		setJoinTarget(null)
+		setActiveSnaps([])
+		return true
+	}
+	const groupDragCapture = (): Pick<
+		GroupDrag,
+		"pointerId" | "captureTarget" | "captureCancelListener"
+	> => {
+		const pointerId = directDragPointerRef.current
+		const captureTarget = directDragCaptureTargetRef.current
+		const captureCancelListener =
+			pointerId === null || captureTarget === null
+				? null
+				: (event: PointerEvent): void => {
+						cancelGroupDrag(event.pointerId)
+					}
+		if (captureCancelListener !== null) {
+			captureTarget?.addEventListener("pointercancel", captureCancelListener, {
+				capture: true,
+			})
+			captureTarget?.addEventListener(
+				"lostpointercapture",
+				captureCancelListener,
+				{ capture: true },
+			)
+		}
+		return { pointerId, captureTarget, captureCancelListener }
+	}
 	const beginGroupDrag = (
 		target: EditorSelectionTarget,
 		targetX: number,
@@ -1978,6 +2033,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			setSelection(rigidSelection)
 		}
 		const nextGroupDrag = {
+			...groupDragCapture(),
 			glyphId: activeGlyphId,
 			masterId: activeMasterId,
 			targetX,
@@ -2012,6 +2068,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		if (controls.length < 2 || bounds === null) return false
 		if (rigidSelection.length !== selection.length) setSelection(rigidSelection)
 		groupDragRef.current = {
+			...groupDragCapture(),
 			glyphId: activeGlyphId,
 			masterId: activeMasterId,
 			targetX: 0,
@@ -2151,6 +2208,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				activeMasterId !== currentGroupDrag.masterId ||
 				activeTool !== "select")
 		) {
+			releaseGroupDragCapture(currentGroupDrag)
+			directDragPointerRef.current = null
+			directDragCaptureTargetRef.current = null
 			currentGroupDrag.node.position({
 				x: currentGroupDrag.targetX,
 				y: currentGroupDrag.targetY,
@@ -2198,6 +2258,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		} catch (error) {
 			reportGeometryCommitError(error)
 		} finally {
+			releaseGroupDragCapture(currentGroupDrag)
+			directDragPointerRef.current = null
+			directDragCaptureTargetRef.current = null
 			if (currentGroupDrag.restoreTargetAfterCommit || !didCommit) {
 				currentGroupDrag.node.position({
 					x: currentGroupDrag.targetX,
@@ -2606,6 +2669,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						cancelledGroupDrag.current,
 						currentGroupDrag.node,
 					)
+					releaseGroupDragCapture(currentGroupDrag)
+					directDragPointerRef.current = null
+					directDragCaptureTargetRef.current = null
 					currentGroupDrag.node.getLayer()?.batchDraw()
 					groupDragRef.current = null
 					setTransformPreview(null)
@@ -3421,6 +3487,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 											}
 											draggable={activeTool === "select"}
 											onPointerDown={(event) => {
+												rememberDirectDragPointer(event)
 												if (activeTool !== "pen") return
 												event.cancelBubble = true
 												if (penPointerAction("segment") === "split")

@@ -16,6 +16,8 @@ const contours: readonly EditorCanvasContour[] = [
 		closed: false,
 		nodes: [
 			{ pointId: "point:source:first", mode: "hard", x: 0, y: 0 },
+			{ pointId: "point:source:middle-a", mode: "hard", x: 30, y: 20 },
+			{ pointId: "point:source:middle-b", mode: "hard", x: 60, y: 20 },
 			{ pointId: "point:source:last", mode: "hard", x: 100, y: 0 },
 		],
 	},
@@ -68,6 +70,31 @@ describe("open endpoint join targeting", () => {
 		expect(
 			hasSelectedCoincidentEndpointPeer(
 				cutContours,
+				"point:cut:left",
+				new Set(["point:cut:left", "point:cut:right"]),
+			),
+		).toBe(true)
+		const openCutContours: readonly EditorCanvasContour[] = [
+			{
+				id: "contour:cut:left",
+				closed: false,
+				nodes: [
+					{ pointId: "point:left:start", mode: "hard", x: 0, y: 0 },
+					{ pointId: "point:cut:left", mode: "hard", x: 50, y: 60 },
+				],
+			},
+			{
+				id: "contour:cut:right",
+				closed: false,
+				nodes: [
+					{ pointId: "point:cut:right", mode: "hard", x: 50, y: 60 },
+					{ pointId: "point:right:end", mode: "hard", x: 100, y: 0 },
+				],
+			},
+		]
+		expect(
+			hasSelectedCoincidentEndpointPeer(
+				openCutContours,
 				"point:cut:left",
 				new Set(["point:cut:left", "point:cut:right"]),
 			),
@@ -132,6 +159,33 @@ describe("open endpoint join targeting", () => {
 				{ x: 100, y: 0 },
 				1,
 				5,
+			),
+		).toBeNull()
+		const shortOpen: readonly EditorCanvasContour[] = [
+			{
+				id: "contour:short",
+				closed: false,
+				nodes: [
+					{ pointId: "point:short:first", mode: "hard", x: 0, y: 0 },
+					{ pointId: "point:short:middle", mode: "hard", x: 50, y: 50 },
+					{ pointId: "point:short:last", mode: "hard", x: 100, y: 0 },
+				],
+			},
+		]
+		expect(
+			resolveOpenEndpointTarget(
+				shortOpen,
+				"contour:short",
+				"point:short:first",
+				{ x: 100, y: 0 },
+				1,
+			),
+		).toBeNull()
+		expect(
+			resolveMovedEndpointJoin(
+				shortOpen,
+				[{ pointId: "point:short:first", x: 100, y: 0 }],
+				1,
 			),
 		).toBeNull()
 	})

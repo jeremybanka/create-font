@@ -5401,7 +5401,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const targetIsFirst = sourceIds[0] === input.targetPointId
 				const targetIsLast = sourceIds.at(-1) === input.targetPointId
 				if (
-					sourceIds.length < 3 ||
+					sourceIds.length < 4 ||
 					!(
 						(draggedIsFirst && targetIsLast) ||
 						(draggedIsLast && targetIsFirst)

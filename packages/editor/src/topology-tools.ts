@@ -35,27 +35,26 @@ export function hasSelectedCoincidentEndpointPeer(
 	pointId: PointId,
 	selectedPointIds: ReadonlySet<PointId>,
 ): boolean {
+	let source: Readonly<{ x: number; y: number }> | null = null
+	const endpoints: Readonly<{ pointId: PointId; x: number; y: number }>[] = []
 	for (const contour of contours) {
 		if (contour.closed) continue
 		const first = contour.nodes[0]
 		const last = contour.nodes.at(-1)
 		if (first === undefined || last === undefined) continue
-		if (first.pointId === pointId) {
-			return (
-				selectedPointIds.has(last.pointId) &&
-				first.x === last.x &&
-				first.y === last.y
-			)
-		}
-		if (last.pointId === pointId) {
-			return (
-				selectedPointIds.has(first.pointId) &&
-				first.x === last.x &&
-				first.y === last.y
-			)
+		for (const endpoint of [first, last]) {
+			endpoints.push(endpoint)
+			if (endpoint.pointId === pointId) source = endpoint
 		}
 	}
-	return false
+	if (source === null) return false
+	return endpoints.some(
+		(endpoint) =>
+			endpoint.pointId !== pointId &&
+			selectedPointIds.has(endpoint.pointId) &&
+			endpoint.x === source.x &&
+			endpoint.y === source.y,
+	)
 }
 
 /** Clears transient join state and optionally restores an uncommitted canvas node. */
@@ -96,6 +95,8 @@ export function resolveOpenEndpointTarget(
 	let nearestSquared = Number.POSITIVE_INFINITY
 	for (const contour of contours) {
 		if (contour.closed) continue
+		if (contour.id === sourceContourId && sourceContour.nodes.length < 4)
+			continue
 		for (const point of [contour.nodes[0], contour.nodes.at(-1)]) {
 			if (point === undefined || point.pointId === sourcePointId) continue
 			const distanceSquared =
@@ -132,7 +133,7 @@ export function resolveMovedEndpointJoin(
 	const movedIds = new Set(movedPoints.map((point) => point.pointId))
 	const endpointOwners = new Map<
 		PointId,
-		Readonly<{ contourId: ContourId; pointId: PointId }>
+		Readonly<{ contourId: ContourId; pointId: PointId; pointCount: number }>
 	>()
 	for (const contour of contours) {
 		if (contour.closed) continue
@@ -141,6 +142,7 @@ export function resolveMovedEndpointJoin(
 				endpointOwners.set(point.pointId, {
 					contourId: contour.id,
 					pointId: point.pointId,
+					pointCount: contour.nodes.length,
 				})
 		}
 	}
@@ -152,6 +154,11 @@ export function resolveMovedEndpointJoin(
 		if (source === undefined) continue
 		for (const contour of contours) {
 			if (contour.closed) continue
+			if (
+				contour.id === source.contourId &&
+				Math.min(source.pointCount, contour.nodes.length) < 4
+			)
+				continue
 			for (const point of [contour.nodes[0], contour.nodes.at(-1)]) {
 				if (
 					point === undefined ||

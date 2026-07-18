@@ -3743,6 +3743,7 @@ describe("font editor state", () => {
 					points: [
 						{ id: "point:rejoin:first", mode: "hard" },
 						{ id: "point:rejoin:middle", mode: "hard" },
+						{ id: "point:rejoin:middle-2", mode: "hard" },
 						{ id: "point:rejoin:last", mode: "hard" },
 					],
 				},
@@ -3760,6 +3761,7 @@ describe("font editor state", () => {
 						outgoing: { x: 20, y: 0 },
 					},
 					{ pointId: "point:rejoin:middle", x: 50, y: 50 },
+					{ pointId: "point:rejoin:middle-2", x: 75, y: 50 },
 					{
 						pointId: "point:rejoin:last",
 						x: lastX,
@@ -3785,7 +3787,11 @@ describe("font editor state", () => {
 				oGlyphId,
 				"contour:rejoin",
 			]),
-		).toEqual(["point:rejoin:first", "point:rejoin:middle"])
+		).toEqual([
+			"point:rejoin:first",
+			"point:rejoin:middle",
+			"point:rejoin:middle-2",
+		])
 		expect(
 			editor.silo.getState(editor.atoms.contourClosed, [
 				oGlyphId,
@@ -3832,7 +3838,11 @@ describe("font editor state", () => {
 				oGlyphId,
 				"contour:rejoin",
 			]),
-		).toEqual(["point:rejoin:middle", "point:rejoin:last"])
+		).toEqual([
+			"point:rejoin:middle",
+			"point:rejoin:middle-2",
+			"point:rejoin:last",
+		])
 		const reverseSurvivor = editor.read.layerNode(
 			razorMasterId,
 			oGlyphId,
@@ -3841,6 +3851,48 @@ describe("font editor state", () => {
 		if (!reverseSurvivor.ok) throw new Error("Reverse survivor is missing.")
 		expect(reverseSurvivor.value.incoming).toEqual({ x: -20, y: 0 })
 		expect(reverseSurvivor.value.outgoing).toEqual({ x: -80, y: 0 })
+	})
+
+	it("rejects rejoining an open contour that would collapse below three nodes", () => {
+		const editor = createLoadedEditor("test/rejoin-too-short")
+		editor.actions.pasteContours({
+			glyphId: oGlyphId,
+			contours: [
+				{
+					id: "contour:short-rejoin",
+					closed: false,
+					points: [
+						{ id: "point:short:first", mode: "hard" },
+						{ id: "point:short:middle", mode: "hard" },
+						{ id: "point:short:last", mode: "hard" },
+					],
+				},
+			],
+			layers: [razorMasterId, blackMasterId].map((masterId) => ({
+				masterId,
+				points: [
+					{ pointId: "point:short:first", x: 0, y: 0 },
+					{ pointId: "point:short:middle", x: 50, y: 50 },
+					{ pointId: "point:short:last", x: 100, y: 0 },
+				],
+			})),
+		})
+		editor.clearHistory(oGlyphId)
+		const before = editor.read.editorGlyphSource(oGlyphId)
+		expect(() =>
+			editor.actions.joinOpenContours({
+				glyphId: oGlyphId,
+				draggedContourId: "contour:short-rejoin",
+				draggedPointId: "point:short:last",
+				targetContourId: "contour:short-rejoin",
+				targetPointId: "point:short:first",
+			}),
+		).toThrow("Only opposite endpoints")
+		expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
+				.length,
+		).toBe(0)
 	})
 
 	it("atomically translates a selected group and joins its moved endpoint", () => {
