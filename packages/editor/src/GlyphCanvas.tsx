@@ -89,10 +89,12 @@ import {
 } from "./outline-selection.ts"
 import {
 	penEndpointHandleBeingReplaced,
+	penDraggedHandle,
 	penGestureHandles,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
+	resolvePenEndpointSide,
 	resolvePenGesture,
 	type PenEndpointResolution,
 	type PenEndpointSide,
@@ -530,6 +532,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		penGesture?.endpoint,
 		penGestureResolution,
 	)
+	const penAuthoringContext =
+		penGesture?.endpoint !== null && penGesture?.endpoint !== undefined
+			? ({ kind: "endpoint", side: penGesture.endpoint.side } as const)
+			: penGesture?.closingPointId !== null &&
+				  penGesture?.closingPointId !== undefined
+				? ({ kind: "closure", direction: penDirection } as const)
+				: ({ kind: "point", direction: penDirection } as const)
+	const penPlacementDraggedHandle = penDraggedHandle(penAuthoringContext)
 	const penPlacement =
 		activeTool !== "pen" || editingTextIndex === null
 			? null
@@ -549,7 +559,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						)
 	const penHandles =
 		penEndpointResolution === null
-			? penGestureHandles(penGestureResolution, "outgoing")
+			? penGestureHandles(penGestureResolution, penPlacementDraggedHandle)
 			: {
 					...(penEndpointResolution.incoming === undefined
 						? {}
@@ -928,6 +938,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		gesture: PenGestureResolution,
 	): void => {
 		if (activeGlyphId === null) return
+		const draggedHandle = penDraggedHandle({
+			kind: "point",
+			direction: penDirection,
+		})
 		const pointId = nextPenEntityId("point") as PointId
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
@@ -935,7 +949,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				glyphId: activeGlyphId,
 				contourId,
 				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture, "outgoing"),
+				coordinates: penCoordinates(point, gesture, draggedHandle),
 			})
 			penContourResumeRef.current = contourId
 			setPenContourId(contourId)
@@ -945,7 +959,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				contourId: penContourId,
 				...(penDirection === "prepend" ? { at: 0 } : {}),
 				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture, "outgoing"),
+				coordinates: penCoordinates(point, gesture, draggedHandle),
 			})
 			penContourResumeRef.current = penContourId
 		}
@@ -967,8 +981,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			gesture,
 			altKey,
 		})
-		const forwardHandle: PenHandleKind =
-			target.side === "first" ? "incoming" : "outgoing"
+		const forwardHandle = penDraggedHandle({
+			kind: "endpoint",
+			side: target.side,
+		})
 		if (!(target.mode === "hard" && gesture.kind === "click")) {
 			workspace.font.actions.authorPenEndpoint({
 				glyphId: activeGlyphId,
@@ -1005,6 +1021,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				? currentPenContour.nodes.at(-1)
 				: currentPenContour.nodes[0]
 		if (closurePoint === undefined) return
+		const draggedHandle = penDraggedHandle({
+			kind: "closure",
+			direction: penDirection,
+		})
 		penContourResumeRef.current = penContourId
 		workspace.font.actions.closeContour({
 			glyphId: activeGlyphId,
@@ -1018,7 +1038,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 							coordinates: penCoordinates(
 								closurePoint,
 								gesture,
-								"outgoing",
+								draggedHandle,
 							).map(({ masterId, incoming, outgoing }) => ({
 								masterId,
 								incoming: incoming!,
@@ -2596,7 +2616,11 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																			pointId: point.pointId,
 																			x: point.x,
 																			y: point.y,
-																			side: pointIndex === 0 ? "first" : "last",
+																			side: resolvePenEndpointSide({
+																				pointIndex,
+																				pointCount: contour.nodes.length,
+																				direction: penDirection,
+																			}),
 																			mode: sourcePoint.mode,
 																			...(sourcePoint.incoming === undefined
 																				? {}

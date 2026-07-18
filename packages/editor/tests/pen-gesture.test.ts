@@ -1,13 +1,18 @@
+import type { ContourId, PointId } from "@create-font/states"
 import { describe, expect, it } from "vitest"
 
+import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
+import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { editorContourToPath, editorSegmentCubic } from "../src/geometry.ts"
 import {
 	PEN_DRAG_THRESHOLD_PIXELS,
 	penEndpointHandleBeingReplaced,
+	penDraggedHandle,
 	penGestureHandles,
 	penLayerCoordinates,
 	penPointerAction,
 	resolvePenEndpoint,
+	resolvePenEndpointSide,
 	resolvePenGesture,
 } from "../src/pen-gesture.ts"
 
@@ -342,6 +347,223 @@ describe("Pen gestures", () => {
 				},
 				pointers[2]!,
 			)
+		},
+	)
+
+	it("uses drawing direction only to disambiguate a one-node contour", () => {
+		expect(
+			resolvePenEndpointSide({
+				pointIndex: 0,
+				pointCount: 1,
+				direction: "append",
+			}),
+		).toBe("last")
+		expect(
+			resolvePenEndpointSide({
+				pointIndex: 0,
+				pointCount: 1,
+				direction: "prepend",
+			}),
+		).toBe("first")
+		expect(
+			resolvePenEndpointSide({
+				pointIndex: 0,
+				pointCount: 3,
+				direction: "append",
+			}),
+		).toBe("first")
+		expect(
+			resolvePenEndpointSide({
+				pointIndex: 2,
+				pointCount: 3,
+				direction: "prepend",
+			}),
+		).toBe("last")
+	})
+
+	it.each([
+		["unconstrained", false],
+		["Shift-constrained", true],
+	] as const)(
+		"keeps a resumed hard start and appended %s soft point in drawing order",
+		(_label, shiftKey) => {
+			const workspace = createEditorWorkspace()
+			const contourId = `contour:pen-hard-resume:${shiftKey}` as ContourId
+			const firstPointId = `point:pen-hard-resume:first:${shiftKey}` as PointId
+			const secondPointId =
+				`point:pen-hard-resume:second:${shiftKey}` as PointId
+			const transforms = [
+				{ masterId: razorMasterId, xScale: 1 },
+				{ masterId: blackMasterId, xScale: 0.94 },
+			] as const
+			const firstPoint = { x: 220, y: 120 }
+			const secondPoint = { x: 410, y: 250 }
+			const click = resolvePenGesture({
+				downScreen: { x: 0, y: 0 },
+				currentScreen: { x: 1, y: 1 },
+				worldScale: 1,
+			})
+			workspace.font.actions.createContour({
+				glyphId: oGlyphId,
+				contourId,
+				point: { id: firstPointId, mode: "hard" },
+				coordinates: penLayerCoordinates(
+					firstPoint,
+					click,
+					transforms,
+					penDraggedHandle({ kind: "point", direction: "append" }),
+				),
+			})
+
+			const resumedSide = resolvePenEndpointSide({
+				pointIndex: 0,
+				pointCount: 1,
+				direction: "append",
+			})
+			const endpointGesture = resolvePenGesture({
+				downScreen: { x: 0, y: 0 },
+				currentScreen: { x: 36, y: -18 },
+				worldScale: 1,
+				shiftKey,
+			})
+			const endpointDraggedHandle = penDraggedHandle({
+				kind: "endpoint",
+				side: resumedSide,
+			})
+			workspace.font.actions.authorPenEndpoint({
+				glyphId: oGlyphId,
+				contourId,
+				pointId: firstPointId,
+				forwardHandle: endpointDraggedHandle,
+				mode: "hard",
+				coordinates: penLayerCoordinates(
+					firstPoint,
+					endpointGesture,
+					transforms,
+					endpointDraggedHandle,
+				).map((coordinate) => ({
+					masterId: coordinate.masterId,
+					forward: coordinate[endpointDraggedHandle]!,
+				})),
+			})
+
+			const resumedDirection = resumedSide === "first" ? "prepend" : "append"
+			const pointGesture = resolvePenGesture({
+				downScreen: { x: 0, y: 0 },
+				currentScreen: { x: 28, y: -14 },
+				worldScale: 1,
+				shiftKey,
+			})
+			const pointDraggedHandle = penDraggedHandle({
+				kind: "point",
+				direction: resumedDirection,
+			})
+			const preview = penGestureHandles(pointGesture, pointDraggedHandle)
+			const committedCoordinates = penLayerCoordinates(
+				secondPoint,
+				pointGesture,
+				transforms,
+				pointDraggedHandle,
+			)
+			workspace.font.actions.insertPoint({
+				glyphId: oGlyphId,
+				contourId,
+				...(resumedDirection === "prepend" ? { at: 0 } : {}),
+				point: { id: secondPointId, mode: "soft" },
+				coordinates: committedCoordinates,
+			})
+
+			expect(resumedSide).toBe("last")
+			expect(endpointDraggedHandle).toBe("outgoing")
+			expect(pointDraggedHandle).toBe("outgoing")
+			expect(
+				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					oGlyphId,
+					contourId,
+				]),
+			).toEqual([firstPointId, secondPointId])
+			for (const [index, masterId] of [
+				razorMasterId,
+				blackMasterId,
+			].entries()) {
+				const first = workspace.font.read.layerNode(
+					masterId,
+					oGlyphId,
+					firstPointId,
+				)
+				const second = workspace.font.read.layerNode(
+					masterId,
+					oGlyphId,
+					secondPointId,
+				)
+				if (!first.ok || !second.ok)
+					throw new Error("Pen sequence did not commit.")
+				const expectedSecond = committedCoordinates[index]!
+				expect(second.value.incoming).toEqual(expectedSecond.incoming)
+				expect(second.value.outgoing).toEqual(expectedSecond.outgoing)
+				if (masterId === razorMasterId) {
+					expect(second.value.incoming?.x).toBeCloseTo(
+						preview?.incoming.x ?? Number.NaN,
+					)
+					expect(second.value.incoming?.y).toBeCloseTo(
+						preview?.incoming.y ?? Number.NaN,
+					)
+					expect(second.value.outgoing?.x).toBeCloseTo(
+						preview?.outgoing.x ?? Number.NaN,
+					)
+					expect(second.value.outgoing?.y).toBeCloseTo(
+						preview?.outgoing.y ?? Number.NaN,
+					)
+				}
+				const segment = editorSegmentCubic(
+					[first.value, second.value],
+					0,
+					false,
+				)!
+				const endpointPointer = first.value.outgoing!
+				const pointPointer = second.value.outgoing!
+				expectAligned(
+					{ x: segment.c1.x - segment.p0.x, y: segment.c1.y - segment.p0.y },
+					endpointPointer,
+				)
+				expectAligned(
+					{ x: segment.p3.x - segment.c2.x, y: segment.p3.y - segment.c2.y },
+					pointPointer,
+				)
+			}
+			expect(
+				workspace.font.silo.inspectTimeline(
+					workspace.font.glyphHistoryTimelines,
+					oGlyphId,
+				),
+			).toMatchObject({ at: 3, length: 3 })
+
+			workspace.font.undo(oGlyphId)
+			expect(
+				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					oGlyphId,
+					contourId,
+				]),
+			).toEqual([firstPointId])
+			expect(
+				workspace.font.silo.inspectTimeline(
+					workspace.font.glyphHistoryTimelines,
+					oGlyphId,
+				),
+			).toMatchObject({ at: 2, length: 3 })
+			workspace.font.redo(oGlyphId)
+			expect(
+				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					oGlyphId,
+					contourId,
+				]),
+			).toEqual([firstPointId, secondPointId])
+			expect(
+				workspace.font.silo.inspectTimeline(
+					workspace.font.glyphHistoryTimelines,
+					oGlyphId,
+				),
+			).toMatchObject({ at: 3, length: 3 })
 		},
 	)
 

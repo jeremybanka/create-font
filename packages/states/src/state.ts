@@ -4144,13 +4144,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			if (closed)
 				throw new TypeError("A closed contour has no dangling endpoint.")
 			const pointIndex = pointIds.indexOf(input.pointId)
-			const expectedHandle =
-				pointIndex === 0
-					? "incoming"
-					: pointIndex === pointIds.length - 1
-						? "outgoing"
-						: null
-			if (expectedHandle === null || expectedHandle !== input.forwardHandle) {
+			const expectedHandles: readonly EditorHandleKind[] =
+				pointIds.length === 1
+					? ["incoming", "outgoing"]
+					: pointIndex === 0
+						? ["incoming"]
+						: pointIndex === pointIds.length - 1
+							? ["outgoing"]
+							: []
+			if (!expectedHandles.includes(input.forwardHandle)) {
 				throw new TypeError(
 					`Point ${input.pointId} is not the requested dangling endpoint.`,
 				)

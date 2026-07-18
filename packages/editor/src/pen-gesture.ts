@@ -52,6 +52,12 @@ export type PenPointerAction =
 	| "split"
 
 export type PenEndpointSide = "first" | "last"
+export type PenDirection = "append" | "prepend"
+
+export type PenAuthoringContext =
+	| Readonly<{ kind: "point"; direction: PenDirection }>
+	| Readonly<{ kind: "endpoint"; side: PenEndpointSide }>
+	| Readonly<{ kind: "closure"; direction: PenDirection }>
 
 export interface PenEndpointResolution {
 	readonly mode: "soft" | "hard"
@@ -62,6 +68,34 @@ export interface PenEndpointResolution {
 export interface PenEndpointHandleTarget {
 	readonly pointId: string
 	readonly handle: "incoming" | "outgoing"
+}
+
+/** Chooses which handle follows the pointer for a Pen authoring operation. */
+export function penDraggedHandle(context: PenAuthoringContext): PenHandleKind {
+	return context.kind === "endpoint" && context.side === "first"
+		? "incoming"
+		: "outgoing"
+}
+
+/** Resolves an open node to the endpoint represented by the drawing context. */
+export function resolvePenEndpointSide(input: {
+	readonly pointIndex: number
+	readonly pointCount: number
+	readonly direction: PenDirection
+}): PenEndpointSide {
+	if (
+		input.pointCount < 1 ||
+		input.pointIndex < 0 ||
+		input.pointIndex >= input.pointCount
+	) {
+		throw new TypeError("Pen endpoint index is outside the open contour.")
+	}
+	if (input.pointCount === 1) {
+		return input.direction === "prepend" ? "first" : "last"
+	}
+	if (input.pointIndex === 0) return "first"
+	if (input.pointIndex === input.pointCount - 1) return "last"
+	throw new TypeError("The selected node is not an open contour endpoint.")
 }
 
 export const PEN_DRAG_THRESHOLD_PIXELS = 4
