@@ -9,6 +9,7 @@ await rm(outdir, { force: true, recursive: true })
 const builds = await Promise.all([
 	Bun.build({
 		conditions: [`development`],
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [
 			resolve(packageRoot, `public/index.html`),
 			resolve(packageRoot, `public/info/index.html`),
@@ -20,6 +21,7 @@ const builds = await Promise.all([
 	}),
 	Bun.build({
 		conditions: [`development`],
+		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
 		entrypoints: [resolve(packageRoot, `public/source-session.worker.ts`)],
 		outdir,
 		target: `browser`,

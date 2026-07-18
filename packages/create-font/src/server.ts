@@ -1,4 +1,5 @@
-import { basename, resolve } from "node:path"
+import { basename, dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { staticPlugin } from "@elysia/static"
 import { Elysia } from "elysia"
@@ -6,19 +7,37 @@ import { Elysia } from "elysia"
 import { createFontRpc, type CreateFontRpcOptions } from "./rpc.ts"
 
 const isBundledApplication = basename(import.meta.dir) === `dist`
-const editorAssets = resolve(
+const applicationAssets = resolve(
 	import.meta.dir,
 	isBundledApplication ? `public` : `../dist/dev/public`,
 )
+const editorPackageRoot = dirname(
+	fileURLToPath(import.meta.resolve(`@create-font/editor/package.json`)),
+)
+const editorBrowserAssets = resolve(editorPackageRoot, `dist/browser`)
+const editorBrowserJavaScript = Bun.file(
+	resolve(editorBrowserAssets, `editor.js`),
+)
+const editorBrowserStyles = Bun.file(resolve(editorBrowserAssets, `editor.css`))
+
+if (
+	isBundledApplication &&
+	(!(await editorBrowserJavaScript.exists()) ||
+		!(await editorBrowserStyles.exists()))
+) {
+	throw new Error(
+		`@create-font/editor browser assets are missing. Build the editor package before starting create-font.`,
+	)
+}
 
 const editorApplication = await staticPlugin({
 	alwaysStatic: true,
-	assets: editorAssets,
+	assets: applicationAssets,
 	indexHTML: true,
 	prefix: `/`,
 })
 const sourceSessionWorker = Bun.file(
-	resolve(editorAssets, `source-session.worker.js`),
+	resolve(applicationAssets, `source-session.worker.js`),
 )
 
 export type CreateFontServerOptions = CreateFontRpcOptions
@@ -26,6 +45,26 @@ export type CreateFontServerOptions = CreateFontRpcOptions
 export function createFontServerApp(options: CreateFontServerOptions = {}) {
 	return new Elysia({ name: `create-font-server` })
 		.use(createFontRpc(options))
+		.get(
+			`/editor/editor.js`,
+			() =>
+				new Response(editorBrowserJavaScript, {
+					headers: {
+						"cache-control": `public, max-age=0, must-revalidate`,
+						"content-type": `text/javascript; charset=utf-8`,
+					},
+				}),
+		)
+		.get(
+			`/editor/editor.css`,
+			() =>
+				new Response(editorBrowserStyles, {
+					headers: {
+						"cache-control": `public, max-age=0, must-revalidate`,
+						"content-type": `text/css; charset=utf-8`,
+					},
+				}),
+		)
 		.get(
 			`/source-session.worker.js`,
 			() =>
