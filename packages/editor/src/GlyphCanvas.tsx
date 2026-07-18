@@ -81,6 +81,7 @@ import {
 	contoursToPath,
 	contourStartDirection,
 	editorContourToPath,
+	editorContourPaintPaths,
 	editorContoursToPath,
 	nearestEditorSegment,
 } from "./geometry.ts"
@@ -583,6 +584,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		.join("|")
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
+	const contourPaintPaths = editorContourPaintPaths(visibleContours)
 	const metricGuides = useMemo(
 		() => resolveVerticalMetricGuides(metrics),
 		[metrics],
@@ -3161,6 +3163,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										fill={palette.previewInk}
 										listening={false}
 									/>
+									<Path
+										name="momentary-open-contour-stroke"
+										data={contourPaintPaths.openPath}
+										fillEnabled={false}
+										stroke={palette.outline}
+										strokeWidth={1.25 * inverseScale}
+										listening={false}
+									/>
 								</Group>
 							)}
 							{editingPosition === undefined ||
@@ -3398,7 +3408,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 										listening={false}
 									/>
 									<Path
-										data={editorContoursToPath(visibleContours)}
+										name="closed-contour-outline"
+										data={contourPaintPaths.closedPath}
+										fillEnabled={false}
+										stroke={palette.outline}
+										strokeWidth={1.25 * inverseScale}
+										listening={false}
+									/>
+									<Path
+										name="open-contour-stroke"
+										data={contourPaintPaths.openPath}
 										fillEnabled={false}
 										stroke={palette.outline}
 										strokeWidth={1.25 * inverseScale}

@@ -25,11 +25,18 @@ export interface NearestEditorSegment {
 }
 
 export interface CombinedPathPreview {
-	/** Nonzero-fill path data; source contours remain independently editable. */
+	/** Nonzero-fill path data for closed contours only. */
 	readonly path: string
 	readonly fillRule: "nonzero"
 	readonly sourceContourCount: number
 	readonly nonDestructive: true
+}
+
+export interface EditorContourPaintPaths {
+	/** Closed contours, suitable for fill and outline painting. */
+	readonly closedPath: string
+	/** Open contours, suitable for stroke-only painting. */
+	readonly openPath: string
 }
 
 export interface ContourStartDirection {
@@ -337,6 +344,25 @@ export function editorContoursToPath(
 		.join(" ")
 }
 
+/** Partitions editor contours by topology so open contours are never filled. */
+export function editorContourPaintPaths(
+	contours: readonly (
+		| readonly EditorOutlineNode[]
+		| { readonly closed: boolean; readonly nodes: readonly EditorOutlineNode[] }
+	)[],
+): EditorContourPaintPaths {
+	const closedContours = []
+	const openContours = []
+	for (const contour of contours) {
+		if (!("nodes" in contour) || contour.closed) closedContours.push(contour)
+		else openContours.push(contour)
+	}
+	return {
+		closedPath: editorContoursToPath(closedContours),
+		openPath: editorContoursToPath(openContours),
+	}
+}
+
 /**
  * Produces the non-destructive paint representation used for overlap preview.
  * Nonzero fill visually unions same-winding overlaps without changing source
@@ -350,7 +376,7 @@ export function combinedEditorPathPreview(
 	)[],
 ): CombinedPathPreview {
 	return {
-		path: editorContoursToPath(contours),
+		path: editorContourPaintPaths(contours).closedPath,
 		fillRule: "nonzero",
 		sourceContourCount: contours.length,
 		nonDestructive: true,

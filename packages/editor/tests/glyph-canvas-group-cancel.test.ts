@@ -6,7 +6,9 @@ import { createRequire } from "node:module"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
-import { oGlyphId } from "../src/demo-font.ts"
+import type { ContourId, PointId } from "@create-font/states"
+
+import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
@@ -30,7 +32,7 @@ afterEach(() => {
 	vi.restoreAllMocks()
 })
 
-function mountSelectedContour() {
+function mountSelectedContour({ withOpenContour = false, zoom = 1 } = {}) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
 			const context = {
@@ -50,7 +52,38 @@ function mountSelectedContour() {
 		},
 	)
 	const workspace = createEditorWorkspace()
+	if (withOpenContour) {
+		const contourId = "contour:open-render-test" as ContourId
+		workspace.font.actions.createContour({
+			glyphId: oGlyphId,
+			contourId,
+			point: {
+				id: "point:open-render-test:first" as PointId,
+				mode: "hard",
+			},
+			coordinates: [
+				{ masterId: razorMasterId, x: 200, y: 200 },
+				{ masterId: blackMasterId, x: 220, y: 220 },
+			],
+		})
+		workspace.font.actions.insertPoint({
+			glyphId: oGlyphId,
+			contourId,
+			point: {
+				id: "point:open-render-test:second" as PointId,
+				mode: "hard",
+			},
+			coordinates: [
+				{ masterId: razorMasterId, x: 500, y: 350 },
+				{ masterId: blackMasterId, x: 520, y: 370 },
+			],
+		})
+	}
 	workspace.actions.enterGlyphEdit(2, oGlyphId)
+	workspace.font.silo.setState(workspace.ui.canvasView, {
+		...workspace.font.silo.getState(workspace.ui.canvasView),
+		zoom,
+	})
 	const layer = workspace.font.silo.getState(workspace.ui.activeLayer)
 	const contour = layer?.contours[0]
 	if (contour === undefined || contour.nodes.length < 2)
@@ -80,7 +113,16 @@ function mountSelectedContour() {
 	const canvas = host.querySelector("canvas")
 	if (stage === undefined || !(canvas instanceof HTMLCanvasElement))
 		throw new Error("GlyphCanvas did not mount a Konva stage.")
-	return { canvas, contour, host, join, selectedPointIds, stage, transform }
+	return {
+		canvas,
+		contour,
+		host,
+		join,
+		selectedPointIds,
+		stage,
+		transform,
+		workspace,
+	}
 }
 
 function pointerDown(target: MountedNode, canvas: HTMLCanvasElement): void {
@@ -126,6 +168,41 @@ function expectCancelledSession(
 }
 
 describe("GlyphCanvas group drag cancellation", () => {
+	it("paints open contours only as screen-constant strokes", () => {
+		const { stage } = mountSelectedContour({ withOpenContour: true })
+		const fill = stage.findOne(".momentary-glyph-preview")
+		const closedOutline = stage.findOne(".closed-contour-outline")
+		const openStroke = stage.findOne(".open-contour-stroke")
+		if (closedOutline === undefined || openStroke === undefined)
+			throw new Error("The separated contour paint layers were not rendered.")
+
+		expect(closedOutline.data()).toContain("Z")
+		expect(openStroke.data()).toBe("M 200 200 L 500 350")
+		expect(openStroke.data()).not.toContain("Z")
+		expect(openStroke.fillEnabled()).toBe(false)
+		expect(openStroke.listening()).toBe(false)
+		expect(openStroke.stroke()).toBe("#f4f3ef")
+		expect(openStroke.strokeWidth()).toBeCloseTo(1.25 / 0.18)
+		expect(fill).toBeUndefined()
+
+		const zoomed = mountSelectedContour({ withOpenContour: true, zoom: 2 })
+		expect(
+			zoomed.stage.findOne(".open-contour-stroke")?.strokeWidth(),
+		).toBeCloseTo(1.25 / 0.36)
+
+		act(() => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "e" }))
+		})
+		const momentaryFill = zoomed.stage.findOne(".momentary-glyph-preview")
+		const momentaryOpen = zoomed.stage.findOne(".momentary-open-contour-stroke")
+		if (momentaryFill === undefined || momentaryOpen === undefined)
+			throw new Error("Momentary preview paint layers were not rendered.")
+		expect(momentaryFill.data()).not.toContain("M 200 200")
+		expect(momentaryOpen.data()).toBe("M 200 200 L 500 350")
+		expect(momentaryOpen.fillEnabled()).toBe(false)
+		expect(momentaryOpen.strokeWidth()).toBeCloseTo(1.25 / 0.36)
+	})
+
 	it("restores a node group drag when Konva forwards touchcancel as dragend", () => {
 		const { canvas, join, selectedPointIds, stage, transform } =
 			mountSelectedContour()
