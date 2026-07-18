@@ -3622,6 +3622,46 @@ describe("font editor state", () => {
 			})
 			editor.clearHistory(oGlyphId)
 			const before = editor.read.editorGlyphSource(oGlyphId)
+			const expectedLayerGeometry = new Map(
+				[razorMasterId, blackMasterId].map((masterId) => {
+					const dragged = editor.read.layerNode(
+						masterId,
+						oGlyphId,
+						draggedPointId,
+					)
+					const target = editor.read.layerNode(
+						masterId,
+						oGlyphId,
+						targetPointId,
+					)
+					if (!dragged.ok || !target.ok)
+						throw new Error("Join fixture node is missing.")
+					const connectedSource =
+						draggedPointId === "point:join:a:0"
+							? dragged.value.outgoing
+							: dragged.value.incoming
+					const connectedTarget =
+						targetPointId === "point:join:b:0"
+							? target.value.outgoing
+							: target.value.incoming
+					if (connectedSource === undefined || connectedTarget === undefined)
+						throw new Error("Join fixture connected handle is missing.")
+					return [
+						masterId,
+						{
+							target: { x: target.value.x, y: target.value.y },
+							sourceControl: {
+								x: dragged.value.x + connectedSource.x,
+								y: dragged.value.y + connectedSource.y,
+							},
+							targetControl: {
+								x: target.value.x + connectedTarget.x,
+								y: target.value.y + connectedTarget.y,
+							},
+						},
+					] as const
+				}),
+			)
 			expect(before?.contours).toContainEqual(
 				expect.objectContaining({ id: "contour:join:a" }),
 			)
@@ -3658,12 +3698,126 @@ describe("font editor state", () => {
 			expect(
 				editor.read.layerNode(razorMasterId, oGlyphId, draggedPointId).ok,
 			).toBe(false)
+			for (const [masterId, expectedGeometry] of expectedLayerGeometry) {
+				const survivor = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					targetPointId,
+				)
+				if (!survivor.ok) throw new Error("Joined survivor is missing.")
+				expect({ x: survivor.value.x, y: survivor.value.y }).toEqual(
+					expectedGeometry.target,
+				)
+				expect(survivor.value.incoming).toBeDefined()
+				expect(survivor.value.outgoing).toBeDefined()
+				expect(
+					survivor.value.x + (survivor.value.incoming?.x ?? 0),
+				).toBeCloseTo(expectedGeometry.sourceControl.x, 9)
+				expect(
+					survivor.value.y + (survivor.value.incoming?.y ?? 0),
+				).toBeCloseTo(expectedGeometry.sourceControl.y, 9)
+				expect(
+					survivor.value.x + (survivor.value.outgoing?.x ?? 0),
+				).toBeCloseTo(expectedGeometry.targetControl.x, 9)
+				expect(
+					survivor.value.y + (survivor.value.outgoing?.y ?? 0),
+				).toBeCloseTo(expectedGeometry.targetControl.y, 9)
+			}
 			expect(
 				editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId)
 					.length,
 			).toBe(1)
 			editor.undo(oGlyphId)
 			expect(editor.read.editorGlyphSource(oGlyphId)).toEqual(before)
+		}
+	})
+
+	it("preserves a valid soft join and hardens an incompatible one", () => {
+		for (const [caseIndex, sourceIncomingY, expectedMode] of [
+			[0, 0, "soft"],
+			[1, 10, "hard"],
+		] as const) {
+			const editor = createLoadedEditor(`test/join-soft-mode-${caseIndex}`)
+			editor.actions.pasteContours({
+				glyphId: oGlyphId,
+				contours: [
+					{
+						id: "contour:join:soft:source",
+						closed: false,
+						points: [
+							{ id: "point:join:soft:source:0", mode: "hard" },
+							{ id: "point:join:soft:source:1", mode: "hard" },
+						],
+					},
+					{
+						id: "contour:join:soft:target",
+						closed: false,
+						points: [
+							{ id: "point:join:soft:target:0", mode: "soft" },
+							{ id: "point:join:soft:target:1", mode: "hard" },
+						],
+					},
+				],
+				layers: [razorMasterId, blackMasterId].map((masterId, index) => ({
+					masterId,
+					points: [
+						{
+							pointId: "point:join:soft:source:0",
+							x: 0,
+							y: index * 10,
+						},
+						{
+							pointId: "point:join:soft:source:1",
+							x: 100,
+							y: index * 10,
+							incoming: { x: -20, y: sourceIncomingY },
+						},
+						{
+							pointId: "point:join:soft:target:0",
+							x: 110,
+							y: index * 10,
+							incoming: { x: -30, y: 0 },
+							outgoing: { x: 30, y: 0 },
+						},
+						{
+							pointId: "point:join:soft:target:1",
+							x: 210,
+							y: index * 10,
+						},
+					],
+				})),
+			})
+			editor.actions.joinOpenContours({
+				glyphId: oGlyphId,
+				draggedContourId: "contour:join:soft:source",
+				draggedPointId: "point:join:soft:source:1",
+				targetContourId: "contour:join:soft:target",
+				targetPointId: "point:join:soft:target:0",
+			})
+			expect(
+				editor.silo.getState(editor.atoms.point, [
+					oGlyphId,
+					"point:join:soft:target:0",
+				]),
+			).toEqual({ mode: expectedMode })
+			for (const [masterId, index] of [
+				[razorMasterId, 0],
+				[blackMasterId, 1],
+			] as const) {
+				const survivor = editor.read.layerNode(
+					masterId,
+					oGlyphId,
+					"point:join:soft:target:0",
+				)
+				if (!survivor.ok) throw new Error("Joined survivor is missing.")
+				expect(survivor.value.x).toBe(110)
+				expect(survivor.value.y).toBe(index * 10)
+				expect(survivor.value.incoming).toEqual({
+					x: -30,
+					y: sourceIncomingY,
+				})
+				expect(survivor.value.outgoing).toEqual({ x: 30, y: 0 })
+			}
 		}
 	})
 

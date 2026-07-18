@@ -3,6 +3,7 @@ import type {
 	EditorHandleKind,
 	EditorLayerNode,
 	GlyphId,
+	MasterId,
 	PointId,
 } from "@create-font/states"
 import {
@@ -67,6 +68,7 @@ import {
 	previewHandleDrag,
 	resolveHandleEdit,
 	segmentPointerAction,
+	shouldActivateEditorControl,
 	shouldSelectContourOnSegmentDoubleClick,
 	toggledNodeMode,
 } from "./curve-editing.ts"
@@ -135,6 +137,7 @@ import {
 	type ShapeToolKind,
 } from "./shape-gesture.ts"
 import {
+	finalizePointDragPreview,
 	resolveOpenEndpointTarget,
 	type OpenEndpointTarget,
 } from "./topology-tools.ts"
@@ -178,13 +181,17 @@ interface PointDrag {
 	readonly pointerId: number | null
 	readonly captureTarget: HTMLCanvasElement | null
 	readonly captureCancelListener: ((event: PointerEvent) => void) | null
+	readonly glyphId: GlyphId
+	readonly masterId: MasterId
 	readonly pointId: PointId
 	readonly contourId: ContourId
 	readonly joinEligible: boolean
 	readonly origin: Readonly<{ x: number; y: number }>
 	readonly startPointer: Readonly<{ x: number; y: number }>
 	readonly projectionCandidates: readonly SegmentProjectionCandidate[]
-	readonly target: DragPositionTarget
+	readonly target: DragPositionTarget & {
+		getLayer(): Readonly<{ batchDraw(): unknown }> | null
+	}
 	readonly tangentEligible: boolean
 	readonly tangentConstraint: TangentSlideConstraint | null
 	lastRawPoint: Readonly<{ x: number; y: number }> | null
@@ -1015,17 +1022,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		) {
 			return false
 		}
-		releaseDirectDragCapture(drag)
-		pointDragRef.current = null
-		directDragPointerRef.current = null
-		directDragCaptureTargetRef.current = null
-		setDraggedPoint(null)
-		setTransformPreview(null)
-		setTangentGuide(null)
-		setJoinTarget(null)
-		drag.joinTarget = null
-		setActiveSnaps([])
-		finishCancelledTarget(drag.target, drag.origin)
+		finalizePointDrag(drag, { restoreTarget: true })
 		return true
 	}
 	const cancelHandleDrag = (pointerId?: number): boolean => {
@@ -1091,6 +1088,23 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			)
 		}
 		return { pointerId, captureTarget, captureCancelListener }
+	}
+	const finalizePointDrag = (
+		drag: PointDrag,
+		options: Readonly<{ restoreTarget: boolean }>,
+	): void => {
+		if (pointDragRef.current !== drag) return
+		releaseDirectDragCapture(drag)
+		if (options.restoreTarget) finishCancelledTarget(drag.target, drag.origin)
+		finalizePointDragPreview(drag, false)
+		pointDragRef.current = null
+		directDragPointerRef.current = null
+		directDragCaptureTargetRef.current = null
+		setDraggedPoint(null)
+		setTransformPreview(null)
+		setTangentGuide(null)
+		setJoinTarget(null)
+		setActiveSnaps([])
 	}
 	const targetsInside = (
 		box: SelectionBox,
@@ -1294,7 +1308,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		cancelPointDrag()
 		cancelHandleDrag()
 		const interruptedGroupDrag = groupDragRef.current
-		if (interruptedGroupDrag?.restoreTargetAfterCommit) {
+		if (interruptedGroupDrag !== null) {
 			interruptedGroupDrag.node.position({
 				x: interruptedGroupDrag.targetX,
 				y: interruptedGroupDrag.targetY,
@@ -1302,6 +1316,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			interruptedGroupDrag.node.getLayer()?.batchDraw()
 		}
 		groupDragRef.current = null
+		setDraggedHandle(null)
 		setTransformPreview(null)
 		setTransformCursor(null)
 		setMomentaryPreview(false)
@@ -1351,14 +1366,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		}
 	}, [altHeld, shiftHeld])
 
-	const commitPoint = (point: DraggedPoint): void => {
-		if (activeGlyphId === null) return
-		workspace.font.actions.movePoints({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
-			points: [{ pointId: point.pointId, x: point.x, y: point.y }],
-		})
-	}
 	const commitTangentSlide = (resolution: TangentSlideResolution): void => {
 		if (activeGlyphId === null) return
 		const point = resolution.points[0]
@@ -1381,12 +1388,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 	}
 	const commitPointOrJoin = (drag: PointDrag, point: DraggedPoint): void => {
-		if (activeGlyphId === null || drag.joinTarget === null) {
-			commitPoint(point)
+		if (
+			activeGlyphId !== drag.glyphId ||
+			activeMasterId !== drag.masterId ||
+			activeTool !== "select"
+		)
+			throw new TypeError("The point drag no longer belongs to this canvas.")
+		if (drag.joinTarget === null) {
+			workspace.font.actions.movePoints({
+				masterId: drag.masterId,
+				glyphId: drag.glyphId,
+				points: [{ pointId: point.pointId, x: point.x, y: point.y }],
+			})
 			return
 		}
 		workspace.font.actions.joinOpenContours({
-			glyphId: activeGlyphId,
+			glyphId: drag.glyphId,
 			draggedContourId: drag.contourId,
 			draggedPointId: drag.pointId,
 			targetContourId: drag.joinTarget.contourId,
@@ -3459,7 +3476,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																	MouseEvent | PointerEvent | TouchEvent
 																>,
 															): void => {
-																if (activeTool === "pen") {
+																if (!shouldActivateEditorControl(activeTool)) {
 																	if (event !== undefined)
 																		event.cancelBubble = true
 																	return
@@ -3472,7 +3489,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																	MouseEvent | PointerEvent | TouchEvent
 																>,
 															): void => {
-																if (activeTool === "pen") {
+																if (!shouldActivateEditorControl(activeTool)) {
 																	if (event !== undefined)
 																		event.cancelBubble = true
 																	return
@@ -3492,7 +3509,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																>,
 															): void => {
 																event.cancelBubble = true
-																if (activeTool !== "select") return
+																if (!shouldActivateEditorControl(activeTool))
+																	return
 																setSelection(Object.freeze([nodeTarget]))
 																toggleNodeMode(point.pointId, point.mode)
 															}
@@ -3556,6 +3574,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 															const beginPointDrag = (
 																event: KonvaEventObject<DragEvent>,
 															): void => {
+																if (activeGlyphId === null) {
+																	event.target.stopDrag()
+																	return
+																}
 																selectPoint(event)
 																const startPointer = pointerInEditingGlyph(
 																	event,
@@ -3566,6 +3588,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																const capture = directDragCapture()
 																pointDragRef.current = {
 																	...capture,
+																	glyphId: activeGlyphId,
+																	masterId: activeMasterId,
 																	pointId: point.pointId,
 																	contourId: contour.id,
 																	joinEligible: isPathEndpoint,
@@ -3685,7 +3709,18 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																	if (commitGroupDrag(event)) return
 																	const drag = pointDragRef.current
 																	if (drag?.pointId !== point.pointId) return
-																	let committedSuccessfully = false
+																	if (
+																		event.evt === undefined ||
+																		activeGlyphId !== drag.glyphId ||
+																		activeMasterId !== drag.masterId ||
+																		activeTool !== "select"
+																	) {
+																		finalizePointDrag(drag, {
+																			restoreTarget: true,
+																		})
+																		return
+																	}
+																	let didCommit = false
 																	try {
 																		const committed = applyPointDrag(
 																			drag,
@@ -3695,29 +3730,17 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		)
 																		if (committed.kind === "tangent") {
 																			commitTangentSlide(committed.resolution)
-																			committedSuccessfully = true
+																			didCommit = true
 																		} else if (committed.kind === "point") {
 																			commitPointOrJoin(drag, committed.point)
-																			committedSuccessfully = true
+																			didCommit = true
 																		}
 																	} catch (error) {
 																		reportGeometryCommitError(error)
 																	} finally {
-																		releaseDirectDragCapture(drag)
-																		pointDragRef.current = null
-																		directDragPointerRef.current = null
-																		directDragCaptureTargetRef.current = null
-																		setDraggedPoint(null)
-																		setTransformPreview(null)
-																		setTangentGuide(null)
-																		setJoinTarget(null)
-																		setActiveSnaps([])
-																		if (!committedSuccessfully) {
-																			finishCancelledTarget(
-																				drag.target,
-																				drag.origin,
-																			)
-																		}
+																		finalizePointDrag(drag, {
+																			restoreTarget: !didCommit,
+																		})
 																	}
 																},
 															}

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest"
 import type { EditorCanvasContour } from "../src/editor-workspace.ts"
 import {
 	ENDPOINT_JOIN_RADIUS_PX,
+	finalizePointDragPreview,
 	resolveOpenEndpointTarget,
+	type OpenEndpointTarget,
 } from "../src/topology-tools.ts"
 
 const contours: readonly EditorCanvasContour[] = [
@@ -88,5 +90,42 @@ describe("open endpoint join targeting", () => {
 				5,
 			),
 		).toBeNull()
+	})
+})
+
+describe("point drag finalization", () => {
+	it("restores failed previews and clears every transient join field", () => {
+		const positions: { x: number; y: number }[] = []
+		let drawCount = 0
+		const drag = {
+			origin: { x: 10, y: 20 },
+			target: {
+				position(point: Readonly<{ x: number; y: number }>) {
+					positions.push({ ...point })
+				},
+				getLayer: () => ({
+					batchDraw: () => {
+						drawCount += 1
+					},
+				}),
+			},
+			lastRawPoint: { x: 30, y: 40 } as Readonly<{
+				x: number
+				y: number
+			}> | null,
+			joinTarget: {
+				contourId: "contour:target:a",
+				pointId: "point:target:a:first",
+				x: 120,
+				y: 0,
+			} as const satisfies OpenEndpointTarget,
+		}
+
+		finalizePointDragPreview(drag, true)
+
+		expect(positions).toEqual([{ x: 10, y: 20 }])
+		expect(drawCount).toBe(1)
+		expect(drag.lastRawPoint).toBeNull()
+		expect(drag.joinTarget).toBeNull()
 	})
 })

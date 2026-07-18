@@ -11,6 +11,29 @@ export interface OpenEndpointTarget {
 	readonly y: number
 }
 
+export interface PointDragPreview {
+	readonly origin: Readonly<{ x: number; y: number }>
+	readonly target: {
+		position(point: Readonly<{ x: number; y: number }>): unknown
+		getLayer(): Readonly<{ batchDraw(): unknown }> | null
+	}
+	lastRawPoint: Readonly<{ x: number; y: number }> | null
+	joinTarget: OpenEndpointTarget | null
+}
+
+/** Clears transient join state and optionally restores an uncommitted canvas node. */
+export function finalizePointDragPreview(
+	drag: PointDragPreview,
+	restoreTarget: boolean,
+): void {
+	if (restoreTarget) {
+		drag.target.position(drag.origin)
+		drag.target.getLayer()?.batchDraw()
+	}
+	drag.lastRawPoint = null
+	drag.joinTarget = null
+}
+
 export function resolveOpenEndpointTarget(
 	contours: readonly EditorCanvasContour[],
 	sourceContourId: ContourId,

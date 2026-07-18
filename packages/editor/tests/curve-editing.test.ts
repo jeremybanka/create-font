@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	segmentPointerAction,
+	shouldActivateEditorControl,
 	shouldSelectContourOnSegmentDoubleClick,
 } from "../src/curve-editing.ts"
 
@@ -27,5 +28,11 @@ describe("curve editing gestures", () => {
 		expect(
 			shouldSelectContourOnSegmentDoubleClick("pen", { altKey: false }),
 		).toBe(false)
+	})
+
+	it("makes node and handle activation exclusive to Select", () => {
+		expect(shouldActivateEditorControl("select")).toBe(true)
+		expect(shouldActivateEditorControl("knife")).toBe(false)
+		expect(shouldActivateEditorControl("pen")).toBe(false)
 	})
 })
