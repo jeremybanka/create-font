@@ -1,3 +1,4 @@
+import type { EditorFontSource } from "@create-font/states"
 import { Silo } from "atom.io"
 import { describe, expect, it } from "vitest"
 
@@ -54,6 +55,64 @@ import {
 function previewGlyph(workspace: EditorWorkspace, index: number) {
 	const item = workspace.font.silo.getState(workspace.ui.previewRun)[index]
 	return item?.kind === "glyph" ? item.glyph : null
+}
+
+const middleMasterId = "master:middle" as const
+
+function makeThreeMasterFont(): EditorFontSource {
+	const source = makeDemoFont()
+	const defaultMaster = source.masters.find(
+		(master) => master.id === razorMasterId,
+	)
+	const blackMaster = source.masters.find(
+		(master) => master.id === blackMasterId,
+	)
+	if (defaultMaster === undefined || blackMaster === undefined)
+		throw new Error("Fixture masters are missing.")
+	return {
+		...source,
+		masters: [
+			defaultMaster,
+			{
+				id: middleMasterId,
+				kind: "source",
+				name: "Middle",
+				location: { [weightAxisId]: 500 },
+				support: { kind: "non-intermediate" },
+			},
+			blackMaster,
+		],
+		glyphs: source.glyphs.map((glyph) => {
+			const defaultLayer = glyph.layers.find(
+				(layer) => layer.masterId === razorMasterId,
+			)
+			const blackLayer = glyph.layers.find(
+				(layer) => layer.masterId === blackMasterId,
+			)
+			if (defaultLayer === undefined || blackLayer === undefined)
+				throw new Error("Fixture glyph layers are missing.")
+			return {
+				...glyph,
+				layers: [
+					defaultLayer,
+					{ ...structuredClone(blackLayer), masterId: middleMasterId },
+					blackLayer,
+				],
+			}
+		}),
+	}
+}
+
+function makeOneMasterFont(): EditorFontSource {
+	const source = makeDemoFont()
+	return {
+		...source,
+		masters: source.masters.filter((master) => master.id === razorMasterId),
+		glyphs: source.glyphs.map((glyph) => ({
+			...glyph,
+			layers: glyph.layers.filter((layer) => layer.masterId === razorMasterId),
+		})),
+	}
 }
 
 describe("editor workspace", () => {
@@ -131,6 +190,95 @@ describe("editor workspace", () => {
 		)
 		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
 	})
+
+	it("cycles through ordered masters in both directions and wraps", () => {
+		const workspace = createEditorWorkspace(makeThreeMasterFont())
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.actions.selectTool("pen")
+		const pointId = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes[0]?.pointId
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		workspace.font.silo.setState(workspace.ui.selection, [
+			{ kind: "node", pointId },
+		])
+
+		workspace.actions.selectNextMaster()
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			middleMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.previewLocation)).toEqual({
+			[weightAxisId]: 500,
+		})
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
+		expect(workspace.font.silo.getState(workspace.ui.comparisonMasterId)).toBe(
+			razorMasterId,
+		)
+
+		workspace.actions.selectNextMaster()
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			blackMasterId,
+		)
+		workspace.actions.selectNextMaster()
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			razorMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.previewLocation)).toEqual({
+			[weightAxisId]: 100,
+		})
+
+		workspace.actions.selectPreviousMaster()
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			blackMasterId,
+		)
+		workspace.actions.selectPreviousMaster()
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			middleMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(0)
+		expect(workspace.font.silo.getState(workspace.ui.activeTool)).toBe("pen")
+		expect(
+			workspace.font.silo.getState(workspace.ui.comparisonMasterId),
+		).not.toBe(middleMasterId)
+	})
+
+	it("reads current master order after replacing the source", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.replaceSource(makeThreeMasterFont())
+
+		workspace.actions.selectNextMaster()
+
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			middleMasterId,
+		)
+	})
+
+	it("leaves editor state untouched when cycling a one-master font", () => {
+		const workspace = createEditorWorkspace(makeOneMasterFont())
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		workspace.actions.selectTool("pen")
+		const pointId = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes[0]?.pointId
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		const selection = Object.freeze([{ kind: "node" as const, pointId }])
+		workspace.font.silo.setState(workspace.ui.selection, selection)
+
+		workspace.actions.selectNextMaster()
+		workspace.actions.selectPreviousMaster()
+
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			razorMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toBe(selection)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(0)
+		expect(workspace.font.silo.getState(workspace.ui.activeTool)).toBe("pen")
+	})
+
 	it("coalesces a transaction into one external-store notification", async () => {
 		const silo = new Silo({
 			name: "test/settled-selector",

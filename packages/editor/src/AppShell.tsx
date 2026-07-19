@@ -30,6 +30,7 @@ import css from "./AppShell.module.css"
 import { FontInfo } from "./FontInfo.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
+import { masterPaletteCommands } from "./master-commands.ts"
 import { useO, useOF, useOptionalOF, useOptionalTL } from "./state-hooks.ts"
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
@@ -65,6 +66,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const masterIds = useO(workspace.font.atoms.masterIds)
 	const glyph = useOptionalOF(
 		workspace.font.selectors.editorGlyphSource,
 		activeGlyphId,
@@ -149,6 +151,11 @@ export function AppShell({ workspace }: AppShellProps) {
 				setAddingGlyphs(true)
 			},
 		},
+		...masterPaletteCommands(
+			masterIds.length,
+			workspace.actions.selectPreviousMaster,
+			workspace.actions.selectNextMaster,
+		),
 		...Object.values(TOOLS).map((tool) => {
 			const editingTool = [
 				"select",
