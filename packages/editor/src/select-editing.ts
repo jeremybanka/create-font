@@ -290,6 +290,49 @@ export interface SelectionNudgePlan {
 	readonly result: SelectionTransformResult
 }
 
+/** Moves one hard node while preserving every authored absolute handle endpoint. */
+export function planFixedHandleNodeMove(
+	node: EditorLayerNode,
+	candidate: Readonly<{ x: number; y: number }>,
+): SelectionTransformResult | null {
+	if (node.mode !== "hard" || !finitePoint(candidate)) return null
+	const handles = (["incoming", "outgoing"] as const).flatMap((handle) => {
+		const endpoint = absoluteHandle(node, handle)
+		return endpoint === null
+			? []
+			: [{ pointId: node.pointId, handle, ...endpoint }]
+	})
+	if (handles.length === 0 || handles.some((handle) => !finitePoint(handle)))
+		return null
+	return {
+		points: [{ pointId: node.pointId, x: candidate.x, y: candidate.y }],
+		handles,
+	}
+}
+
+/** Selects fixed-handle nudging only for one hard node and no handle controls. */
+export function planSelectedHardNodeNudge(
+	nodes: readonly EditorLayerNode[],
+	selection: readonly EditorSelectionTarget[],
+	deltaX: number,
+	deltaY: number,
+): SelectionTransformResult | null {
+	if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return null
+	const unique = new Map(
+		selection.map((target) => [selectionKey(target), target]),
+	)
+	if (unique.size !== 1) return null
+	const target = unique.values().next().value
+	if (target?.kind !== "node") return null
+	const node = nodes.find((candidate) => candidate.pointId === target.pointId)
+	return node === undefined
+		? null
+		: planFixedHandleNodeMove(node, {
+				x: node.x + deltaX,
+				y: node.y + deltaY,
+			})
+}
+
 /** Plans one atomic node/handle keyboard translation. */
 export function planSelectionNudge(
 	nodes: readonly EditorLayerNode[],

@@ -29,7 +29,7 @@ afterEach(() => {
 	vi.restoreAllMocks()
 })
 
-function mountWithSelectedNodes(count = 2) {
+function mountWithSelectedNodes(count = 2, hard = false) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
 			const context = {
@@ -51,9 +51,25 @@ function mountWithSelectedNodes(count = 2) {
 	const workspace = createEditorWorkspace()
 	workspace.actions.enterGlyphEdit(2, oGlyphId)
 	const layer = workspace.font.silo.getState(workspace.ui.activeLayer)
-	const selected = layer?.contours[0]?.nodes.slice(0, count)
+	let selected = layer?.contours[0]?.nodes.slice(0, count)
 	if (selected === undefined || selected.length !== count)
 		throw new Error("The demo glyph does not contain enough nodes.")
+	if (hard) {
+		for (const node of selected) {
+			workspace.font.actions.setNodeMode({
+				masterId: workspace.font.silo.getState(workspace.ui.activeMasterId),
+				glyphId: oGlyphId,
+				pointId: node.pointId,
+				mode: "hard",
+			})
+		}
+		workspace.font.clearHistory(oGlyphId)
+		selected = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes.slice(0, count)
+		if (selected === undefined || selected.length !== count)
+			throw new Error("The hard demo nodes are unavailable.")
+	}
 	workspace.font.silo.setState(
 		workspace.ui.selection,
 		selected.map(({ pointId }) => ({ kind: "node" as const, pointId })),
@@ -73,9 +89,24 @@ function mountWithSelectedNodes(count = 2) {
 		),
 	)
 	const root = host.querySelector('[role="application"]')
-	if (!(root instanceof HTMLElement) || Konva.stages.at(-1) === undefined)
+	const stage = Konva.stages.at(-1)
+	if (!(root instanceof HTMLElement) || stage === undefined)
 		throw new Error("GlyphCanvas did not mount.")
-	return { root, selected, workspace }
+	return { root, selected, stage, workspace }
+}
+
+function absoluteEndpoints(node: {
+	readonly x: number
+	readonly y: number
+	readonly incoming?: Readonly<{ x: number; y: number }>
+	readonly outgoing?: Readonly<{ x: number; y: number }>
+}) {
+	return (["incoming", "outgoing"] as const).flatMap((handle) => {
+		const vector = node[handle]
+		return vector === undefined
+			? []
+			: [{ handle, x: node.x + vector.x, y: node.y + vector.y }]
+	})
 }
 
 function positions(
@@ -93,6 +124,118 @@ function positions(
 }
 
 describe("GlyphCanvas group nudging", () => {
+	it("Alt-drags one hard node through a fixed-endpoint preview and commit", () => {
+		const { selected, stage, workspace } = mountWithSelectedNodes(1, true)
+		const before = selected[0]
+		if (
+			before === undefined ||
+			(before.incoming === undefined && before.outgoing === undefined)
+		)
+			throw new Error("The hard node needs an authored handle.")
+		const target = stage.findOne(`#${before.pointId}`)
+		if (target === undefined) throw new Error("The hard node was not rendered.")
+		const endpoints = absoluteEndpoints(before)
+		const transform = vi.spyOn(workspace.font.actions, "transformControls")
+		const dragEvent = {
+			evt: { altKey: true, shiftKey: false, type: "mousemove" },
+		}
+		const setStagePointerFromTarget = (): void => {
+			const position = target.getAbsolutePosition()
+			stage.setPointersPositions({
+				clientX: position.x,
+				clientY: position.y,
+			} as PointerEvent)
+		}
+
+		setStagePointerFromTarget()
+		act(() => target.fire("dragstart", dragEvent))
+		target.position({ x: before.x + 200, y: before.y + 160 })
+		setStagePointerFromTarget()
+		act(() => target.fire("dragmove", dragEvent))
+		expect(transform).not.toHaveBeenCalled()
+		const previewHandles = stage
+			.find(".bezier-handle")
+			.map((handle: { x(): number; y(): number }) => ({
+				x: handle.x(),
+				y: handle.y(),
+			}))
+		for (const { x, y } of endpoints) {
+			expect(previewHandles).toContainEqual({ x, y })
+		}
+
+		act(() => target.fire("dragend", dragEvent))
+		expect(transform).toHaveBeenCalledOnce()
+		const committed = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((contour) => contour.nodes)
+			.find((node) => node.pointId === before.pointId)
+		if (committed === undefined) throw new Error("The dragged node is missing.")
+		expect(committed.x).not.toBe(before.x)
+		expect(committed.y).not.toBe(before.y)
+		expect(absoluteEndpoints(committed)).toEqual(endpoints)
+	})
+
+	it("Alt-nudges one hard node while its absolute endpoints stay fixed", () => {
+		const { root, selected, workspace } = mountWithSelectedNodes(1, true)
+		const before = selected[0]
+		if (
+			before === undefined ||
+			(before.incoming === undefined && before.outgoing === undefined)
+		)
+			throw new Error("The hard node needs an authored handle.")
+		const endpoints = absoluteEndpoints(before)
+		const transform = vi.spyOn(workspace.font.actions, "transformControls")
+
+		for (const event of [
+			new KeyboardEvent("keydown", {
+				key: "ArrowRight",
+				altKey: true,
+				bubbles: true,
+			}),
+			new KeyboardEvent("keydown", {
+				key: "ArrowUp",
+				altKey: true,
+				shiftKey: true,
+				repeat: true,
+				bubbles: true,
+			}),
+		]) {
+			act(() => {
+				root.dispatchEvent(event)
+			})
+		}
+
+		expect(transform).toHaveBeenCalledTimes(2)
+		for (const [input] of transform.mock.calls) {
+			expect(input.handles).toEqual(
+				endpoints.map(({ handle, x, y }) => ({
+					pointId: before.pointId,
+					handle,
+					x,
+					y,
+				})),
+			)
+		}
+		const after = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((contour) => contour.nodes)
+			.find((node) => node.pointId === before.pointId)
+		expect(after).toMatchObject({ x: before.x + 1, y: before.y + 10 })
+		if (after === undefined) throw new Error("The moved node is missing.")
+		expect(absoluteEndpoints(after)).toEqual(endpoints)
+
+		workspace.font.undo(oGlyphId)
+		workspace.font.undo(oGlyphId)
+		const undone = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((contour) => contour.nodes)
+			.find((node) => node.pointId === before.pointId)
+		expect(undone).toMatchObject({ x: before.x, y: before.y })
+		expect(undone === undefined ? [] : absoluteEndpoints(undone)).toEqual(
+			endpoints,
+		)
+	})
+
 	it("nudges every selected node in one atomic action and preserves selection", () => {
 		const { root, selected, workspace } = mountWithSelectedNodes()
 		const before = selected.map(({ pointId, x, y }) => ({ pointId, x, y }))
@@ -122,6 +265,39 @@ describe("GlyphCanvas group nudging", () => {
 		expect(positions(workspace, pointIds)).toEqual(
 			before.map(({ pointId, x, y }) => ({ pointId, x: x + 1, y })),
 		)
+	})
+
+	it("keeps Alt group nudging on the ordinary rigid-translation path", () => {
+		const { root, selected, workspace } = mountWithSelectedNodes(2, true)
+		const before = selected.map((node) => ({
+			pointId: node.pointId,
+			x: node.x,
+			y: node.y,
+			endpoints: absoluteEndpoints(node),
+		}))
+		act(() => {
+			root.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "ArrowLeft",
+					altKey: true,
+					bubbles: true,
+				}),
+			)
+		})
+		const after = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours.flatMap((contour) => contour.nodes)
+		for (const expected of before) {
+			const node = after?.find(({ pointId }) => pointId === expected.pointId)
+			expect(node).toMatchObject({ x: expected.x - 1, y: expected.y })
+			if (node === undefined) continue
+			expect(absoluteEndpoints(node)).toEqual(
+				expected.endpoints.map((endpoint) => ({
+					...endpoint,
+					x: endpoint.x - 1,
+				})),
+			)
+		}
 	})
 
 	it("uses modifiers and repeat from the latest committed group geometry", () => {

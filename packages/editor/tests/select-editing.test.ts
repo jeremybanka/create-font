@@ -8,6 +8,8 @@ import {
 } from "../src/curve-editing.ts"
 import {
 	directDragOwnsPointer,
+	planFixedHandleNodeMove,
+	planSelectedHardNodeNudge,
 	planSelectionNudge,
 	rememberedTangentDirection,
 	resolveTangentSlide,
@@ -382,6 +384,76 @@ describe("soft-node tangent slides", () => {
 			selectedTangentSlideConstraint(contours, [
 				{ kind: "handle", pointId, handle: "incoming" },
 			]),
+		).toBeNull()
+	})
+})
+
+describe("hard-node fixed-handle moves", () => {
+	it("keeps one or two authored endpoints absolute across crossing and zero", () => {
+		const twoSided: EditorLayerNode = {
+			pointId,
+			mode: "hard",
+			x: 10,
+			y: 20,
+			incoming: { x: -5, y: 2 },
+			outgoing: { x: 0, y: 0 },
+		}
+		expect(planFixedHandleNodeMove(twoSided, { x: -30, y: 70 })).toEqual({
+			points: [{ pointId, x: -30, y: 70 }],
+			handles: [
+				{ pointId, handle: "incoming", x: 5, y: 22 },
+				{ pointId, handle: "outgoing", x: 10, y: 20 },
+			],
+		})
+
+		const { outgoing: _outgoing, ...incomingOnly } = twoSided
+		expect(planFixedHandleNodeMove(incomingOnly, { x: 5, y: 22 })).toEqual({
+			points: [{ pointId, x: 5, y: 22 }],
+			handles: [{ pointId, handle: "incoming", x: 5, y: 22 }],
+		})
+	})
+
+	it("requires exactly one selected hard node with an authored handle", () => {
+		const hard: EditorLayerNode = {
+			pointId,
+			mode: "hard",
+			x: 10,
+			y: 20,
+			outgoing: { x: 15, y: -5 },
+		}
+		expect(
+			planSelectedHardNodeNudge([hard], [{ kind: "node", pointId }], 1, -10),
+		).toEqual({
+			points: [{ pointId, x: 11, y: 10 }],
+			handles: [{ pointId, handle: "outgoing", x: 25, y: 15 }],
+		})
+		expect(
+			planSelectedHardNodeNudge(
+				[{ ...hard, mode: "soft" }],
+				[{ kind: "node", pointId }],
+				1,
+				0,
+			),
+		).toBeNull()
+		const { outgoing: _handle, ...handleless } = hard
+		expect(
+			planSelectedHardNodeNudge(
+				[handleless],
+				[{ kind: "node", pointId }],
+				1,
+				0,
+			),
+		).toBeNull()
+		expect(
+			planSelectedHardNodeNudge(
+				[hard],
+				[
+					{ kind: "node", pointId },
+					{ kind: "handle", pointId, handle: "outgoing" },
+				],
+				1,
+				0,
+			),
 		).toBeNull()
 	})
 })
