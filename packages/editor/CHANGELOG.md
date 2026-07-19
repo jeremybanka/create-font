@@ -1,5 +1,31 @@
 # @create-font/editor
 
+## 0.5.0
+
+### Minor Changes
+
+- a325bed: Add a point-cut Knife tool and explicit drag-end joining for open contour endpoints, backed by atomic multi-master topology transactions.
+- 7dfefd2: Add Rect and Ellipse outline tools with constrained square and circle gestures,
+  multi-master projection, and atomic complete-contour history edits.
+- abbaed8: Allow editor number fields to evaluate and normalize basic arithmetic expressions when committed.
+
+### Patch Changes
+
+- b64038b: Move every selected outline node together during keyboard nudges, including repeated and modified Arrow presses.
+- 80bcc77: Keep the Command Palette open while dragging multiple commands into hotbar slots.
+- d946e2e: Coalesce Pen hover and drag previews to the latest input once per animation frame.
+- 829bcd6: Constrain Select handle drags, nudge selected handles, and slide soft nodes along fixed tangent controls.
+- 2a2f1eb: Draw rectangles and ellipses from their center and resize transform selections around their center while Alt or Option is held.
+- 53cfdff: Add independent, vertically filling preview tiles with local proof text, samples, variation controls, typography sizing, and color presets.
+- 716ccd1: Render open contours as thin strokes without implicitly filling or closing them.
+- 585a2af: Toggle every eligible selected outline node between hard and soft in one atomic Enter action.
+- Updated dependencies [b64038b]
+- Updated dependencies [829bcd6]
+- Updated dependencies [a325bed]
+- Updated dependencies [7dfefd2]
+- Updated dependencies [585a2af]
+  - @create-font/states@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
