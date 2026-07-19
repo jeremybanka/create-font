@@ -6,96 +6,206 @@
 	"layers": [
 		{
 			"masterId": "master:text",
-			"advanceWidth": 700,
-			"leftSideBearing": 114,
+			"advanceWidth": 528,
+			"leftSideBearing": 50,
 			"contours": [
 				{
-					"id": "contour:glyph:a:0",
+					"id": "contour:glyph:a:pen:22",
 					"closed": true,
 					"points": [
 						{
-							"id": "point:glyph:a:0:0",
+							"id": "point:glyph:a:pen:11",
 							"mode": "hard",
-							"x": 114,
-							"y": 12
+							"x": 448,
+							"y": 0
 						},
 						{
-							"id": "point:glyph:a:0:1",
+							"id": "point:glyph:a:pen:12",
 							"mode": "hard",
-							"x": 319,
-							"y": 512
+							"x": 356,
+							"y": 0
 						},
 						{
-							"id": "point:glyph:a:0:2",
+							"id": "point:glyph:a:pen:13",
 							"mode": "hard",
-							"x": 379,
-							"y": 488
+							"x": 356,
+							"y": 75,
+							"outgoing": {
+								"x": -37,
+								"y": -47
+							}
 						},
 						{
-							"id": "point:glyph:a:0:3",
+							"id": "point:glyph:a:pen:0",
+							"mode": "soft",
+							"x": 177,
+							"y": -7,
+							"incoming": {
+								"x": 66,
+								"y": 0
+							},
+							"outgoing": {
+								"x": -73.06161783043132,
+								"y": 0
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:2",
+							"mode": "soft",
+							"x": 50,
+							"y": 96,
+							"incoming": {
+								"x": 0,
+								"y": -72
+							},
+							"outgoing": {
+								"x": 0,
+								"y": 81.23677266328636
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:3",
+							"mode": "soft",
+							"x": 266.9378210806023,
+							"y": 246.35394154118688,
+							"incoming": {
+								"x": -113.61663567585599,
+								"y": -16.13257876781647
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:4",
 							"mode": "hard",
-							"x": 174,
-							"y": -12
+							"x": 356,
+							"y": 259
+						},
+						{
+							"id": "point:glyph:a:pen:5",
+							"mode": "soft",
+							"x": 356,
+							"y": 326,
+							"outgoing": {
+								"x": 0,
+								"y": 99.40745468755244
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:6",
+							"mode": "soft",
+							"x": 250,
+							"y": 448,
+							"incoming": {
+								"x": 63,
+								"y": 0
+							},
+							"outgoing": {
+								"x": -46.67952923555322,
+								"y": 0
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:7",
+							"mode": "hard",
+							"x": 123,
+							"y": 400,
+							"incoming": {
+								"x": 22.706210653224957,
+								"y": 24.70999158461484
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:8",
+							"mode": "hard",
+							"x": 74,
+							"y": 448,
+							"outgoing": {
+								"x": 53.1398735121565,
+								"y": 42.74897982091443
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:9",
+							"mode": "soft",
+							"x": 292,
+							"y": 512,
+							"incoming": {
+								"x": -101.40602839324765,
+								"y": 0
+							},
+							"outgoing": {
+								"x": 81.40602839324765,
+								"y": 0
+							}
+						},
+						{
+							"id": "point:glyph:a:pen:10",
+							"mode": "soft",
+							"x": 448,
+							"y": 346,
+							"incoming": {
+								"x": 0,
+								"y": 113.79244369079635
+							}
 						}
 					]
 				},
 				{
-					"id": "contour:glyph:a:1",
+					"id": "contour:glyph:a:pen:15",
 					"closed": true,
 					"points": [
 						{
-							"id": "point:glyph:a:1:0",
+							"id": "point:glyph:a:pen:14",
 							"mode": "hard",
-							"x": 379,
-							"y": 512
+							"x": 356,
+							"y": 131,
+							"incoming": {
+								"x": -43.320388918128856,
+								"y": -43.30937880555877
+							}
 						},
 						{
-							"id": "point:glyph:a:1:1",
+							"id": "point:glyph:a:pen:19",
 							"mode": "hard",
-							"x": 584,
-							"y": 12
+							"x": 356,
+							"y": 208
 						},
 						{
-							"id": "point:glyph:a:1:2",
-							"mode": "hard",
-							"x": 524,
-							"y": -12
+							"id": "point:glyph:a:pen:18",
+							"mode": "soft",
+							"x": 282.77322515212984,
+							"y": 194.20365111561864,
+							"outgoing": {
+								"x": -76.90926795229169,
+								"y": -14.490151933040487
+							}
 						},
 						{
-							"id": "point:glyph:a:1:3",
-							"mode": "hard",
-							"x": 319,
-							"y": 488
-						}
-					]
-				},
-				{
-					"id": "contour:glyph:a:2",
-					"closed": true,
-					"points": [
-						{
-							"id": "point:glyph:a:2:0",
-							"mode": "hard",
-							"x": 230,
-							"y": 246
+							"id": "point:glyph:a:pen:17",
+							"mode": "soft",
+							"x": 157,
+							"y": 107,
+							"incoming": {
+								"x": 1,
+								"y": 40
+							},
+							"outgoing": {
+								"x": -0.712506757757385,
+								"y": -28.500270310295402
+							}
 						},
 						{
-							"id": "point:glyph:a:2:1",
-							"mode": "hard",
-							"x": 468,
-							"y": 246
-						},
-						{
-							"id": "point:glyph:a:2:2",
-							"mode": "hard",
-							"x": 468,
-							"y": 182
-						},
-						{
-							"id": "point:glyph:a:2:3",
-							"mode": "hard",
-							"x": 230,
-							"y": 182
+							"id": "point:glyph:a:pen:16",
+							"mode": "soft",
+							"x": 213,
+							"y": 61,
+							"incoming": {
+								"x": -36.110371277228865,
+								"y": 4.4222450600680816e-15
+							},
+							"outgoing": {
+								"x": 36.110371277228865,
+								"y": -4.4222450600680816e-15
+							}
 						}
 					]
 				}
@@ -104,95 +214,217 @@
 		{
 			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 75,
+			"leftSideBearing": 186,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:a:0",
+					"id": "contour:master:heavy:glyph:a:pen:22",
 					"closed": true,
 					"points": [
 						{
-							"id": "point:master:heavy:glyph:a:0:0",
+							"id": "point:master:heavy:glyph:a:pen:11",
 							"mode": "hard",
-							"x": 75,
-							"y": 28
+							"x": 538,
+							"y": 0,
+							"incoming": {
+								"x": 0,
+								"y": 0
+							}
 						},
 						{
-							"id": "point:master:heavy:glyph:a:0:1",
+							"id": "point:master:heavy:glyph:a:pen:12",
 							"mode": "hard",
-							"x": 280,
-							"y": 528
+							"x": 451,
+							"y": 0
 						},
 						{
-							"id": "point:master:heavy:glyph:a:0:2",
+							"id": "point:master:heavy:glyph:a:pen:13",
 							"mode": "hard",
-							"x": 418,
-							"y": 472
+							"x": 451,
+							"y": 75,
+							"outgoing": {
+								"x": -28.68568272432742,
+								"y": -50.823621791960775
+							}
 						},
 						{
-							"id": "point:master:heavy:glyph:a:0:3",
+							"id": "point:master:heavy:glyph:a:pen:0",
+							"mode": "soft",
+							"x": 363,
+							"y": -14,
+							"incoming": {
+								"x": 105.13563127976613,
+								"y": 1.3728503144138008e-14
+							},
+							"outgoing": {
+								"x": -105.13563127976613,
+								"y": -1.3728503144138008e-14
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:2",
+							"mode": "soft",
+							"x": 203,
+							"y": 135,
+							"incoming": {
+								"x": -0.03999999999996362,
+								"y": -81.24460762233079
+							},
+							"outgoing": {
+								"x": 0.03999999999996362,
+								"y": 81.24460762233079
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:3",
+							"mode": "soft",
+							"x": 336,
+							"y": 271,
+							"incoming": {
+								"x": -81.70461171528424,
+								"y": 0
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:4",
+							"mode": "hard",
+							"x": 451,
+							"y": 271
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:5",
+							"mode": "soft",
+							"x": 451,
+							"y": 322,
+							"outgoing": {
+								"x": 0,
+								"y": 99.40752711670173
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:6",
+							"mode": "soft",
+							"x": 363,
+							"y": 469,
+							"incoming": {
+								"x": 43.63875748142004,
+								"y": 5.7165936064025515e-15
+							},
+							"outgoing": {
+								"x": -43.63875748142004,
+								"y": -5.7165936064025515e-15
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:7",
 							"mode": "hard",
 							"x": 213,
-							"y": -28
+							"y": 431,
+							"incoming": {
+								"x": 21.643838014031473,
+								"y": 24.70999158461487
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:8",
+							"mode": "hard",
+							"x": 186,
+							"y": 469,
+							"outgoing": {
+								"x": 49.911481101427114,
+								"y": 42.74897982091441
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:9",
+							"mode": "soft",
+							"x": 382,
+							"y": 533,
+							"incoming": {
+								"x": -86.3616666896528,
+								"y": 0
+							},
+							"outgoing": {
+								"x": 86.3616666896528,
+								"y": 0
+							}
+						},
+						{
+							"id": "point:master:heavy:glyph:a:pen:10",
+							"mode": "soft",
+							"x": 538,
+							"y": 347,
+							"incoming": {
+								"x": -0.39999999999997726,
+								"y": 113.79244369079636
+							},
+							"outgoing": {
+								"x": 0.07148886723132364,
+								"y": -20.337232247357463
+							}
 						}
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:a:1",
+					"id": "contour:master:heavy:glyph:a:pen:15",
 					"closed": true,
 					"points": [
 						{
-							"id": "point:master:heavy:glyph:a:1:0",
+							"id": "point:master:heavy:glyph:a:pen:14",
 							"mode": "hard",
-							"x": 418,
-							"y": 528
+							"x": 451,
+							"y": 131,
+							"incoming": {
+								"x": -40.84116558304112,
+								"y": -43.30937880555877
+							}
 						},
 						{
-							"id": "point:master:heavy:glyph:a:1:1",
+							"id": "point:master:heavy:glyph:a:pen:19",
 							"mode": "hard",
-							"x": 623,
-							"y": 28
+							"x": 451,
+							"y": 208
 						},
 						{
-							"id": "point:master:heavy:glyph:a:1:2",
-							"mode": "hard",
-							"x": 485,
-							"y": -28
+							"id": "point:master:heavy:glyph:a:pen:18",
+							"mode": "soft",
+							"x": 386,
+							"y": 195,
+							"incoming": {
+								"x": 79.70028193325254,
+								"y": 17.2374322396743
+							},
+							"outgoing": {
+								"x": -79.70028193325254,
+								"y": -17.2374322396743
+							}
 						},
 						{
-							"id": "point:master:heavy:glyph:a:1:3",
-							"mode": "hard",
-							"x": 280,
-							"y": 472
-						}
-					]
-				},
-				{
-					"id": "contour:master:heavy:glyph:a:2",
-					"closed": true,
-					"points": [
-						{
-							"id": "point:master:heavy:glyph:a:2:0",
-							"mode": "hard",
-							"x": 230,
-							"y": 289
+							"id": "point:master:heavy:glyph:a:pen:17",
+							"mode": "soft",
+							"x": 264,
+							"y": 107,
+							"incoming": {
+								"x": -0.060000000000002274,
+								"y": 28.50917525358732
+							},
+							"outgoing": {
+								"x": 0.060000000000002274,
+								"y": -28.50917525358732
+							}
 						},
 						{
-							"id": "point:master:heavy:glyph:a:2:1",
-							"mode": "hard",
-							"x": 468,
-							"y": 289
-						},
-						{
-							"id": "point:master:heavy:glyph:a:2:2",
-							"mode": "hard",
-							"x": 468,
-							"y": 139
-						},
-						{
-							"id": "point:master:heavy:glyph:a:2:3",
-							"mode": "hard",
-							"x": 230,
-							"y": 139
+							"id": "point:master:heavy:glyph:a:pen:16",
+							"mode": "soft",
+							"x": 317,
+							"y": 61,
+							"incoming": {
+								"x": -33.64374900059511,
+								"y": 4.4222450600680816e-15
+							},
+							"outgoing": {
+								"x": 33.64374900059511,
+								"y": -4.4222450600680816e-15
+							}
 						}
 					]
 				}
