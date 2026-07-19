@@ -81,10 +81,9 @@ preview-tile.class {
 		}
 
 		> svg {
-			display: inline-block;
-			height: 1em;
+			display: block;
+			width: 100%;
 			overflow: visible;
-			vertical-align: -0.18em;
 
 			path {
 				fill: currentColor;

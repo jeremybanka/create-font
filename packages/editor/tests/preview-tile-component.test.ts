@@ -129,7 +129,7 @@ describe("PreviewTile", () => {
 		if (!(seed instanceof HTMLInputElement))
 			throw new Error("The glyph noise field was not rendered.")
 		input(seed, "nne")
-		const characters = [...first.querySelectorAll("svg[data-character]")].map(
+		const characters = [...first.querySelectorAll("use[data-character]")].map(
 			(glyph) => glyph.getAttribute("data-character"),
 		)
 		expect(characters.length).toBeGreaterThanOrEqual(384)
@@ -158,7 +158,7 @@ describe("PreviewTile", () => {
 			if (!(sample instanceof HTMLSelectElement))
 				throw new Error("Preview sample controls were not rendered.")
 			change(sample, "noise")
-			const before = first.querySelectorAll("svg[data-character]").length
+			const before = first.querySelectorAll("use[data-character]").length
 			act(() => {
 				for (const resize of resizeCallbacks)
 					resize(
@@ -171,7 +171,7 @@ describe("PreviewTile", () => {
 					)
 			})
 			expect(
-				first.querySelectorAll("svg[data-character]").length,
+				first.querySelectorAll("use[data-character]").length,
 			).toBeGreaterThan(before)
 		} finally {
 			globalThis.ResizeObserver = OriginalResizeObserver
@@ -183,6 +183,7 @@ describe("PreviewTile", () => {
 		expect(first.querySelectorAll("preview-scroll svg").length).toBeGreaterThan(
 			0,
 		)
+		expect(first.querySelectorAll("preview-scroll svg")).toHaveLength(1)
 		expect(
 			first.querySelector("preview-scroll path")?.getAttribute("d"),
 		).toContain("M")

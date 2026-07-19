@@ -25,6 +25,13 @@ type PreviewGlyph = Readonly<{
 	openPath: string
 }>
 
+type ProofGlyph = Readonly<{
+	character: string
+	glyphId: GlyphId
+	x: number
+	y: number
+}>
+
 const DEFAULT_TEXT = "Hamburgefontsiv"
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
@@ -82,8 +89,6 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 		return { byCodePoint, fallbackId: fallback?.id, previews }
 	}, [axes, coordinates, source, workspace])
 	const unitsPerEm = source.metadata.unitsPerEm
-	const lineBoxTop = -source.metrics.ascender
-	const lineBoxHeight = source.metrics.ascender - source.metrics.descender
 	const noiseLength = estimateNoiseCharacterCount({
 		...proofSize,
 		fontSize,
@@ -111,6 +116,55 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 
 	const proofText =
 		sample === "noise" ? generateGlyphNoise(noiseSeed, noiseLength) : text
+	const proofLayout = useMemo(() => {
+		const lineAdvance = unitsPerEm * lineHeight
+		const width = Math.max(
+			unitsPerEm,
+			((proofSize.width || fontSize * 8) / fontSize) * unitsPerEm,
+		)
+		const placements: ProofGlyph[] = []
+		let x = 0
+		let line = 0
+		for (const character of proofText) {
+			if (character === "\n") {
+				x = 0
+				line++
+				continue
+			}
+			const glyphId =
+				glyphs.byCodePoint.get(character.codePointAt(0) ?? -1) ??
+				glyphs.fallbackId
+			if (glyphId === undefined) continue
+			const glyph = glyphs.previews.get(glyphId)
+			if (glyph === undefined) continue
+			const advance = Math.max(glyph.advance, 1)
+			if (x > 0 && x + advance > width) {
+				x = 0
+				line++
+			}
+			placements.push({
+				character,
+				glyphId,
+				x,
+				y: source.metrics.ascender + line * lineAdvance,
+			})
+			x += advance
+		}
+		return {
+			height: Math.max(lineAdvance, (line + 1) * lineAdvance),
+			placements,
+			usedGlyphIds: [...new Set(placements.map(({ glyphId }) => glyphId))],
+			width,
+		}
+	}, [
+		fontSize,
+		glyphs,
+		lineHeight,
+		proofSize.width,
+		proofText,
+		source.metrics.ascender,
+		unitsPerEm,
+	])
 
 	const chooseSample = (next: PreviewSampleId): void => {
 		setSample(next)
@@ -234,29 +288,34 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				data-colors={colors}
 				style={{ fontSize: `${fontSize}px`, lineHeight }}
 			>
-				{Array.from(proofText).map((character, index) => {
-					if (character === "\n") return <br key={`break:${index}`} />
-					const glyphId =
-						glyphs.byCodePoint.get(character.codePointAt(0) ?? -1) ??
-						glyphs.fallbackId
-					const glyph =
-						glyphId === undefined ? undefined : glyphs.previews.get(glyphId)
-					if (glyph === undefined) return null
-					return (
-						<svg
-							key={`${index}:${character}`}
-							aria-hidden="true"
-							data-character={character}
-							viewBox={`0 ${lineBoxTop} ${Math.max(glyph.advance, 1)} ${lineBoxHeight}`}
-							style={{ width: `${(glyph.advance / unitsPerEm).toFixed(4)}em` }}
-						>
-							<g transform="scale(1 -1)">
-								<path d={glyph.fillPath} />
-								<path data-open d={glyph.openPath} />
-							</g>
-						</svg>
-					)
-				})}
+				<svg
+					aria-hidden="true"
+					data-proof
+					viewBox={`0 0 ${proofLayout.width} ${proofLayout.height}`}
+					style={{
+						height: `${(proofLayout.height / unitsPerEm) * fontSize}px`,
+					}}
+				>
+					<defs>
+						{proofLayout.usedGlyphIds.map((glyphId) => {
+							const glyph = glyphs.previews.get(glyphId)
+							return glyph === undefined ? null : (
+								<g id={`${tileId}-glyph-${glyphId}`} key={glyphId}>
+									<path d={glyph.fillPath} />
+									<path data-open d={glyph.openPath} />
+								</g>
+							)
+						})}
+					</defs>
+					{proofLayout.placements.map((placement, index) => (
+						<use
+							key={index}
+							data-character={placement.character}
+							href={`#${tileId}-glyph-${placement.glyphId}`}
+							transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
+						/>
+					))}
+				</svg>
 			</preview-scroll>
 		</preview-tile>
 	)
