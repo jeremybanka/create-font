@@ -64,4 +64,15 @@ describe("preview tile model", () => {
 			}),
 		).toBeGreaterThan(base)
 	})
+
+	it("bounds the amount of live preview work for tiny type", () => {
+		expect(
+			estimateNoiseCharacterCount({
+				width: 2_000,
+				height: 2_000,
+				fontSize: 4,
+				lineHeight: 0.5,
+			}),
+		).toBe(2_048)
+	})
 })

@@ -33,6 +33,7 @@ type ProofGlyph = Readonly<{
 }>
 
 const DEFAULT_TEXT = "Hamburgefontsiv"
+let previewInstance = 0
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	useO(workspace.font.atoms.documentRevision)
@@ -41,10 +42,12 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	const [text, setText] = useState(DEFAULT_TEXT)
 	const [sample, setSample] = useState<PreviewSampleId>("custom")
 	const [noiseSeed, setNoiseSeed] = useState("can")
+	const [renderedNoiseSeed, setRenderedNoiseSeed] = useState("can")
 	const [fontSize, setFontSize] = useState(42)
 	const [lineHeight, setLineHeight] = useState(1.15)
 	const [proofSize, setProofSize] = useState({ width: 0, height: 0 })
 	const proofRef = useRef<HTMLElement>(null)
+	const proofId = useRef(`preview-proof-${++previewInstance}`).current
 	const [coordinates, setCoordinates] = useState<
 		Readonly<Record<string, number>>
 	>(() => Object.fromEntries(axes.map((axis) => [axis.id, axis.default])))
@@ -96,6 +99,14 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	})
 
 	useEffect(() => {
+		const timeout = window.setTimeout(
+			() => setRenderedNoiseSeed(noiseSeed),
+			120,
+		)
+		return () => window.clearTimeout(timeout)
+	}, [noiseSeed])
+
+	useEffect(() => {
 		const element = proofRef.current
 		if (element === null) return
 		const publish = (width: number, height: number): void =>
@@ -115,7 +126,9 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	}, [])
 
 	const proofText =
-		sample === "noise" ? generateGlyphNoise(noiseSeed, noiseLength) : text
+		sample === "noise"
+			? generateGlyphNoise(renderedNoiseSeed, noiseLength)
+			: text
 	const proofLayout = useMemo(() => {
 		const lineAdvance = unitsPerEm * lineHeight
 		const width = Math.max(
@@ -150,9 +163,14 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 			})
 			x += advance
 		}
+		const usedGlyphIds = [...new Set(placements.map(({ glyphId }) => glyphId))]
 		return {
+			definitionIndex: new Map(
+				usedGlyphIds.map((glyphId, index) => [glyphId, index] as const),
+			),
 			height: Math.max(lineAdvance, (line + 1) * lineAdvance),
 			placements,
+			usedGlyphIds,
 			width,
 		}
 	}, [
@@ -295,17 +313,28 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						height: `${(proofLayout.height / unitsPerEm) * fontSize}px`,
 					}}
 				>
+					<defs>
+						{proofLayout.usedGlyphIds.map((glyphId, index) => {
+							const glyph = glyphs.previews.get(glyphId)
+							return glyph === undefined ? null : (
+								<g id={`${proofId}-${index}`} key={glyphId}>
+									<path d={glyph.fillPath} />
+									<path data-open d={glyph.openPath} />
+								</g>
+							)
+						})}
+					</defs>
 					{proofLayout.placements.map((placement, index) => {
-						const glyph = glyphs.previews.get(placement.glyphId)
-						return glyph === undefined ? null : (
-							<g
+						const definitionIndex = proofLayout.definitionIndex.get(
+							placement.glyphId,
+						)
+						return definitionIndex === undefined ? null : (
+							<use
 								key={index}
 								data-character={placement.character}
+								href={`#${proofId}-${definitionIndex}`}
 								transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
-							>
-								<path d={glyph.fillPath} />
-								<path data-open d={glyph.openPath} />
-							</g>
+							/>
 						)
 					})}
 				</svg>

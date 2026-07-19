@@ -2,7 +2,7 @@
 
 import { h, render } from "preact"
 import { act } from "preact/test-utils"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { PreviewTile } from "../src/PreviewTile.tsx"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
@@ -11,6 +11,7 @@ import { EditorStateContext } from "../src/state-hooks.ts"
 const hosts: HTMLElement[] = []
 
 afterEach(() => {
+	vi.useRealTimers()
 	for (const host of hosts) {
 		render(null, host)
 		host.remove()
@@ -110,6 +111,7 @@ describe("PreviewTile", () => {
 	})
 
 	it("loads long samples and regenerates glyph noise", () => {
+		vi.useFakeTimers()
 		const { first } = mountTwo()
 		const sample = first.querySelector('select[aria-label="Preview sample"]')
 		const text = first.querySelector('textarea[aria-label="Preview text"]')
@@ -129,7 +131,10 @@ describe("PreviewTile", () => {
 		if (!(seed instanceof HTMLInputElement))
 			throw new Error("The glyph noise field was not rendered.")
 		input(seed, "nne")
-		const characters = [...first.querySelectorAll("g[data-character]")].map(
+		act(() => {
+			vi.advanceTimersByTime(120)
+		})
+		const characters = [...first.querySelectorAll("use[data-character]")].map(
 			(glyph) => glyph.getAttribute("data-character"),
 		)
 		expect(characters.length).toBeGreaterThanOrEqual(384)
@@ -158,7 +163,7 @@ describe("PreviewTile", () => {
 			if (!(sample instanceof HTMLSelectElement))
 				throw new Error("Preview sample controls were not rendered.")
 			change(sample, "noise")
-			const before = first.querySelectorAll("g[data-character]").length
+			const before = first.querySelectorAll("use[data-character]").length
 			act(() => {
 				for (const resize of resizeCallbacks)
 					resize(
@@ -171,7 +176,7 @@ describe("PreviewTile", () => {
 					)
 			})
 			expect(
-				first.querySelectorAll("g[data-character]").length,
+				first.querySelectorAll("use[data-character]").length,
 			).toBeGreaterThan(before)
 		} finally {
 			globalThis.ResizeObserver = OriginalResizeObserver

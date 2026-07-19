@@ -51,7 +51,7 @@ export function estimateNoiseCharacterCount({
 	const rows = Math.ceil(
 		Math.max(0, height) / (safeFontSize * Math.max(0.1, lineHeight)),
 	)
-	return Math.max(384, Math.ceil(columns * rows * 1.35))
+	return Math.min(2_048, Math.max(384, Math.ceil(columns * rows * 1.35)))
 }
 
 export function previewColorDefault(prefersLight: boolean): "dark" | "light" {
