@@ -153,7 +153,6 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 		return {
 			height: Math.max(lineAdvance, (line + 1) * lineAdvance),
 			placements,
-			usedGlyphIds: [...new Set(placements.map(({ glyphId }) => glyphId))],
 			width,
 		}
 	}, [
@@ -296,25 +295,19 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						height: `${(proofLayout.height / unitsPerEm) * fontSize}px`,
 					}}
 				>
-					<defs>
-						{proofLayout.usedGlyphIds.map((glyphId) => {
-							const glyph = glyphs.previews.get(glyphId)
-							return glyph === undefined ? null : (
-								<g id={`${tileId}-glyph-${glyphId}`} key={glyphId}>
-									<path d={glyph.fillPath} />
-									<path data-open d={glyph.openPath} />
-								</g>
-							)
-						})}
-					</defs>
-					{proofLayout.placements.map((placement, index) => (
-						<use
-							key={index}
-							data-character={placement.character}
-							href={`#${tileId}-glyph-${placement.glyphId}`}
-							transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
-						/>
-					))}
+					{proofLayout.placements.map((placement, index) => {
+						const glyph = glyphs.previews.get(placement.glyphId)
+						return glyph === undefined ? null : (
+							<g
+								key={index}
+								data-character={placement.character}
+								transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
+							>
+								<path d={glyph.fillPath} />
+								<path data-open d={glyph.openPath} />
+							</g>
+						)
+					})}
 				</svg>
 			</preview-scroll>
 		</preview-tile>
