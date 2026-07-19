@@ -26,7 +26,7 @@
 		"@dprint/markdown": "0.22.1",
 		"@dprint/oxc": "0.30.0",
 		"@dprint/toml": "0.7.0",
-		"@preact/preset-vite": "2.10.5",
+		"@preact/preset-vite": "2.10.6",
 		"agents.yaml": "0.2.2",
 		"dprint": "0.55.2",
 		"dprint-plugin-malva": "0.16.0",
