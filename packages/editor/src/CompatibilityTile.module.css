@@ -140,7 +140,7 @@ compatibility-tile.class {
 		height: 28px;
 		overflow: visible;
 
-		> path {
+		path {
 			stroke-width: 1.25px;
 		}
 	}

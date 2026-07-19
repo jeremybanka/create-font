@@ -15,8 +15,17 @@ export interface CompatibilityTileProps {
 const OFFSET_MIN = -96
 const OFFSET_MAX = 96
 
-function contourThumbnailViewBox(nodes: readonly EditorLayerNode[]): string {
-	if (nodes.length === 0) return "0 0 1 1"
+interface ContourThumbnailGeometry {
+	readonly viewBox: string
+	readonly transform: string
+}
+
+function contourThumbnailGeometry(
+	nodes: readonly EditorLayerNode[],
+): ContourThumbnailGeometry {
+	if (nodes.length === 0) {
+		return { viewBox: "0 0 1 1", transform: "translate(0 1) scale(1 -1)" }
+	}
 	const xs = nodes.flatMap((node) => [
 		node.x,
 		...(node.incoming === undefined ? [] : [node.x + node.incoming.x]),
@@ -32,7 +41,10 @@ function contourThumbnailViewBox(nodes: readonly EditorLayerNode[]): string {
 	const minY = Math.min(...ys)
 	const maxY = Math.max(...ys)
 	const padding = Math.max(maxX - minX, maxY - minY, 1) * 0.12
-	return `${minX - padding} ${minY - padding} ${Math.max(maxX - minX + padding * 2, 1)} ${Math.max(maxY - minY + padding * 2, 1)}`
+	return {
+		viewBox: `${minX - padding} ${minY - padding} ${Math.max(maxX - minX + padding * 2, 1)} ${Math.max(maxY - minY + padding * 2, 1)}`,
+		transform: `translate(0 ${minY + maxY}) scale(1 -1)`,
+	}
 }
 
 export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
@@ -186,80 +198,82 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 					)}
 					<h2>Path order</h2>
 					<ol>
-						{contours.map((contour, pathIndex) => (
-							<li
-								key={contour.id}
-								tabIndex={0}
-								draggable
-								onDragStart={(event) => {
-									setDraggedContourId(contour.id)
-									if (event.dataTransfer !== null) {
-										event.dataTransfer.effectAllowed = "move"
-									}
-								}}
-								onDragEnd={() => setDraggedContourId(null)}
-								onDragOver={(event) => {
-									if (draggedContourId !== null) event.preventDefault()
-								}}
-								onDrop={(event) => {
-									event.preventDefault()
-									if (draggedContourId !== null) {
-										reorderContour(draggedContourId, pathIndex)
-									}
-									setDraggedContourId(null)
-								}}
-								onKeyDown={(event) => {
-									if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
-										return
-									}
-									event.preventDefault()
-									reorderContour(
-										contour.id,
-										pathIndex + (event.key === "ArrowUp" ? -1 : 1),
-									)
-								}}
-							>
-								<path-ordinal
-									style={{ background: compatibilityPathColor(pathIndex) }}
-								>
-									{pathIndex + 1}
-								</path-ordinal>
-								<svg
-									viewBox={contourThumbnailViewBox(contour.nodes)}
-									aria-hidden="true"
-								>
-									<path
-										d={editorContourToPath(contour.nodes, contour.closed)}
-										fill={
-											contour.closed
-												? compatibilityPathColor(pathIndex)
-												: "none"
+						{contours.map((contour, pathIndex) => {
+							const thumbnail = contourThumbnailGeometry(contour.nodes)
+							return (
+								<li
+									key={contour.id}
+									tabIndex={0}
+									draggable
+									onDragStart={(event) => {
+										setDraggedContourId(contour.id)
+										if (event.dataTransfer !== null) {
+											event.dataTransfer.effectAllowed = "move"
 										}
-										stroke={compatibilityPathColor(pathIndex)}
-										vector-effect="non-scaling-stroke"
-									/>
-								</svg>
-								<path-name>Path {pathIndex + 1}</path-name>
-								<path-buttons>
-									<button
-										type="button"
-										disabled={pathIndex === 0}
-										aria-label={`Move path ${pathIndex + 1} up`}
-										onClick={() => reorderContour(contour.id, pathIndex - 1)}
+									}}
+									onDragEnd={() => setDraggedContourId(null)}
+									onDragOver={(event) => {
+										if (draggedContourId !== null) event.preventDefault()
+									}}
+									onDrop={(event) => {
+										event.preventDefault()
+										if (draggedContourId !== null) {
+											reorderContour(draggedContourId, pathIndex)
+										}
+										setDraggedContourId(null)
+									}}
+									onKeyDown={(event) => {
+										if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+											return
+										}
+										event.preventDefault()
+										reorderContour(
+											contour.id,
+											pathIndex + (event.key === "ArrowUp" ? -1 : 1),
+										)
+									}}
+								>
+									<path-ordinal
+										style={{ background: compatibilityPathColor(pathIndex) }}
 									>
-										↑
-									</button>
-									<button
-										type="button"
-										disabled={pathIndex === contours.length - 1}
-										aria-label={`Move path ${pathIndex + 1} down`}
-										onClick={() => reorderContour(contour.id, pathIndex + 1)}
-									>
-										↓
-									</button>
-								</path-buttons>
-							</li>
-						))}
+										{pathIndex + 1}
+									</path-ordinal>
+									<svg viewBox={thumbnail.viewBox} aria-hidden="true">
+										<g transform={thumbnail.transform}>
+											<path
+												d={editorContourToPath(contour.nodes, contour.closed)}
+												fill={
+													contour.closed
+														? compatibilityPathColor(pathIndex)
+														: "none"
+												}
+												stroke={compatibilityPathColor(pathIndex)}
+												vector-effect="non-scaling-stroke"
+											/>
+										</g>
+									</svg>
+									<path-name>Path {pathIndex + 1}</path-name>
+									<path-buttons>
+										<button
+											type="button"
+											disabled={pathIndex === 0}
+											aria-label={`Move path ${pathIndex + 1} up`}
+											onClick={() => reorderContour(contour.id, pathIndex - 1)}
+										>
+											↑
+										</button>
+										<button
+											type="button"
+											disabled={pathIndex === contours.length - 1}
+											aria-label={`Move path ${pathIndex + 1} down`}
+											onClick={() => reorderContour(contour.id, pathIndex + 1)}
+										>
+											↓
+										</button>
+									</path-buttons>
+								</li>
+							)
+						})}
 					</ol>
 				</>
 			)}

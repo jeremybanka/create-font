@@ -96,4 +96,21 @@ describe("CompatibilityTile", () => {
 				?.contours.map((contour) => contour.id),
 		).toEqual([before[1], before[0]])
 	})
+
+	it("plots path thumbnails with the font-space vertical direction", () => {
+		const { tile } = mountCompatibilityTile()
+		const thumbnail = tile.querySelector("ol svg")
+		const drawing = thumbnail?.querySelector("g")
+		if (
+			!(thumbnail instanceof SVGElement) ||
+			!(drawing instanceof SVGElement)
+		) {
+			throw new Error("The path thumbnail was not rendered.")
+		}
+
+		expect(drawing.getAttribute("transform")).toMatch(
+			/^translate\(0 -?[\d.]+\) scale\(1 -1\)$/,
+		)
+		expect(thumbnail.getAttribute("viewBox")).not.toBeNull()
+	})
 })
