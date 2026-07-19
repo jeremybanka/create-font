@@ -26,25 +26,20 @@ export function createGlyphPreview(
 		(candidate) => candidate.masterId === masterId,
 	)
 	if (layer === undefined) return null
-	const layerPoints = new Map(
-		layer.points.map((point) => [point.pointId, point] as const),
-	)
-	const contours = []
-	for (const contour of glyph.contours) {
-		const nodes = []
-		for (const point of contour.points) {
-			const layerPoint = layerPoints.get(point.id)
-			if (layerPoint === undefined) return null
-			nodes.push(layerPoint)
-		}
-		contours.push({ closed: contour.closed, nodes })
-	}
+	const contours = layer.contours.map((contour) => ({
+		closed: contour.closed,
+		nodes: contour.points.map((point) => ({
+			pointId: point.id,
+			...point,
+		})),
+	}))
+	const layerPoints = layer.contours.flatMap((contour) => contour.points)
 
 	let minX = 0
 	let maxX = layer.advanceWidth
 	let minY = metrics.descender
 	let maxY = metrics.ascender
-	for (const point of layer.points) {
+	for (const point of layerPoints) {
 		minX = Math.min(
 			minX,
 			point.x,

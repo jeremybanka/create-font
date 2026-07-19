@@ -34,25 +34,27 @@ function createClient(): FontSourceRemoteClient {
 			revision: `${input.path}-2`,
 			value: input.value,
 		})),
-		writeUnits: vi.fn(async (input) => ({
-			revision: `manifest-2`,
-			units: input.writes.map((write) => ({
-				path: write.path,
-				revision: `${write.path}-2`,
-				value: write.value,
-			})) as [
-				{
-					path: string
-					revision: string
-					value: (typeof input.writes)[number]["value"]
-				},
-				...{
-					path: string
-					revision: string
-					value: (typeof input.writes)[number]["value"]
-				}[],
-			],
-		})),
+		writeUnits: vi.fn(
+			async (input: Parameters<FontSourceRemoteClient["writeUnits"]>[0]) => ({
+				revision: `manifest-2`,
+				units: input.writes.map((write: (typeof input.writes)[number]) => ({
+					path: write.path,
+					revision: `${write.path}-2`,
+					value: write.value,
+				})) as [
+					{
+						path: string
+						revision: string
+						value: (typeof input.writes)[number]["value"]
+					},
+					...{
+						path: string
+						revision: string
+						value: (typeof input.writes)[number]["value"]
+					}[],
+				],
+			}),
+		),
 	}
 }
 
@@ -72,6 +74,7 @@ describe(`remote font source state`, () => {
 		const firstA = await remote.read.unit(`glyphs/a.json`)
 		const secondA = await remote.read.unit(`glyphs/a.json`)
 		const firstB = await remote.read.unit(`glyphs/b.json`)
+		if (firstB instanceof Error) throw firstB
 
 		expect(firstA).toEqual(secondA)
 		expect(firstB.path).toBe(`glyphs/b.json`)

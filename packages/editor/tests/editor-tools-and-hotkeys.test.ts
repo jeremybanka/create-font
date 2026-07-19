@@ -178,6 +178,7 @@ describe("editor tools and hotkeys", () => {
 		TOOLS.INVERT_VERTICAL.do(context)
 
 		expect(reverseContour).toHaveBeenCalledWith({
+			masterId: "master:test",
 			glyphId: "glyph:test",
 			contourId: "contour:test",
 		})

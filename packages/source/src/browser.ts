@@ -17,7 +17,7 @@ export type ProjectFile = Readonly<{
 	format: typeof CREATE_FONT_SOURCE_FORMAT
 	sourceVersion: typeof CREATE_FONT_SOURCE_VERSION
 	editorFormat: typeof CREATE_FONT_EDITOR_FORMAT
-	editorVersion: 3 | typeof CREATE_FONT_EDITOR_VERSION
+	editorVersion: 3 | 4 | typeof CREATE_FONT_EDITOR_VERSION
 }>
 export type MetadataFile = EditorFontFile["metadata"]
 export type NamesFile = EditorFontFile["names"]
@@ -383,6 +383,7 @@ export function assembleEditorFontSource(
 		projectRecord.value.sourceVersion !== CREATE_FONT_SOURCE_VERSION ||
 		projectRecord.value.editorFormat !== CREATE_FONT_EDITOR_FORMAT ||
 		(projectRecord.value.editorVersion !== 3 &&
+			projectRecord.value.editorVersion !== 4 &&
 			projectRecord.value.editorVersion !== CREATE_FONT_EDITOR_VERSION)
 	) {
 		return failure([

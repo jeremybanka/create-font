@@ -1,9 +1,9 @@
 import type {
+	AuthoringContourInput,
+	AuthoringLayerPointInput,
 	ContourId,
-	EditorContourSource,
 	EditorGlyphSource,
 	EditorHandleVectorSource,
-	EditorLayerPointSource,
 	MasterId,
 	PasteContoursInput,
 	PointId,
@@ -102,6 +102,7 @@ function safeVector(value: unknown): EditorHandleVectorSource | undefined {
 
 export function copyOutlineSelection(
 	glyph: EditorGlyphSource,
+	masterId: MasterId,
 	selection: readonly EditorSelectionTarget[],
 ): OutlineClipboardResult<OutlineClipboardPayload> {
 	const selectedPointIds = new Set(
@@ -112,19 +113,15 @@ export function copyOutlineSelection(
 	if (selectedPointIds.size === 0) {
 		return { ok: false, error: "Select one or more outline nodes to copy." }
 	}
-	const sourceLayers = new Map(
-		glyph.layers.map((layer) => [
-			layer.masterId,
-			new Map(layer.points.map((point) => [point.pointId, point])),
-		]),
-	)
+	const activeLayer = glyph.layers.find((layer) => layer.masterId === masterId)
+	if (activeLayer === undefined) {
+		return { ok: false, error: `The glyph has no ${masterId} layer.` }
+	}
 	const contours: OutlineClipboardPayload["contours"][number][] = []
-	const layerPoints = new Map<MasterId, ClipboardLayerPoint[]>(
-		glyph.layers.map((layer) => [layer.masterId, []]),
-	)
+	const layerPoints: ClipboardLayerPoint[] = []
 	let fragmentSequence = 0
 
-	for (const contour of glyph.contours) {
+	for (const contour of activeLayer.contours) {
 		const selectedIndexes = new Set<number>()
 		contour.points.forEach((point, index) => {
 			if (selectedPointIds.has(point.id)) selectedIndexes.add(index)
@@ -146,29 +143,20 @@ export function copyOutlineSelection(
 				const endpointOfFragment =
 					!run.closed && (runIndex === 0 || runIndex === run.indexes.length - 1)
 				points.push({ key, mode: endpointOfFragment ? "hard" : point.mode })
-				for (const layer of glyph.layers) {
-					const source = sourceLayers.get(layer.masterId)?.get(point.id)
-					if (source === undefined) {
-						return {
-							ok: false,
-							error: `The ${layer.masterId} layer is missing ${point.id}.`,
-						}
-					}
-					const includeIncoming = run.closed || runIndex > 0
-					const includeOutgoing =
-						run.closed || runIndex < run.indexes.length - 1
-					layerPoints.get(layer.masterId)?.push({
-						key,
-						x: source.x,
-						y: source.y,
-						...(includeIncoming && source.incoming !== undefined
-							? { incoming: { ...source.incoming } }
-							: {}),
-						...(includeOutgoing && source.outgoing !== undefined
-							? { outgoing: { ...source.outgoing } }
-							: {}),
-					})
-				}
+				const source = point
+				const includeIncoming = run.closed || runIndex > 0
+				const includeOutgoing = run.closed || runIndex < run.indexes.length - 1
+				layerPoints.push({
+					key,
+					x: source.x,
+					y: source.y,
+					...(includeIncoming && source.incoming !== undefined
+						? { incoming: { ...source.incoming } }
+						: {}),
+					...(includeOutgoing && source.outgoing !== undefined
+						? { outgoing: { ...source.outgoing } }
+						: {}),
+				})
 			}
 			if (points.length > 0) contours.push({ closed: run.closed, points })
 		}
@@ -184,12 +172,9 @@ export function copyOutlineSelection(
 		value: {
 			format: "create-font.outline",
 			version: OUTLINE_CLIPBOARD_VERSION,
-			masterIds: glyph.layers.map((layer) => layer.masterId),
+			masterIds: [masterId],
 			contours,
-			layers: glyph.layers.map((layer) => ({
-				masterId: layer.masterId,
-				points: layerPoints.get(layer.masterId) ?? [],
-			})),
+			layers: [{ masterId, points: layerPoints }],
 		},
 	}
 }
@@ -361,6 +346,7 @@ export function parseOutlineClipboard(
 
 export function prepareOutlinePaste(
 	payload: OutlineClipboardPayload,
+	masterId: MasterId,
 	glyphId: PasteContoursInput["glyphId"],
 	destinationMasterIds: readonly MasterId[],
 	nextId: (kind: "contour" | "point") => ContourId | PointId,
@@ -379,7 +365,7 @@ export function prepareOutlinePaste(
 		}
 	}
 	const pointIds = new Map<string, PointId>()
-	const contours: EditorContourSource[] = payload.contours.map((contour) => ({
+	const contours: AuthoringContourInput[] = payload.contours.map((contour) => ({
 		id: nextId("contour") as ContourId,
 		closed: contour.closed,
 		points: contour.points.map((point) => {
@@ -390,7 +376,7 @@ export function prepareOutlinePaste(
 	}))
 	const layers = payload.layers.map((layer) => ({
 		masterId: layer.masterId,
-		points: layer.points.map((point): EditorLayerPointSource => {
+		points: layer.points.map((point): AuthoringLayerPointInput => {
 			const pointId = pointIds.get(point.key)
 			if (pointId === undefined)
 				throw new Error("Clipboard point key is missing.")
@@ -410,6 +396,7 @@ export function prepareOutlinePaste(
 	return {
 		ok: true,
 		value: {
+			masterId,
 			glyphId,
 			contours,
 			layers,

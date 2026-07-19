@@ -227,7 +227,7 @@ export function resolvePenEndpoint(input: {
 	}
 }
 
-/** Maps the authored node and its dragged handle endpoints into every master. */
+/** Maps the authored node and dragged handle endpoints into candidate layers. */
 export function penLayerCoordinates(
 	point: PenPoint,
 	gesture: PenGestureResolution,

@@ -392,10 +392,7 @@ describe("Pen gestures", () => {
 			const firstPointId = `point:pen-hard-resume:first:${shiftKey}` as PointId
 			const secondPointId =
 				`point:pen-hard-resume:second:${shiftKey}` as PointId
-			const transforms = [
-				{ masterId: razorMasterId, xScale: 1 },
-				{ masterId: blackMasterId, xScale: 0.94 },
-			] as const
+			const transforms = [{ masterId: razorMasterId, xScale: 1 }] as const
 			const firstPoint = { x: 220, y: 120 }
 			const secondPoint = { x: 410, y: 250 }
 			const click = resolvePenGesture({
@@ -404,6 +401,7 @@ describe("Pen gestures", () => {
 				worldScale: 1,
 			})
 			workspace.font.actions.createContour({
+				masterId: razorMasterId,
 				glyphId: oGlyphId,
 				contourId,
 				point: { id: firstPointId, mode: "hard" },
@@ -431,6 +429,7 @@ describe("Pen gestures", () => {
 				side: resumedSide,
 			})
 			workspace.font.actions.authorPenEndpoint({
+				masterId: razorMasterId,
 				glyphId: oGlyphId,
 				contourId,
 				pointId: firstPointId,
@@ -466,6 +465,7 @@ describe("Pen gestures", () => {
 				pointDraggedHandle,
 			)
 			workspace.font.actions.insertPoint({
+				masterId: razorMasterId,
 				glyphId: oGlyphId,
 				contourId,
 				...(resumedDirection === "prepend" ? { at: 0 } : {}),
@@ -478,14 +478,12 @@ describe("Pen gestures", () => {
 			expect(pointDraggedHandle).toBe("outgoing")
 			expect(
 				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					razorMasterId,
 					oGlyphId,
 					contourId,
 				]),
 			).toEqual([firstPointId, secondPointId])
-			for (const [index, masterId] of [
-				razorMasterId,
-				blackMasterId,
-			].entries()) {
+			for (const [index, masterId] of [razorMasterId].entries()) {
 				const first = workspace.font.read.layerNode(
 					masterId,
 					oGlyphId,
@@ -541,6 +539,7 @@ describe("Pen gestures", () => {
 			workspace.font.undo(oGlyphId)
 			expect(
 				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					razorMasterId,
 					oGlyphId,
 					contourId,
 				]),
@@ -554,6 +553,7 @@ describe("Pen gestures", () => {
 			workspace.font.redo(oGlyphId)
 			expect(
 				workspace.font.silo.getState(workspace.font.atoms.contourPointIds, [
+					razorMasterId,
 					oGlyphId,
 					contourId,
 				]),

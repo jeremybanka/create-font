@@ -170,7 +170,11 @@ import {
 	prepareOutlinePaste,
 	serializeOutlineClipboard,
 } from "./outline-clipboard.ts"
-import { visualDebugControlRegions } from "./visual-debug.ts"
+import {
+	COMPATIBILITY_GHOST_OFFSET,
+	compatibilityPathColor,
+	visualDebugControlRegions,
+} from "./visual-debug.ts"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
@@ -330,6 +334,26 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowDown: [0, -1],
 }
 
+function contourThumbnailViewBox(nodes: readonly EditorLayerNode[]): string {
+	if (nodes.length === 0) return "0 0 1 1"
+	const xs = nodes.flatMap((node) => [
+		node.x,
+		...(node.incoming === undefined ? [] : [node.x + node.incoming.x]),
+		...(node.outgoing === undefined ? [] : [node.x + node.outgoing.x]),
+	])
+	const ys = nodes.flatMap((node) => [
+		node.y,
+		...(node.incoming === undefined ? [] : [node.y + node.incoming.y]),
+		...(node.outgoing === undefined ? [] : [node.y + node.outgoing.y]),
+	])
+	const minX = Math.min(...xs)
+	const maxX = Math.max(...xs)
+	const minY = Math.min(...ys)
+	const maxY = Math.max(...ys)
+	const padding = Math.max(maxX - minX, maxY - minY, 1) * 0.12
+	return `${minX - padding} ${minY - padding} ${Math.max(maxX - minX + padding * 2, 1)} ${Math.max(maxY - minY + padding * 2, 1)}`
+}
+
 export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
 	const text = useO(workspace.ui.previewText)
@@ -341,9 +365,21 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const run = useO(workspace.ui.previewRun)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
+	const comparisonMasterId = useO(workspace.ui.comparisonMasterId)
 	const glyph = useOptionalOF(
 		workspace.font.selectors.editorGlyphSource,
 		activeGlyphId,
+	)
+	const compatibilityKey = useMemo(
+		() =>
+			activeGlyphId === null
+				? null
+				: ([comparisonMasterId, activeMasterId, activeGlyphId] as const),
+		[activeGlyphId, activeMasterId, comparisonMasterId],
+	)
+	const compatibility = useOptionalOF(
+		workspace.font.selectors.glyphCompatibility,
+		compatibilityKey,
 	)
 	const master = useOF(workspace.font.atoms.master, activeMasterId)
 	const metrics =
@@ -397,6 +433,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const shapeEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
+	const [draggedContourId, setDraggedContourId] = useState<ContourId | null>(
+		null,
+	)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const penHoverRef = useRef<PenHoverPreview | null>(null)
@@ -479,6 +518,25 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		(position) => position.item.textStart === editingTextIndex,
 	)
 	const contours = layer?.contours ?? []
+	const comparisonContours = useMemo(() => {
+		const sourceLayer = glyph?.layers.find(
+			(candidate) => candidate.masterId === comparisonMasterId,
+		)
+		return (
+			sourceLayer?.contours.map((contour) => ({
+				id: contour.id,
+				closed: contour.closed,
+				nodes: contour.points.map((point) => ({
+					pointId: point.id,
+					mode: point.mode,
+					x: point.x,
+					y: point.y,
+					...(point.incoming === undefined ? {} : { incoming: point.incoming }),
+					...(point.outgoing === undefined ? {} : { outgoing: point.outgoing }),
+				})),
+			})) ?? []
+		)
+	}, [comparisonMasterId, glyph])
 	const visibleContours = useMemo(
 		() =>
 			contours.map((contour) => {
@@ -623,6 +681,30 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
+	const compatibilityGhostOffset = {
+		x: COMPATIBILITY_GHOST_OFFSET.x * inverseScale,
+		y: COMPATIBILITY_GHOST_OFFSET.y * inverseScale,
+	}
+	const activeCompatibilityPoints = new Map(
+		visibleContours.flatMap((contour) =>
+			contour.nodes.map((point) => [point.pointId, point] as const),
+		),
+	)
+	const comparisonCompatibilityPoints = new Map(
+		comparisonContours.flatMap((contour) =>
+			contour.nodes.map((point) => [point.pointId, point] as const),
+		),
+	)
+	const incompatibleActivePaths = new Set(
+		compatibility?.diagnostics.map(
+			(diagnostic) => diagnostic.comparison.pathIndex,
+		) ?? [],
+	)
+	const incompatibleComparisonPaths = new Set(
+		compatibility?.diagnostics.map(
+			(diagnostic) => diagnostic.reference.pathIndex,
+		) ?? [],
+	)
 	const hitControlCandidates = useMemo(
 		() => (showNodes ? editorControlHitCandidates(visibleContours) : []),
 		[showNodes, visibleContours],
@@ -1424,6 +1506,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			return
 		}
 		workspace.font.actions.joinOpenContours({
+			masterId: drag.masterId,
 			glyphId: drag.glyphId,
 			draggedContourId: drag.contourId,
 			draggedPointId: drag.pointId,
@@ -1447,6 +1530,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const toggleNodeMode = (pointId: PointId, mode: "soft" | "hard"): void => {
 		if (activeGlyphId === null) return
 		workspace.font.actions.setNodeMode({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			pointId,
 			mode: toggledNodeMode(mode),
@@ -1458,6 +1542,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			target.kind === "node" ? [target.pointId] : [],
 		)
 		const result = workspace.font.actions.toggleNodeModes({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			pointIds,
 		})
@@ -1538,10 +1623,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		const source = workspace.font.read.editorSource()
 		const occupied = new Set<string>(
 			(source?.glyphs ?? []).flatMap((sourceGlyph) => [
-				...sourceGlyph.contours.map((contour) => contour.id),
-				...sourceGlyph.contours.flatMap((contour) =>
-					contour.points.map((point) => point.id),
-				),
+				...(
+					sourceGlyph.layers.find((layer) => layer.masterId === activeMasterId)
+						?.contours ?? []
+				).map((contour) => contour.id),
+				...(
+					sourceGlyph.layers.find((layer) => layer.masterId === activeMasterId)
+						?.contours ?? []
+				).flatMap((contour) => contour.points.map((point) => point.id)),
 			]),
 		)
 		while (true) {
@@ -1581,6 +1670,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
 			workspace.font.actions.createContour({
+				masterId: activeMasterId,
 				glyphId: activeGlyphId,
 				contourId,
 				point: { id: pointId, mode: gesture.mode },
@@ -1590,6 +1680,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			setPenContourId(contourId)
 		} else {
 			workspace.font.actions.insertPoint({
+				masterId: activeMasterId,
 				glyphId: activeGlyphId,
 				contourId: penContourId,
 				...(penDirection === "prepend" ? { at: 0 } : {}),
@@ -1622,6 +1713,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 		if (!(target.mode === "hard" && gesture.kind === "click")) {
 			workspace.font.actions.authorPenEndpoint({
+				masterId: activeMasterId,
 				glyphId: activeGlyphId,
 				contourId: target.contourId,
 				pointId: target.pointId,
@@ -1662,6 +1754,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		})
 		penContourResumeRef.current = penContourId
 		workspace.font.actions.closeContour({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			contourId: penContourId,
 			...(gesture.handles === null
@@ -1944,6 +2037,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			() => nextShapeEntityId("point", gesture.kind) as PointId,
 		)
 		workspace.font.actions.createCompleteContour({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			contour: {
 				id: contourId,
@@ -2274,6 +2368,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				})
 			} else {
 				workspace.font.actions.joinOpenContours({
+					masterId: currentGroupDrag.masterId,
 					glyphId: currentGroupDrag.glyphId,
 					draggedContourId: candidate.sourceContourId,
 					draggedPointId: candidate.sourcePointId,
@@ -2486,6 +2581,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			return
 		const pointId = nextPenEntityId("point") as PointId
 		workspace.font.actions.splitSegment({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			contourId: contour.id,
 			segmentIndex: nearest.segmentIndex,
@@ -2514,6 +2610,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			? undefined
 			: (nextPenEntityId("contour") as ContourId)
 		workspace.font.actions.cutSegment({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			contourId: contour.id,
 			segmentIndex: nearest.segmentIndex,
@@ -2546,6 +2643,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			: contour.nodes[nearest.segmentIndex + 1]
 		if (start === undefined || end === undefined) return
 		const changed = workspace.font.actions.addSegmentHandles({
+			masterId: activeMasterId,
 			glyphId: activeGlyphId,
 			contourId: contour.id,
 			segmentIndex: nearest.segmentIndex,
@@ -2576,6 +2674,15 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			zoomCanvasView(current, nextZoom, { x: focalX, y: focalY }),
 		)
 	}
+	const reorderContour = (contourId: ContourId, toIndex: number): void => {
+		if (activeGlyphId === null || visibleContours.length === 0) return
+		workspace.font.actions.reorderContour({
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+			contourId,
+			toIndex: Math.max(0, Math.min(visibleContours.length - 1, toIndex)),
+		})
+	}
 
 	return (
 		<glyph-canvas
@@ -2605,7 +2712,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					setClipboardStatus("The active glyph is unavailable for copying.")
 					return
 				}
-				const copied = copyOutlineSelection(glyph, selection)
+				const copied = copyOutlineSelection(glyph, activeMasterId, selection)
 				if (!copied.ok) {
 					setClipboardStatus(copied.error)
 					return
@@ -2656,8 +2763,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				}
 				const paste = prepareOutlinePaste(
 					parsed.value,
+					activeMasterId,
 					activeGlyphId,
-					masterIds,
+					[activeMasterId],
 					nextClipboardEntityId,
 				)
 				if (!paste.ok) {
@@ -2951,6 +3059,130 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					setCaretIndex(activeTextareaSelectionIndex(event.currentTarget))
 				}
 			/>
+			{!visualDebug.compatibility ||
+			editingTextIndex === null ||
+			layer === null ? null : (
+				<compatibility-panel
+					role="region"
+					aria-label="Master compatibility and path order"
+					onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) =>
+						event.stopPropagation()
+					}
+				>
+					<label>
+						Compare with
+						<select
+							value={comparisonMasterId}
+							onChange={(event) =>
+								workspace.actions.selectComparisonMaster(
+									event.currentTarget.value as MasterId,
+								)
+							}
+						>
+							{masterIds
+								.filter((masterId) => masterId !== activeMasterId)
+								.map((masterId) => (
+									<option key={masterId} value={masterId}>
+										{workspace.document.masters.find(
+											(master) => master.id === masterId,
+										)?.name ?? masterId}
+									</option>
+								))}
+						</select>
+					</label>
+					<p
+						data-state={compatibility?.compatible ? "ok" : "error"}
+						role="status"
+					>
+						{compatibility?.compatible
+							? "Compatible by path and node order"
+							: `${compatibility?.diagnostics.length ?? 0} compatibility issue${compatibility?.diagnostics.length === 1 ? "" : "s"}`}
+					</p>
+					{compatibility?.diagnostics.length === 0 ? null : (
+						<ul>
+							{compatibility?.diagnostics.map((diagnostic, index) => (
+								<li key={`${diagnostic.code}:${index}`}>
+									{diagnostic.message}
+								</li>
+							))}
+						</ul>
+					)}
+					<h2>Path order</h2>
+					<ol>
+						{visibleContours.map((contour, pathIndex) => (
+							<li
+								key={contour.id}
+								tabIndex={0}
+								draggable
+								onDragStart={(event) => {
+									setDraggedContourId(contour.id)
+									if (event.dataTransfer !== null)
+										event.dataTransfer.effectAllowed = "move"
+								}}
+								onDragEnd={() => setDraggedContourId(null)}
+								onDragOver={(event) => {
+									if (draggedContourId !== null) event.preventDefault()
+								}}
+								onDrop={(event) => {
+									event.preventDefault()
+									if (draggedContourId !== null)
+										reorderContour(draggedContourId, pathIndex)
+									setDraggedContourId(null)
+								}}
+								onKeyDown={(event) => {
+									if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+										return
+									event.preventDefault()
+									reorderContour(
+										contour.id,
+										pathIndex + (event.key === "ArrowUp" ? -1 : 1),
+									)
+								}}
+							>
+								<path-ordinal
+									style={{ background: compatibilityPathColor(pathIndex) }}
+								>
+									{pathIndex + 1}
+								</path-ordinal>
+								<svg
+									viewBox={contourThumbnailViewBox(contour.nodes)}
+									aria-hidden="true"
+								>
+									<path
+										d={editorContourToPath(contour.nodes, contour.closed)}
+										fill={
+											contour.closed
+												? compatibilityPathColor(pathIndex)
+												: "none"
+										}
+										stroke={compatibilityPathColor(pathIndex)}
+										vector-effect="non-scaling-stroke"
+									/>
+								</svg>
+								<path-name>Path {pathIndex + 1}</path-name>
+								<path-buttons>
+									<button
+										type="button"
+										disabled={pathIndex === 0}
+										aria-label={`Move path ${pathIndex + 1} up`}
+										onClick={() => reorderContour(contour.id, pathIndex - 1)}
+									>
+										↑
+									</button>
+									<button
+										type="button"
+										disabled={pathIndex === visibleContours.length - 1}
+										aria-label={`Move path ${pathIndex + 1} down`}
+										onClick={() => reorderContour(contour.id, pathIndex + 1)}
+									>
+										↓
+									</button>
+								</path-buttons>
+							</li>
+						))}
+					</ol>
+				</compatibility-panel>
+			)}
 			<canvas-surface
 				ref={ref}
 				data-tool={activeTool}
@@ -3462,6 +3694,121 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 											</Group>
 										)
 									})}
+									{!visualDebug.compatibility ||
+									compatibility === null ? null : (
+										<Group name="master-compatibility" listening={false}>
+											{comparisonContours.map((contour, pathIndex) => (
+												<Path
+													key={`compatibility-ghost:${contour.id}`}
+													name="compatibility-ghost-path"
+													x={compatibilityGhostOffset.x}
+													y={compatibilityGhostOffset.y}
+													data={editorContourToPath(
+														contour.nodes,
+														contour.closed,
+													)}
+													fill={compatibilityPathColor(pathIndex)}
+													fillEnabled={contour.closed}
+													opacity={0.24}
+													stroke={
+														incompatibleComparisonPaths.has(pathIndex)
+															? "#ef4444"
+															: compatibilityPathColor(pathIndex)
+													}
+													strokeWidth={
+														(incompatibleComparisonPaths.has(pathIndex)
+															? 3
+															: 1.5) * inverseScale
+													}
+													dash={[5 * inverseScale, 4 * inverseScale]}
+												/>
+											))}
+											{compatibility.paths.flatMap((path) =>
+												path.nodes.map((node) => {
+													const reference = comparisonCompatibilityPoints.get(
+														node.referencePointId,
+													)
+													const active = activeCompatibilityPoints.get(
+														node.comparisonPointId,
+													)
+													if (reference === undefined || active === undefined)
+														return null
+													return (
+														<Line
+															key={`compatibility-map:${path.pathIndex}:${node.nodeIndex}`}
+															name="compatibility-node-mapping"
+															points={[
+																reference.x + compatibilityGhostOffset.x,
+																reference.y + compatibilityGhostOffset.y,
+																active.x,
+																active.y,
+															]}
+															stroke={compatibilityPathColor(path.pathIndex)}
+															strokeWidth={inverseScale}
+															dash={[3 * inverseScale, 4 * inverseScale]}
+															opacity={0.65}
+														/>
+													)
+												}),
+											)}
+											{visibleContours.map((contour, pathIndex) => (
+												<Path
+													key={`compatibility-active:${contour.id}`}
+													name="compatibility-active-path"
+													data={editorContourToPath(
+														contour.nodes,
+														contour.closed,
+													)}
+													fill={compatibilityPathColor(pathIndex)}
+													fillEnabled={contour.closed}
+													opacity={0.2}
+													stroke={
+														incompatibleActivePaths.has(pathIndex)
+															? "#ef4444"
+															: compatibilityPathColor(pathIndex)
+													}
+													strokeWidth={
+														(incompatibleActivePaths.has(pathIndex) ? 3 : 1.5) *
+														inverseScale
+													}
+												/>
+											))}
+											{compatibility.diagnostics.flatMap(
+												(diagnostic, index) => {
+													const referenceContour =
+														comparisonContours[diagnostic.reference.pathIndex]
+													const activeContour =
+														visibleContours[diagnostic.comparison.pathIndex]
+													const reference = referenceContour?.nodes[0]
+													const active = activeContour?.nodes[0]
+													return [
+														reference === undefined ? null : (
+															<Circle
+																key={`compatibility-error-reference:${index}`}
+																x={reference.x + compatibilityGhostOffset.x}
+																y={reference.y + compatibilityGhostOffset.y}
+																radius={6 * inverseScale}
+																fill="#ef4444"
+																stroke="#ffffff"
+																strokeWidth={1.5 * inverseScale}
+															/>
+														),
+														active === undefined ? null : (
+															<Circle
+																key={`compatibility-error-active:${index}`}
+																x={active.x}
+																y={active.y}
+																radius={6 * inverseScale}
+																fill="#ef4444"
+																stroke="#ffffff"
+																strokeWidth={1.5 * inverseScale}
+															/>
+														),
+													]
+												},
+											)}
+										</Group>
+									)}
 									<Path
 										data={combinedPreview.path}
 										fill={palette.previewInk}

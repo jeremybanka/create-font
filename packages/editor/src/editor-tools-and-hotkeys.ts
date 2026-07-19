@@ -303,6 +303,7 @@ export const TOOLS = {
 			const contour = selectedContour(context)
 			if (contour === null) return
 			context.workspace.font.actions.reverseContour({
+				masterId: context.activeMasterId,
 				glyphId: context.activeGlyphId,
 				contourId: contour.id,
 			})
@@ -395,6 +396,7 @@ export const TOOLS = {
 			const contour = selectedContour(context)
 			if (target?.kind !== "node" || contour === null || !contour.closed) return
 			context.workspace.font.actions.makeNodeFirst({
+				masterId: context.activeMasterId,
 				glyphId: context.activeGlyphId,
 				contourId: contour.id,
 				pointId: target.pointId,

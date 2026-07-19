@@ -12,14 +12,17 @@ import {
 } from "../src/outline-clipboard.ts"
 
 describe("outline clipboard", () => {
-	it("copies a whole curved contour across every master", () => {
+	it("copies a whole curved contour from the active master", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
-		const contour = glyph?.contours[0]
+		const contour = glyph?.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)?.contours[0]
 		if (glyph === null || contour === undefined)
 			throw new Error("Missing glyph.")
 		const copied = copyOutlineSelection(
 			glyph,
+			razorMasterId,
 			contour.points.map((point) => ({ kind: "node", pointId: point.id })),
 		)
 		expect(copied.ok).toBe(true)
@@ -28,7 +31,6 @@ describe("outline clipboard", () => {
 		expect(copied.value.contours[0]?.closed).toBe(true)
 		expect(copied.value.layers.map((layer) => layer.masterId)).toEqual([
 			razorMasterId,
-			blackMasterId,
 		])
 		expect(copied.value.layers[0]?.points[0]).toEqual(
 			expect.objectContaining({ incoming: expect.any(Object) }),
@@ -43,14 +45,16 @@ describe("outline clipboard", () => {
 	it("turns discontiguous selected regions into deterministic open fragments", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
-		const contour = glyph?.contours[0]
+		const contour = glyph?.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)?.contours[0]
 		if (glyph === null || contour === undefined)
 			throw new Error("Missing glyph.")
 		const first = contour.points[0]
 		const third = contour.points[2]
 		if (first === undefined || third === undefined)
 			throw new Error("Missing points.")
-		const copied = copyOutlineSelection(glyph, [
+		const copied = copyOutlineSelection(glyph, razorMasterId, [
 			{ kind: "node", pointId: first.id },
 			{ kind: "node", pointId: third.id },
 		])
@@ -75,11 +79,14 @@ describe("outline clipboard", () => {
 	it("validates payloads and prepares fresh IDs for an atomic paste", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
-		const contour = glyph?.contours[1]
+		const contour = glyph?.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)?.contours[1]
 		if (glyph === null || contour === undefined)
 			throw new Error("Missing glyph.")
 		const copied = copyOutlineSelection(
 			glyph,
+			razorMasterId,
 			contour.points.map((point) => ({ kind: "node", pointId: point.id })),
 		)
 		if (!copied.ok) throw new Error(copied.error)
@@ -90,8 +97,9 @@ describe("outline clipboard", () => {
 		let sequence = 0
 		const prepared = prepareOutlinePaste(
 			parsed.value,
+			razorMasterId,
 			oGlyphId,
-			[razorMasterId, blackMasterId],
+			[razorMasterId],
 			(kind) => `${kind}:clipboard:${sequence++}`,
 		)
 		expect(prepared.ok).toBe(true)
@@ -115,8 +123,9 @@ describe("outline clipboard", () => {
 		expect(
 			prepareOutlinePaste(
 				parsed.value,
+				razorMasterId,
 				oGlyphId,
-				[razorMasterId],
+				[blackMasterId],
 				() => "point:unused",
 			),
 		).toEqual(

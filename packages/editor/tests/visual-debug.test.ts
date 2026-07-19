@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { editorControlHitRadii } from "../src/canvas-hit-testing.ts"
 import {
+	compatibilityPathColor,
 	DEFAULT_VISUAL_DEBUG_STATE,
 	toggleVisualDebug,
 	visualDebugControlRegions,
@@ -31,6 +32,21 @@ describe("visual debug", () => {
 		expect(on?.checked).toBe(true)
 		on?.do()
 		expect(onToggle).toHaveBeenCalledWith("hit-targets")
+		const compatibility = visualDebugPaletteCommands(
+			DEFAULT_VISUAL_DEBUG_STATE,
+			onToggle,
+		)[1]
+		expect(compatibility).toMatchObject({
+			id: "visual-debug:compatibility",
+			status: "Off",
+			checked: false,
+		})
+	})
+
+	it("assigns deterministic repeating ordinal path colors", () => {
+		expect(compatibilityPathColor(0)).toBe(compatibilityPathColor(8))
+		expect(compatibilityPathColor(0)).not.toBe(compatibilityPathColor(1))
+		expect(compatibilityPathColor(-1)).toBe(compatibilityPathColor(7))
 	})
 
 	it("describes the exact effective regions, including coincident ownership", () => {

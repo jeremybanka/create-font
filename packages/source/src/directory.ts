@@ -7,6 +7,7 @@ import { failure, success } from "./result.ts"
 import {
 	CREATE_FONT_EDITOR_FORMAT,
 	CREATE_FONT_EDITOR_VERSION,
+	type EditorFontFile,
 	type SourceDiagnostic,
 	type SourceResult,
 } from "./types.ts"
@@ -44,6 +45,7 @@ export const projectFileSchema = z
 		editorFormat: z.literal(CREATE_FONT_EDITOR_FORMAT),
 		editorVersion: z.union([
 			z.literal(3),
+			z.literal(4),
 			z.literal(CREATE_FONT_EDITOR_VERSION),
 		]),
 	})
@@ -177,23 +179,61 @@ export const instanceFileSchema = z
 	.strict()
 	.meta({ title: "create-font instance" })
 
-const pointSchema = z
+const topologyPointSchema = z
 	.object({
 		id: pointIdSchema,
 		mode: z.enum(["soft", "hard"]),
-	})
-	.strict()
-const contourSchema = z
-	.object({
-		id: contourIdSchema,
-		closed: z.boolean(),
-		points: z.array(pointSchema),
 	})
 	.strict()
 const handleSchema = z
 	.object({ x: finiteNumberSchema, y: finiteNumberSchema })
 	.strict()
 const layerPointSchema = z
+	.object({
+		id: pointIdSchema,
+		mode: z.enum(["soft", "hard"]),
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		incoming: handleSchema.optional(),
+		outgoing: handleSchema.optional(),
+	})
+	.strict()
+const contourSchema = z
+	.object({
+		id: contourIdSchema,
+		closed: z.boolean(),
+		points: z.array(layerPointSchema),
+	})
+	.strict()
+const glyphLayerSchema = z
+	.object({
+		masterId: masterIdSchema,
+		advanceWidth: finiteNumberSchema,
+		leftSideBearing: finiteNumberSchema,
+		contours: z.array(contourSchema),
+	})
+	.strict()
+
+const currentGlyphFileSchema = z
+	.object({
+		id: glyphIdSchema,
+		name: z.string(),
+		export: z.boolean(),
+		note: z.string().optional(),
+		color: z.string().optional(),
+		overlap: z.boolean().optional(),
+		layers: z.array(glyphLayerSchema),
+	})
+	.strict()
+
+const legacyContourSchema = z
+	.object({
+		id: contourIdSchema,
+		closed: z.boolean(),
+		points: z.array(topologyPointSchema),
+	})
+	.strict()
+const legacyLayerPointSchema = z
 	.object({
 		pointId: pointIdSchema,
 		x: finiteNumberSchema,
@@ -202,16 +242,15 @@ const layerPointSchema = z
 		outgoing: handleSchema.optional(),
 	})
 	.strict()
-const glyphLayerSchema = z
+const legacyGlyphLayerSchema = z
 	.object({
 		masterId: masterIdSchema,
 		advanceWidth: finiteNumberSchema,
 		leftSideBearing: finiteNumberSchema,
-		points: z.array(layerPointSchema),
+		points: z.array(legacyLayerPointSchema),
 	})
 	.strict()
-
-export const glyphFileSchema = z
+const legacyGlyphFileSchema = z
 	.object({
 		id: glyphIdSchema,
 		name: z.string(),
@@ -219,10 +258,13 @@ export const glyphFileSchema = z
 		note: z.string().optional(),
 		color: z.string().optional(),
 		overlap: z.boolean().optional(),
-		contours: z.array(contourSchema),
-		layers: z.array(glyphLayerSchema),
+		contours: z.array(legacyContourSchema),
+		layers: z.array(legacyGlyphLayerSchema),
 	})
 	.strict()
+
+export const glyphFileSchema = z
+	.union([currentGlyphFileSchema, legacyGlyphFileSchema])
 	.meta({ title: "create-font glyph" })
 
 export const cmapEntryFileSchema = z
@@ -636,11 +678,26 @@ export function defaultCmapUnitPath(codePoint: number): string {
 }
 
 export interface SplitFontSourceOptions {
-	readonly axisPath?: (axis: AxisFile, index: number) => string
-	readonly masterPath?: (master: MasterFile, index: number) => string
-	readonly instancePath?: (instance: InstanceFile, index: number) => string
-	readonly glyphPath?: (glyph: GlyphFile, index: number) => string
-	readonly cmapPath?: (entry: CmapEntryFile, index: number) => string
+	readonly axisPath?: (
+		axis: EditorFontFile["axes"][number],
+		index: number,
+	) => string
+	readonly masterPath?: (
+		master: EditorFontFile["masters"][number],
+		index: number,
+	) => string
+	readonly instancePath?: (
+		instance: EditorFontFile["instances"][number],
+		index: number,
+	) => string
+	readonly glyphPath?: (
+		glyph: EditorFontFile["glyphs"][number],
+		index: number,
+	) => string
+	readonly cmapPath?: (
+		entry: EditorFontFile["cmap"][number],
+		index: number,
+	) => string
 }
 
 function duplicatePathDiagnostic(
@@ -924,7 +981,7 @@ export function assembleEditorFontSource(
 	)
 	if (!cmapIndex.ok) return failure(cmapIndex.errors)
 
-	const knownPaths = new Set([
+	const knownPaths = new Set<string>([
 		sourceUnitDescriptors.project.path,
 		sourceUnitDescriptors.metadata.path,
 		sourceUnitDescriptors.names.path,
@@ -977,7 +1034,7 @@ export function assembleEditorFontSource(
 					},
 				])
 			}
-			values.push(value.value as Value)
+			values.push(value.value as unknown as Value)
 		}
 		return success(values)
 	}

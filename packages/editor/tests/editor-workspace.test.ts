@@ -80,6 +80,7 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({
 			"hit-targets": false,
+			compatibility: false,
 		})
 
 		workspace.actions.toggleVisualDebug("hit-targets")
@@ -88,7 +89,30 @@ describe("editor workspace", () => {
 
 		expect(workspace.font.silo.getState(workspace.ui.visualDebug)).toEqual({
 			"hit-targets": true,
+			compatibility: false,
 		})
+	})
+
+	it("chooses a distinct comparison master and clears layer-local selection when switching", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		const pointId = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes[0]?.pointId
+		if (pointId === undefined) throw new Error("Fixture point is missing.")
+		workspace.font.silo.setState(
+			workspace.ui.selection,
+			Object.freeze([{ kind: "node", pointId }]),
+		)
+
+		workspace.actions.selectMaster(blackMasterId)
+
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			blackMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.comparisonMasterId)).toBe(
+			razorMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
 	})
 	it("coalesces a transaction into one external-store notification", async () => {
 		const silo = new Silo({
@@ -241,9 +265,12 @@ describe("editor workspace", () => {
 				glyph.id === oGlyphId
 					? {
 							...glyph,
-							contours: glyph.contours.map((contour, index) =>
-								index === 0 ? { ...contour, closed: false } : contour,
-							),
+							layers: glyph.layers.map((layer) => ({
+								...layer,
+								contours: layer.contours.map((contour, index) =>
+									index === 0 ? { ...contour, closed: false } : contour,
+								),
+							})),
 						}
 					: glyph,
 			),
@@ -408,8 +435,10 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.previewText, "O")
 		const source = workspace.font.read.editorSource()
-		const innerTop = source?.glyphs.find((glyph) => glyph.id === oGlyphId)
-			?.contours[1]?.points[0]?.id
+		const innerTop = source?.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === blackMasterId)?.contours[1]
+			?.points[0]?.id
 		expect(innerTop).toBeDefined()
 		if (innerTop === undefined) return
 
@@ -484,9 +513,10 @@ describe("editor workspace", () => {
 		workspace.font.silo.setState(workspace.ui.previewText, "O")
 		const before = workspace.font.silo.getState(workspace.ui.previewRun)
 		const layerBefore = workspace.font.silo.getState(workspace.ui.activeLayer)
-		const notdefPoint = workspace.document.glyphs.find(
-			(glyph) => glyph.id === notdefGlyphId,
-		)?.contours[0]?.points[0]?.id
+		const notdefPoint = workspace.document.glyphs
+			.find((glyph) => glyph.id === notdefGlyphId)
+			?.layers.find((layer) => layer.masterId === blackMasterId)?.contours[0]
+			?.points[0]?.id
 		expect(notdefPoint).toBeDefined()
 		if (notdefPoint === undefined) return
 
@@ -506,18 +536,15 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		const aBefore = workspace.font.read.editorGlyphSource(aGlyphId)
 		const oBefore = workspace.font.read.editorGlyphSource(oGlyphId)
-		const point = oBefore?.contours[0]?.points[0]
-		const layerPoint = oBefore?.layers[0]?.points.find(
-			(item) => item.pointId === point?.id,
-		)
-		if (oBefore === null || point === undefined || layerPoint === undefined) {
+		const point = oBefore?.layers[0]?.contours[0]?.points[0]
+		if (oBefore === null || point === undefined) {
 			throw new Error("Missing O fixture point.")
 		}
 
 		workspace.font.actions.movePoints({
 			masterId: oBefore.layers[0]?.masterId ?? razorMasterId,
 			glyphId: oGlyphId,
-			points: [{ pointId: point.id, x: layerPoint.x + 1, y: layerPoint.y }],
+			points: [{ pointId: point.id, x: point.x + 1, y: point.y }],
 		})
 
 		expect(workspace.font.read.editorGlyphSource(aGlyphId)).toBe(aBefore)
@@ -969,12 +996,14 @@ describe("editor workspace", () => {
 	it("projects a mode toggle into the active layer and undo history", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)
-		const pointId = workspace.document.glyphs.find(
-			(glyph) => glyph.id === oGlyphId,
-		)?.contours[0]?.points[0]?.id
+		const pointId = workspace.document.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)?.contours[0]
+			?.points[0]?.id
 		if (pointId === undefined) throw new Error("Fixture node is missing.")
 
 		workspace.font.actions.setNodeMode({
+			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			pointId,
 			mode: "hard",
@@ -998,9 +1027,9 @@ describe("editor workspace", () => {
 	it("keeps a deleted handle absent when toggling its node back to soft", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)
-		const contour = workspace.document.glyphs.find(
-			(glyph) => glyph.id === oGlyphId,
-		)?.contours[0]
+		const contour = workspace.document.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)?.contours[0]
 		const pointId = contour?.points[0]?.id
 		const nextPointId = contour?.points[1]?.id
 		if (pointId === undefined || nextPointId === undefined) {
@@ -1014,6 +1043,7 @@ describe("editor workspace", () => {
 			handles: [{ pointId, handle: "outgoing" }],
 		})
 		workspace.font.actions.setNodeMode({
+			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			pointId,
 			mode: "soft",
@@ -1073,9 +1103,9 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)
 		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
-		const contour = workspace.document.glyphs.find(
-			(glyph) => glyph.id === oGlyphId,
-		)?.contours[0]
+		const contour = workspace.document.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)?.contours[0]
 		const pointId = contour?.points[0]?.id
 		const neighborId = contour?.points[1]?.id
 		if (pointId === undefined || neighborId === undefined) {
@@ -1089,6 +1119,7 @@ describe("editor workspace", () => {
 				handles: [{ pointId: targetId, handle: "outgoing" }],
 			})
 			workspace.font.actions.setNodeMode({
+				masterId: razorMasterId,
 				glyphId: oGlyphId,
 				pointId: targetId,
 				mode: "soft",
@@ -1177,9 +1208,9 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)
 		workspace.font.silo.setState(workspace.ui.activeMasterId, razorMasterId)
-		const contour = workspace.document.glyphs.find(
-			(glyph) => glyph.id === oGlyphId,
-		)?.contours[0]
+		const contour = workspace.document.glyphs
+			.find((glyph) => glyph.id === oGlyphId)
+			?.layers.find((layer) => layer.masterId === razorMasterId)?.contours[0]
 		const pointId = contour?.points[0]?.id
 		const neighborId = contour?.points[1]?.id
 		if (pointId === undefined || neighborId === undefined) {
@@ -1193,6 +1224,7 @@ describe("editor workspace", () => {
 				handles: [{ pointId: targetId, handle: "outgoing" }],
 			})
 			workspace.font.actions.setNodeMode({
+				masterId: razorMasterId,
 				glyphId: oGlyphId,
 				pointId: targetId,
 				mode: "soft",

@@ -42,12 +42,11 @@ describe(`glyph preview`, () => {
 		const blank = {
 			...template,
 			name: `space`,
-			contours: [],
 			layers: template.layers.map((layer) => ({
 				...layer,
 				advanceWidth: 320,
 				leftSideBearing: 0,
-				points: [],
+				contours: [],
 			})),
 		}
 
@@ -72,9 +71,12 @@ describe(`glyph preview`, () => {
 		if (glyph === undefined) throw new Error("Missing preview fixture glyph.")
 		const openGlyph = {
 			...glyph,
-			contours: glyph.contours.map((contour, index) =>
-				index === 0 ? { ...contour, closed: false } : contour,
-			),
+			layers: glyph.layers.map((layer) => ({
+				...layer,
+				contours: layer.contours.map((contour, index) =>
+					index === 0 ? { ...contour, closed: false } : contour,
+				),
+			})),
 		}
 
 		const preview = createGlyphPreview(

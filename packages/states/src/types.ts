@@ -10,7 +10,7 @@ import type {
 } from "@create-font/target"
 
 export const CREATE_FONT_EDITOR_FORMAT = "create-font.editor" as const
-export const CREATE_FONT_EDITOR_VERSION = 4 as const
+export const CREATE_FONT_EDITOR_VERSION = 5 as const
 
 /** Stable, serialization-safe identifiers scoped by editor entity kind. */
 export type AxisId = `axis:${string}`
@@ -128,11 +128,6 @@ export interface EditorHandleVectorSource {
 	readonly y: number
 }
 
-/**
- * Topological node data shared by every master. Coordinates and handle
- * vectors deliberately do not live here: they are supplied by the
- * corresponding glyph layer.
- */
 export interface EditorPointSource {
 	readonly id: PointId
 	/**
@@ -147,11 +142,11 @@ export interface EditorContourSource {
 	readonly id: ContourId
 	/** Open contours are valid editor state but must be closed before export. */
 	readonly closed: boolean
-	readonly points: readonly EditorPointSource[]
+	readonly points: readonly EditorLayerPointSource[]
 }
 
-export interface EditorLayerPointSource {
-	readonly pointId: PointId
+/** One complete master-local authoring node. */
+export interface EditorLayerPointSource extends EditorPointSource {
 	readonly x: number
 	readonly y: number
 	/** Relative vector from the node to the preceding cubic control point. */
@@ -160,12 +155,13 @@ export interface EditorLayerPointSource {
 	readonly outgoing?: EditorHandleVectorSource
 }
 
-/** Coordinates and horizontal metrics for one glyph at one master. */
+/** One independently authored, ordered glyph outline at one master. */
 export interface EditorGlyphLayerSource {
 	readonly masterId: MasterId
 	readonly advanceWidth: number
 	readonly leftSideBearing: number
-	readonly points: readonly EditorLayerPointSource[]
+	/** Authored order is the ordinal interpolation contract and export order. */
+	readonly contours: readonly EditorContourSource[]
 }
 
 export interface EditorGlyphSource {
@@ -178,9 +174,7 @@ export interface EditorGlyphSource {
 	/** Editor-only color label expressed as a CSS color string. */
 	readonly color?: string
 	readonly overlap?: boolean
-	/** Shared contour and node topology, in export order. */
-	readonly contours: readonly EditorContourSource[]
-	/** At most one layer per master; projection verifies complete coverage. */
+	/** At most one independently authored layer per master. */
 	readonly layers: readonly EditorGlyphLayerSource[]
 }
 

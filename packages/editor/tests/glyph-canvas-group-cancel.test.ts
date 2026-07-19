@@ -59,6 +59,7 @@ function mountSelectedContour({
 	if (withOpenContour) {
 		const contourId = "contour:open-render-test" as ContourId
 		workspace.font.actions.createContour({
+			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			contourId,
 			point: {
@@ -71,6 +72,7 @@ function mountSelectedContour({
 			],
 		})
 		workspace.font.actions.insertPoint({
+			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			contourId,
 			point: {

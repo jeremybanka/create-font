@@ -119,6 +119,12 @@ export function createEditorWorkspace(
 		key: "activeMasterId",
 		default: document.defaultMasterId,
 	})
+	const comparisonMasterIdAtom = font.silo.atom<MasterId>({
+		key: "comparisonMasterId",
+		default:
+			document.masters.find((master) => master.id !== document.defaultMasterId)
+				?.id ?? document.defaultMasterId,
+	})
 	const selectionAtom = font.silo.atom<readonly EditorSelectionTarget[]>({
 		key: "selection",
 		default: Object.freeze([]),
@@ -348,7 +354,7 @@ export function createEditorWorkspace(
 			const masterId = get(activeMasterIdAtom)
 			const glyphId = get(activeGlyphIdSelector)
 			if (glyphId === null) return null
-			const contourIds = get(font.atoms.glyphContourIds, glyphId)
+			const contourIds = get(font.atoms.glyphContourIds, [masterId, glyphId])
 			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
 			const bounds = get(font.selectors.layerBounds, [masterId, glyphId])
 			if (contourIds === null || advanceWidth === null || !bounds.ok) {
@@ -356,8 +362,16 @@ export function createEditorWorkspace(
 			}
 			const contours: EditorCanvasContour[] = []
 			for (const contourId of contourIds) {
-				const pointIds = get(font.atoms.contourPointIds, [glyphId, contourId])
-				const closed = get(font.atoms.contourClosed, [glyphId, contourId])
+				const pointIds = get(font.atoms.contourPointIds, [
+					masterId,
+					glyphId,
+					contourId,
+				])
+				const closed = get(font.atoms.contourClosed, [
+					masterId,
+					glyphId,
+					contourId,
+				])
 				if (pointIds === null || closed === null) return null
 				const contour: EditorLayerNode[] = []
 				const tangentNodes: EditorLayerNode[] = []
@@ -369,7 +383,7 @@ export function createEditorWorkspace(
 					])
 					if (!node.ok) return null
 					contour.push(node.value)
-					const topology = get(font.atoms.point, [glyphId, pointId])
+					const topology = get(font.atoms.point, [masterId, glyphId, pointId])
 					const position = get(font.atoms.pointPosition, [
 						masterId,
 						glyphId,
@@ -490,6 +504,7 @@ export function createEditorWorkspace(
 			selectedGlyphId: selectedGlyphIdAtom,
 			activeGlyphId: activeGlyphIdSelector,
 			activeMasterId: activeMasterIdAtom,
+			comparisonMasterId: comparisonMasterIdAtom,
 			selection: selectionAtom,
 			previewText: previewTextAtom,
 			caretIndex: caretIndexAtom,
@@ -581,12 +596,11 @@ export function createEditorWorkspace(
 						name,
 						export: true,
 						color: "#d5963f",
-						contours: [],
 						layers: currentDocument.masters.map((master) => ({
 							masterId: master.id,
 							advanceWidth: currentDocument.metadata.unitsPerEm,
 							leftSideBearing: 80,
-							points: [],
+							contours: [],
 						})),
 					})
 					const characters = Array.from(name)
@@ -617,6 +631,16 @@ export function createEditorWorkspace(
 				)
 				if (master === undefined) return
 				font.silo.setState(activeMasterIdAtom, masterId)
+				font.silo.setState(selectionAtom, Object.freeze([]))
+				if (font.silo.getState(comparisonMasterIdAtom) === masterId) {
+					font.silo.setState(
+						comparisonMasterIdAtom,
+						masterId === currentDocument.defaultMasterId
+							? (currentDocument.masters.find((item) => item.id !== masterId)
+									?.id ?? masterId)
+							: currentDocument.defaultMasterId,
+					)
+				}
 				setLocation(
 					master.kind === "default"
 						? Object.fromEntries(
@@ -624,6 +648,15 @@ export function createEditorWorkspace(
 							)
 						: master.location,
 				)
+			},
+			selectComparisonMaster(masterId: MasterId): void {
+				const currentDocument = font.read.editorSource()
+				if (
+					currentDocument?.masters.some((master) => master.id === masterId) &&
+					masterId !== font.silo.getState(activeMasterIdAtom)
+				) {
+					font.silo.setState(comparisonMasterIdAtom, masterId)
+				}
 			},
 			selectInstance(instanceId: InstanceId): void {
 				const currentDocument = font.read.editorSource()

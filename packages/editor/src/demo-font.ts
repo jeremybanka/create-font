@@ -108,7 +108,8 @@ function cubicNodes(
 			return []
 		return [
 			{
-				pointId: pointId(glyphId, pointOffset + index),
+				id: pointId(glyphId, pointOffset + index),
+				mode: "soft" as const,
 				x: coordinate.x,
 				y: coordinate.y,
 				incoming: {
@@ -130,41 +131,39 @@ function makeGeometricO(id: GlyphId, name: string): EditorGlyphSource {
 		name,
 		export: true,
 		color: name === "O" ? "#ce5d3d" : "#807c73",
-		contours: [
-			{
-				id: contourId(id, "outer"),
-				closed: true,
-				points: Array.from({ length: 4 }, (_, index) => ({
-					id: pointId(id, index * 2),
-					mode: "soft" as const,
-				})),
-			},
-			{
-				id: contourId(id, "counter"),
-				closed: true,
-				points: Array.from({ length: 4 }, (_, index) => ({
-					id: pointId(id, index * 2 + 8),
-					mode: "soft" as const,
-				})),
-			},
-		],
 		layers: [
 			{
 				masterId: razorMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: [
-					...cubicNodes(id, outerCoordinates, 0),
-					...cubicNodes(id, razorCounterCoordinates, 8),
+				contours: [
+					{
+						id: contourId(id, "outer"),
+						closed: true,
+						points: cubicNodes(id, outerCoordinates, 0),
+					},
+					{
+						id: contourId(id, "counter"),
+						closed: true,
+						points: cubicNodes(id, razorCounterCoordinates, 8),
+					},
 				],
 			},
 			{
 				masterId: blackMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: [
-					...cubicNodes(id, outerCoordinates, 0),
-					...cubicNodes(id, blackCounterCoordinates, 8),
+				contours: [
+					{
+						id: contourId(id, "outer"),
+						closed: true,
+						points: cubicNodes(id, outerCoordinates, 0),
+					},
+					{
+						id: contourId(id, "counter"),
+						closed: true,
+						points: cubicNodes(id, blackCounterCoordinates, 8),
+					},
 				],
 			},
 		],
@@ -177,7 +176,8 @@ function hardNodes(
 	pointOffset: number,
 ) {
 	return coordinates.map((coordinate, index) => ({
-		pointId: pointId(glyphId, pointOffset + index),
+		id: pointId(glyphId, pointOffset + index),
+		mode: "hard" as const,
 		x: coordinate.x,
 		y: coordinate.y,
 	}))
@@ -189,49 +189,47 @@ function makeGeometricA(): EditorGlyphSource {
 		name: "A",
 		export: true,
 		color: "#d5963f",
-		contours: [
-			{
-				id: contourId(aGlyphId, "outer"),
-				closed: true,
-				points: razorAOuterCoordinates.map((_, index) => ({
-					id: pointId(aGlyphId, index),
-					mode: "hard" as const,
-				})),
-			},
-			{
-				id: contourId(aGlyphId, "counter"),
-				closed: true,
-				points: razorACounterCoordinates.map((_, index) => ({
-					id: pointId(aGlyphId, index + razorAOuterCoordinates.length),
-					mode: "hard" as const,
-				})),
-			},
-		],
 		layers: [
 			{
 				masterId: razorMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: [
-					...hardNodes(aGlyphId, razorAOuterCoordinates, 0),
-					...hardNodes(
-						aGlyphId,
-						razorACounterCoordinates,
-						razorAOuterCoordinates.length,
-					),
+				contours: [
+					{
+						id: contourId(aGlyphId, "outer"),
+						closed: true,
+						points: hardNodes(aGlyphId, razorAOuterCoordinates, 0),
+					},
+					{
+						id: contourId(aGlyphId, "counter"),
+						closed: true,
+						points: hardNodes(
+							aGlyphId,
+							razorACounterCoordinates,
+							razorAOuterCoordinates.length,
+						),
+					},
 				],
 			},
 			{
 				masterId: blackMasterId,
 				advanceWidth: 1_000,
 				leftSideBearing: 80,
-				points: [
-					...hardNodes(aGlyphId, blackAOuterCoordinates, 0),
-					...hardNodes(
-						aGlyphId,
-						blackACounterCoordinates,
-						blackAOuterCoordinates.length,
-					),
+				contours: [
+					{
+						id: contourId(aGlyphId, "outer"),
+						closed: true,
+						points: hardNodes(aGlyphId, blackAOuterCoordinates, 0),
+					},
+					{
+						id: contourId(aGlyphId, "counter"),
+						closed: true,
+						points: hardNodes(
+							aGlyphId,
+							blackACounterCoordinates,
+							blackAOuterCoordinates.length,
+						),
+					},
 				],
 			},
 		],
@@ -241,7 +239,7 @@ function makeGeometricA(): EditorGlyphSource {
 export function makeDemoFont(): EditorFontSource {
 	return {
 		format: "create-font.editor",
-		editorVersion: 4,
+		editorVersion: 5,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

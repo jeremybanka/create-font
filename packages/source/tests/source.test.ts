@@ -37,6 +37,36 @@ function mutableFile(file: EditorFontFile): DeepMutable<EditorFontFile> {
 	return JSON.parse(JSON.stringify(file)) as DeepMutable<EditorFontFile>
 }
 
+function legacySharedTopologyGlyph(
+	glyph: EditorFontSource["glyphs"][number],
+	defaultMasterId: string,
+) {
+	const defaultLayer = glyph.layers.find(
+		(layer) => layer.masterId === defaultMasterId,
+	)
+	if (defaultLayer === undefined)
+		throw new Error("Default glyph layer is missing.")
+	return {
+		...glyph,
+		contours: defaultLayer.contours.map((contour) => ({
+			id: contour.id,
+			closed: contour.closed,
+			points: contour.points.map(({ id, mode }) => ({ id, mode })),
+		})),
+		layers: glyph.layers.map((layer) => ({
+			masterId: layer.masterId,
+			advanceWidth: layer.advanceWidth,
+			leftSideBearing: layer.leftSideBearing,
+			points: layer.contours.flatMap((contour) =>
+				contour.points.map(({ id: pointId, mode: _mode, ...geometry }) => ({
+					pointId,
+					...geometry,
+				})),
+			),
+		})),
+	}
+}
+
 function geometricOWithEveryEditorField(): EditorFontSource {
 	const source = makeGeometricOEditorFont()
 	return {
@@ -115,7 +145,7 @@ describe("@create-font/source", () => {
 			format: "create-font.source",
 			sourceVersion: 1,
 			editorFormat: "create-font.editor",
-			editorVersion: 4,
+			editorVersion: 5,
 		})
 		expect(split.value["glyphs/glyph%3AO~e48dd026.json"]).toEqual(
 			source.glyphs[1],
@@ -383,9 +413,13 @@ describe("@create-font/source", () => {
 			"glyph:O",
 		])
 		expect(decoded.value.glyphs[1]?.note).toBe("Geometric O")
-		expect(decoded.value.glyphs[1]?.contours[0]?.points[0]?.mode).toBe("soft")
-		expect(decoded.value.glyphs[1]?.contours[0]?.closed).toBe(true)
-		expect(decoded.value.glyphs[1]?.layers[0]?.points[0]?.incoming).toEqual({
+		expect(
+			decoded.value.glyphs[1]?.layers[0]?.contours[0]?.points[0]?.mode,
+		).toBe("soft")
+		expect(decoded.value.glyphs[1]?.layers[0]?.contours[0]?.closed).toBe(true)
+		expect(
+			decoded.value.glyphs[1]?.layers[0]?.contours[0]?.points[0]?.incoming,
+		).toEqual({
 			x: -266.6666666666667,
 			y: 0,
 		})
@@ -399,11 +433,14 @@ describe("@create-font/source", () => {
 			...source,
 			glyphs: source.glyphs.map((glyph) => ({
 				...glyph,
-				contours: glyph.contours.map((contour, index) =>
-					glyph.id === "glyph:O" && index === 0
-						? { ...contour, closed: false }
-						: contour,
-				),
+				layers: glyph.layers.map((layer) => ({
+					...layer,
+					contours: layer.contours.map((contour, index) =>
+						glyph.id === "glyph:O" && index === 0
+							? { ...contour, closed: false }
+							: contour,
+					),
+				})),
 			})),
 		}
 		const encoded = encodeEditorFontSource(open)
@@ -412,7 +449,7 @@ describe("@create-font/source", () => {
 		const decoded = decodeEditorFontSource(encoded.value)
 		expect(decoded.ok).toBe(true)
 		if (!decoded.ok) return
-		expect(decoded.value.glyphs[1]?.contours[0]?.closed).toBe(false)
+		expect(decoded.value.glyphs[1]?.layers[0]?.contours[0]?.closed).toBe(false)
 	})
 
 	test("uses the EditorFontSource document as the file root", () => {
@@ -420,7 +457,7 @@ describe("@create-font/source", () => {
 		expect(file.ok).toBe(true)
 		if (!file.ok) return
 		expect(file.value.format).toBe("create-font.editor")
-		expect(file.value.editorVersion).toBe(4)
+		expect(file.value.editorVersion).toBe(5)
 		expect(file.value).not.toHaveProperty("document")
 		expect(file.value).not.toHaveProperty("sourceVersion")
 		expect(file.value.metadata.createdAt).toBe("-1")
@@ -478,7 +515,7 @@ describe("@create-font/source", () => {
 				overlap: false,
 				layers: glyph.layers.map((layer) => ({
 					...layer,
-					points: [...layer.points].reverse(),
+					contours: [...layer.contours].reverse(),
 				})),
 			})),
 		}
@@ -503,13 +540,16 @@ describe("@create-font/source", () => {
 		expect(decoded.value.glyphs[0]).not.toHaveProperty("note")
 		expect(decoded.value.glyphs[0]).not.toHaveProperty("overlap")
 		expect(decoded.value.glyphs[0]?.color).toBe("")
-		expect(decoded.value.glyphs[0]?.contours[0]?.points[0]?.mode).toBe("soft")
-		const topologyOrder = decoded.value.glyphs[0]?.contours.flatMap((contour) =>
-			contour.points.map((point) => point.id),
-		)
 		expect(
-			decoded.value.glyphs[0]?.layers[0]?.points.map((point) => point.pointId),
-		).toEqual(topologyOrder)
+			decoded.value.glyphs[0]?.layers[0]?.contours[0]?.points[0]?.mode,
+		).toBe("soft")
+		expect(
+			decoded.value.glyphs[0]?.layers[0]?.contours.map((contour) => contour.id),
+		).toEqual(
+			explicitDefaults.glyphs[0]!.layers[0]!.contours.map(
+				(contour) => contour.id,
+			),
+		)
 	})
 
 	test("round-trips intermediate master supports", () => {
@@ -543,7 +583,7 @@ describe("@create-font/source", () => {
 		if (glyph === undefined) throw new Error("missing O")
 		const layer = glyph.layers[0]
 		if (layer === undefined) throw new Error("missing layer")
-		const point = layer.points[0]
+		const point = layer.contours[0]?.points[0]
 		if (point === undefined) throw new Error("missing point")
 		const modified: EditorFontSource = {
 			...source,
@@ -555,11 +595,14 @@ describe("@create-font/source", () => {
 								candidateLayer.masterId === layer.masterId
 									? {
 											...candidateLayer,
-											points: candidateLayer.points.map((candidatePoint) =>
-												candidatePoint.pointId === point.pointId
-													? { ...candidatePoint, x: -0 }
-													: candidatePoint,
-											),
+											contours: candidateLayer.contours.map((contour) => ({
+												...contour,
+												points: contour.points.map((candidatePoint) =>
+													candidatePoint.id === point.id
+														? { ...candidatePoint, x: -0 }
+														: candidatePoint,
+												),
+											})),
 										}
 									: candidateLayer,
 							),
@@ -573,7 +616,10 @@ describe("@create-font/source", () => {
 		const decoded = decodeEditorFontSource(encoded.value)
 		if (!decoded.ok) throw new Error("negative zero did not decode")
 		expect(
-			Object.is(decoded.value.glyphs[1]?.layers[0]?.points[0]?.x, -0),
+			Object.is(
+				decoded.value.glyphs[1]?.layers[0]?.contours[0]?.points[0]?.x,
+				-0,
+			),
 		).toBe(true)
 	})
 
@@ -582,9 +628,9 @@ describe("@create-font/source", () => {
 		const file = toEditorFontFile(source)
 		if (!file.ok) throw new Error("fixture did not convert")
 		expect(Object.isFrozen(file.value)).toBe(true)
-		expect(Object.isFrozen(file.value.glyphs[0]?.contours[0]?.points)).toBe(
-			true,
-		)
+		expect(
+			Object.isFrozen(file.value.glyphs[0]?.layers[0]?.contours[0]?.points),
+		).toBe(true)
 
 		const mutable = mutableFile(file.value)
 		const decoded = fromEditorFontFile(mutable)
@@ -594,9 +640,9 @@ describe("@create-font/source", () => {
 		expect(decoded.value.names.family).toBe("Create Font O Razor")
 		expect(decoded.value.glyphs[0]?.id).toBe("glyph:.notdef")
 		expect(Object.isFrozen(decoded.value)).toBe(true)
-		expect(Object.isFrozen(decoded.value.glyphs[0]?.layers[0]?.points)).toBe(
-			true,
-		)
+		expect(
+			Object.isFrozen(decoded.value.glyphs[0]?.layers[0]?.contours[0]?.points),
+		).toBe(true)
 	})
 
 	test("accepts structurally sound in-progress state without compiling it", () => {
@@ -716,7 +762,7 @@ describe("@create-font/source", () => {
 			"source.unknown_property",
 			"$.surprise",
 		)
-		const future = { ...file.value, editorVersion: 5 }
+		const future = { ...file.value, editorVersion: 6 }
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(future)),
 			"source.version",
@@ -734,15 +780,19 @@ describe("@create-font/source", () => {
 		const file = toEditorFontFile(makeGeometricOEditorFont())
 		if (!file.ok) throw new Error("fixture did not convert")
 		const { overshoots: _overshoots, ...legacyMetrics } = file.value.metrics
-		const legacy = {
+		const source = makeGeometricOEditorFont()
+		const legacy: Record<string, unknown> = {
 			...file.value,
 			editorVersion: 3,
 			metrics: legacyMetrics,
+			glyphs: source.glyphs.map((glyph) =>
+				legacySharedTopologyGlyph(glyph, source.defaultMasterId),
+			),
 		}
 		const decoded = decodeEditorFontSource(JSON.stringify(legacy))
 		expect(decoded.ok).toBe(true)
 		if (!decoded.ok) return
-		expect(decoded.value.editorVersion).toBe(4)
+		expect(decoded.value.editorVersion).toBe(5)
 		expect(decoded.value.metrics.overshoots).toEqual({
 			baseline: 0,
 			ascender: 0,
@@ -761,10 +811,23 @@ describe("@create-font/source", () => {
 		const project = split.value["create-font.json"] as Record<string, unknown>
 		const metrics = split.value["metrics.json"] as Record<string, unknown>
 		const { overshoots: _overshoots, ...legacyMetrics } = metrics
-		const legacy = {
+		const legacy: Record<string, unknown> = {
 			...split.value,
 			"create-font.json": { ...project, editorVersion: 3 },
 			"metrics.json": legacyMetrics,
+		}
+		const source = makeGeometricOEditorFont()
+		for (const [path, value] of Object.entries(legacy)) {
+			if (!path.startsWith("glyphs/") || path === "glyphs/index.json") continue
+			const glyph = source.glyphs.find(
+				(candidate) => candidate.id === (value as { id?: string }).id,
+			)
+			if (glyph !== undefined) {
+				legacy[path] = legacySharedTopologyGlyph(
+					glyph,
+					source.defaultMasterId,
+				) as never
+			}
 		}
 		for (const assemble of [
 			assembleEditorFontSource,
@@ -773,7 +836,7 @@ describe("@create-font/source", () => {
 			const result = assemble(legacy)
 			expect(result.ok).toBe(true)
 			if (!result.ok) continue
-			expect(result.value.editorVersion).toBe(4)
+			expect(result.value.editorVersion).toBe(5)
 			expect(result.value.metrics.overshoots.xHeight).toBe(0)
 		}
 	})
@@ -782,14 +845,15 @@ describe("@create-font/source", () => {
 		const file = toEditorFontFile(makeGeometricOEditorFont())
 		if (!file.ok) throw new Error("fixture did not convert")
 		const oneSided = mutableFile(file.value)
-		const oneSidedPoint = oneSided.glyphs[0]?.layers[0]?.points[0]
+		const oneSidedPoint = oneSided.glyphs[0]?.layers[0]?.contours[0]?.points[0]
 		if (oneSidedPoint === undefined) throw new Error("fixture node is missing")
 		delete oneSidedPoint.outgoing
 		const decodedOneSided = decodeEditorFontSource(JSON.stringify(oneSided))
 		expect(decodedOneSided.ok).toBe(true)
 
 		const handleless = mutableFile(file.value)
-		const handlelessPoint = handleless.glyphs[0]?.layers[0]?.points[0]
+		const handlelessPoint =
+			handleless.glyphs[0]?.layers[0]?.contours[0]?.points[0]
 		if (handlelessPoint === undefined)
 			throw new Error("fixture node is missing")
 		delete handlelessPoint.incoming
@@ -797,11 +861,11 @@ describe("@create-font/source", () => {
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(handleless)),
 			"source.handle",
-			"$.glyphs[0].layers[0].points[0]",
+			"$.glyphs[0].layers[0].contours[0].points[0]",
 		)
 
 		const bent = mutableFile(file.value)
-		const bentPoint = bent.glyphs[0]?.layers[0]?.points[0]
+		const bentPoint = bent.glyphs[0]?.layers[0]?.contours[0]?.points[0]
 		if (bentPoint?.outgoing === undefined) {
 			throw new Error("fixture outgoing handle is missing")
 		}
@@ -809,7 +873,7 @@ describe("@create-font/source", () => {
 		expectFailure(
 			decodeEditorFontSource(JSON.stringify(bent)),
 			"source.handle",
-			"$.glyphs[0].layers[0].points[0]",
+			"$.glyphs[0].layers[0].contours[0].points[0]",
 		)
 	})
 

@@ -21,11 +21,14 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const validation = useO(workspace.ui.validation)
 	const location = useO(workspace.ui.previewLocation)
 	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
+	const sourceLayer = glyph?.layers.find(
+		(candidate) => candidate.masterId === activeMasterId,
+	)
 	const pointIds =
 		layer?.contours.flatMap((contour) =>
 			contour.nodes.map((point) => point.pointId),
 		) ??
-		glyph?.contours.flatMap((contour) =>
+		sourceLayer?.contours.flatMap((contour) =>
 			contour.points.map((point) => point.id),
 		) ??
 		[]
@@ -78,7 +81,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 					<dt>Master</dt>
 					<dd>{master?.name ?? "—"}</dd>
 					<dt>Contours</dt>
-					<dd>{layer?.contours.length ?? glyph?.contours.length ?? 0}</dd>
+					<dd>{layer?.contours.length ?? sourceLayer?.contours.length ?? 0}</dd>
 					<dt>Points</dt>
 					<dd>{pointIds.length}</dd>
 				</dl>
@@ -153,6 +156,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 								onClick={() => {
 									if (activeGlyphId === null) return
 									workspace.font.actions.setNodeMode({
+										masterId: activeMasterId,
 										glyphId: activeGlyphId,
 										pointId: selectedPoint.pointId,
 										mode: "soft",
@@ -167,6 +171,7 @@ export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 								onClick={() => {
 									if (activeGlyphId === null) return
 									workspace.font.actions.setNodeMode({
+										masterId: activeMasterId,
 										glyphId: activeGlyphId,
 										pointId: selectedPoint.pointId,
 										mode: "hard",
