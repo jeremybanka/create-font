@@ -25,6 +25,11 @@ export const DEFAULT_VISUAL_DEBUG_STATE: VisualDebugState = Object.freeze({
 
 export const COMPATIBILITY_GHOST_OFFSET = Object.freeze({ x: -12, y: 12 })
 
+export type CompatibilityGhostOffset = Readonly<{
+	x: number
+	y: number
+}>
+
 const PATH_COLORS = [
 	"#8fd3ff",
 	"#ffb7d5",

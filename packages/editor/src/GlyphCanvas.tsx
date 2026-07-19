@@ -171,7 +171,6 @@ import {
 	serializeOutlineClipboard,
 } from "./outline-clipboard.ts"
 import {
-	COMPATIBILITY_GHOST_OFFSET,
 	compatibilityPathColor,
 	visualDebugControlRegions,
 } from "./visual-debug.ts"
@@ -334,26 +333,6 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowDown: [0, -1],
 }
 
-function contourThumbnailViewBox(nodes: readonly EditorLayerNode[]): string {
-	if (nodes.length === 0) return "0 0 1 1"
-	const xs = nodes.flatMap((node) => [
-		node.x,
-		...(node.incoming === undefined ? [] : [node.x + node.incoming.x]),
-		...(node.outgoing === undefined ? [] : [node.x + node.outgoing.x]),
-	])
-	const ys = nodes.flatMap((node) => [
-		node.y,
-		...(node.incoming === undefined ? [] : [node.y + node.incoming.y]),
-		...(node.outgoing === undefined ? [] : [node.y + node.outgoing.y]),
-	])
-	const minX = Math.min(...xs)
-	const maxX = Math.max(...xs)
-	const minY = Math.min(...ys)
-	const maxY = Math.max(...ys)
-	const padding = Math.max(maxX - minX, maxY - minY, 1) * 0.12
-	return `${minX - padding} ${minY - padding} ${Math.max(maxX - minX + padding * 2, 1)} ${Math.max(maxY - minY + padding * 2, 1)}`
-}
-
 export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
 	const text = useO(workspace.ui.previewText)
@@ -393,6 +372,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const showNodes = useO(workspace.ui.showNodes)
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const visualDebug = useO(workspace.ui.visualDebug)
+	const compatibilityOffsetPixels = useO(workspace.ui.compatibilityGhostOffset)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
 	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
@@ -433,9 +413,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const shapeEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
-	const [draggedContourId, setDraggedContourId] = useState<ContourId | null>(
-		null,
-	)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const penHoverRef = useRef<PenHoverPreview | null>(null)
@@ -682,8 +659,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
 	const compatibilityGhostOffset = {
-		x: COMPATIBILITY_GHOST_OFFSET.x * inverseScale,
-		y: COMPATIBILITY_GHOST_OFFSET.y * inverseScale,
+		x: compatibilityOffsetPixels.x * inverseScale,
+		y: compatibilityOffsetPixels.y * inverseScale,
 	}
 	const activeCompatibilityPoints = new Map(
 		visibleContours.flatMap((contour) =>
@@ -2674,16 +2651,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			zoomCanvasView(current, nextZoom, { x: focalX, y: focalY }),
 		)
 	}
-	const reorderContour = (contourId: ContourId, toIndex: number): void => {
-		if (activeGlyphId === null || visibleContours.length === 0) return
-		workspace.font.actions.reorderContour({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
-			contourId,
-			toIndex: Math.max(0, Math.min(visibleContours.length - 1, toIndex)),
-		})
-	}
-
 	return (
 		<glyph-canvas
 			ref={rootRef}
@@ -3059,130 +3026,6 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					setCaretIndex(activeTextareaSelectionIndex(event.currentTarget))
 				}
 			/>
-			{!visualDebug.compatibility ||
-			editingTextIndex === null ||
-			layer === null ? null : (
-				<compatibility-panel
-					role="region"
-					aria-label="Master compatibility and path order"
-					onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) =>
-						event.stopPropagation()
-					}
-				>
-					<label>
-						Compare with
-						<select
-							value={comparisonMasterId}
-							onChange={(event) =>
-								workspace.actions.selectComparisonMaster(
-									event.currentTarget.value as MasterId,
-								)
-							}
-						>
-							{masterIds
-								.filter((masterId) => masterId !== activeMasterId)
-								.map((masterId) => (
-									<option key={masterId} value={masterId}>
-										{workspace.document.masters.find(
-											(master) => master.id === masterId,
-										)?.name ?? masterId}
-									</option>
-								))}
-						</select>
-					</label>
-					<p
-						data-state={compatibility?.compatible ? "ok" : "error"}
-						role="status"
-					>
-						{compatibility?.compatible
-							? "Compatible by path and node order"
-							: `${compatibility?.diagnostics.length ?? 0} compatibility issue${compatibility?.diagnostics.length === 1 ? "" : "s"}`}
-					</p>
-					{compatibility?.diagnostics.length === 0 ? null : (
-						<ul>
-							{compatibility?.diagnostics.map((diagnostic, index) => (
-								<li key={`${diagnostic.code}:${index}`}>
-									{diagnostic.message}
-								</li>
-							))}
-						</ul>
-					)}
-					<h2>Path order</h2>
-					<ol>
-						{visibleContours.map((contour, pathIndex) => (
-							<li
-								key={contour.id}
-								tabIndex={0}
-								draggable
-								onDragStart={(event) => {
-									setDraggedContourId(contour.id)
-									if (event.dataTransfer !== null)
-										event.dataTransfer.effectAllowed = "move"
-								}}
-								onDragEnd={() => setDraggedContourId(null)}
-								onDragOver={(event) => {
-									if (draggedContourId !== null) event.preventDefault()
-								}}
-								onDrop={(event) => {
-									event.preventDefault()
-									if (draggedContourId !== null)
-										reorderContour(draggedContourId, pathIndex)
-									setDraggedContourId(null)
-								}}
-								onKeyDown={(event) => {
-									if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
-										return
-									event.preventDefault()
-									reorderContour(
-										contour.id,
-										pathIndex + (event.key === "ArrowUp" ? -1 : 1),
-									)
-								}}
-							>
-								<path-ordinal
-									style={{ background: compatibilityPathColor(pathIndex) }}
-								>
-									{pathIndex + 1}
-								</path-ordinal>
-								<svg
-									viewBox={contourThumbnailViewBox(contour.nodes)}
-									aria-hidden="true"
-								>
-									<path
-										d={editorContourToPath(contour.nodes, contour.closed)}
-										fill={
-											contour.closed
-												? compatibilityPathColor(pathIndex)
-												: "none"
-										}
-										stroke={compatibilityPathColor(pathIndex)}
-										vector-effect="non-scaling-stroke"
-									/>
-								</svg>
-								<path-name>Path {pathIndex + 1}</path-name>
-								<path-buttons>
-									<button
-										type="button"
-										disabled={pathIndex === 0}
-										aria-label={`Move path ${pathIndex + 1} up`}
-										onClick={() => reorderContour(contour.id, pathIndex - 1)}
-									>
-										↑
-									</button>
-									<button
-										type="button"
-										disabled={pathIndex === visibleContours.length - 1}
-										aria-label={`Move path ${pathIndex + 1} down`}
-										onClick={() => reorderContour(contour.id, pathIndex + 1)}
-									>
-										↓
-									</button>
-								</path-buttons>
-							</li>
-						))}
-					</ol>
-				</compatibility-panel>
-			)}
 			<canvas-surface
 				ref={ref}
 				data-tool={activeTool}

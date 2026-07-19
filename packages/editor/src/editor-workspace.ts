@@ -21,8 +21,10 @@ import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
 import {
+	COMPATIBILITY_GHOST_OFFSET,
 	DEFAULT_VISUAL_DEBUG_STATE,
 	toggleVisualDebug,
+	type CompatibilityGhostOffset,
 	type VisualDebugState,
 	type VisualDebugToggleId,
 } from "./visual-debug.ts"
@@ -171,6 +173,12 @@ export function createEditorWorkspace(
 		key: "visualDebug",
 		default: DEFAULT_VISUAL_DEBUG_STATE,
 	})
+	const compatibilityGhostOffsetAtom = font.silo.atom<CompatibilityGhostOffset>(
+		{
+			key: "compatibilityGhostOffset",
+			default: COMPATIBILITY_GHOST_OFFSET,
+		},
+	)
 	const validationAtom = font.silo.atom<EditorValidationStatus>({
 		key: "validation",
 		default: initialValidation ?? validationStatus(font.read.compilation()),
@@ -517,6 +525,7 @@ export function createEditorWorkspace(
 			canvasView: canvasViewAtom,
 			canvasViewport: canvasViewportAtom,
 			visualDebug: visualDebugAtom,
+			compatibilityGhostOffset: compatibilityGhostOffsetAtom,
 			validation: validationAtom,
 			pathname: pathnameAtom,
 			route: routeSelector,

@@ -93,6 +93,23 @@ describe("editor workspace", () => {
 		})
 	})
 
+	it("keeps compatibility overlay offsets in shared workspace state", () => {
+		const workspace = createEditorWorkspace()
+		expect(
+			workspace.font.silo.getState(workspace.ui.compatibilityGhostOffset),
+		).toEqual({ x: -12, y: 12 })
+
+		workspace.font.silo.setState(workspace.ui.compatibilityGhostOffset, {
+			x: 24,
+			y: -8,
+		})
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+
+		expect(
+			workspace.font.silo.getState(workspace.ui.compatibilityGhostOffset),
+		).toEqual({ x: 24, y: -8 })
+	})
+
 	it("chooses a distinct comparison master and clears layer-local selection when switching", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)

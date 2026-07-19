@@ -77,6 +77,16 @@ describe("tiling workspace", () => {
 		})
 	})
 
+	it("persists compatibility tiles in workspace layouts", () => {
+		const initial = createDefaultTilingLayout()
+		const added = addTile(initial, "compatibility", 3)
+		const restored = parseTilingLayout(serializeTilingLayout(added.layout))
+		expect(findTile(restored!, added.tileId)?.tile).toMatchObject({
+			kind: "compatibility",
+			fill: false,
+		})
+	})
+
 	it("adds preview tiles with vertical fill affinity by default", () => {
 		const added = addTile(createDefaultTilingLayout(), "preview", 2)
 		expect(findTile(added.layout, added.tileId)?.tile).toMatchObject({
