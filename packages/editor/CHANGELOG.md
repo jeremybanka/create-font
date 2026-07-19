@@ -1,5 +1,17 @@
 # @create-font/editor
 
+## 0.7.0
+
+### Minor Changes
+
+- 8a36d1f: Add previous and next master commands with wrapping navigation and Action Hotbar support.
+
+### Patch Changes
+
+- 61e9d52: Render additive path overlaps correctly in Glyph Library previews.
+- 61e9d52: Propagate Preview Tile color presets to rendered glyph foregrounds.
+- 4f41584: Move one hard node with Alt or Option while keeping its authored handle endpoints fixed.
+
 ## 0.6.0
 
 ### Minor Changes
