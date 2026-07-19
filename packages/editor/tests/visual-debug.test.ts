@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { editorControlHitRadii } from "../src/canvas-hit-testing.ts"
 import {
+	compatibilityNodeTraceStyle,
 	compatibilityPathColor,
 	DEFAULT_VISUAL_DEBUG_STATE,
 	toggleVisualDebug,
@@ -47,6 +48,19 @@ describe("visual debug", () => {
 		expect(compatibilityPathColor(0)).toBe(compatibilityPathColor(8))
 		expect(compatibilityPathColor(0)).not.toBe(compatibilityPathColor(1))
 		expect(compatibilityPathColor(-1)).toBe(compatibilityPathColor(7))
+	})
+
+	it("keeps compatibility traces legible at every canvas zoom", () => {
+		expect(compatibilityNodeTraceStyle(1)).toEqual({
+			dash: [7, 5],
+			haloWidth: 4,
+			strokeWidth: 1.75,
+		})
+		expect(compatibilityNodeTraceStyle(0.5)).toEqual({
+			dash: [3.5, 2.5],
+			haloWidth: 2,
+			strokeWidth: 0.875,
+		})
 	})
 
 	it("describes the exact effective regions, including coincident ownership", () => {

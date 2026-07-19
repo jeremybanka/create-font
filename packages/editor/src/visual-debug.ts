@@ -47,6 +47,18 @@ export function compatibilityPathColor(pathIndex: number): string {
 	return PATH_COLORS[index] ?? PATH_COLORS[0]
 }
 
+export function compatibilityNodeTraceStyle(inverseScale: number): Readonly<{
+	readonly dash: [number, number]
+	readonly haloWidth: number
+	readonly strokeWidth: number
+}> {
+	return {
+		dash: [7 * inverseScale, 5 * inverseScale],
+		haloWidth: 4 * inverseScale,
+		strokeWidth: 1.75 * inverseScale,
+	}
+}
+
 export function toggleVisualDebug(
 	state: VisualDebugState,
 	id: VisualDebugToggleId,

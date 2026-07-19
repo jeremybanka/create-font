@@ -171,6 +171,7 @@ import {
 	serializeOutlineClipboard,
 } from "./outline-clipboard.ts"
 import {
+	compatibilityNodeTraceStyle,
 	compatibilityPathColor,
 	visualDebugControlRegions,
 } from "./visual-debug.ts"
@@ -662,6 +663,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		x: compatibilityOffsetPixels.x * inverseScale,
 		y: compatibilityOffsetPixels.y * inverseScale,
 	}
+	const compatibilityTraceStyle = compatibilityNodeTraceStyle(inverseScale)
 	const activeCompatibilityPoints = new Map(
 		visibleContours.flatMap((contour) =>
 			contour.nodes.map((point) => [point.pointId, point] as const),
@@ -3576,21 +3578,38 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 													)
 													if (reference === undefined || active === undefined)
 														return null
+													const points = [
+														reference.x + compatibilityGhostOffset.x,
+														reference.y + compatibilityGhostOffset.y,
+														active.x,
+														active.y,
+													]
 													return (
-														<Line
+														<Group
 															key={`compatibility-map:${path.pathIndex}:${node.nodeIndex}`}
-															name="compatibility-node-mapping"
-															points={[
-																reference.x + compatibilityGhostOffset.x,
-																reference.y + compatibilityGhostOffset.y,
-																active.x,
-																active.y,
-															]}
-															stroke={compatibilityPathColor(path.pathIndex)}
-															strokeWidth={inverseScale}
-															dash={[3 * inverseScale, 4 * inverseScale]}
-															opacity={0.65}
-														/>
+															name="compatibility-node-trace"
+														>
+															<Line
+																name="compatibility-node-mapping-halo"
+																points={points}
+																stroke={palette.surface}
+																strokeWidth={compatibilityTraceStyle.haloWidth}
+																dash={compatibilityTraceStyle.dash}
+																lineCap="round"
+																opacity={0.95}
+															/>
+															<Line
+																name="compatibility-node-mapping"
+																points={points}
+																stroke={compatibilityPathColor(path.pathIndex)}
+																strokeWidth={
+																	compatibilityTraceStyle.strokeWidth
+																}
+																dash={compatibilityTraceStyle.dash}
+																lineCap="round"
+																opacity={0.95}
+															/>
+														</Group>
 													)
 												}),
 											)}
