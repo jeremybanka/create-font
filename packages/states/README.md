@@ -7,8 +7,8 @@ state into the target's low-level `VariableFontSource` representation.
 
 The distinction is deliberate:
 
-- editor state has stable entity IDs, source masters, shared glyph topology,
-  per-master coordinates, selection-friendly diagnostics, and editor-only
+- editor state has stable entity IDs, independently authored master outlines,
+  explicit interpolation compatibility, selection-friendly diagnostics, and editor-only
   annotations;
 - the target IR has resolved glyph order, axis-tagged locations, default
   outlines and metrics, complete variation tuples, numeric glyph IDs, and no
@@ -34,18 +34,21 @@ The principal entities are:
   support regions;
 - named instances keyed by stable axis IDs;
 - glyph records containing export intent and editor-only note and color;
-- one ordered open-or-closed contour/node topology per glyph, with `soft` or
-  `hard` editing behavior shared by every master;
-- one coordinate, relative incoming/outgoing handle, and metrics layer per
-  glyph and master;
+- one ordered list of open-or-closed contours per glyph and master;
+- layer-local contour and point IDs, `soft` or `hard` editing behavior,
+  coordinates, relative incoming/outgoing handles, and metrics;
 - a character map from Unicode code points to stable glyph IDs.
 
-Sharing topology is an important constraint. A node's identity, contour
-membership, order, and soft/hard behavior live once; its `x` and `y`
-coordinates and optional handles vary by master. Handles are vectors relative
-to their owning node, so moving a node carries its handles without rewriting
-them. A structural node edit can therefore update every layer atomically, and
-lowering never has to guess whether master contours correspond.
+Topology is master-local. A structural edit receives a `masterId` and changes
+only that layer; another master may use different contour IDs, point IDs,
+orders, or node counts. Handles are vectors relative to their owning node, so
+moving a node carries its handles without rewriting them.
+
+Interpolation correspondence is ordinal and explicit: corresponding paths and
+nodes occupy the same indexes. `glyphCompatibility` reports path-count,
+open/closed, node-count, and projected on/off-curve-pattern mismatches with
+locations in both masters. Lowering preserves authored path boundaries and
+order and fails on incompatibility instead of merging or reordering outlines.
 
 Soft nodes require at least one handle in every layer. When both handles are
 present, they lie on opposite rays of one line, and moving either rotates the
@@ -107,10 +110,11 @@ Selectors form a lowering graph rather than one monolithic compiler:
 1. axis selectors quantize user-space values and validate axis maps;
 2. master selectors normalize locations and build OpenType support regions;
 3. the variation-model selector builds the master scalar matrix;
-4. segment-plan selectors choose one cubic-to-quadratic subdivision depth from
-   the worst approximation bound across every master;
-5. layer selectors combine shared topology with one master's coordinates,
-   handles, and metrics, following the shared segment plan;
+4. compatibility and segment-plan selectors map paths and nodes ordinally and
+   choose one cubic-to-quadratic subdivision depth from every corresponding
+   master segment;
+5. layer selectors lower one master's authored paths in their original order,
+   following the corresponding segment plan;
 6. glyph selectors solve source-master differences into complete `gvar`
    tuples, including horizontal phantom-point deltas;
 7. instance and character-map selectors replace stable editor IDs with axis
@@ -178,8 +182,8 @@ font-format invariant that the composed source violates.
 
 ## Editing semantics
 
-Structural operations are synchronous atom.io transactions. Inserting a shared
-node, loading a document, moving several coordinates, dragging or deleting a
+Structural operations are synchronous atom.io transactions. Inserting a
+master-local node, loading a document, moving several coordinates, dragging or deleting a
 handle, deleting nodes, and changing node mode must either update the complete
 affected structure or make no change. Ordinary node deletion reconnects and
 keeps a contour closed. Breaking deletion splits remaining regions into open
@@ -187,14 +191,15 @@ contours and removes the outward handles from their loose ends. Open contours
 remain valid, serializable editor state but produce a typed
 `topology.open_contour` projection error until closed. A keyed timeline family
 routes each glyph-owned atom-family member to that glyph's independent history,
-including points and contours created after loading. Projections remain derived
+including layer-local points and contours created after loading. Path restacking
+is one transaction and therefore one undo step. Projections remain derived
 state. Undoing `glyph:O` therefore cannot rewind `.notdef`, even though both
 histories live in the document's isolated `Silo`.
 
 Loading is intended for trusted `EditorFontSource` values already constructed
 or decoded by an application. It checks structural requirements needed to
 populate the graph, such as unique stable IDs, a valid default-master reference,
-and layer coordinates that refer to known points. Export validity remains the
+and internally consistent master layers. Export validity remains the
 job of the projection and ingestion stages, where failures are data rather than
 thrown exceptions.
 

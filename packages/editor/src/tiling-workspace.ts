@@ -6,6 +6,7 @@ export type TileKind =
 	| "font-navigation"
 	| "canvas-toolbar"
 	| "preview"
+	| "compatibility"
 	| "glyph-attributes"
 	| "selection-dimensions"
 
@@ -45,6 +46,7 @@ const TILE_KINDS = new Set<TileKind>([
 	"font-navigation",
 	"canvas-toolbar",
 	"preview",
+	"compatibility",
 	"glyph-attributes",
 	"selection-dimensions",
 ])

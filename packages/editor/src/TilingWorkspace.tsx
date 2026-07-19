@@ -14,6 +14,7 @@ import { useEffect, useReducer, useRef, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
+import { CompatibilityTile } from "./CompatibilityTile.tsx"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { PreviewTile } from "./PreviewTile.tsx"
@@ -96,6 +97,11 @@ const TILE_DEFINITIONS: readonly TileDefinition[] = [
 		kind: "preview",
 		name: "Preview",
 		description: "Proof custom text, samples, and variation settings.",
+	},
+	{
+		kind: "compatibility",
+		name: "Master compatibility",
+		description: "Compare master topology, offset overlays, and reorder paths.",
 	},
 	{
 		kind: "glyph-attributes",
@@ -765,6 +771,8 @@ export function TilingWorkspace({
 					<CanvasToolbar workspace={workspace} />
 				) : tile.kind === "preview" ? (
 					<PreviewTile workspace={workspace} tileId={tile.id} />
+				) : tile.kind === "compatibility" ? (
+					<CompatibilityTile workspace={workspace} />
 				) : tile.kind === "glyph-attributes" ? (
 					<GlyphInspector workspace={workspace} />
 				) : (

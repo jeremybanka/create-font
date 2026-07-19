@@ -8,7 +8,7 @@
 - the repository directory contract used by the development server.
 
 Both representations map directly to `EditorFontSource`.
-Stable IDs, author ordering, shared topology, master layers, locations, cmap
+Stable IDs, author ordering, master-local outlines, locations, cmap
 references, relative incoming/outgoing handles, soft/hard node modes, and
 each contour's explicit `closed` state, plus editor-only note and color fields,
 all cross the boundary in the same form emitted by the state graph.
@@ -51,7 +51,7 @@ cmap/
 - axes, masters, instances, and character mappings each have one unit per
   atom-family identity.
 - each indexed glyph file is one complete glyph timeline unit: glyph facts,
-  topology, and all master layers.
+  complete independently authored outlines for all master layers.
 
 The explicit indexes mean IDs and code points remain application identities
 rather than being treated as raw filenames. Existing repositories can retain
@@ -102,10 +102,13 @@ watching. This package owns the directory's portable data contract.
 ## Complete-document codec
 
 One JSON document can still represent one complete `EditorFontSource`
-snapshot: the JSON root is the state document itself, with the existing
-`format: "create-font.editor"` and `editorVersion: 4` discriminants. Version 3
-files and directory manifests are migrated on read by adding zero-depth
-alignment overshoots; every new write emits version 4. There is no
+snapshot: the JSON root is the state document itself, with
+`format: "create-font.editor"` and `editorVersion: 5` discriminants. Version 3
+and 4 files and directory manifests are migrated on read; every new write emits
+version 5. Version 3 gains zero-depth alignment overshoots. Version 4 shared
+topology is joined to each layer by `pointId`: the default layer preserves IDs,
+other layers receive deterministic master-qualified IDs, and missing,
+duplicate, or unknown joins produce actionable diagnostics. There is no
 second envelope and no file-only identity layer. Decoding returns the public
 type that can be passed to `createFontEditorState().actions.load`.
 
@@ -166,7 +169,7 @@ Canonical encoding has deliberately small rules:
 
 - object properties are sorted recursively by JavaScript string order;
 - array order is preserved exactly;
-- each glyph layer's point records follow the glyph's shared topology order;
+- each glyph layer preserves its authored contour and point order;
 - strings use the platform's well-formed `JSON.stringify` escaping;
 - finite numbers use JSON's shortest round-tripping representation, with
   negative zero explicitly retained as `-0`;
@@ -185,7 +188,7 @@ empty PostScript name. Consequently, encoding a source before and after
 
 ## Validation boundary
 
-Version 3 is a closed schema. Earlier versions are rejected explicitly rather
+Versions 3 and 4 are closed legacy schemas. Earlier versions are rejected explicitly rather
 than silently reinterpreted: version 2 did not record whether contours were
 open or closed and allowed handleless soft nodes. The decoder rejects invalid syntax, duplicate object keys,
 prototype-sensitive keys, unknown properties, missing or wrongly typed fields,

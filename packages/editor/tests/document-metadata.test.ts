@@ -50,9 +50,14 @@ describe(`font favicon`, () => {
 							...glyph,
 							layers: glyph.layers.map((layer) => ({
 								...layer,
-								points: layer.points.map((point, index) =>
-									index === 0 ? { ...point, x: point.x + 7 } : point,
-								),
+								contours: layer.contours.map((contour, contourIndex) => ({
+									...contour,
+									points: contour.points.map((point, pointIndex) =>
+										contourIndex === 0 && pointIndex === 0
+											? { ...point, x: point.x + 7 }
+											: point,
+									),
+								})),
 							})),
 						}
 					: glyph,

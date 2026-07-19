@@ -18,6 +18,7 @@ import type {
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
 } from "./source-session.ts"
+import { SOURCE_SESSION_WORKER_NAME } from "./source-session-identity.ts"
 import {
 	createStartupTimeline,
 	startupEpochMilliseconds,
@@ -334,7 +335,7 @@ function connectSourceSession(): void {
 	try {
 		const finish = startupTimeline.startPhase(`shared-worker-construction`)
 		const worker = new SharedWorker("/source-session.worker.js", {
-			name: `create-font-source-session`,
+			name: SOURCE_SESSION_WORKER_NAME,
 			type: `module`,
 		})
 		finish()

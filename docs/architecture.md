@@ -120,6 +120,27 @@ in-memory backends, and whole-snapshot validation. Programmable behavior such
 as `features/layout.rs` remains a separate compiler input rather than an editor
 state unit.
 
+### Decision: master-local outlines
+
+Editor source version 5 stores a complete ordered contour list inside every
+glyph/master layer. Contours and nodes have layer-local stable IDs, topology,
+mode, geometry, and handles. There is deliberately no glyph-level shared
+topology.
+
+Interpolation correspondence is an explicit ordinal contract: path _n_ maps to
+path _n_, and node _m_ in that path maps to node _m_. Compatibility validation
+compares path count, open/closed state, node count, and the projected
+on/off-curve pattern. It returns typed diagnostics with both masters' stable IDs
+and ordinal locations. Export stops on an incompatibility; it never repairs one
+by unioning, sorting, reversing, or otherwise changing authored paths.
+
+This representation permits masters to be authored independently while keeping
+correspondence inspectable and deterministic. The editor visualizes the
+contract with a comparison ghost, mapping lines, ordinal colors, and an
+undoable path-order control. A v4 loader joins shared topology to each layer by
+`pointId`; the default layer keeps its IDs and other layers receive deterministic
+master-qualified IDs. Missing, duplicate, or unknown joins are migration errors.
+
 Source formats must distinguish:
 
 - canonical source committed to the repository;

@@ -86,7 +86,7 @@ const layerContour = (
 			throw new Error("Geometric O fixture coordinates are incomplete.")
 		}
 		return {
-			pointId: pointId(glyphId, offset + index),
+			...topologyPoint(glyphId, offset + index),
 			x: coordinate.x,
 			y: coordinate.y,
 			incoming: handleVector(coordinate, incomingControl),
@@ -94,40 +94,38 @@ const layerContour = (
 		}
 	})
 
+const layerContours = (
+	id: GlyphId,
+	coordinates: readonly { readonly x: number; readonly y: number }[],
+) => [
+	{
+		id: contourId(id, "outer"),
+		closed: true,
+		points: layerContour(id, 0, coordinates),
+	},
+	{
+		id: contourId(id, "counter"),
+		closed: true,
+		points: layerContour(id, 8, coordinates),
+	},
+]
+
 const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 	id,
 	name,
 	export: true,
-	contours: [
-		{
-			id: contourId(id, "outer"),
-			closed: true,
-			points: [0, 2, 4, 6].map((index) => topologyPoint(id, index)),
-		},
-		{
-			id: contourId(id, "counter"),
-			closed: true,
-			points: [8, 10, 12, 14].map((index) => topologyPoint(id, index)),
-		},
-	],
 	layers: [
 		{
 			masterId: razorMasterId,
 			advanceWidth: 1_000,
 			leftSideBearing: 100,
-			points: [
-				...layerContour(id, 0, razorCoordinates),
-				...layerContour(id, 8, razorCoordinates),
-			],
+			contours: layerContours(id, razorCoordinates),
 		},
 		{
 			masterId: blackMasterId,
 			advanceWidth: 1_000,
 			leftSideBearing: 100,
-			points: [
-				...layerContour(id, 0, blackCoordinates),
-				...layerContour(id, 8, blackCoordinates),
-			],
+			contours: layerContours(id, blackCoordinates),
 		},
 	],
 })
@@ -135,7 +133,7 @@ const makeO = (id: GlyphId, name: string): EditorGlyphSource => ({
 export function makeGeometricOEditorFont(): EditorFontSource {
 	return {
 		format: "create-font.editor",
-		editorVersion: 4,
+		editorVersion: 5,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1,

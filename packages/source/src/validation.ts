@@ -30,6 +30,7 @@ import {
 } from "./types.ts"
 
 const LEGACY_EDITOR_VERSION = 3 as const
+const SHARED_TOPOLOGY_EDITOR_VERSION = 4 as const
 const MAX_OVERSHOOT_DEPTH = 16_383
 
 type TimestampMode = "file" | "state"
@@ -865,7 +866,7 @@ function parseInstance(
 	}
 }
 
-function parsePoint(
+function parseTopologyPoint(
 	value: unknown,
 	path: string,
 	context: ValidationContext,
@@ -889,6 +890,31 @@ function parsePoint(
 	}
 }
 
+interface LegacyContour {
+	readonly id: ContourId
+	readonly closed: boolean
+	readonly points: readonly EditorPointSource[]
+}
+
+function parseContourTopology(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): LegacyContour {
+	const record = objectValue(value, path, context)
+	if (record === null) return { id: "contour:", closed: true, points: [] }
+	checkShape(record, ["id", "closed", "points"], path, context)
+	const points = requiredArray(record, "points", path, context)
+	return {
+		id: requiredId<ContourId>(record, "id", "contour:", path, context),
+		closed: requiredBoolean(record, "closed", path, context),
+		points:
+			points?.map((point, index) =>
+				parseTopologyPoint(point, `${path}.points[${index}]`, context),
+			) ?? [],
+	}
+}
+
 function parseContour(
 	value: unknown,
 	path: string,
@@ -903,7 +929,7 @@ function parseContour(
 		closed: requiredBoolean(record, "closed", path, context),
 		points:
 			points?.map((point, index) =>
-				parsePoint(point, `${path}.points[${index}]`, context),
+				parseLayerPoint(point, `${path}.points[${index}]`, context),
 			) ?? [],
 	}
 }
@@ -913,6 +939,62 @@ function parseLayerPoint(
 	path: string,
 	context: ValidationContext,
 ): EditorLayerPointSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { id: "point:", mode: "hard", x: 0, y: 0 }
+	checkShape(
+		record,
+		["id", "mode", "x", "y", "incoming", "outgoing"],
+		path,
+		context,
+	)
+	const modeValue = requiredString(record, "mode", path, context)
+	const mode = modeValue === "soft" || modeValue === "hard" ? modeValue : "hard"
+	if (modeValue !== "soft" && modeValue !== "hard") {
+		add(
+			context,
+			"source.string",
+			`${path}.mode`,
+			'Expected node mode "soft" or "hard".',
+		)
+	}
+	const parseHandle = (
+		key: "incoming" | "outgoing",
+	): EditorHandleVectorSource | undefined => {
+		if (!Object.hasOwn(record, key)) return undefined
+		const handlePath = `${path}.${key}`
+		const handle = objectValue(record[key], handlePath, context)
+		if (handle === null) return { x: 0, y: 0 }
+		checkShape(handle, ["x", "y"], handlePath, context)
+		return {
+			x: requiredNumber(handle, "x", handlePath, context),
+			y: requiredNumber(handle, "y", handlePath, context),
+		}
+	}
+	const incoming = parseHandle("incoming")
+	const outgoing = parseHandle("outgoing")
+	return {
+		id: requiredId<PointId>(record, "id", "point:", path, context),
+		mode,
+		x: requiredNumber(record, "x", path, context),
+		y: requiredNumber(record, "y", path, context),
+		...(incoming === undefined ? {} : { incoming }),
+		...(outgoing === undefined ? {} : { outgoing }),
+	}
+}
+
+interface LegacyLayerPoint {
+	readonly pointId: PointId
+	readonly x: number
+	readonly y: number
+	readonly incoming?: EditorHandleVectorSource
+	readonly outgoing?: EditorHandleVectorSource
+}
+
+function parseLegacyLayerPoint(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): LegacyLayerPoint {
 	const record = objectValue(value, path, context)
 	if (record === null) return { pointId: "point:", x: 0, y: 0 }
 	checkShape(
@@ -945,11 +1027,70 @@ function parseLayerPoint(
 	}
 }
 
+function localContourId(
+	masterId: MasterId,
+	id: ContourId,
+	preserve: boolean,
+): ContourId {
+	return preserve ? id : `contour:${masterId}:${id.slice("contour:".length)}`
+}
+
+function localPointId(
+	masterId: MasterId,
+	id: PointId,
+	preserve: boolean,
+): PointId {
+	return preserve ? id : `point:${masterId}:${id.slice("point:".length)}`
+}
+
 function parseLayer(
 	value: unknown,
 	path: string,
 	context: ValidationContext,
 ): EditorGlyphLayerSource {
+	const record = objectValue(value, path, context)
+	if (record === null) {
+		return {
+			masterId: "master:",
+			advanceWidth: 0,
+			leftSideBearing: 0,
+			contours: [],
+		}
+	}
+	checkShape(
+		record,
+		["masterId", "advanceWidth", "leftSideBearing", "contours"],
+		path,
+		context,
+	)
+	const contours = requiredArray(record, "contours", path, context)
+	return {
+		masterId: requiredId<MasterId>(
+			record,
+			"masterId",
+			"master:",
+			path,
+			context,
+		),
+		advanceWidth: requiredNumber(record, "advanceWidth", path, context),
+		leftSideBearing: requiredNumber(record, "leftSideBearing", path, context),
+		contours:
+			contours?.map((contour, index) =>
+				parseContour(contour, `${path}.contours[${index}]`, context),
+			) ?? [],
+	}
+}
+
+function parseLegacyLayer(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): Readonly<{
+	masterId: MasterId
+	advanceWidth: number
+	leftSideBearing: number
+	points: readonly LegacyLayerPoint[]
+}> {
 	const record = objectValue(value, path, context)
 	if (record === null) {
 		return {
@@ -978,7 +1119,7 @@ function parseLayer(
 		leftSideBearing: requiredNumber(record, "leftSideBearing", path, context),
 		points:
 			points?.map((point, index) =>
-				parseLayerPoint(point, `${path}.points[${index}]`, context),
+				parseLegacyLayerPoint(point, `${path}.points[${index}]`, context),
 			) ?? [],
 	}
 }
@@ -986,6 +1127,8 @@ function parseLayer(
 function parseGlyph(
 	value: unknown,
 	path: string,
+	editorVersion: number,
+	defaultMasterId: MasterId,
 	context: ValidationContext,
 ): EditorGlyphSource {
 	const record = objectValue(value, path, context)
@@ -994,21 +1137,109 @@ function parseGlyph(
 			id: "glyph:",
 			name: "",
 			export: false,
-			contours: [],
 			layers: [],
 		}
 	}
+	const sharedTopology = editorVersion <= SHARED_TOPOLOGY_EDITOR_VERSION
 	checkShape(
 		record,
-		["id", "name", "export", "note", "color", "overlap", "contours", "layers"],
+		[
+			"id",
+			"name",
+			"export",
+			"note",
+			"color",
+			"overlap",
+			...(sharedTopology ? ["contours"] : []),
+			"layers",
+		],
 		path,
 		context,
 	)
 	const note = optionalString(record, "note", path, context)
 	const color = optionalString(record, "color", path, context)
 	const overlap = optionalBoolean(record, "overlap", path, context)
-	const contours = requiredArray(record, "contours", path, context)
 	const layers = requiredArray(record, "layers", path, context)
+	let parsedLayers: readonly EditorGlyphLayerSource[]
+	if (sharedTopology) {
+		const contours = requiredArray(record, "contours", path, context)
+		const legacyContours =
+			contours?.map((contour, index) =>
+				parseContourTopology(contour, `${path}.contours[${index}]`, context),
+			) ?? []
+		parsedLayers =
+			layers?.map((layer, layerIndex) => {
+				const layerPath = `${path}.layers[${layerIndex}]`
+				const legacy = parseLegacyLayer(layer, layerPath, context)
+				const positions = new Map<PointId, LegacyLayerPoint>()
+				for (let index = 0; index < legacy.points.length; index += 1) {
+					const point = legacy.points[index]
+					if (point === undefined) continue
+					if (positions.has(point.pointId)) {
+						add(
+							context,
+							"source.duplicate",
+							`${layerPath}.points[${index}].pointId`,
+							`Duplicate legacy layer point ${JSON.stringify(point.pointId)} makes migration ambiguous.`,
+						)
+					} else positions.set(point.pointId, point)
+				}
+				const expected = new Set(
+					legacyContours.flatMap((contour) =>
+						contour.points.map((point) => point.id),
+					),
+				)
+				for (let index = 0; index < legacy.points.length; index += 1) {
+					const point = legacy.points[index]
+					if (point !== undefined && !expected.has(point.pointId)) {
+						add(
+							context,
+							"source.reference",
+							`${layerPath}.points[${index}].pointId`,
+							`Legacy layer point ${JSON.stringify(point.pointId)} is not present in shared topology.`,
+						)
+					}
+				}
+				const preserve = legacy.masterId === defaultMasterId
+				return {
+					masterId: legacy.masterId,
+					advanceWidth: legacy.advanceWidth,
+					leftSideBearing: legacy.leftSideBearing,
+					contours: legacyContours.map((contour, contourIndex) => ({
+						id: localContourId(legacy.masterId, contour.id, preserve),
+						closed: contour.closed,
+						points: contour.points.map((topology, pointIndex) => {
+							const geometry = positions.get(topology.id)
+							if (geometry === undefined) {
+								add(
+									context,
+									"source.reference",
+									`${layerPath}.points`,
+									`Legacy layer is missing point ${JSON.stringify(topology.id)} required by contours[${contourIndex}].points[${pointIndex}].`,
+								)
+							}
+							return {
+								id: localPointId(legacy.masterId, topology.id, preserve),
+								mode: topology.mode,
+								x: geometry?.x ?? 0,
+								y: geometry?.y ?? 0,
+								...(geometry?.incoming === undefined
+									? {}
+									: { incoming: geometry.incoming }),
+								...(geometry?.outgoing === undefined
+									? {}
+									: { outgoing: geometry.outgoing }),
+							}
+						}),
+					})),
+				}
+			}) ?? []
+	} else {
+		parsedLayers =
+			layers?.map((layer, index) =>
+				parseLayer(layer, `${path}.layers[${index}]`, context),
+			) ?? []
+	}
 	return {
 		id: requiredId<GlyphId>(record, "id", "glyph:", path, context),
 		name: requiredString(record, "name", path, context),
@@ -1016,14 +1247,7 @@ function parseGlyph(
 		...(note === undefined ? {} : { note }),
 		...(color === undefined ? {} : { color }),
 		...(overlap === undefined ? {} : { overlap }),
-		contours:
-			contours?.map((contour, index) =>
-				parseContour(contour, `${path}.contours[${index}]`, context),
-			) ?? [],
-		layers:
-			layers?.map((layer, index) =>
-				parseLayer(layer, `${path}.layers[${index}]`, context),
-			) ?? [],
+		layers: parsedLayers,
 	}
 }
 
@@ -1143,7 +1367,9 @@ function parseRoot(
 	}
 	const editorVersion = requiredNumber(record, "editorVersion", "$", context)
 	const migratesLegacy =
-		mode === "file" && editorVersion === LEGACY_EDITOR_VERSION
+		mode === "file" &&
+		(editorVersion === LEGACY_EDITOR_VERSION ||
+			editorVersion === SHARED_TOPOLOGY_EDITOR_VERSION)
 	if (editorVersion !== CREATE_FONT_EDITOR_VERSION && !migratesLegacy) {
 		add(
 			context,
@@ -1162,6 +1388,13 @@ function parseRoot(
 	const instances = requiredArray(record, "instances", "$", context)
 	const glyphs = requiredArray(record, "glyphs", "$", context)
 	const cmap = requiredArray(record, "cmap", "$", context)
+	const defaultMasterId = requiredId<MasterId>(
+		record,
+		"defaultMasterId",
+		"master:",
+		"$",
+		context,
+	)
 	return {
 		format: CREATE_FONT_EDITOR_FORMAT,
 		editorVersion: CREATE_FONT_EDITOR_VERSION,
@@ -1187,20 +1420,20 @@ function parseRoot(
 			masters?.map((master, index) =>
 				parseMaster(master, `$.masters[${index}]`, context),
 			) ?? [],
-		defaultMasterId: requiredId<MasterId>(
-			record,
-			"defaultMasterId",
-			"master:",
-			"$",
-			context,
-		),
+		defaultMasterId,
 		instances:
 			instances?.map((instance, index) =>
 				parseInstance(instance, `$.instances[${index}]`, context),
 			) ?? [],
 		glyphs:
 			glyphs?.map((glyph, index) =>
-				parseGlyph(glyph, `$.glyphs[${index}]`, context),
+				parseGlyph(
+					glyph,
+					`$.glyphs[${index}]`,
+					editorVersion,
+					defaultMasterId,
+					context,
+				),
 			) ?? [],
 		cmap:
 			cmap?.map((entry, index) =>
@@ -1359,53 +1592,10 @@ function diagnoseStructure(
 		)
 	}
 
-	const contourIds = new Set<ContourId>()
-	const pointIds = new Set<PointId>()
 	for (let glyphIndex = 0; glyphIndex < source.glyphs.length; glyphIndex += 1) {
 		const glyph = source.glyphs[glyphIndex]
 		if (glyph === undefined) continue
 		const glyphPath = `$.glyphs[${glyphIndex}]`
-		const glyphPointIds = new Set<PointId>()
-		const glyphPoints = new Map<PointId, EditorPointSource>()
-		for (
-			let contourIndex = 0;
-			contourIndex < glyph.contours.length;
-			contourIndex += 1
-		) {
-			const contour = glyph.contours[contourIndex]
-			if (contour === undefined) continue
-			const contourPath = `${glyphPath}.contours[${contourIndex}]`
-			if (contourIds.has(contour.id)) {
-				add(
-					context,
-					"source.duplicate",
-					`${contourPath}.id`,
-					`Contour ID ${JSON.stringify(contour.id)} must be globally unique.`,
-				)
-			}
-			contourIds.add(contour.id)
-			for (
-				let pointIndex = 0;
-				pointIndex < contour.points.length;
-				pointIndex += 1
-			) {
-				const point = contour.points[pointIndex]
-				if (point === undefined) continue
-				const pointPath = `${contourPath}.points[${pointIndex}].id`
-				if (pointIds.has(point.id)) {
-					add(
-						context,
-						"source.duplicate",
-						pointPath,
-						`Point ID ${JSON.stringify(point.id)} must be globally unique.`,
-					)
-				}
-				pointIds.add(point.id)
-				glyphPointIds.add(point.id)
-				glyphPoints.set(point.id, point)
-			}
-		}
-
 		diagnoseDuplicates(
 			glyph.layers.map((layer) => layer.masterId),
 			(index) => `${glyphPath}.layers[${index}].masterId`,
@@ -1429,48 +1619,64 @@ function diagnoseStructure(
 				)
 			}
 			diagnoseDuplicates(
-				layer.points.map((point) => point.pointId),
-				(index) => `${layerPath}.points[${index}].pointId`,
-				"layer point ID",
+				layer.contours.map((contour) => contour.id),
+				(index) => `${layerPath}.contours[${index}].id`,
+				"layer contour ID",
 				context,
 			)
+			const layerPointIds = new Set<PointId>()
 			for (
-				let pointIndex = 0;
-				pointIndex < layer.points.length;
-				pointIndex += 1
+				let contourIndex = 0;
+				contourIndex < layer.contours.length;
+				contourIndex += 1
 			) {
-				const point = layer.points[pointIndex]
-				if (point !== undefined && !glyphPointIds.has(point.pointId)) {
-					add(
-						context,
-						"source.reference",
-						`${layerPath}.points[${pointIndex}].pointId`,
-						`Unknown glyph point reference ${JSON.stringify(point.pointId)}.`,
-					)
-				}
-				if (point === undefined) continue
-				const topology = glyphPoints.get(point.pointId)
-				if (topology?.mode !== "soft") continue
-				if (point.incoming === undefined && point.outgoing === undefined) {
-					add(
-						context,
-						"source.handle",
-						`${layerPath}.points[${pointIndex}]`,
-						"A soft node requires at least one handle in every layer.",
-					)
-					continue
-				}
-				if (
-					point.incoming !== undefined &&
-					point.outgoing !== undefined &&
-					!handlesShareOppositeRay(point.incoming, point.outgoing)
+				const contour = layer.contours[contourIndex]
+				if (contour === undefined) continue
+				const contourPath = `${layerPath}.contours[${contourIndex}]`
+				diagnoseDuplicates(
+					contour.points.map((point) => point.id),
+					(index) => `${contourPath}.points[${index}].id`,
+					"contour point ID",
+					context,
+				)
+				for (
+					let pointIndex = 0;
+					pointIndex < contour.points.length;
+					pointIndex += 1
 				) {
-					add(
-						context,
-						"source.handle",
-						`${layerPath}.points[${pointIndex}]`,
-						"A soft node's handles must be collinear and point in opposite directions.",
-					)
+					const point = contour.points[pointIndex]
+					if (point === undefined) continue
+					if (layerPointIds.has(point.id)) {
+						add(
+							context,
+							"source.duplicate",
+							`${contourPath}.points[${pointIndex}].id`,
+							`Point ID ${JSON.stringify(point.id)} may occur only once in a master layer.`,
+						)
+					}
+					layerPointIds.add(point.id)
+					if (point.mode !== "soft") continue
+					if (point.incoming === undefined && point.outgoing === undefined) {
+						add(
+							context,
+							"source.handle",
+							`${contourPath}.points[${pointIndex}]`,
+							"A soft node requires at least one handle.",
+						)
+						continue
+					}
+					if (
+						point.incoming !== undefined &&
+						point.outgoing !== undefined &&
+						!handlesShareOppositeRay(point.incoming, point.outgoing)
+					) {
+						add(
+							context,
+							"source.handle",
+							`${contourPath}.points[${pointIndex}]`,
+							"A soft node's handles must be collinear and point in opposite directions.",
+						)
+					}
 				}
 			}
 		}
@@ -1513,9 +1719,6 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 			...(instance.elidable ? { elidable: true } : {}),
 		})),
 		glyphs: source.glyphs.map((glyph) => {
-			const pointIds = glyph.contours.flatMap((contour) =>
-				contour.points.map((point) => point.id),
-			)
 			return {
 				id: glyph.id,
 				name: glyph.name,
@@ -1525,42 +1728,27 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 					: { note: glyph.note }),
 				...(glyph.color === undefined ? {} : { color: glyph.color }),
 				...(glyph.overlap ? { overlap: true } : {}),
-				contours: glyph.contours.map((contour) => ({
-					id: contour.id,
-					closed: contour.closed,
-					points: contour.points.map((point) => ({
-						id: point.id,
-						mode: point.mode,
+				layers: glyph.layers.map((layer) => ({
+					masterId: layer.masterId,
+					advanceWidth: layer.advanceWidth,
+					leftSideBearing: layer.leftSideBearing,
+					contours: layer.contours.map((contour) => ({
+						id: contour.id,
+						closed: contour.closed,
+						points: contour.points.map((point) => ({
+							id: point.id,
+							mode: point.mode,
+							x: point.x,
+							y: point.y,
+							...(point.incoming === undefined
+								? {}
+								: { incoming: point.incoming }),
+							...(point.outgoing === undefined
+								? {}
+								: { outgoing: point.outgoing }),
+						})),
 					})),
 				})),
-				layers: glyph.layers.map((layer) => {
-					const pointsById = new Map(
-						layer.points.map((point) => [point.pointId, point]),
-					)
-					return {
-						masterId: layer.masterId,
-						advanceWidth: layer.advanceWidth,
-						leftSideBearing: layer.leftSideBearing,
-						points: pointIds.flatMap((pointId) => {
-							const point = pointsById.get(pointId)
-							return point === undefined
-								? []
-								: [
-										{
-											pointId: point.pointId,
-											x: point.x,
-											y: point.y,
-											...(point.incoming === undefined
-												? {}
-												: { incoming: point.incoming }),
-											...(point.outgoing === undefined
-												? {}
-												: { outgoing: point.outgoing }),
-										},
-									]
-						}),
-					}
-				}),
 			}
 		}),
 	}

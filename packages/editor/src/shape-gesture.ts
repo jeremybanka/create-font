@@ -1,6 +1,6 @@
 import type {
+	AuthoringLayerPointInput,
 	EditorHandleVectorSource,
-	EditorLayerPointSource,
 	MasterId,
 	PointId,
 } from "@create-font/states"
@@ -218,7 +218,7 @@ export function shapeLayerCoordinates(
 	transforms: readonly AuthoringLayerTransform[],
 ): readonly {
 	readonly masterId: MasterId
-	readonly points: readonly EditorLayerPointSource[]
+	readonly points: readonly AuthoringLayerPointInput[]
 }[] {
 	if (points.length !== pointIds.length) {
 		throw new TypeError("Shape point IDs must match its geometry.")

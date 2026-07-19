@@ -6,7 +6,7 @@ import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
-import { oGlyphId } from "../src/demo-font.ts"
+import { oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
@@ -105,6 +105,7 @@ describe("GlyphCanvas batch node-mode keyboard action", () => {
 
 		expect(toggle).toHaveBeenCalledOnce()
 		expect(toggle).toHaveBeenCalledWith({
+			masterId: razorMasterId,
 			glyphId: oGlyphId,
 			pointIds: nodes.map(({ pointId }) => pointId),
 		})
