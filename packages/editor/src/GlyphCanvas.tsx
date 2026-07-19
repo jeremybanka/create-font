@@ -82,7 +82,6 @@ import {
 	contourStartDirection,
 	editorContourToPath,
 	editorContourPaintPaths,
-	editorContoursToPath,
 	nearestEditorSegment,
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
@@ -1437,6 +1436,20 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			mode: toggledNodeMode(mode),
 		})
 	}
+	const toggleSelectedNodeModes = (): void => {
+		if (activeGlyphId === null) return
+		const pointIds = selection.flatMap((target) =>
+			target.kind === "node" ? [target.pointId] : [],
+		)
+		const result = workspace.font.actions.toggleNodeModes({
+			glyphId: activeGlyphId,
+			pointIds,
+		})
+		if (result.toggled === 0) return
+		setClipboardStatus(
+			`Toggled ${result.toggled} node${result.toggled === 1 ? "" : "s"}${result.skipped === 0 ? "." : `; skipped ${result.skipped}.`}`,
+		)
+	}
 	const focusTypingAt = (index: number): void => {
 		const next = Math.max(0, Math.min(text.length, index))
 		preferredCaretXRef.current = null
@@ -2717,6 +2730,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					event.target instanceof HTMLButtonElement
 				)
 					return
+				if (event.isComposing) return
 				if (
 					editingTextIndex !== null &&
 					(event.metaKey || event.ctrlKey) &&
@@ -2788,10 +2802,15 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				if (
 					editingTextIndex !== null &&
 					event.key === "Enter" &&
-					selectedPoint !== undefined
+					!event.repeat &&
+					!event.altKey &&
+					!event.ctrlKey &&
+					!event.metaKey &&
+					!event.shiftKey &&
+					selection.some((target) => target.kind === "node")
 				) {
 					event.preventDefault()
-					toggleNodeMode(selectedPoint.pointId, selectedPoint.mode)
+					toggleSelectedNodeModes()
 					return
 				}
 				const delta = ARROW_DELTAS[event.key]
