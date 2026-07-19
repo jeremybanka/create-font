@@ -109,28 +109,16 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 		return () => observer.disconnect()
 	}, [])
 
-	useEffect(() => {
-		if (sample !== "noise") return
-		const generated = generateGlyphNoise(noiseSeed, noiseLength)
-		setText((current) => (current === generated ? current : generated))
-	}, [noiseLength, noiseSeed, sample])
+	const proofText =
+		sample === "noise" ? generateGlyphNoise(noiseSeed, noiseLength) : text
 
 	const chooseSample = (next: PreviewSampleId): void => {
 		setSample(next)
-		if (next === "custom") return
-		setText(
-			next === "noise"
-				? generateGlyphNoise(noiseSeed, noiseLength)
-				: PREVIEW_SAMPLES[next],
-		)
+		if (next !== "custom" && next !== "noise") setText(PREVIEW_SAMPLES[next])
 	}
 
 	return (
-		<preview-tile
-			className={css.class}
-			data-colors={colors}
-			data-tile-id={tileId}
-		>
+		<preview-tile className={css.class} data-tile-id={tileId}>
 			<preview-options aria-label="Preview options">
 				<label data-wide>
 					<span>Sample</span>
@@ -164,27 +152,30 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				<label>
 					<span>Size</span>
 					<input
-						type="number"
+						type="range"
 						aria-label="Font size"
-						min="8"
-						max="240"
+						min="4"
+						max="72"
+						step="1"
 						value={fontSize}
 						onInput={(event) => setFontSize(Number(event.currentTarget.value))}
 					/>
+					<output>{fontSize}px</output>
 				</label>
 				<label>
 					<span>Leading</span>
 					<input
-						type="number"
+						type="range"
 						aria-label="Line height"
 						min="0.5"
-						max="3"
+						max="2.5"
 						step="0.05"
 						value={lineHeight}
 						onInput={(event) =>
 							setLineHeight(Number(event.currentTarget.value))
 						}
 					/>
+					<output>{lineHeight}</output>
 				</label>
 				{axes
 					.filter((axis) => !axis.hidden)
@@ -208,43 +199,42 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 							<output>{coordinates[axis.id] ?? axis.default}</output>
 						</label>
 					))}
-				<fieldset data-wide>
-					<legend>Colors</legend>
-					<button
-						type="button"
-						aria-pressed={colors === "dark"}
-						onClick={() => setColors("dark")}
-					>
-						White on black
-					</button>
-					<button
-						type="button"
-						aria-pressed={colors === "light"}
-						onClick={() => setColors("light")}
-					>
-						Black on white
-					</button>
-				</fieldset>
 				<label data-wide>
-					<span>Text</span>
-					<textarea
-						aria-label="Preview text"
-						rows={2}
-						value={text}
-						onInput={(event) => {
-							setSample("custom")
-							setText(event.currentTarget.value)
-						}}
-					/>
+					<span>Colors</span>
+					<select
+						aria-label="Preview colors"
+						value={colors}
+						onChange={(event) =>
+							setColors(event.currentTarget.value as "dark" | "light")
+						}
+					>
+						<option value="dark">White on black</option>
+						<option value="light">Black on white</option>
+					</select>
 				</label>
+				{sample === "noise" ? null : (
+					<label data-wide>
+						<span>Text</span>
+						<textarea
+							aria-label="Preview text"
+							rows={2}
+							value={text}
+							onInput={(event) => {
+								setSample("custom")
+								setText(event.currentTarget.value)
+							}}
+						/>
+					</label>
+				)}
 			</preview-options>
 			<preview-scroll
 				ref={proofRef}
 				tabIndex={0}
 				aria-label="Rendered preview"
+				data-colors={colors}
 				style={{ fontSize: `${fontSize}px`, lineHeight }}
 			>
-				{Array.from(text).map((character, index) => {
+				{Array.from(proofText).map((character, index) => {
 					if (character === "\n") return <br key={`break:${index}`} />
 					const glyphId =
 						glyphs.byCodePoint.get(character.codePointAt(0) ?? -1) ??
@@ -256,6 +246,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<svg
 							key={`${index}:${character}`}
 							aria-hidden="true"
+							data-character={character}
 							viewBox={`0 ${lineBoxTop} ${Math.max(glyph.advance, 1)} ${lineBoxHeight}`}
 							style={{ width: `${(glyph.advance / unitsPerEm).toFixed(4)}em` }}
 						>

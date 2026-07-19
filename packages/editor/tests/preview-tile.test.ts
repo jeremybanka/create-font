@@ -27,6 +27,14 @@ describe("preview tile model", () => {
 		expect(generateGlyphNoise("", 80)).toBe("")
 	})
 
+	it("weights repeated glyphs in the noise source", () => {
+		const noise = generateGlyphNoise("nne", 10_000)
+		const n = Array.from(noise).filter((glyph) => glyph === "n").length
+		const e = noise.length - n
+		expect(n / e).toBeGreaterThan(1.8)
+		expect(n / e).toBeLessThan(2.2)
+	})
+
 	it("only uses the application preference to choose an initial preset", () => {
 		expect(previewColorDefault(true)).toBe("light")
 		expect(previewColorDefault(false)).toBe("dark")

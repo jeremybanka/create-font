@@ -1,35 +1,23 @@
 preview-tile.class {
-	--preview-background: #0e0f0d;
-	--preview-foreground: #f7f6f1;
 	display: grid;
 	grid-template-rows: auto minmax(100px, 1fr);
 	height: 100%;
 	min-height: 304px;
 	max-height: 100%;
-	background: var(--preview-background);
-	color: var(--preview-foreground);
-
-	&[data-colors="light"] {
-		--preview-background: #f7f6f1;
-		--preview-foreground: #11120f;
-	}
+	background: var(--panel);
+	color: var(--ink);
 
 	> preview-options {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: 6px;
 		padding: 8px;
-		border-bottom: 1px solid
-			color-mix(in srgb, var(--preview-foreground) 18%, transparent);
-		background: color-mix(
-			in srgb,
-			var(--preview-background) 92%,
-			var(--preview-foreground)
-		);
+		border-bottom: 1px solid var(--line);
+		background: var(--panel);
 
 		> label {
 			display: grid;
-			grid-template-columns: auto minmax(0, 1fr);
+			grid-template-columns: auto minmax(0, 1fr) auto;
 			align-items: center;
 			gap: 5px;
 			min-width: 0;
@@ -46,12 +34,17 @@ preview-tile.class {
 				width: 100%;
 				min-width: 0;
 				padding: 4px 5px;
-				border: 1px solid
-					color-mix(in srgb, var(--preview-foreground) 22%, transparent);
+				border: 1px solid var(--line-strong);
 				border-radius: 4px;
-				background: var(--preview-background);
+				background: var(--paper);
 				font: 500 9px/1.2 var(--ui-font);
-				color: var(--preview-foreground);
+				color: var(--ink);
+			}
+
+			> input:not([type="range"]),
+			> select,
+			> textarea {
+				grid-column: 2 / -1;
 			}
 
 			> input[type="range"] {
@@ -69,47 +62,11 @@ preview-tile.class {
 				text-align: right;
 			}
 		}
-
-		> fieldset {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 4px;
-			min-width: 0;
-			padding: 0;
-			border: 0;
-			margin: 0;
-
-			&[data-wide] {
-				grid-column: 1 / -1;
-			}
-
-			> legend {
-				position: absolute;
-				width: 1px;
-				height: 1px;
-				overflow: hidden;
-				clip: rect(0, 0, 0, 0);
-			}
-
-			> button {
-				padding: 5px 3px;
-				border: 1px solid
-					color-mix(in srgb, var(--preview-foreground) 18%, transparent);
-				border-radius: 4px;
-				background: transparent;
-				font: 600 8px/1 var(--ui-font);
-				color: var(--preview-foreground);
-				cursor: pointer;
-
-				&[aria-pressed="true"] {
-					border-color: var(--accent);
-					background: color-mix(in srgb, var(--accent) 24%, transparent);
-				}
-			}
-		}
 	}
 
 	> preview-scroll {
+		--preview-background: #0e0f0d;
+		--preview-foreground: #f7f6f1;
 		display: block;
 		min-height: 100px;
 		padding: 10px;
@@ -117,6 +74,11 @@ preview-tile.class {
 		background: var(--preview-background);
 		color: var(--preview-foreground);
 		word-break: break-word;
+
+		&[data-colors="light"] {
+			--preview-background: #f7f6f1;
+			--preview-foreground: #11120f;
+		}
 
 		> svg {
 			display: inline-block;

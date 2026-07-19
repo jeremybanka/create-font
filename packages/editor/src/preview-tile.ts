@@ -12,7 +12,11 @@ export const PREVIEW_SAMPLES = {
 
 export type PreviewSampleId = keyof typeof PREVIEW_SAMPLES | "custom" | "noise"
 
-/** Repeats only the supplied Unicode glyphs using a stable, irregular cadence. */
+/**
+ * Repeats only the supplied Unicode glyphs using a stable random cadence.
+ * Duplicate input glyphs are retained as weights: `nne` makes n twice as
+ * likely as e.
+ */
 export function generateGlyphNoise(seed: string, minimumLength = 384): string {
 	const glyphs = Array.from(seed.replaceAll(/\s/g, ""))
 	if (glyphs.length === 0 || minimumLength <= 0) return ""
@@ -22,9 +26,11 @@ export function generateGlyphNoise(seed: string, minimumLength = 384): string {
 		2_166_136_261,
 	)
 	let result = ""
-	while (Array.from(result).length < minimumLength) {
+	let length = 0
+	while (length < minimumLength) {
 		state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0
 		result += glyphs[state % glyphs.length] ?? glyphs[0]
+		length++
 	}
 	return result
 }
