@@ -16,6 +16,7 @@ import type { EditorWorkspace } from "./editor-workspace.ts"
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
+import { PreviewTile } from "./PreviewTile.tsx"
 import { SelectionDimensions } from "./SelectionDimensions.tsx"
 import css from "./TilingWorkspace.module.css"
 import {
@@ -90,6 +91,11 @@ const TILE_DEFINITIONS: readonly TileDefinition[] = [
 		kind: "canvas-toolbar",
 		name: "Canvas toolbar",
 		description: "Control design-space coordinates and the canvas viewport.",
+	},
+	{
+		kind: "preview",
+		name: "Preview",
+		description: "Proof custom text, samples, and variation settings.",
 	},
 	{
 		kind: "glyph-attributes",
@@ -697,6 +703,7 @@ export function TilingWorkspace({
 	const renderTile = (column: TileColumn, tile: TileInstance) => (
 		<workspace-tile
 			key={tile.id}
+			data-kind={tile.kind}
 			data-selected={
 				management && selectedTileId === tile.id ? "true" : "false"
 			}
@@ -756,6 +763,8 @@ export function TilingWorkspace({
 					<FontNavigator workspace={workspace} />
 				) : tile.kind === "canvas-toolbar" ? (
 					<CanvasToolbar workspace={workspace} />
+				) : tile.kind === "preview" ? (
+					<PreviewTile workspace={workspace} tileId={tile.id} />
 				) : tile.kind === "glyph-attributes" ? (
 					<GlyphInspector workspace={workspace} />
 				) : (

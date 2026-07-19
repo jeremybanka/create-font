@@ -5,6 +5,7 @@ export type TileColumnAlignment = "top" | "bottom"
 export type TileKind =
 	| "font-navigation"
 	| "canvas-toolbar"
+	| "preview"
 	| "glyph-attributes"
 	| "selection-dimensions"
 
@@ -43,6 +44,7 @@ export const TILING_DRAFT_STORAGE_KEY = "create-font:tiling-workspace:draft:v1"
 const TILE_KINDS = new Set<TileKind>([
 	"font-navigation",
 	"canvas-toolbar",
+	"preview",
 	"glyph-attributes",
 	"selection-dimensions",
 ])
@@ -274,7 +276,7 @@ export function addTile(
 	beforeTileId?: string,
 ): { readonly layout: TilingLayout; readonly tileId: string } {
 	const id = tileId(kind)
-	const tile: TileInstance = { id, kind, fill: false }
+	const tile: TileInstance = { id, kind, fill: kind === "preview" }
 	return {
 		tileId: id,
 		layout: updateColumn(layout, columnId, (column) => {
