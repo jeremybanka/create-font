@@ -137,8 +137,8 @@
 		},
 		{
 			"masterId": "master:heavy",
-			"advanceWidth": 700,
-			"leftSideBearing": 110.84000000000003,
+			"advanceWidth": 640,
+			"leftSideBearing": 60,
 			"contours": [
 				{
 					"id": "contour:master:heavy:glyph:o:ellipse:15",
@@ -147,57 +147,57 @@
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:16",
 							"mode": "soft",
-							"x": 329.86,
-							"y": 514,
+							"x": 320,
+							"y": 508,
 							"incoming": {
-								"x": -120.96140590794033,
+								"x": -185,
 								"y": 0
 							},
 							"outgoing": {
-								"x": 120.96140590794033,
+								"x": 185,
 								"y": 0
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:17",
 							"mode": "soft",
-							"x": 548.88,
-							"y": 251,
+							"x": 580,
+							"y": 250,
 							"incoming": {
 								"x": 0,
-								"y": 145.25088920549865
+								"y": 142
 							},
 							"outgoing": {
 								"x": 0,
-								"y": -145.25088920549865
+								"y": -146
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:18",
 							"mode": "soft",
-							"x": 329.86,
+							"x": 320,
 							"y": -12,
 							"incoming": {
-								"x": 120.96140590794033,
+								"x": 185,
 								"y": 0
 							},
 							"outgoing": {
-								"x": -120.96140590794033,
+								"x": -185,
 								"y": 0
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:19",
 							"mode": "soft",
-							"x": 110.84000000000003,
-							"y": 251,
+							"x": 60,
+							"y": 250,
 							"incoming": {
 								"x": 0,
-								"y": -145.25088920549865
+								"y": -146
 							},
 							"outgoing": {
 								"x": 0,
-								"y": 145.25088920549865
+								"y": 142
 							}
 						}
 					]
@@ -209,57 +209,57 @@
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:21",
 							"mode": "soft",
-							"x": 329.86,
-							"y": 466,
+							"x": 320,
+							"y": 430,
 							"incoming": {
-								"x": 77.35300206130086,
+								"x": 61,
 								"y": 0
 							},
 							"outgoing": {
-								"x": -77.35300206130088,
+								"x": -60,
 								"y": 0
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:24",
 							"mode": "soft",
-							"x": 189.8,
-							"y": 251.5,
+							"x": 210,
+							"y": 252,
 							"incoming": {
 								"x": 0,
-								"y": 118.46507883870515
+								"y": 97
 							},
 							"outgoing": {
 								"x": 0,
-								"y": -118.46507883870515
+								"y": -102
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:23",
 							"mode": "soft",
-							"x": 329.86,
-							"y": 37,
+							"x": 320,
+							"y": 70,
 							"incoming": {
-								"x": -77.35300206130088,
+								"x": -60,
 								"y": 0
 							},
 							"outgoing": {
-								"x": 77.35300206130086,
+								"x": 61,
 								"y": 0
 							}
 						},
 						{
 							"id": "point:master:heavy:glyph:o:ellipse:22",
 							"mode": "soft",
-							"x": 469.92,
-							"y": 251.5,
+							"x": 430,
+							"y": 252,
 							"incoming": {
 								"x": 0,
-								"y": -118.46507883870515
+								"y": -102
 							},
 							"outgoing": {
 								"x": 0,
-								"y": 118.46507883870515
+								"y": 97
 							}
 						}
 					]
