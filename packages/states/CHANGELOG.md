@@ -1,5 +1,19 @@
 # @create-font/states
 
+## 0.5.0
+
+### Minor Changes
+
+- a325bed: Add a point-cut Knife tool and explicit drag-end joining for open contour endpoints, backed by atomic multi-master topology transactions.
+- 7dfefd2: Add Rect and Ellipse outline tools with constrained square and circle gestures,
+  multi-master projection, and atomic complete-contour history edits.
+
+### Patch Changes
+
+- b64038b: Move every selected outline node together during keyboard nudges, including repeated and modified Arrow presses.
+- 829bcd6: Constrain Select handle drags, nudge selected handles, and slide soft nodes along fixed tangent controls.
+- 585a2af: Toggle every eligible selected outline node between hard and soft in one atomic Enter action.
+
 ## 0.4.0
 
 ### Minor Changes
