@@ -467,6 +467,17 @@ export interface SetNodeModeInput {
 	readonly mode: EditorNodeMode
 }
 
+export interface ToggleNodeModesInput {
+	readonly glyphId: GlyphId
+	/** Ordered selection targets. Duplicate point IDs are ignored after the first. */
+	readonly pointIds: readonly PointId[]
+}
+
+export interface ToggleNodeModesResult {
+	readonly toggled: number
+	readonly skipped: number
+}
+
 export interface InsertPointInput {
 	readonly glyphId: GlyphId
 	readonly contourId: ContourId
@@ -4518,6 +4529,197 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const toggleNodeModesTransaction = silo.transaction<
+		(input: ToggleNodeModesInput) => ToggleNodeModesResult
+	>({
+		key: "toggleNodeModes",
+		do: ({ get, set }, input) => {
+			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
+			if (layerMasterIds === null) {
+				throw new TypeError(`Unknown glyph ${input.glyphId}.`)
+			}
+			const pointIds = [...new Set(input.pointIds)]
+			const plans: {
+				readonly pointId: PointId
+				readonly mode: EditorNodeMode
+				readonly layers: readonly {
+					readonly atomKey: LayerPointKey
+					readonly incoming?: Vector2
+					readonly outgoing?: Vector2
+				}[]
+			}[] = []
+			let skipped = 0
+
+			for (const pointId of pointIds) {
+				const point = get(pointAtoms, [input.glyphId, pointId])
+				if (point === null) {
+					skipped++
+					continue
+				}
+				if (point.mode === "soft") {
+					plans.push({ pointId, mode: "hard", layers: [] })
+					continue
+				}
+
+				const contourId = (get(glyphContourIdsAtoms, input.glyphId) ?? []).find(
+					(candidate) =>
+						(
+							get(contourPointIdsAtoms, [input.glyphId, candidate]) ?? []
+						).includes(pointId),
+				)
+				if (contourId === undefined) {
+					skipped++
+					continue
+				}
+				const contourPointIds =
+					get(contourPointIdsAtoms, [input.glyphId, contourId]) ?? []
+				const closed =
+					get(contourClosedAtoms, [input.glyphId, contourId]) ?? false
+				const pointIndex = contourPointIds.indexOf(pointId)
+				const previousPointId =
+					pointIndex > 0
+						? contourPointIds[pointIndex - 1]
+						: closed
+							? contourPointIds.at(-1)
+							: undefined
+				const nextPointId =
+					pointIndex < contourPointIds.length - 1
+						? contourPointIds[pointIndex + 1]
+						: closed
+							? contourPointIds[0]
+							: undefined
+				const layers: {
+					readonly atomKey: LayerPointKey
+					readonly incoming?: Vector2
+					readonly outgoing?: Vector2
+				}[] = []
+				let eligible = true
+				for (const masterId of layerMasterIds) {
+					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
+					const incomingX = get(incomingHandleXAtoms, atomKey)
+					const incomingY = get(incomingHandleYAtoms, atomKey)
+					const outgoingX = get(outgoingHandleXAtoms, atomKey)
+					const outgoingY = get(outgoingHandleYAtoms, atomKey)
+					if (
+						(incomingX === null) !== (incomingY === null) ||
+						(outgoingX === null) !== (outgoingY === null) ||
+						(incomingX === null && outgoingX === null)
+					) {
+						eligible = false
+						break
+					}
+					let incoming =
+						incomingX === null || incomingY === null
+							? undefined
+							: { x: incomingX, y: incomingY }
+					let outgoing =
+						outgoingX === null || outgoingY === null
+							? undefined
+							: { x: outgoingX, y: outgoingY }
+					if (incoming === undefined) {
+						if (outgoing === undefined || previousPointId === undefined) {
+							eligible = false
+							break
+						}
+						const position = readPointPosition(get, atomKey)
+						const neighbor = readPointPosition(get, [
+							masterId,
+							input.glyphId,
+							previousPointId,
+						])
+						if (position === null || neighbor === null) {
+							eligible = false
+							break
+						}
+						const dx = neighbor.x - position.x
+						const dy = neighbor.y - position.y
+						const distance = Math.hypot(dx, dy)
+						if (distance === 0) {
+							eligible = false
+							break
+						}
+						const length = Math.hypot(outgoing.x, outgoing.y)
+						incoming = {
+							x: (dx / distance) * length,
+							y: (dy / distance) * length,
+						}
+						outgoing = { x: -incoming.x, y: -incoming.y }
+						layers.push({ atomKey, outgoing })
+						continue
+					}
+					if (outgoing === undefined) {
+						if (nextPointId === undefined) {
+							eligible = false
+							break
+						}
+						const position = readPointPosition(get, atomKey)
+						const neighbor = readPointPosition(get, [
+							masterId,
+							input.glyphId,
+							nextPointId,
+						])
+						if (position === null || neighbor === null) {
+							eligible = false
+							break
+						}
+						const dx = neighbor.x - position.x
+						const dy = neighbor.y - position.y
+						const distance = Math.hypot(dx, dy)
+						if (distance === 0) {
+							eligible = false
+							break
+						}
+						const length = Math.hypot(incoming.x, incoming.y)
+						outgoing = {
+							x: (dx / distance) * length,
+							y: (dy / distance) * length,
+						}
+						incoming = { x: -outgoing.x, y: -outgoing.y }
+						layers.push({ atomKey, incoming })
+						continue
+					}
+					const incomingLength = Math.hypot(incoming.x, incoming.y)
+					const outgoingLength = Math.hypot(outgoing.x, outgoing.y)
+					layers.push({
+						atomKey,
+						incoming,
+						outgoing:
+							incomingLength === 0
+								? { x: -incoming.x, y: -incoming.y }
+								: {
+										x: (-incoming.x / incomingLength) * outgoingLength,
+										y: (-incoming.y / incomingLength) * outgoingLength,
+									},
+					})
+				}
+				if (!eligible) {
+					skipped++
+					continue
+				}
+				plans.push({ pointId, mode: "soft", layers })
+			}
+
+			for (const plan of plans) {
+				for (const layer of plan.layers) {
+					if (layer.incoming !== undefined) {
+						set(incomingHandleXAtoms, layer.atomKey, layer.incoming.x)
+						set(incomingHandleYAtoms, layer.atomKey, layer.incoming.y)
+					}
+					if (layer.outgoing !== undefined) {
+						set(outgoingHandleXAtoms, layer.atomKey, layer.outgoing.x)
+						set(outgoingHandleYAtoms, layer.atomKey, layer.outgoing.y)
+					}
+				}
+				set(
+					pointAtoms,
+					[input.glyphId, plan.pointId],
+					deepFreeze({ mode: plan.mode }),
+				)
+			}
+			return deepFreeze({ toggled: plans.length, skipped })
+		},
+	})
+
 	const authorPenEndpointTransaction = silo.transaction<
 		(input: AuthorPenEndpointInput) => void
 	>({
@@ -6620,6 +6822,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const runTransformControls = silo.runTransaction(transformControlsTransaction)
 	const runSlideSoftNode = silo.runTransaction(slideSoftNodeTransaction)
 	const runSetNodeMode = silo.runTransaction(setNodeModeTransaction)
+	const runToggleNodeModes = silo.runTransaction(toggleNodeModesTransaction)
 	const runAuthorPenEndpoint = silo.runTransaction(authorPenEndpointTransaction)
 	const runInsertPoint = silo.runTransaction(insertPointTransaction)
 	const runAddSegmentHandles = silo.runTransaction(addSegmentHandlesTransaction)
@@ -6724,6 +6927,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			transformControls: transformControlsTransaction,
 			slideSoftNode: slideSoftNodeTransaction,
 			setNodeMode: setNodeModeTransaction,
+			toggleNodeModes: toggleNodeModesTransaction,
 			authorPenEndpoint: authorPenEndpointTransaction,
 			insertPoint: insertPointTransaction,
 			addSegmentHandles: addSegmentHandlesTransaction,
@@ -6781,6 +6985,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			setNodeMode(input: SetNodeModeInput): void {
 				runSetNodeMode(input)
 				markDocumentChanged()
+			},
+			toggleNodeModes(input: ToggleNodeModesInput): ToggleNodeModesResult {
+				const result = runToggleNodeModes(input)
+				if (result.toggled > 0) markDocumentChanged()
+				return result
 			},
 			authorPenEndpoint(input: AuthorPenEndpointInput): void {
 				runAuthorPenEndpoint(input)

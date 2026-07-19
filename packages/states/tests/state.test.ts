@@ -1239,6 +1239,126 @@ describe("font editor state", () => {
 		expect(handleless.value.mode).toBe("hard")
 	})
 
+	it("toggles eligible node modes from one snapshot as one undoable edit", () => {
+		const editor = createLoadedEditor("test/toggle-node-modes")
+		const points = makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points
+		const softPointId = points?.[0]?.id
+		const hardPointId = points?.[1]?.id
+		const handlelessPointId = points?.[2]?.id
+		if (
+			softPointId === undefined ||
+			hardPointId === undefined ||
+			handlelessPointId === undefined
+		) {
+			throw new Error("Fixture nodes are missing.")
+		}
+		editor.actions.setNodeMode({
+			glyphId: oGlyphId,
+			pointId: hardPointId,
+			mode: "hard",
+		})
+		editor.actions.setNodeMode({
+			glyphId: oGlyphId,
+			pointId: handlelessPointId,
+			mode: "hard",
+		})
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			for (const handle of ["incoming", "outgoing"] as const) {
+				editor.actions.moveHandle({
+					masterId,
+					glyphId: oGlyphId,
+					pointId: handlelessPointId,
+					handle,
+					vector: null,
+				})
+			}
+		}
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+
+		const result = editor.actions.toggleNodeModes({
+			glyphId: oGlyphId,
+			pointIds: [hardPointId, softPointId, hardPointId, handlelessPointId],
+		})
+
+		expect(result).toEqual({ toggled: 2, skipped: 1 })
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(
+			revision + 1,
+		)
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, softPointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "hard" },
+		})
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, hardPointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "soft" },
+		})
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, handlelessPointId),
+		).toMatchObject({ ok: true, value: { mode: "hard" } })
+
+		editor.undo(oGlyphId)
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, softPointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "soft" },
+		})
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, hardPointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "hard" },
+		})
+		editor.redo(oGlyphId)
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, hardPointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "soft" },
+		})
+	})
+
+	it("does not publish or record a no-op node-mode batch", () => {
+		const editor = createLoadedEditor("test/toggle-node-modes-noop")
+		const pointId =
+			makeGeometricOEditorFont().glyphs[1]?.contours[0]?.points[0]?.id
+		if (pointId === undefined) throw new Error("Fixture node is missing.")
+		editor.actions.setNodeMode({ glyphId: oGlyphId, pointId, mode: "hard" })
+		for (const masterId of [razorMasterId, blackMasterId] as const) {
+			for (const handle of ["incoming", "outgoing"] as const) {
+				editor.actions.moveHandle({
+					masterId,
+					glyphId: oGlyphId,
+					pointId,
+					handle,
+					vector: null,
+				})
+			}
+		}
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		expect(
+			editor.actions.toggleNodeModes({
+				glyphId: oGlyphId,
+				pointIds: [pointId],
+			}),
+		).toEqual({
+			toggled: 0,
+			skipped: 1,
+		})
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		editor.undo(oGlyphId)
+		expect(
+			editor.read.layerNode(blackMasterId, oGlyphId, pointId),
+		).toMatchObject({
+			ok: true,
+			value: { mode: "hard", outgoing: expect.any(Object) },
+		})
+	})
+
 	it("deletes nodes while keeping a contour closed by default", () => {
 		const editor = createLoadedEditor("test/delete-node-closed")
 		const contour = makeGeometricOEditorFont().glyphs[1]?.contours[0]
