@@ -110,6 +110,104 @@ describe("PreviewTile", () => {
 		expect(secondProof?.getAttribute("data-colors")).toBe(initialColors)
 	})
 
+	it("repaints uses without rebuilding glyph definitions or placements", () => {
+		const { first, second } = mountTwo()
+		const firstText = first.querySelector('textarea[aria-label="Preview text"]')
+		const firstColors = first.querySelector(
+			'select[aria-label="Preview colors"]',
+		)
+		const firstProof = first.querySelector("preview-scroll")
+		const secondProof = second.querySelector("preview-scroll")
+		if (
+			!(firstText instanceof HTMLTextAreaElement) ||
+			!(firstColors instanceof HTMLSelectElement) ||
+			firstProof === null ||
+			secondProof === null
+		)
+			throw new Error("Preview color controls were not rendered.")
+
+		input(firstText, "AAAAOOOO")
+		const definitions = [...firstProof.querySelectorAll("defs > g")]
+		const paths = [...firstProof.querySelectorAll("defs path")]
+		const placements = [...firstProof.querySelectorAll("use")]
+		const pathData = paths.map((path) => path.getAttribute("d"))
+		const placementData = placements.map((placement) => [
+			placement.getAttribute("href"),
+			placement.getAttribute("transform"),
+		])
+		const initialColors = firstProof.getAttribute("data-colors")
+		const secondColors = secondProof.getAttribute("data-colors")
+		if (initialColors !== "dark" && initialColors !== "light")
+			throw new Error("The initial Preview color preset is invalid.")
+		const otherColors = initialColors === "light" ? "dark" : "light"
+
+		expect(definitions).toHaveLength(2)
+		expect(paths).toHaveLength(4)
+		expect(placements).toHaveLength(8)
+		expect(new Set(placementData.map(([href]) => href)).size).toBe(2)
+		expect(
+			paths
+				.filter((path) => !path.hasAttribute("data-open"))
+				.map((path) => [
+					path.getAttribute("fill"),
+					path.getAttribute("stroke"),
+				]),
+		).toEqual([
+			["inherit", "none"],
+			["inherit", "none"],
+		])
+		expect(
+			paths
+				.filter((path) => path.hasAttribute("data-open"))
+				.map((path) => [
+					path.getAttribute("fill"),
+					path.getAttribute("stroke"),
+				]),
+		).toEqual([
+			["none", "inherit"],
+			["none", "inherit"],
+		])
+		expect(
+			placements.every(
+				(placement) =>
+					placement.getAttribute("fill") === "currentColor" &&
+					placement.getAttribute("stroke") === "currentColor",
+			),
+		).toBe(true)
+
+		for (const colors of [
+			otherColors,
+			initialColors,
+			otherColors,
+			initialColors,
+		]) {
+			change(firstColors, colors)
+			const currentDefinitions = [...firstProof.querySelectorAll("defs > g")]
+			const currentPaths = [...firstProof.querySelectorAll("defs path")]
+			const currentPlacements = [...firstProof.querySelectorAll("use")]
+			expect(firstProof.getAttribute("data-colors")).toBe(colors)
+			expect(
+				currentDefinitions.every((node, index) => node === definitions[index]),
+			).toBe(true)
+			expect(currentPaths.every((node, index) => node === paths[index])).toBe(
+				true,
+			)
+			expect(
+				currentPlacements.every((node, index) => node === placements[index]),
+			).toBe(true)
+			expect(currentPaths.map((path) => path.getAttribute("d"))).toEqual(
+				pathData,
+			)
+			expect(
+				currentPlacements.map((placement) => [
+					placement.getAttribute("href"),
+					placement.getAttribute("transform"),
+				]),
+			).toEqual(placementData)
+			expect(secondProof.getAttribute("data-colors")).toBe(secondColors)
+		}
+	})
+
 	it("loads long samples and regenerates glyph noise", () => {
 		vi.useFakeTimers()
 		const { first } = mountTwo()

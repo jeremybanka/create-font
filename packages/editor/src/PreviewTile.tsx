@@ -318,8 +318,15 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 							const glyph = glyphs.previews.get(glyphId)
 							return glyph === undefined ? null : (
 								<g id={`${proofId}-${index}`} key={glyphId}>
-									<path d={glyph.fillPath} />
-									<path data-open d={glyph.openPath} />
+									<path d={glyph.fillPath} fill="inherit" stroke="none" />
+									<path
+										data-open
+										d={glyph.openPath}
+										fill="none"
+										stroke="inherit"
+										strokeWidth="1.25"
+										vectorEffect="non-scaling-stroke"
+									/>
 								</g>
 							)
 						})}
@@ -332,7 +339,9 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 							<use
 								key={index}
 								data-character={placement.character}
+								fill="currentColor"
 								href={`#${proofId}-${definitionIndex}`}
+								stroke="currentColor"
 								transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
 							/>
 						)
