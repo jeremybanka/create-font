@@ -77,6 +77,17 @@ describe("tiling workspace", () => {
 		})
 	})
 
+	it("adds preview tiles with vertical fill affinity by default", () => {
+		const added = addTile(createDefaultTilingLayout(), "preview", 2)
+		expect(findTile(added.layout, added.tileId)?.tile).toMatchObject({
+			kind: "preview",
+			fill: true,
+		})
+		expect(parseTilingLayout(serializeTilingLayout(added.layout))).toEqual(
+			added.layout,
+		)
+	})
+
 	it("supports relative reorder, duplication, fill affinity, and removal", () => {
 		const initial = createDefaultTilingLayout()
 		const first = addTile(initial, "font-navigation", 2)

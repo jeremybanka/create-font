@@ -1,0 +1,100 @@
+preview-tile.class {
+	display: grid;
+	grid-template-rows: auto minmax(100px, 1fr);
+	height: 100%;
+	min-height: 304px;
+	max-height: 100%;
+	background: var(--panel);
+	color: var(--ink);
+
+	> preview-options {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 6px;
+		padding: 8px;
+		border-bottom: 1px solid var(--line);
+		background: var(--panel);
+
+		> label {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 5px;
+			min-width: 0;
+			font: 650 8px/1 var(--ui-font);
+			text-transform: uppercase;
+
+			&[data-wide] {
+				grid-column: 1 / -1;
+			}
+
+			> input,
+			> select,
+			> textarea {
+				width: 100%;
+				min-width: 0;
+				padding: 4px 5px;
+				border: 1px solid var(--line-strong);
+				border-radius: 4px;
+				background: var(--paper);
+				font: 500 9px/1.2 var(--ui-font);
+				color: var(--ink);
+			}
+
+			> input:not([type="range"]),
+			> select,
+			> textarea {
+				grid-column: 2 / -1;
+			}
+
+			> input[type="range"] {
+				padding: 0;
+				accent-color: var(--accent);
+			}
+
+			> textarea {
+				resize: vertical;
+			}
+
+			> output {
+				min-width: 25px;
+				font-size: 8px;
+				text-align: right;
+			}
+		}
+	}
+
+	> preview-scroll {
+		--preview-background: #0e0f0d;
+		--preview-foreground: #f7f6f1;
+		display: block;
+		min-height: 100px;
+		padding: 10px;
+		overflow: auto;
+		background: var(--preview-background);
+		color: var(--preview-foreground);
+		word-break: break-word;
+
+		&[data-colors="light"] {
+			--preview-background: #f7f6f1;
+			--preview-foreground: #11120f;
+		}
+
+		> svg {
+			display: block;
+			width: 100%;
+			overflow: visible;
+
+			path {
+				fill: currentColor;
+			}
+
+			path[data-open] {
+				fill: none;
+				stroke: currentColor;
+				stroke-width: 1.25;
+				vector-effect: non-scaling-stroke;
+			}
+		}
+	}
+}

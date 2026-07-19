@@ -300,6 +300,14 @@ tiling-workspace.class {
 			display: block;
 			min-height: 0;
 		}
+
+		&:has(preview-tile) {
+			min-height: 304px;
+
+			> tile-content {
+				flex: 1 1 auto;
+			}
+		}
 	}
 
 	empty-column {
