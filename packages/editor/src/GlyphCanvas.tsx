@@ -104,6 +104,8 @@ import {
 } from "./outline-selection.ts"
 import {
 	directDragOwnsPointer,
+	planFixedHandleNodeMove,
+	planSelectedHardNodeNudge,
 	planSelectionNudge,
 	projectSelectionTransformPreview,
 	rememberedTangentDirection,
@@ -196,6 +198,7 @@ interface PointDrag {
 	readonly pointId: PointId
 	readonly contourId: ContourId
 	readonly joinEligible: boolean
+	readonly fixedHandleNode: EditorLayerNode | null
 	readonly origin: Readonly<{ x: number; y: number }>
 	readonly startPointer: Readonly<{ x: number; y: number }>
 	readonly projectionCandidates: readonly SegmentProjectionCandidate[]
@@ -230,6 +233,10 @@ interface HandleDrag {
 
 type PointDragResolution =
 	| Readonly<{ kind: "point"; point: DraggedPoint }>
+	| Readonly<{
+			kind: "fixed-handles"
+			resolution: SelectionTransformResult
+	  }>
 	| Readonly<{ kind: "tangent"; resolution: TangentSlideResolution }>
 	| Readonly<{ kind: "blocked" }>
 
@@ -1000,6 +1007,20 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			shiftKey,
 			drag.projectionCandidates,
 		)
+		if (altKey && drag.fixedHandleNode !== null) {
+			const resolution = planFixedHandleNodeMove(drag.fixedHandleNode, snapped)
+			const point = resolution?.points[0]
+			if (resolution !== null && point !== undefined) {
+				drag.joinTarget = null
+				setJoinTarget(null)
+				drag.target.position({ x: point.x, y: point.y })
+				setDraggedPoint(null)
+				setTransformPreview(resolution)
+				setTangentGuide(null)
+				setActiveSnaps(snapped.snaps)
+				return { kind: "fixed-handles", resolution }
+			}
+		}
 		const candidate = drag.joinEligible
 			? resolveOpenEndpointTarget(
 					visibleContours,
@@ -1495,6 +1516,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		setSelection(
 			Object.freeze([{ kind: "node", pointId: drag.joinTarget.pointId }]),
 		)
+	}
+	const commitFixedHandleMove = (
+		drag: PointDrag,
+		resolution: SelectionTransformResult,
+	): void => {
+		if (
+			activeGlyphId !== drag.glyphId ||
+			activeMasterId !== drag.masterId ||
+			activeTool !== "select"
+		)
+			throw new TypeError("The point drag no longer belongs to this canvas.")
+		workspace.font.actions.transformControls({
+			masterId: drag.masterId,
+			glyphId: drag.glyphId,
+			...resolution,
+		})
 	}
 	const commitHandle = (handle: DraggedHandle): void => {
 		if (activeGlyphId === null) return
@@ -2919,6 +2956,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				)
 					return
 				const multiplier = keyboardStepMultiplier(event, IS_MAC_LIKE)
+				const committedPoints =
+					workspace.font.silo
+						.getState(workspace.ui.activeLayer)
+						?.contours.flatMap((contour) => contour.nodes) ?? allPoints
 				if (event.altKey) {
 					const tangentSelection = selectedTangentSlideConstraint(
 						visibleContours,
@@ -2948,11 +2989,22 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						}
 						return
 					}
+					const fixedHandlePlan = planSelectedHardNodeNudge(
+						committedPoints,
+						selection,
+						delta[0] * multiplier,
+						delta[1] * multiplier,
+					)
+					if (fixedHandlePlan !== null) {
+						event.preventDefault()
+						workspace.font.actions.transformControls({
+							masterId: activeMasterId,
+							glyphId: activeGlyphId,
+							...fixedHandlePlan,
+						})
+						return
+					}
 				}
-				const committedPoints =
-					workspace.font.silo
-						.getState(workspace.ui.activeLayer)
-						?.contours.flatMap((contour) => contour.nodes) ?? allPoints
 				const plan = planSelectionNudge(
 					committedPoints,
 					selection,
@@ -4043,6 +4095,12 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																	pointId: point.pointId,
 																	contourId: contour.id,
 																	joinEligible: isPathEndpoint,
+																	fixedHandleNode:
+																		point.mode === "hard" &&
+																		(point.incoming !== undefined ||
+																			point.outgoing !== undefined)
+																			? point
+																			: null,
 																	origin: { x: point.x, y: point.y },
 																	startPointer,
 																	projectionCandidates:
@@ -4180,6 +4238,14 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 																		)
 																		if (committed.kind === "tangent") {
 																			commitTangentSlide(committed.resolution)
+																			didCommit = true
+																		} else if (
+																			committed.kind === "fixed-handles"
+																		) {
+																			commitFixedHandleMove(
+																				drag,
+																				committed.resolution,
+																			)
 																			didCommit = true
 																		} else if (committed.kind === "point") {
 																			commitPointOrJoin(drag, committed.point)
@@ -4790,9 +4856,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				to align, and Delete to remove the selection. Arrow keys nudge selected
 				nodes and handles; Shift uses 10 units and Command or Control uses 100.
 				Option or Alt-drag or nudge one soft node to slide it between its fixed
-				handles. Use Command or Control+C and V to copy and paste outline
-				selections. Hold Option or Alt while deleting nodes to break paths open,
-				or while deleting a handle to remove its adjoining segment.
+				handles, or one hard node to move it without moving its handles. Use
+				Command or Control+C and V to copy and paste outline selections. Hold
+				Option or Alt while deleting nodes to break paths open, or while
+				deleting a handle to remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
