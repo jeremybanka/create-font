@@ -2,55 +2,41 @@
 	"id": "glyph:hyphen",
 	"name": "hyphen",
 	"export": true,
-	"contours": [
-		{
-			"id": "contour:glyph:hyphen:0",
-			"closed": true,
-			"points": [
-				{
-					"id": "point:glyph:hyphen:0:0",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:hyphen:0:1",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:hyphen:0:2",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:hyphen:0:3",
-					"mode": "hard"
-				}
-			]
-		}
-	],
 	"layers": [
 		{
 			"masterId": "master:text",
 			"advanceWidth": 700,
 			"leftSideBearing": 140,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:hyphen:0:0",
-					"x": 140,
-					"y": 382
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:1",
-					"x": 560,
-					"y": 382
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:2",
-					"x": 560,
-					"y": 318
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:3",
-					"x": 140,
-					"y": 318
+					"id": "contour:glyph:hyphen:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:glyph:hyphen:0:0",
+							"mode": "hard",
+							"x": 140,
+							"y": 382
+						},
+						{
+							"id": "point:glyph:hyphen:0:1",
+							"mode": "hard",
+							"x": 560,
+							"y": 382
+						},
+						{
+							"id": "point:glyph:hyphen:0:2",
+							"mode": "hard",
+							"x": 560,
+							"y": 318
+						},
+						{
+							"id": "point:glyph:hyphen:0:3",
+							"mode": "hard",
+							"x": 140,
+							"y": 318
+						}
+					]
 				}
 			]
 		},
@@ -58,26 +44,36 @@
 			"masterId": "master:heavy",
 			"advanceWidth": 700,
 			"leftSideBearing": 140,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:hyphen:0:0",
-					"x": 140,
-					"y": 425
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:1",
-					"x": 560,
-					"y": 425
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:2",
-					"x": 560,
-					"y": 275
-				},
-				{
-					"pointId": "point:glyph:hyphen:0:3",
-					"x": 140,
-					"y": 275
+					"id": "contour:master:heavy:glyph:hyphen:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:master:heavy:glyph:hyphen:0:0",
+							"mode": "hard",
+							"x": 140,
+							"y": 425
+						},
+						{
+							"id": "point:master:heavy:glyph:hyphen:0:1",
+							"mode": "hard",
+							"x": 560,
+							"y": 425
+						},
+						{
+							"id": "point:master:heavy:glyph:hyphen:0:2",
+							"mode": "hard",
+							"x": 560,
+							"y": 275
+						},
+						{
+							"id": "point:master:heavy:glyph:hyphen:0:3",
+							"mode": "hard",
+							"x": 140,
+							"y": 275
+						}
+					]
 				}
 			]
 		}
