@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	estimateNoiseCharacterCount,
 	generateGlyphNoise,
 	PREVIEW_SAMPLES,
 	previewColorDefault,
@@ -29,5 +30,30 @@ describe("preview tile model", () => {
 	it("only uses the application preference to choose an initial preset", () => {
 		expect(previewColorDefault(true)).toBe("light")
 		expect(previewColorDefault(false)).toBe("dark")
+	})
+
+	it("requests more noise for larger panes and smaller, tighter type", () => {
+		const base = estimateNoiseCharacterCount({
+			width: 800,
+			height: 600,
+			fontSize: 40,
+			lineHeight: 1.2,
+		})
+		expect(
+			estimateNoiseCharacterCount({
+				width: 1_600,
+				height: 1_200,
+				fontSize: 40,
+				lineHeight: 1.2,
+			}),
+		).toBeGreaterThan(base)
+		expect(
+			estimateNoiseCharacterCount({
+				width: 800,
+				height: 600,
+				fontSize: 20,
+				lineHeight: 1,
+			}),
+		).toBeGreaterThan(base)
 	})
 })

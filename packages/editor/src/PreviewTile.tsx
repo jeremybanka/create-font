@@ -1,10 +1,11 @@
 import type { EditorAxisSource, GlyphId } from "@create-font/states"
-import { useMemo, useState } from "preact/hooks"
+import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { contoursToPath, resolveVariableGlyph } from "./geometry.ts"
 import { createGlyphPreview } from "./glyph-preview.ts"
 import {
+	estimateNoiseCharacterCount,
 	generateGlyphNoise,
 	PREVIEW_SAMPLES,
 	previewColorDefault,
@@ -35,6 +36,8 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	const [noiseSeed, setNoiseSeed] = useState("can")
 	const [fontSize, setFontSize] = useState(42)
 	const [lineHeight, setLineHeight] = useState(1.15)
+	const [proofSize, setProofSize] = useState({ width: 0, height: 0 })
+	const proofRef = useRef<HTMLElement>(null)
 	const [coordinates, setCoordinates] = useState<
 		Readonly<Record<string, number>>
 	>(() => Object.fromEntries(axes.map((axis) => [axis.id, axis.default])))
@@ -81,12 +84,44 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	const unitsPerEm = source.metadata.unitsPerEm
 	const lineBoxTop = -source.metrics.ascender
 	const lineBoxHeight = source.metrics.ascender - source.metrics.descender
+	const noiseLength = estimateNoiseCharacterCount({
+		...proofSize,
+		fontSize,
+		lineHeight,
+	})
+
+	useEffect(() => {
+		const element = proofRef.current
+		if (element === null) return
+		const publish = (width: number, height: number): void =>
+			setProofSize((current) =>
+				current.width === width && current.height === height
+					? current
+					: { width, height },
+			)
+		publish(element.clientWidth, element.clientHeight)
+		if (typeof ResizeObserver !== "function") return
+		const observer = new ResizeObserver(([entry]) => {
+			if (entry !== undefined)
+				publish(entry.contentRect.width, entry.contentRect.height)
+		})
+		observer.observe(element)
+		return () => observer.disconnect()
+	}, [])
+
+	useEffect(() => {
+		if (sample !== "noise") return
+		const generated = generateGlyphNoise(noiseSeed, noiseLength)
+		setText((current) => (current === generated ? current : generated))
+	}, [noiseLength, noiseSeed, sample])
 
 	const chooseSample = (next: PreviewSampleId): void => {
 		setSample(next)
 		if (next === "custom") return
 		setText(
-			next === "noise" ? generateGlyphNoise(noiseSeed) : PREVIEW_SAMPLES[next],
+			next === "noise"
+				? generateGlyphNoise(noiseSeed, noiseLength)
+				: PREVIEW_SAMPLES[next],
 		)
 	}
 
@@ -122,7 +157,6 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 							value={noiseSeed}
 							onInput={(event) => {
 								setNoiseSeed(event.currentTarget.value)
-								setText(generateGlyphNoise(event.currentTarget.value))
 							}}
 						/>
 					</label>
@@ -205,6 +239,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				</label>
 			</preview-options>
 			<preview-scroll
+				ref={proofRef}
 				tabIndex={0}
 				aria-label="Rendered preview"
 				style={{ fontSize: `${fontSize}px`, lineHeight }}

@@ -118,6 +118,45 @@ describe("PreviewTile", () => {
 		expect(new Set(text.value)).toEqual(new Set(["c", "a", "n"]))
 	})
 
+	it("refills glyph noise when the proof area grows", () => {
+		const resizeCallbacks: ResizeObserverCallback[] = []
+		const OriginalResizeObserver = globalThis.ResizeObserver
+		globalThis.ResizeObserver = class {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallbacks.push(callback)
+			}
+			disconnect() {}
+			observe() {}
+			unobserve() {}
+		} as unknown as typeof ResizeObserver
+		try {
+			const { first } = mountTwo()
+			const sample = first.querySelector('select[aria-label="Preview sample"]')
+			const text = first.querySelector('textarea[aria-label="Preview text"]')
+			if (
+				!(sample instanceof HTMLSelectElement) ||
+				!(text instanceof HTMLTextAreaElement)
+			)
+				throw new Error("Preview sample controls were not rendered.")
+			change(sample, "noise")
+			const before = text.value.length
+			act(() => {
+				for (const resize of resizeCallbacks)
+					resize(
+						[
+							{
+								contentRect: { width: 900, height: 700 },
+							} as ResizeObserverEntry,
+						],
+						{} as ResizeObserver,
+					)
+			})
+			expect(text.value.length).toBeGreaterThan(before)
+		} finally {
+			globalThis.ResizeObserver = OriginalResizeObserver
+		}
+	})
+
 	it("renders proof glyphs as live inline outlines", () => {
 		const { first } = mountTwo()
 		expect(first.querySelectorAll("preview-scroll svg").length).toBeGreaterThan(

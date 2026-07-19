@@ -29,6 +29,25 @@ export function generateGlyphNoise(seed: string, minimumLength = 384): string {
 	return result
 }
 
+export function estimateNoiseCharacterCount({
+	width,
+	height,
+	fontSize,
+	lineHeight,
+}: Readonly<{
+	width: number
+	height: number
+	fontSize: number
+	lineHeight: number
+}>): number {
+	const safeFontSize = Math.max(1, fontSize)
+	const columns = Math.ceil(Math.max(0, width) / (safeFontSize * 0.58))
+	const rows = Math.ceil(
+		Math.max(0, height) / (safeFontSize * Math.max(0.1, lineHeight)),
+	)
+	return Math.max(384, Math.ceil(columns * rows * 1.35))
+}
+
 export function previewColorDefault(prefersLight: boolean): "dark" | "light" {
 	return prefersLight ? "light" : "dark"
 }
