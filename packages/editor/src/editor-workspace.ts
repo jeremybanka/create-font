@@ -504,6 +504,44 @@ export function createEditorWorkspace(
 			)
 		}
 	}
+	const selectMaster = (masterId: MasterId): void => {
+		const currentDocument = font.read.editorSource()
+		if (currentDocument === null) return
+		const master = currentDocument.masters.find((item) => item.id === masterId)
+		if (master === undefined) return
+		font.silo.setState(activeMasterIdAtom, masterId)
+		font.silo.setState(selectionAtom, Object.freeze([]))
+		if (font.silo.getState(comparisonMasterIdAtom) === masterId) {
+			font.silo.setState(
+				comparisonMasterIdAtom,
+				masterId === currentDocument.defaultMasterId
+					? (currentDocument.masters.find((item) => item.id !== masterId)?.id ??
+							masterId)
+					: currentDocument.defaultMasterId,
+			)
+		}
+		setLocation(
+			master.kind === "default"
+				? Object.fromEntries(
+						currentDocument.axes.map((axis) => [axis.id, axis.default]),
+					)
+				: master.location,
+		)
+	}
+	const cycleMaster = (direction: -1 | 1): void => {
+		const currentDocument = font.read.editorSource()
+		if (currentDocument === null || currentDocument.masters.length < 2) return
+		const currentMasterId = font.silo.getState(activeMasterIdAtom)
+		const currentIndex = currentDocument.masters.findIndex(
+			(master) => master.id === currentMasterId,
+		)
+		if (currentIndex === -1) return
+		const nextIndex =
+			(currentIndex + direction + currentDocument.masters.length) %
+			currentDocument.masters.length
+		const nextMaster = currentDocument.masters[nextIndex]
+		if (nextMaster !== undefined) selectMaster(nextMaster.id)
+	}
 
 	return {
 		font,
@@ -632,31 +670,12 @@ export function createEditorWorkspace(
 				}
 				return Object.freeze(addedIds)
 			},
-			selectMaster(masterId: MasterId): void {
-				const currentDocument = font.read.editorSource()
-				if (currentDocument === null) return
-				const master = currentDocument.masters.find(
-					(item) => item.id === masterId,
-				)
-				if (master === undefined) return
-				font.silo.setState(activeMasterIdAtom, masterId)
-				font.silo.setState(selectionAtom, Object.freeze([]))
-				if (font.silo.getState(comparisonMasterIdAtom) === masterId) {
-					font.silo.setState(
-						comparisonMasterIdAtom,
-						masterId === currentDocument.defaultMasterId
-							? (currentDocument.masters.find((item) => item.id !== masterId)
-									?.id ?? masterId)
-							: currentDocument.defaultMasterId,
-					)
-				}
-				setLocation(
-					master.kind === "default"
-						? Object.fromEntries(
-								currentDocument.axes.map((axis) => [axis.id, axis.default]),
-							)
-						: master.location,
-				)
+			selectMaster,
+			selectPreviousMaster(): void {
+				cycleMaster(-1)
+			},
+			selectNextMaster(): void {
+				cycleMaster(1)
 			},
 			selectComparisonMaster(masterId: MasterId): void {
 				const currentDocument = font.read.editorSource()
