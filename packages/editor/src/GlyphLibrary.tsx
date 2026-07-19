@@ -205,8 +205,8 @@ function GlyphLibraryItem({
 							>
 								<path
 									d={preview.path}
-									fillRule="evenodd"
-									clipRule="evenodd"
+									fillRule="nonzero"
+									clipRule="nonzero"
 									transform="scale(1 -1)"
 								/>
 								<path
