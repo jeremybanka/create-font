@@ -2,55 +2,41 @@
 	"id": "glyph:grave",
 	"name": "grave",
 	"export": true,
-	"contours": [
-		{
-			"id": "contour:glyph:grave:0",
-			"closed": true,
-			"points": [
-				{
-					"id": "point:glyph:grave:0:0",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:grave:0:1",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:grave:0:2",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:grave:0:3",
-					"mode": "hard"
-				}
-			]
-		}
-	],
 	"layers": [
 		{
 			"masterId": "master:text",
 			"advanceWidth": 460,
 			"leftSideBearing": 255,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:grave:0:0",
-					"x": 305,
-					"y": 720
-				},
-				{
-					"pointId": "point:glyph:grave:0:1",
-					"x": 415,
-					"y": 580
-				},
-				{
-					"pointId": "point:glyph:grave:0:2",
-					"x": 365,
-					"y": 540
-				},
-				{
-					"pointId": "point:glyph:grave:0:3",
-					"x": 255,
-					"y": 680
+					"id": "contour:glyph:grave:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:glyph:grave:0:0",
+							"mode": "hard",
+							"x": 305,
+							"y": 720
+						},
+						{
+							"id": "point:glyph:grave:0:1",
+							"mode": "hard",
+							"x": 415,
+							"y": 580
+						},
+						{
+							"id": "point:glyph:grave:0:2",
+							"mode": "hard",
+							"x": 365,
+							"y": 540
+						},
+						{
+							"id": "point:glyph:grave:0:3",
+							"mode": "hard",
+							"x": 255,
+							"y": 680
+						}
+					]
 				}
 			]
 		},
@@ -58,26 +44,36 @@
 			"masterId": "master:heavy",
 			"advanceWidth": 460,
 			"leftSideBearing": 221,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:grave:0:0",
-					"x": 339,
-					"y": 746
-				},
-				{
-					"pointId": "point:glyph:grave:0:1",
-					"x": 449,
-					"y": 606
-				},
-				{
-					"pointId": "point:glyph:grave:0:2",
-					"x": 331,
-					"y": 514
-				},
-				{
-					"pointId": "point:glyph:grave:0:3",
-					"x": 221,
-					"y": 654
+					"id": "contour:master:heavy:glyph:grave:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:master:heavy:glyph:grave:0:0",
+							"mode": "hard",
+							"x": 339,
+							"y": 746
+						},
+						{
+							"id": "point:master:heavy:glyph:grave:0:1",
+							"mode": "hard",
+							"x": 449,
+							"y": 606
+						},
+						{
+							"id": "point:master:heavy:glyph:grave:0:2",
+							"mode": "hard",
+							"x": 331,
+							"y": 514
+						},
+						{
+							"id": "point:master:heavy:glyph:grave:0:3",
+							"mode": "hard",
+							"x": 221,
+							"y": 654
+						}
+					]
 				}
 			]
 		}

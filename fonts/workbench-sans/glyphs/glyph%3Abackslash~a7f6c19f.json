@@ -2,55 +2,41 @@
 	"id": "glyph:backslash",
 	"name": "backslash",
 	"export": true,
-	"contours": [
-		{
-			"id": "contour:glyph:backslash:0",
-			"closed": true,
-			"points": [
-				{
-					"id": "point:glyph:backslash:0:0",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:backslash:0:1",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:backslash:0:2",
-					"mode": "hard"
-				},
-				{
-					"id": "point:glyph:backslash:0:3",
-					"mode": "hard"
-				}
-			]
-		}
-	],
 	"layers": [
 		{
 			"masterId": "master:text",
 			"advanceWidth": 700,
 			"leftSideBearing": 74,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:backslash:0:0",
-					"x": 126,
-					"y": 719
-				},
-				{
-					"pointId": "point:glyph:backslash:0:1",
-					"x": 626,
-					"y": 19
-				},
-				{
-					"pointId": "point:glyph:backslash:0:2",
-					"x": 574,
-					"y": -19
-				},
-				{
-					"pointId": "point:glyph:backslash:0:3",
-					"x": 74,
-					"y": 681
+					"id": "contour:glyph:backslash:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:glyph:backslash:0:0",
+							"mode": "hard",
+							"x": 126,
+							"y": 719
+						},
+						{
+							"id": "point:glyph:backslash:0:1",
+							"mode": "hard",
+							"x": 626,
+							"y": 19
+						},
+						{
+							"id": "point:glyph:backslash:0:2",
+							"mode": "hard",
+							"x": 574,
+							"y": -19
+						},
+						{
+							"id": "point:glyph:backslash:0:3",
+							"mode": "hard",
+							"x": 74,
+							"y": 681
+						}
+					]
 				}
 			]
 		},
@@ -58,26 +44,36 @@
 			"masterId": "master:heavy",
 			"advanceWidth": 700,
 			"leftSideBearing": 39,
-			"points": [
+			"contours": [
 				{
-					"pointId": "point:glyph:backslash:0:0",
-					"x": 161,
-					"y": 744
-				},
-				{
-					"pointId": "point:glyph:backslash:0:1",
-					"x": 661,
-					"y": 44
-				},
-				{
-					"pointId": "point:glyph:backslash:0:2",
-					"x": 539,
-					"y": -44
-				},
-				{
-					"pointId": "point:glyph:backslash:0:3",
-					"x": 39,
-					"y": 656
+					"id": "contour:master:heavy:glyph:backslash:0",
+					"closed": true,
+					"points": [
+						{
+							"id": "point:master:heavy:glyph:backslash:0:0",
+							"mode": "hard",
+							"x": 161,
+							"y": 744
+						},
+						{
+							"id": "point:master:heavy:glyph:backslash:0:1",
+							"mode": "hard",
+							"x": 661,
+							"y": 44
+						},
+						{
+							"id": "point:master:heavy:glyph:backslash:0:2",
+							"mode": "hard",
+							"x": 539,
+							"y": -44
+						},
+						{
+							"id": "point:master:heavy:glyph:backslash:0:3",
+							"mode": "hard",
+							"x": 39,
+							"y": 656
+						}
+					]
 				}
 			]
 		}
