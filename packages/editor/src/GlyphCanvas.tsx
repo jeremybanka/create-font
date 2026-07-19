@@ -82,7 +82,6 @@ import {
 	contourStartDirection,
 	editorContourToPath,
 	editorContourPaintPaths,
-	editorContoursToPath,
 	nearestEditorSegment,
 } from "./geometry.ts"
 import css from "./GlyphCanvas.module.css"
@@ -139,6 +138,7 @@ import {
 	type ShapeGestureResolution,
 	type ShapeToolKind,
 } from "./shape-gesture.ts"
+import { resolveTransformResize } from "./transform-gesture.ts"
 import {
 	finalizePointDragPreview,
 	hasSelectedCoincidentEndpointPeer,
@@ -262,6 +262,7 @@ interface ShapeDragSession {
 	currentScreen: PenPoint
 	direction: ShapeDragDirection
 	shiftKey: boolean
+	altKey: boolean
 }
 
 type PenPreviewFrame =
@@ -291,6 +292,10 @@ interface TransformDrag {
 	readonly handle: TransformHandle
 	readonly controls: readonly ResolvedSelectionControl[]
 	readonly bounds: SelectionBounds
+	targetX: number
+	targetY: number
+	shiftKey: boolean
+	altKey: boolean
 }
 
 interface GroupDrag {
@@ -378,6 +383,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	)
 	const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
 	const [transformDrag, setTransformDrag] = useState<TransformDrag | null>(null)
+	const transformDragRef = useRef<TransformDrag | null>(null)
 	const [transformCursor, setTransformCursor] = useState<string | null>(null)
 	const [momentaryPreview, setMomentaryPreview] = useState(false)
 	const [transformPreview, setTransformPreview] =
@@ -838,6 +844,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			currentScreen: gesture.currentScreen,
 			previousDirection: gesture.direction,
 			shiftKey: gesture.shiftKey,
+			altKey: gesture.altKey,
 		})
 	const shapeGestureResolution =
 		shapeGesture === null ? null : resolveLiveShape(shapeGesture)
@@ -1154,7 +1161,15 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			const shape = shapeGestureRef.current
 			if (shape !== null) {
 				shape.shiftKey = event.shiftKey
+				shape.altKey = event.altKey
 				shapePreviewPublisher.schedule({ ...shape })
+				return
+			}
+			const transform = transformDragRef.current
+			if (transform !== null && transform.handle !== "inside") {
+				transform.shiftKey = event.shiftKey
+				transform.altKey = event.altKey
+				setTransformPreview(resolveTransformPreview(transform))
 				return
 			}
 			const gesture = penGestureRef.current
@@ -1851,6 +1866,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			currentScreen: screen,
 			direction: { x: null, y: null },
 			shiftKey: event.evt.shiftKey,
+			altKey: event.evt.altKey,
 		}
 		shapeGestureRef.current = gesture
 		nativeTarget?.addEventListener("pointercancel", captureCancelListener)
@@ -1883,6 +1899,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		gesture.snaps = snapped.snaps
 		gesture.currentScreen = pointerOnCanvas(event)
 		gesture.shiftKey = event.evt.shiftKey
+		gesture.altKey = event.evt.altKey
 		gesture.direction = resolveLiveShape(gesture).direction
 		shapePreviewPublisher.schedule({ ...gesture })
 		return gesture
@@ -2286,73 +2303,74 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 		const controls = resolveSelectionControls(allPoints, selection)
 		const bounds = boundsOfControls(controls)
 		if (bounds === null) return
-		setTransformDrag({ handle, controls, bounds })
+		const targetX = handle.includes("west") ? bounds.minX : bounds.maxX
+		const targetY = handle.includes("south") ? bounds.minY : bounds.maxY
+		const drag = {
+			handle,
+			controls,
+			bounds,
+			targetX,
+			targetY,
+			shiftKey: false,
+			altKey: false,
+		}
+		transformDragRef.current = drag
+		setTransformDrag(drag)
 	}
-	const previewTransformDrag = (event: KonvaEventObject<DragEvent>): void => {
-		if (transformDrag === null) return
-		const { bounds, controls, handle } = transformDrag
-		if (handle === "inside") {
-			setTransformPreview(
-				roundedTransform(
-					translateSelectionControls(
-						controls,
-						event.target.x() - bounds.minX,
-						event.target.y() - bounds.minY,
-					),
+	const resolveTransformPreview = (
+		drag: TransformDrag,
+	): SelectionTransformResult => {
+		if (drag.handle === "inside") {
+			return roundedTransform(
+				translateSelectionControls(
+					drag.controls,
+					drag.targetX - drag.bounds.minX,
+					drag.targetY - drag.bounds.minY,
 				),
 			)
-			return
 		}
-		const movesWest = handle.includes("west")
-		const movesEast = handle.includes("east")
-		const movesNorth = handle.includes("north")
-		const movesSouth = handle.includes("south")
-		const anchorX = movesWest ? bounds.maxX : bounds.minX
-		const anchorY = movesSouth ? bounds.maxY : bounds.minY
-		const sourceX = movesWest ? bounds.minX : bounds.maxX
-		const sourceY = movesSouth ? bounds.minY : bounds.maxY
-		let scaleX =
-			movesWest || movesEast
-				? sourceX === anchorX
-					? 1
-					: (event.target.x() - anchorX) / (sourceX - anchorX)
-				: 1
-		let scaleY =
-			movesNorth || movesSouth
-				? sourceY === anchorY
-					? 1
-					: (event.target.y() - anchorY) / (sourceY - anchorY)
-				: 1
-		if (
-			event.evt.shiftKey &&
-			(movesWest || movesEast) &&
-			(movesNorth || movesSouth)
-		) {
-			const uniform =
-				Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY
-			scaleX = uniform
-			scaleY = uniform
-		}
-		setTransformPreview(
-			roundedTransform(
-				scaleSelectionControls(controls, {
-					anchorX,
-					anchorY,
-					scaleX,
-					scaleY,
+		return roundedTransform(
+			scaleSelectionControls(
+				drag.controls,
+				resolveTransformResize({
+					bounds: drag.bounds,
+					handle: drag.handle,
+					targetX: drag.targetX,
+					targetY: drag.targetY,
+					shiftKey: drag.shiftKey,
+					altKey: drag.altKey,
 				}),
 			),
 		)
 	}
-	const commitTransform = (): void => {
-		if (transformPreview !== null && activeGlyphId !== null) {
+	const previewTransformDrag = (event: KonvaEventObject<DragEvent>): void => {
+		const drag = transformDragRef.current
+		if (drag === null) return
+		drag.targetX = event.target.x()
+		drag.targetY = event.target.y()
+		drag.shiftKey = event.evt.shiftKey
+		drag.altKey = event.evt.altKey
+		setTransformPreview(resolveTransformPreview(drag))
+	}
+	const commitTransform = (event?: KonvaEventObject<DragEvent>): void => {
+		const drag = transformDragRef.current
+		if (drag !== null && event !== undefined) {
+			drag.targetX = event.target.x()
+			drag.targetY = event.target.y()
+			drag.shiftKey = event.evt.shiftKey
+			drag.altKey = event.evt.altKey
+		}
+		const finalPreview =
+			drag === null ? transformPreview : resolveTransformPreview(drag)
+		if (finalPreview !== null && activeGlyphId !== null) {
 			workspace.font.actions.transformControls({
 				masterId: activeMasterId,
 				glyphId: activeGlyphId,
-				...transformPreview,
+				...finalPreview,
 			})
 		}
 		setTransformPreview(null)
+		transformDragRef.current = null
 		setTransformDrag(null)
 	}
 	const selectWholeContour = (
@@ -2701,6 +2719,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				}
 				if (event.key === "Escape" && transformDrag !== null) {
 					event.preventDefault()
+					transformDragRef.current = null
 					setTransformDrag(null)
 					setTransformPreview(null)
 					setTransformCursor(null)
@@ -4392,7 +4411,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 												draggable
 												onDragStart={() => beginTransform("inside")}
 												onDragMove={previewTransformDrag}
-												onDragEnd={commitTransform}
+												onDragEnd={(event) => commitTransform(event)}
 											/>
 											{(
 												[
@@ -4454,8 +4473,8 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 														beginTransform(handle)
 													}}
 													onDragMove={previewTransformDrag}
-													onDragEnd={() => {
-														commitTransform()
+													onDragEnd={(event) => {
+														commitTransform(event)
 														setTransformCursor(null)
 													}}
 													onMouseEnter={() =>

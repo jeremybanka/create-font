@@ -81,6 +81,67 @@ describe("shape gestures", () => {
 		})
 	})
 
+	it.each([
+		[
+			{ x: 300, y: 500 },
+			{ minX: -100, minY: -100, maxX: 300, maxY: 500 },
+		],
+		[
+			{ x: -100, y: 500 },
+			{ minX: -100, minY: -100, maxX: 300, maxY: 500 },
+		],
+		[
+			{ x: 300, y: -100 },
+			{ minX: -100, minY: -100, maxX: 300, maxY: 500 },
+		],
+		[
+			{ x: -100, y: -100 },
+			{ minX: -100, minY: -100, maxX: 300, maxY: 500 },
+		],
+	])(
+		"draws symmetrically around the anchor in every quadrant",
+		(raw, bounds) => {
+			expect(resolve(raw, { altKey: true })).toMatchObject({
+				bounds,
+				valid: true,
+			})
+		},
+	)
+
+	it("reflects snapped extrema without moving the center", () => {
+		const result = resolve(
+			{ x: 275, y: 240 },
+			{ altKey: true, snappedCandidate: { x: 280, y: 250 } },
+		)
+		expect(result.bounds).toEqual({
+			minX: -80,
+			minY: 150,
+			maxX: 280,
+			maxY: 250,
+		})
+		expect((result.bounds.minX + result.bounds.maxX) / 2).toBe(100)
+		expect((result.bounds.minY + result.bounds.maxY) / 2).toBe(200)
+	})
+
+	it("combines Alt and Shift using the raw dominant axis and remembered direction", () => {
+		const first = resolve({ x: 260, y: 240 }, { altKey: true, shiftKey: true })
+		expect(first.bounds).toEqual({ minX: -60, minY: 40, maxX: 260, maxY: 360 })
+		const crossing = resolve(
+			{ x: 100, y: 40 },
+			{
+				altKey: true,
+				shiftKey: true,
+				previousDirection: first.direction,
+			},
+		)
+		expect(crossing.bounds).toEqual({
+			minX: -60,
+			minY: 40,
+			maxX: 260,
+			maxY: 360,
+		})
+	})
+
 	it("preserves the last non-zero quadrant direction across axis crossings", () => {
 		const first = resolve({ x: 250, y: 350 }, { shiftKey: true })
 		const onAxis = resolve(

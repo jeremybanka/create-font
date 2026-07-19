@@ -68,6 +68,7 @@ export function resolveShapeGesture(input: {
 	readonly currentScreen: AuthoringPoint
 	readonly previousDirection?: ShapeDragDirection
 	readonly shiftKey?: boolean
+	readonly altKey?: boolean
 	readonly thresholdPixels?: number
 }): ShapeGestureResolution {
 	if (
@@ -110,11 +111,17 @@ export function resolveShapeGesture(input: {
 					: canonicalZero(anchor.y + direction.y * side),
 		}
 	}
+	const opposite = input.altKey
+		? {
+				x: canonicalZero(anchor.x - (corner.x - anchor.x)),
+				y: canonicalZero(anchor.y - (corner.y - anchor.y)),
+			}
+		: anchor
 	const bounds = {
-		minX: canonicalZero(Math.min(anchor.x, corner.x)),
-		minY: canonicalZero(Math.min(anchor.y, corner.y)),
-		maxX: canonicalZero(Math.max(anchor.x, corner.x)),
-		maxY: canonicalZero(Math.max(anchor.y, corner.y)),
+		minX: canonicalZero(Math.min(opposite.x, corner.x)),
+		minY: canonicalZero(Math.min(opposite.y, corner.y)),
+		maxX: canonicalZero(Math.max(opposite.x, corner.x)),
+		maxY: canonicalZero(Math.max(opposite.y, corner.y)),
 	}
 	const distancePixels = Math.hypot(
 		input.currentScreen.x - input.downScreen.x,
