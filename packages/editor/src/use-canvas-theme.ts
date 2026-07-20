@@ -1,4 +1,6 @@
-import { useEffect, useState } from "preact/hooks"
+import { useMemo } from "preact/hooks"
+
+import { useInferredColorPreference } from "./inferred-color-preference.ts"
 
 export interface CanvasTheme {
 	readonly surface: string
@@ -52,13 +54,6 @@ function readCanvasTheme(): CanvasTheme {
 
 /** Keeps Konva's imperative color props in sync with CSS media-query tokens. */
 export function useCanvasTheme(): CanvasTheme {
-	const [theme, setTheme] = useState<CanvasTheme>(readCanvasTheme)
-	useEffect(() => {
-		const query = window.matchMedia("(prefers-color-scheme: light)")
-		const update = (): void => setTheme(readCanvasTheme())
-		update()
-		query.addEventListener("change", update)
-		return () => query.removeEventListener("change", update)
-	}, [])
-	return theme
+	const preference = useInferredColorPreference()
+	return useMemo(readCanvasTheme, [preference])
 }

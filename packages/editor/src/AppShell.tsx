@@ -80,7 +80,7 @@ export function AppShell({ workspace }: AppShellProps) {
 	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
-	const faviconHref = useO(workspace.ui.faviconHref)
+	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const history = useOptionalTL(
@@ -98,7 +98,7 @@ export function AppShell({ workspace }: AppShellProps) {
 		selection,
 		workspace,
 	}
-	useEditorDocumentMetadata(faviconHref, routeName, previewText)
+	useEditorDocumentMetadata(faviconPreview, routeName, previewText)
 	useHotkeys(toolContext, routeName === "canvas" && !tilingStatus.management)
 	const updateTilingStatus = useCallback((status: TilingWorkspaceStatus) => {
 		setTilingStatus((current) =>
