@@ -73,6 +73,35 @@ app-shell.class {
 			justify-self: end;
 			gap: 14px;
 
+			> diff-view-control {
+				display: grid;
+				gap: 2px;
+				justify-items: center;
+
+				> button {
+					padding: 5px 8px;
+					border: 1px dashed var(--line-strong);
+					border-radius: 6px;
+					background: var(--paper);
+					font: 600 10px/1 var(--ui-font);
+					color: var(--ink-muted);
+				}
+
+				> button[aria-pressed="true"] {
+					border-style: solid;
+					border-color: var(--accent);
+					color: var(--accent);
+				}
+
+				> small {
+					max-width: 130px;
+					overflow: hidden;
+					font-size: 8px;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+				}
+			}
+
 			> document-status {
 				display: flex;
 				align-items: center;
@@ -197,6 +226,39 @@ app-shell.class {
 			grid-template-rows: minmax(0, 1fr);
 			min-width: 0;
 			min-height: 0;
+
+			> diff-view-legend {
+				position: absolute;
+				z-index: 3;
+				top: 12px;
+				left: 50%;
+				display: flex;
+				gap: 5px;
+				transform: translateX(-50%);
+
+				> button {
+					display: flex;
+					gap: 5px;
+					align-items: center;
+					padding: 5px 8px;
+					border: 1px solid var(--line-strong);
+					border-radius: 999px;
+					background: var(--paper);
+					font: 550 9px/1 var(--ui-font);
+					color: var(--ink);
+				}
+
+				> button[aria-pressed="false"] {
+					opacity: 0.45;
+				}
+				> button > i {
+					width: 12px;
+					border-top: 2px solid #16834b;
+				}
+				> button > i[data-side="baseline"] {
+					border-top: 2px dashed #c43d4d;
+				}
+			}
 		}
 
 		> not-found-view {

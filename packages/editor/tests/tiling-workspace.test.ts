@@ -39,6 +39,9 @@ describe("tiling workspace", () => {
 		expect(layout.columns[0]?.tiles.map((tile) => tile.kind)).toEqual([
 			"font-navigation",
 		])
+		expect(layout.columns[1]?.tiles.map((tile) => tile.kind)).toEqual([
+			"version-control",
+		])
 		expect(layout.columns[2]?.tiles.map((tile) => tile.kind)).toEqual([
 			"canvas-toolbar",
 		])
@@ -47,7 +50,7 @@ describe("tiling workspace", () => {
 		])
 		expect(layout.columns.map((column) => column.collapsed)).toEqual([
 			false,
-			true,
+			false,
 			false,
 			false,
 		])
@@ -108,7 +111,7 @@ describe("tiling workspace", () => {
 		if (duplicated === null) throw new Error("The tile was not duplicated.")
 		const removed = removeTile(duplicated.layout, second.tileId)
 
-		expect(reordered.columns[1]?.tiles[0]?.id).toBe(second.tileId)
+		expect(reordered.columns[1]?.tiles[1]?.id).toBe(second.tileId)
 		expect(findTile(duplicated.layout, duplicated.tileId)?.tile.fill).toBe(true)
 		expect(findTile(removed, second.tileId)).toBeNull()
 		expect(findTile(removed, duplicated.tileId)).not.toBeNull()
@@ -122,10 +125,11 @@ describe("tiling workspace", () => {
 			"canvas-toolbar:default",
 		)
 		const empty = removeTile(withoutToolbar, "glyph-attributes:default")
+		const completelyEmpty = removeTile(empty, "version-control:default")
 
-		expect(empty.columns.every((column) => column.tiles.length === 0)).toBe(
-			true,
-		)
+		expect(
+			completelyEmpty.columns.every((column) => column.tiles.length === 0),
+		).toBe(true)
 	})
 
 	it("records column packing and collapse disposition", () => {
@@ -164,7 +168,7 @@ describe("tiling workspace", () => {
 		expect(normalizeTilingLayout(invalid)).toBeNull()
 	})
 
-	it("migrates saved version-one layouts by adding the canvas toolbar", () => {
+	it("migrates saved version-one layouts by adding current default tiles", () => {
 		const current = createDefaultTilingLayout()
 		const legacy = JSON.parse(serializeTilingLayout(current)) as {
 			version: number
@@ -179,13 +183,24 @@ describe("tiling workspace", () => {
 		if (column === undefined) throw new Error("Column 3 is missing.")
 		column.collapsed = true
 		column.tiles = column.tiles.filter((tile) => tile.kind !== "canvas-toolbar")
+		const versionControlColumn = legacy.columns.find((item) => item.id === 2)
+		if (versionControlColumn === undefined)
+			throw new Error("Column 2 is missing.")
+		versionControlColumn.collapsed = true
+		versionControlColumn.tiles = versionControlColumn.tiles.filter(
+			(tile) => tile.kind !== "version-control",
+		)
 
 		const migrated = normalizeTilingLayout(legacy)
-		expect(migrated?.version).toBe(2)
+		expect(migrated?.version).toBe(3)
 		expect(migrated?.columns[2]).toMatchObject({
 			collapsed: false,
 			alignment: "top",
 			tiles: [{ kind: "canvas-toolbar" }],
+		})
+		expect(migrated?.columns[1]).toMatchObject({
+			collapsed: false,
+			tiles: [expect.objectContaining({ kind: "version-control" })],
 		})
 	})
 })

@@ -10,6 +10,73 @@ import {
 } from "../src/index.ts"
 
 describe(`create-font workspace RPC`, () => {
+	it(`exposes bounded comparison and selective commit operations`, async () => {
+		const comparison = {
+			base: {
+				identity: `commit-a`,
+				kind: `ref` as const,
+				label: `HEAD`,
+				ref: `HEAD`,
+				snapshot: { revision: `commit-a`, units: [] },
+			},
+			changes: [
+				{
+					change: `modified` as const,
+					id: `source:names.json`,
+					kind: `source` as const,
+					label: `names.json`,
+					paths: [`names.json`] as [string],
+				},
+			],
+			identity: `comparison-a`,
+			target: {
+				identity: `working-a`,
+				kind: `working` as const,
+				label: `Working source`,
+				snapshot: { revision: `working-a`, units: [] },
+			},
+		}
+		const source: CreateFontSourceService = {
+			commitUnits: vi.fn(async () => ({
+				commit: `commit-b`,
+				comparison: { ...comparison, changes: [] },
+			})),
+			readComparison: vi.fn(async () => comparison),
+			readManifest: vi.fn(),
+			readSnapshot: vi.fn(),
+			readUnit: vi.fn(),
+			writeUnit: vi.fn(),
+			writeUnits: vi.fn(),
+		}
+		const app = createFontRpc({ build: vi.fn(), source })
+		const read = await app.handle(
+			new Request(`http://localhost/api/source/comparison?baseRef=HEAD`),
+		)
+		expect(read.status).toBe(200)
+		expect(await read.json()).toEqual(comparison)
+		expect(source.readComparison).toHaveBeenCalledWith({ baseRef: `HEAD` })
+
+		const commit = await app.handle(
+			new Request(`http://localhost/api/source/commit`, {
+				method: `POST`,
+				headers: { "content-type": `application/json` },
+				body: JSON.stringify({
+					expectedComparisonIdentity: `comparison-a`,
+					message: `Update names`,
+					paths: [`names.json`],
+				}),
+			}),
+		)
+		expect(commit.status).toBe(200)
+		expect(await commit.json()).toEqual(
+			expect.objectContaining({ commit: `commit-b` }),
+		)
+		expect(source.commitUnits).toHaveBeenCalledExactlyOnceWith({
+			expectedComparisonIdentity: `comparison-a`,
+			message: `Update names`,
+			paths: [`names.json`],
+		})
+	})
 	it(`serves individual source units through the typed contract`, async () => {
 		const source: CreateFontSourceService = {
 			readSnapshot: vi.fn(async () => ({

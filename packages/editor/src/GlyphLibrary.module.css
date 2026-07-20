@@ -73,6 +73,7 @@ glyph-library.class {
 			}
 
 			> button {
+				position: relative;
 				display: flex;
 				align-items: center;
 				gap: 7px;
@@ -120,6 +121,26 @@ glyph-library.class {
 				&[aria-pressed="true"] {
 					border-color: var(--line-glyph-selected);
 					background: var(--selected);
+				}
+
+				&[data-difference]:not([data-difference="unchanged"])::after {
+					position: absolute;
+					top: 14px;
+					right: 14px;
+					width: 9px;
+					height: 9px;
+					border: 2px solid var(--paper);
+					border-radius: 50%;
+					background: var(--warning);
+					content: "";
+				}
+
+				&[data-difference="added"]::after {
+					background: var(--success);
+				}
+				&[data-difference="deleted"]::after {
+					border-radius: 0;
+					background: #c43d4d;
 				}
 
 				> glyph-tile {

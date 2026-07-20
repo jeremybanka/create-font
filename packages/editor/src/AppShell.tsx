@@ -38,9 +38,11 @@ import {
 	type TilingWorkspaceStatus,
 } from "./TilingWorkspace.tsx"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
+import type { EditorVersionControl } from "./version-control.ts"
 
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
+	readonly versionControl?: EditorVersionControl
 }
 
 function readInitialHotbarSlots(): HotbarSlots {
@@ -55,10 +57,13 @@ function readInitialHotbarSlots(): HotbarSlots {
 	}
 }
 
-export function AppShell({ workspace }: AppShellProps) {
+export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
+	const [diffView, setDiffView] = useState(false)
+	const [diffBaselineVisible, setDiffBaselineVisible] = useState(true)
+	const [diffCurrentVisible, setDiffCurrentVisible] = useState(true)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
 		management: false,
@@ -139,6 +144,18 @@ export function AppShell({ workspace }: AppShellProps) {
 	}, [tilingStatus.management])
 
 	const commands: readonly PaletteCommand[] = [
+		{
+			id: "toggle-diff-view",
+			displayName: "Toggle Diff View",
+			category: "Version Control",
+			description: "Compare the active glyph with the selected baseline.",
+			icon: "CircleIcon",
+			keywords: ["git", "changes", "review", "baseline"],
+			checked: diffView,
+			disabled: versionControl?.comparison === undefined,
+			disabledReason: "Load a version-control comparison first.",
+			do: () => setDiffView((enabled) => !enabled),
+		},
 		{
 			id: "add-glyphs",
 			displayName: "Add glyphs",
@@ -223,6 +240,25 @@ export function AppShell({ workspace }: AppShellProps) {
 					</button>
 				</command-center>
 				<header-actions>
+					<diff-view-control
+						data-active={diffView ? "true" : "false"}
+						aria-label="Diff View comparison"
+					>
+						<button
+							type="button"
+							aria-pressed={diffView}
+							disabled={versionControl?.comparison === undefined}
+							onClick={() => setDiffView((enabled) => !enabled)}
+						>
+							Diff View
+						</button>
+						{versionControl?.comparison === undefined ? null : (
+							<small>
+								{versionControl.comparison.base.label} →{" "}
+								{versionControl.comparison.target.label}
+							</small>
+						)}
+					</diff-view-control>
 					<document-status
 						role="status"
 						aria-live="polite"
@@ -261,7 +297,31 @@ export function AppShell({ workspace }: AppShellProps) {
 						<GlyphCanvas
 							workspace={workspace}
 							disabled={tilingStatus.management}
+							diffView={diffView}
+							diffBaselineVisible={diffBaselineVisible}
+							diffCurrentVisible={diffCurrentVisible}
+							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
+						{!diffView || versionControl?.comparison === undefined ? null : (
+							<diff-view-legend aria-label="Diff View legend">
+								<button
+									type="button"
+									aria-pressed={diffBaselineVisible}
+									onClick={() => setDiffBaselineVisible((visible) => !visible)}
+								>
+									<i data-side="baseline" /> Baseline ·{" "}
+									{versionControl.comparison.base.label}
+								</button>
+								<button
+									type="button"
+									aria-pressed={diffCurrentVisible}
+									onClick={() => setDiffCurrentVisible((visible) => !visible)}
+								>
+									<i data-side="current" /> Current ·{" "}
+									{versionControl.comparison.target.label}
+								</button>
+							</diff-view-legend>
+						)}
 						<ActionHotbar
 							commands={commands}
 							enabled={!tilingStatus.management && !commandPaletteOpen}
@@ -285,6 +345,14 @@ export function AppShell({ workspace }: AppShellProps) {
 							workspace={workspace}
 							enabled={!commandPaletteOpen}
 							onStatusChange={updateTilingStatus}
+							{...(versionControl === undefined ? {} : { versionControl })}
+							onReviewGlyph={(glyphId) => {
+								workspace.actions.reviewGlyph(glyphId)
+								setDiffView(true)
+								requestAnimationFrame(() =>
+									document.querySelector<HTMLElement>("glyph-canvas")?.focus(),
+								)
+							}}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (
@@ -292,6 +360,7 @@ export function AppShell({ workspace }: AppShellProps) {
 						workspace={workspace}
 						addingGlyphs={addingGlyphs}
 						onAddingGlyphsChange={setAddingGlyphs}
+						{...(versionControl === undefined ? {} : { versionControl })}
 					/>
 				) : routeName === "info" ? (
 					<FontInfo workspace={workspace} />

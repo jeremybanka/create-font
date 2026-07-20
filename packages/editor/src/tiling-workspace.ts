@@ -7,6 +7,7 @@ export type TileKind =
 	| "canvas-toolbar"
 	| "preview"
 	| "compatibility"
+	| "version-control"
 	| "glyph-attributes"
 	| "selection-dimensions"
 
@@ -24,7 +25,7 @@ export interface TileColumn {
 }
 
 export interface TilingLayout {
-	readonly version: 2
+	readonly version: 3
 	readonly columns: readonly TileColumn[]
 }
 
@@ -47,6 +48,7 @@ const TILE_KINDS = new Set<TileKind>([
 	"canvas-toolbar",
 	"preview",
 	"compatibility",
+	"version-control",
 	"glyph-attributes",
 	"selection-dimensions",
 ])
@@ -60,7 +62,7 @@ function tileId(kind: TileKind): string {
 
 export function createDefaultTilingLayout(): TilingLayout {
 	return {
-		version: 2,
+		version: 3,
 		columns: [
 			{
 				id: 1,
@@ -74,7 +76,18 @@ export function createDefaultTilingLayout(): TilingLayout {
 					},
 				],
 			},
-			{ id: 2, alignment: "top", collapsed: true, tiles: [] },
+			{
+				id: 2,
+				alignment: "top",
+				collapsed: false,
+				tiles: [
+					{
+						id: "version-control:default",
+						kind: "version-control",
+						fill: true,
+					},
+				],
+			},
 			{
 				id: 3,
 				alignment: "top",
@@ -125,7 +138,9 @@ export function normalizeTilingLayout(value: unknown): TilingLayout | null {
 	if (typeof value !== "object" || value === null) return null
 	const candidate = value as { version?: unknown; columns?: unknown }
 	if (
-		(candidate.version !== 1 && candidate.version !== 2) ||
+		(candidate.version !== 1 &&
+			candidate.version !== 2 &&
+			candidate.version !== 3) ||
 		!Array.isArray(candidate.columns)
 	)
 		return null
@@ -199,7 +214,29 @@ export function normalizeTilingLayout(value: unknown): TilingLayout | null {
 			],
 		}
 	}
-	return { version: 2, columns: normalized }
+	if (
+		candidate.version < 3 &&
+		!normalized.some((column) =>
+			column.tiles.some((tile) => tile.kind === "version-control"),
+		)
+	) {
+		const column = normalized.find((item) => item.id === 2)
+		if (column === undefined) return null
+		const index = normalized.indexOf(column)
+		normalized[index] = {
+			...column,
+			collapsed: false,
+			tiles: [
+				{
+					id: "version-control:default",
+					kind: "version-control",
+					fill: true,
+				},
+				...column.tiles,
+			],
+		}
+	}
+	return { version: 3, columns: normalized }
 }
 
 export function createTilingHistory(layout: TilingLayout): TilingHistory {

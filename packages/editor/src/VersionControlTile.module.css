@@ -1,0 +1,140 @@
+version-control-tile.class {
+	display: grid;
+	gap: 0.65rem;
+	padding: 0.7rem;
+	font-size: 0.75rem;
+
+	comparison-controls {
+		display: grid;
+		grid-template-columns: 1fr 1fr auto;
+		gap: 0.35rem;
+		align-items: end;
+	}
+
+	label {
+		display: grid;
+		gap: 0.2rem;
+	}
+
+	input,
+	textarea,
+	button {
+		font: inherit;
+	}
+
+	input,
+	textarea {
+		min-width: 0;
+		padding: 0.35rem;
+		border: 1px solid var(--line);
+		border-radius: 0.3rem;
+		background: var(--surface);
+		color: inherit;
+	}
+
+	comparison-status,
+	change-counts,
+	empty-changes {
+		display: flex;
+		gap: 0.45rem;
+		align-items: center;
+		color: var(--muted);
+	}
+
+	change-counts {
+		flex-wrap: wrap;
+	}
+
+	ul {
+		display: grid;
+		gap: 0.2rem;
+		padding: 0;
+		margin: 0;
+		list-style: none;
+	}
+
+	> ul {
+		max-height: 14rem;
+		overflow: auto;
+	}
+
+	> ul button {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		gap: 0.4rem;
+		width: 100%;
+		align-items: center;
+		padding: 0.35rem;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		text-align: left;
+	}
+
+	li i {
+		width: 0.55rem;
+		height: 0.55rem;
+		border: 2px solid currentcolor;
+		border-radius: 50%;
+	}
+
+	li[data-change="added"] {
+		color: #16834b;
+	}
+	li[data-change="modified"] {
+		color: #a76a00;
+	}
+	li[data-change="deleted"] {
+		color: #c43d4d;
+	}
+	li[data-change="modified"] i {
+		border-style: dashed;
+	}
+	li[data-change="deleted"] i {
+		border-radius: 0;
+	}
+
+	dialog {
+		position: fixed;
+		z-index: 100;
+		inset: 50% auto auto 50%;
+		width: min(34rem, calc(100vw - 2rem));
+		max-height: calc(100vh - 2rem);
+		padding: 0;
+		margin: 0;
+		overflow: auto;
+		transform: translate(-50%, -50%);
+		border: 1px solid var(--line);
+		border-radius: 0.6rem;
+		background: var(--surface);
+		color: inherit;
+		box-shadow: 0 1rem 4rem rgb(0 0 0 / 0.3);
+	}
+
+	dialog form {
+		display: grid;
+		gap: 0.8rem;
+		padding: 1rem;
+	}
+
+	dialog commit-dialog-heading,
+	dialog commit-dialog-actions,
+	selection-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	dialog textarea {
+		min-height: 7rem;
+		resize: vertical;
+	}
+	dialog label:has(input[type="checkbox"]) {
+		grid-template-columns: auto 1fr auto;
+		align-items: center;
+	}
+	dialog p[role="alert"] {
+		color: #c43d4d;
+	}
+}

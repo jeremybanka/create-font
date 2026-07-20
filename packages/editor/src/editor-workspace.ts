@@ -594,6 +594,29 @@ export function createEditorWorkspace(
 				font.silo.setState(editingTextIndexAtom, null)
 				font.silo.setState(activeToolAtom, "select")
 			},
+			reviewGlyph(glyphId: GlyphId): void {
+				const currentDocument = font.read.editorSource()
+				if (currentDocument === null) return
+				const mapping = currentDocument.cmap.find(
+					(entry) => entry.glyphId === glyphId,
+				)
+				const character =
+					mapping === undefined
+						? undefined
+						: String.fromCodePoint(mapping.codePoint)
+				font.silo.setState(selectedGlyphIdAtom, glyphId)
+				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(activeToolAtom, "select")
+				if (character !== undefined) {
+					font.silo.setState(previewTextAtom, character)
+					font.silo.setState(caretIndexAtom, 0)
+					font.silo.setState(editingTextIndexAtom, 0)
+				} else {
+					font.silo.setState(editingTextIndexAtom, null)
+				}
+				if (typeof window !== "undefined") history.pushState(null, ``, `/`)
+				font.silo.setState(pathnameAtom, `/`)
+			},
 			enterGlyphEdit(textStart: number, glyphId: GlyphId): void {
 				const currentDocument = font.read.editorSource()
 				if (!currentDocument?.glyphs.some((glyph) => glyph.id === glyphId))

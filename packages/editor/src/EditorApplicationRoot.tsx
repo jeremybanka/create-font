@@ -6,17 +6,20 @@ import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
 import { EditorStateContext } from "./state-hooks.ts"
+import type { EditorVersionControl } from "./version-control.ts"
 
 export type EditorApplicationRootProps = Readonly<{
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
 	source: EditorFontSource
 	validation?: Readonly<{ ok: boolean; issueCount: number }>
+	versionControl?: EditorVersionControl
 }>
 
 export function EditorApplicationRoot({
 	onSourceChange,
 	source,
 	validation,
+	versionControl,
 }: EditorApplicationRootProps) {
 	const [workspace] = useState(() => createEditorWorkspace(source, validation))
 	const applyingSource = useRef(false)
@@ -79,7 +82,10 @@ export function EditorApplicationRoot({
 	return (
 		<editor-application-root className={css.class}>
 			<EditorStateContext.Provider value={workspace.font.silo}>
-				<AppShell workspace={workspace} />
+				<AppShell
+					workspace={workspace}
+					{...(versionControl === undefined ? {} : { versionControl })}
+				/>
 			</EditorStateContext.Provider>
 		</editor-application-root>
 	)
