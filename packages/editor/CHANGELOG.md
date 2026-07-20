@@ -1,5 +1,13 @@
 # @create-font/editor
 
+## 0.7.1
+
+### Patch Changes
+
+- 9cc75e0: Add subtractive Shift-marquee selection and safe outline cutting with Mod-X.
+- 613f9fb: Select paths from compatibility order and invert exact outline selections
+- dde1031: Keep generated favicons in sync with live system color preference
+
 ## 0.7.0
 
 ### Minor Changes
