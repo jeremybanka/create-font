@@ -117,8 +117,12 @@ implement SSH or synchronize a second checkout. See the repository
 - Use the + button in the glyph panel or Command/Control-Shift-N to add one or
   more space-separated glyph names. Enter confirms and Escape cancels.
 - Drag an empty canvas region to box-select nodes and handle endpoints. Hold
-  Shift, Command, or Control to add controls to the existing selection;
-  Command/Control-A selects every visible node and handle.
+  Command or Control to add controls to the existing selection, or hold Shift
+  to remove enclosed controls from it. Shift wins when combined with Command or
+  Control. Command/Control-A selects every visible node and handle.
+- Command/Control-C, X, and V copy, cut, and paste selected outline nodes. Cut
+  writes the same reusable outline payload as Copy before removing its source
+  nodes; native text fields keep their normal clipboard behavior.
 - Delete or Backspace removes selected handles independently and removes
   selected nodes while keeping their contours closed. Hold Option/Alt while
   deleting nodes to split the remaining regions into open, loose-ended paths;

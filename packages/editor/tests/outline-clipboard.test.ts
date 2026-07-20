@@ -4,14 +4,75 @@ import { oGlyphId, razorMasterId, blackMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import {
 	copyOutlineSelection,
+	OUTLINE_CLIPBOARD_MIME,
 	outlinePasteSelectionTargets,
 	outlineClipboardPlainText,
 	parseOutlineClipboard,
+	prepareOutlineClipboardCopy,
 	prepareOutlinePaste,
 	serializeOutlineClipboard,
+	writeOutlineClipboard,
 } from "../src/outline-clipboard.ts"
 
 describe("outline clipboard", () => {
+	it("plans only represented source nodes and writes both clipboard formats", () => {
+		const workspace = createEditorWorkspace()
+		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
+		const contour = glyph?.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)?.contours[0]
+		const first = contour?.points[0]
+		if (glyph === null || first === undefined) throw new Error("Missing glyph.")
+		const prepared = prepareOutlineClipboardCopy(glyph, razorMasterId, [
+			{ kind: "node", pointId: first.id },
+			{ kind: "handle", pointId: first.id, handle: "incoming" },
+			{ kind: "node", pointId: "point:missing" },
+		])
+		expect(prepared.ok).toBe(true)
+		if (!prepared.ok) return
+		expect(prepared.value.selectedPointIds).toEqual([first.id])
+		const entries = new Map<string, string>()
+		expect(
+			writeOutlineClipboard(
+				{ setData: (format, data) => entries.set(format, data) },
+				prepared.value.payload,
+			),
+		).toEqual({ ok: true, value: undefined })
+		expect(
+			parseOutlineClipboard(entries.get(OUTLINE_CLIPBOARD_MIME) ?? ""),
+		).toEqual({ ok: true, value: prepared.value.payload })
+		expect(parseOutlineClipboard(entries.get("text/plain") ?? "")).toEqual({
+			ok: true,
+			value: prepared.value.payload,
+		})
+	})
+
+	it("reports clipboard write failures without throwing", () => {
+		const workspace = createEditorWorkspace()
+		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
+		const point = glyph?.layers[0]?.contours[0]?.points[0]
+		if (glyph === null || point === undefined) throw new Error("Missing glyph.")
+		const copied = copyOutlineSelection(glyph, razorMasterId, [
+			{ kind: "node", pointId: point.id },
+		])
+		if (!copied.ok) throw new Error(copied.error)
+		let calls = 0
+		const result = writeOutlineClipboard(
+			{
+				setData: () => {
+					calls += 1
+					if (calls === 2) throw new Error("denied")
+				},
+			},
+			copied.value,
+		)
+		expect(result).toEqual({
+			ok: false,
+			error: expect.stringContaining("system clipboard"),
+		})
+		expect(calls).toBe(2)
+	})
+
 	it("copies a whole curved contour from the active master", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
