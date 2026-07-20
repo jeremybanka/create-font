@@ -2,20 +2,41 @@ import type { EditorFontSource } from "@create-font/states"
 import { useEffect } from "preact/hooks"
 
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
+import {
+	type InferredColorPreference,
+	useInferredColorPreference,
+} from "./inferred-color-preference.ts"
 
 export type EditorViewName = "canvas" | "glyphs" | "info" | "not-found"
 
-const FALLBACK_FAVICON_SVG = [
-	`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`,
-	`<style>.background{fill:#1c1b17}.bar{fill:#f4f3ef}.accent{fill:#e17352}@media(prefers-color-scheme:dark){.background{fill:#efeee8}.bar{fill:#171815}}</style>`,
-	`<rect class="background" x="5" y="5" width="54" height="54" rx="14"/>`,
-	`<rect class="bar" x="18" y="17" width="7" height="30" rx="3.5"/>`,
-	`<rect class="accent" x="29" y="25" width="7" height="22" rx="3.5"/>`,
-	`<rect class="bar" x="40" y="17" width="7" height="30" rx="3.5"/>`,
-	`</svg>`,
-].join(``)
+export const FAVICON_INK = Object.freeze({
+	dark: "#efeee8",
+	light: "#1c1b17",
+}) satisfies Readonly<Record<InferredColorPreference, string>>
 
-export const FALLBACK_FAVICON_HREF = faviconDataUrl(FALLBACK_FAVICON_SVG)
+function serializeFallbackFaviconSvg(
+	preference: InferredColorPreference,
+): string {
+	const ink = FAVICON_INK[preference]
+	const inverseInk = FAVICON_INK[preference === "light" ? "dark" : "light"]
+	return [
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`,
+		`<style>.background{fill:${ink}}.bar{fill:${inverseInk}}.accent{fill:#e17352}</style>`,
+		`<rect class="background" x="5" y="5" width="54" height="54" rx="14"/>`,
+		`<rect class="bar" x="18" y="17" width="7" height="30" rx="3.5"/>`,
+		`<rect class="accent" x="29" y="25" width="7" height="22" rx="3.5"/>`,
+		`<rect class="bar" x="40" y="17" width="7" height="30" rx="3.5"/>`,
+		`</svg>`,
+	].join(``)
+}
+
+export function fallbackFaviconHref(
+	preference: InferredColorPreference,
+): string {
+	return faviconDataUrl(serializeFallbackFaviconSvg(preference))
+}
+
+export const FALLBACK_FAVICON_HREF = fallbackFaviconHref("dark")
 
 const LOWERCASE_A_CODE_POINT = 0x61
 const CANVAS_TITLE_LENGTH = 20
@@ -59,13 +80,15 @@ function escapeSvgAttribute(value: string): string {
 		.replaceAll(`'`, `&apos;`)
 }
 
-export function serializeFaviconSvg(preview: GlyphPreview): string {
+export function serializeFaviconSvg(
+	preview: GlyphPreview,
+	preference: InferredColorPreference = "dark",
+): string {
 	const viewBox = escapeSvgAttribute(preview.viewBox)
 	const path = escapeSvgAttribute(preview.path)
 	return [
 		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">`,
-		`<style>path{fill:#1c1b17}@media(prefers-color-scheme:dark){path{fill:#efeee8}}</style>`,
-		`<path d="${path}" fill-rule="evenodd" clip-rule="evenodd" transform="scale(1 -1)"/>`,
+		`<path d="${path}" fill="${FAVICON_INK[preference]}" fill-rule="evenodd" clip-rule="evenodd" transform="scale(1 -1)"/>`,
 		`</svg>`,
 	].join(``)
 }
@@ -74,23 +97,38 @@ export function faviconDataUrl(svg: string): string {
 	return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
-export function createFontFaviconHref(source: EditorFontSource): string {
+export function createFontFaviconPreview(
+	source: EditorFontSource,
+): GlyphPreview | null {
 	const cmapEntry = source.cmap.find(
 		(entry) => entry.codePoint === LOWERCASE_A_CODE_POINT,
 	)
-	if (cmapEntry === undefined) return FALLBACK_FAVICON_HREF
+	if (cmapEntry === undefined) return null
 	const glyph = source.glyphs.find((item) => item.id === cmapEntry.glyphId)
-	if (glyph === undefined) return FALLBACK_FAVICON_HREF
+	if (glyph === undefined) return null
 	const preview = createGlyphPreview(
 		glyph,
 		source.defaultMasterId,
 		source.metrics,
 		source.metadata.unitsPerEm,
 	)
-	if (preview === null || preview.path.trim().length === 0) {
-		return FALLBACK_FAVICON_HREF
-	}
-	return faviconDataUrl(serializeFaviconSvg(preview))
+	return preview === null || preview.path.trim().length === 0 ? null : preview
+}
+
+export function faviconHrefForPreview(
+	preview: GlyphPreview | null,
+	preference: InferredColorPreference,
+): string {
+	return preview === null
+		? fallbackFaviconHref(preference)
+		: faviconDataUrl(serializeFaviconSvg(preview, preference))
+}
+
+export function createFontFaviconHref(
+	source: EditorFontSource,
+	preference: InferredColorPreference = "dark",
+): string {
+	return faviconHrefForPreview(createFontFaviconPreview(source), preference)
 }
 
 export function installFavicon(documentValue: Document, href: string): void {
@@ -108,10 +146,12 @@ export function installFavicon(documentValue: Document, href: string): void {
 }
 
 export function useEditorDocumentMetadata(
-	faviconHref: string,
+	faviconPreview: GlyphPreview | null,
 	view: EditorViewName,
 	canvasText: string,
 ): void {
+	const preference = useInferredColorPreference()
+	const faviconHref = faviconHrefForPreview(faviconPreview, preference)
 	useEffect(() => {
 		document.title = editorDocumentTitle(view, canvasText)
 	}, [canvasText, view])

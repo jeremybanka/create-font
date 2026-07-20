@@ -4,11 +4,14 @@ import {
 	createFontFaviconHref,
 	editorDocumentTitle,
 	FALLBACK_FAVICON_HREF,
+	fallbackFaviconHref,
+	FAVICON_INK,
 	installFavicon,
 	normalizeCanvasTitle,
 	serializeFaviconSvg,
 } from "../src/document-metadata.ts"
 import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
+import { readInferredColorPreference } from "../src/inferred-color-preference.ts"
 
 describe(`editor document title`, () => {
 	it(`uses exact labels for non-canvas views and a canvas fallback`, () => {
@@ -77,6 +80,29 @@ describe(`font favicon`, () => {
 		expect(svg).toContain(`&quot;`)
 		expect(svg).toContain(`&lt;script&gt;`)
 		expect(svg).not.toContain(`<script>`)
+	})
+
+	it(`serializes explicit contrasting ink for both inferred preferences`, () => {
+		const preview = {
+			advanceWidth: 10,
+			openPath: "",
+			path: "M 0 0 L 1 1",
+			viewBox: "0 0 10 10",
+		}
+		expect(serializeFaviconSvg(preview, "light")).toContain(
+			`fill="${FAVICON_INK.light}"`,
+		)
+		expect(serializeFaviconSvg(preview, "dark")).toContain(
+			`fill="${FAVICON_INK.dark}"`,
+		)
+		expect(fallbackFaviconHref("light")).not.toBe(fallbackFaviconHref("dark"))
+		expect(decodeURIComponent(fallbackFaviconHref("light"))).toContain(
+			`.background{fill:${FAVICON_INK.light}}`,
+		)
+	})
+
+	it(`uses a deterministic dark fallback outside the browser`, () => {
+		expect(readInferredColorPreference()).toBe("dark")
 	})
 
 	it(`reuses the managed icon link across repeated updates`, () => {

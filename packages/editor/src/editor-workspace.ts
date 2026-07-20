@@ -12,10 +12,7 @@ import {
 
 import { makeDemoFont } from "./demo-font.ts"
 import type { CanvasView } from "./canvas-view.ts"
-import {
-	createFontFaviconHref,
-	FALLBACK_FAVICON_HREF,
-} from "./document-metadata.ts"
+import { createFontFaviconPreview } from "./document-metadata.ts"
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
@@ -466,8 +463,8 @@ export function createEditorWorkspace(
 				}),
 			),
 	})
-	const faviconHrefSelector = font.silo.selector<string>({
-		key: "faviconHref",
+	const faviconPreviewSelector = font.silo.selector<GlyphPreview | null>({
+		key: "faviconPreview",
 		get: ({ get }) => {
 			const glyphId = get(font.atoms.cmapGlyph, 0x61)
 			const metadata = get(font.atoms.metadata)
@@ -479,10 +476,10 @@ export function createEditorWorkspace(
 				metrics === null ||
 				defaultMasterId === null
 			)
-				return FALLBACK_FAVICON_HREF
+				return null
 			const glyph = get(font.selectors.editorGlyphSource, glyphId)
-			if (glyph === null) return FALLBACK_FAVICON_HREF
-			return createFontFaviconHref({
+			if (glyph === null) return null
+			return createFontFaviconPreview({
 				...source,
 				metadata,
 				metrics,
@@ -571,7 +568,7 @@ export function createEditorWorkspace(
 			activeLayer: activeLayerSelector,
 			previewRun: previewRunSelector,
 			glyphIndex: glyphIndexSelector,
-			faviconHref: faviconHrefSelector,
+			faviconPreview: faviconPreviewSelector,
 		},
 		actions: {
 			toggleConstrainProportions(): void {
