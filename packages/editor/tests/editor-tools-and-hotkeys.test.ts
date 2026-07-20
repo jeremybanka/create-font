@@ -133,9 +133,8 @@ describe("editor tools and hotkeys", () => {
 		).toBe("invert-vertical")
 	})
 
-	it("reverses open paths and dispatches both contour inversions", () => {
+	it("reverses open paths and remaps handle selection through history", () => {
 		const reverseContour = vi.fn()
-		const invertContour = vi.fn()
 		const setState = vi.fn()
 		const selectionToken = Symbol("selection")
 		const context = {
@@ -165,7 +164,7 @@ describe("editor tools and hotkeys", () => {
 			},
 			workspace: {
 				font: {
-					actions: { reverseContour, invertContour },
+					actions: { reverseContour },
 					silo: { setState },
 				},
 				ui: { selection: selectionToken },
@@ -174,31 +173,13 @@ describe("editor tools and hotkeys", () => {
 
 		expect(TOOLS.REVERSE.status(context)).toBe("ready")
 		TOOLS.REVERSE.do(context)
-		TOOLS.INVERT_HORIZONTAL.do(context)
-		TOOLS.INVERT_VERTICAL.do(context)
 
 		expect(reverseContour).toHaveBeenCalledWith({
 			masterId: "master:test",
 			glyphId: "glyph:test",
 			contourId: "contour:test",
 		})
-		expect(invertContour).toHaveBeenNthCalledWith(1, {
-			masterId: "master:test",
-			glyphId: "glyph:test",
-			contourId: "contour:test",
-			axis: "horizontal",
-			centerX: 10,
-			centerY: 40,
-		})
-		expect(invertContour).toHaveBeenNthCalledWith(2, {
-			masterId: "master:test",
-			glyphId: "glyph:test",
-			contourId: "contour:test",
-			axis: "vertical",
-			centerX: 10,
-			centerY: 40,
-		})
-		expect(setState).toHaveBeenCalledTimes(3)
+		expect(setState).toHaveBeenCalledOnce()
 		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
 			{ kind: "handle", pointId: "point:a", handle: "outgoing" },
 		])
@@ -224,6 +205,122 @@ describe("editor tools and hotkeys", () => {
 		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
 			{ kind: "handle", pointId: "point:a", handle: "outgoing" },
 		])
+	})
+
+	it("inverts exactly the resolved mixed selection across contours", () => {
+		const transformControls = vi.fn()
+		const selection = [
+			{ kind: "node", pointId: "point:a" },
+			{ kind: "handle", pointId: "point:b", handle: "incoming" },
+			{ kind: "node", pointId: "point:c" },
+		] as const
+		const context = {
+			activeGlyphId: "glyph:test",
+			activeMasterId: "master:test",
+			activeTool: "select",
+			editingTextIndex: 0,
+			history: { at: 0, length: 0 },
+			selection,
+			activeLayer: {
+				contours: [
+					{
+						id: "contour:first",
+						closed: false,
+						nodes: [
+							{
+								pointId: "point:a",
+								mode: "hard",
+								x: 10,
+								y: 20,
+								outgoing: { x: 7, y: 9 },
+							},
+							{
+								pointId: "point:b",
+								mode: "soft",
+								x: 40,
+								y: 50,
+								incoming: { x: -20, y: -10 },
+								outgoing: { x: 20, y: 10 },
+							},
+						],
+					},
+					{
+						id: "contour:second",
+						closed: true,
+						nodes: [
+							{ pointId: "point:c", mode: "hard", x: 90, y: 80 },
+							{ pointId: "point:d", mode: "hard", x: 120, y: 140 },
+						],
+					},
+				],
+			},
+			workspace: { font: { actions: { transformControls } } },
+		} as unknown as Parameters<(typeof TOOLS)["INVERT_HORIZONTAL"]["do"]>[0]
+
+		expect(TOOLS.INVERT_HORIZONTAL.status(context)).toBe("ready")
+		expect(TOOLS.INVERT_VERTICAL.status(context)).toBe("ready")
+		TOOLS.INVERT_HORIZONTAL.do(context)
+		TOOLS.INVERT_VERTICAL.do(context)
+
+		expect(transformControls).toHaveBeenNthCalledWith(1, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			points: [
+				{ pointId: "point:a", x: 90, y: 20 },
+				{ pointId: "point:c", x: 10, y: 80 },
+			],
+			handles: [{ pointId: "point:b", handle: "incoming", x: 80, y: 40 }],
+		})
+		expect(transformControls).toHaveBeenNthCalledWith(2, {
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			points: [
+				{ pointId: "point:a", x: 10, y: 80 },
+				{ pointId: "point:c", x: 90, y: 20 },
+			],
+			handles: [{ pointId: "point:b", handle: "incoming", x: 20, y: 60 }],
+		})
+		expect(context.selection).toBe(selection)
+	})
+
+	it("keeps inversion disabled without a resolvable selection", () => {
+		const context = {
+			activeGlyphId: "glyph:test",
+			editingTextIndex: 0,
+			selection: [{ kind: "node", pointId: "point:missing" }],
+			activeLayer: { contours: [] },
+		} as unknown as Parameters<(typeof TOOLS)["INVERT_HORIZONTAL"]["status"]>[0]
+		expect(TOOLS.INVERT_HORIZONTAL.status(context)).toBe("disabled")
+		expect(toolDisabledReason(TOOLS.INVERT_HORIZONTAL, context)).toBe(
+			"Select at least one node or handle to invert.",
+		)
+	})
+
+	it("keeps a single-control inversion finite and deterministic", () => {
+		const transformControls = vi.fn()
+		const context = {
+			activeGlyphId: "glyph:test",
+			activeMasterId: "master:test",
+			editingTextIndex: 0,
+			selection: [{ kind: "node", pointId: "point:only" }],
+			activeLayer: {
+				contours: [
+					{
+						id: "contour:only",
+						nodes: [{ pointId: "point:only", mode: "hard", x: 23, y: -47 }],
+					},
+				],
+			},
+			workspace: { font: { actions: { transformControls } } },
+		} as unknown as Parameters<(typeof TOOLS)["INVERT_HORIZONTAL"]["do"]>[0]
+
+		TOOLS.INVERT_HORIZONTAL.do(context)
+		expect(transformControls).toHaveBeenCalledWith({
+			masterId: "master:test",
+			glyphId: "glyph:test",
+			points: [{ pointId: "point:only", x: 23, y: -47 }],
+			handles: [],
+		})
 	})
 
 	it("dispatches alignment as one mixed-control state action", () => {

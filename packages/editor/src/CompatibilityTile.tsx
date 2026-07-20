@@ -1,9 +1,10 @@
 import type { ContourId, EditorLayerNode, MasterId } from "@create-font/states"
 import type { JSX } from "preact"
-import { useMemo, useState } from "preact/hooks"
+import { useMemo, useRef, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { editorContourToPath } from "./geometry.ts"
+import { contourSelectionTargets, selectionKey } from "./outline-selection.ts"
 import { useI, useO, useOptionalOF } from "./state-hooks.ts"
 import { compatibilityPathColor } from "./visual-debug.ts"
 import css from "./CompatibilityTile.module.css"
@@ -57,9 +58,13 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const offset = useO(workspace.ui.compatibilityGhostOffset)
 	const setOffset = useI(workspace.ui.compatibilityGhostOffset)
+	const selection = useO(workspace.ui.selection)
+	const setSelection = useI(workspace.ui.selection)
+	const setShowNodes = useI(workspace.ui.showNodes)
 	const [draggedContourId, setDraggedContourId] = useState<ContourId | null>(
 		null,
 	)
+	const suppressDragClick = useRef(false)
 	const compatibilityKey = useMemo(
 		() =>
 			activeGlyphId === null
@@ -89,6 +94,10 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 			contourId,
 			toIndex: Math.max(0, Math.min(contours.length - 1, toIndex)),
 		})
+	}
+	const selectContour = (nodes: readonly EditorLayerNode[]): void => {
+		setSelection(Object.freeze(contourSelectionTargets(nodes)))
+		setShowNodes(true)
 	}
 
 	return (
@@ -197,21 +206,46 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 						</ul>
 					)}
 					<h2>Path order</h2>
-					<ol>
+					<ol role="listbox" aria-label="Path order">
 						{contours.map((contour, pathIndex) => {
 							const thumbnail = contourThumbnailGeometry(contour.nodes)
+							const targets = contourSelectionTargets(contour.nodes)
+							const selectedKeys = new Set(selection.map(selectionKey))
+							const selected =
+								selectedKeys.size === targets.length &&
+								targets.every((target) =>
+									selectedKeys.has(selectionKey(target)),
+								)
 							return (
 								<li
 									key={contour.id}
+									role="option"
+									aria-label={`Select path ${pathIndex + 1}`}
+									aria-selected={selected}
 									tabIndex={0}
 									draggable
+									onClick={(event) => {
+										if (suppressDragClick.current) return
+										if (
+											event.target instanceof Element &&
+											event.target.closest("button") !== null
+										)
+											return
+										selectContour(contour.nodes)
+									}}
 									onDragStart={(event) => {
+										suppressDragClick.current = true
 										setDraggedContourId(contour.id)
 										if (event.dataTransfer !== null) {
 											event.dataTransfer.effectAllowed = "move"
 										}
 									}}
-									onDragEnd={() => setDraggedContourId(null)}
+									onDragEnd={() => {
+										setDraggedContourId(null)
+										setTimeout(() => {
+											suppressDragClick.current = false
+										}, 0)
+									}}
 									onDragOver={(event) => {
 										if (draggedContourId !== null) event.preventDefault()
 									}}
@@ -223,9 +257,14 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 										setDraggedContourId(null)
 									}}
 									onKeyDown={(event) => {
-										if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+										if (event.target !== event.currentTarget) return
+										if (event.key === "Enter" || event.key === " ") {
+											event.preventDefault()
+											selectContour(contour.nodes)
 											return
 										}
+										if (event.key !== "ArrowUp" && event.key !== "ArrowDown")
+											return
 										event.preventDefault()
 										reorderContour(
 											contour.id,

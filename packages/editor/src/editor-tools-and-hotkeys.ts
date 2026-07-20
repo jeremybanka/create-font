@@ -10,10 +10,10 @@ import type {
 } from "./editor-workspace.ts"
 import {
 	boundsOfControls,
-	contourSelectionTargets,
 	nearestAxisAlignment,
 	reverseSelectionHandles,
 	resolveSelectionControls,
+	scaleSelectionControls,
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
 import type { TimelineMeta } from "./state-hooks.ts"
@@ -93,9 +93,10 @@ export function toolDisabledReason(
 		case "align-selection":
 			return "Select at least two nodes or handles to align."
 		case "reverse-path":
+			return "Select controls from exactly one path."
 		case "invert-horizontal":
 		case "invert-vertical":
-			return "Select controls from exactly one path."
+			return "Select at least one node or handle to invert."
 		case "make-node-first":
 			return "Select one non-first node on a closed path."
 		case "undo":
@@ -145,22 +146,32 @@ function remapSelectionHandles(context: ToolContext): void {
 	)
 }
 
-function inversionCenter(contour: EditorCanvasContour): {
-	readonly centerX: number
-	readonly centerY: number
-} | null {
-	const bounds = boundsOfControls(
-		resolveSelectionControls(
-			contour.nodes,
-			contourSelectionTargets(contour.nodes),
-		),
+function selectedControls(context: ToolContext) {
+	return resolveSelectionControls(
+		context.activeLayer?.contours.flatMap(({ nodes }) => nodes) ?? [],
+		context.selection,
 	)
-	return bounds === null
-		? null
-		: {
-				centerX: (bounds.minX + bounds.maxX) / 2,
-				centerY: (bounds.minY + bounds.maxY) / 2,
-			}
+}
+
+function invertSelection(
+	context: ToolContext,
+	axis: "horizontal" | "vertical",
+): void {
+	if (context.activeGlyphId === null) return
+	const controls = selectedControls(context)
+	const bounds = boundsOfControls(controls)
+	if (bounds === null) return
+	const result = scaleSelectionControls(controls, {
+		anchorX: (bounds.minX + bounds.maxX) / 2,
+		anchorY: (bounds.minY + bounds.maxY) / 2,
+		scaleX: axis === "horizontal" ? -1 : 1,
+		scaleY: axis === "vertical" ? -1 : 1,
+	})
+	context.workspace.font.actions.transformControls({
+		masterId: context.activeMasterId,
+		glyphId: context.activeGlyphId,
+		...result,
+	})
 }
 
 function directionChangeAt(context: ToolContext, entry: number): boolean {
@@ -312,8 +323,7 @@ export const TOOLS = {
 		},
 	},
 	INVERT_HORIZONTAL: {
-		description:
-			"Mirror the selected path horizontally and preserve its direction.",
+		description: "Mirror the current selection horizontally as one group.",
 		id: "invert-horizontal",
 		displayName: "Invert Horizontally",
 		hotkey: { key: "h", shift: true },
@@ -321,29 +331,13 @@ export const TOOLS = {
 		status: (context) =>
 			context.activeGlyphId !== null &&
 			context.editingTextIndex !== null &&
-			selectedContour(context) !== null
+			selectedControls(context).length > 0
 				? "ready"
 				: "disabled",
-		do: (context) => {
-			if (context.activeGlyphId === null) return
-			const contour = selectedContour(context)
-			if (contour === null) return
-			const center = inversionCenter(contour)
-			if (center === null) return
-			context.workspace.font.actions.invertContour({
-				masterId: context.activeMasterId,
-				glyphId: context.activeGlyphId,
-				contourId: contour.id,
-				axis: "horizontal",
-				...center,
-			})
-			rememberDirectionChange(context)
-			remapSelectionHandles(context)
-		},
+		do: (context) => invertSelection(context, "horizontal"),
 	},
 	INVERT_VERTICAL: {
-		description:
-			"Mirror the selected path vertically and preserve its direction.",
+		description: "Mirror the current selection vertically as one group.",
 		id: "invert-vertical",
 		displayName: "Invert Vertically",
 		hotkey: { key: "v", shift: true },
@@ -351,25 +345,10 @@ export const TOOLS = {
 		status: (context) =>
 			context.activeGlyphId !== null &&
 			context.editingTextIndex !== null &&
-			selectedContour(context) !== null
+			selectedControls(context).length > 0
 				? "ready"
 				: "disabled",
-		do: (context) => {
-			if (context.activeGlyphId === null) return
-			const contour = selectedContour(context)
-			if (contour === null) return
-			const center = inversionCenter(contour)
-			if (center === null) return
-			context.workspace.font.actions.invertContour({
-				masterId: context.activeMasterId,
-				glyphId: context.activeGlyphId,
-				contourId: contour.id,
-				axis: "vertical",
-				...center,
-			})
-			rememberDirectionChange(context)
-			remapSelectionHandles(context)
-		},
+		do: (context) => invertSelection(context, "vertical"),
 	},
 	MAKE_FIRST: {
 		description: "Make the selected node the first node of its closed path.",
