@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { CompatibilityTile } from "../src/CompatibilityTile.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
+import { contourSelectionTargets } from "../src/outline-selection.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const hosts: HTMLElement[] = []
@@ -95,6 +96,66 @@ describe("CompatibilityTile", () => {
 				.getState(workspace.ui.activeLayer)
 				?.contours.map((contour) => contour.id),
 		).toEqual([before[1], before[0]])
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
+	})
+
+	it("selects an exact whole path by mouse and reflects shared selection", async () => {
+		const { tile, workspace } = mountCompatibilityTile()
+		const row = tile.querySelector('[role="option"]')
+		const contour = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[0]
+		if (!(row instanceof HTMLElement) || contour === undefined) {
+			throw new Error("The first path row was not rendered.")
+		}
+
+		await act(async () => {
+			row.click()
+			await Promise.resolve()
+		})
+
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual(
+			contourSelectionTargets(contour.nodes),
+		)
+		expect(workspace.font.silo.getState(workspace.ui.showNodes)).toBe(true)
+		expect(row.getAttribute("aria-selected")).toBe("true")
+
+		await act(async () => {
+			workspace.font.silo.setState(workspace.ui.selection, [
+				{ kind: "node", pointId: contour.nodes[0]?.pointId ?? "point:missing" },
+			])
+			await Promise.resolve()
+		})
+		expect(row.getAttribute("aria-selected")).toBe("false")
+	})
+
+	it("supports keyboard path selection without hijacking reorder buttons", () => {
+		const { tile, workspace } = mountCompatibilityTile()
+		const rows = tile.querySelectorAll('[role="option"]')
+		const second = rows[1]
+		const contour = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[1]
+		const moveUp = tile.querySelector('button[aria-label="Move path 2 up"]')
+		if (
+			!(second instanceof HTMLElement) ||
+			contour === undefined ||
+			!(moveUp instanceof HTMLButtonElement)
+		) {
+			throw new Error("The second path controls were not rendered.")
+		}
+
+		act(() => {
+			second.dispatchEvent(
+				new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+			)
+		})
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual(
+			contourSelectionTargets(contour.nodes),
+		)
+
+		act(() => moveUp.click())
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual(
+			contourSelectionTargets(contour.nodes),
+		)
 	})
 
 	it("plots path thumbnails with the font-space vertical direction", () => {
