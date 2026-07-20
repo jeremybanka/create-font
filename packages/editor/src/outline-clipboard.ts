@@ -32,6 +32,15 @@ interface ClipboardLayerPoint {
 	readonly outgoing?: EditorHandleVectorSource
 }
 
+export interface OutlineClipboardCopyPlan {
+	readonly payload: OutlineClipboardPayload
+	readonly selectedPointIds: readonly PointId[]
+}
+
+export interface OutlineClipboardWriter {
+	setData(format: string, data: string): void
+}
+
 export interface OutlineClipboardPayload {
 	readonly format: "create-font.outline"
 	readonly version: typeof OUTLINE_CLIPBOARD_VERSION
@@ -100,11 +109,11 @@ function safeVector(value: unknown): EditorHandleVectorSource | undefined {
 		: undefined
 }
 
-export function copyOutlineSelection(
+export function prepareOutlineClipboardCopy(
 	glyph: EditorGlyphSource,
 	masterId: MasterId,
 	selection: readonly EditorSelectionTarget[],
-): OutlineClipboardResult<OutlineClipboardPayload> {
+): OutlineClipboardResult<OutlineClipboardCopyPlan> {
 	const selectedPointIds = new Set(
 		selection
 			.filter((target) => target.kind === "node")
@@ -119,12 +128,16 @@ export function copyOutlineSelection(
 	}
 	const contours: OutlineClipboardPayload["contours"][number][] = []
 	const layerPoints: ClipboardLayerPoint[] = []
+	const representedPointIds: PointId[] = []
 	let fragmentSequence = 0
 
 	for (const contour of activeLayer.contours) {
 		const selectedIndexes = new Set<number>()
 		contour.points.forEach((point, index) => {
-			if (selectedPointIds.has(point.id)) selectedIndexes.add(index)
+			if (selectedPointIds.has(point.id)) {
+				selectedIndexes.add(index)
+				representedPointIds.push(point.id)
+			}
 		})
 		for (const run of selectedRuns(
 			contour.points.length,
@@ -170,13 +183,25 @@ export function copyOutlineSelection(
 	return {
 		ok: true,
 		value: {
-			format: "create-font.outline",
-			version: OUTLINE_CLIPBOARD_VERSION,
-			masterIds: [masterId],
-			contours,
-			layers: [{ masterId, points: layerPoints }],
+			payload: {
+				format: "create-font.outline",
+				version: OUTLINE_CLIPBOARD_VERSION,
+				masterIds: [masterId],
+				contours,
+				layers: [{ masterId, points: layerPoints }],
+			},
+			selectedPointIds: Object.freeze(representedPointIds),
 		},
 	}
+}
+
+export function copyOutlineSelection(
+	glyph: EditorGlyphSource,
+	masterId: MasterId,
+	selection: readonly EditorSelectionTarget[],
+): OutlineClipboardResult<OutlineClipboardPayload> {
+	const prepared = prepareOutlineClipboardCopy(glyph, masterId, selection)
+	return prepared.ok ? { ok: true, value: prepared.value.payload } : prepared
 }
 
 export function serializeOutlineClipboard(
@@ -189,6 +214,26 @@ export function outlineClipboardPlainText(
 	payload: OutlineClipboardPayload,
 ): string {
 	return `${OUTLINE_CLIPBOARD_TEXT_PREFIX}${serializeOutlineClipboard(payload)}`
+}
+
+export function writeOutlineClipboard(
+	clipboard: OutlineClipboardWriter,
+	payload: OutlineClipboardPayload,
+): OutlineClipboardResult<undefined> {
+	try {
+		clipboard.setData(
+			OUTLINE_CLIPBOARD_MIME,
+			serializeOutlineClipboard(payload),
+		)
+		clipboard.setData("text/plain", outlineClipboardPlainText(payload))
+	} catch {
+		return {
+			ok: false,
+			error:
+				"The outline selection could not be written to the system clipboard.",
+		}
+	}
+	return { ok: true, value: undefined }
 }
 
 export function parseOutlineClipboard(

@@ -90,8 +90,10 @@ import { keyboardStepMultiplier } from "./keyboard-step.ts"
 import {
 	canStartBoxSelectionOn,
 	boundsOfControls,
+	combineMarqueeSelection,
 	contourSelectionTargets,
 	controlsInsideBounds,
+	marqueeSelectionMode,
 	resolveSelectionControls,
 	scaleSelectionControls,
 	selectionForRigidTranslation,
@@ -100,6 +102,7 @@ import {
 	type EditorSelectionTarget,
 	type ResolvedSelectionControl,
 	type SelectionBounds,
+	type MarqueeSelectionMode,
 	type SelectionTransformResult,
 } from "./outline-selection.ts"
 import {
@@ -164,13 +167,12 @@ import {
 } from "./textarea-selection.ts"
 import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
 import {
-	copyOutlineSelection,
 	OUTLINE_CLIPBOARD_MIME,
 	outlinePasteSelectionTargets,
-	outlineClipboardPlainText,
 	parseOutlineClipboard,
 	prepareOutlinePaste,
-	serializeOutlineClipboard,
+	prepareOutlineClipboardCopy,
+	writeOutlineClipboard,
 } from "./outline-clipboard.ts"
 import {
 	compatibilityNodeTraceStyle,
@@ -296,7 +298,7 @@ interface SelectionBox {
 	readonly startY: number
 	readonly endX: number
 	readonly endY: number
-	readonly additive: boolean
+	readonly mode: MarqueeSelectionMode
 }
 
 interface TransformDrag {
@@ -2697,7 +2699,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			role="application"
 			aria-label="Text layout and outline editor"
 			aria-describedby="canvas-instructions"
-			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
+			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+X Control+X Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onContextMenu={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
 				if (cancelDirectDrag()) event.preventDefault()
@@ -2706,7 +2708,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				if (
 					editingTextIndex === null ||
 					activeGlyphId === null ||
-					event.target instanceof HTMLTextAreaElement
+					event.target instanceof HTMLInputElement ||
+					event.target instanceof HTMLTextAreaElement ||
+					(event.target instanceof HTMLElement &&
+						event.target.isContentEditable)
 				)
 					return
 				const clipboard = event.clipboardData
@@ -2718,23 +2723,71 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 					setClipboardStatus("The active glyph is unavailable for copying.")
 					return
 				}
-				const copied = copyOutlineSelection(glyph, activeMasterId, selection)
+				const copied = prepareOutlineClipboardCopy(
+					glyph,
+					activeMasterId,
+					selection,
+				)
 				if (!copied.ok) {
 					setClipboardStatus(copied.error)
 					return
 				}
+				const written = writeOutlineClipboard(clipboard, copied.value.payload)
+				if (!written.ok) {
+					setClipboardStatus(written.error)
+					return
+				}
 				event.preventDefault()
-				clipboard.setData(
-					OUTLINE_CLIPBOARD_MIME,
-					serializeOutlineClipboard(copied.value),
-				)
-				clipboard.setData("text/plain", outlineClipboardPlainText(copied.value))
-				const pointCount = copied.value.contours.reduce(
-					(total, contour) => total + contour.points.length,
-					0,
-				)
+				const pointCount = copied.value.selectedPointIds.length
 				setClipboardStatus(
 					`Copied ${pointCount} outline node${pointCount === 1 ? "" : "s"}.`,
+				)
+			}}
+			onCut={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+				if (
+					editingTextIndex === null ||
+					activeGlyphId === null ||
+					event.target instanceof HTMLInputElement ||
+					event.target instanceof HTMLTextAreaElement ||
+					(event.target instanceof HTMLElement &&
+						event.target.isContentEditable)
+				)
+					return
+				const clipboard = event.clipboardData
+				if (clipboard === null) {
+					setClipboardStatus("The system clipboard is unavailable.")
+					return
+				}
+				if (glyph === null) {
+					setClipboardStatus("The active glyph is unavailable for cutting.")
+					return
+				}
+				const copied = prepareOutlineClipboardCopy(
+					glyph,
+					activeMasterId,
+					selection,
+				)
+				if (!copied.ok) {
+					setClipboardStatus(copied.error)
+					return
+				}
+				const written = writeOutlineClipboard(clipboard, copied.value.payload)
+				if (!written.ok) {
+					setClipboardStatus(written.error)
+					return
+				}
+				event.preventDefault()
+				workspace.font.actions.deleteSelection({
+					masterId: activeMasterId,
+					glyphId: activeGlyphId,
+					pointIds: copied.value.selectedPointIds,
+					handles: [],
+					breakPaths: false,
+				})
+				setSelection(Object.freeze([]))
+				const pointCount = copied.value.selectedPointIds.length
+				setClipboardStatus(
+					`Cut ${pointCount} outline node${pointCount === 1 ? "" : "s"}.`,
 				)
 			}}
 			onPaste={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
@@ -2745,7 +2798,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				if (
 					editingTextIndex === null ||
 					activeGlyphId === null ||
-					event.target instanceof HTMLTextAreaElement
+					event.target instanceof HTMLInputElement ||
+					event.target instanceof HTMLTextAreaElement ||
+					(event.target instanceof HTMLElement &&
+						event.target.isContentEditable)
 				)
 					return
 				const clipboard = event.clipboardData
@@ -3135,8 +3191,7 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 								startY: point.y,
 								endX: point.x,
 								endY: point.y,
-								additive:
-									event.evt.metaKey || event.evt.ctrlKey || event.evt.shiftKey,
+								mode: marqueeSelectionMode(event.evt),
 							})
 							return
 						}
@@ -3203,15 +3258,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 						if (momentaryPreview) return
 						if (selectionBox === null) return
 						const boxed = targetsInside(selectionBox)
-						setSelection((current) => {
-							if (!selectionBox.additive) return Object.freeze(boxed)
-							const merged = new Map(
-								current.map((target) => [selectionKey(target), target]),
-							)
-							for (const target of boxed)
-								merged.set(selectionKey(target), target)
-							return Object.freeze([...merged.values()])
-						})
+						setSelection((current) =>
+							combineMarqueeSelection(current, boxed, selectionBox.mode),
+						)
 						setSelectionBox(null)
 					}}
 					onTouchStart={(event: KonvaEventObject<TouchEvent>) => {
@@ -4852,14 +4901,16 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				clean glyph preview. Use Rect or Ellipse to drag a complete shape, and
 				hold Shift for a square or circle. Press Escape to cancel a Pen or shape
 				gesture, return to typing, or cancel a transform. Drag an empty area to
-				box-select controls; press Command or Control+A to select all, Shift+A
-				to align, and Delete to remove the selection. Arrow keys nudge selected
-				nodes and handles; Shift uses 10 units and Command or Control uses 100.
-				Option or Alt-drag or nudge one soft node to slide it between its fixed
-				handles, or one hard node to move it without moving its handles. Use
-				Command or Control+C and V to copy and paste outline selections. Hold
-				Option or Alt while deleting nodes to break paths open, or while
-				deleting a handle to remove its adjoining segment.
+				box-select controls; hold Command or Control to add, or Shift to
+				subtract (including when combined with Command or Control). Press
+				Command or Control+A to select all, Shift+A to align, and Delete to
+				remove the selection. Arrow keys nudge selected nodes and handles; Shift
+				uses 10 units and Command or Control uses 100. Option or Alt-drag or
+				nudge one soft node to slide it between its fixed handles, or one hard
+				node to move it without moving its handles. Use Command or Control+C, X,
+				and V to copy, cut, and paste outline selections. Hold Option or Alt
+				while deleting nodes to break paths open, or while deleting a handle to
+				remove its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??

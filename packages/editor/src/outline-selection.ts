@@ -125,6 +125,40 @@ export const selectionKey = (target: EditorSelectionTarget): string =>
 		? `node/${target.pointId}`
 		: `handle/${target.pointId}/${target.handle}`
 
+export type MarqueeSelectionMode = "replace" | "add" | "subtract"
+
+export function marqueeSelectionMode(modifiers: {
+	readonly shiftKey: boolean
+	readonly metaKey: boolean
+	readonly ctrlKey: boolean
+}): MarqueeSelectionMode {
+	if (modifiers.shiftKey) return "subtract"
+	if (modifiers.metaKey || modifiers.ctrlKey) return "add"
+	return "replace"
+}
+
+/** Combines a completed marquee with the authoritative workspace selection. */
+export function combineMarqueeSelection(
+	current: readonly EditorSelectionTarget[],
+	boxed: readonly EditorSelectionTarget[],
+	mode: MarqueeSelectionMode,
+): readonly EditorSelectionTarget[] {
+	if (mode === "replace") {
+		return Object.freeze([
+			...new Map(
+				boxed.map((target) => [selectionKey(target), target]),
+			).values(),
+		])
+	}
+	const next = new Map(current.map((target) => [selectionKey(target), target]))
+	for (const target of boxed) {
+		const key = selectionKey(target)
+		if (mode === "subtract") next.delete(key)
+		else next.set(key, target)
+	}
+	return Object.freeze([...next.values()])
+}
+
 /** Keeps a selected geometric handle attached when path direction is reversed. */
 export function reverseSelectionHandles(
 	selection: readonly EditorSelectionTarget[],
