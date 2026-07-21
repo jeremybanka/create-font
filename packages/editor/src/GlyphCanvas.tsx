@@ -331,6 +331,10 @@ interface GroupDrag {
 	readonly bounds: SelectionBounds
 	readonly selectedPointIds: ReadonlySet<PointId>
 	readonly controllerPointId: PointId | null
+	readonly tangentDirections: ReadonlyMap<
+		PointId,
+		Readonly<{ x: number; y: number }>
+	>
 	readonly restoreTargetAfterCommit: boolean
 	lastRawDelta: Readonly<{ x: number; y: number }> | null
 	joinCandidate: EndpointJoinCandidate | null
@@ -2293,6 +2297,19 @@ export function GlyphCanvas({
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
 			controllerPointId: target.kind === "node" ? target.pointId : null,
+			tangentDirections: new Map(
+				rigidSelection.flatMap((item) => {
+					if (item.kind !== "node") return []
+					const point = allPoints.find(
+						(candidate) => candidate.pointId === item.pointId,
+					)
+					if (point === undefined) return []
+					const direction = tangentDirectionFor(point)
+					return direction === undefined
+						? []
+						: ([[item.pointId, { x: direction.x, y: direction.y }]] as const)
+				}),
+			),
 			restoreTargetAfterCommit: false,
 			lastRawDelta: null,
 			joinCandidate: null,
@@ -2330,6 +2347,7 @@ export function GlyphCanvas({
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
 			controllerPointId: null,
+			tangentDirections: new Map(),
 			restoreTargetAfterCommit: true,
 			lastRawDelta: null,
 			joinCandidate: null,
@@ -2360,6 +2378,7 @@ export function GlyphCanvas({
 				currentGroupDrag.selection,
 				currentGroupDrag.controllerPointId,
 				gestureDelta,
+				currentGroupDrag.tangentDirections,
 			)
 			currentGroupDrag.joinCandidate = null
 			setJoinTarget(null)

@@ -358,6 +358,10 @@ export function planControlledSelectionDrag(
 	selection: readonly EditorSelectionTarget[],
 	controllerPointId: PointId,
 	rawDelta: Readonly<{ x: number; y: number }>,
+	tangentDirections: ReadonlyMap<
+		PointId,
+		Readonly<{ x: number; y: number }>
+	> = new Map(),
 ): ControlledSelectionDragPlan | null {
 	if (!finitePoint(rawDelta)) return null
 	const nodes = contours.flatMap((contour) => contour.nodes)
@@ -401,7 +405,7 @@ export function planControlledSelectionDrag(
 				location.contour.nodes,
 				location.index,
 				location.contour.closed,
-				undefined,
+				tangentDirections.get(node.pointId),
 				location.contour.tangentNodes,
 			)
 			return constraint === null
@@ -412,22 +416,33 @@ export function planControlledSelectionDrag(
 		if (fixed !== undefined) {
 			const anchor = endpoint(node, fixed)
 			if (anchor === null) return null
-			return projectToLine(
-				candidate,
-				anchor,
-				{ x: node.x - anchor.x, y: node.y - anchor.y },
-				0,
-				null,
-			)
+			const fixedDirection = { x: node.x - anchor.x, y: node.y - anchor.y }
+			const movingEndpoint = endpoint(node, moving[0]!)
+			const direction =
+				fixedDirection.x !== 0 || fixedDirection.y !== 0
+					? fixedDirection
+					: movingEndpoint !== null &&
+						  (movingEndpoint.x !== node.x || movingEndpoint.y !== node.y)
+						? { x: movingEndpoint.x - node.x, y: movingEndpoint.y - node.y }
+						: tangentDirections.get(node.pointId)
+			if (direction === undefined) return null
+			return projectToLine(candidate, anchor, direction, 0, null)
 		}
 		const authored = authoredHandles
 			.map((handle) => endpoint(node, handle))
-			.find((value) => value !== null)
-		if (authored === undefined) return null
+			.find(
+				(value): value is Readonly<{ x: number; y: number }> =>
+					value !== null && (value.x !== node.x || value.y !== node.y),
+			)
+		const direction =
+			authored === undefined
+				? tangentDirections.get(node.pointId)
+				: { x: node.x - authored.x, y: node.y - authored.y }
+		if (direction === undefined) return null
 		return projectToLine(
 			candidate,
 			{ x: node.x, y: node.y },
-			{ x: node.x - authored.x, y: node.y - authored.y },
+			direction,
 			null,
 			null,
 		)
@@ -474,7 +489,10 @@ export function planControlledSelectionDrag(
 							y: position.y - opposite.y,
 						}
 						const magnitude = Math.hypot(away.x, away.y)
-						if (magnitude === 0) return null
+						if (magnitude === 0) {
+							handles.push({ pointId: node.pointId, handle, ...original })
+							continue
+						}
 						handles.push({
 							pointId: node.pointId,
 							handle,

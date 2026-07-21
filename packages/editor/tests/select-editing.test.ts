@@ -584,7 +584,78 @@ describe("controlled multi-node Alt/Option drags", () => {
 		])
 	})
 
-	it("rejects non-finite, missing-controller, and degenerate soft geometry", () => {
+	it("uses selected-handle direction when the fixed opposite handle is zero-length", () => {
+		const degenerateB = {
+			...contours[1]!.nodes[0]!,
+			incoming: { x: 0, y: 0 },
+			outgoing: { x: 30, y: 0 },
+		}
+		const planned = planControlledSelectionDrag(
+			[contours[0]!, { closed: false, nodes: [degenerateB] }],
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: softB },
+				{ kind: "handle", pointId: softB, handle: "outgoing" },
+			],
+			softA,
+			{ x: 20, y: 0 },
+		)
+		const b = planned?.result.points.find((point) => point.pointId === softB)
+		const fixed = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "incoming",
+		)
+		const moving = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "outgoing",
+		)
+		expect(b).toEqual({ pointId: softB, x: 120, y: 200 })
+		expect(fixed).toEqual({
+			pointId: softB,
+			handle: "incoming",
+			x: 100,
+			y: 200,
+		})
+		expect(moving).toEqual({
+			pointId: softB,
+			handle: "outgoing",
+			x: 150,
+			y: 200,
+		})
+	})
+
+	it("uses captured tangent memory when all authored directions are degenerate", () => {
+		const degenerate = [
+			{
+				closed: false,
+				nodes: [
+					{
+						pointId: softA,
+						mode: "soft" as const,
+						x: 0,
+						y: 0,
+						incoming: { x: 0, y: 0 },
+					},
+				],
+			},
+			{ closed: false, nodes: [contours[0]!.nodes[1]!] },
+		]
+		const planned = planControlledSelectionDrag(
+			degenerate,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: hard },
+			],
+			softA,
+			{ x: 10, y: 30 },
+			new Map([[softA, { x: 1, y: 0 }]]),
+		)
+		expect(planned?.controllerDelta).toEqual({ x: 10, y: 0 })
+		expect(planned?.result.points).toEqual([
+			{ pointId: softA, x: 10, y: 0 },
+			{ pointId: hard, x: 210, y: 50 },
+		])
+	})
+
+	it("rejects non-finite and missing-controller geometry", () => {
 		expect(
 			planControlledSelectionDrag(
 				contours,
@@ -602,32 +673,6 @@ describe("controlled multi-node Alt/Option drags", () => {
 				[{ kind: "node", pointId: hard }],
 				softA,
 				{ x: 1, y: 1 },
-			),
-		).toBeNull()
-		const degenerate = [
-			{
-				closed: false,
-				nodes: [
-					{
-						pointId: softA,
-						mode: "soft" as const,
-						x: 0,
-						y: 0,
-						incoming: { x: 0, y: 0 },
-					},
-				],
-			},
-			{ closed: false, nodes: [contours[0]!.nodes[1]!] },
-		]
-		expect(
-			planControlledSelectionDrag(
-				degenerate,
-				[
-					{ kind: "node", pointId: softA },
-					{ kind: "node", pointId: hard },
-				],
-				softA,
-				{ x: 10, y: 10 },
 			),
 		).toBeNull()
 	})
