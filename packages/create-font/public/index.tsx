@@ -29,6 +29,10 @@ import {
 	startupTransitDuration,
 	type StartupPhase,
 } from "./startup-profile.ts"
+import {
+	refreshWorkingComparison,
+	type VersionControlSelection,
+} from "./version-control-refresh.ts"
 
 type StartupProfileStatus = `loading` | `error` | `editor-usable`
 type EditorBrowserModule = typeof import("@create-font/editor/browser")
@@ -183,6 +187,7 @@ let versionControlState: Readonly<{
 }> = { loading: true }
 const rpcClient = createFontRpcClient(window.location.origin)
 let comparisonRequestSequence = 0
+let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
 const pending = new Map<
 	string,
@@ -284,6 +289,10 @@ async function loadComparison(
 	baseRef: string,
 	targetRef?: string,
 ): Promise<void> {
+	versionControlSelection = {
+		baseRef,
+		...(targetRef === undefined ? {} : { targetRef }),
+	}
 	const requestSequence = ++comparisonRequestSequence
 	versionControlState = {
 		...versionControlState,
@@ -435,7 +444,10 @@ function handleSourceSessionEvent(
 					)
 				},
 			)
-			void loadComparison(`HEAD`).catch((error: unknown) => {
+			void refreshWorkingComparison(
+				versionControlSelection,
+				loadComparison,
+			).catch((error: unknown) => {
 				console.error(`Unable to refresh version-control changes.`, error)
 			})
 			break
@@ -451,6 +463,15 @@ function handleSourceSessionEvent(
 			const request = pending.get(event.requestId)
 			pending.delete(event.requestId)
 			request?.resolve()
+			void refreshWorkingComparison(
+				versionControlSelection,
+				loadComparison,
+			).catch((error: unknown) => {
+				console.error(
+					`Unable to refresh version-control changes after saving.`,
+					error,
+				)
+			})
 			break
 		}
 		case `error`: {
