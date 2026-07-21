@@ -24,6 +24,7 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
 	const location = useO(workspace.ui.previewLocation)
 	const showNodes = useO(workspace.ui.showNodes)
+	const fontFeaturesEnabled = useO(workspace.ui.fontFeaturesEnabled)
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const view = useO(workspace.ui.canvasView)
 	const setView = useI(workspace.ui.canvasView)
@@ -94,6 +95,16 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 
 			<toolbar-section>
 				<h2>View</h2>
+				{editingTextIndex === null ? (
+					<button
+						type="button"
+						aria-label="Toggle font features"
+						aria-pressed={fontFeaturesEnabled}
+						onClick={workspace.actions.toggleFontFeatures}
+					>
+						Features
+					</button>
+				) : null}
 				<zoom-controls aria-label="Canvas zoom">
 					<button
 						type="button"

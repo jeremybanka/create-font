@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -52,6 +52,20 @@ function checksum(bytes: Uint8Array): number {
 }
 
 describe(`buildProject`, () => {
+	it(`compiles feature files into a conventional GSUB table`, async () => {
+		const root = await copyWorkbenchSans()
+		await mkdir(resolve(root, `features`))
+		await writeFile(
+			resolve(root, `features`, `layout.fea`),
+			`feature liga { sub A O by O; } liga;\n`,
+		)
+		const result = await buildProject(root)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const bytes = new Uint8Array(await readFile(result.outputs[0]!))
+		expect(tableTags(bytes)).toContain(`GSUB`)
+		expect(checksum(bytes)).toBe(0xb1b0_afba)
+	})
 	it(`builds Workbench Sans deterministically through the complete pipeline`, async () => {
 		const root = await copyWorkbenchSans()
 		const first = await buildProject(root)

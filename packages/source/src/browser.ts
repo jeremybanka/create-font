@@ -1,5 +1,13 @@
 import type { EditorFontSource } from "@create-font/states"
 
+export { parseFea, lowerFeaSubstitutions } from "./fea.ts"
+export type {
+	FeaDiagnostic,
+	FeaDocumentAst,
+	FeaParseResult,
+	FeatureSubstitutionIr,
+} from "./fea.ts"
+
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
 import { failure, success } from "./result.ts"
 import {

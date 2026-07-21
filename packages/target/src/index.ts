@@ -1,4 +1,5 @@
 export * from "./model.ts"
+export * from "./opentype-layout.ts"
 export * from "./lowering.ts"
 export * from "./serialization.ts"
 export * from "./variation.ts"

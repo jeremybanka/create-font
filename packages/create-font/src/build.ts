@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises"
-import { basename, dirname, resolve } from "node:path"
+import {
+	mkdir,
+	readFile,
+	readdir,
+	rename,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises"
+import { basename, dirname, join, resolve } from "node:path"
 
 import {
 	SourceValidationError,
@@ -8,10 +16,18 @@ import {
 	type BuildResult,
 } from "@create-font/server"
 import {
+	lowerFeaSubstitutions,
+	parseFea,
+	type FeatureSubstitutionIr,
+} from "@create-font/source"
+import {
 	createFontEditorState,
 	type FontCompilation,
 } from "@create-font/states"
-import { serializeVariableFont } from "@create-font/target"
+import {
+	serializeVariableFont,
+	withVariableFontSubstitutions,
+} from "@create-font/target"
 
 import { loadEditorFontSourceDirectory } from "./source-service.ts"
 
@@ -127,7 +143,35 @@ export async function buildProject(
 
 	let bytes: Uint8Array
 	try {
-		bytes = serializeVariableFont(compilation.font)
+		const featureDirectory = join(root, "features")
+		const featureFiles = (await readdir(featureDirectory).catch(() => []))
+			.filter((path) => path.endsWith(".fea"))
+			.toSorted()
+		const substitutions: FeatureSubstitutionIr[] = []
+		const glyphs = new Map(
+			compilation.font.glyphs.map((glyph, index) => [
+				String(glyph.name),
+				index,
+			]),
+		)
+		for (const path of featureFiles) {
+			const parsed = parseFea(
+				await readFile(join(featureDirectory, path), "utf8"),
+			)
+			if (!parsed.ok)
+				throw new Error(
+					`${path}:${parsed.errors[0]?.range.line ?? 1}:${parsed.errors[0]?.range.column ?? 1}: ${parsed.errors[0]?.message ?? "Invalid feature source."}`,
+				)
+			const lowered = lowerFeaSubstitutions(parsed.value, glyphs)
+			if (lowered.errors.length > 0)
+				throw new Error(
+					`${path}:${lowered.errors[0]?.range.line ?? 1}:${lowered.errors[0]?.range.column ?? 1}: ${lowered.errors[0]?.message}`,
+				)
+			substitutions.push(...lowered.ir)
+		}
+		bytes = serializeVariableFont(
+			withVariableFontSubstitutions(compilation.font, substitutions),
+		)
 	} catch (error) {
 		return failure(root, [
 			{

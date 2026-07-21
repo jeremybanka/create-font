@@ -11,6 +11,7 @@ import {
 } from "@create-font/states"
 
 import { makeDemoFont } from "./demo-font.ts"
+import type { EditorFeatureSubstitution } from "./browser-api.ts"
 import type { CanvasView } from "./canvas-view.ts"
 import { createFontFaviconPreview } from "./document-metadata.ts"
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
@@ -100,6 +101,7 @@ function validationStatus(
 export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
 	initialValidation?: EditorValidationStatus,
+	initialFeatureSubstitutions: readonly EditorFeatureSubstitution[] = [],
 ) {
 	const font = createFontEditorState({ key: "create-font/editor/font" })
 	font.actions.load(source)
@@ -135,6 +137,23 @@ export function createEditorWorkspace(
 		key: "previewText",
 		default: "AHO\nnon",
 	})
+	const featureSubstitutionsAtom = font.silo.atom<
+		readonly EditorFeatureSubstitution[]
+	>({
+		key: "featureSubstitutions",
+		default: Object.freeze(initialFeatureSubstitutions),
+	})
+	const fontFeaturesEnabledAtom = font.silo.atom<boolean>({
+		key: "fontFeaturesEnabled",
+		default: true,
+	})
+	font.actions.setFeatureSubstitutions(
+		initialFeatureSubstitutions.map((rule) => ({
+			feature: rule.feature,
+			from: rule.from as readonly GlyphId[],
+			to: rule.to as GlyphId,
+		})),
+	)
 	const caretIndexAtom = font.silo.atom<number>({
 		key: "caretIndex",
 		default: 0,
@@ -359,6 +378,64 @@ export function createEditorWorkspace(
 								),
 				})
 				previousGlyphId = glyphId
+			}
+			if (!get(fontFeaturesEnabledAtom)) return Object.freeze(run)
+			for (const rule of get(featureSubstitutionsAtom)) {
+				if (rule.feature !== "liga" && rule.feature !== "calt") continue
+				for (
+					let index = 0;
+					index <= run.length - rule.from.length;
+					index += 1
+				) {
+					const input = run.slice(index, index + rule.from.length)
+					if (
+						rule.from.length === 0 ||
+						!input.every(
+							(item, offset) =>
+								item.kind === "glyph" && item.glyphId === rule.from[offset],
+						)
+					)
+						continue
+					const replacementId = rule.to as GlyphId
+					const editorGlyph = get(
+						font.selectors.editorGlyphSource,
+						replacementId,
+					)
+					const first = input[0]
+					const last = input.at(-1)
+					if (
+						editorGlyph === null ||
+						first === undefined ||
+						last === undefined
+					) {
+						continue
+					}
+					const result = get(font.selectors.glyphSource, replacementId)
+					run.splice(index, input.length, {
+						kind: "glyph",
+						character: get(previewTextAtom).slice(
+							first.textStart,
+							last.textEnd,
+						),
+						textStart: first.textStart,
+						textEnd: last.textEnd,
+						glyphId: replacementId,
+						glyph: result.ok
+							? resolveVariableGlyph(
+									replacementId,
+									result.value,
+									axes,
+									location,
+								)
+							: null,
+						sourcePreview: createGlyphPreview(
+							editorGlyph,
+							activeMasterId,
+							document.metrics,
+							document.metadata.unitsPerEm,
+						),
+					})
+				}
 			}
 			return Object.freeze(run)
 		},
@@ -607,6 +684,7 @@ export function createEditorWorkspace(
 			comparisonMasterId: comparisonMasterIdAtom,
 			selection: selectionAtom,
 			previewText: previewTextAtom,
+			fontFeaturesEnabled: fontFeaturesEnabledAtom,
 			caretIndex: caretIndexAtom,
 			textSelectionCollapsed: textSelectionCollapsedAtom,
 			editingTextIndex: editingTextIndexAtom,
@@ -647,6 +725,24 @@ export function createEditorWorkspace(
 						right: pair.right,
 						value,
 					})
+			},
+			setFeatureSubstitutions(
+				substitutions: readonly EditorFeatureSubstitution[],
+			): void {
+				font.silo.setState(
+					featureSubstitutionsAtom,
+					Object.freeze([...substitutions]),
+				)
+				font.actions.setFeatureSubstitutions(
+					substitutions.map((rule) => ({
+						feature: rule.feature,
+						from: rule.from as readonly GlyphId[],
+						to: rule.to as GlyphId,
+					})),
+				)
+			},
+			toggleFontFeatures(): void {
+				font.silo.setState(fontFeaturesEnabledAtom, (enabled) => !enabled)
 			},
 			toggleConstrainProportions(): void {
 				font.silo.setState(constrainProportionsAtom, (enabled) => !enabled)

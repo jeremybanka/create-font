@@ -31,6 +31,7 @@ import {
 	formatSourceUnit,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
+	parseFea,
 	type FontSourceDirectoryFiles,
 	type SourceDiagnostic,
 } from "@create-font/source"
@@ -140,7 +141,7 @@ function normalizeUnitPath(path: string): string {
 	return segments.join(`/`)
 }
 
-async function collectJsonPaths(
+async function collectSourcePaths(
 	root: string,
 	directory = root,
 ): Promise<readonly string[]> {
@@ -152,11 +153,17 @@ async function collectJsonPaths(
 			throw new Error(`Font source cannot contain symbolic links: ${absolute}`)
 		}
 		if (entry.isDirectory()) {
-			paths.push(...(await collectJsonPaths(root, absolute)))
+			paths.push(...(await collectSourcePaths(root, absolute)))
 			continue
 		}
-		if (!entry.isFile() || !entry.name.endsWith(`.json`)) continue
-		paths.push(relative(root, absolute).split(sep).join(`/`))
+		if (!entry.isFile()) continue
+		const path = relative(root, absolute).split(sep).join(`/`)
+		if (
+			!entry.name.endsWith(`.json`) &&
+			!(path.startsWith(`features/`) && path.endsWith(`.fea`))
+		)
+			continue
+		paths.push(path)
 	}
 	return paths.toSorted()
 }
@@ -242,10 +249,29 @@ async function loadProjectDirectory(
 	const values: Record<string, unknown> = {}
 	const revisions = new Map<string, string>()
 	const texts = new Map<string, string>()
-	const paths = await collectJsonPaths(projectRoot)
+	const paths = await collectSourcePaths(projectRoot)
 	const collectedAt =
 		onProjectLoad === undefined ? undefined : performance.now()
 	for (const path of paths) {
+		if (path.startsWith(`features/`) && path.endsWith(`.fea`)) {
+			const text = await readFile(resolveInside(projectRoot, path), `utf8`)
+			const parsed = parseFea(text)
+			if (!parsed.ok) {
+				throw validationError(
+					parsed.errors.map((error) => ({
+						severity: `error`,
+						code: `source.schema`,
+						unitPath: path,
+						path: `$:${error.range.line}:${error.range.column}`,
+						message: error.message,
+					})) as [SourceDiagnostic, ...SourceDiagnostic[]],
+				)
+			}
+			values[path] = text
+			texts.set(path, text)
+			revisions.set(path, revisionForText(text))
+			continue
+		}
 		const kind = sourceUnitKindForPath(path)
 		if (kind === null) {
 			throw validationError([
@@ -274,7 +300,11 @@ async function loadProjectDirectory(
 		revisions.set(path, revisionForText(text))
 	}
 	const readAt = onProjectLoad === undefined ? undefined : performance.now()
-	const assembled = assembleEditorFontSource(values)
+	const assembled = assembleEditorFontSource(
+		Object.fromEntries(
+			Object.entries(values).filter(([path]) => path.endsWith(`.json`)),
+		),
+	)
 	if (!assembled.ok) throw validationError(assembled.errors)
 	const assembledAt =
 		onProjectLoad === undefined ? undefined : performance.now()

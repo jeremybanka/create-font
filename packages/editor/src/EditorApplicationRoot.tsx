@@ -8,8 +8,10 @@ import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
 import { EditorStateContext } from "./state-hooks.ts"
 import type { EditorVersionControl } from "./version-control.ts"
+import type { EditorFeatureSubstitution } from "./browser-api.ts"
 
 export type EditorApplicationRootProps = Readonly<{
+	featureSubstitutions?: readonly EditorFeatureSubstitution[]
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
 	source: EditorFontSource
 	validation?: Readonly<{ ok: boolean; issueCount: number }>
@@ -17,12 +19,19 @@ export type EditorApplicationRootProps = Readonly<{
 }>
 
 export function EditorApplicationRoot({
+	featureSubstitutions,
 	onSourceChange,
 	source,
 	validation,
 	versionControl,
 }: EditorApplicationRootProps) {
-	const [workspace] = useState(() => createEditorWorkspace(source, validation))
+	const [workspace] = useState(() =>
+		createEditorWorkspace(source, validation, featureSubstitutions),
+	)
+
+	useEffect(() => {
+		workspace.actions.setFeatureSubstitutions(featureSubstitutions ?? [])
+	}, [featureSubstitutions, workspace])
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
 

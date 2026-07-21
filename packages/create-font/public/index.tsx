@@ -5,7 +5,7 @@ import type {
 import type { EditorFontSource } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type { SourceComparison } from "@create-font/server"
-import { assembleEditorFontSource } from "@create-font/source/browser"
+import { assembleEditorFontSource, parseFea } from "@create-font/source/browser"
 import { render } from "preact"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
@@ -180,6 +180,9 @@ let renderedSource = false
 let mountedEditor: MountedEditor | null = null
 let currentSource: EditorFontSource | null = null
 let currentValidation: FontValidationStatus | null = null
+let currentFeatureSubstitutions: NonNullable<
+	EditorBrowserOptions["featureSubstitutions"]
+> = []
 let versionControlState: Readonly<{
 	comparison?: NonNullable<EditorBrowserOptions["versionControl"]>["comparison"]
 	error?: string
@@ -229,7 +232,11 @@ function sourceFromSnapshot(
 	snapshot: SourceComparison["base"]["snapshot"],
 ): EditorFontSource {
 	const assembled = assembleEditorFontSource(
-		Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
+		Object.fromEntries(
+			snapshot.units
+				.filter((unit) => unit.path.endsWith(`.json`))
+				.map((unit) => [unit.path, unit.value]),
+		),
 	)
 	if (!assembled.ok) throw new Error(assembled.errors[0].message)
 	return assembled.value
@@ -359,16 +366,34 @@ async function commitSourceUnits(
 async function showSource(
 	source: EditorFontSource,
 	validation: FontValidationStatus,
+	featureSources?: readonly string[],
 ): Promise<void> {
 	const editorModule = await editorModulePromise
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
 	currentValidation = validation
+	const glyphIds = new Map(source.glyphs.map((glyph) => [glyph.name, glyph.id]))
+	if (featureSources !== undefined)
+		currentFeatureSubstitutions = featureSources.flatMap((featureSource) => {
+			const parsed = parseFea(featureSource)
+			if (!parsed.ok) return []
+			return parsed.value.features.flatMap((feature) =>
+				feature.statements.flatMap((statement) => {
+					const from = statement.from.map((name) => glyphIds.get(name))
+					const to = glyphIds.get(statement.to)
+					return from.some((glyphId) => glyphId === undefined) ||
+						to === undefined
+						? []
+						: [{ feature: feature.tag, from: from as string[], to }]
+				}),
+			)
+		})
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
 	const options: EditorBrowserOptions = {
+		featureSubstitutions: currentFeatureSubstitutions,
 		onSourceChange: saveSource,
 		source,
 		validation,
@@ -435,15 +460,17 @@ function handleSourceSessionEvent(
 				performance.timeOrigin + performance.now(),
 			)
 			revision = event.revision
-			void showSource(event.source, event.validation).catch(
-				(error: unknown) => {
-					showBootstrapError(
-						error instanceof Error
-							? error.message
-							: `The editor application did not load.`,
-					)
-				},
-			)
+			void showSource(
+				event.source,
+				event.validation,
+				event.featureSources,
+			).catch((error: unknown) => {
+				showBootstrapError(
+					error instanceof Error
+						? error.message
+						: `The editor application did not load.`,
+				)
+			})
 			void refreshWorkingComparison(
 				versionControlSelection,
 				loadComparison,

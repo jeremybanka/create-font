@@ -37,6 +37,7 @@ export type SourceSessionRequest =
 export type SourceSessionEvent =
 	| Readonly<{
 			type: `source`
+			featureSources: readonly string[]
 			sentAtEpochMilliseconds: number
 			revision: string
 			source: EditorFontSource

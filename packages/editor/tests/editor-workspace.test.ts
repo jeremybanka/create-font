@@ -116,6 +116,45 @@ function makeOneMasterFont(): EditorFontSource {
 }
 
 describe("editor workspace", () => {
+	it("applies feature substitutions to canvas clusters only while enabled", () => {
+		const source = makeDemoFont()
+		const glyphFor = (character: string) => {
+			const codePoint = character.codePointAt(0)
+			const id = source.cmap.find(
+				(entry) => entry.codePoint === codePoint,
+			)?.glyphId
+			if (id === undefined)
+				throw new Error(`Missing ${character} fixture glyph.`)
+			return id
+		}
+		const workspace = createEditorWorkspace(source, undefined, [
+			{
+				feature: "liga",
+				from: [glyphFor("A"), glyphFor("O")],
+				to: glyphFor("O"),
+			},
+		])
+		workspace.font.silo.setState(workspace.ui.previewText, "AO")
+		const shaped = workspace.font.silo.getState(workspace.ui.previewRun)
+		expect(shaped).toHaveLength(1)
+		expect(shaped[0]).toMatchObject({
+			kind: "glyph",
+			glyphId: glyphFor("O"),
+			textStart: 0,
+			textEnd: 2,
+		})
+		const compilation = workspace.font.read.compilation()
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) {
+			expect(compilation.font.substitutions).toEqual([
+				{ feature: "liga", from: [1, 2], to: 2 },
+			])
+		}
+		workspace.actions.toggleFontFeatures()
+		expect(workspace.font.silo.getState(workspace.ui.previewRun)).toHaveLength(
+			2,
+		)
+	})
 	it("shares proportional scaling preference across editor lifecycle actions", () => {
 		const workspace = createEditorWorkspace()
 		expect(

@@ -6,6 +6,7 @@ import {
 } from "atom.io"
 import {
 	ingestVariableFont,
+	withVariableFontSubstitutions,
 	CREATE_FONT_FORMAT,
 	CREATE_FONT_IR_VERSION,
 	type CharacterMapEntrySource,
@@ -1064,6 +1065,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 	const glyphIdsAtom = silo.atom<readonly GlyphId[]>({
 		key: "glyphIds",
+		default: Object.freeze([]),
+	})
+	const featureSubstitutionsAtom = silo.atom<
+		readonly {
+			readonly feature: string
+			readonly from: readonly GlyphId[]
+			readonly to: GlyphId
+		}[]
+	>({
+		key: "featureSubstitutions",
 		default: Object.freeze([]),
 	})
 	const cmapCodePointsAtom = silo.atom<readonly number[]>({
@@ -3597,11 +3608,21 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					ingestionWarnings: ingested.warnings,
 				} as const)
 			}
+			const glyphIndices = new Map(
+				get(glyphIdsAtom).map((glyphId, index) => [glyphId, index]),
+			)
+			const substitutions = get(featureSubstitutionsAtom).flatMap((rule) => {
+				const from = rule.from.map((glyphId) => glyphIndices.get(glyphId))
+				const to = glyphIndices.get(rule.to)
+				return from.some((glyphId) => glyphId === undefined) || to === undefined
+					? []
+					: [{ feature: rule.feature, from: from as number[], to }]
+			})
 			return deepFreeze({
 				ok: true,
 				stage: "compiled",
 				source: projected.value,
-				font: ingested.value,
+				font: withVariableFontSubstitutions(ingested.value, substitutions),
 				projectionWarnings: projected.warnings,
 				ingestionWarnings: ingested.warnings,
 			} as const)
@@ -7611,6 +7632,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		glyphHistoryTimelines,
 		kerningTimeline,
 		actions: {
+			setFeatureSubstitutions(
+				substitutions: readonly {
+					readonly feature: string
+					readonly from: readonly GlyphId[]
+					readonly to: GlyphId
+				}[],
+			): void {
+				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
+			},
 			markDocumentChanged,
 			load(source: EditorFontSource): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)

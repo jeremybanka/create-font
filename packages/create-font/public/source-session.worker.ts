@@ -54,6 +54,7 @@ let sourceUnits = new Map<string, SourceUnitSnapshot>()
 let source: EditorFontSource | null = null
 let revision: string | null = null
 let validation: FontValidationStatus | null = null
+let featureSources: readonly string[] = []
 let writeQueue = Promise.resolve()
 let startupProfile: SourceSessionStartupProfile | null = null
 
@@ -120,6 +121,7 @@ function currentSourceEvent(): SourceSessionEvent | null {
 		return null
 	return {
 		type: `source`,
+		featureSources,
 		sentAtEpochMilliseconds: performance.timeOrigin + performance.now(),
 		revision,
 		source,
@@ -153,8 +155,18 @@ const refreshController = createSourceSnapshotRefreshController({
 	applySnapshot(project, initialLoad) {
 		const snapshots = project.units
 		const files = Object.fromEntries(
-			snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
+			snapshots
+				.filter((snapshot) => snapshot.path.endsWith(`.json`))
+				.map((snapshot) => [snapshot.path, snapshot.value]),
 		)
+		featureSources = snapshots
+			.filter(
+				(snapshot) =>
+					snapshot.path.startsWith(`features/`) &&
+					snapshot.path.endsWith(`.fea`) &&
+					typeof snapshot.value === `string`,
+			)
+			.map((snapshot) => snapshot.value as string)
 		const finishAssembly = initialLoad
 			? startupTimeline.startPhase(`source-assembly`)
 			: undefined

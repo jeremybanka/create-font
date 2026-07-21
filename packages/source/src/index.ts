@@ -1,3 +1,13 @@
+export { parseFea, lowerFeaSubstitutions } from "./fea.ts"
+export type {
+	FeaDiagnostic,
+	FeaDocumentAst,
+	FeaFeatureAst,
+	FeaParseResult,
+	FeaSourceRange,
+	FeaSubstitutionAst,
+	FeatureSubstitutionIr,
+} from "./fea.ts"
 export {
 	canonicalizeEditorFontSource,
 	decodeEditorFontSource,
