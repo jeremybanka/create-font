@@ -53,7 +53,11 @@ import {
 	selectionOwnsEditorSegment,
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
-import { BASE_CANVAS_SCALE, zoomCanvasView } from "./canvas-view.ts"
+import {
+	BASE_CANVAS_SCALE,
+	initializeCanvasView,
+	zoomCanvasView,
+} from "./canvas-view.ts"
 import { hasWheelZoomModifier } from "./canvas-wheel.ts"
 import {
 	incidentStraightProjectionCandidates,
@@ -497,18 +501,36 @@ export function GlyphCanvas({
 	> | null>(null)
 	const view = useO(workspace.ui.canvasView)
 	const setView = useI(workspace.ui.canvasView)
+	const canvasViewport = useO(workspace.ui.canvasViewport)
 	const setCanvasViewport = useI(workspace.ui.canvasViewport)
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const preferredCaretXRef = useRef<number | null>(null)
-	const { ref, width, height } = useElementSize<HTMLElement>()
+	const {
+		ref,
+		width,
+		height,
+		usable: hasUsableCanvasSize,
+	} = useElementSize<HTMLElement>()
 	useEffect(() => {
+		if (!hasUsableCanvasSize) return
+		const nextViewport = { width, height }
+		setView((current) =>
+			initializeCanvasView(current, canvasViewport, nextViewport),
+		)
 		setCanvasViewport((current) =>
 			current.width === width && current.height === height
 				? current
-				: { width, height },
+				: nextViewport,
 		)
-	}, [height, setCanvasViewport, width])
+	}, [
+		canvasViewport,
+		hasUsableCanvasSize,
+		height,
+		setCanvasViewport,
+		setView,
+		width,
+	])
 	const layout = useMemo(
 		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
 		[run, metadata.unitsPerEm, metrics],

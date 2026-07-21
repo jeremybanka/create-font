@@ -8,6 +8,35 @@ export interface CanvasView {
 	readonly zoom: number
 }
 
+export interface CanvasViewport {
+	readonly width: number
+	readonly height: number
+}
+
+export function initialCanvasView(viewport: CanvasViewport): CanvasView | null {
+	if (
+		!Number.isFinite(viewport.width) ||
+		viewport.width <= 0 ||
+		!Number.isFinite(viewport.height) ||
+		viewport.height <= 0
+	)
+		return null
+	return {
+		x: viewport.width / 3,
+		y: viewport.height / 3,
+		zoom: 1,
+	}
+}
+
+export function initializeCanvasView(
+	current: CanvasView,
+	previousViewport: CanvasViewport,
+	nextViewport: CanvasViewport,
+): CanvasView {
+	if (initialCanvasView(previousViewport) !== null) return current
+	return initialCanvasView(nextViewport) ?? current
+}
+
 export function zoomCanvasView(
 	current: CanvasView,
 	nextZoom: number,

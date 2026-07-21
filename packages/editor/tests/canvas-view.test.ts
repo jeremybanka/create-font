@@ -2,12 +2,62 @@ import { describe, expect, it } from "vitest"
 
 import {
 	BASE_CANVAS_SCALE,
+	initialCanvasView,
+	initializeCanvasView,
 	MAX_CANVAS_ZOOM,
 	MIN_CANVAS_ZOOM,
 	zoomCanvasView,
 } from "../src/canvas-view.ts"
 
 describe("canvas viewport", () => {
+	it.each([
+		[
+			{ width: 1_200, height: 600 },
+			{ x: 400, y: 200, zoom: 1 },
+		],
+		[
+			{ width: 480, height: 1_440 },
+			{ x: 160, y: 480, zoom: 1 },
+		],
+		[
+			{ width: 1_000.5, height: 749.25 },
+			{ x: 333.5, y: 249.75, zoom: 1 },
+		],
+	] as const)(
+		"initializes one-third into a %# viewport",
+		(viewport, expected) => {
+			expect(initialCanvasView(viewport)).toEqual(expected)
+		},
+	)
+
+	it.each([
+		{ width: 0, height: 600 },
+		{ width: 800, height: 0 },
+		{ width: Number.NaN, height: 600 },
+		{ width: 800, height: Number.POSITIVE_INFINITY },
+	])("waits for a finite positive viewport: %#", (viewport) => {
+		expect(initialCanvasView(viewport)).toBeNull()
+	})
+
+	it("initializes after a zero-size mount and preserves a manipulated view on resize", () => {
+		const placeholder = { x: 72, y: 72, zoom: 1 }
+		const measured = { width: 900, height: 600 }
+		const initialized = initializeCanvasView(
+			placeholder,
+			{ width: 0, height: 0 },
+			measured,
+		)
+		expect(initialized).toEqual({ x: 300, y: 200, zoom: 1 })
+
+		const manipulated = { x: -45, y: 123, zoom: 2.5 }
+		expect(
+			initializeCanvasView(manipulated, measured, {
+				width: 1_440,
+				height: 900,
+			}),
+		).toBe(manipulated)
+	})
+
 	it("clamps zoom from 25% through 1000%", () => {
 		const current = { x: 72, y: 72, zoom: 1 }
 		expect(
