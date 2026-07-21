@@ -290,7 +290,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 									aria-pressed={diffBaselineVisible}
 									onClick={() => setDiffBaselineVisible((visible) => !visible)}
 								>
-									<i data-side="baseline" /> Baseline ·{" "}
+									<i data-side="baseline" /> Reference ·{" "}
 									{versionControl.comparison.base.label}
 								</button>
 								<button
@@ -298,7 +298,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 									aria-pressed={diffCurrentVisible}
 									onClick={() => setDiffCurrentVisible((visible) => !visible)}
 								>
-									<i data-side="current" /> Current ·{" "}
+									<i data-side="current" /> Target ·{" "}
 									{versionControl.comparison.target.label}
 								</button>
 							</diff-view-legend>

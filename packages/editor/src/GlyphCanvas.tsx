@@ -613,12 +613,12 @@ export function GlyphCanvas({
 				(candidate) => candidate.id === activeGlyphId,
 			) ?? false
 		if (baselineExists && !targetExists)
-			return `Baseline only — this glyph is deleted in ${versionControl?.comparison?.target.label ?? `the target`}.`
+			return `Reference only — this glyph is absent from ${versionControl?.comparison?.target.label ?? `the target`}.`
 		if (!baselineExists && targetExists)
-			return `Current only — this glyph is added in ${versionControl?.comparison?.target.label ?? `the target`}.`
+			return `Target only — this glyph is absent from ${versionControl?.comparison?.base.label ?? `the reference`}.`
 		if (!baselineExists && !targetExists)
 			return `The active glyph is missing from both comparison endpoints.`
-		return `${versionControl?.comparison?.base.label ?? `Baseline`} and ${versionControl?.comparison?.target.label ?? `current`} outlines are shown independently.`
+		return `${versionControl?.comparison?.base.label ?? `Reference`} and ${versionControl?.comparison?.target.label ?? `target`} outlines are shown independently.`
 	}, [activeGlyphId, diffView, versionControl])
 	const visibleContours = useMemo(
 		() =>
@@ -3767,7 +3767,7 @@ export function GlyphCanvas({
 														x={0}
 														y={metrics.ascender + 18 * inverseScale}
 														scaleY={-1}
-														text={`Baseline · ${versionControl?.comparison?.base.label ?? "ref"}`}
+														text={`Reference · ${versionControl?.comparison?.base.label ?? "ref"}`}
 														fontSize={10 * inverseScale}
 														fill="#c43d4d"
 													/>

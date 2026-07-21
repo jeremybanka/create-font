@@ -98,6 +98,9 @@ describe("VersionControlTile", () => {
 
 	it("reports endpoints and reviews changed glyphs", () => {
 		const { host, review } = mount()
+		expect(host.textContent).toContain("Reference ref")
+		expect(host.textContent).toContain("Target ref")
+		expect(host.textContent).not.toContain("Baseline ref")
 		expect(host.textContent).toContain("HEAD → Working source")
 		expect(host.textContent).toContain("2 total")
 		const glyph = [...host.querySelectorAll("button")].find((button) =>

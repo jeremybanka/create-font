@@ -64,10 +64,10 @@ export function VersionControlTile({
 		<version-control-tile className={css.class}>
 			<comparison-controls>
 				<label>
-					<span>Baseline ref</span>
+					<span>Reference ref</span>
 					<input
 						value={baseRef}
-						aria-label="Baseline Git ref"
+						aria-label="Reference Git ref"
 						onInput={(event) => setBaseRef(event.currentTarget.value)}
 					/>
 				</label>
