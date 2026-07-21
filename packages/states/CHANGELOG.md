@@ -1,5 +1,12 @@
 # @create-font/states
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [ed751e8]
+  - @create-font/server@0.1.1
+
 ## 0.6.0
 
 ### Minor Changes
