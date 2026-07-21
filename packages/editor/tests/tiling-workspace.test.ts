@@ -21,6 +21,7 @@ import {
 	serializeTilingLayout,
 	setColumnAlignment,
 	setTileFill,
+	scrollbarScrollTopFromPointer,
 	toggleColumnCollapsed,
 	undoTilingHistory,
 	visibleColumnIds,
@@ -108,6 +109,44 @@ describe("tiling workspace", () => {
 				scrollHeight: 500,
 			}),
 		).toBe("end")
+	})
+
+	it("preserves the thumb grab offset across its available travel", () => {
+		const common = {
+			trackStart: 100,
+			trackSize: 200,
+			thumbSize: 40,
+			maximum: 800,
+			grabOffset: 10,
+		}
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 110 }),
+		).toBe(0)
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 190 }),
+		).toBe(400)
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 270 }),
+		).toBe(800)
+	})
+
+	it("centers the thumb on track clicks and clamps beyond both ends", () => {
+		const common = {
+			trackStart: 100,
+			trackSize: 200,
+			thumbSize: 40,
+			maximum: 800,
+			grabOffset: 20,
+		}
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 180 }),
+		).toBe(300)
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 0 }),
+		).toBe(0)
+		expect(
+			scrollbarScrollTopFromPointer({ ...common, pointerPosition: 400 }),
+		).toBe(800)
 	})
 
 	it("starts with stable logical columns and the editor panes as tiles", () => {

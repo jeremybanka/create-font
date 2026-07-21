@@ -48,6 +48,7 @@ import {
 	serializeTilingLayout,
 	setColumnAlignment,
 	setTileFill,
+	scrollbarScrollTopFromPointer,
 	TILING_DRAFT_STORAGE_KEY,
 	TILING_SAVED_STORAGE_KEY,
 	toggleColumnCollapsed,
@@ -287,6 +288,11 @@ export function TilingWorkspace({
 	const columnRefs = useRef(new Map<TileColumnId, HTMLElement>())
 	const scrollRefs = useRef(new Map<TileColumnId, HTMLElement>())
 	const scrollbarRefs = useRef(new Map<TileColumnId, HTMLElement>())
+	const scrollbarDrag = useRef<{
+		readonly columnId: TileColumnId
+		readonly pointerId: number
+		readonly grabOffset: number
+	} | null>(null)
 	const layout = history.present
 	const dirty = serializeTilingLayout(layout) !== saved
 	const allocation = columnSlotAllocation(viewportWidth)
@@ -450,17 +456,23 @@ export function TilingWorkspace({
 	const scrollColumnFromPointer = (
 		event: PointerEvent,
 		columnId: TileColumnId,
+		grabOffset: number,
 	): void => {
 		const scroll = scrollRefs.current.get(columnId)
 		if (scroll === undefined) return
 		const track = event.currentTarget
 		if (!(track instanceof HTMLElement)) return
 		const bounds = track.getBoundingClientRect()
-		const ratio = Math.max(
-			0,
-			Math.min(1, (event.clientY - bounds.top) / bounds.height),
-		)
-		scroll.scrollTop = ratio * (scroll.scrollHeight - scroll.clientHeight)
+		const thumb = track.firstElementChild
+		if (!(thumb instanceof HTMLElement)) return
+		scroll.scrollTop = scrollbarScrollTopFromPointer({
+			pointerPosition: event.clientY,
+			trackStart: bounds.top,
+			trackSize: bounds.height,
+			thumbSize: thumb.getBoundingClientRect().height,
+			maximum: scroll.scrollHeight - scroll.clientHeight,
+			grabOffset,
+		})
 		measureColumnOverflow()
 	}
 
@@ -928,17 +940,44 @@ export function TilingWorkspace({
 						onPointerDown={(event: PointerEvent) => {
 							const target = event.currentTarget
 							if (target instanceof HTMLElement) {
+								const thumb = target.firstElementChild
+								if (!(thumb instanceof HTMLElement)) return
+								const thumbBounds = thumb.getBoundingClientRect()
+								const grabbedThumb =
+									event.clientY >= thumbBounds.top &&
+									event.clientY <= thumbBounds.bottom
+								const grabOffset = grabbedThumb
+									? event.clientY - thumbBounds.top
+									: thumbBounds.height / 2
+								scrollbarDrag.current = {
+									columnId: column.id,
+									pointerId: event.pointerId,
+									grabOffset,
+								}
 								target.setPointerCapture(event.pointerId)
+								scrollColumnFromPointer(event, column.id, grabOffset)
 							}
-							scrollColumnFromPointer(event, column.id)
 						}}
 						onPointerMove={(event: PointerEvent) => {
 							const target = event.currentTarget
+							const drag = scrollbarDrag.current
 							if (
 								target instanceof HTMLElement &&
-								target.hasPointerCapture(event.pointerId)
+								target.hasPointerCapture(event.pointerId) &&
+								drag?.pointerId === event.pointerId &&
+								drag.columnId === column.id
 							) {
-								scrollColumnFromPointer(event, column.id)
+								scrollColumnFromPointer(event, column.id, drag.grabOffset)
+							}
+						}}
+						onPointerUp={(event: PointerEvent) => {
+							if (scrollbarDrag.current?.pointerId === event.pointerId) {
+								scrollbarDrag.current = null
+							}
+						}}
+						onPointerCancel={(event: PointerEvent) => {
+							if (scrollbarDrag.current?.pointerId === event.pointerId) {
+								scrollbarDrag.current = null
 							}
 						}}
 					>

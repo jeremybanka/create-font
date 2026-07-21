@@ -47,6 +47,15 @@ export interface ScrollMetrics {
 	readonly scrollHeight: number
 }
 
+export interface ScrollbarPointerMetrics {
+	readonly pointerPosition: number
+	readonly trackStart: number
+	readonly trackSize: number
+	readonly thumbSize: number
+	readonly maximum: number
+	readonly grabOffset: number
+}
+
 export type ColumnOverflowState = "fit" | "more" | "end"
 export type ColumnHitSurface = "content" | "column"
 
@@ -167,6 +176,23 @@ export function columnOverflowState(
 ): ColumnOverflowState {
 	if (scrollHeight <= clientHeight + tolerance) return "fit"
 	return scrollTop + clientHeight >= scrollHeight - tolerance ? "end" : "more"
+}
+
+export function scrollbarScrollTopFromPointer({
+	pointerPosition,
+	trackStart,
+	trackSize,
+	thumbSize,
+	maximum,
+	grabOffset,
+}: ScrollbarPointerMetrics): number {
+	const travel = Math.max(0, trackSize - thumbSize)
+	if (travel === 0 || maximum <= 0) return 0
+	const thumbStart = Math.max(
+		0,
+		Math.min(travel, pointerPosition - trackStart - grabOffset),
+	)
+	return (thumbStart / travel) * maximum
 }
 
 export function columnHitSurface(management: boolean): ColumnHitSurface {
