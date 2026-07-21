@@ -3,11 +3,16 @@ import { useLayoutEffect, useRef, useState } from "preact/hooks"
 export interface ElementSize {
 	readonly width: number
 	readonly height: number
+	readonly usable: boolean
 }
 
 export function useElementSize<Element extends HTMLElement>() {
 	const ref = useRef<Element>(null)
-	const [size, setSize] = useState<ElementSize>({ width: 1, height: 1 })
+	const [size, setSize] = useState<ElementSize>({
+		width: 1,
+		height: 1,
+		usable: false,
+	})
 	useLayoutEffect(() => {
 		const element = ref.current
 		if (element === null) return
@@ -16,6 +21,11 @@ export function useElementSize<Element extends HTMLElement>() {
 			setSize({
 				width: Math.max(1, Math.round(bounds.width)),
 				height: Math.max(1, Math.round(bounds.height)),
+				usable:
+					Number.isFinite(bounds.width) &&
+					bounds.width > 0 &&
+					Number.isFinite(bounds.height) &&
+					bounds.height > 0,
 			})
 		}
 		update()
