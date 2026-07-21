@@ -9,6 +9,7 @@ import {
 import {
 	directDragOwnsPointer,
 	planFixedHandleNodeMove,
+	planControlledSelectionDrag,
 	planSelectedHardNodeNudge,
 	planSelectionNudge,
 	rememberedTangentDirection,
@@ -453,6 +454,245 @@ describe("hard-node fixed-handle moves", () => {
 				],
 				1,
 				0,
+			),
+		).toBeNull()
+	})
+})
+
+describe("controlled multi-node Alt/Option drags", () => {
+	const softA = "point:soft-a" as const
+	const softB = "point:soft-b" as const
+	const hard = "point:hard" as const
+	const contours = [
+		{
+			closed: false,
+			nodes: [
+				{
+					pointId: softA,
+					mode: "soft" as const,
+					x: 50,
+					y: 50,
+					incoming: { x: -50, y: 0 },
+					outgoing: { x: 50, y: 0 },
+				},
+				{
+					pointId: hard,
+					mode: "hard" as const,
+					x: 200,
+					y: 50,
+					incoming: { x: -20, y: -20 },
+					outgoing: { x: 30, y: 10 },
+				},
+			],
+		},
+		{
+			closed: false,
+			nodes: [
+				{
+					pointId: softB,
+					mode: "soft" as const,
+					x: 100,
+					y: 200,
+					incoming: { x: 0, y: -40 },
+					outgoing: { x: 0, y: 30 },
+				},
+			],
+		},
+	]
+
+	it("maps the soft controller displacement to each tangent and fixes hard handles", () => {
+		const planned = planControlledSelectionDrag(
+			contours,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: softB },
+				{ kind: "node", pointId: hard },
+			],
+			softA,
+			{ x: 25, y: 80 },
+		)
+		expect(planned?.controllerDelta).toEqual({ x: 25, y: 0 })
+		expect(planned?.result.points).toEqual([
+			{ pointId: softA, x: 75, y: 50 },
+			{ pointId: hard, x: 225, y: 50 },
+			{ pointId: softB, x: 100, y: 200 },
+		])
+		expect(planned?.result.handles).toContainEqual({
+			pointId: hard,
+			handle: "incoming",
+			x: 180,
+			y: 30,
+		})
+		expect(planned?.result.handles).toContainEqual({
+			pointId: hard,
+			handle: "outgoing",
+			x: 230,
+			y: 60,
+		})
+	})
+
+	it("preserves the selected handle length while its soft opposite stays fixed", () => {
+		const planned = planControlledSelectionDrag(
+			contours,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: softB },
+				{ kind: "handle", pointId: softB, handle: "outgoing" },
+			],
+			softA,
+			{ x: 40, y: 10 },
+		)
+		const b = planned?.result.points.find((point) => point.pointId === softB)
+		const fixed = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "incoming",
+		)
+		const moving = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "outgoing",
+		)
+		expect(b).toEqual({ pointId: softB, x: 100, y: 200 })
+		expect(fixed).toEqual({
+			pointId: softB,
+			handle: "incoming",
+			x: 100,
+			y: 160,
+		})
+		expect(
+			Math.hypot((moving?.x ?? 0) - 100, (moving?.y ?? 0) - 200),
+		).toBeCloseTo(30)
+	})
+
+	it("moves a node and both selected handles as a tangent-constrained unit", () => {
+		const planned = planControlledSelectionDrag(
+			contours,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "handle", pointId: softA, handle: "incoming" },
+				{ kind: "handle", pointId: softA, handle: "outgoing" },
+				{ kind: "node", pointId: hard },
+			],
+			softA,
+			{ x: 30, y: 90 },
+		)
+		expect(planned?.result.points[0]).toEqual({
+			pointId: softA,
+			x: 80,
+			y: 50,
+		})
+		expect(planned?.result.handles.slice(0, 2)).toEqual([
+			{ pointId: softA, handle: "incoming", x: 30, y: 50 },
+			{ pointId: softA, handle: "outgoing", x: 130, y: 50 },
+		])
+	})
+
+	it("preserves controlled dragging for a single node-and-handles group", () => {
+		const planned = planControlledSelectionDrag(
+			contours,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "handle", pointId: softA, handle: "incoming" },
+				{ kind: "handle", pointId: softA, handle: "outgoing" },
+			],
+			softA,
+			{ x: 30, y: 90 },
+		)
+		expect(planned?.result).toEqual({
+			points: [{ pointId: softA, x: 80, y: 50 }],
+			handles: [
+				{ pointId: softA, handle: "incoming", x: 30, y: 50 },
+				{ pointId: softA, handle: "outgoing", x: 130, y: 50 },
+			],
+		})
+	})
+
+	it("uses selected-handle direction when the fixed opposite handle is zero-length", () => {
+		const degenerateB = {
+			...contours[1]!.nodes[0]!,
+			incoming: { x: 0, y: 0 },
+			outgoing: { x: 30, y: 0 },
+		}
+		const planned = planControlledSelectionDrag(
+			[contours[0]!, { closed: false, nodes: [degenerateB] }],
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: softB },
+				{ kind: "handle", pointId: softB, handle: "outgoing" },
+			],
+			softA,
+			{ x: 20, y: 0 },
+		)
+		const b = planned?.result.points.find((point) => point.pointId === softB)
+		const fixed = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "incoming",
+		)
+		const moving = planned?.result.handles.find(
+			(handle) => handle.pointId === softB && handle.handle === "outgoing",
+		)
+		expect(b).toEqual({ pointId: softB, x: 120, y: 200 })
+		expect(fixed).toEqual({
+			pointId: softB,
+			handle: "incoming",
+			x: 100,
+			y: 200,
+		})
+		expect(moving).toEqual({
+			pointId: softB,
+			handle: "outgoing",
+			x: 150,
+			y: 200,
+		})
+	})
+
+	it("uses captured tangent memory when all authored directions are degenerate", () => {
+		const degenerate = [
+			{
+				closed: false,
+				nodes: [
+					{
+						pointId: softA,
+						mode: "soft" as const,
+						x: 0,
+						y: 0,
+						incoming: { x: 0, y: 0 },
+					},
+				],
+			},
+			{ closed: false, nodes: [contours[0]!.nodes[1]!] },
+		]
+		const planned = planControlledSelectionDrag(
+			degenerate,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "node", pointId: hard },
+			],
+			softA,
+			{ x: 10, y: 30 },
+			new Map([[softA, { x: 1, y: 0 }]]),
+		)
+		expect(planned?.controllerDelta).toEqual({ x: 10, y: 0 })
+		expect(planned?.result.points).toEqual([
+			{ pointId: softA, x: 10, y: 0 },
+			{ pointId: hard, x: 210, y: 50 },
+		])
+	})
+
+	it("rejects non-finite and missing-controller geometry", () => {
+		expect(
+			planControlledSelectionDrag(
+				contours,
+				[
+					{ kind: "node", pointId: softA },
+					{ kind: "node", pointId: hard },
+				],
+				softA,
+				{ x: Number.NaN, y: 0 },
+			),
+		).toBeNull()
+		expect(
+			planControlledSelectionDrag(
+				contours,
+				[{ kind: "node", pointId: hard }],
+				softA,
+				{ x: 1, y: 1 },
 			),
 		).toBeNull()
 	})
