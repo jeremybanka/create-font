@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest"
 
 import {
 	addTile,
+	columnHitSurface,
+	columnOverflowState,
 	columnSlotAllocation,
 	createDefaultTilingLayout,
 	createTilingHistory,
 	duplicateTile,
 	editTilingHistory,
 	findTile,
+	hotbarClearanceForColumn,
 	moveTile,
 	moveTileBy,
 	moveTileToEdge,
@@ -20,6 +23,7 @@ import {
 	setTileFill,
 	toggleColumnCollapsed,
 	undoTilingHistory,
+	visibleColumnIds,
 } from "../src/tiling-workspace.ts"
 
 describe("tiling workspace", () => {
@@ -30,6 +34,80 @@ describe("tiling workspace", () => {
 		expect(columnSlotAllocation(1_000)).toEqual({ left: 1, right: 2 })
 		expect(columnSlotAllocation(1_199)).toEqual({ left: 1, right: 2 })
 		expect(columnSlotAllocation(1_200)).toEqual({ left: 2, right: 2 })
+	})
+
+	it("identifies the visible logical columns in every allocation and paging state", () => {
+		expect(visibleColumnIds({ left: 2, right: 2 }, 1, 3, 4)).toEqual([
+			1, 2, 3, 4,
+		])
+		expect(visibleColumnIds({ left: 1, right: 2 }, 2, 3, 1)).toEqual([2, 3, 4])
+		expect(visibleColumnIds({ left: 1, right: 1 }, 1, 4, 2)).toEqual([1, 4])
+		expect(visibleColumnIds({ left: 0, right: 1 }, 1, 3, 2)).toEqual([2])
+		expect(visibleColumnIds({ left: 0, right: 1 }, 1, 3, 4)).toEqual([4])
+	})
+
+	it("reserves measured hotbar clearance only across a strict horizontal intersection", () => {
+		const hotbar = { left: 400, right: 840, top: 620, bottom: 668 }
+		const workspaceBottom = 700
+		const leftOfHotbar = { left: 151, right: 400, top: 12, bottom: 688 }
+		const onePixelOverlap = { ...leftOfHotbar, right: 401 }
+
+		expect(
+			hotbarClearanceForColumn(leftOfHotbar, hotbar, workspaceBottom),
+		).toBe(0)
+		expect(
+			hotbarClearanceForColumn(onePixelOverlap, hotbar, workspaceBottom),
+		).toBe(80)
+		expect(
+			hotbarClearanceForColumn(
+				{ left: 839, right: 1_088, top: 12, bottom: 688 },
+				hotbar,
+				workspaceBottom,
+			),
+		).toBe(80)
+		expect(
+			hotbarClearanceForColumn(
+				{ left: 20, right: 240, top: 12, bottom: 688 },
+				hotbar,
+				workspaceBottom,
+			),
+		).toBe(0)
+	})
+
+	it("distinguishes content-only hit testing from management drop surfaces", () => {
+		expect(columnHitSurface(false)).toBe("content")
+		expect(columnHitSurface(true)).toBe("column")
+	})
+
+	it("tracks fitting, trailing, mid-scroll, and true scroll-end states", () => {
+		expect(
+			columnOverflowState({
+				scrollTop: 0,
+				clientHeight: 300,
+				scrollHeight: 300,
+			}),
+		).toBe("fit")
+		expect(
+			columnOverflowState({
+				scrollTop: 0,
+				clientHeight: 300,
+				scrollHeight: 500,
+			}),
+		).toBe("more")
+		expect(
+			columnOverflowState({
+				scrollTop: 120,
+				clientHeight: 300,
+				scrollHeight: 500,
+			}),
+		).toBe("more")
+		expect(
+			columnOverflowState({
+				scrollTop: 199.25,
+				clientHeight: 300,
+				scrollHeight: 500,
+			}),
+		).toBe("end")
 	})
 
 	it("starts with stable logical columns and the editor panes as tiles", () => {

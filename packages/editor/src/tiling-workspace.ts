@@ -34,6 +34,22 @@ export interface ColumnSlotAllocation {
 	readonly right: 1 | 2
 }
 
+export interface LayoutRect {
+	readonly left: number
+	readonly right: number
+	readonly top: number
+	readonly bottom: number
+}
+
+export interface ScrollMetrics {
+	readonly scrollTop: number
+	readonly clientHeight: number
+	readonly scrollHeight: number
+}
+
+export type ColumnOverflowState = "fit" | "more" | "end"
+export type ColumnHitSurface = "content" | "column"
+
 export interface TilingHistory {
 	readonly past: readonly TilingLayout[]
 	readonly present: TilingLayout
@@ -119,6 +135,42 @@ export function columnSlotAllocation(
 	if (viewportWidth < 1_000) return { left: 1, right: 1 }
 	if (viewportWidth < 1_200) return { left: 1, right: 2 }
 	return { left: 2, right: 2 }
+}
+
+export function visibleColumnIds(
+	allocation: ColumnSlotAllocation,
+	activeLeft: 1 | 2,
+	activeRight: 3 | 4,
+	selectedColumn: TileColumnId,
+): readonly TileColumnId[] {
+	if (allocation.left === 0) return [selectedColumn]
+	return [
+		...(allocation.left === 2 ? ([1, 2] as const) : [activeLeft]),
+		...(allocation.right === 2 ? ([3, 4] as const) : [activeRight]),
+	]
+}
+
+export function hotbarClearanceForColumn(
+	column: LayoutRect,
+	hotbar: LayoutRect,
+	workspaceBottom: number,
+): number {
+	const horizontallyIntersects =
+		column.left < hotbar.right && column.right > hotbar.left
+	if (!horizontallyIntersects) return 0
+	return Math.max(0, workspaceBottom - hotbar.top)
+}
+
+export function columnOverflowState(
+	{ scrollTop, clientHeight, scrollHeight }: ScrollMetrics,
+	tolerance = 1,
+): ColumnOverflowState {
+	if (scrollHeight <= clientHeight + tolerance) return "fit"
+	return scrollTop + clientHeight >= scrollHeight - tolerance ? "end" : "more"
+}
+
+export function columnHitSurface(management: boolean): ColumnHitSurface {
+	return management ? "column" : "content"
 }
 
 export function serializeTilingLayout(layout: TilingLayout): string {
