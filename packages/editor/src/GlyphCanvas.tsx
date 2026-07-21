@@ -108,6 +108,7 @@ import {
 import {
 	directDragOwnsPointer,
 	planFixedHandleNodeMove,
+	planControlledSelectionDrag,
 	planSelectedHardNodeNudge,
 	planSelectionNudge,
 	projectSelectionTransformPreview,
@@ -326,8 +327,10 @@ interface GroupDrag {
 	readonly targetY: number
 	readonly node: LiveGroupDragTarget["node"]
 	readonly controls: readonly ResolvedSelectionControl[]
+	readonly selection: readonly EditorSelectionTarget[]
 	readonly bounds: SelectionBounds
 	readonly selectedPointIds: ReadonlySet<PointId>
+	readonly controllerPointId: PointId | null
 	readonly restoreTargetAfterCommit: boolean
 	lastRawDelta: Readonly<{ x: number; y: number }> | null
 	joinCandidate: EndpointJoinCandidate | null
@@ -2286,8 +2289,10 @@ export function GlyphCanvas({
 			targetY,
 			node,
 			controls,
+			selection: rigidSelection,
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
+			controllerPointId: target.kind === "node" ? target.pointId : null,
 			restoreTargetAfterCommit: false,
 			lastRawDelta: null,
 			joinCandidate: null,
@@ -2321,8 +2326,10 @@ export function GlyphCanvas({
 			targetY: 0,
 			node: event.target,
 			controls,
+			selection: rigidSelection,
 			bounds,
 			selectedPointIds: new Set(rigidSelection.map((item) => item.pointId)),
+			controllerPointId: null,
 			restoreTargetAfterCommit: true,
 			lastRawDelta: null,
 			joinCandidate: null,
@@ -2333,10 +2340,39 @@ export function GlyphCanvas({
 		currentGroupDrag: GroupDrag,
 		rawDelta: Readonly<{ x: number; y: number }>,
 		shiftKey: boolean,
+		altKey: boolean,
 	): Readonly<{
 		preview: SelectionTransformResult
 		snaps: readonly ActiveSnap[]
 	}> => {
+		if (altKey && currentGroupDrag.controllerPointId !== null) {
+			const constrained = orthogonalConstraint(
+				{ x: 0, y: 0 },
+				rawDelta,
+				shiftKey,
+			)
+			const gestureDelta = {
+				x: constrained?.axis === "x" ? constrained.value : rawDelta.x,
+				y: constrained?.axis === "y" ? constrained.value : rawDelta.y,
+			}
+			const controlled = planControlledSelectionDrag(
+				contours,
+				currentGroupDrag.selection,
+				currentGroupDrag.controllerPointId,
+				gestureDelta,
+			)
+			currentGroupDrag.joinCandidate = null
+			setJoinTarget(null)
+			const preview =
+				controlled?.result ??
+				translateSelectionControls(currentGroupDrag.controls, 0, 0)
+			const delta = controlled?.controllerDelta ?? { x: 0, y: 0 }
+			currentGroupDrag.node.position({
+				x: currentGroupDrag.targetX + delta.x,
+				y: currentGroupDrag.targetY + delta.y,
+			})
+			return { preview, snaps: [] }
+		}
 		const deltaConstraint = orthogonalConstraint(
 			{ x: 0, y: 0 },
 			rawDelta,
@@ -2403,7 +2439,12 @@ export function GlyphCanvas({
 			y: event.target.y() - currentGroupDrag.targetY,
 		}
 		currentGroupDrag.lastRawDelta = rawDelta
-		return applyGroupDrag(currentGroupDrag, rawDelta, event.evt.shiftKey)
+		return applyGroupDrag(
+			currentGroupDrag,
+			rawDelta,
+			event.evt.shiftKey,
+			event.evt.altKey,
+		)
 	}
 	useEffect(() => {
 		const currentGroupDrag = groupDragRef.current
@@ -2413,11 +2454,12 @@ export function GlyphCanvas({
 			currentGroupDrag,
 			currentGroupDrag.lastRawDelta,
 			shiftHeld,
+			altHeld,
 		)
 		setTransformPreview(resolved.preview)
 		setActiveSnaps(resolved.snaps)
 		currentGroupDrag.node.getLayer()?.batchDraw()
-	}, [shiftHeld])
+	}, [altHeld, shiftHeld])
 	const previewGroupDrag = (event: KonvaEventObject<DragEvent>): boolean => {
 		const cancellation = cancelledGroupDrag.current
 		if (

@@ -143,10 +143,13 @@ function pointerDown(target: MountedNode, canvas: HTMLCanvasElement): void {
 	})
 }
 
-function dragEvent(type: string): Readonly<Record<string, unknown>> {
+function dragEvent(
+	type: string,
+	altKey = false,
+): Readonly<Record<string, unknown>> {
 	return {
 		evt: {
-			altKey: false,
+			altKey,
 			offsetX: 0,
 			offsetY: 0,
 			shiftKey: false,
@@ -160,9 +163,10 @@ function expectCancelledSession(
 	origin: Readonly<{ x: number; y: number }>,
 	transform: ReturnType<typeof vi.fn>,
 	join: ReturnType<typeof vi.fn>,
+	altKey = false,
 ): void {
 	target.position({ x: origin.x + 40, y: origin.y + 30 })
-	target.fire("dragmove", dragEvent("touchmove"))
+	target.fire("dragmove", dragEvent("touchmove", altKey))
 	expect(target.position()).not.toEqual(origin)
 	target.fire("dragend", dragEvent("touchcancel"))
 	expect(target.position()).toEqual(origin)
@@ -175,6 +179,82 @@ function expectCancelledSession(
 }
 
 describe("GlyphCanvas group drag cancellation", () => {
+	it("previews, commits, and undoes a multi-soft-node controlled drag atomically", () => {
+		const { canvas, contour, selectedPointIds, stage, transform, workspace } =
+			mountSelectedContour()
+		const [controllerId, followerId] = selectedPointIds
+		const controller =
+			controllerId === undefined ? undefined : stage.findOne(`#${controllerId}`)
+		if (controller === undefined || followerId === undefined)
+			throw new Error("The selected nodes were not rendered.")
+		const before = contour.nodes.slice(0, 2).map((node) => ({
+			pointId: node.pointId,
+			x: node.x,
+			y: node.y,
+		}))
+		const origin = controller.position()
+		pointerDown(controller, canvas)
+		controller.fire("dragstart", dragEvent("mousedown", true))
+		controller.position({ x: origin.x + 40, y: origin.y + 30 })
+		controller.fire("dragmove", dragEvent("mousemove", true))
+		controller.fire("dragend", dragEvent("mouseup", true))
+
+		expect(transform).toHaveBeenCalledTimes(1)
+		const result = transform.mock.calls[0]?.[0]
+		expect(result?.points).toEqual([
+			{ pointId: controllerId, x: before[0]!.x + 40, y: before[0]!.y },
+			{ pointId: followerId, x: before[1]!.x, y: before[1]!.y },
+		])
+		const committed = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes.slice(0, 2)
+		expect(committed?.map(({ pointId, x, y }) => ({ pointId, x, y }))).toEqual(
+			result?.points,
+		)
+
+		workspace.font.undo(oGlyphId)
+		const undone = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes.slice(0, 2)
+		expect(undone?.map(({ pointId, x, y }) => ({ pointId, x, y }))).toEqual(
+			before,
+		)
+		workspace.font.redo(oGlyphId)
+		const redone = workspace.font.silo
+			.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes.slice(0, 2)
+		expect(redone?.map(({ pointId, x, y }) => ({ pointId, x, y }))).toEqual(
+			result?.points,
+		)
+	})
+
+	it("uses the final modifier state when Alt is released during a group drag", () => {
+		const { canvas, contour, selectedPointIds, stage, transform } =
+			mountSelectedContour()
+		const controllerId = selectedPointIds[0]
+		const controller =
+			controllerId === undefined ? undefined : stage.findOne(`#${controllerId}`)
+		if (controller === undefined)
+			throw new Error("The selected controller was not rendered.")
+		const origin = controller.position()
+		pointerDown(controller, canvas)
+		controller.fire("dragstart", dragEvent("mousedown", true))
+		controller.position({ x: origin.x + 40, y: origin.y + 30 })
+		controller.fire("dragmove", dragEvent("mousemove", true))
+		controller.position({ x: origin.x + 40, y: origin.y + 30 })
+		controller.fire("dragmove", dragEvent("mousemove", false))
+		controller.fire("dragend", dragEvent("mouseup", false))
+
+		const points = transform.mock.calls[0]?.[0].points
+		expect(points).toHaveLength(2)
+		expect(points?.map(({ pointId, x }) => ({ pointId, x }))).toEqual(
+			contour.nodes.slice(0, 2).map((node) => ({
+				pointId: node.pointId,
+				x: node.x + 40,
+			})),
+		)
+	})
+
 	it("renders open authoring contours in the typing view", () => {
 		const { stage, workspace } = mountSelectedContour({
 			withOpenContour: true,
@@ -247,7 +327,7 @@ describe("GlyphCanvas group drag cancellation", () => {
 		const origin = node.position()
 		pointerDown(node, canvas)
 		node.fire("dragstart", dragEvent("touchmove"))
-		expectCancelledSession(node, origin, transform, join)
+		expectCancelledSession(node, origin, transform, join, true)
 	})
 
 	it("restores a path group drag when Konva forwards touchcancel as dragend", () => {

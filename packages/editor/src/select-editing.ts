@@ -52,6 +52,12 @@ export interface TangentDirectionMemory {
 	readonly direction: Readonly<{ x: number; y: number }>
 }
 
+export interface ControlledSelectionDragPlan {
+	readonly result: SelectionTransformResult
+	/** The controller's actual movement after its tangent constraint is applied. */
+	readonly controllerDelta: Readonly<{ x: number; y: number }>
+}
+
 /** Projects pending absolute controls from authored geometry exactly once. */
 export function projectSelectionTransformPreview(
 	authoredNodes: readonly EditorLayerNode[],
@@ -308,6 +314,189 @@ export function planFixedHandleNodeMove(
 		points: [{ pointId: node.pointId, x: candidate.x, y: candidate.y }],
 		handles,
 	}
+}
+
+const projectToLine = (
+	candidate: Readonly<{ x: number; y: number }>,
+	anchor: Readonly<{ x: number; y: number }>,
+	direction: Readonly<{ x: number; y: number }>,
+	minimum: number | null,
+	maximum: number | null,
+): Readonly<{ x: number; y: number }> | null => {
+	const denominator = direction.x ** 2 + direction.y ** 2
+	if (
+		!finitePoint(candidate) ||
+		!Number.isFinite(denominator) ||
+		denominator === 0
+	)
+		return null
+	let amount =
+		((candidate.x - anchor.x) * direction.x +
+			(candidate.y - anchor.y) * direction.y) /
+		denominator
+	if (minimum !== null) amount = Math.max(minimum, amount)
+	if (maximum !== null) amount = Math.min(maximum, amount)
+	return {
+		x: anchor.x + direction.x * amount,
+		y: anchor.y + direction.y * amount,
+	}
+}
+
+/**
+ * Plans an Alt/Option drag that starts from one selected node. The controller's
+ * constrained displacement is mapped to every selected node, then each soft
+ * node resolves that candidate against its own tangent. Unselected authored
+ * endpoints are included in the result so preview and the atomic state commit
+ * share exactly the same geometry.
+ */
+export function planControlledSelectionDrag(
+	contours: readonly Readonly<{
+		closed: boolean
+		nodes: readonly EditorLayerNode[]
+		tangentNodes?: readonly EditorLayerNode[]
+	}>[],
+	selection: readonly EditorSelectionTarget[],
+	controllerPointId: PointId,
+	rawDelta: Readonly<{ x: number; y: number }>,
+): ControlledSelectionDragPlan | null {
+	if (!finitePoint(rawDelta)) return null
+	const nodes = contours.flatMap((contour) => contour.nodes)
+	const byId = new Map(nodes.map((node) => [node.pointId, node]))
+	const controller = byId.get(controllerPointId)
+	if (controller === undefined) return null
+	const selected = new Set(selection.map(selectionKey))
+	if (!selected.has(`node/${controllerPointId}`)) return null
+
+	const locate = (pointId: PointId) => {
+		for (const contour of contours) {
+			const index = contour.nodes.findIndex((node) => node.pointId === pointId)
+			if (index !== -1) return { contour, index }
+		}
+		return null
+	}
+	const endpoint = (node: EditorLayerNode, handle: EditorHandleKind) => {
+		const vector = node[handle]
+		return vector === undefined
+			? null
+			: { x: node.x + vector.x, y: node.y + vector.y }
+	}
+	const selectedHandles = (node: EditorLayerNode) =>
+		(["incoming", "outgoing"] as const).filter(
+			(handle) =>
+				node[handle] !== undefined &&
+				selected.has(`handle/${node.pointId}/${handle}`),
+		)
+	const resolveSoftPosition = (
+		node: EditorLayerNode,
+		candidate: Readonly<{ x: number; y: number }>,
+	): Readonly<{ x: number; y: number }> | null => {
+		const location = locate(node.pointId)
+		if (location === null) return null
+		const authoredHandles = (["incoming", "outgoing"] as const).filter(
+			(handle) => node[handle] !== undefined,
+		)
+		const moving = selectedHandles(node)
+		if (moving.length === 0) {
+			const constraint = tangentSlideConstraint(
+				location.contour.nodes,
+				location.index,
+				location.contour.closed,
+				undefined,
+				location.contour.tangentNodes,
+			)
+			return constraint === null
+				? null
+				: (resolveTangentSlide(constraint, candidate)?.points[0] ?? null)
+		}
+		const fixed = authoredHandles.find((handle) => !moving.includes(handle))
+		if (fixed !== undefined) {
+			const anchor = endpoint(node, fixed)
+			if (anchor === null) return null
+			return projectToLine(
+				candidate,
+				anchor,
+				{ x: node.x - anchor.x, y: node.y - anchor.y },
+				0,
+				null,
+			)
+		}
+		const authored = authoredHandles
+			.map((handle) => endpoint(node, handle))
+			.find((value) => value !== null)
+		if (authored === undefined) return null
+		return projectToLine(
+			candidate,
+			{ x: node.x, y: node.y },
+			{ x: node.x - authored.x, y: node.y - authored.y },
+			null,
+			null,
+		)
+	}
+	const controllerCandidate = {
+		x: controller.x + rawDelta.x,
+		y: controller.y + rawDelta.y,
+	}
+	const controllerPosition =
+		controller.mode === "soft"
+			? resolveSoftPosition(controller, controllerCandidate)
+			: controllerCandidate
+	if (controllerPosition === null) return null
+	const controllerDelta = {
+		x: controllerPosition.x - controller.x,
+		y: controllerPosition.y - controller.y,
+	}
+
+	const points: SelectionTransformResult["points"][number][] = []
+	const handles: SelectionTransformResult["handles"][number][] = []
+	for (const node of nodes) {
+		if (!selected.has(`node/${node.pointId}`)) continue
+		const candidate = {
+			x: node.x + controllerDelta.x,
+			y: node.y + controllerDelta.y,
+		}
+		const position =
+			node.mode === "soft" ? resolveSoftPosition(node, candidate) : candidate
+		if (position === null) return null
+		points.push({ pointId: node.pointId, ...position })
+		const delta = { x: position.x - node.x, y: position.y - node.y }
+		const moving = selectedHandles(node)
+		for (const handle of ["incoming", "outgoing"] as const) {
+			const original = endpoint(node, handle)
+			if (original === null) continue
+			if (moving.includes(handle)) {
+				if (node.mode === "soft" && moving.length === 1) {
+					const oppositeKind = handle === "incoming" ? "outgoing" : "incoming"
+					const opposite = endpoint(node, oppositeKind)
+					if (opposite !== null) {
+						const length = Math.hypot(original.x - node.x, original.y - node.y)
+						const away = {
+							x: position.x - opposite.x,
+							y: position.y - opposite.y,
+						}
+						const magnitude = Math.hypot(away.x, away.y)
+						if (magnitude === 0) return null
+						handles.push({
+							pointId: node.pointId,
+							handle,
+							x: position.x + (away.x / magnitude) * length,
+							y: position.y + (away.y / magnitude) * length,
+						})
+						continue
+					}
+				}
+				handles.push({
+					pointId: node.pointId,
+					handle,
+					x: original.x + delta.x,
+					y: original.y + delta.y,
+				})
+			} else {
+				handles.push({ pointId: node.pointId, handle, ...original })
+			}
+		}
+	}
+	if (points.length < 2) return null
+	return { result: { points, handles }, controllerDelta }
 }
 
 /** Selects fixed-handle nudging only for one hard node and no handle controls. */
