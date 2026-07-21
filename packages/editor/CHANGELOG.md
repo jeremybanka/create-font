@@ -1,5 +1,15 @@
 # @create-font/editor
 
+## 0.7.3
+
+### Patch Changes
+
+- c3ababf: Keep tiled editor columns clear of the action hotbar, pass empty column space through to the canvas, and show measured scroll overflow edges.
+- 6670af3: Support tangent-aware Alt/Option dragging for multi-node outline selections
+- 07221ff: Paste single-layer outline copies across masters of the same glyph.
+- c28c938: Initialize canvas views one-third into their first usable viewport.
+- ae3d43e: Prevent loading-screen layout shift and remove obsolete diff overlays that collided with tile management controls.
+
 ## 0.7.2
 
 ### Patch Changes

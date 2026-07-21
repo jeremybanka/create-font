@@ -1,5 +1,17 @@
 # create-font
 
+## 0.3.7
+
+### Patch Changes
+
+- ae3d43e: Prevent loading-screen layout shift and remove obsolete diff overlays that collided with tile management controls.
+- Updated dependencies [c3ababf]
+- Updated dependencies [6670af3]
+- Updated dependencies [07221ff]
+- Updated dependencies [c28c938]
+- Updated dependencies [ae3d43e]
+  - @create-font/editor@0.7.3
+
 ## 0.3.6
 
 ### Patch Changes
