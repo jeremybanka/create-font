@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "bun:test"
 import {
 	SourceUnitConflictError,
 	SourceValidationError,
+	SourceVersionControlError,
 	type SourceChangedEvent,
 } from "@create-font/server"
 import { assembleEditorFontSource } from "@create-font/source"
@@ -19,6 +20,29 @@ import {
 import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
+
+async function git(root: string, ...args: readonly string[]): Promise<string> {
+	const process = Bun.spawn([`git`, ...args], {
+		cwd: root,
+		stdout: `pipe`,
+		stderr: `pipe`,
+	})
+	const [code, stdout, stderr] = await Promise.all([
+		process.exited,
+		new Response(process.stdout).text(),
+		new Response(process.stderr).text(),
+	])
+	if (code !== 0) throw new Error(stderr)
+	return stdout.trim()
+}
+
+async function initializeGitRepository(workspaceRoot: string): Promise<void> {
+	await git(workspaceRoot, `init`, `--initial-branch=main`)
+	await git(workspaceRoot, `config`, `user.name`, `Create Font Test`)
+	await git(workspaceRoot, `config`, `user.email`, `test@create-font.local`)
+	await git(workspaceRoot, `add`, `fonts`)
+	await git(workspaceRoot, `commit`, `-m`, `Initial font`)
+}
 
 function revisionForText(text: string): string {
 	return `sha256:${createHash(`sha256`).update(text).digest(`hex`)}`
@@ -64,6 +88,95 @@ describe(`font workspace discovery`, () => {
 })
 
 describe(`filesystem font source service`, () => {
+	it(`compares the complete working source with HEAD and arbitrary immutable refs`, async () => {
+		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
+		await initializeGitRepository(workspaceRoot)
+		const source = await createFileSystemSourceService(projectRoot)
+		const clean = await source.readComparison?.({ baseRef: `HEAD` })
+		expect(clean?.changes).toEqual([])
+		expect(clean?.base.identity).toMatch(/^[0-9a-f]{40,64}$/)
+		expect(clean?.target.kind).toBe(`working`)
+
+		const namesPath = resolve(projectRoot, `names.json`)
+		await writeFile(
+			namesPath,
+			(await readFile(namesPath, `utf8`)).replace(
+				`Workbench Sans`,
+				`Workbench Review Sans`,
+			),
+		)
+		const working = await source.readComparison?.({ baseRef: `HEAD` })
+		expect(working?.changes).toContainEqual(
+			expect.objectContaining({
+				change: `modified`,
+				kind: `source`,
+				paths: [`names.json`],
+			}),
+		)
+
+		await git(workspaceRoot, `add`, `fonts/workbench-sans/names.json`)
+		await git(workspaceRoot, `commit`, `-m`, `Rename font`)
+		const refs = await source.readComparison?.({
+			baseRef: `HEAD~1`,
+			targetRef: `HEAD`,
+		})
+		expect(refs?.target.kind).toBe(`ref`)
+		expect(refs?.changes.map((change) => change.paths[0])).toEqual([
+			`names.json`,
+		])
+	})
+
+	it(`rejects invalid refs without treating them as Git options`, async () => {
+		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
+		await initializeGitRepository(workspaceRoot)
+		const source = await createFileSystemSourceService(projectRoot)
+		await expect(
+			source.readComparison?.({ baseRef: `--help` }),
+		).rejects.toMatchObject<Partial<SourceVersionControlError>>({
+			code: `source.invalid_ref`,
+		})
+	})
+
+	it(`commits exactly nominated units and leaves other working changes intact`, async () => {
+		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
+		await initializeGitRepository(workspaceRoot)
+		const source = await createFileSystemSourceService(projectRoot)
+		const namesPath = resolve(projectRoot, `names.json`)
+		const glyphPath = (await source.readManifest()).units.find(
+			(unit) =>
+				unit.path.startsWith(`glyphs/`) && unit.path !== `glyphs/index.json`,
+		)?.path
+		expect(glyphPath).toBeDefined()
+		await writeFile(
+			namesPath,
+			(await readFile(namesPath, `utf8`)).replace(
+				`Workbench Sans`,
+				`Workbench Commit Sans`,
+			),
+		)
+		const glyphAbsolute = resolve(projectRoot, glyphPath as string)
+		await writeFile(
+			glyphAbsolute,
+			(await readFile(glyphAbsolute, `utf8`)).replace(
+				`"export": true`,
+				`"export": false`,
+			),
+		)
+		const before = await source.readComparison?.({ baseRef: `HEAD` })
+		expect(before?.changes).toHaveLength(2)
+		const result = await source.commitUnits?.({
+			expectedComparisonIdentity: before?.identity ?? ``,
+			message: `Update family name`,
+			paths: [`names.json`],
+		})
+		expect(result?.commit).toBe(await git(workspaceRoot, `rev-parse`, `HEAD`))
+		expect(
+			await git(workspaceRoot, `diff`, `--name-only`, `HEAD`, `--`, `fonts`),
+		).toBe(`fonts/workbench-sans/${glyphPath}`)
+		expect(
+			await git(workspaceRoot, `show`, `HEAD:fonts/workbench-sans/names.json`),
+		).toContain(`Workbench Commit Sans`)
+	})
 	it(`reports project-load phases and their operation triggers`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const diagnostics: SourceProjectLoadDiagnostic[] = []

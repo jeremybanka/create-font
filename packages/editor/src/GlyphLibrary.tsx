@@ -11,17 +11,23 @@ import css from "./GlyphLibrary.module.css"
 import { createGlyphPreview } from "./glyph-preview.ts"
 import { useO, useOF } from "./state-hooks.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
+import {
+	glyphDifference,
+	type EditorVersionControl,
+} from "./version-control.ts"
 
 export interface GlyphLibraryProps {
 	readonly addingGlyphs: boolean
 	readonly onAddingGlyphsChange: (addingGlyphs: boolean) => void
 	readonly workspace: EditorWorkspace
+	readonly versionControl?: EditorVersionControl
 }
 
 export function GlyphLibrary({
 	addingGlyphs,
 	onAddingGlyphsChange,
 	workspace,
+	versionControl,
 }: GlyphLibraryProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
@@ -104,6 +110,7 @@ export function GlyphLibrary({
 							glyphId={glyph.id}
 							activeGlyphId={activeGlyphId}
 							activeMasterId={activeMasterId}
+							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
 					))}
 				</glyph-grid>
@@ -165,6 +172,7 @@ function GlyphLibraryItem({
 	glyphId,
 	activeGlyphId,
 	activeMasterId,
+	versionControl,
 }: {
 	readonly workspace: EditorWorkspace
 	readonly glyphId: Parameters<EditorWorkspace["actions"]["selectGlyph"]>[0]
@@ -174,7 +182,9 @@ function GlyphLibraryItem({
 	readonly activeMasterId: Parameters<
 		EditorWorkspace["actions"]["selectMaster"]
 	>[0]
+	readonly versionControl?: EditorVersionControl
 }) {
+	const difference = glyphDifference(versionControl?.comparison, glyphId)
 	const glyph = useOF(workspace.font.selectors.editorGlyphSource, glyphId)
 	const metrics =
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
@@ -191,6 +201,7 @@ function GlyphLibraryItem({
 					type="button"
 					aria-pressed={glyph.id === activeGlyphId}
 					aria-label={`Open ${glyph.name} in the canvas`}
+					data-difference={difference}
 					onClick={() => {
 						workspace.actions.selectGlyph(glyph.id)
 						workspace.actions.navigate("/")
@@ -224,6 +235,7 @@ function GlyphLibraryItem({
 					<glyph-label>
 						<strong>{glyph.name}</strong>
 						<span>{glyph.export ? "Exported" : "Not exported"}</span>
+						{difference === "unchanged" ? null : <small>{difference}</small>}
 					</glyph-label>
 				</button>
 			)}

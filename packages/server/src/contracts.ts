@@ -61,6 +61,51 @@ export type SourceProjectSnapshot = Readonly<{
 	units: readonly SourceUnitSnapshot[]
 }>
 
+export type SourceComparisonEndpoint = Readonly<{
+	/** Immutable commit object ID, or the live source manifest revision. */
+	identity: string
+	kind: `ref` | `working`
+	label: string
+	ref?: string
+	snapshot: SourceProjectSnapshot
+}>
+
+export type SourceChangeKind = `added` | `deleted` | `modified`
+
+export type SourceChangeUnit = Readonly<{
+	change: SourceChangeKind
+	id: string
+	kind: `glyph` | `source`
+	label: string
+	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
+}>
+
+export type SourceComparison = Readonly<{
+	base: SourceComparisonEndpoint
+	/** Changes from base to target, grouped into safely committable source units. */
+	changes: readonly SourceChangeUnit[]
+	/** Changes when either endpoint changes; used as the optimistic commit guard. */
+	identity: string
+	target: SourceComparisonEndpoint
+}>
+
+export type ReadSourceComparisonInput = Readonly<{
+	baseRef: string
+	/** Omit for the live working source (tracked, staged, and untracked). */
+	targetRef?: string
+}>
+
+export type CommitSourceUnitsInput = Readonly<{
+	expectedComparisonIdentity: string
+	message: string
+	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
+}>
+
+export type CommitSourceUnitsResult = Readonly<{
+	commit: string
+	comparison: SourceComparison
+}>
+
 export type SourceUnitWrite = Readonly<{
 	/**
 	 * `null` means the caller expects to create the unit. A string means the
@@ -89,6 +134,8 @@ export type WriteSourceUnitsResult = Readonly<{
 }>
 
 export interface CreateFontSourceService {
+	commitUnits?(input: CommitSourceUnitsInput): Promise<CommitSourceUnitsResult>
+	readComparison?(input: ReadSourceComparisonInput): Promise<SourceComparison>
 	readManifest(): Promise<SourceManifest>
 	readSnapshot(): Promise<SourceProjectSnapshot>
 	readUnit(path: SourceUnitPath): Promise<SourceUnitSnapshot>
@@ -99,6 +146,21 @@ export interface CreateFontSourceService {
 	 * filesystem edits. The service remains usable without realtime support.
 	 */
 	subscribe?(listener: (event: SourceChangedEvent) => void): () => void
+}
+
+export class SourceVersionControlError extends Error {
+	readonly code:
+		| `source.git_unavailable`
+		| `source.invalid_ref`
+		| `source.repository_state`
+		| `source.snapshot_too_large`
+		| `source.commit_conflict`
+
+	constructor(code: SourceVersionControlError["code"], message: string) {
+		super(message)
+		this.name = `SourceVersionControlError`
+		this.code = code
+	}
 }
 
 export type SourceServiceUnavailable = Readonly<{

@@ -32,3 +32,9 @@ export type {
 	EditorFontSource,
 	MountedEditor,
 } from "./browser-api.ts"
+export type {
+	EditorVersionControl,
+	VersionControlChangeUnit,
+	VersionControlCommitRequest,
+	VersionControlComparison,
+} from "./version-control.ts"

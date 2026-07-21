@@ -6,6 +6,7 @@ import {
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
 	SourceValidationError,
+	SourceVersionControlError,
 } from "./contracts.ts"
 import type {
 	BuildResult,
@@ -17,9 +18,10 @@ import type {
 	CreateFontSourceService,
 	WriteSourceUnitInput,
 	WriteSourceUnitsInput,
+	CommitSourceUnitsInput,
 } from "./contracts.ts"
 
-export const CREATE_FONT_RPC_VERSION = 4 as const
+export const CREATE_FONT_RPC_VERSION = 5 as const
 
 export type CreateFontRpcOptions = Readonly<{
 	build: () => Promise<BuildResult>
@@ -33,6 +35,16 @@ const sourceServiceUnavailable: SourceServiceUnavailable = {
 }
 
 function sourceErrorResponse(error: unknown) {
+	if (error instanceof SourceVersionControlError) {
+		return status(
+			error.code === `source.invalid_ref`
+				? 422
+				: error.code === `source.commit_conflict`
+					? 409
+					: 503,
+			{ code: error.code, message: error.message },
+		)
+	}
 	if (error instanceof SourceUnitNotFoundError) {
 		const body: SourceUnitNotFound = {
 			code: `source.unit_not_found`,
@@ -126,6 +138,61 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 				return sourceErrorResponse(error)
 			}
 		})
+		.get(
+			`/source/comparison`,
+			async ({ query }) => {
+				if (options.source?.readComparison === undefined) {
+					return status(501, {
+						code: `source.git_unavailable` as const,
+						message: `Version control is not available for this font source.`,
+					})
+				}
+				try {
+					return await options.source.readComparison({
+						baseRef: query.baseRef,
+						...(query.targetRef === undefined
+							? {}
+							: { targetRef: query.targetRef }),
+					})
+				} catch (error) {
+					return sourceErrorResponse(error)
+				}
+			},
+			{
+				query: t.Object({
+					baseRef: t.String({ minLength: 1, maxLength: 256 }),
+					targetRef: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
+				}),
+			},
+		)
+		.post(
+			`/source/commit`,
+			async ({ body }) => {
+				if (options.source?.commitUnits === undefined) {
+					return status(501, {
+						code: `source.git_unavailable` as const,
+						message: `Version control commits are not available for this font source.`,
+					})
+				}
+				try {
+					return await options.source.commitUnits(
+						body as CommitSourceUnitsInput,
+					)
+				} catch (error) {
+					return sourceErrorResponse(error)
+				}
+			},
+			{
+				body: t.Object({
+					expectedComparisonIdentity: t.String({ minLength: 1 }),
+					message: t.String({ minLength: 1, maxLength: 10_000 }),
+					paths: t.Array(t.String({ minLength: 1 }), {
+						minItems: 1,
+						maxItems: 1_000,
+					}),
+				}),
+			},
+		)
 		.get(
 			`/source/unit`,
 			async ({ query }) => {

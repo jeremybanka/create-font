@@ -3,6 +3,9 @@ import type {
 	MountedEditor,
 } from "@create-font/editor/browser"
 import type { EditorFontSource } from "@create-font/states"
+import { createFontRpcClient } from "@create-font/server/client"
+import type { SourceComparison } from "@create-font/server"
+import { assembleEditorFontSource } from "@create-font/source/browser"
 import { render } from "preact"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
@@ -26,6 +29,10 @@ import {
 	startupTransitDuration,
 	type StartupPhase,
 } from "./startup-profile.ts"
+import {
+	refreshWorkingComparison,
+	type VersionControlSelection,
+} from "./version-control-refresh.ts"
 
 type StartupProfileStatus = `loading` | `error` | `editor-usable`
 type EditorBrowserModule = typeof import("@create-font/editor/browser")
@@ -172,6 +179,15 @@ let saveQueue = Promise.resolve()
 let renderedSource = false
 let mountedEditor: MountedEditor | null = null
 let currentSource: EditorFontSource | null = null
+let currentValidation: FontValidationStatus | null = null
+let versionControlState: Readonly<{
+	comparison?: NonNullable<EditorBrowserOptions["versionControl"]>["comparison"]
+	error?: string
+	loading: boolean
+}> = { loading: true }
+const rpcClient = createFontRpcClient(window.location.origin)
+let comparisonRequestSequence = 0
+let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
 const pending = new Map<
 	string,
@@ -209,6 +225,137 @@ function showBootstrapError(message: string): void {
 	renderBootstrap()
 }
 
+function sourceFromSnapshot(
+	snapshot: SourceComparison["base"]["snapshot"],
+): EditorFontSource {
+	const assembled = assembleEditorFontSource(
+		Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
+	)
+	if (!assembled.ok) throw new Error(assembled.errors[0].message)
+	return assembled.value
+}
+
+function responseErrorMessage(error: unknown, fallback: string): string {
+	if (typeof error !== `object` || error === null) return fallback
+	const value = (error as { value?: unknown }).value
+	if (typeof value !== `object` || value === null) return fallback
+	const message = (value as { message?: unknown }).message
+	return typeof message === `string` && message.length > 0 ? message : fallback
+}
+
+function editorComparison(
+	comparison: SourceComparison,
+): NonNullable<EditorBrowserOptions["versionControl"]>["comparison"] {
+	return {
+		base: {
+			identity: comparison.base.identity,
+			kind: comparison.base.kind,
+			label: comparison.base.label,
+			...(comparison.base.ref === undefined
+				? {}
+				: { ref: comparison.base.ref }),
+			source: sourceFromSnapshot(comparison.base.snapshot),
+		},
+		changes: comparison.changes,
+		identity: comparison.identity,
+		target: {
+			identity: comparison.target.identity,
+			kind: comparison.target.kind,
+			label: comparison.target.label,
+			...(comparison.target.ref === undefined
+				? {}
+				: { ref: comparison.target.ref }),
+			source: sourceFromSnapshot(comparison.target.snapshot),
+		},
+	}
+}
+
+function versionControlOptions(): NonNullable<
+	EditorBrowserOptions["versionControl"]
+> {
+	return {
+		...versionControlState,
+		onCompare: loadComparison,
+		onCommit: commitSourceUnits,
+	}
+}
+
+async function updateMountedEditor(): Promise<void> {
+	if (currentSource === null || currentValidation === null) return
+	await showSource(currentSource, currentValidation)
+}
+
+async function loadComparison(
+	baseRef: string,
+	targetRef?: string,
+): Promise<void> {
+	versionControlSelection = {
+		baseRef,
+		...(targetRef === undefined ? {} : { targetRef }),
+	}
+	const requestSequence = ++comparisonRequestSequence
+	versionControlState = {
+		...versionControlState,
+		loading: true,
+		...(versionControlState.comparison === undefined
+			? {}
+			: { comparison: versionControlState.comparison }),
+	}
+	await updateMountedEditor()
+	const response = await rpcClient.api.source.comparison.get({
+		query: { baseRef, ...(targetRef === undefined ? {} : { targetRef }) },
+	})
+	if (requestSequence !== comparisonRequestSequence) return
+	if (response.error !== null || response.data === null) {
+		const message = responseErrorMessage(
+			response.error,
+			`Unable to load the version-control comparison (HTTP ${response.error?.status ?? 500}).`,
+		)
+		versionControlState = {
+			...versionControlState,
+			error: message,
+			loading: false,
+		}
+		await updateMountedEditor()
+		throw new Error(message)
+	}
+	const data = response.data as SourceComparison
+	versionControlState = {
+		comparison: editorComparison(data),
+		loading: false,
+	}
+	await updateMountedEditor()
+}
+
+async function commitSourceUnits(
+	request: Parameters<
+		NonNullable<EditorBrowserOptions["versionControl"]>["onCommit"]
+	>[0],
+): Promise<void> {
+	comparisonRequestSequence += 1
+	if (request.paths.length === 0)
+		throw new Error(`Select at least one source unit.`)
+	const response = await rpcClient.api.source.commit.post({
+		expectedComparisonIdentity: request.expectedComparisonIdentity,
+		message: request.message,
+		paths: request.paths as [string, ...string[]],
+	})
+	if (response.error !== null || response.data === null) {
+		throw new Error(
+			responseErrorMessage(
+				response.error,
+				`The selected source units could not be committed (HTTP ${response.error?.status ?? 500}).`,
+			),
+		)
+	}
+	const result = response.data as { comparison: SourceComparison }
+	versionControlState = {
+		comparison: editorComparison(result.comparison),
+		loading: false,
+	}
+	await updateMountedEditor()
+}
+
 async function showSource(
 	source: EditorFontSource,
 	validation: FontValidationStatus,
@@ -217,6 +364,7 @@ async function showSource(
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
+	currentValidation = validation
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
@@ -224,6 +372,7 @@ async function showSource(
 		onSourceChange: saveSource,
 		source,
 		validation,
+		versionControl: versionControlOptions(),
 	}
 	if (mountedEditor === null) {
 		// The bootstrap and editor artifacts intentionally own separate Preact
@@ -295,6 +444,12 @@ function handleSourceSessionEvent(
 					)
 				},
 			)
+			void refreshWorkingComparison(
+				versionControlSelection,
+				loadComparison,
+			).catch((error: unknown) => {
+				console.error(`Unable to refresh version-control changes.`, error)
+			})
 			break
 		case `saved`: {
 			revision = event.revision
@@ -308,6 +463,15 @@ function handleSourceSessionEvent(
 			const request = pending.get(event.requestId)
 			pending.delete(event.requestId)
 			request?.resolve()
+			void refreshWorkingComparison(
+				versionControlSelection,
+				loadComparison,
+			).catch((error: unknown) => {
+				console.error(
+					`Unable to refresh version-control changes after saving.`,
+					error,
+				)
+			})
 			break
 		}
 		case `error`: {

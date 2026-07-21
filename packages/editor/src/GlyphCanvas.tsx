@@ -179,10 +179,15 @@ import {
 	compatibilityPathColor,
 	visualDebugControlRegions,
 } from "./visual-debug.ts"
+import type { EditorVersionControl } from "./version-control.ts"
 
 export interface GlyphCanvasProps {
 	readonly workspace: EditorWorkspace
 	readonly disabled?: boolean
+	readonly diffView?: boolean
+	readonly diffBaselineVisible?: boolean
+	readonly diffCurrentVisible?: boolean
+	readonly versionControl?: EditorVersionControl
 }
 
 interface DraggedPoint {
@@ -343,7 +348,14 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowDown: [0, -1],
 }
 
-export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
+export function GlyphCanvas({
+	workspace,
+	disabled = false,
+	diffView = false,
+	diffBaselineVisible = true,
+	diffCurrentVisible = true,
+	versionControl,
+}: GlyphCanvasProps) {
 	const palette = useCanvasTheme()
 	const text = useO(workspace.ui.previewText)
 	const setText = useI(workspace.ui.previewText)
@@ -524,6 +536,90 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 			})) ?? []
 		)
 	}, [comparisonMasterId, glyph])
+	const diffBaselineContours = useMemo(() => {
+		if (!diffView || activeGlyphId === null) return []
+		const baseline = versionControl?.comparison?.base.source
+		if (baseline === undefined) return []
+		const baselineGlyph = baseline.glyphs.find(
+			(candidate) => candidate.id === activeGlyphId,
+		)
+		const baselineMasterId = baseline.masters.some(
+			(candidate) => candidate.id === activeMasterId,
+		)
+			? activeMasterId
+			: baseline.defaultMasterId
+		return (
+			baselineGlyph?.layers
+				.find((candidate) => candidate.masterId === baselineMasterId)
+				?.contours.map((contour) => ({
+					id: contour.id,
+					closed: contour.closed,
+					nodes: contour.points.map((point) => ({
+						pointId: point.id,
+						mode: point.mode,
+						x: point.x,
+						y: point.y,
+						...(point.incoming === undefined
+							? {}
+							: { incoming: point.incoming }),
+						...(point.outgoing === undefined
+							? {}
+							: { outgoing: point.outgoing }),
+					})),
+				})) ?? []
+		)
+	}, [activeGlyphId, activeMasterId, diffView, versionControl])
+	const diffTargetContours = useMemo(() => {
+		if (!diffView || activeGlyphId === null) return []
+		const target = versionControl?.comparison?.target.source
+		if (target === undefined) return []
+		const targetGlyph = target.glyphs.find(
+			(candidate) => candidate.id === activeGlyphId,
+		)
+		const targetMasterId = target.masters.some(
+			(candidate) => candidate.id === activeMasterId,
+		)
+			? activeMasterId
+			: target.defaultMasterId
+		return (
+			targetGlyph?.layers
+				.find((candidate) => candidate.masterId === targetMasterId)
+				?.contours.map((contour) => ({
+					id: contour.id,
+					closed: contour.closed,
+					nodes: contour.points.map((point) => ({
+						pointId: point.id,
+						mode: point.mode,
+						x: point.x,
+						y: point.y,
+						...(point.incoming === undefined
+							? {}
+							: { incoming: point.incoming }),
+						...(point.outgoing === undefined
+							? {}
+							: { outgoing: point.outgoing }),
+					})),
+				})) ?? []
+		)
+	}, [activeGlyphId, activeMasterId, diffView, versionControl])
+	const diffGlyphState = useMemo(() => {
+		if (!diffView || activeGlyphId === null) return null
+		const baselineExists =
+			versionControl?.comparison?.base.source.glyphs.some(
+				(candidate) => candidate.id === activeGlyphId,
+			) ?? false
+		const targetExists =
+			versionControl?.comparison?.target.source.glyphs.some(
+				(candidate) => candidate.id === activeGlyphId,
+			) ?? false
+		if (baselineExists && !targetExists)
+			return `Reference only — this glyph is absent from ${versionControl?.comparison?.target.label ?? `the target`}.`
+		if (!baselineExists && targetExists)
+			return `Target only — this glyph is absent from ${versionControl?.comparison?.base.label ?? `the reference`}.`
+		if (!baselineExists && !targetExists)
+			return `The active glyph is missing from both comparison endpoints.`
+		return `${versionControl?.comparison?.base.label ?? `Reference`} and ${versionControl?.comparison?.target.label ?? `target`} outlines are shown independently.`
+	}, [activeGlyphId, diffView, versionControl])
 	const visibleContours = useMemo(
 		() =>
 			contours.map((contour) => {
@@ -671,6 +767,10 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 	const compatibilityGhostOffset = {
 		x: compatibilityOffsetPixels.x * inverseScale,
 		y: compatibilityOffsetPixels.y * inverseScale,
+	}
+	const diffGhostOffset = {
+		x: 44 * inverseScale,
+		y: 28 * inverseScale,
 	}
 	const compatibilityTraceStyle = compatibilityNodeTraceStyle(inverseScale)
 	const activeCompatibilityPoints = new Map(
@@ -3085,6 +3185,9 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 				})
 			}}
 		>
+			{diffGlyphState === null ? null : (
+				<diff-glyph-status role="status">{diffGlyphState}</diff-glyph-status>
+			)}
 			<textarea
 				ref={textareaRef}
 				value={text}
@@ -3640,6 +3743,55 @@ export function GlyphCanvas({ workspace, disabled = false }: GlyphCanvasProps) {
 											</Group>
 										)
 									})}
+									{!diffView ? null : (
+										<Group name="version-control-diff" listening={false}>
+											{diffBaselineVisible ? (
+												<Group x={diffGhostOffset.x} y={diffGhostOffset.y}>
+													{diffBaselineContours.map((contour) => (
+														<Path
+															key={`diff-baseline:${contour.id}`}
+															name="diff-baseline-path"
+															data={editorContourToPath(
+																contour.nodes,
+																contour.closed,
+															)}
+															fill="#c43d4d"
+															fillEnabled={contour.closed}
+															opacity={0.16}
+															stroke="#c43d4d"
+															strokeWidth={1.75 * inverseScale}
+															dash={[6 * inverseScale, 4 * inverseScale]}
+														/>
+													))}
+													<Text
+														x={0}
+														y={metrics.ascender + 18 * inverseScale}
+														scaleY={-1}
+														text={`Reference · ${versionControl?.comparison?.base.label ?? "ref"}`}
+														fontSize={10 * inverseScale}
+														fill="#c43d4d"
+													/>
+												</Group>
+											) : null}
+											{!diffCurrentVisible
+												? null
+												: diffTargetContours.map((contour) => (
+														<Path
+															key={`diff-current:${contour.id}`}
+															name="diff-current-path"
+															data={editorContourToPath(
+																contour.nodes,
+																contour.closed,
+															)}
+															fill="#16834b"
+															fillEnabled={contour.closed}
+															opacity={0.08}
+															stroke="#16834b"
+															strokeWidth={1.5 * inverseScale}
+														/>
+													))}
+										</Group>
+									)}
 									{!visualDebug.compatibility ||
 									compatibility === null ? null : (
 										<Group name="master-compatibility" listening={false}>

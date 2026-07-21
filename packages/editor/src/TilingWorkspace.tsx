@@ -19,6 +19,8 @@ import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { PreviewTile } from "./PreviewTile.tsx"
 import { SelectionDimensions } from "./SelectionDimensions.tsx"
+import { VersionControlTile } from "./VersionControlTile.tsx"
+import type { EditorVersionControl } from "./version-control.ts"
 import css from "./TilingWorkspace.module.css"
 import {
 	addTile,
@@ -55,9 +57,17 @@ export interface TilingWorkspaceStatus {
 }
 
 export interface TilingWorkspaceProps {
+	readonly diffView?: boolean
 	readonly workspace: EditorWorkspace
 	readonly enabled?: boolean
 	readonly onStatusChange?: (status: TilingWorkspaceStatus) => void
+	readonly onReviewGlyph?: Parameters<
+		typeof VersionControlTile
+	>[0]["onReviewGlyph"]
+	readonly onDiffViewChange?: Parameters<
+		typeof VersionControlTile
+	>[0]["onDiffViewChange"]
+	readonly versionControl?: EditorVersionControl
 }
 
 interface TileDefinition {
@@ -83,6 +93,11 @@ type HistoryAction =
 	| { readonly type: "redo" }
 
 const TILE_DEFINITIONS: readonly TileDefinition[] = [
+	{
+		kind: "version-control",
+		name: "Version Control",
+		description: "Review and commit discrete working-source changes.",
+	},
 	{
 		kind: "font-navigation",
 		name: "Masters & instances",
@@ -223,8 +238,12 @@ function filterTileDefinitions(query: string): readonly TileDefinition[] {
 
 export function TilingWorkspace({
 	workspace,
+	diffView = false,
 	enabled = true,
+	onDiffViewChange = () => undefined,
 	onStatusChange,
+	onReviewGlyph = () => undefined,
+	versionControl,
 }: TilingWorkspaceProps) {
 	const [initial] = useState(readInitialState)
 	const [history, dispatch] = useReducer(historyReducer, initial.history)
@@ -765,7 +784,14 @@ export function TilingWorkspace({
 				aria-hidden={management ? "true" : undefined}
 				inert={management}
 			>
-				{tile.kind === "font-navigation" ? (
+				{tile.kind === "version-control" ? (
+					<VersionControlTile
+						diffView={diffView}
+						onDiffViewChange={onDiffViewChange}
+						onReviewGlyph={onReviewGlyph}
+						{...(versionControl === undefined ? {} : { versionControl })}
+					/>
+				) : tile.kind === "font-navigation" ? (
 					<FontNavigator workspace={workspace} />
 				) : tile.kind === "canvas-toolbar" ? (
 					<CanvasToolbar workspace={workspace} />

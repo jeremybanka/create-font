@@ -36,6 +36,8 @@ import {
 } from "@create-font/source"
 import type { EditorFontSource } from "@create-font/states"
 
+import { createSourceVersionControl } from "./source-version-control.ts"
+
 type LoadedProject = Readonly<{
 	manifest: SourceManifest
 	revisions: ReadonlyMap<string, string>
@@ -368,6 +370,9 @@ export async function createFileSystemSourceService(
 		revision: project.manifest.revision,
 		units: project.manifest.units.map(({ path }) => snapshot(project, path)),
 	})
+	const versionControl = createSourceVersionControl(projectRoot, async () =>
+		projectSnapshot(await loadProject(`read-snapshot`)),
+	)
 
 	const writeUnitsUnlocked = async (
 		input: WriteSourceUnitsInput,
@@ -491,6 +496,14 @@ export async function createFileSystemSourceService(
 	for (const watcher of watchers) watcher.unref()
 
 	return {
+		commitUnits: (input) =>
+			withLock(async () => {
+				const result = await versionControl.commitUnits(input)
+				publishManifest((await loadProject(`read-manifest`)).manifest)
+				return result
+			}),
+		readComparison: (input) =>
+			withLock(() => versionControl.readComparison(input)),
 		readManifest: () =>
 			withLock(async () => (await loadProject(`read-manifest`)).manifest),
 		readSnapshot: () =>
