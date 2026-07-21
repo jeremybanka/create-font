@@ -1,5 +1,12 @@
 # @create-font/editor
 
+## 0.7.2
+
+### Patch Changes
+
+- ed751e8: Add bounded Git snapshot comparison, visual diff review, and guided selective commits.
+  - @create-font/states@0.6.1
+
 ## 0.7.1
 
 ### Patch Changes

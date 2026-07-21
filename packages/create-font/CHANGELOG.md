@@ -1,5 +1,16 @@
 # create-font
 
+## 0.3.6
+
+### Patch Changes
+
+- ed751e8: Add bounded Git snapshot comparison, visual diff review, and guided selective commits.
+- Updated dependencies [ed751e8]
+  - @create-font/editor@0.7.2
+  - @create-font/server@0.1.1
+  - @create-font/states@0.6.1
+  - @create-font/source@0.2.1
+
 ## 0.3.5
 
 ### Patch Changes

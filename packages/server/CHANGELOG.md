@@ -1,5 +1,11 @@
 # @create-font/server
 
+## 0.1.1
+
+### Patch Changes
+
+- ed751e8: Add bounded Git snapshot comparison, visual diff review, and guided selective commits.
+
 ## 0.1.0
 
 ### Minor Changes
