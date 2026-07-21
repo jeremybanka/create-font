@@ -24,6 +24,7 @@ import { CompatibilityTile } from "./CompatibilityTile.tsx"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
 import { PreviewTile } from "./PreviewTile.tsx"
+import { KerningTile } from "./KerningTile.tsx"
 import { SelectionDimensions } from "./SelectionDimensions.tsx"
 import { VersionControlTile } from "./VersionControlTile.tsx"
 import type { EditorVersionControl } from "./version-control.ts"
@@ -119,6 +120,11 @@ const TILE_DEFINITIONS: readonly TileDefinition[] = [
 		kind: "canvas-toolbar",
 		name: "Canvas toolbar",
 		description: "Control design-space coordinates and the canvas viewport.",
+	},
+	{
+		kind: "kerning",
+		name: "Kerning",
+		description: "Inspect and edit the glyph pair at the text cursor.",
 	},
 	{
 		kind: "preview",
@@ -1058,6 +1064,8 @@ export function TilingWorkspace({
 					<FontNavigator workspace={workspace} />
 				) : tile.kind === "canvas-toolbar" ? (
 					<CanvasToolbar workspace={workspace} />
+				) : tile.kind === "kerning" ? (
+					<KerningTile workspace={workspace} />
 				) : tile.kind === "preview" ? (
 					<PreviewTile workspace={workspace} tileId={tile.id} />
 				) : tile.kind === "compatibility" ? (

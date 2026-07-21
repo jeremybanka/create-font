@@ -16,6 +16,7 @@ import {
 	type FUnit,
 	type GlyphCoordinate,
 	type GlyphVariation,
+	type KerningPair,
 	type IngestResult,
 	type IntermediateRegion,
 	type NamedInstance,
@@ -46,6 +47,51 @@ type UnknownRecord = Record<string, unknown>
 interface ValidationContext {
 	readonly errors: Diagnostic[]
 	readonly warnings: Diagnostic[]
+}
+
+function parseKerning(
+	value: unknown,
+	glyphCount: number,
+	context: ValidationContext,
+): readonly KerningPair[] {
+	if (value === undefined) return []
+	const source = asArray(value, "$.kerning", context, "GPOS")
+	const seen = new Set<string>()
+	return source.map((entry, index) => {
+		const path = `$.kerning[${index}]`
+		const record = asRecord(entry, path, context, "GPOS") ?? {}
+		exactKeys(record, ["left", "right", "value"], path, context, "GPOS")
+		const left = asInteger(
+			record.left,
+			0,
+			Math.max(0, glyphCount - 1),
+			`${path}.left`,
+			context,
+			"GPOS",
+			"kerning.glyph",
+		)
+		const right = asInteger(
+			record.right,
+			0,
+			Math.max(0, glyphCount - 1),
+			`${path}.right`,
+			context,
+			"GPOS",
+			"kerning.glyph",
+		)
+		const value = asFUnit(record.value, `${path}.value`, context, "GPOS")
+		const key = `${left}/${right}`
+		if (seen.has(key))
+			error(
+				context,
+				"kerning.duplicate",
+				path,
+				"Kerning pairs must be unique.",
+				"GPOS",
+			)
+		seen.add(key)
+		return { left: left as never, right: right as never, value }
+	})
 }
 
 const MAX_INT16 = 32_767
@@ -2314,6 +2360,7 @@ function ingestVariableFontData(value: unknown): IngestResult {
 			"instances",
 			"glyphs",
 			"cmap",
+			"kerning",
 		],
 		"$",
 		context,
@@ -2346,6 +2393,7 @@ function ingestVariableFontData(value: unknown): IngestResult {
 	const instances = parseInstances(source.instances, axes, context)
 	const glyphs = parseGlyphs(source.glyphs, axes, context)
 	const cmap = parseCmap(source.cmap, glyphs.length, context)
+	const kerning = parseKerning(source.kerning, glyphs.length, context)
 	validateStyleAxes(style, axes, context)
 	validateDerivedMetrics(glyphs, metrics, axes.length, context)
 	validateDefaultInstanceNames(names, axes, instances, context)
@@ -2386,6 +2434,7 @@ function ingestVariableFontData(value: unknown): IngestResult {
 		instances,
 		glyphs,
 		cmap,
+		kerning,
 	} as VariableFont
 	markVariableFontValidated(font)
 	return deepFreeze({ ok: true, value: font, warnings })

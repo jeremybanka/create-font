@@ -7,7 +7,9 @@ import type {
 	NamedInstance,
 	SimpleGlyph,
 	VariationAxis,
+	KerningPair,
 } from "./model.ts"
+import { getGposLength } from "./gpos.ts"
 
 /** Required v1 tables in bytewise SFNT-directory order. */
 export const REQUIRED_TABLE_TAGS = Object.freeze([
@@ -27,7 +29,7 @@ export const REQUIRED_TABLE_TAGS = Object.freeze([
 ] as const)
 
 export type RequiredTableTag = (typeof REQUIRED_TABLE_TAGS)[number]
-export type TableTag = RequiredTableTag | "avar"
+export type TableTag = RequiredTableTag | "avar" | "GPOS"
 
 export interface CanonicalEncodingInput {
 	readonly axes: readonly VariationAxis[]
@@ -35,6 +37,7 @@ export interface CanonicalEncodingInput {
 	readonly glyphs: readonly SimpleGlyph[]
 	readonly cmap: readonly CharacterMapEntry[]
 	readonly names: FontNames
+	readonly kerning?: readonly KerningPair[]
 }
 
 export interface TableLengthPlan {
@@ -188,10 +191,18 @@ function compareTags(left: TableTag, right: TableTag): number {
 
 export function getCanonicalTableTags(
 	axes: readonly VariationAxis[],
+	kerning: readonly KerningPair[] = [],
 ): readonly TableTag[] {
-	if (!axes.some((axis) => axis.map !== null)) return REQUIRED_TABLE_TAGS
+	if (!axes.some((axis) => axis.map !== null) && kerning.length === 0)
+		return REQUIRED_TABLE_TAGS
 	return Object.freeze(
-		([...REQUIRED_TABLE_TAGS, "avar"] satisfies TableTag[]).sort(compareTags),
+		(
+			[
+				...REQUIRED_TABLE_TAGS,
+				...(axes.some((axis) => axis.map !== null) ? (["avar"] as const) : []),
+				...(kerning.length > 0 ? (["GPOS"] as const) : []),
+			] satisfies TableTag[]
+		).sort(compareTags),
 	)
 }
 
@@ -203,6 +214,7 @@ export function createCanonicalEncodingPlan(
 	const glyphCount = font.glyphs.length
 	const instanceCount = font.instances.length
 	const hasAvar = font.axes.some((axis) => axis.map !== null)
+	const kerning = font.kerning ?? []
 	const fvarHasPostScriptNameIds = font.instances.some(
 		(instance) => instance.postScriptName !== null,
 	)
@@ -249,6 +261,7 @@ export function createCanonicalEncodingPlan(
 				),
 		)
 	}
+	if (kerning.length > 0) lengths.set("GPOS", getGposLength(kerning))
 	const tableLengths = [...lengths]
 		.map(([tag, length]): TableLengthPlan => ({ tag, length }))
 		.sort((left, right) => compareTags(left.tag, right.tag))

@@ -575,6 +575,34 @@ describe("editor workspace", () => {
 		).toBe(2)
 	})
 
+	it("persists, lays out, removes, and undoes caret-pair kerning", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "AO")
+		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeKerningPair),
+		).toMatchObject({ left: aGlyphId, right: oGlyphId, value: null })
+
+		workspace.actions.setActiveKerning(-80)
+		const run = workspace.font.silo.getState(workspace.ui.previewRun)
+		const layout = layoutTextRun(
+			run,
+			workspace.document.metrics,
+			workspace.document.metadata.unitsPerEm,
+		)
+		expect(run[1]).toMatchObject({ kind: "glyph", kerningBefore: -80 })
+		expect(layout.glyphs[1]?.x).toBe((layout.glyphs[0]?.advance ?? 0) - 80)
+		expect(workspace.font.read.editorSource()?.kerning).toEqual([
+			{ left: aGlyphId, right: oGlyphId, value: -80 },
+		])
+		expect(workspace.font.read.compilation().ok).toBe(true)
+
+		workspace.actions.setActiveKerning(null)
+		expect(workspace.font.read.editorSource()?.kerning).toBeUndefined()
+		workspace.font.actions.undoKerning()
+		expect(workspace.font.read.editorSource()?.kerning?.[0]?.value).toBe(-80)
+	})
+
 	it("enters, switches, and exits outline editing occurrences", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)

@@ -3254,6 +3254,23 @@ export function GlyphCanvas({
 				spellcheck={false}
 				aria-label="Text canvas contents"
 				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLTextAreaElement>) => {
+					if (
+						event.altKey &&
+						(event.key === "ArrowLeft" || event.key === "ArrowRight")
+					) {
+						const pair = workspace.font.silo.getState(
+							workspace.ui.activeKerningPair,
+						)
+						if (pair !== null) {
+							event.preventDefault()
+							const step =
+								event.metaKey || event.ctrlKey ? 100 : event.shiftKey ? 10 : 1
+							workspace.actions.setActiveKerning(
+								(pair.value ?? 0) + (event.key === "ArrowLeft" ? -step : step),
+							)
+							return
+						}
+					}
 					if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
 						if (
 							event.key !== "Shift" &&

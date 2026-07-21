@@ -156,7 +156,7 @@ export function getFontBounds(font: VariableFont): Bounds {
 /** Returns the complete, directory-sorted set of tables for a font. */
 export function getTableTags(font: VariableFont): readonly TableTag[] {
 	assertVariableFontValidated(font)
-	return getCanonicalTableTags(font.axes)
+	return getCanonicalTableTags(font.axes, font.kerning)
 }
 
 function createHheaPlan(

@@ -3,6 +3,7 @@ import type {
 	ReadableToken,
 	Silo,
 	TimelineFamilyToken,
+	TimelineToken,
 	ViewOf,
 	WritableToken,
 } from "atom.io"
@@ -114,6 +115,38 @@ export function useTL<K extends Canonical>(
 	}, [silo, token])
 	const snapshot = useSyncExternalStore(subscribe, getSnapshot)
 
+	return useMemo(() => {
+		const { at, length } = silo.inspectTimeline(token)
+		return {
+			at,
+			length,
+			undo: () => {
+				silo.undo(token)
+				onChange?.()
+			},
+			redo: () => {
+				silo.redo(token)
+				onChange?.()
+			},
+			clear: () => silo.clearTimeline(token),
+		}
+	}, [onChange, silo, snapshot, token])
+}
+
+export function useTimeline(
+	token: TimelineToken<any>,
+	onChange?: () => void,
+): TimelineMeta {
+	const silo = useEditorSilo()
+	const subscribe = useCallback(
+		(notify: () => void) => silo.subscribe(token, () => notify()),
+		[silo, token],
+	)
+	const getSnapshot = useCallback(() => {
+		const { at, length } = silo.inspectTimeline(token)
+		return `${at}:${length}`
+	}, [silo, token])
+	const snapshot = useSyncExternalStore(subscribe, getSnapshot)
 	return useMemo(() => {
 		const { at, length } = silo.inspectTimeline(token)
 		return {
