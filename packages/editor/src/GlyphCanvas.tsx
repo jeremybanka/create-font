@@ -3012,6 +3012,7 @@ export function GlyphCanvas({
 					activeGlyphId,
 					[activeMasterId],
 					nextClipboardEntityId,
+					masterIds,
 				)
 				if (!paste.ok) {
 					setClipboardStatus(paste.error)

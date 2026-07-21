@@ -6,7 +6,7 @@ import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
-import { oGlyphId } from "../src/demo-font.ts"
+import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { OUTLINE_CLIPBOARD_MIME } from "../src/outline-clipboard.ts"
 import type { EditorSelectionTarget } from "../src/outline-selection.ts"
@@ -75,7 +75,7 @@ function mountCanvas() {
 }
 
 function clipboardEvent(
-	type: "cut" | "paste",
+	type: "copy" | "cut" | "paste",
 	clipboard: {
 		setData(format: string, data: string): void
 		getData(format: string): string
@@ -122,7 +122,9 @@ describe("GlyphCanvas cut", () => {
 		const before = pointCount(workspace)
 		const values = new Map<string, string>()
 		const clipboard = {
-			setData: (format: string, data: string) => values.set(format, data),
+			setData: (format: string, data: string) => {
+				values.set(format, data)
+			},
 			getData: (format: string) => values.get(format) ?? "",
 		}
 		const cut = clipboardEvent("cut", clipboard)
@@ -174,6 +176,77 @@ describe("GlyphCanvas cut", () => {
 					target.pointId === first.pointId || target.pointId === second.pointId,
 			),
 		).toBe(false)
+	})
+
+	it("copies from one master and pastes into another master of the same glyph", async () => {
+		const { nodes, root, workspace } = mountCanvas()
+		const glyphBefore = workspace.font.read.editorGlyphSource(oGlyphId)
+		const sourceBefore = structuredClone(
+			glyphBefore?.layers.find((layer) => layer.masterId === razorMasterId),
+		)
+		const destinationBefore = glyphBefore?.layers.find(
+			(layer) => layer.masterId === blackMasterId,
+		)
+		await setSelection(
+			workspace,
+			nodes.map(({ pointId }) => ({ kind: "node", pointId })),
+		)
+		const values = new Map<string, string>()
+		const clipboard = {
+			setData: (format: string, data: string) => {
+				values.set(format, data)
+			},
+			getData: (format: string) => values.get(format) ?? "",
+		}
+		const copy = clipboardEvent("copy", clipboard)
+		act(() => {
+			root.dispatchEvent(copy)
+		})
+		expect(copy.defaultPrevented).toBe(true)
+
+		await act(async () => {
+			workspace.actions.selectMaster(blackMasterId)
+			await Promise.resolve()
+		})
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
+		const paste = clipboardEvent("paste", clipboard)
+		await act(async () => {
+			root.dispatchEvent(paste)
+			await Promise.resolve()
+		})
+		expect(paste.defaultPrevented).toBe(true)
+		const destinationAfter = workspace.font.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === blackMasterId)
+		expect(destinationAfter?.contours).toHaveLength(
+			(destinationBefore?.contours.length ?? 0) + 1,
+		)
+		const pastedSelection = workspace.font.silo.getState(workspace.ui.selection)
+		expect(pastedSelection).toHaveLength(nodes.length)
+		expect(pastedSelection.every((target) => target.kind === "node")).toBe(true)
+		expect(
+			pastedSelection.some((target) =>
+				nodes.some(({ pointId }) => pointId === target.pointId),
+			),
+		).toBe(false)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId),
+		).toEqual(sourceBefore)
+
+		workspace.font.undo(oGlyphId)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === blackMasterId)?.contours,
+		).toHaveLength(destinationBefore?.contours.length ?? 0)
+		workspace.font.redo(oGlyphId)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === blackMasterId)?.contours,
+		).toHaveLength((destinationBefore?.contours.length ?? 0) + 1)
 	})
 
 	it("is non-destructive for unavailable, failed, and handles-only clipboards", async () => {
