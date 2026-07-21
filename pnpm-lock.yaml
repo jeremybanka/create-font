@@ -98,6 +98,9 @@ importers:
       '@create-font/states':
         specifier: workspace:*
         version: link:../states
+      '@create-font/target':
+        specifier: workspace:*
+        version: link:../target
     devDependencies:
       '@create-font/preact-konva':
         specifier: workspace:*

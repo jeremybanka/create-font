@@ -2,6 +2,7 @@ import type { EditorFontSource } from "@create-font/states"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 import { AppShell } from "./AppShell.tsx"
+import { startBrowserLiveFont } from "./browser-font-face.ts"
 import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
@@ -24,6 +25,20 @@ export function EditorApplicationRoot({
 	const [workspace] = useState(() => createEditorWorkspace(source, validation))
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
+
+	useEffect(() => {
+		workspace.liveFont.start()
+		const stopBrowserFont = startBrowserLiveFont(
+			workspace.font.silo,
+			workspace.liveFont.compilation,
+			workspace.liveFont.active,
+			workspace.liveFont.family,
+		)
+		return () => {
+			stopBrowserFont()
+			workspace.liveFont.stop()
+		}
+	}, [workspace])
 
 	useEffect(() => {
 		if (currentSource.current === source) return
