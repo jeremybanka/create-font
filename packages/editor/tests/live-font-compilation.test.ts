@@ -46,8 +46,7 @@ describe("live font compilation", () => {
 			)
 
 			compiler.start()
-			for (let value = 1; value <= 5; value += 1)
-				silo.setState(revision, value)
+			for (let value = 1; value <= 5; value += 1) silo.setState(revision, value)
 
 			expect(compilation).not.toHaveBeenCalled()
 			await vi.advanceTimersByTimeAsync(LIVE_FONT_EDIT_DEBOUNCE_MS)
