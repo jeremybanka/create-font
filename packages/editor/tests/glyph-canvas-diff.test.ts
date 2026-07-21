@@ -118,6 +118,7 @@ describe("GlyphCanvas Diff View", () => {
 		const stage = Konva.stages.at(-1)
 		expect(stage?.find(".diff-baseline-path")).toHaveLength(1)
 		expect(stage?.find(".diff-current-path")).toHaveLength(2)
+		expect(host.querySelector("diff-glyph-status")).toBeNull()
 		const dash = stage?.findOne(".diff-baseline-path")?.dash()
 		expect(dash).toHaveLength(2)
 		expect(dash?.[0]).toBeGreaterThan(dash?.[1] ?? Number.POSITIVE_INFINITY)

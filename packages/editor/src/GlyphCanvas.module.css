@@ -22,21 +22,6 @@ glyph-canvas.class {
 		pointer-events: none;
 	}
 
-	> diff-glyph-status {
-		position: absolute;
-		z-index: 2;
-		top: 48px;
-		left: 50%;
-		padding: 5px 9px;
-		transform: translateX(-50%);
-		border: 1px solid var(--line-strong);
-		border-radius: 999px;
-		background: var(--paper);
-		font: 550 9px/1 var(--ui-font);
-		color: var(--ink-muted);
-		pointer-events: none;
-	}
-
 	> canvas-surface {
 		display: block;
 		min-width: 0;

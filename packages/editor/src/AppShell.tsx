@@ -62,8 +62,6 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
 	const [diffView, setDiffView] = useState(false)
-	const [diffBaselineVisible, setDiffBaselineVisible] = useState(true)
-	const [diffCurrentVisible, setDiffCurrentVisible] = useState(true)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
 		management: false,
@@ -279,30 +277,8 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 							workspace={workspace}
 							disabled={tilingStatus.management}
 							diffView={diffView}
-							diffBaselineVisible={diffBaselineVisible}
-							diffCurrentVisible={diffCurrentVisible}
 							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
-						{!diffView || versionControl?.comparison === undefined ? null : (
-							<diff-view-legend aria-label="Diff View legend">
-								<button
-									type="button"
-									aria-pressed={diffBaselineVisible}
-									onClick={() => setDiffBaselineVisible((visible) => !visible)}
-								>
-									<i data-side="baseline" /> Reference ·{" "}
-									{versionControl.comparison.base.label}
-								</button>
-								<button
-									type="button"
-									aria-pressed={diffCurrentVisible}
-									onClick={() => setDiffCurrentVisible((visible) => !visible)}
-								>
-									<i data-side="current" /> Target ·{" "}
-									{versionControl.comparison.target.label}
-								</button>
-							</diff-view-legend>
-						)}
 						<ActionHotbar
 							commands={commands}
 							enabled={!tilingStatus.management && !commandPaletteOpen}
