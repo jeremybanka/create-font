@@ -10,7 +10,13 @@ import {
 	PlusIcon,
 	QuestionMarkCircledIcon,
 } from "@radix-ui/react-icons"
-import { useEffect, useReducer, useRef, useState } from "preact/hooks"
+import {
+	useCallback,
+	useEffect,
+	useReducer,
+	useRef,
+	useState,
+} from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
@@ -24,12 +30,15 @@ import type { EditorVersionControl } from "./version-control.ts"
 import css from "./TilingWorkspace.module.css"
 import {
 	addTile,
+	columnHitSurface,
+	columnOverflowState,
 	columnSlotAllocation,
 	createDefaultTilingLayout,
 	createTilingHistory,
 	duplicateTile,
 	editTilingHistory,
 	findTile,
+	hotbarClearanceForColumn,
 	moveTile,
 	moveTileBy,
 	moveTileToEdge,
@@ -39,9 +48,12 @@ import {
 	serializeTilingLayout,
 	setColumnAlignment,
 	setTileFill,
+	scrollbarScrollTopFromPointer,
 	TILING_DRAFT_STORAGE_KEY,
 	TILING_SAVED_STORAGE_KEY,
 	toggleColumnCollapsed,
+	visibleColumnIds,
+	type ColumnOverflowState,
 	type TileColumn,
 	type TileColumnId,
 	type TileInstance,
@@ -264,11 +276,32 @@ export function TilingWorkspace({
 		typeof window === "undefined" ? 1_200 : window.innerWidth,
 	)
 	const [dragging, setDragging] = useState(false)
+	const [columnClearance, setColumnClearance] = useState<
+		Partial<Record<TileColumnId, number>>
+	>({})
+	const [columnOverflow, setColumnOverflow] = useState<
+		Partial<Record<TileColumnId, ColumnOverflowState>>
+	>({})
 	const dragPayload = useRef<DragPayload | null>(null)
 	const poolInputRef = useRef<HTMLInputElement>(null)
+	const workspaceRef = useRef<HTMLElement>(null)
+	const columnRefs = useRef(new Map<TileColumnId, HTMLElement>())
+	const scrollRefs = useRef(new Map<TileColumnId, HTMLElement>())
+	const scrollbarRefs = useRef(new Map<TileColumnId, HTMLElement>())
+	const scrollbarDrag = useRef<{
+		readonly columnId: TileColumnId
+		readonly pointerId: number
+		readonly grabOffset: number
+	} | null>(null)
 	const layout = history.present
 	const dirty = serializeTilingLayout(layout) !== saved
 	const allocation = columnSlotAllocation(viewportWidth)
+	const visibleColumns = visibleColumnIds(
+		allocation,
+		activeLeft,
+		activeRight,
+		selectedColumn,
+	)
 	const filteredTileDefinitions = filterTileDefinitions(poolQuery)
 	const activeTileDefinition = filteredTileDefinitions[poolIndex]
 
@@ -354,6 +387,155 @@ export function TilingWorkspace({
 		window.addEventListener("resize", handleResize)
 		return () => window.removeEventListener("resize", handleResize)
 	}, [])
+
+	const measureColumnClearance = useCallback((): void => {
+		if (management) {
+			setColumnClearance((current) =>
+				Object.keys(current).length === 0 ? current : {},
+			)
+			return
+		}
+		const root = workspaceRef.current
+		const hotbar = document.querySelector<HTMLElement>("action-hotbar")
+		if (root === null || hotbar === null) return
+		const hotbarBounds = hotbar.getBoundingClientRect()
+		const workspaceBounds = root.getBoundingClientRect()
+		const next: Partial<Record<TileColumnId, number>> = {}
+		for (const columnId of visibleColumns) {
+			const column = columnRefs.current.get(columnId)
+			if (column === undefined) continue
+			const clearance = hotbarClearanceForColumn(
+				column.getBoundingClientRect(),
+				hotbarBounds,
+				workspaceBounds.bottom,
+			)
+			if (clearance > 0) next[columnId] = clearance
+		}
+		setColumnClearance((current) => {
+			for (const id of ALL_COLUMNS) {
+				if ((current[id] ?? 0) !== (next[id] ?? 0)) return next
+			}
+			return current
+		})
+	}, [activeLeft, activeRight, management, selectedColumn, viewportWidth])
+
+	const measureColumnOverflow = useCallback((): void => {
+		const next: Partial<Record<TileColumnId, ColumnOverflowState>> = {}
+		for (const columnId of visibleColumns) {
+			const scroll = scrollRefs.current.get(columnId)
+			if (scroll === undefined) continue
+			next[columnId] = columnOverflowState(scroll)
+			const scrollbar = scrollbarRefs.current.get(columnId)
+			if (scrollbar !== undefined) {
+				const maximum = Math.max(0, scroll.scrollHeight - scroll.clientHeight)
+				const thumbRatio =
+					scroll.scrollHeight <= 0
+						? 1
+						: Math.max(0.12, scroll.clientHeight / scroll.scrollHeight)
+				const progress = maximum <= 0 ? 0 : scroll.scrollTop / maximum
+				const thumbHeight = Math.max(18, scrollbar.clientHeight * thumbRatio)
+				const thumbTop =
+					progress * Math.max(0, scrollbar.clientHeight - thumbHeight)
+				scrollbar.style.setProperty("--scroll-thumb-height", `${thumbHeight}px`)
+				scrollbar.style.setProperty("--scroll-thumb-top", `${thumbTop}px`)
+				scrollbar.setAttribute("aria-valuemax", String(Math.round(maximum)))
+				scrollbar.setAttribute(
+					"aria-valuenow",
+					String(Math.round(scroll.scrollTop)),
+				)
+			}
+		}
+		setColumnOverflow((current) => {
+			for (const id of ALL_COLUMNS) {
+				if (current[id] !== next[id]) return next
+			}
+			return current
+		})
+	}, [activeLeft, activeRight, selectedColumn, viewportWidth])
+
+	const scrollColumnFromPointer = (
+		event: PointerEvent,
+		columnId: TileColumnId,
+		grabOffset: number,
+	): void => {
+		const scroll = scrollRefs.current.get(columnId)
+		if (scroll === undefined) return
+		const track = event.currentTarget
+		if (!(track instanceof HTMLElement)) return
+		const bounds = track.getBoundingClientRect()
+		const thumb = track.firstElementChild
+		if (!(thumb instanceof HTMLElement)) return
+		scroll.scrollTop = scrollbarScrollTopFromPointer({
+			pointerPosition: event.clientY,
+			trackStart: bounds.top,
+			trackSize: bounds.height,
+			thumbSize: thumb.getBoundingClientRect().height,
+			maximum: scroll.scrollHeight - scroll.clientHeight,
+			grabOffset,
+		})
+		measureColumnOverflow()
+	}
+
+	const scrollColumnFromKeyboard = (
+		event: KeyboardEvent,
+		columnId: TileColumnId,
+	): void => {
+		const scroll = scrollRefs.current.get(columnId)
+		if (scroll === undefined) return
+		const maximum = scroll.scrollHeight - scroll.clientHeight
+		const next =
+			event.key === "Home"
+				? 0
+				: event.key === "End"
+					? maximum
+					: event.key === "PageUp"
+						? scroll.scrollTop - scroll.clientHeight
+						: event.key === "PageDown"
+							? scroll.scrollTop + scroll.clientHeight
+							: event.key === "ArrowUp"
+								? scroll.scrollTop - 40
+								: event.key === "ArrowDown"
+									? scroll.scrollTop + 40
+									: null
+		if (next === null) return
+		event.preventDefault()
+		scroll.scrollTop = Math.max(0, Math.min(maximum, next))
+		measureColumnOverflow()
+	}
+
+	useEffect(() => {
+		const frame = requestAnimationFrame(measureColumnClearance)
+		const observer =
+			typeof ResizeObserver === "undefined"
+				? null
+				: new ResizeObserver(measureColumnClearance)
+		const root = workspaceRef.current
+		const hotbar = document.querySelector<HTMLElement>("action-hotbar")
+		if (root !== null) observer?.observe(root)
+		if (hotbar !== null) observer?.observe(hotbar)
+		for (const column of columnRefs.current.values()) observer?.observe(column)
+		return () => {
+			cancelAnimationFrame(frame)
+			observer?.disconnect()
+		}
+	}, [layout, measureColumnClearance])
+
+	useEffect(() => {
+		const frame = requestAnimationFrame(measureColumnOverflow)
+		const observer =
+			typeof ResizeObserver === "undefined"
+				? null
+				: new ResizeObserver(measureColumnOverflow)
+		for (const scroll of scrollRefs.current.values()) {
+			observer?.observe(scroll)
+			const stack = scroll.firstElementChild
+			if (stack instanceof HTMLElement) observer?.observe(stack)
+		}
+		return () => {
+			cancelAnimationFrame(frame)
+			observer?.disconnect()
+		}
+	}, [columnClearance, columnOverflow, layout, measureColumnOverflow])
 
 	useEffect(() => {
 		try {
@@ -674,8 +856,20 @@ export function TilingWorkspace({
 		return (
 			<tile-column
 				key={column.id}
+				ref={(element: HTMLElement | null) => {
+					if (element === null) columnRefs.current.delete(column.id)
+					else columnRefs.current.set(column.id, element)
+				}}
 				data-selected={management && selected ? "true" : "false"}
 				data-alignment={column.alignment}
+				data-hit-surface={columnHitSurface(management)}
+				data-hotbar-clearance={
+					(columnClearance[column.id] ?? 0) > 0 ? "true" : "false"
+				}
+				data-overflow={columnOverflow[column.id] ?? "fit"}
+				style={{
+					"--tile-column-clearance": `${columnClearance[column.id] ?? 0}px`,
+				}}
 				onClick={() => management && selectColumn(column.id)}
 				onDragOver={(event: DragEvent) => {
 					if (!management) return
@@ -710,7 +904,14 @@ export function TilingWorkspace({
 						</column-state>
 					</button>
 				</column-heading>
-				<column-scroll>
+				<column-scroll
+					id={`tile-column-scroll-${column.id}`}
+					ref={(element: HTMLElement | null) => {
+						if (element === null) scrollRefs.current.delete(column.id)
+						else scrollRefs.current.set(column.id, element)
+					}}
+					onScroll={measureColumnOverflow}
+				>
 					<tile-stack>
 						{column.tiles.map((tile) => renderTile(column, tile))}
 						{column.tiles.length === 0 ? (
@@ -721,6 +922,68 @@ export function TilingWorkspace({
 						) : null}
 					</tile-stack>
 				</column-scroll>
+				{columnOverflow[column.id] === "fit" ? null : (
+					<column-scrollbar
+						ref={(element: HTMLElement | null) => {
+							if (element === null) scrollbarRefs.current.delete(column.id)
+							else scrollbarRefs.current.set(column.id, element)
+						}}
+						role="scrollbar"
+						tabIndex={0}
+						aria-label={`Scroll column ${column.id}`}
+						aria-controls={`tile-column-scroll-${column.id}`}
+						aria-orientation="vertical"
+						aria-valuemin={0}
+						onKeyDown={(event: KeyboardEvent) =>
+							scrollColumnFromKeyboard(event, column.id)
+						}
+						onPointerDown={(event: PointerEvent) => {
+							const target = event.currentTarget
+							if (target instanceof HTMLElement) {
+								const thumb = target.firstElementChild
+								if (!(thumb instanceof HTMLElement)) return
+								const thumbBounds = thumb.getBoundingClientRect()
+								const grabbedThumb =
+									event.clientY >= thumbBounds.top &&
+									event.clientY <= thumbBounds.bottom
+								const grabOffset = grabbedThumb
+									? event.clientY - thumbBounds.top
+									: thumbBounds.height / 2
+								scrollbarDrag.current = {
+									columnId: column.id,
+									pointerId: event.pointerId,
+									grabOffset,
+								}
+								target.setPointerCapture(event.pointerId)
+								scrollColumnFromPointer(event, column.id, grabOffset)
+							}
+						}}
+						onPointerMove={(event: PointerEvent) => {
+							const target = event.currentTarget
+							const drag = scrollbarDrag.current
+							if (
+								target instanceof HTMLElement &&
+								target.hasPointerCapture(event.pointerId) &&
+								drag?.pointerId === event.pointerId &&
+								drag.columnId === column.id
+							) {
+								scrollColumnFromPointer(event, column.id, drag.grabOffset)
+							}
+						}}
+						onPointerUp={(event: PointerEvent) => {
+							if (scrollbarDrag.current?.pointerId === event.pointerId) {
+								scrollbarDrag.current = null
+							}
+						}}
+						onPointerCancel={(event: PointerEvent) => {
+							if (scrollbarDrag.current?.pointerId === event.pointerId) {
+								scrollbarDrag.current = null
+							}
+						}}
+					>
+						<span />
+					</column-scrollbar>
+				)}
 			</tile-column>
 		)
 	}
@@ -819,6 +1082,10 @@ export function TilingWorkspace({
 				style={{
 					transform: `translateX(calc(${pageIndex} * (var(--tile-column-width) + var(--tile-column-gap)) * -1))`,
 				}}
+				onTransitionEnd={() => {
+					measureColumnClearance()
+					measureColumnOverflow()
+				}}
 			>
 				{columns.map((id) => {
 					const column = layout.columns.find((item) => item.id === id)
@@ -831,6 +1098,7 @@ export function TilingWorkspace({
 	const singleSlot = allocation.left === 0
 	return (
 		<tiling-workspace
+			ref={workspaceRef}
 			className={css.class}
 			data-management={management ? "true" : "false"}
 			data-dirty={dirty ? "true" : "false"}

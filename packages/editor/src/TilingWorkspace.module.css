@@ -106,8 +106,28 @@ tiling-workspace.class {
 				display: grid;
 				grid-template-rows: 34px minmax(0, 1fr);
 				min-height: 0;
+				margin-block-end: var(--tile-column-clearance, 0);
 				border-radius: 12px;
-				pointer-events: auto;
+				pointer-events: none;
+				transition: margin-block-end 160ms ease;
+
+				&[data-overflow="more"]::before {
+					position: absolute;
+					right: 0;
+					bottom: 0;
+					left: 0;
+					height: 12px;
+					border-bottom: 1px solid var(--line-strong);
+					border-radius: 0 0 10px 10px;
+					background: linear-gradient(
+						to bottom,
+						transparent,
+						color-mix(in srgb, var(--panel) 82%, transparent)
+					);
+					content: "";
+					pointer-events: none;
+					z-index: 2;
+				}
 
 				&::after {
 					position: absolute;
@@ -127,6 +147,7 @@ tiling-workspace.class {
 					border: 1px solid var(--line-strong);
 					border-radius: 9px;
 					background: color-mix(in srgb, var(--panel) 96%, transparent);
+					pointer-events: auto;
 
 					> button {
 						display: grid;
@@ -179,20 +200,58 @@ tiling-workspace.class {
 					display: block;
 					min-height: 0;
 					overflow: auto;
-					scrollbar-width: thin;
+					pointer-events: none;
+					scrollbar-width: none;
 					scroll-padding: 8px;
+
+					&::-webkit-scrollbar {
+						display: none;
+					}
 
 					> tile-stack {
 						display: flex;
 						flex-direction: column;
 						gap: 8px;
 						min-height: 100%;
-						padding: 8px 0;
+						padding: 8px 0 0;
 
 						> workspace-tile:first-child,
 						> empty-column:first-child {
 							margin-block-start: 0;
 						}
+					}
+				}
+
+				> column-scrollbar {
+					--scroll-thumb-height: 100%;
+					--scroll-thumb-top: 0;
+					position: absolute;
+					top: 40px;
+					right: 2px;
+					bottom: 4px;
+					display: block;
+					width: 7px;
+					border-radius: 999px;
+					background: color-mix(in srgb, var(--line) 34%, transparent);
+					cursor: pointer;
+					pointer-events: auto;
+					z-index: 4;
+
+					&:focus-visible {
+						outline: 2px solid var(--accent);
+						outline-offset: 1px;
+					}
+
+					> span {
+						position: absolute;
+						top: var(--scroll-thumb-top);
+						left: 1px;
+						display: block;
+						width: 5px;
+						height: var(--scroll-thumb-height);
+						border-radius: inherit;
+						background: var(--line-strong);
+						pointer-events: none;
 					}
 				}
 
@@ -222,6 +281,7 @@ tiling-workspace.class {
 		background: color-mix(in srgb, var(--panel) 96%, transparent);
 		overflow: clip;
 		transition: border-color 160ms ease;
+		pointer-events: auto;
 
 		&[data-fill="true"] {
 			flex-grow: 1;
@@ -321,6 +381,7 @@ tiling-workspace.class {
 		background: color-mix(in srgb, var(--panel) 72%, transparent);
 		text-align: center;
 		color: var(--ink-muted);
+		pointer-events: auto;
 
 		> span {
 			font-size: 10px;
@@ -732,6 +793,10 @@ tiling-workspace.class {
 				pointer-events: none;
 				user-select: none;
 			}
+		}
+
+		tile-column {
+			pointer-events: auto;
 		}
 	}
 }
