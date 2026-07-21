@@ -9,6 +9,7 @@ export type LiveFontDiagnostic = Readonly<{
 }>
 
 export type LiveFontTimings = Readonly<{
+	queueing: number
 	projectionAndIngestion: number
 	serialization: number
 	total: number
@@ -78,12 +79,22 @@ export interface LiveFontCompilerOptions {
 	) => Promise<Uint8Array> | Uint8Array
 }
 
+/**
+ * Keep live compilation out of the input event turn and collapse a burst of
+ * key-driven edits before doing the synchronous projection work.
+ */
+export const LIVE_FONT_EDIT_DEBOUNCE_MS = 16
+
 export function createLiveFontCompiler(
 	owner: LiveFontStateOwner,
 	options: LiveFontCompilerOptions = {},
 ) {
 	const now = options.now ?? (() => performance.now())
-	const schedule = options.schedule ?? queueMicrotask
+	const schedule =
+		options.schedule ??
+		((work: () => void) => {
+			setTimeout(work, LIVE_FONT_EDIT_DEBOUNCE_MS)
+		})
 	const serialize =
 		options.serialize ??
 		((compilation: Extract<FontCompilation, { ok: true }>) =>
@@ -121,7 +132,11 @@ export function createLiveFontCompiler(
 			}),
 		)
 	}
-	const compile = (currentGeneration: number, revision: number): void => {
+	const compile = (
+		currentGeneration: number,
+		revision: number,
+		requestedAt: number,
+	): void => {
 		if (!running || currentGeneration !== generation) return
 		const started = now()
 		let compilation: FontCompilation
@@ -163,9 +178,10 @@ export function createLiveFontCompiler(
 					generation: currentGeneration,
 					revision,
 					timings: Object.freeze({
+						queueing: started - requestedAt,
 						projectionAndIngestion: projected - started,
 						serialization: serialized - projected,
-						total: serialized - started,
+						total: serialized - requestedAt,
 					}),
 				})
 				owner.silo.setState(
@@ -194,6 +210,7 @@ export function createLiveFontCompiler(
 		if (!running) return
 		const currentGeneration = ++generation
 		const revision = owner.silo.getState(owner.documentRevision)
+		const requestedAt = now()
 		owner.silo.setState(
 			compilationAtom,
 			Object.freeze({
@@ -203,7 +220,7 @@ export function createLiveFontCompiler(
 				lastGood: lastGood(),
 			}),
 		)
-		schedule(() => compile(currentGeneration, revision))
+		schedule(() => compile(currentGeneration, revision, requestedAt))
 	}
 
 	return {

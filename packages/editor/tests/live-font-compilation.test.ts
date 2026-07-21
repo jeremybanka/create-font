@@ -8,7 +8,10 @@ import {
 } from "../src/browser-font-face.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { aGlyphId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
-import { createLiveFontCompiler } from "../src/live-font-compilation.ts"
+import {
+	createLiveFontCompiler,
+	LIVE_FONT_EDIT_DEBOUNCE_MS,
+} from "../src/live-font-compilation.ts"
 
 function successfulCompilation(): FontCompilation {
 	return {
@@ -27,6 +30,39 @@ async function settle(): Promise<void> {
 }
 
 describe("live font compilation", () => {
+	it("defers compilation beyond the input turn and coalesces an edit burst", async () => {
+		vi.useFakeTimers()
+		try {
+			const silo = new Silo({
+				name: "live-font-debounce-test",
+				lifespan: "ephemeral",
+				isProduction: false,
+			})
+			const revision = silo.atom({ key: "revision", default: 0 })
+			const compilation = vi.fn(successfulCompilation)
+			const compiler = createLiveFontCompiler(
+				{ silo, documentRevision: revision, compilation },
+				{ serialize: () => new Uint8Array([1]) },
+			)
+
+			compiler.start()
+			for (let value = 1; value <= 5; value += 1)
+				silo.setState(revision, value)
+
+			expect(compilation).not.toHaveBeenCalled()
+			await vi.advanceTimersByTimeAsync(LIVE_FONT_EDIT_DEBOUNCE_MS)
+			await settle()
+			expect(compilation).toHaveBeenCalledTimes(1)
+			expect(silo.getState(compiler.state)).toMatchObject({
+				status: "ready",
+				revision: 5,
+			})
+			compiler.stop()
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
 	it("suppresses stale serialized bytes and retains the last good artifact", async () => {
 		const silo = new Silo({
 			name: "live-font-test",
@@ -92,6 +128,7 @@ describe("live font compilation", () => {
 
 	it("reuses unrelated atom.io glyph projection artifacts after one glyph edit", () => {
 		const workspace = createEditorWorkspace()
+		const beforeCompilation = workspace.font.read.compilation()
 		const beforeA = workspace.font.silo.getState(
 			workspace.font.selectors.glyphSource,
 			aGlyphId,
@@ -123,6 +160,17 @@ describe("live font compilation", () => {
 		)
 		expect(afterA).toBe(beforeA)
 		expect(afterO).not.toBe(beforeO)
+		const afterCompilation = workspace.font.read.compilation()
+		expect(afterCompilation).not.toBe(beforeCompilation)
+		if (beforeCompilation.ok && afterCompilation.ok) {
+			const compiledBefore = beforeCompilation.font.glyphs.find(
+				(glyph) => glyph.name === "O",
+			)
+			const compiledAfter = afterCompilation.font.glyphs.find(
+				(glyph) => glyph.name === "O",
+			)
+			expect(compiledAfter?.contours).not.toEqual(compiledBefore?.contours)
+		}
 	})
 })
 
@@ -156,7 +204,12 @@ describe("browser font face lifecycle", () => {
 			bytes: new Uint8Array([1]),
 			generation: 1,
 			revision: 1,
-			timings: { projectionAndIngestion: 1, serialization: 1, total: 2 },
+			timings: {
+				queueing: 0,
+				projectionAndIngestion: 1,
+				serialization: 1,
+				total: 2,
+			},
 		})
 		loaded.shift()?.()
 		await first
@@ -166,7 +219,12 @@ describe("browser font face lifecycle", () => {
 			bytes: new Uint8Array([2]),
 			generation: 2,
 			revision: 2,
-			timings: { projectionAndIngestion: 1, serialization: 1, total: 2 },
+			timings: {
+				queueing: 0,
+				projectionAndIngestion: 1,
+				serialization: 1,
+				total: 2,
+			},
 		})
 		expect(deleted).toHaveLength(0)
 		loaded.shift()?.()
@@ -198,7 +256,12 @@ describe("browser font face lifecycle", () => {
 		const artifact = {
 			bytes: new Uint8Array([1]),
 			revision: 1,
-			timings: { projectionAndIngestion: 1, serialization: 1, total: 2 },
+			timings: {
+				queueing: 0,
+				projectionAndIngestion: 1,
+				serialization: 1,
+				total: 2,
+			},
 		}
 		const first = manager.activate({ ...artifact, generation: 1 })
 		const second = manager.activate({ ...artifact, generation: 2 })

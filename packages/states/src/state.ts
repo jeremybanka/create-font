@@ -3058,11 +3058,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	>({
 		key: "glyphsSource",
 		get: ({ get }) => {
-			const ids = get(exportedGlyphIdsSelector)
+			// Glyph membership and every authoring action are revisioned. Tracking one
+			// stable revision edge avoids tearing down and recreating hundreds of
+			// selector-family dependency edges for every point nudge while preserving
+			// the already memoized per-glyph projection results.
+			get(documentRevisionAtom)
+			const ids = silo.getState(exportedGlyphIdsSelector)
 			if (!ids.ok) return ids
 			return resultWithWarnings(
 				collectProjectionResults(
-					ids.value.map((glyphId) => get(glyphSourceSelectors, glyphId)),
+					ids.value.map((glyphId) =>
+						silo.getState(glyphSourceSelectors, glyphId),
+					),
 				),
 				ids.warnings,
 			)

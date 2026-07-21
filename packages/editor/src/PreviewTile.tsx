@@ -20,11 +20,10 @@ export interface PreviewTileProps {
 const DEFAULT_TEXT = "Hamburgefontsiv"
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
-	useO(workspace.font.atoms.documentRevision)
 	const compilation = useO(workspace.liveFont.compilation)
 	const activeFont = useO(workspace.liveFont.active)
-	const source = workspace.font.read.editorSource() ?? workspace.document
-	const axes = source.axes as readonly EditorAxisSource[]
+	const axes = (useO(workspace.font.selectors.editorAxesSource) ??
+		workspace.document.axes) as readonly EditorAxisSource[]
 	const [text, setText] = useState(DEFAULT_TEXT)
 	const [sample, setSample] = useState<PreviewSampleId>("custom")
 	const [noiseSeed, setNoiseSeed] = useState("can")
@@ -251,6 +250,21 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				data-compilation-ms={
 					compilation.status === "ready"
 						? compilation.artifact.timings.total
+						: undefined
+				}
+				data-projection-ingestion-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.projectionAndIngestion
+						: undefined
+				}
+				data-compilation-queue-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.queueing
+						: undefined
+				}
+				data-serialization-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.serialization
 						: undefined
 				}
 				data-activation-ms={
