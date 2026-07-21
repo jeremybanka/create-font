@@ -9,6 +9,13 @@
 	color-scheme: dark;
 }
 
+/* Match the editor's global sizing contract before its stylesheet arrives. */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
 html,
 body,
 #app {
