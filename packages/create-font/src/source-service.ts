@@ -32,6 +32,7 @@ import {
 	parseSourceUnitText,
 	sourceUnitKindForPath,
 	parseFea,
+	lowerFeaSubstitutions,
 	type FontSourceDirectoryFiles,
 	type SourceDiagnostic,
 } from "@create-font/source"
@@ -308,6 +309,26 @@ async function loadProjectDirectory(
 	if (!assembled.ok) throw validationError(assembled.errors)
 	const assembledAt =
 		onProjectLoad === undefined ? undefined : performance.now()
+	const glyphIndices = new Map(
+		assembled.value.glyphs.map((glyph, index) => [glyph.name, index]),
+	)
+	for (const [path, value] of Object.entries(values)) {
+		if (!path.startsWith(`features/`) || !path.endsWith(`.fea`)) continue
+		const parsed = parseFea(value as string)
+		if (!parsed.ok) continue
+		const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
+		if (lowered.errors.length > 0) {
+			throw validationError(
+				lowered.errors.map((error) => ({
+					severity: `error`,
+					code: `source.reference`,
+					unitPath: path,
+					path: `$:${error.range.line}:${error.range.column}`,
+					message: error.message,
+				})) as [SourceDiagnostic, ...SourceDiagnostic[]],
+			)
+		}
+	}
 	const units = paths.map((path) => ({
 		path,
 		revision: revisions.get(path) ?? revisionForText(``),

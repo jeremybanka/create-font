@@ -32,6 +32,29 @@ describe("OpenType substitutions", () => {
 		])
 	})
 
+	test("applies a contextual calt rule only with its lookahead", () => {
+		const rules = [
+			{
+				feature: "calt",
+				from: [4, 1],
+				to: 5,
+				contextIndex: 0,
+			},
+		]
+		const glyph = (value: number, index: number) => ({
+			glyph: value,
+			textStart: index,
+			textEnd: index + 1,
+		})
+		expect(
+			applySubstitutions([glyph(4, 0), glyph(2, 1)], rules, new Set(["calt"])),
+		).toEqual([glyph(4, 0), glyph(2, 1)])
+		expect(
+			applySubstitutions([glyph(4, 0), glyph(1, 1)], rules, new Set(["calt"])),
+		).toEqual([glyph(5, 0), glyph(1, 1)])
+		expect(() => serializeGsub(rules)).not.toThrow()
+	})
+
 	test("default font serialization consumes compilation-owned substitutions", () => {
 		const ingested = ingestVariableFont(makeGeometricOFont())
 		if (!ingested.ok) throw new Error("fixture failed ingestion")

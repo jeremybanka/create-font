@@ -149,7 +149,7 @@ export function createEditorWorkspace(
 	})
 	font.actions.setFeatureSubstitutions(
 		initialFeatureSubstitutions.map((rule) => ({
-			feature: rule.feature,
+			...rule,
 			from: rule.from as readonly GlyphId[],
 			to: rule.to as GlyphId,
 		})),
@@ -401,8 +401,12 @@ export function createEditorWorkspace(
 						font.selectors.editorGlyphSource,
 						replacementId,
 					)
-					const first = input[0]
-					const last = input.at(-1)
+					const contextualTarget =
+						rule.contextIndex === undefined
+							? undefined
+							: input[rule.contextIndex]
+					const first = contextualTarget ?? input[0]
+					const last = contextualTarget ?? input.at(-1)
 					if (
 						editorGlyph === null ||
 						first === undefined ||
@@ -411,30 +415,34 @@ export function createEditorWorkspace(
 						continue
 					}
 					const result = get(font.selectors.glyphSource, replacementId)
-					run.splice(index, input.length, {
-						kind: "glyph",
-						character: get(previewTextAtom).slice(
-							first.textStart,
-							last.textEnd,
-						),
-						textStart: first.textStart,
-						textEnd: last.textEnd,
-						glyphId: replacementId,
-						glyph: result.ok
-							? resolveVariableGlyph(
-									replacementId,
-									result.value,
-									axes,
-									location,
-								)
-							: null,
-						sourcePreview: createGlyphPreview(
-							editorGlyph,
-							activeMasterId,
-							document.metrics,
-							document.metadata.unitsPerEm,
-						),
-					})
+					run.splice(
+						index + (rule.contextIndex ?? 0),
+						rule.contextIndex === undefined ? input.length : 1,
+						{
+							kind: "glyph",
+							character: get(previewTextAtom).slice(
+								first.textStart,
+								last.textEnd,
+							),
+							textStart: first.textStart,
+							textEnd: last.textEnd,
+							glyphId: replacementId,
+							glyph: result.ok
+								? resolveVariableGlyph(
+										replacementId,
+										result.value,
+										axes,
+										location,
+									)
+								: null,
+							sourcePreview: createGlyphPreview(
+								editorGlyph,
+								activeMasterId,
+								document.metrics,
+								document.metadata.unitsPerEm,
+							),
+						},
+					)
 				}
 			}
 			return Object.freeze(run)
@@ -446,6 +454,13 @@ export function createEditorWorkspace(
 			if (get(editingTextIndexAtom) !== null) return get(selectedGlyphIdAtom)
 			if (get(routeNameSelector) !== "canvas") return get(selectedGlyphIdAtom)
 			const caretIndex = get(caretIndexAtom)
+			const containingGlyph = get(previewRunSelector).find(
+				(item): item is PreviewRunGlyph =>
+					item.kind === "glyph" &&
+					item.textStart <= caretIndex &&
+					caretIndex < item.textEnd,
+			)
+			if (containingGlyph !== undefined) return containingGlyph.glyphId
 			const nextGlyph = get(previewRunSelector).find(
 				(item): item is PreviewRunGlyph =>
 					item.kind === "glyph" && item.textStart >= caretIndex,
@@ -735,7 +750,7 @@ export function createEditorWorkspace(
 				)
 				font.actions.setFeatureSubstitutions(
 					substitutions.map((rule) => ({
-						feature: rule.feature,
+						...rule,
 						from: rule.from as readonly GlyphId[],
 						to: rule.to as GlyphId,
 					})),

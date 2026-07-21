@@ -172,6 +172,7 @@ export interface FeatureSubstitutionSource {
 	readonly feature: string
 	readonly from: readonly number[]
 	readonly to: number
+	readonly contextIndex?: number
 }
 
 export interface VariableFontSource {

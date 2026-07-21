@@ -1072,6 +1072,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			readonly feature: string
 			readonly from: readonly GlyphId[]
 			readonly to: GlyphId
+			readonly contextIndex?: number
 		}[]
 	>({
 		key: "featureSubstitutions",
@@ -3616,7 +3617,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				const to = glyphIndices.get(rule.to)
 				return from.some((glyphId) => glyphId === undefined) || to === undefined
 					? []
-					: [{ feature: rule.feature, from: from as number[], to }]
+					: [
+							{
+								feature: rule.feature,
+								from: from as number[],
+								to,
+								...(rule.contextIndex === undefined
+									? {}
+									: { contextIndex: rule.contextIndex }),
+							},
+						]
 			})
 			return deepFreeze({
 				ok: true,
@@ -7637,6 +7647,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					readonly feature: string
 					readonly from: readonly GlyphId[]
 					readonly to: GlyphId
+					readonly contextIndex?: number
 				}[],
 			): void {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))

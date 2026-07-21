@@ -14,6 +14,7 @@ export interface EditorFeatureSubstitution {
 	readonly feature: string
 	readonly from: readonly string[]
 	readonly to: string
+	readonly contextIndex?: number
 }
 
 export type MountedEditor = Readonly<{

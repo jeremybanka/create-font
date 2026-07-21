@@ -5,7 +5,11 @@ import type {
 import type { EditorFontSource } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type { SourceComparison } from "@create-font/server"
-import { assembleEditorFontSource, parseFea } from "@create-font/source/browser"
+import {
+	assembleEditorFontSource,
+	lowerFeaSubstitutions,
+	parseFea,
+} from "@create-font/source/browser"
 import { render } from "preact"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
@@ -373,21 +377,23 @@ async function showSource(
 	renderedSource = true
 	currentSource = source
 	currentValidation = validation
-	const glyphIds = new Map(source.glyphs.map((glyph) => [glyph.name, glyph.id]))
+	const glyphIndices = new Map(
+		source.glyphs.map((glyph, index) => [glyph.name, index]),
+	)
 	if (featureSources !== undefined)
 		currentFeatureSubstitutions = featureSources.flatMap((featureSource) => {
 			const parsed = parseFea(featureSource)
-			if (!parsed.ok) return []
-			return parsed.value.features.flatMap((feature) =>
-				feature.statements.flatMap((statement) => {
-					const from = statement.from.map((name) => glyphIds.get(name))
-					const to = glyphIds.get(statement.to)
-					return from.some((glyphId) => glyphId === undefined) ||
-						to === undefined
-						? []
-						: [{ feature: feature.tag, from: from as string[], to }]
-				}),
-			)
+			if (!parsed.ok) throw new Error(parsed.errors[0]?.message)
+			const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
+			if (lowered.errors.length > 0) throw new Error(lowered.errors[0]?.message)
+			return lowered.ir.map((rule) => ({
+				feature: rule.feature,
+				from: rule.from.map((index) => source.glyphs[index]?.id ?? ""),
+				to: source.glyphs[rule.to]?.id ?? "",
+				...(rule.contextIndex === undefined
+					? {}
+					: { contextIndex: rule.contextIndex }),
+			}))
 		})
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)

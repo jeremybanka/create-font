@@ -10,6 +10,7 @@ export interface FeaSubstitutionAst {
 	readonly kind: "substitution"
 	readonly from: readonly string[]
 	readonly to: string
+	readonly markedIndex?: number
 	readonly range: FeaSourceRange
 }
 
@@ -39,10 +40,14 @@ export interface FeatureSubstitutionIr {
 	readonly feature: string
 	readonly from: readonly number[]
 	readonly to: number
+	readonly contextIndex?: number
 	readonly range: FeaSourceRange
 }
 
 type Token = { readonly value: string; readonly range: FeaSourceRange }
+type TokenizeResult =
+	| { readonly ok: true; readonly tokens: readonly Token[] }
+	| { readonly ok: false; readonly errors: readonly FeaDiagnostic[] }
 
 function position(source: string, start: number, end = start): FeaSourceRange {
 	const before = source.slice(0, start)
@@ -55,23 +60,46 @@ function position(source: string, start: number, end = start): FeaSourceRange {
 	}
 }
 
-function tokenize(source: string): readonly Token[] {
+function tokenize(source: string): TokenizeResult {
 	const tokens: Token[] = []
-	const pattern = /#[^\n]*|\/\*[\s\S]*?\*\/|[A-Za-z_.][A-Za-z0-9_.]*|[{};]/gu
-	for (const match of source.matchAll(pattern)) {
-		if (match[0].startsWith("#") || match[0].startsWith("/*")) continue
+	const pattern =
+		/\s+|#[^\n]*|\/\*[\s\S]*?\*\/|[A-Za-z_.][A-Za-z0-9_.]*|[{};']/gy
+	let cursor = 0
+	while (cursor < source.length) {
+		pattern.lastIndex = cursor
+		const match = pattern.exec(source)
+		if (match === null) {
+			return {
+				ok: false,
+				errors: [
+					{
+						message: `Unsupported Adobe feature syntax ${JSON.stringify(source[cursor])}.`,
+						range: position(source, cursor, cursor + 1),
+					},
+				],
+			}
+		}
+		cursor = pattern.lastIndex
+		if (
+			/^\s/u.test(match[0]) ||
+			match[0].startsWith("#") ||
+			match[0].startsWith("/*")
+		)
+			continue
 		const start = match.index
 		tokens.push({
 			value: match[0],
 			range: position(source, start, start + match[0].length),
 		})
 	}
-	return tokens
+	return { ok: true, tokens }
 }
 
 /** Parses the feature/substitution subset used by create-font's pre-lowering IR. */
 export function parseFea(source: string): FeaParseResult {
-	const tokens = tokenize(source)
+	const tokenized = tokenize(source)
+	if (!tokenized.ok) return tokenized
+	const tokens = tokenized.tokens
 	const features: FeaFeatureAst[] = []
 	const errors: FeaDiagnostic[] = []
 	let cursor = 0
@@ -95,10 +123,19 @@ export function parseFea(source: string): FeaParseResult {
 		while (tokens[cursor]?.value !== "}" && cursor < tokens.length) {
 			const sub = take()
 			const from: string[] = []
+			let markedIndex: number | undefined
 			while (tokens[cursor] !== undefined && tokens[cursor]?.value !== "by") {
 				const token = take()
 				if (token?.value === ";" || token?.value === "}") break
-				if (token !== undefined) from.push(token.value)
+				if (token?.value === "'") {
+					if (from.length === 0 || markedIndex !== undefined)
+						errors.push({
+							message:
+								"Expected one apostrophe after the contextual input glyph.",
+							range: token.range,
+						})
+					else markedIndex = from.length - 1
+				} else if (token !== undefined) from.push(token.value)
 			}
 			const by = take()
 			const to = take()
@@ -127,6 +164,7 @@ export function parseFea(source: string): FeaParseResult {
 				kind: "substitution",
 				from,
 				to: to.value,
+				...(markedIndex === undefined ? {} : { markedIndex }),
 				range: { ...sub.range, end: semicolon.range.end },
 			})
 		}
@@ -191,6 +229,9 @@ export function lowerFeaSubstitutions(
 				feature: feature.tag,
 				from: from as number[],
 				to,
+				...(statement.markedIndex === undefined
+					? {}
+					: { contextIndex: statement.markedIndex }),
 				range: statement.range,
 			})
 		}

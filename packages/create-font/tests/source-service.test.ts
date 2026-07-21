@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
@@ -90,6 +90,9 @@ describe(`font workspace discovery`, () => {
 describe(`filesystem font source service`, () => {
 	it(`compares the complete working source with HEAD and arbitrary immutable refs`, async () => {
 		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
+		const featurePath = resolve(projectRoot, `features`, `nested`, `layout.fea`)
+		await mkdir(resolve(featurePath, `..`), { recursive: true })
+		await writeFile(featurePath, `feature liga { sub A O by O; } liga;\n`)
 		await initializeGitRepository(workspaceRoot)
 		const source = await createFileSystemSourceService(projectRoot)
 		const clean = await source.readComparison?.({ baseRef: `HEAD` })
@@ -113,6 +116,22 @@ describe(`filesystem font source service`, () => {
 				paths: [`names.json`],
 			}),
 		)
+		await writeFile(featurePath, `feature liga { sub A O by A; } liga;\n`)
+		const featureWorking = await source.readComparison?.({ baseRef: `HEAD` })
+		expect(featureWorking?.changes).toContainEqual(
+			expect.objectContaining({
+				change: `modified`,
+				paths: [`features/nested/layout.fea`],
+			}),
+		)
+		await source.commitUnits?.({
+			expectedComparisonIdentity: featureWorking?.identity ?? ``,
+			message: `Update ligature`,
+			paths: [`features/nested/layout.fea`],
+		})
+		expect(
+			(await source.readComparison?.({ baseRef: `HEAD` }))?.changes,
+		).toEqual([expect.objectContaining({ paths: [`names.json`] })])
 
 		await git(workspaceRoot, `add`, `fonts/workbench-sans/names.json`)
 		await git(workspaceRoot, `commit`, `-m`, `Rename font`)

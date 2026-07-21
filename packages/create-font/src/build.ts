@@ -8,7 +8,7 @@ import {
 	stat,
 	writeFile,
 } from "node:fs/promises"
-import { basename, dirname, join, resolve } from "node:path"
+import { basename, dirname, join, relative, resolve } from "node:path"
 
 import {
 	SourceValidationError,
@@ -32,6 +32,24 @@ import {
 import { loadEditorFontSourceDirectory } from "./source-service.ts"
 
 export type { BuildDiagnostic, BuildResult } from "@create-font/server"
+
+async function collectFeatureFiles(
+	root: string,
+	directory = root,
+): Promise<readonly string[]> {
+	const paths: string[] = []
+	for (const entry of await readdir(directory, { withFileTypes: true }).catch(
+		() => [],
+	)) {
+		const absolute = join(directory, entry.name)
+		if (entry.isDirectory()) {
+			paths.push(...(await collectFeatureFiles(root, absolute)))
+		} else if (entry.isFile() && entry.name.endsWith(".fea")) {
+			paths.push(relative(root, absolute))
+		}
+	}
+	return paths.toSorted()
+}
 
 function failure(
 	root: string,
@@ -144,9 +162,7 @@ export async function buildProject(
 	let bytes: Uint8Array
 	try {
 		const featureDirectory = join(root, "features")
-		const featureFiles = (await readdir(featureDirectory).catch(() => []))
-			.filter((path) => path.endsWith(".fea"))
-			.toSorted()
+		const featureFiles = await collectFeatureFiles(featureDirectory)
 		const substitutions: FeatureSubstitutionIr[] = []
 		const glyphs = new Map(
 			compilation.font.glyphs.map((glyph, index) => [

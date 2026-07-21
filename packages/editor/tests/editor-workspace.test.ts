@@ -143,6 +143,19 @@ describe("editor workspace", () => {
 			textStart: 0,
 			textEnd: 2,
 		})
+		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			glyphFor("O"),
+		)
+		const layout = layoutTextRun(
+			shaped,
+			source.metrics,
+			source.metadata.unitsPerEm,
+		)
+		const interior = layout.carets.find((caret) => caret.textIndex === 1)
+		expect(interior).toBeDefined()
+		expect(interior?.x).toBeGreaterThan(layout.carets[0]?.x ?? -1)
+		expect(interior?.x).toBeLessThan(layout.carets.at(-1)?.x ?? Infinity)
 		const compilation = workspace.font.read.compilation()
 		expect(compilation.ok).toBe(true)
 		if (compilation.ok) {

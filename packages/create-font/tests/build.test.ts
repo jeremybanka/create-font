@@ -54,10 +54,10 @@ function checksum(bytes: Uint8Array): number {
 describe(`buildProject`, () => {
 	it(`compiles feature files into a conventional GSUB table`, async () => {
 		const root = await copyWorkbenchSans()
-		await mkdir(resolve(root, `features`))
+		await mkdir(resolve(root, `features`, `nested`), { recursive: true })
 		await writeFile(
-			resolve(root, `features`, `layout.fea`),
-			`feature liga { sub A O by O; } liga;\n`,
+			resolve(root, `features`, `nested`, `layout.fea`),
+			`feature calt { sub A' O by O; } calt;\n`,
 		)
 		const result = await buildProject(root)
 		expect(result.ok).toBe(true)

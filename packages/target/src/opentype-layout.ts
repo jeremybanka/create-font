@@ -2,6 +2,7 @@ export interface FeatureSubstitution {
 	readonly feature: string
 	readonly from: readonly number[]
 	readonly to: number
+	readonly contextIndex?: number
 }
 
 import type { VariableFont } from "./model.ts"
@@ -55,7 +56,57 @@ function ligatureSubstitution(rule: FeatureSubstitution): readonly number[] {
 	return [...header, ...set, ...coverage(rule.from[0] ?? 0)]
 }
 
-function lookup(rule: FeatureSubstitution): readonly number[] {
+function contextualSubstitution(
+	rule: FeatureSubstitution,
+	referencedLookup: number,
+): readonly number[] {
+	const marked = rule.contextIndex ?? 0
+	const backtrack = rule.from.slice(0, marked).toReversed()
+	const input = rule.from.slice(marked, marked + 1)
+	const lookahead = rule.from.slice(marked + 1)
+	const glyphs = [...backtrack, ...input, ...lookahead]
+	const headerLength =
+		2 +
+		2 +
+		backtrack.length * 2 +
+		2 +
+		input.length * 2 +
+		2 +
+		lookahead.length * 2 +
+		2 +
+		4
+	let coverageOffset = headerLength
+	const offsets = glyphs.flatMap((glyph) => {
+		const offset = u16(coverageOffset)
+		coverageOffset += coverage(glyph).length
+		return offset
+	})
+	let cursor = 0
+	const takeOffsets = (count: number) =>
+		offsets.slice(cursor, (cursor += count * 2))
+	return [
+		...u16(3),
+		...u16(backtrack.length),
+		...takeOffsets(backtrack.length),
+		...u16(input.length),
+		...takeOffsets(input.length),
+		...u16(lookahead.length),
+		...takeOffsets(lookahead.length),
+		...u16(1),
+		...u16(0),
+		...u16(referencedLookup),
+		...glyphs.flatMap(coverage),
+	]
+}
+
+function lookup(
+	rule: FeatureSubstitution,
+	referencedLookup?: number,
+): readonly number[] {
+	if (rule.contextIndex !== undefined) {
+		const subtable = contextualSubstitution(rule, referencedLookup ?? 0)
+		return [...u16(6), ...u16(0), ...u16(1), ...u16(8), ...subtable]
+	}
 	const subtable =
 		rule.from.length === 1
 			? singleSubstitution(rule)
@@ -91,11 +142,39 @@ export function serializeGsub(
 	for (const rule of substitutions) {
 		if (rule.from.length === 0)
 			throw new TypeError("A substitution input cannot be empty.")
+		if (
+			rule.contextIndex !== undefined &&
+			(!Number.isInteger(rule.contextIndex) ||
+				rule.contextIndex < 0 ||
+				rule.contextIndex >= rule.from.length)
+		)
+			throw new RangeError(
+				"GSUB contextual substitution indices must identify an input glyph.",
+			)
 		for (const glyph of [...rule.from, rule.to])
 			if (!Number.isInteger(glyph) || glyph < 0 || glyph > 0xffff)
 				throw new RangeError("GSUB glyph IDs must be uint16 values.")
 	}
-	const lookups = substitutions.map(lookup)
+	const contextual = substitutions.filter(
+		(rule) => rule.contextIndex !== undefined,
+	)
+	const lookups = [
+		...substitutions.map((rule) =>
+			lookup(
+				rule,
+				rule.contextIndex === undefined
+					? undefined
+					: substitutions.length + contextual.indexOf(rule),
+			),
+		),
+		...contextual.map((rule) =>
+			lookup({
+				feature: rule.feature,
+				from: [rule.from[rule.contextIndex ?? 0] ?? 0],
+				to: rule.to,
+			}),
+		),
+	]
 	const lookupList = [
 		...u16(lookups.length),
 		...offsetList(lookups, 2),
@@ -171,6 +250,15 @@ export function applySubstitutions(
 				)
 			)
 				continue
+			if (rule.contextIndex !== undefined) {
+				const target = result[index + rule.contextIndex]
+				if (target !== undefined)
+					result.splice(index + rule.contextIndex, 1, {
+						...target,
+						glyph: rule.to,
+					})
+				continue
+			}
 			const first = result[index]
 			const last = result[index + rule.from.length - 1]
 			if (first === undefined || last === undefined) continue
