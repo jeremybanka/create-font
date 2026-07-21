@@ -584,6 +584,26 @@ describe("controlled multi-node Alt/Option drags", () => {
 		])
 	})
 
+	it("preserves controlled dragging for a single node-and-handles group", () => {
+		const planned = planControlledSelectionDrag(
+			contours,
+			[
+				{ kind: "node", pointId: softA },
+				{ kind: "handle", pointId: softA, handle: "incoming" },
+				{ kind: "handle", pointId: softA, handle: "outgoing" },
+			],
+			softA,
+			{ x: 30, y: 90 },
+		)
+		expect(planned?.result).toEqual({
+			points: [{ pointId: softA, x: 80, y: 50 }],
+			handles: [
+				{ pointId: softA, handle: "incoming", x: 30, y: 50 },
+				{ pointId: softA, handle: "outgoing", x: 130, y: 50 },
+			],
+		})
+	})
+
 	it("uses selected-handle direction when the fixed opposite handle is zero-length", () => {
 		const degenerateB = {
 			...contours[1]!.nodes[0]!,

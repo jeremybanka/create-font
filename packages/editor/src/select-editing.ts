@@ -513,7 +513,7 @@ export function planControlledSelectionDrag(
 			}
 		}
 	}
-	if (points.length < 2) return null
+	if (points.length === 0) return null
 	return { result: { points, handles }, controllerDelta }
 }
 
