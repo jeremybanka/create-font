@@ -4,6 +4,7 @@ import type {
 	ContourId,
 	EditorGlyphSource,
 	EditorHandleVectorSource,
+	GlyphId,
 	MasterId,
 	PasteContoursInput,
 	PointId,
@@ -44,6 +45,10 @@ export interface OutlineClipboardWriter {
 export interface OutlineClipboardPayload {
 	readonly format: "create-font.outline"
 	readonly version: typeof OUTLINE_CLIPBOARD_VERSION
+	/** Present on new copies so a one-layer payload can be remapped safely. */
+	readonly sourceGlyphId?: GlyphId
+	/** Full source glyph master set preserves document compatibility on remap. */
+	readonly sourceGlyphMasterIds?: readonly MasterId[]
 	readonly masterIds: readonly MasterId[]
 	readonly contours: readonly {
 		readonly closed: boolean
@@ -186,6 +191,8 @@ export function prepareOutlineClipboardCopy(
 			payload: {
 				format: "create-font.outline",
 				version: OUTLINE_CLIPBOARD_VERSION,
+				sourceGlyphId: glyph.id,
+				sourceGlyphMasterIds: glyph.layers.map((layer) => layer.masterId),
 				masterIds: [masterId],
 				contours,
 				layers: [{ masterId, points: layerPoints }],
@@ -260,6 +267,8 @@ export function parseOutlineClipboard(
 	const candidate = value as {
 		format?: unknown
 		version?: unknown
+		sourceGlyphId?: unknown
+		sourceGlyphMasterIds?: unknown
 		masterIds?: unknown
 		contours?: unknown
 		layers?: unknown
@@ -277,6 +286,32 @@ export function parseOutlineClipboard(
 		}
 	}
 	if (
+		candidate.sourceGlyphId !== undefined &&
+		(typeof candidate.sourceGlyphId !== "string" ||
+			!candidate.sourceGlyphId.startsWith("glyph:"))
+	) {
+		return { ok: false, error: "The clipboard source glyph is malformed." }
+	}
+	if (
+		candidate.sourceGlyphMasterIds !== undefined &&
+		(!Array.isArray(candidate.sourceGlyphMasterIds) ||
+			candidate.sourceGlyphMasterIds.length === 0 ||
+			!candidate.sourceGlyphMasterIds.every(
+				(masterId) =>
+					typeof masterId === "string" && masterId.startsWith("master:"),
+			) ||
+			new Set(candidate.sourceGlyphMasterIds).size !==
+				candidate.sourceGlyphMasterIds.length)
+	) {
+		return {
+			ok: false,
+			error: "The clipboard source glyph master list is malformed.",
+		}
+	}
+	const sourceGlyphMasterIds = candidate.sourceGlyphMasterIds as
+		| readonly unknown[]
+		| undefined
+	if (
 		!Array.isArray(candidate.masterIds) ||
 		!candidate.masterIds.every(
 			(masterId) =>
@@ -285,6 +320,17 @@ export function parseOutlineClipboard(
 		new Set(candidate.masterIds).size !== candidate.masterIds.length
 	) {
 		return { ok: false, error: "The clipboard master list is malformed." }
+	}
+	if (
+		sourceGlyphMasterIds !== undefined &&
+		candidate.masterIds.some(
+			(masterId) => !sourceGlyphMasterIds.includes(masterId),
+		)
+	) {
+		return {
+			ok: false,
+			error: "The clipboard source glyph master list is malformed.",
+		}
 	}
 	if (!Array.isArray(candidate.contours) || candidate.contours.length === 0) {
 		return { ok: false, error: "The clipboard contains no outline contours." }
@@ -395,15 +441,28 @@ export function prepareOutlinePaste(
 	glyphId: PasteContoursInput["glyphId"],
 	destinationMasterIds: readonly MasterId[],
 	nextId: (kind: "contour" | "point") => ContourId | PointId,
+	destinationGlyphMasterIds: readonly MasterId[] = destinationMasterIds,
 ): OutlineClipboardResult<
 	PasteContoursInput & { readonly selectedPointIds: readonly PointId[] }
 > {
-	if (
-		payload.masterIds.length !== destinationMasterIds.length ||
-		destinationMasterIds.some(
-			(masterId) => !payload.masterIds.includes(masterId),
+	const mastersMatch =
+		payload.masterIds.length === destinationMasterIds.length &&
+		destinationMasterIds.every((destinationMasterId) =>
+			payload.masterIds.includes(destinationMasterId),
 		)
-	) {
+	const remapSingleLayer =
+		!mastersMatch &&
+		payload.sourceGlyphId === glyphId &&
+		payload.sourceGlyphMasterIds !== undefined &&
+		payload.sourceGlyphMasterIds.length === destinationGlyphMasterIds.length &&
+		destinationGlyphMasterIds.every((destinationMasterId) =>
+			payload.sourceGlyphMasterIds?.includes(destinationMasterId),
+		) &&
+		payload.masterIds.length === 1 &&
+		payload.layers.length === 1 &&
+		destinationMasterIds.length === 1 &&
+		destinationMasterIds[0] === masterId
+	if (!mastersMatch && !remapSingleLayer) {
 		return {
 			ok: false,
 			error: "The copied outlines use a different set of font masters.",
@@ -420,7 +479,7 @@ export function prepareOutlinePaste(
 		}),
 	}))
 	const layers = payload.layers.map((layer) => ({
-		masterId: layer.masterId,
+		masterId: remapSingleLayer ? masterId : layer.masterId,
 		points: layer.points.map((point): AuthoringLayerPointInput => {
 			const pointId = pointIds.get(point.key)
 			if (pointId === undefined)
