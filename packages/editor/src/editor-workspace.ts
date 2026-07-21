@@ -139,6 +139,10 @@ export function createEditorWorkspace(
 		key: "caretIndex",
 		default: 0,
 	})
+	const textSelectionCollapsedAtom = font.silo.atom<boolean>({
+		key: "textSelectionCollapsed",
+		default: true,
+	})
 	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: "editingTextIndex",
 		default: null,
@@ -379,6 +383,7 @@ export function createEditorWorkspace(
 	}> | null>({
 		key: "activeKerningPair",
 		get: ({ get }) => {
+			if (!get(textSelectionCollapsedAtom)) return null
 			const caret = get(caretIndexAtom)
 			const glyphs = get(previewRunSelector).filter(
 				(item): item is PreviewRunGlyph => item.kind === "glyph",
@@ -582,6 +587,7 @@ export function createEditorWorkspace(
 		const nextMaster = currentDocument.masters[nextIndex]
 		if (nextMaster !== undefined) selectMaster(nextMaster.id)
 	}
+	let restoreTextCanvasFocus: (() => void) | null = null
 
 	return {
 		font,
@@ -602,6 +608,7 @@ export function createEditorWorkspace(
 			selection: selectionAtom,
 			previewText: previewTextAtom,
 			caretIndex: caretIndexAtom,
+			textSelectionCollapsed: textSelectionCollapsedAtom,
 			editingTextIndex: editingTextIndexAtom,
 			activeTool: activeToolAtom,
 			previewCoordinate: previewCoordinateAtoms,
@@ -623,6 +630,15 @@ export function createEditorWorkspace(
 			faviconPreview: faviconPreviewSelector,
 		},
 		actions: {
+			registerTextCanvasFocusRestorer(restorer: () => void): () => void {
+				restoreTextCanvasFocus = restorer
+				return () => {
+					if (restoreTextCanvasFocus === restorer) restoreTextCanvasFocus = null
+				}
+			},
+			restoreTextCanvasFocus(): void {
+				queueMicrotask(() => restoreTextCanvasFocus?.())
+			},
 			setActiveKerning(value: number | null): void {
 				const pair = font.silo.getState(activeKerningPairSelector)
 				if (pair !== null)

@@ -582,6 +582,13 @@ describe("editor workspace", () => {
 		expect(
 			workspace.font.silo.getState(workspace.ui.activeKerningPair),
 		).toMatchObject({ left: aGlyphId, right: oGlyphId, value: null })
+		workspace.font.silo.setState(workspace.ui.textSelectionCollapsed, false)
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeKerningPair),
+		).toBeNull()
+		workspace.actions.setActiveKerning(-40)
+		expect(workspace.font.read.editorSource()?.kerning).toBeUndefined()
+		workspace.font.silo.setState(workspace.ui.textSelectionCollapsed, true)
 
 		workspace.actions.setActiveKerning(-80)
 		const run = workspace.font.silo.getState(workspace.ui.previewRun)

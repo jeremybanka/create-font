@@ -8,8 +8,12 @@ export function KerningTile({
 	readonly workspace: EditorWorkspace
 }) {
 	const pair = useO(workspace.ui.activeKerningPair)
+	const setKerningAndRestoreCanvas = (value: number | null): void => {
+		workspace.actions.setActiveKerning(value)
+		workspace.actions.restoreTextCanvasFocus()
+	}
 	return (
-		<kerning-tile>
+		<kerning-tile data-state={pair?.value == null ? "absent" : "explicit"}>
 			{pair === null ? (
 				<p>Place the text cursor between two glyphs to edit their kerning.</p>
 			) : (
@@ -19,6 +23,9 @@ export function KerningTile({
 							{pair.left.slice(6)} / {pair.right.slice(6)}
 						</strong>
 					</p>
+					<p role="status">
+						Kerning: {pair.value === null ? "Absent" : "Explicit"}
+					</p>
 					<NumericInput
 						aria-label="Kerning amount"
 						value={pair.value ?? 0}
@@ -26,12 +33,12 @@ export function KerningTile({
 						max={32767}
 						step={1}
 						arrowStep={1}
-						onCommit={(value) => workspace.actions.setActiveKerning(value)}
+						onCommit={setKerningAndRestoreCanvas}
 					/>
 					<button
 						type="button"
 						disabled={pair.value === null}
-						onClick={() => workspace.actions.setActiveKerning(null)}
+						onClick={() => setKerningAndRestoreCanvas(null)}
 					>
 						Remove kerning
 					</button>

@@ -1075,7 +1075,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		default: Object.freeze([]),
 	})
 	const kerningTimeline = silo.timeline({
-		key: "kerningHistory",
+		key: "kerning",
 		scope: [kerningAtom],
 	})
 

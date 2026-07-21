@@ -368,6 +368,7 @@ export function GlyphCanvas({
 	const setText = useI(workspace.ui.previewText)
 	const caretIndex = useO(workspace.ui.caretIndex)
 	const setCaretIndex = useI(workspace.ui.caretIndex)
+	const setTextSelectionCollapsed = useI(workspace.ui.textSelectionCollapsed)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
 	const activeTool = useO(workspace.ui.activeTool)
 	const run = useO(workspace.ui.previewRun)
@@ -1343,8 +1344,29 @@ export function GlyphCanvas({
 	useEffect(() => {
 		const textarea = textareaRef.current
 		if (textarea === null) return
-		return observeTextareaSelection(textarea, setCaretIndex)
-	}, [setCaretIndex])
+		const synchronizeSelection = (): void => {
+			setCaretIndex(activeTextareaSelectionIndex(textarea))
+			setTextSelectionCollapsed(
+				textarea.selectionStart === textarea.selectionEnd,
+			)
+		}
+		return observeTextareaSelection(textarea, synchronizeSelection)
+	}, [setCaretIndex, setTextSelectionCollapsed])
+
+	useEffect(
+		() =>
+			workspace.actions.registerTextCanvasFocusRestorer(() => {
+				const textarea = textareaRef.current
+				if (textarea === null || textarea.disabled) return
+				const start = textarea.selectionStart
+				const end = textarea.selectionEnd
+				const direction = textarea.selectionDirection
+				textarea.focus({ preventScroll: true })
+				if (start !== null && end !== null)
+					textarea.setSelectionRange(start, end, direction)
+			}),
+		[workspace],
+	)
 
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
@@ -3304,16 +3326,26 @@ export function GlyphCanvas({
 						movement.selectionDirection,
 					)
 					setCaretIndex(movement.focus)
+					setTextSelectionCollapsed(
+						movement.selectionStart === movement.selectionEnd,
+					)
 				}}
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
 					const textarea = event.currentTarget
 					preferredCaretXRef.current = null
 					setText(textarea.value)
 					setCaretIndex(activeTextareaSelectionIndex(textarea))
+					setTextSelectionCollapsed(
+						textarea.selectionStart === textarea.selectionEnd,
+					)
 				}}
-				onSelect={(event: JSX.TargetedEvent<HTMLTextAreaElement, Event>) =>
-					setCaretIndex(activeTextareaSelectionIndex(event.currentTarget))
-				}
+				onSelect={(event: JSX.TargetedEvent<HTMLTextAreaElement, Event>) => {
+					const textarea = event.currentTarget
+					setCaretIndex(activeTextareaSelectionIndex(textarea))
+					setTextSelectionCollapsed(
+						textarea.selectionStart === textarea.selectionEnd,
+					)
+				}}
 			/>
 			<canvas-surface
 				ref={ref}
