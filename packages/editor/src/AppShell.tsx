@@ -240,25 +240,6 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 					</button>
 				</command-center>
 				<header-actions>
-					<diff-view-control
-						data-active={diffView ? "true" : "false"}
-						aria-label="Diff View comparison"
-					>
-						<button
-							type="button"
-							aria-pressed={diffView}
-							disabled={versionControl?.comparison === undefined}
-							onClick={() => setDiffView((enabled) => !enabled)}
-						>
-							Diff View
-						</button>
-						{versionControl?.comparison === undefined ? null : (
-							<small>
-								{versionControl.comparison.base.label} →{" "}
-								{versionControl.comparison.target.label}
-							</small>
-						)}
-					</diff-view-control>
 					<document-status
 						role="status"
 						aria-live="polite"
@@ -343,7 +324,9 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 						/>
 						<TilingWorkspace
 							workspace={workspace}
+							diffView={diffView}
 							enabled={!commandPaletteOpen}
+							onDiffViewChange={setDiffView}
 							onStatusChange={updateTilingStatus}
 							{...(versionControl === undefined ? {} : { versionControl })}
 							onReviewGlyph={(glyphId) => {

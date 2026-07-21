@@ -73,35 +73,6 @@ app-shell.class {
 			justify-self: end;
 			gap: 14px;
 
-			> diff-view-control {
-				display: grid;
-				gap: 2px;
-				justify-items: center;
-
-				> button {
-					padding: 5px 8px;
-					border: 1px dashed var(--line-strong);
-					border-radius: 6px;
-					background: var(--paper);
-					font: 600 10px/1 var(--ui-font);
-					color: var(--ink-muted);
-				}
-
-				> button[aria-pressed="true"] {
-					border-style: solid;
-					border-color: var(--accent);
-					color: var(--accent);
-				}
-
-				> small {
-					max-width: 130px;
-					overflow: hidden;
-					font-size: 8px;
-					text-overflow: ellipsis;
-					white-space: nowrap;
-				}
-			}
-
 			> document-status {
 				display: flex;
 				align-items: center;

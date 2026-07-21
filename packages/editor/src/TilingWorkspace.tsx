@@ -57,12 +57,16 @@ export interface TilingWorkspaceStatus {
 }
 
 export interface TilingWorkspaceProps {
+	readonly diffView?: boolean
 	readonly workspace: EditorWorkspace
 	readonly enabled?: boolean
 	readonly onStatusChange?: (status: TilingWorkspaceStatus) => void
 	readonly onReviewGlyph?: Parameters<
 		typeof VersionControlTile
 	>[0]["onReviewGlyph"]
+	readonly onDiffViewChange?: Parameters<
+		typeof VersionControlTile
+	>[0]["onDiffViewChange"]
 	readonly versionControl?: EditorVersionControl
 }
 
@@ -234,7 +238,9 @@ function filterTileDefinitions(query: string): readonly TileDefinition[] {
 
 export function TilingWorkspace({
 	workspace,
+	diffView = false,
 	enabled = true,
+	onDiffViewChange = () => undefined,
 	onStatusChange,
 	onReviewGlyph = () => undefined,
 	versionControl,
@@ -780,6 +786,8 @@ export function TilingWorkspace({
 			>
 				{tile.kind === "version-control" ? (
 					<VersionControlTile
+						diffView={diffView}
+						onDiffViewChange={onDiffViewChange}
 						onReviewGlyph={onReviewGlyph}
 						{...(versionControl === undefined ? {} : { versionControl })}
 					/>

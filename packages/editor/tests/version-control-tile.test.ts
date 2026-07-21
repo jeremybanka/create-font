@@ -67,19 +67,35 @@ function mount(options = versionControl()) {
 	document.body.append(host)
 	hosts.push(host)
 	const review = vi.fn()
+	const changeDiffView = vi.fn()
 	act(() =>
 		render(
 			h(VersionControlTile, {
+				diffView: false,
+				onDiffViewChange: changeDiffView,
 				onReviewGlyph: review,
 				versionControl: options,
 			}),
 			host,
 		),
 	)
-	return { host, options, review }
+	return { changeDiffView, host, options, review }
 }
 
 describe("VersionControlTile", () => {
+	it("owns the Diff View toggle", () => {
+		const { changeDiffView, host } = mount()
+		const toggle = [...host.querySelectorAll("button")].find(
+			(button) => button.getAttribute("aria-pressed") === "false",
+		)
+		if (!(toggle instanceof HTMLButtonElement))
+			throw new Error("Diff View toggle not found.")
+
+		act(() => toggle.click())
+
+		expect(changeDiffView).toHaveBeenCalledExactlyOnceWith(true)
+	})
+
 	it("reports endpoints and reviews changed glyphs", () => {
 		const { host, review } = mount()
 		expect(host.textContent).toContain("HEAD → Working source")

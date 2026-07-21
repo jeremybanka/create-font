@@ -9,6 +9,8 @@ import type {
 } from "./version-control.ts"
 
 export interface VersionControlTileProps {
+	readonly diffView: boolean
+	readonly onDiffViewChange: (enabled: boolean) => void
 	readonly onReviewGlyph: (glyphId: GlyphId) => void
 	readonly versionControl?: EditorVersionControl
 }
@@ -21,6 +23,8 @@ function count(
 }
 
 export function VersionControlTile({
+	diffView,
+	onDiffViewChange,
 	onReviewGlyph,
 	versionControl,
 }: VersionControlTileProps) {
@@ -100,6 +104,22 @@ export function VersionControlTile({
 								? "No comparison loaded."
 								: `${comparison.base.label} → ${comparison.target.label}`}
 			</comparison-status>
+			<diff-view-toggle>
+				<toggle-copy>
+					<strong>Diff View</strong>
+					<small>
+						Compare the active glyph without changing the live source.
+					</small>
+				</toggle-copy>
+				<button
+					type="button"
+					aria-pressed={diffView}
+					disabled={comparison === undefined}
+					onClick={() => onDiffViewChange(!diffView)}
+				>
+					{diffView ? "On" : "Off"}
+				</button>
+			</diff-view-toggle>
 			{comparison === undefined ? null : (
 				<>
 					<change-counts aria-label={`${changes.length} source changes`}>
