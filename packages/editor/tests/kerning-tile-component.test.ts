@@ -41,6 +41,13 @@ describe("KerningTile", () => {
 		expect(host.querySelector("kerning-tile")?.getAttribute("data-state")).toBe(
 			"absent",
 		)
+		expect(host.querySelector("kerning-heading")?.textContent).toContain(
+			"Pair inspector",
+		)
+		expect(host.querySelectorAll("kerning-section")).toHaveLength(3)
+		expect(
+			host.querySelector("kerning-section[data-accent='false']"),
+		).not.toBeNull()
 		expect(host.querySelector('[role="status"]')?.textContent).toContain(
 			"Kerning: Absent",
 		)
@@ -68,6 +75,9 @@ describe("KerningTile", () => {
 		expect(host.querySelector("kerning-tile")?.getAttribute("data-state")).toBe(
 			"explicit",
 		)
+		expect(
+			host.querySelector("kerning-section[data-accent='true']"),
+		).not.toBeNull()
 		expect(host.querySelector('[role="status"]')?.textContent).toContain(
 			"Kerning: Explicit",
 		)

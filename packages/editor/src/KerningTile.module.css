@@ -1,0 +1,130 @@
+kerning-tile.class {
+	display: block;
+	min-width: 0;
+	background: transparent;
+
+	> kerning-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		height: 45px;
+		padding: 0 18px;
+		border-bottom: 1px solid var(--line);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.075em;
+		text-transform: uppercase;
+		color: var(--ink-muted);
+
+		> status-dot {
+			display: block;
+			width: 7px;
+			height: 7px;
+			border-radius: 50%;
+			background: var(--ink-faint);
+
+			&[data-state="explicit"] {
+				background: var(--success);
+			}
+		}
+	}
+
+	> kerning-section {
+		display: block;
+		padding: 18px;
+		border-bottom: 1px solid var(--line);
+
+		&[data-accent="true"] {
+			box-shadow: inset 2px 0 var(--accent);
+		}
+
+		> h2 {
+			margin: 0 0 13px;
+			font-size: 10px;
+			font-weight: 720;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--ink-muted);
+		}
+
+		> p {
+			margin: 0;
+			font-size: 11px;
+			line-height: 1.55;
+			color: var(--ink-faint);
+		}
+
+		> dl {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: 9px 12px;
+			margin: 0;
+			font-size: 11px;
+
+			> dt {
+				color: var(--ink-muted);
+			}
+
+			> dd {
+				margin: 0;
+				font-weight: 570;
+				font-variant-numeric: tabular-nums;
+				color: var(--ink);
+			}
+		}
+
+		> kerning-field {
+			display: grid;
+			gap: 9px;
+
+			> label {
+				display: grid;
+				gap: 5px;
+
+				> span {
+					font-size: 9px;
+					font-weight: 690;
+					color: var(--ink-muted);
+				}
+
+				> numeric-input {
+					display: contents;
+
+					> input {
+						box-sizing: border-box;
+						width: 100%;
+						min-width: 0;
+						padding: 6px;
+						border: 1px solid var(--line);
+						border-radius: 5px;
+						background: var(--paper);
+						font: 570 10px/1 var(--ui-font);
+						font-variant-numeric: tabular-nums;
+						color: var(--ink);
+					}
+				}
+			}
+
+			> button {
+				min-height: 28px;
+				padding: 0 10px;
+				border: 1px solid var(--line);
+				border-radius: 5px;
+				background: var(--paper);
+				font: 680 10px/1 var(--ui-font);
+				color: var(--ink-muted);
+				cursor: pointer;
+
+				&:hover:not(:disabled) {
+					background: var(--hover);
+					color: var(--ink);
+				}
+
+				&:disabled {
+					opacity: 0.45;
+					cursor: default;
+				}
+			}
+		}
+	}
+}
