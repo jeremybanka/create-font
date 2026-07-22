@@ -5,7 +5,9 @@ import {
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
 
-export const CONTROL_HIT_RADIUS_PX = 24
+/** Maximum screen-space radius for node and handle convenience targets. */
+export const CONTROL_HIT_RADIUS_PX = 10
+/** Maximum screen-space radius for thin outline segment convenience targets. */
 export const SEGMENT_HIT_RADIUS_PX = 24
 
 interface CircularHitContext<Shape> {

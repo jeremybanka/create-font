@@ -1169,7 +1169,11 @@ describe("editor workspace", () => {
 	it("starts box selection over inactive glyph occurrences", () => {
 		expect(canStartBoxSelectionOn("canvas-background")).toBe(true)
 		expect(canStartBoxSelectionOn("typed-glyph")).toBe(true)
-		expect(canStartBoxSelectionOn("outline-node")).toBe(false)
+		expect(canStartBoxSelectionOn("outline-control-helper")).toBe(true)
+		expect(canStartBoxSelectionOn("outline-segment-helper")).toBe(true)
+		expect(canStartBoxSelectionOn("outline-point")).toBe(false)
+		expect(canStartBoxSelectionOn("bezier-handle")).toBe(false)
+		expect(canStartBoxSelectionOn("outline-segment")).toBe(false)
 	})
 
 	it("previews soft handles as one line and hard handles independently", () => {
