@@ -30,12 +30,25 @@ const clampTextOffset = (offset: number | null, textLength: number): number => {
 	return Math.min(textLength, Math.max(0, Math.trunc(offset)))
 }
 
+/** Returns a clamped, ordered snapshot of the textarea's native selection. */
+export function normalizedTextareaSelection(
+	textarea: TextareaSelectionState,
+): TextareaSelectionRange {
+	const first = clampTextOffset(textarea.selectionStart, textarea.value.length)
+	const second = clampTextOffset(textarea.selectionEnd, textarea.value.length)
+	return Object.freeze({
+		selectionStart: Math.min(first, second),
+		selectionEnd: Math.max(first, second),
+		selectionDirection: textarea.selectionDirection ?? "none",
+	})
+}
+
 /** Returns the native selection's focus edge as a UTF-16 text offset. */
 export function activeTextareaSelectionIndex(
 	textarea: TextareaSelectionState,
 ): number {
-	const start = clampTextOffset(textarea.selectionStart, textarea.value.length)
-	const end = clampTextOffset(textarea.selectionEnd, textarea.value.length)
+	const { selectionStart: start, selectionEnd: end } =
+		normalizedTextareaSelection(textarea)
 	// Browsers expose the focus edge through selectionDirection. When direction
 	// is unavailable/none, use the end edge as the deterministic fallback.
 	return textarea.selectionDirection === "backward" ? start : end

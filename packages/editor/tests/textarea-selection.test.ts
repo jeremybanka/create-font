@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	activeTextareaSelectionIndex,
 	moveTextareaSelectionVertically,
+	normalizedTextareaSelection,
 	observeTextareaSelection,
 } from "../src/textarea-selection.ts"
 
@@ -55,6 +56,19 @@ describe("textarea selection synchronization", () => {
 
 		textarea.selectionDirection = "forward"
 		expect(activeTextareaSelectionIndex(textarea)).toBe(textarea.value.length)
+	})
+
+	it("normalizes the renderable range while retaining its native direction", () => {
+		const textarea = new TestTextarea()
+		textarea.value = "A😀B"
+		textarea.selectionStart = -20
+		textarea.selectionEnd = 20
+		textarea.selectionDirection = "backward"
+		expect(normalizedTextareaSelection(textarea)).toEqual({
+			selectionStart: 0,
+			selectionEnd: 4,
+			selectionDirection: "backward",
+		})
 	})
 
 	it("reacts to this textarea's selectionchange events and cleans up", () => {

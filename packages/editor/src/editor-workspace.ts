@@ -18,6 +18,7 @@ import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
 import { createLiveFontCompiler } from "./live-font-compilation.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
+import type { TextareaSelectionRange } from "./textarea-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
 import {
 	COMPATIBILITY_GHOST_OFFSET,
@@ -161,6 +162,14 @@ export function createEditorWorkspace(
 	const textSelectionCollapsedAtom = font.silo.atom<boolean>({
 		key: "textSelectionCollapsed",
 		default: true,
+	})
+	const textSelectionRangeAtom = font.silo.atom<TextareaSelectionRange>({
+		key: "textSelectionRange",
+		default: Object.freeze({
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		}),
 	})
 	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: "editingTextIndex",
@@ -702,6 +711,7 @@ export function createEditorWorkspace(
 			fontFeaturesEnabled: fontFeaturesEnabledAtom,
 			caretIndex: caretIndexAtom,
 			textSelectionCollapsed: textSelectionCollapsedAtom,
+			textSelectionRange: textSelectionRangeAtom,
 			editingTextIndex: editingTextIndexAtom,
 			activeTool: activeToolAtom,
 			previewCoordinate: previewCoordinateAtoms,
