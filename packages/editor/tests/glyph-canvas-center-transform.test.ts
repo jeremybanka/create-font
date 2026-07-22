@@ -76,7 +76,7 @@ function mountTransformSelection() {
 	)
 	const stage = Konva.stages.at(-1)
 	if (stage === undefined) throw new Error("GlyphCanvas did not mount.")
-	return { stage, transform }
+	return { host, stage, transform, workspace }
 }
 
 describe("GlyphCanvas center transform", () => {
@@ -105,5 +105,84 @@ describe("GlyphCanvas center transform", () => {
 		)
 		expect(transform.mock.calls[0]?.[0].points.length).toBeGreaterThan(0)
 		expect(centerX).toBeTypeOf("number")
+	})
+
+	it("previews snapped rotation and commits exactly one atomic transform", () => {
+		const { host, stage, transform, workspace } = mountTransformSelection()
+		const originalLayer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		const handle = stage.findOne(".transform-rotation")
+		const box = stage.findOne(".transform-selection-box")
+		if (handle === undefined || box === undefined)
+			throw new Error("Rotation transform affordance was not rendered.")
+		const pivot = {
+			x: box.x() + box.width() / 2,
+			y: box.y() + box.height() / 2,
+		}
+		const radius = handle.y() - pivot.y
+		act(() => {
+			handle.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+			handle.position({ x: pivot.x - radius, y: pivot.y })
+			handle.fire("dragmove", { evt: { altKey: false, shiftKey: true } })
+		})
+		expect(stage.findOne(".transform-rotation-angle")?.text()).toBe(
+			"90° · snapped",
+		)
+		expect(host.querySelector('[role="status"]')?.textContent).toContain(
+			"Rotation preview 90 degrees, snapped to 15 degree increments",
+		)
+		expect(transform).not.toHaveBeenCalled()
+		act(() => {
+			handle.fire("dragend", { evt: { altKey: false, shiftKey: true } })
+		})
+		expect(transform).toHaveBeenCalledTimes(1)
+		const input = transform.mock.calls[0]?.[0]
+		expect(input?.points.length).toBeGreaterThan(0)
+		expect(
+			input?.points.every(
+				(point) => Number.isFinite(point.x) && Number.isFinite(point.y),
+			),
+		).toBe(true)
+		expect(host.querySelector('[aria-label^="Rotation handle"]')).not.toBeNull()
+		workspace.font.undo(oGlyphId)
+		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toEqual(
+			originalLayer,
+		)
+	})
+
+	it("restores rotation preview and commits nothing on Escape", () => {
+		const { host, stage, transform } = mountTransformSelection()
+		const handle = stage.findOne(".transform-rotation")
+		if (handle === undefined)
+			throw new Error("Rotation transform affordance was not rendered.")
+		const origin = handle.position()
+		handle.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		handle.position({ x: origin.x + 40, y: origin.y - 20 })
+		handle.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		act(() => {
+			host.firstElementChild?.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+		})
+		handle.fire("dragend", {
+			evt: { altKey: false, shiftKey: false, type: "pointercancel" },
+		})
+		expect(transform).not.toHaveBeenCalled()
+		expect(stage.findOne(".transform-rotation-angle")).toBeUndefined()
+	})
+
+	it("commits nothing when the native drag end is a pointer cancellation", () => {
+		const { stage, transform } = mountTransformSelection()
+		const handle = stage.findOne(".transform-rotation")
+		if (handle === undefined)
+			throw new Error("Rotation transform affordance was not rendered.")
+		const origin = handle.position()
+		handle.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		handle.position({ x: origin.x + 40, y: origin.y - 20 })
+		handle.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		handle.fire("dragend", {
+			evt: { altKey: false, shiftKey: false, type: "pointercancel" },
+		})
+		expect(transform).not.toHaveBeenCalled()
+		expect(stage.findOne(".transform-rotation-angle")).toBeUndefined()
 	})
 })

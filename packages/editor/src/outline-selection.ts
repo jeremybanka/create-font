@@ -47,6 +47,13 @@ export interface SelectionScale {
 	readonly scaleY: number
 }
 
+export interface SelectionRotation {
+	readonly pivotX: number
+	readonly pivotY: number
+	/** Signed radians in the editor's font-coordinate system. */
+	readonly angleRadians: number
+}
+
 export const SELECTION_ORIGINS = [
 	"top-left",
 	"top-center",
@@ -295,6 +302,22 @@ export function scaleSelectionControls(
 		x: scale.anchorX + (x - scale.anchorX) * scale.scaleX,
 		y: scale.anchorY + (y - scale.anchorY) * scale.scaleY,
 	}))
+}
+
+export function rotateSelectionControls(
+	controls: readonly ResolvedSelectionControl[],
+	rotation: SelectionRotation,
+): SelectionTransformResult {
+	const cosine = Math.cos(rotation.angleRadians)
+	const sine = Math.sin(rotation.angleRadians)
+	return transformedResult(controls, ({ x, y }) => {
+		const deltaX = x - rotation.pivotX
+		const deltaY = y - rotation.pivotY
+		return {
+			x: rotation.pivotX + deltaX * cosine - deltaY * sine,
+			y: rotation.pivotY + deltaX * sine + deltaY * cosine,
+		}
+	})
 }
 
 /**

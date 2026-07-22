@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import type { TransformHandle } from "../src/canvas-cursor.ts"
-import { resolveTransformResize } from "../src/transform-gesture.ts"
+import {
+	normalizeSignedAngle,
+	resolveTransformResize,
+	resolveTransformRotation,
+	snapTransformAngle,
+} from "../src/transform-gesture.ts"
 
 const bounds = { minX: 0, minY: 10, maxX: 100, maxY: 210 }
 
@@ -36,7 +41,7 @@ describe("transform resize gestures", () => {
 	it("switches between opposite-edge and center math from original bounds", () => {
 		const common = {
 			bounds,
-			handle: "east" as Exclude<TransformHandle, "inside">,
+			handle: "east" as Exclude<TransformHandle, "inside" | "rotation">,
 			targetX: 150,
 			targetY: 110,
 		}
@@ -82,5 +87,92 @@ describe("transform resize gestures", () => {
 		})
 		expect(degenerate.scaleX).toBe(1)
 		expect(Object.values(degenerate).every(Number.isFinite)).toBe(true)
+	})
+})
+
+const radians = (degrees: number): number => (degrees * Math.PI) / 180
+const degrees = (angle: number): number => (angle * 180) / Math.PI
+const pointAt = (angleDegrees: number) => ({
+	x: Math.cos(radians(angleDegrees)) * 100,
+	y: Math.sin(radians(angleDegrees)) * 100,
+})
+
+describe("transform rotation gestures", () => {
+	const centeredBounds = { minX: -50, minY: -25, maxX: 50, maxY: 25 }
+
+	it("resolves signed angles around the stable selection center", () => {
+		const counterClockwise = resolveTransformRotation({
+			bounds: centeredBounds,
+			startX: 100,
+			startY: 0,
+			targetX: 0,
+			targetY: 100,
+		})
+		const clockwise = resolveTransformRotation({
+			bounds: centeredBounds,
+			startX: 100,
+			startY: 0,
+			targetX: 0,
+			targetY: -100,
+		})
+		expect(counterClockwise).toMatchObject({ pivotX: 0, pivotY: 0 })
+		expect(degrees(counterClockwise.angleRadians)).toBeCloseTo(90)
+		expect(degrees(clockwise.angleRadians)).toBeCloseTo(-90)
+	})
+
+	it("normalizes deterministically across the signed wrap boundary", () => {
+		const start = pointAt(179)
+		const target = pointAt(-179)
+		const result = resolveTransformRotation({
+			bounds: centeredBounds,
+			startX: start.x,
+			startY: start.y,
+			targetX: target.x,
+			targetY: target.y,
+		})
+		expect(degrees(result.angleRadians)).toBeCloseTo(2)
+		expect(degrees(normalizeSignedAngle(radians(181)))).toBeCloseTo(-179)
+	})
+
+	it("snaps Shift rotation to 15 degree increments in both directions", () => {
+		expect(degrees(snapTransformAngle(radians(7.49)))).toBeCloseTo(0)
+		expect(degrees(snapTransformAngle(radians(7.5)))).toBeCloseTo(15)
+		expect(degrees(snapTransformAngle(radians(-44)))).toBeCloseTo(-45)
+		expect(degrees(snapTransformAngle(radians(181)))).toBeCloseTo(-180)
+	})
+
+	it("engages and releases snapping from the original vector without jumps", () => {
+		const target = pointAt(22)
+		const common = {
+			bounds: centeredBounds,
+			startX: 100,
+			startY: 0,
+			targetX: target.x,
+			targetY: target.y,
+		}
+		expect(degrees(resolveTransformRotation(common).angleRadians)).toBeCloseTo(
+			22,
+		)
+		expect(
+			degrees(
+				resolveTransformRotation({ ...common, shiftKey: true }).angleRadians,
+			),
+		).toBeCloseTo(15)
+		expect(degrees(resolveTransformRotation(common).angleRadians)).toBeCloseTo(
+			22,
+		)
+	})
+
+	it("returns a finite no-op for degenerate pointer vectors", () => {
+		const result = resolveTransformRotation({
+			bounds: { minX: 10, minY: 20, maxX: 10, maxY: 20 },
+			startX: 10,
+			startY: 20,
+			targetX: Number.POSITIVE_INFINITY,
+			targetY: 20,
+			shiftKey: true,
+		})
+		expect(result).toEqual({ pivotX: 10, pivotY: 20, angleRadians: 0 })
+		expect(Object.values(result).every(Number.isFinite)).toBe(true)
 	})
 })

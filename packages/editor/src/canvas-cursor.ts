@@ -1,5 +1,6 @@
 export type TransformHandle =
 	| "inside"
+	| "rotation"
 	| "north"
 	| "north-east"
 	| "east"
@@ -11,6 +12,7 @@ export type TransformHandle =
 
 export type TransformResizeCursor =
 	| "default"
+	| "grab"
 	| "ns-resize"
 	| "ew-resize"
 	| "nwse-resize"
@@ -34,5 +36,7 @@ export function transformHandleCursor(
 			return "nesw-resize"
 		case "inside":
 			return "default"
+		case "rotation":
+			return "grab"
 	}
 }
