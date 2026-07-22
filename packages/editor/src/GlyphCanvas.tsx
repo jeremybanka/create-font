@@ -173,9 +173,14 @@ import { useElementSize } from "./use-element-size.ts"
 import {
 	activeTextareaSelectionIndex,
 	moveTextareaSelectionVertically,
+	normalizedTextareaSelection,
 	observeTextareaSelection,
 } from "./textarea-selection.ts"
-import { layoutTextRun, nearestCaretIndex } from "./text-layout.ts"
+import {
+	layoutTextRun,
+	nearestCaretIndex,
+	textSelectionRects,
+} from "./text-layout.ts"
 import {
 	OUTLINE_CLIPBOARD_MIME,
 	outlinePasteSelectionTargets,
@@ -376,6 +381,8 @@ export function GlyphCanvas({
 	const caretIndex = useO(workspace.ui.caretIndex)
 	const setCaretIndex = useI(workspace.ui.caretIndex)
 	const setTextSelectionCollapsed = useI(workspace.ui.textSelectionCollapsed)
+	const textSelectionRange = useO(workspace.ui.textSelectionRange)
+	const setTextSelectionRange = useI(workspace.ui.textSelectionRange)
 	const editingTextIndex = useO(workspace.ui.editingTextIndex)
 	const activeTool = useO(workspace.ui.activeTool)
 	const run = useO(workspace.ui.previewRun)
@@ -415,6 +422,7 @@ export function GlyphCanvas({
 	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
 	const [joinTarget, setJoinTarget] = useState<OpenEndpointTarget | null>(null)
 	const [shiftHeld, setShiftHeld] = useState(false)
+	const [textareaFocused, setTextareaFocused] = useState(false)
 	const [altHeld, setAltHeld] = useState(false)
 	const [handleConstraintGuide, setHandleConstraintGuide] = useState<Readonly<{
 		x: number
@@ -851,6 +859,16 @@ export function GlyphCanvas({
 	const caret =
 		layout.carets.find((candidate) => candidate.textIndex === caretIndex) ??
 		layout.carets.at(-1)
+	const selectionRects = useMemo(
+		() =>
+			textSelectionRects(
+				layout,
+				metrics,
+				textSelectionRange.selectionStart,
+				textSelectionRange.selectionEnd,
+			),
+		[layout, metrics, textSelectionRange],
+	)
 	const isSelected = (target: EditorSelectionTarget): boolean => {
 		const key = selectionKey(target)
 		return selection.some((candidate) => selectionKey(candidate) === key)
@@ -1380,13 +1398,13 @@ export function GlyphCanvas({
 		const textarea = textareaRef.current
 		if (textarea === null) return
 		const synchronizeSelection = (): void => {
+			const range = normalizedTextareaSelection(textarea)
 			setCaretIndex(activeTextareaSelectionIndex(textarea))
-			setTextSelectionCollapsed(
-				textarea.selectionStart === textarea.selectionEnd,
-			)
+			setTextSelectionRange(range)
+			setTextSelectionCollapsed(range.selectionStart === range.selectionEnd)
 		}
 		return observeTextareaSelection(textarea, synchronizeSelection)
-	}, [setCaretIndex, setTextSelectionCollapsed])
+	}, [setCaretIndex, setTextSelectionCollapsed, setTextSelectionRange])
 
 	useEffect(
 		() =>
@@ -3391,26 +3409,35 @@ export function GlyphCanvas({
 						movement.selectionDirection,
 					)
 					setCaretIndex(movement.focus)
+					setTextSelectionRange(
+						Object.freeze({
+							selectionStart: movement.selectionStart,
+							selectionEnd: movement.selectionEnd,
+							selectionDirection: movement.selectionDirection,
+						}),
+					)
 					setTextSelectionCollapsed(
 						movement.selectionStart === movement.selectionEnd,
 					)
 				}}
 				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
 					const textarea = event.currentTarget
+					const range = normalizedTextareaSelection(textarea)
 					preferredCaretXRef.current = null
 					setText(textarea.value)
 					setCaretIndex(activeTextareaSelectionIndex(textarea))
-					setTextSelectionCollapsed(
-						textarea.selectionStart === textarea.selectionEnd,
-					)
+					setTextSelectionRange(range)
+					setTextSelectionCollapsed(range.selectionStart === range.selectionEnd)
 				}}
 				onSelect={(event: JSX.TargetedEvent<HTMLTextAreaElement, Event>) => {
 					const textarea = event.currentTarget
+					const range = normalizedTextareaSelection(textarea)
 					setCaretIndex(activeTextareaSelectionIndex(textarea))
-					setTextSelectionCollapsed(
-						textarea.selectionStart === textarea.selectionEnd,
-					)
+					setTextSelectionRange(range)
+					setTextSelectionCollapsed(range.selectionStart === range.selectionEnd)
 				}}
+				onFocus={() => setTextareaFocused(true)}
+				onBlur={() => setTextareaFocused(false)}
 			/>
 			<canvas-surface
 				ref={ref}
@@ -3569,6 +3596,21 @@ export function GlyphCanvas({
 							scaleX={worldScale}
 							scaleY={worldScale}
 						>
+							{editingTextIndex === null
+								? selectionRects.map((selectionRect, index) => (
+										<Rect
+											key={`typing-selection:${index}`}
+											name="typing-selection"
+											x={selectionRect.x}
+											y={selectionRect.y}
+											width={selectionRect.width}
+											height={selectionRect.height}
+											fill={palette.accent}
+											opacity={textareaFocused ? 0.3 : 0.18}
+											listening={false}
+										/>
+									))
+								: null}
 							{layout.glyphs.map((position) => {
 								const isEditing = position.item.textStart === editingTextIndex
 								const typingFillPath =
@@ -5420,7 +5462,10 @@ export function GlyphCanvas({
 					(momentaryPreview
 						? `Momentary preview of ${glyph?.name ?? "glyph"}.`
 						: editingTextIndex === null
-							? `Typing mode at text position ${caretIndex}.`
+							? textSelectionRange.selectionStart ===
+								textSelectionRange.selectionEnd
+								? `Typing mode at text position ${caretIndex}.`
+								: `Typing mode with text positions ${textSelectionRange.selectionStart} through ${textSelectionRange.selectionEnd} selected; focus at ${caretIndex}.`
 							: joinTarget !== null
 								? `Release to join endpoint ${joinTarget.pointId}.`
 								: activeTool === "pen" && penPlacement !== null
