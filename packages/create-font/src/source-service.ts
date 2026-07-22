@@ -301,11 +301,7 @@ async function loadProjectDirectory(
 		revisions.set(path, revisionForText(text))
 	}
 	const readAt = onProjectLoad === undefined ? undefined : performance.now()
-	const assembled = assembleEditorFontSource(
-		Object.fromEntries(
-			Object.entries(values).filter(([path]) => path.endsWith(`.json`)),
-		),
-	)
+	const assembled = assembleEditorFontSource(values)
 	if (!assembled.ok) throw validationError(assembled.errors)
 	const assembledAt =
 		onProjectLoad === undefined ? undefined : performance.now()
@@ -464,11 +460,7 @@ export async function createFileSystemSourceService(
 			candidate[path] = write.value
 			formatted.set(path, result.value)
 		}
-		const assembled = assembleEditorFontSource(
-			Object.fromEntries(
-				Object.entries(candidate).filter(([path]) => path.endsWith(`.json`)),
-			),
-		)
+		const assembled = assembleEditorFontSource(candidate)
 		if (!assembled.ok) throw validationError(assembled.errors)
 
 		const transactionRoot = join(

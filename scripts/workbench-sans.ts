@@ -609,6 +609,14 @@ for (const [path, value] of Object.entries(split.value)) {
 	await writeFile(destination, formatted.value)
 }
 await mkdir(resolve(projectRoot, "features"), { recursive: true })
+const featureIndexPath = "features/index.json"
+const featureIndex = formatSourceUnit(
+	"feature-index",
+	[{ path: "features/layout.fea" }],
+	featureIndexPath,
+)
+if (!featureIndex.ok) throw new Error(featureIndex.errors[0].message)
+await writeFile(resolve(projectRoot, featureIndexPath), featureIndex.value)
 await writeFile(
 	resolve(projectRoot, "features", "layout.fea"),
 	"feature liga { sub f i by f_i; } liga;\n",

@@ -155,9 +155,7 @@ const refreshController = createSourceSnapshotRefreshController({
 	applySnapshot(project, initialLoad) {
 		const snapshots = project.units
 		const files = Object.fromEntries(
-			snapshots
-				.filter((snapshot) => snapshot.path.endsWith(`.json`))
-				.map((snapshot) => [snapshot.path, snapshot.value]),
+			snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
 		)
 		featureSources = snapshots
 			.filter(

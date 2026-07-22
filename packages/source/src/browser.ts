@@ -57,6 +57,7 @@ export type CmapIndexFile = readonly Readonly<{
 	codePoint: number
 	path: string
 }>[]
+export type FeatureIndexFile = readonly Readonly<{ path: string }>[]
 
 export type FontSourceDirectoryFiles = Readonly<Record<string, unknown>>
 
@@ -71,6 +72,7 @@ const paths = {
 	instanceIndex: "instances/index.json",
 	glyphIndex: "glyphs/index.json",
 	cmapIndex: "cmap/index.json",
+	featureIndex: "features/index.json",
 	kerning: "kerning.json",
 } as const
 
@@ -475,10 +477,21 @@ export function assembleEditorFontSource(
 		paths.cmapIndex,
 	)
 	if (!cmapIndex.ok) return failure(cmapIndex.errors)
+	const featureIndexFile = Object.hasOwn(files, paths.featureIndex)
+		? requiredDirectoryFile<unknown>(files, paths.featureIndex)
+		: success([])
+	if (!featureIndexFile.ok) return failure(featureIndexFile.errors)
+	const featureIndex = arrayValue<FeatureIndexFile[number]>(
+		featureIndexFile.value,
+		paths.featureIndex,
+	)
+	if (!featureIndex.ok) return failure(featureIndex.errors)
 
 	const knownPaths = new Set<string>(
 		Object.values(paths).filter(
-			(path) => path !== paths.kerning || Object.hasOwn(files, path),
+			(path) =>
+				(path !== paths.kerning && path !== paths.featureIndex) ||
+				Object.hasOwn(files, path),
 		),
 	)
 	const loadIdentifiedUnits = <
@@ -616,6 +629,40 @@ export function assembleEditorFontSource(
 			])
 		}
 		cmap.push(value.value)
+	}
+
+	const featurePaths = new Set<string>()
+	for (let index = 0; index < featureIndex.value.length; index += 1) {
+		const entry = featureIndex.value[index]
+		if (entry === undefined || typeof entry.path !== "string") {
+			return failure([
+				directoryDiagnostic(
+					"source.object",
+					paths.featureIndex,
+					`$[${index}]`,
+					"Expected a feature source index entry.",
+				),
+			])
+		}
+		if (featurePaths.has(entry.path)) {
+			return failure([
+				duplicateIndexedPathDiagnostic(paths.featureIndex, index, entry.path),
+			])
+		}
+		featurePaths.add(entry.path)
+		knownPaths.add(entry.path)
+		const value = requiredDirectoryFile<unknown>(files, entry.path)
+		if (!value.ok) return failure(value.errors)
+		if (typeof value.value !== "string") {
+			return failure([
+				directoryDiagnostic(
+					"source.string",
+					entry.path,
+					"$",
+					"Expected Adobe feature source text.",
+				),
+			])
+		}
 	}
 
 	for (const path of Object.keys(files)) {

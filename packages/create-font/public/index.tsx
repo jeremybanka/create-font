@@ -236,11 +236,7 @@ function sourceFromSnapshot(
 	snapshot: SourceComparison["base"]["snapshot"],
 ): EditorFontSource {
 	const assembled = assembleEditorFontSource(
-		Object.fromEntries(
-			snapshot.units
-				.filter((unit) => unit.path.endsWith(`.json`))
-				.map((unit) => [unit.path, unit.value]),
-		),
+		Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
 	)
 	if (!assembled.ok) throw new Error(assembled.errors[0].message)
 	return assembled.value

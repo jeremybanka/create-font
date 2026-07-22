@@ -269,11 +269,7 @@ async function snapshotAtCommit(
 			value: value as JsonValue,
 		})
 	}
-	const assembled = assembleEditorFontSource(
-		Object.fromEntries(
-			Object.entries(values).filter(([path]) => path.endsWith(`.json`)),
-		),
-	)
+	const assembled = assembleEditorFontSource(values)
 	if (!assembled.ok)
 		throw new SourceValidationError(validationIssues(assembled.errors))
 	return { revision: commit, units }

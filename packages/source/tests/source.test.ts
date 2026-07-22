@@ -290,6 +290,7 @@ describe("@create-font/source", () => {
 			"glyph",
 			"cmap-index",
 			"cmap-entry",
+			"feature-index",
 		]
 		for (const kind of kinds) {
 			const schema = jsonSchemaForSourceUnit(kind) as {
@@ -347,6 +348,31 @@ describe("@create-font/source", () => {
 				).ok,
 				path,
 			).toBe(false)
+		}
+	})
+
+	test("indexes Adobe feature sources as part of the directory contract", () => {
+		const split = splitEditorFontSource(geometricOWithEveryEditorField())
+		if (!split.ok) throw new Error("fixture did not split")
+		const files = {
+			...split.value,
+			"features/index.json": [{ path: "features/layout.fea" }],
+			"features/layout.fea": "feature liga { sub O O by O; } liga;\n",
+		}
+		for (const assemble of [
+			assembleEditorFontSource,
+			assembleBrowserEditorFontSource,
+		]) {
+			expect(assemble(files).ok).toBe(true)
+			const unindexed = { ...files }
+			delete unindexed["features/index.json"]
+			const result = assemble(unindexed)
+			expect(result.ok).toBe(false)
+			if (!result.ok)
+				expect(result.errors[0]).toMatchObject({
+					code: "directory.unknown_file",
+					unitPath: "features/layout.fea",
+				})
 		}
 	})
 

@@ -98,6 +98,15 @@ describe(`filesystem font source service`, () => {
 		const featurePath = resolve(projectRoot, `features`, `nested`, `layout.fea`)
 		await mkdir(resolve(featurePath, `..`), { recursive: true })
 		await writeFile(featurePath, `feature liga { sub A O by O; } liga;\n`)
+		const featureIndexPath = resolve(projectRoot, `features`, `index.json`)
+		const featureIndex = JSON.parse(
+			await readFile(featureIndexPath, `utf8`),
+		) as { path: string }[]
+		featureIndex.push({ path: `features/nested/layout.fea` })
+		await writeFile(
+			featureIndexPath,
+			`${JSON.stringify(featureIndex, null, `\t`)}\n`,
+		)
 		await initializeGitRepository(workspaceRoot)
 		const source = await createFileSystemSourceService(projectRoot)
 		const clean = await source.readComparison?.({ baseRef: `HEAD` })
@@ -275,11 +284,7 @@ describe(`filesystem font source service`, () => {
 			)
 		}
 		const assembled = assembleEditorFontSource(
-			Object.fromEntries(
-				project.units
-					.filter((unit) => unit.path.endsWith(`.json`))
-					.map((unit) => [unit.path, unit.value]),
-			),
+			Object.fromEntries(project.units.map((unit) => [unit.path, unit.value])),
 		)
 		expect(assembled.ok).toBe(true)
 		expect(project.revision).toBe(
@@ -442,20 +447,19 @@ describe(`filesystem font source service`, () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)
 		const manifest = await source.readManifest()
-		const entries = await Promise.all(
-			manifest.units
-				.filter(({ path }) => path.endsWith(`.json`))
-				.map(
-					async ({ path }) =>
-						[
-							path,
-							JSON.parse(
-								await readFile(resolve(projectRoot, path), `utf8`),
-							) as unknown,
-						] as const,
-				),
+		expect(manifest.units.map(({ path }) => path)).toContain(
+			`features/index.json`,
 		)
-		const assembled = assembleEditorFontSource(Object.fromEntries(entries))
+		expect(manifest.units.map(({ path }) => path)).toContain(
+			`features/layout.fea`,
+		)
+		expect((await source.readUnit(`features/layout.fea`)).value).toBe(
+			`feature liga { sub f i by f_i; } liga;\n`,
+		)
+		const snapshot = await source.readSnapshot()
+		const assembled = assembleEditorFontSource(
+			Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
+		)
 		expect(assembled.ok).toBe(true)
 		if (!assembled.ok) return
 
