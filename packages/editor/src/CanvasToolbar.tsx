@@ -6,6 +6,12 @@ import css from "./CanvasToolbar.module.css"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { useI, useO, useOF, useOptionalOF } from "./state-hooks.ts"
 
+const svg = {
+	DotsHorizontal: DotsHorizontalIcon,
+	Minus: MinusIcon,
+	Plus: PlusIcon,
+}
+
 export interface CanvasToolbarProps {
 	readonly workspace: EditorWorkspace
 }
@@ -113,7 +119,7 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 						aria-label="Zoom out"
 						onClick={() => zoom(view.zoom / 1.2)}
 					>
-						<MinusIcon aria-hidden="true" />
+						<svg.Minus aria-hidden="true" />
 					</button>
 					<button
 						type="button"
@@ -127,7 +133,7 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 						aria-label="Zoom in"
 						onClick={() => zoom(view.zoom * 1.2)}
 					>
-						<PlusIcon aria-hidden="true" />
+						<svg.Plus aria-hidden="true" />
 					</button>
 				</zoom-controls>
 				{editingTextIndex === null ? null : (
@@ -137,7 +143,7 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 						aria-pressed={showNodes}
 						onClick={() => setShowNodes((visible) => !visible)}
 					>
-						<DotsHorizontalIcon aria-hidden="true" />
+						<svg.DotsHorizontal aria-hidden="true" />
 						Nodes
 					</button>
 				)}

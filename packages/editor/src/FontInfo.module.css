@@ -99,8 +99,8 @@ font-info.class {
 					}
 				}
 
-				> text-field > label > input,
-				> number-field > label > numeric-input > input {
+				> text-field > label > input {
+					box-sizing: border-box;
 					min-width: 0;
 					width: 100%;
 					padding: 9px 10px;

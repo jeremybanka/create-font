@@ -21,6 +21,13 @@ import css from "./CommandPalette.module.css"
 import { EditorIcon } from "./EditorIcon.tsx"
 import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./editor-tools-and-hotkeys.ts"
 
+const svg = {
+	ArrowDown: ArrowDownIcon,
+	ArrowUp: ArrowUpIcon,
+	Enter: EnterIcon,
+	MagnifyingGlass: MagnifyingGlassIcon,
+}
+
 export interface CommandPaletteProps {
 	readonly commands: readonly PaletteCommand[]
 	readonly onCancel: () => void
@@ -114,7 +121,7 @@ export function CommandPalette({
 		>
 			<command-palette-dialog role="dialog" aria-label="Command Palette">
 				<command-search>
-					<MagnifyingGlassIcon aria-hidden="true" />
+					<svg.MagnifyingGlass aria-hidden="true" />
 					<input
 						ref={inputRef}
 						role="combobox"
@@ -192,16 +199,16 @@ export function CommandPalette({
 				</command-results>
 				<command-hint>
 					<span>
-						<EnterIcon aria-hidden="true" />
+						<svg.Enter aria-hidden="true" />
 						{MOD_KEY_LABEL}+Enter Assign
 					</span>
 					<span>
-						<ArrowUpIcon aria-hidden="true" />
-						<ArrowDownIcon aria-hidden="true" />
+						<svg.ArrowUp aria-hidden="true" />
+						<svg.ArrowDown aria-hidden="true" />
 						Navigate
 					</span>
 					<span>
-						<EnterIcon aria-hidden="true" />
+						<svg.Enter aria-hidden="true" />
 						Run command
 					</span>
 				</command-hint>

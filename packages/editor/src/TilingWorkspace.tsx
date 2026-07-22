@@ -64,6 +64,19 @@ import {
 	undoTilingHistory,
 } from "./tiling-workspace.ts"
 
+const svg = {
+	BookmarkFilled: BookmarkFilledIcon,
+	ChevronDown: ChevronDownIcon,
+	ChevronUp: ChevronUpIcon,
+	Cross: Cross2Icon,
+	DragHandleDots: DragHandleDots2Icon,
+	EnterFullScreen: EnterFullScreenIcon,
+	ExitFullScreen: ExitFullScreenIcon,
+	MagnifyingGlass: MagnifyingGlassIcon,
+	Plus: PlusIcon,
+	QuestionMarkCircled: QuestionMarkCircledIcon,
+}
+
 export interface TilingWorkspaceStatus {
 	readonly dirty: boolean
 	readonly management: boolean
@@ -852,7 +865,7 @@ export function TilingWorkspace({
 							applyEdit(toggleColumnCollapsed(layout, column.id))
 						}}
 					>
-						<EnterFullScreenIcon aria-hidden="true" />
+						<svg.EnterFullScreen aria-hidden="true" />
 						<strong>{column.id}</strong>
 						<small>{column.tiles.length}</small>
 					</button>
@@ -902,11 +915,11 @@ export function TilingWorkspace({
 						<span>Column {column.id}</span>
 						<column-state>
 							{column.alignment === "top" ? (
-								<ChevronUpIcon aria-label="Top aligned" />
+								<svg.ChevronUp aria-label="Top aligned" />
 							) : (
-								<ChevronDownIcon aria-label="Bottom aligned" />
+								<svg.ChevronDown aria-label="Bottom aligned" />
 							)}
-							<ExitFullScreenIcon aria-label="Collapse column" />
+							<svg.ExitFullScreen aria-label="Collapse column" />
 						</column-state>
 					</button>
 				</column-heading>
@@ -1031,7 +1044,7 @@ export function TilingWorkspace({
 			}}
 		>
 			<tile-heading>
-				<DragHandleDots2Icon aria-hidden="true" />
+				<svg.DragHandleDots aria-hidden="true" />
 				<strong>{tileName(tile.kind)}</strong>
 				<tile-actions>
 					{tile.fill ? <span>Fill</span> : null}
@@ -1044,7 +1057,7 @@ export function TilingWorkspace({
 								deleteTile(tile.id)
 							}}
 						>
-							<Cross2Icon aria-hidden="true" />
+							<svg.Cross aria-hidden="true" />
 						</button>
 					) : null}
 				</tile-actions>
@@ -1137,7 +1150,7 @@ export function TilingWorkspace({
 							<span>Tile pool</span>
 						</pool-heading>
 						<pool-search>
-							<MagnifyingGlassIcon aria-hidden="true" />
+							<svg.MagnifyingGlass aria-hidden="true" />
 							<input
 								ref={poolInputRef}
 								type="search"
@@ -1238,7 +1251,7 @@ export function TilingWorkspace({
 										setDragging(false)
 									}}
 								>
-									<PlusIcon aria-hidden="true" />
+									<svg.Plus aria-hidden="true" />
 									<strong>{definition.name}</strong>
 									<span>{definition.description}</span>
 								</button>
@@ -1264,7 +1277,7 @@ export function TilingWorkspace({
 									aria-label="Close keyboard help"
 									onClick={() => setHelpOpen(false)}
 								>
-									<Cross2Icon aria-hidden="true" />
+									<svg.Cross aria-hidden="true" />
 								</button>
 							</help-heading>
 							<dl>
@@ -1318,10 +1331,10 @@ export function TilingWorkspace({
 								aria-pressed={helpOpen}
 								onClick={() => setHelpOpen((open) => !open)}
 							>
-								<QuestionMarkCircledIcon aria-hidden="true" />
+								<svg.QuestionMarkCircled aria-hidden="true" />
 							</button>
 							<button type="button" data-save onClick={save} disabled={!dirty}>
-								<BookmarkFilledIcon aria-hidden="true" />
+								<svg.BookmarkFilled aria-hidden="true" />
 								{dirty ? "Save" : "Saved"}
 							</button>
 						</hud-actions>
@@ -1336,9 +1349,9 @@ export function TilingWorkspace({
 					onClick={toggleManagement}
 				>
 					{management ? (
-						<ExitFullScreenIcon aria-hidden="true" />
+						<svg.ExitFullScreen aria-hidden="true" />
 					) : (
-						<DragHandleDots2Icon aria-hidden="true" />
+						<svg.DragHandleDots aria-hidden="true" />
 					)}
 					<span>{management ? "Done" : "Tiles"}</span>
 					<kbd>⇧ Space</kbd>

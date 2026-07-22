@@ -81,27 +81,11 @@ kerning-tile.class {
 				display: grid;
 				gap: 5px;
 
+				/* @lasertag-expect-error: full-batch analysis leaves NumericInput opaque; isolated analysis resolves its root */
 				> span {
 					font-size: 9px;
 					font-weight: 690;
 					color: var(--ink-muted);
-				}
-
-				> numeric-input {
-					display: contents;
-
-					> input {
-						box-sizing: border-box;
-						width: 100%;
-						min-width: 0;
-						padding: 6px;
-						border: 1px solid var(--line);
-						border-radius: 5px;
-						background: var(--paper);
-						font: 570 10px/1 var(--ui-font);
-						font-variant-numeric: tabular-nums;
-						color: var(--ink);
-					}
 				}
 			}
 

@@ -89,22 +89,6 @@ selection-dimensions.class {
 			font-size: 9px;
 			font-weight: 650;
 			color: var(--ink-muted);
-
-			> numeric-input,
-			> numeric-input > input {
-				min-width: 0;
-				width: 100%;
-			}
-
-			> numeric-input > input {
-				box-sizing: border-box;
-				padding: 6px;
-				border: 1px solid var(--line-strong);
-				border-radius: 5px;
-				background: var(--paper);
-				font: 550 10px/1 var(--ui-font);
-				color: var(--ink);
-			}
 		}
 	}
 

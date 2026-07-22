@@ -1,5 +1,6 @@
 import type { JSX } from "preact"
 
+import css from "./AppAnchor.module.css"
 import type { Pathname } from "./routing.ts"
 
 export type AppAnchorProps = Omit<
@@ -11,7 +12,7 @@ export type AppAnchorProps = Omit<
 
 export function AppAnchor(props: AppAnchorProps) {
 	return (
-		<app-anchor>
+		<app-anchor className={css.class}>
 			<a {...props} />
 		</app-anchor>
 	)

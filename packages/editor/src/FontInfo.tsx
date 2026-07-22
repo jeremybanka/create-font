@@ -375,6 +375,7 @@ function NumberField({
 				<span>{label}</span>
 				<NumericInput
 					aria-label={label}
+					appearance="roomy"
 					{...(min === undefined ? {} : { min })}
 					{...(max === undefined ? {} : { max })}
 					step={step}

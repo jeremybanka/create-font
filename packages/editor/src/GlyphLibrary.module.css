@@ -235,6 +235,7 @@ glyph-library.class {
 					font-size: 15px;
 				}
 
+				/* @lasertag-expect-error: TooltipButton intentionally exposes caller-owned button presentation */
 				> tooltip-button > button {
 					display: grid;
 					place-items: center;

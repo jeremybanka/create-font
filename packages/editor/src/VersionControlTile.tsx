@@ -8,6 +8,11 @@ import type {
 	VersionControlChangeUnit,
 } from "./version-control.ts"
 
+const svg = {
+	Check: CheckIcon,
+	Cross: Cross2Icon,
+}
+
 export interface VersionControlTileProps {
 	readonly diffView: boolean
 	readonly onDiffViewChange: (enabled: boolean) => void
@@ -130,7 +135,7 @@ export function VersionControlTile({
 					</change-counts>
 					{changes.length === 0 ? (
 						<empty-changes>
-							<CheckIcon aria-hidden="true" />
+							<svg.Check aria-hidden="true" />
 							<span>No source differences</span>
 						</empty-changes>
 					) : (
@@ -185,7 +190,7 @@ export function VersionControlTile({
 								aria-label="Close commit dialog"
 								onClick={() => setCommitOpen(false)}
 							>
-								<Cross2Icon aria-hidden="true" />
+								<svg.Cross aria-hidden="true" />
 							</button>
 						</commit-dialog-heading>
 						{step === "select" ? (
