@@ -17,3 +17,10 @@ export const SOURCE_SESSION_WORKER_NAME = sourceSessionWorkerName(
 	CREATE_FONT_EDITOR_VERSION,
 	SOURCE_SESSION_PROTOCOL_VERSION,
 )
+
+export function sourceSessionProtocolError(
+	actualVersion: unknown,
+): string | null {
+	if (actualVersion === SOURCE_SESSION_PROTOCOL_VERSION) return null
+	return `The source session worker protocol is ${String(actualVersion)}; this editor requires ${SOURCE_SESSION_PROTOCOL_VERSION}. Restart the development server and reload the editor.`
+}

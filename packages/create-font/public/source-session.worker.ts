@@ -29,9 +29,11 @@ import {
 import type {
 	FontValidationStatus,
 	SourceSessionEvent,
+	SourceSessionEventPayload,
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
 } from "./source-session.ts"
+import { SOURCE_SESSION_PROTOCOL_VERSION } from "./source-session-identity.ts"
 import { createSourceSnapshotRefreshController } from "./source-session-refresh.ts"
 import { sourceProjectSnapshotFromResponse } from "./source-session-snapshot.ts"
 import {
@@ -101,17 +103,23 @@ function pathOptions(files: FontSourceDirectoryFiles): SplitFontSourceOptions {
 	}
 }
 
-function post(port: MessagePort, event: SourceSessionEvent): void {
-	port.postMessage(event)
+function post(port: MessagePort, event: SourceSessionEventPayload): void {
+	port.postMessage({
+		...event,
+		protocolVersion: SOURCE_SESSION_PROTOCOL_VERSION,
+	} satisfies SourceSessionEvent)
 }
 
-function broadcast(event: SourceSessionEvent, except?: MessagePort): void {
+function broadcast(
+	event: SourceSessionEventPayload,
+	except?: MessagePort,
+): void {
 	for (const port of ports) {
 		if (port !== except) post(port, event)
 	}
 }
 
-function currentSourceEvent(): SourceSessionEvent | null {
+function currentSourceEvent(): SourceSessionEventPayload | null {
 	if (
 		source === null ||
 		revision === null ||

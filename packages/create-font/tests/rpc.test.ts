@@ -19,6 +19,12 @@ describe(`create-font RPC`, () => {
 			.then((response) => response.json())
 		expect(workspace.root).toBe(import.meta.dir)
 
+		const worker = await app.handle(
+			new Request(`http://localhost/source-session.worker.js`),
+		)
+		expect(worker.headers.get(`cache-control`)).toBe(`no-store`)
+		expect(worker.headers.get(`content-type`)).toStartWith(`text/javascript`)
+
 		const build = await app
 			.handle(
 				new Request(`http://localhost/api/build`, {

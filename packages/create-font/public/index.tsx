@@ -25,7 +25,11 @@ import type {
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
 } from "./source-session.ts"
-import { SOURCE_SESSION_WORKER_NAME } from "./source-session-identity.ts"
+import {
+	SOURCE_SESSION_PROTOCOL_VERSION,
+	SOURCE_SESSION_WORKER_NAME,
+	sourceSessionProtocolError,
+} from "./source-session-identity.ts"
 import {
 	createStartupTimeline,
 	startupEpochMilliseconds,
@@ -453,6 +457,11 @@ function handleSourceSessionEvent(
 	message: MessageEvent<SourceSessionEvent>,
 ): void {
 	const event = message.data
+	const protocolError = sourceSessionProtocolError(event.protocolVersion)
+	if (protocolError !== null) {
+		showBootstrapError(protocolError)
+		return
+	}
 	switch (event.type) {
 		case `source`:
 			startupTimeline.mark(`source-message-received`)
@@ -527,10 +536,21 @@ function connectSourceSession(): void {
 	}
 	try {
 		const finish = startupTimeline.startPhase(`shared-worker-construction`)
-		const worker = new SharedWorker("/source-session.worker.js", {
-			name: SOURCE_SESSION_WORKER_NAME,
-			type: `module`,
-		})
+		const worker = __CREATE_FONT_DEVELOPMENT__
+			? new SharedWorker(
+					new URL("./source-session.worker.ts", import.meta.url),
+					{
+						name: SOURCE_SESSION_WORKER_NAME,
+						type: "module",
+					},
+				)
+			: new SharedWorker(
+					`/source-session.worker.js?v=${SOURCE_SESSION_PROTOCOL_VERSION}`,
+					{
+						name: SOURCE_SESSION_WORKER_NAME,
+						type: "module",
+					},
+				)
 		finish()
 		startupTimeline.mark(`shared-worker-constructed`)
 		port = worker.port

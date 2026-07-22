@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
 	SOURCE_SESSION_PROTOCOL_VERSION,
 	SOURCE_SESSION_WORKER_NAME,
+	sourceSessionProtocolError,
 	sourceSessionWorkerName,
 } from "../public/source-session-identity.ts"
 
@@ -17,6 +18,18 @@ describe("source-session SharedWorker identity", () => {
 		)
 		expect(SOURCE_SESSION_WORKER_NAME).toBe(
 			`create-font-source-session-v${CREATE_FONT_EDITOR_VERSION}.${SOURCE_SESSION_PROTOCOL_VERSION}`,
+		)
+	})
+
+	it(`rejects missing and mismatched worker protocol markers`, () => {
+		expect(
+			sourceSessionProtocolError(SOURCE_SESSION_PROTOCOL_VERSION),
+		).toBeNull()
+		expect(sourceSessionProtocolError(undefined)).toContain(
+			`worker protocol is undefined`,
+		)
+		expect(sourceSessionProtocolError(1)).toContain(
+			`requires ${SOURCE_SESSION_PROTOCOL_VERSION}`,
 		)
 	})
 })
