@@ -15,6 +15,7 @@ import {
 	lowerFeaSubstitutions,
 	parseFea,
 } from "@create-font/source"
+import { assembleEditorFontSource as assembleBrowserEditorFontSource } from "@create-font/source/browser"
 import { createFontEditorState } from "@create-font/states"
 import { applySubstitutions } from "@create-font/target"
 
@@ -462,6 +463,23 @@ describe(`filesystem font source service`, () => {
 		)
 		expect(assembled.ok).toBe(true)
 		if (!assembled.ok) return
+		const neutralManifest = Object.fromEntries(
+			snapshot.units.map((unit) => [unit.path, unit.value]),
+		)
+		const browserAssembled = assembleBrowserEditorFontSource(neutralManifest)
+		expect(browserAssembled.ok).toBe(true)
+		const withUnindexedFeature = {
+			...neutralManifest,
+			"features/unindexed.fea": `feature calt { sub f by i; } calt;\n`,
+		}
+		const rejected = assembleBrowserEditorFontSource(withUnindexedFeature)
+		expect(rejected.ok).toBe(false)
+		if (!rejected.ok) {
+			expect(rejected.errors[0]).toMatchObject({
+				code: `directory.unknown_file`,
+				unitPath: `features/unindexed.fea`,
+			})
+		}
 
 		expect(assembled.value.names.family).toBe(`Workbench Sans`)
 		expect(assembled.value.cmap).toHaveLength(95)

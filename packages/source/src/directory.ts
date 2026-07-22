@@ -1051,10 +1051,9 @@ export function assembleEditorFontSource(
 		sourceUnitDescriptors.instanceIndex.path,
 		sourceUnitDescriptors.glyphIndex.path,
 		sourceUnitDescriptors.cmapIndex.path,
-		...(featureIndex.value.length > 0 ||
-		Object.hasOwn(files, sourceUnitDescriptors.featureIndex.path)
-			? [sourceUnitDescriptors.featureIndex.path]
-			: []),
+		// Index files are structural units. They are known independently of the
+		// collection members they enumerate and never need to index themselves.
+		sourceUnitDescriptors.featureIndex.path,
 		...(Object.hasOwn(files, sourceUnitDescriptors.kerning.path)
 			? [sourceUnitDescriptors.kerning.path]
 			: []),

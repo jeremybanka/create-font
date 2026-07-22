@@ -354,8 +354,12 @@ describe("@create-font/source", () => {
 	test("indexes Adobe feature sources as part of the directory contract", () => {
 		const split = splitEditorFontSource(geometricOWithEveryEditorField())
 		if (!split.ok) throw new Error("fixture did not split")
-		const files = {
+		const structuralOnly = {
 			...split.value,
+			"features/index.json": [],
+		}
+		const files = {
+			...structuralOnly,
 			"features/index.json": [{ path: "features/layout.fea" }],
 			"features/layout.fea": "feature liga { sub O O by O; } liga;\n",
 		}
@@ -363,6 +367,7 @@ describe("@create-font/source", () => {
 			assembleEditorFontSource,
 			assembleBrowserEditorFontSource,
 		]) {
+			expect(assemble(structuralOnly).ok).toBe(true)
 			expect(assemble(files).ok).toBe(true)
 			const unindexed = { ...files }
 			delete unindexed["features/index.json"]

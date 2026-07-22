@@ -489,9 +489,7 @@ export function assembleEditorFontSource(
 
 	const knownPaths = new Set<string>(
 		Object.values(paths).filter(
-			(path) =>
-				(path !== paths.kerning && path !== paths.featureIndex) ||
-				Object.hasOwn(files, path),
+			(path) => path !== paths.kerning || Object.hasOwn(files, paths.kerning),
 		),
 	)
 	const loadIdentifiedUnits = <
