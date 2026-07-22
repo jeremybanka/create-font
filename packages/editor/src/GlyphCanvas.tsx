@@ -99,6 +99,7 @@ import {
 	controlsInsideBounds,
 	marqueeSelectionMode,
 	resolveSelectionControls,
+	rotateSelectionControls,
 	scaleSelectionControls,
 	selectionForRigidTranslation,
 	selectionKey,
@@ -148,7 +149,11 @@ import {
 	type ShapeGestureResolution,
 	type ShapeToolKind,
 } from "./shape-gesture.ts"
-import { resolveTransformResize } from "./transform-gesture.ts"
+import {
+	resolveTransformResize,
+	resolveTransformRotation,
+	TRANSFORM_ROTATION_SNAP_DEGREES,
+} from "./transform-gesture.ts"
 import {
 	finalizePointDragPreview,
 	hasSelectedCoincidentEndpointPeer,
@@ -313,6 +318,8 @@ interface TransformDrag {
 	readonly handle: TransformHandle
 	readonly controls: readonly ResolvedSelectionControl[]
 	readonly bounds: SelectionBounds
+	readonly startX: number
+	readonly startY: number
 	targetX: number
 	targetY: number
 	shiftKey: boolean
@@ -772,6 +779,34 @@ export function GlyphCanvas({
 		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
+	const activeRotation =
+		transformDrag?.handle === "rotation"
+			? resolveTransformRotation({
+					bounds: transformDrag.bounds,
+					startX: transformDrag.startX,
+					startY: transformDrag.startY,
+					targetX: transformDrag.targetX,
+					targetY: transformDrag.targetY,
+					shiftKey: transformDrag.shiftKey,
+				})
+			: null
+	const rotationAngleDegrees =
+		activeRotation === null
+			? null
+			: Math.round((activeRotation.angleRadians * 180) / Math.PI)
+	const rotationHandlePosition =
+		transformBounds === null
+			? null
+			: transformDrag?.handle === "rotation"
+				? { x: transformDrag.targetX, y: transformDrag.targetY }
+				: {
+						x: (transformBounds.minX + transformBounds.maxX) / 2,
+						y: transformBounds.maxY + 28 * inverseScale,
+					}
+	const hasRotationAffordance =
+		transformBounds !== null &&
+		(transformBounds.maxX > transformBounds.minX ||
+			transformBounds.maxY > transformBounds.minY)
 	const compatibilityGhostOffset = {
 		x: compatibilityOffsetPixels.x * inverseScale,
 		y: compatibilityOffsetPixels.y * inverseScale,
@@ -2609,16 +2644,31 @@ export function GlyphCanvas({
 		}
 		return true
 	}
-	const beginTransform = (handle: TransformHandle): void => {
+	const cancelTransform = (): boolean => {
+		if (transformDragRef.current === null) return false
+		transformDragRef.current = null
+		setTransformDrag(null)
+		setTransformPreview(null)
+		setTransformCursor(null)
+		return true
+	}
+	const beginTransform = (
+		handle: TransformHandle,
+		initialTarget?: Readonly<{ x: number; y: number }>,
+	): void => {
 		const controls = resolveSelectionControls(allPoints, selection)
 		const bounds = boundsOfControls(controls)
 		if (bounds === null) return
-		const targetX = handle.includes("west") ? bounds.minX : bounds.maxX
-		const targetY = handle.includes("south") ? bounds.minY : bounds.maxY
+		const targetX =
+			initialTarget?.x ?? (handle.includes("west") ? bounds.minX : bounds.maxX)
+		const targetY =
+			initialTarget?.y ?? (handle.includes("south") ? bounds.minY : bounds.maxY)
 		const drag = {
 			handle,
 			controls,
 			bounds,
+			startX: targetX,
+			startY: targetY,
 			targetX,
 			targetY,
 			shiftKey: false,
@@ -2636,6 +2686,21 @@ export function GlyphCanvas({
 					drag.controls,
 					drag.targetX - drag.bounds.minX,
 					drag.targetY - drag.bounds.minY,
+				),
+			)
+		}
+		if (drag.handle === "rotation") {
+			return roundedTransform(
+				rotateSelectionControls(
+					drag.controls,
+					resolveTransformRotation({
+						bounds: drag.bounds,
+						startX: drag.startX,
+						startY: drag.startY,
+						targetX: drag.targetX,
+						targetY: drag.targetY,
+						shiftKey: drag.shiftKey,
+					}),
 				),
 			)
 		}
@@ -2664,15 +2729,19 @@ export function GlyphCanvas({
 	}
 	const commitTransform = (event?: KonvaEventObject<DragEvent>): void => {
 		const drag = transformDragRef.current
-		if (drag !== null && event !== undefined) {
+		if (drag === null) return
+		if (event !== undefined && isCancelledGroupDragEnd(event.evt)) {
+			cancelTransform()
+			return
+		}
+		if (event !== undefined) {
 			drag.targetX = event.target.x()
 			drag.targetY = event.target.y()
 			drag.shiftKey = event.evt.shiftKey
 			drag.altKey = event.evt.altKey
 		}
-		const finalPreview =
-			drag === null ? transformPreview : resolveTransformPreview(drag)
-		if (finalPreview !== null && activeGlyphId !== null) {
+		const finalPreview = resolveTransformPreview(drag)
+		if (activeGlyphId !== null) {
 			workspace.font.actions.transformControls({
 				masterId: activeMasterId,
 				glyphId: activeGlyphId,
@@ -3085,12 +3154,8 @@ export function GlyphCanvas({
 					cancelShapeGesture()
 					return
 				}
-				if (event.key === "Escape" && transformDrag !== null) {
+				if (event.key === "Escape" && cancelTransform()) {
 					event.preventDefault()
-					transformDragRef.current = null
-					setTransformDrag(null)
-					setTransformPreview(null)
-					setTransformCursor(null)
 					return
 				}
 				if (event.key === "Escape" && editingTextIndex !== null) {
@@ -3456,6 +3521,7 @@ export function GlyphCanvas({
 							cancelPenGesture()
 						if (shapeGestureRef.current?.pointerId === event.evt.pointerId)
 							cancelShapeGesture()
+						cancelTransform()
 						cancelDirectDrag(event.evt.pointerId)
 					}}
 					onLostPointerCapture={(event: KonvaEventObject<PointerEvent>) => {
@@ -3463,6 +3529,7 @@ export function GlyphCanvas({
 							cancelPenGesture()
 						if (shapeGestureRef.current?.pointerId === event.evt.pointerId)
 							cancelShapeGesture()
+						cancelTransform()
 						cancelDirectDrag(event.evt.pointerId)
 					}}
 					onMouseUp={() => {
@@ -5112,6 +5179,75 @@ export function GlyphCanvas({
 												onDragMove={previewTransformDrag}
 												onDragEnd={(event) => commitTransform(event)}
 											/>
+											{!hasRotationAffordance ||
+											rotationHandlePosition === null ? null : (
+												<>
+													<Line
+														name="transform-rotation-stem"
+														points={[
+															(transformBounds.minX + transformBounds.maxX) / 2,
+															transformBounds.maxY,
+															rotationHandlePosition.x,
+															rotationHandlePosition.y,
+														]}
+														stroke={palette.accent}
+														strokeWidth={1.5 * inverseScale}
+														listening={false}
+													/>
+													<Circle
+														name="transform-rotation"
+														x={rotationHandlePosition.x}
+														y={rotationHandlePosition.y}
+														radius={8 * inverseScale}
+														fill={palette.surface}
+														stroke={palette.accent}
+														strokeWidth={1.5 * inverseScale}
+														hitStrokeWidth={12 * inverseScale}
+														draggable
+														onDragStart={(event) => {
+															setTransformCursor("grabbing")
+															beginTransform(
+																"rotation",
+																event.target.position(),
+															)
+														}}
+														onDragMove={previewTransformDrag}
+														onDragEnd={(event) => {
+															commitTransform(event)
+															setTransformCursor(null)
+														}}
+														onMouseEnter={() => setTransformCursor("grab")}
+														onMouseLeave={() => {
+															if (transformDrag === null)
+																setTransformCursor(null)
+														}}
+													/>
+													<Text
+														name="transform-rotation-icon"
+														x={rotationHandlePosition.x}
+														y={rotationHandlePosition.y}
+														text="↻"
+														fontSize={12 * inverseScale}
+														fill={palette.accent}
+														offsetX={6 * inverseScale}
+														offsetY={6 * inverseScale}
+														scaleY={-1}
+														listening={false}
+													/>
+													{rotationAngleDegrees === null ? null : (
+														<Text
+															name="transform-rotation-angle"
+															x={rotationHandlePosition.x + 12 * inverseScale}
+															y={rotationHandlePosition.y + 6 * inverseScale}
+															text={`${rotationAngleDegrees}°${transformDrag?.shiftKey ? " · snapped" : ""}`}
+															fontSize={11 * inverseScale}
+															fill={palette.accent}
+															scaleY={-1}
+															listening={false}
+														/>
+													)}
+												</>
+											)}
 											{(
 												[
 													[
@@ -5242,6 +5378,15 @@ export function GlyphCanvas({
 					</Layer>
 				</Stage>
 			</canvas-surface>
+			{activeTool === "transform" && hasRotationAffordance ? (
+				<span
+					className="sr-only"
+					tabIndex={0}
+					aria-label={`Rotation handle. Drag the circular handle above the selection to rotate around its center. Hold Shift to snap to ${TRANSFORM_ROTATION_SNAP_DEGREES} degree increments.`}
+				>
+					Rotation handle
+				</span>
+			) : null}
 			<p id="canvas-instructions">
 				Type and add line breaks normally. Scroll to pan; use Command, Control,
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
@@ -5254,18 +5399,21 @@ export function GlyphCanvas({
 				placement, or Pen and Select handles; click or drag a loose endpoint to
 				resume its path, and Option/Alt-drag to break its tangent. Hold E for a
 				clean glyph preview. Use Rect or Ellipse to drag a complete shape, and
-				hold Shift for a square or circle. Press Escape to cancel a Pen or shape
-				gesture, return to typing, or cancel a transform. Drag an empty area to
-				box-select controls; hold Command or Control to add, or Shift to
-				subtract (including when combined with Command or Control). Press
-				Command or Control+A to select all, Shift+A to align, and Delete to
-				remove the selection. Arrow keys nudge selected nodes and handles; Shift
-				uses 10 units and Command or Control uses 100. Option or Alt-drag or
-				nudge one soft node to slide it between its fixed handles, or one hard
-				node to move it without moving its handles. Use Command or Control+C, X,
-				and V to copy, cut, and paste outline selections. Hold Option or Alt
-				while deleting nodes to break paths open, or while deleting a handle to
-				remove its adjoining segment.
+				hold Shift for a square or circle. In the Transform tool, drag the
+				circular rotation handle above the selection to rotate around its
+				center; hold Shift to snap to {TRANSFORM_ROTATION_SNAP_DEGREES} degree
+				increments. Press Escape to cancel a Pen or shape gesture, return to
+				typing, or cancel a transform. Drag an empty area to box-select
+				controls; hold Command or Control to add, or Shift to subtract
+				(including when combined with Command or Control). Press Command or
+				Control+A to select all, Shift+A to align, and Delete to remove the
+				selection. Arrow keys nudge selected nodes and handles; Shift uses 10
+				units and Command or Control uses 100. Option or Alt-drag or nudge one
+				soft node to slide it between its fixed handles, or one hard node to
+				move it without moving its handles. Use Command or Control+C, X, and V
+				to copy, cut, and paste outline selections. Hold Option or Alt while
+				deleting nodes to break paths open, or while deleting a handle to remove
+				its adjoining segment.
 			</p>
 			<output role="status" aria-live="polite">
 				{clipboardStatus ??
@@ -5279,11 +5427,13 @@ export function GlyphCanvas({
 									? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
 									: shapeGestureResolution !== null && shapeGesture !== null
 										? `${shapeGesture.kind === "rect" ? "Rect" : "Ellipse"} preview from ${shapeGestureResolution.bounds.minX}, ${shapeGestureResolution.bounds.minY} to ${shapeGestureResolution.bounds.maxX}, ${shapeGestureResolution.bounds.maxY}.`
-										: selection.length === 0
-											? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-											: selection.length === 1 && selectedPoint !== undefined
-												? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-												: `${selection.length} outline controls selected.`)}
+										: rotationAngleDegrees !== null
+											? `Rotation preview ${rotationAngleDegrees} degrees${transformDrag?.shiftKey ? `, snapped to ${TRANSFORM_ROTATION_SNAP_DEGREES} degree increments` : ""}.`
+											: selection.length === 0
+												? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+												: selection.length === 1 && selectedPoint !== undefined
+													? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+													: `${selection.length} outline controls selected.`)}
 			</output>
 		</glyph-canvas>
 	)

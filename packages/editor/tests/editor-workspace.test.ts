@@ -40,6 +40,7 @@ import {
 	controlsInsideBounds,
 	nearestAxisAlignment,
 	resolveSelectionControls,
+	rotateSelectionControls,
 	scaleSelectionControls,
 	selectionForRigidTranslation,
 	selectionOriginPosition,
@@ -1030,6 +1031,14 @@ describe("editor workspace", () => {
 			handles: [{ x: 32, y: 20 }],
 			points: [{ x: 12, y: 50 }],
 		})
+		const rotated = rotateSelectionControls(controls, {
+			pivotX: 12,
+			pivotY: 20,
+			angleRadians: Math.PI / 2,
+		})
+		expect(rotated.handles[0]).toMatchObject({ x: 12, y: 30 })
+		expect(rotated.points[0]?.x).toBeCloseTo(-48)
+		expect(rotated.points[0]?.y).toBeCloseTo(20)
 	})
 
 	it("includes a soft handle pair's owner in a rigid translation", () => {
