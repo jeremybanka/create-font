@@ -1,5 +1,12 @@
 # @create-font/target
 
+## 0.0.2
+
+### Patch Changes
+
+- 5ff7ace: Add persisted pair kerning, canvas editing controls, and conventional GPOS Pair Adjustment compilation.
+- 04000ab: Compile Adobe feature sources into GSUB tables and apply enabled substitutions in the Canvas preview.
+
 ## 0.0.1
 
 ### Patch Changes

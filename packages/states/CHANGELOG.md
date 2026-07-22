@@ -1,5 +1,16 @@
 # @create-font/states
 
+## 0.6.2
+
+### Patch Changes
+
+- 5ff7ace: Add persisted pair kerning, canvas editing controls, and conventional GPOS Pair Adjustment compilation.
+- f87a70c: Compile live editor fonts and render Preview tiles through managed browser FontFace resources.
+- 04000ab: Compile Adobe feature sources into GSUB tables and apply enabled substitutions in the Canvas preview.
+- Updated dependencies [5ff7ace]
+- Updated dependencies [04000ab]
+  - @create-font/target@0.0.2
+
 ## 0.6.1
 
 ### Patch Changes
