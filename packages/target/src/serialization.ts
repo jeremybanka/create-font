@@ -11,6 +11,78 @@ import type {
 	VariationAxis,
 } from "./model.ts"
 
+function serializeGpos(font: VariableFont): Uint8Array {
+	const grouped = new Map<number, { right: number; value: number }[]>()
+	for (const pair of font.kerning) {
+		const left = Number(pair.left)
+		const list = grouped.get(left) ?? []
+		list.push({ right: Number(pair.right), value: Number(pair.value) })
+		grouped.set(left, list)
+	}
+	const groups = [...grouped]
+		.sort(([a], [b]) => a - b)
+		.map(([left, pairs]) => ({
+			left,
+			pairs: pairs.sort((a, b) => a.right - b.right),
+		}))
+	const writer = new BinaryWriter()
+	writer.u16(1)
+	writer.u16(0)
+	writer.u16(10)
+	writer.u16(30)
+	writer.u16(44)
+	// DFLT/default language system enables the only `kern` feature.
+	writer.u16(1)
+	writer.tag("DFLT")
+	writer.u16(8)
+	writer.u16(4)
+	writer.u16(0)
+	writer.u16(0)
+	writer.u16(0xffff)
+	writer.u16(1)
+	writer.u16(0)
+	writer.u16(1)
+	writer.tag("kern")
+	writer.u16(8)
+	writer.u16(0)
+	writer.u16(1)
+	writer.u16(0)
+	writer.u16(1)
+	writer.u16(4)
+	writer.u16(2)
+	writer.u16(0)
+	writer.u16(1)
+	writer.u16(8)
+	const pairPosStart = writer.length
+	const headerLength = 10 + groups.length * 2
+	const pairSetsLength = groups.reduce(
+		(sum, group) => sum + 2 + group.pairs.length * 4,
+		0,
+	)
+	writer.u16(1)
+	writer.u16(headerLength + pairSetsLength)
+	writer.u16(0x0004)
+	writer.u16(0)
+	writer.u16(groups.length)
+	let pairSetOffset = headerLength
+	for (const group of groups) {
+		writer.u16(pairSetOffset)
+		pairSetOffset += 2 + group.pairs.length * 4
+	}
+	for (const group of groups) {
+		writer.u16(group.pairs.length)
+		for (const pair of group.pairs) {
+			writer.u16(pair.right)
+			writer.i16(pair.value)
+		}
+	}
+	writer.u16(1)
+	writer.u16(groups.length)
+	for (const group of groups) writer.u16(group.left)
+	if (pairPosStart !== 56) throw new Error("Unexpected GPOS PairPos offset.")
+	return writer.toUint8Array()
+}
+
 const SFNT_CHECKSUM_MAGIC = 0xb1b0_afba
 const HEAD_MAGIC = 0x5f0f_3cf5
 const NAME_ID_START = 256
@@ -876,6 +948,7 @@ export function serializeVariableFont(font: VariableFont): Uint8Array {
 	if (font.axes.some((axis) => axis.map !== null)) {
 		tables.set("avar", serializeAvar(font.axes))
 	}
+	if (font.kerning.length > 0) tables.set("GPOS", serializeGpos(font))
 	for (const tag of plan.tableTags) {
 		const table = tables.get(tag)
 		const expected = expectedLengths.get(tag)

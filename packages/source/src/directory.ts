@@ -275,6 +275,18 @@ export const cmapEntryFileSchema = z
 	.strict()
 	.meta({ title: "create-font character mapping" })
 
+export const kerningFileSchema = z
+	.array(
+		z
+			.object({
+				left: glyphIdSchema,
+				right: glyphIdSchema,
+				value: finiteNumberSchema.int().min(-32_768).max(32_767),
+			})
+			.strict(),
+	)
+	.meta({ title: "create-font kerning pairs" })
+
 function isSafeCollectionUnitPath(path: string, directory: string): boolean {
 	const prefix = `${directory}/`
 	if (!path.startsWith(prefix) || path === `${prefix}index.json`) return false
@@ -371,6 +383,7 @@ export type GlyphIndexFile = z.infer<typeof glyphIndexFileSchema>
 export type GlyphFile = z.infer<typeof glyphFileSchema>
 export type CmapIndexFile = z.infer<typeof cmapIndexFileSchema>
 export type CmapEntryFile = z.infer<typeof cmapEntryFileSchema>
+export type KerningFile = z.infer<typeof kerningFileSchema>
 
 export type SourceUnitKind =
 	| "project"
@@ -388,6 +401,7 @@ export type SourceUnitKind =
 	| "glyph"
 	| "cmap-index"
 	| "cmap-entry"
+	| "kerning"
 
 export interface SingletonSourceUnitDescriptor<Schema extends z.ZodType> {
 	readonly cardinality: "singleton"
@@ -504,6 +518,12 @@ export const sourceUnitDescriptors = {
 		kind: "cmap-entry",
 		schema: cmapEntryFileSchema,
 	},
+	kerning: {
+		cardinality: "singleton",
+		kind: "kerning",
+		path: "kerning.json",
+		schema: kerningFileSchema,
+	},
 } as const satisfies Record<
 	string,
 	| SingletonSourceUnitDescriptor<z.ZodType>
@@ -526,6 +546,7 @@ type SourceUnitValueByKind = {
 	readonly glyph: GlyphFile
 	readonly "cmap-index": CmapIndexFile
 	readonly "cmap-entry": CmapEntryFile
+	readonly kerning: KerningFile
 }
 
 const descriptorByKind: {
@@ -546,6 +567,7 @@ const descriptorByKind: {
 	glyph: sourceUnitDescriptors.glyph,
 	"cmap-index": sourceUnitDescriptors.cmapIndex,
 	"cmap-entry": sourceUnitDescriptors.cmapEntry,
+	kerning: sourceUnitDescriptors.kerning,
 }
 
 function issuePath(segments: readonly PropertyKey[]): string {
@@ -854,6 +876,8 @@ export function splitEditorFontSource(
 		cmapIndex.push({ codePoint: entry.codePoint, path })
 	}
 	files[sourceUnitDescriptors.cmapIndex.path] = cmapIndex
+	if ((file.kerning?.length ?? 0) > 0)
+		files[sourceUnitDescriptors.kerning.path] = file.kerning
 	return success(files)
 }
 
@@ -992,6 +1016,9 @@ export function assembleEditorFontSource(
 		sourceUnitDescriptors.instanceIndex.path,
 		sourceUnitDescriptors.glyphIndex.path,
 		sourceUnitDescriptors.cmapIndex.path,
+		...(Object.hasOwn(files, sourceUnitDescriptors.kerning.path)
+			? [sourceUnitDescriptors.kerning.path]
+			: []),
 	])
 
 	const loadIdentifiedUnits = <
@@ -1122,6 +1149,14 @@ export function assembleEditorFontSource(
 		}
 	}
 
+	const kerning = Object.hasOwn(files, sourceUnitDescriptors.kerning.path)
+		? validateSourceUnit(
+				"kerning",
+				files[sourceUnitDescriptors.kerning.path],
+				sourceUnitDescriptors.kerning.path,
+			)
+		: success([] as KerningFile)
+	if (!kerning.ok) return failure(kerning.errors)
 	const assembled = {
 		format: project.value.editorFormat,
 		editorVersion: project.value.editorVersion,
@@ -1135,6 +1170,7 @@ export function assembleEditorFontSource(
 		instances: instances.value,
 		glyphs: glyphs.value,
 		cmap,
+		...(kerning.value.length === 0 ? {} : { kerning: kerning.value }),
 	}
 	return fromEditorFontFile(assembled)
 }

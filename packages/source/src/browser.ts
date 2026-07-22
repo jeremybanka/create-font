@@ -28,6 +28,7 @@ export type MasterFile = EditorFontFile["masters"][number]
 export type InstanceFile = EditorFontFile["instances"][number]
 export type GlyphFile = EditorFontFile["glyphs"][number]
 export type CmapEntryFile = EditorFontFile["cmap"][number]
+export type KerningFile = NonNullable<EditorFontFile["kerning"]>
 export type AxisIndexFile = readonly Readonly<{
 	id: AxisFile["id"]
 	path: string
@@ -62,6 +63,7 @@ const paths = {
 	instanceIndex: "instances/index.json",
 	glyphIndex: "glyphs/index.json",
 	cmapIndex: "cmap/index.json",
+	kerning: "kerning.json",
 } as const
 
 function encodePathSegment(value: string): string {
@@ -288,6 +290,7 @@ export function splitEditorFontSource(
 		cmapIndex.push({ codePoint: entry.codePoint, path })
 	}
 	files[paths.cmapIndex] = cmapIndex
+	if ((file.kerning?.length ?? 0) > 0) files[paths.kerning] = file.kerning
 	return success(files)
 }
 
@@ -465,7 +468,11 @@ export function assembleEditorFontSource(
 	)
 	if (!cmapIndex.ok) return failure(cmapIndex.errors)
 
-	const knownPaths = new Set<string>(Object.values(paths))
+	const knownPaths = new Set<string>(
+		Object.values(paths).filter(
+			(path) => path !== paths.kerning || Object.hasOwn(files, path),
+		),
+	)
 	const loadIdentifiedUnits = <
 		Identity extends string,
 		Value extends { readonly id: Identity },
@@ -629,6 +636,9 @@ export function assembleEditorFontSource(
 		instances: instances.value,
 		glyphs: glyphs.value,
 		cmap,
+		...(Object.hasOwn(files, paths.kerning)
+			? { kerning: files[paths.kerning] as KerningFile }
+			: {}),
 	}
 	return fromEditorFontFile(assembled)
 }

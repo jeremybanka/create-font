@@ -5,6 +5,7 @@ export type TileColumnAlignment = "top" | "bottom"
 export type TileKind =
 	| "font-navigation"
 	| "canvas-toolbar"
+	| "kerning"
 	| "preview"
 	| "compatibility"
 	| "version-control"
@@ -71,6 +72,7 @@ export const TILING_DRAFT_STORAGE_KEY = "create-font:tiling-workspace:draft:v1"
 const TILE_KINDS = new Set<TileKind>([
 	"font-navigation",
 	"canvas-toolbar",
+	"kerning",
 	"preview",
 	"compatibility",
 	"version-control",

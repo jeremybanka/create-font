@@ -53,6 +53,8 @@ export interface PreviewRunGlyph {
 	readonly textStart: number
 	readonly textEnd: number
 	readonly glyphId: GlyphId
+	/** Horizontal adjustment applied before this glyph. */
+	readonly kerningBefore?: number
 	readonly glyph: ResolvedGlyph | null
 	/** Authoring geometry used when open contours prevent compiled preview. */
 	readonly sourcePreview: GlyphPreview | null
@@ -136,6 +138,10 @@ export function createEditorWorkspace(
 	const caretIndexAtom = font.silo.atom<number>({
 		key: "caretIndex",
 		default: 0,
+	})
+	const textSelectionCollapsedAtom = font.silo.atom<boolean>({
+		key: "textSelectionCollapsed",
+		default: true,
 	})
 	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: "editingTextIndex",
@@ -308,12 +314,15 @@ export function createEditorWorkspace(
 			const fallbackId = fallback ?? firstExported
 			if (fallbackId === undefined) return []
 			const run: PreviewRunItem[] = []
+			const kerning = get(font.atoms.kerning)
+			let previousGlyphId: GlyphId | null = null
 			let textOffset = 0
 			for (const character of get(previewTextAtom)) {
 				const textStart = textOffset
 				textOffset += character.length
 				if (character === "\n") {
 					run.push({ kind: "line-break", textStart, textEnd: textOffset })
+					previousGlyphId = null
 					continue
 				}
 				const codePoint = character.codePointAt(0)
@@ -329,6 +338,13 @@ export function createEditorWorkspace(
 					textStart,
 					textEnd: textOffset,
 					glyphId,
+					kerningBefore:
+						previousGlyphId === null
+							? 0
+							: (kerning.find(
+									(pair) =>
+										pair.left === previousGlyphId && pair.right === glyphId,
+								)?.value ?? 0),
 					glyph: result.ok
 						? resolveVariableGlyph(glyphId, result.value, axes, location)
 						: null,
@@ -342,6 +358,7 @@ export function createEditorWorkspace(
 									document.metadata.unitsPerEm,
 								),
 				})
+				previousGlyphId = glyphId
 			}
 			return Object.freeze(run)
 		},
@@ -357,6 +374,31 @@ export function createEditorWorkspace(
 					item.kind === "glyph" && item.textStart >= caretIndex,
 			)
 			return nextGlyph?.glyphId ?? null
+		},
+	})
+	const activeKerningPairSelector = font.silo.selector<Readonly<{
+		left: GlyphId
+		right: GlyphId
+		value: number | null
+	}> | null>({
+		key: "activeKerningPair",
+		get: ({ get }) => {
+			if (!get(textSelectionCollapsedAtom)) return null
+			const caret = get(caretIndexAtom)
+			const glyphs = get(previewRunSelector).filter(
+				(item): item is PreviewRunGlyph => item.kind === "glyph",
+			)
+			const left = glyphs.find((item) => item.textEnd === caret)
+			const right = glyphs.find((item) => item.textStart === caret)
+			if (left === undefined || right === undefined) return null
+			const pair = get(font.atoms.kerning).find(
+				(pair) => pair.left === left.glyphId && pair.right === right.glyphId,
+			)
+			return Object.freeze({
+				left: left.glyphId,
+				right: right.glyphId,
+				value: pair?.value ?? null,
+			})
 		},
 	})
 	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
@@ -545,6 +587,7 @@ export function createEditorWorkspace(
 		const nextMaster = currentDocument.masters[nextIndex]
 		if (nextMaster !== undefined) selectMaster(nextMaster.id)
 	}
+	let restoreTextCanvasFocus: (() => void) | null = null
 
 	return {
 		font,
@@ -565,6 +608,7 @@ export function createEditorWorkspace(
 			selection: selectionAtom,
 			previewText: previewTextAtom,
 			caretIndex: caretIndexAtom,
+			textSelectionCollapsed: textSelectionCollapsedAtom,
 			editingTextIndex: editingTextIndexAtom,
 			activeTool: activeToolAtom,
 			previewCoordinate: previewCoordinateAtoms,
@@ -581,10 +625,29 @@ export function createEditorWorkspace(
 			routeName: routeNameSelector,
 			activeLayer: activeLayerSelector,
 			previewRun: previewRunSelector,
+			activeKerningPair: activeKerningPairSelector,
 			glyphIndex: glyphIndexSelector,
 			faviconPreview: faviconPreviewSelector,
 		},
 		actions: {
+			registerTextCanvasFocusRestorer(restorer: () => void): () => void {
+				restoreTextCanvasFocus = restorer
+				return () => {
+					if (restoreTextCanvasFocus === restorer) restoreTextCanvasFocus = null
+				}
+			},
+			restoreTextCanvasFocus(): void {
+				queueMicrotask(() => restoreTextCanvasFocus?.())
+			},
+			setActiveKerning(value: number | null): void {
+				const pair = font.silo.getState(activeKerningPairSelector)
+				if (pair !== null)
+					font.actions.setKerningPair({
+						left: pair.left,
+						right: pair.right,
+						value,
+					})
+			},
 			toggleConstrainProportions(): void {
 				font.silo.setState(constrainProportionsAtom, (enabled) => !enabled)
 			},

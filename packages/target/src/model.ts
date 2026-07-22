@@ -161,6 +161,13 @@ export interface CharacterMapEntrySource {
 	readonly glyph: number
 }
 
+/** One horizontal pair adjustment, addressed by target glyph index. */
+export interface KerningPairSource {
+	readonly left: number
+	readonly right: number
+	readonly value: number
+}
+
 export interface VariableFontSource {
 	readonly format: typeof CREATE_FONT_FORMAT
 	readonly irVersion: typeof CREATE_FONT_IR_VERSION
@@ -172,6 +179,8 @@ export interface VariableFontSource {
 	readonly instances: readonly NamedInstanceSource[]
 	readonly glyphs: readonly SimpleGlyphSource[]
 	readonly cmap: readonly CharacterMapEntrySource[]
+	/** Conventional GPOS `kern` pair adjustments. */
+	readonly kerning?: readonly KerningPairSource[]
 }
 
 export interface FontMetadata {
@@ -295,6 +304,12 @@ export interface CharacterMapEntry {
 	readonly glyph: GlyphId
 }
 
+export interface KerningPair {
+	readonly left: GlyphId
+	readonly right: GlyphId
+	readonly value: FUnit
+}
+
 export type VariableFont = {
 	readonly format: typeof CREATE_FONT_FORMAT
 	readonly irVersion: typeof CREATE_FONT_IR_VERSION
@@ -306,6 +321,7 @@ export type VariableFont = {
 	readonly instances: readonly NamedInstance[]
 	readonly glyphs: NonEmptyReadonlyArray<SimpleGlyph>
 	readonly cmap: NonEmptyReadonlyArray<CharacterMapEntry>
+	readonly kerning: readonly KerningPair[]
 } & ValidatedFontProof
 
 export type DiagnosticSeverity = "error" | "warning"
@@ -349,6 +365,8 @@ export type DiagnosticCode =
 	| "instance.duplicate"
 	| "instance.name"
 	| "instance.postscript_name"
+	| "kerning.duplicate"
+	| "kerning.glyph"
 	| "metadata.fixed"
 	| "metadata.modified_before_created"
 	| "metadata.timestamp"

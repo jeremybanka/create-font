@@ -31,7 +31,13 @@ import { FontInfo } from "./FontInfo.tsx"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
-import { useO, useOF, useOptionalOF, useOptionalTL } from "./state-hooks.ts"
+import {
+	useO,
+	useOF,
+	useOptionalOF,
+	useOptionalTL,
+	useTimeline,
+} from "./state-hooks.ts"
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,
@@ -86,11 +92,17 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
-	const history = useOptionalTL(
+	const glyphHistory = useOptionalTL(
 		workspace.font.glyphHistoryTimelines,
 		activeGlyphId,
 		workspace.font.actions.markDocumentChanged,
 	)
+	const kerningHistory = useTimeline(
+		workspace.font.kerningTimeline,
+		workspace.font.actions.markDocumentChanged,
+	)
+	const activeKerningPair = useO(workspace.ui.activeKerningPair)
+	const history = activeKerningPair === null ? glyphHistory : kerningHistory
 	const toolContext: ToolContext = {
 		activeGlyphId,
 		activeLayer,

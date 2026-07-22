@@ -214,6 +214,29 @@ describe("@create-font/source", () => {
 		expect(assembled.value).toEqual(source)
 	})
 
+	test("round-trips kerning as a dedicated optional directory unit", () => {
+		const base = makeGeometricOEditorFont()
+		const source: EditorFontSource = {
+			...base,
+			kerning: [{ left: "glyph:O", right: "glyph:O", value: -80 }],
+		}
+		const split = splitEditorFontSource(source)
+		expect(split.ok).toBe(true)
+		if (!split.ok) return
+		expect(split.value["kerning.json"]).toEqual(source.kerning)
+		expect(assembleEditorFontSource(split.value)).toMatchObject({
+			ok: true,
+			value: source,
+		})
+		const browserSplit = splitBrowserEditorFontSource(source)
+		expect(browserSplit.ok).toBe(true)
+		if (!browserSplit.ok) return
+		expect(assembleBrowserEditorFontSource(browserSplit.value)).toMatchObject({
+			ok: true,
+			value: source,
+		})
+	})
+
 	test("keeps glyph identity independent from its indexed file path", () => {
 		const source = makeGeometricOEditorFont()
 		const split = splitEditorFontSource(source, {

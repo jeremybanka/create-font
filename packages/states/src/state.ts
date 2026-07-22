@@ -47,6 +47,7 @@ import {
 	type EditorHandleKind,
 	type EditorHandleVectorSource,
 	type EditorLayerPointSource,
+	type EditorKerningPairSource,
 	type EditorMasterSource,
 	type EditorNodeMode,
 	type EditorPointSource,
@@ -211,6 +212,12 @@ export type CurveSegmentKey = readonly [
 	contourId: ContourId,
 	segmentIndex: number,
 ]
+
+export interface SetKerningPairInput {
+	readonly left: GlyphId
+	readonly right: GlyphId
+	readonly value: number | null
+}
 
 function splitContourId(glyphId: GlyphId, firstPointId: PointId): ContourId {
 	return `contour:${glyphId}:split:${firstPointId}`
@@ -859,6 +866,10 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 		source.cmap.map((entry) => entry.codePoint),
 		"Cmap code points",
 	)
+	assertUnique(
+		(source.kerning ?? []).map((pair) => `${pair.left}/${pair.right}`),
+		"Kerning pairs",
+	)
 
 	const axisIds = new Set(source.axes.map((axis) => axis.id))
 	const masterIds = new Set(source.masters.map((master) => master.id))
@@ -986,6 +997,16 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 			)
 		}
 	}
+	for (const pair of source.kerning ?? []) {
+		if (!glyphIds.has(pair.left) || !glyphIds.has(pair.right))
+			throw new TypeError("Kerning pairs must refer to known glyphs.")
+		if (
+			!Number.isInteger(pair.value) ||
+			pair.value < MIN_INT16 ||
+			pair.value > MAX_INT16
+		)
+			throw new TypeError("Kerning values must be signed 16-bit integers.")
+	}
 }
 
 /**
@@ -1048,6 +1069,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const cmapCodePointsAtom = silo.atom<readonly number[]>({
 		key: "cmapCodePoints",
 		default: Object.freeze([]),
+	})
+	const kerningAtom = silo.atom<readonly EditorKerningPairSource[]>({
+		key: "kerning",
+		default: Object.freeze([]),
+	})
+	const kerningTimeline = silo.timeline({
+		key: "kerning",
+		scope: [kerningAtom],
 	})
 
 	const axisAtoms = silo.atomFamily<AxisState | null, AxisId>({
@@ -3530,6 +3559,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					instances: instances.value,
 					glyphs: glyphs.value,
 					cmap: cmap.value,
+					kerning: get(kerningAtom).flatMap((pair) => {
+						const exported = get(exportedGlyphIdsSelector)
+						const exportedIds = exported.ok ? exported.value : []
+						const left = exportedIds.indexOf(pair.left)
+						const right = exportedIds.indexOf(pair.right)
+						return left < 0 || right < 0
+							? []
+							: [{ left, right, value: pair.value }]
+					}),
 				},
 				warnings,
 			)
@@ -3843,6 +3881,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				instances,
 				glyphs,
 				cmap,
+				...(get(kerningAtom).length === 0 ? {} : { kerning: get(kerningAtom) }),
 			})
 		},
 	})
@@ -3929,6 +3968,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				cmapCodePointsAtom,
 				deepFreeze(source.cmap.map((entry) => entry.codePoint)),
 			)
+			set(kerningAtom, deepFreeze([...(source.kerning ?? [])]))
 
 			for (const axis of source.axes) {
 				set(
@@ -7403,6 +7443,34 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const setKerningPairTransaction = silo.transaction<
+		(input: SetKerningPairInput) => void
+	>({
+		key: "setKerningPair",
+		do: ({ get, set }, input) => {
+			if (
+				!get(glyphIdsAtom).includes(input.left) ||
+				!get(glyphIdsAtom).includes(input.right)
+			)
+				throw new TypeError("Kerning pairs require known glyphs.")
+			if (
+				input.value !== null &&
+				(!Number.isInteger(input.value) ||
+					input.value < MIN_INT16 ||
+					input.value > MAX_INT16)
+			)
+				throw new TypeError("Kerning values must be signed 16-bit integers.")
+			const pairs = [
+				...get(kerningAtom).filter(
+					(pair) => pair.left !== input.left || pair.right !== input.right,
+				),
+			]
+			if (input.value !== null && input.value !== 0)
+				pairs.push({ left: input.left, right: input.right, value: input.value })
+			set(kerningAtom, deepFreeze(pairs))
+		},
+	})
+
 	const runReplaceFont = silo.runTransaction(replaceFontTransaction)
 	const runMovePoints = silo.runTransaction(movePointsTransaction)
 	const runSetHorizontalMetrics = silo.runTransaction(
@@ -7431,6 +7499,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	)
 	const runPasteContours = silo.runTransaction(pasteContoursTransaction)
 	const runDeleteSelection = silo.runTransaction(deleteSelectionTransaction)
+	const runSetKerningPair = silo.runTransaction(setKerningPairTransaction)
 
 	const assertKnownGlyphHistory = (glyphId: GlyphId): void => {
 		if (!silo.getState(glyphIdsAtom).includes(glyphId)) {
@@ -7473,6 +7542,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			outgoingHandleX: outgoingHandleXAtoms,
 			outgoingHandleY: outgoingHandleYAtoms,
 			cmapGlyph: cmapGlyphAtoms,
+			kerning: kerningAtom,
 		},
 		selectors: {
 			editorSource: editorSourceSelector,
@@ -7536,8 +7606,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			createCompleteContour: createCompleteContourTransaction,
 			pasteContours: pasteContoursTransaction,
 			deleteSelection: deleteSelectionTransaction,
+			setKerningPair: setKerningPairTransaction,
 		},
 		glyphHistoryTimelines,
+		kerningTimeline,
 		actions: {
 			markDocumentChanged,
 			load(source: EditorFontSource): void {
@@ -7554,6 +7626,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					silo.clearTimeline(glyphHistoryTimelines, glyphId)
 				}
 				markDocumentChanged()
+				silo.clearTimeline(kerningTimeline)
 			},
 			movePoints(input: MovePointsInput): void {
 				runMovePoints(input)
@@ -7647,6 +7720,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
 				runDeleteSelection(input)
+				markDocumentChanged()
+			},
+			setKerningPair(input: SetKerningPairInput): void {
+				runSetKerningPair(input)
+				markDocumentChanged()
+			},
+			undoKerning(): void {
+				silo.undo(kerningTimeline)
+				markDocumentChanged()
+			},
+			redoKerning(): void {
+				silo.redo(kerningTimeline)
 				markDocumentChanged()
 			},
 		},

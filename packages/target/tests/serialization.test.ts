@@ -121,6 +121,22 @@ function compile(source: VariableFontSource) {
 }
 
 describe(`target-v1 SFNT serialization`, () => {
+	it(`serializes conventional GPOS kern Pair Adjustment`, () => {
+		const source = makeGeometricOFont()
+		const bytes = serializeVariableFont(
+			compile({ ...source, kerning: [{ left: 1, right: 1, value: -80 }] }),
+		)
+		const record = tableDirectory(bytes).get("GPOS")
+		expect(record).toBeDefined()
+		const table = tableBytes(bytes, record!)
+		const view = new DataView(table.buffer, table.byteOffset, table.byteLength)
+		expect(view.getUint16(0)).toBe(1)
+		expect(String.fromCharCode(...table.slice(32, 36))).toBe("kern")
+		// PairPos starts at 56: format 1, xAdvance value format, then pair value.
+		expect(view.getUint16(56)).toBe(1)
+		expect(view.getUint16(60)).toBe(0x0004)
+		expect(view.getInt16(72)).toBe(-80)
+	})
 	it(`emits deterministic aligned tables with valid checksums`, () => {
 		const font = compile(makeGeometricOFont())
 		const first = serializeVariableFont(font)

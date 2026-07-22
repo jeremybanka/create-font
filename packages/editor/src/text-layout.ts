@@ -52,6 +52,8 @@ export function layoutTextRun(
 			item.glyph?.advanceWidth ??
 			item.sourcePreview?.advanceWidth ??
 			fallbackAdvance
+		x += item.kerningBefore ?? 0
+		carets.set(item.textStart, { textIndex: item.textStart, x, baseline })
 		glyphs.push({ item, x, baseline, advance })
 		x += advance
 		carets.set(item.textEnd, { textIndex: item.textEnd, x, baseline })

@@ -10,6 +10,7 @@ import type {
 	EditorGlyphSource,
 	EditorHandleVectorSource,
 	EditorInstanceSource,
+	EditorKerningPairSource,
 	EditorLayerPointSource,
 	EditorLocationSource,
 	EditorMasterSource,
@@ -1274,6 +1275,21 @@ function parseCmapEntry(
 	}
 }
 
+function parseKerningPair(
+	value: unknown,
+	path: string,
+	context: ValidationContext,
+): EditorKerningPairSource {
+	const record = objectValue(value, path, context)
+	if (record === null) return { left: "glyph:", right: "glyph:", value: 0 }
+	checkShape(record, ["left", "right", "value"], path, context)
+	return {
+		left: requiredId<GlyphId>(record, "left", "glyph:", path, context),
+		right: requiredId<GlyphId>(record, "right", "glyph:", path, context),
+		value: requiredNumber(record, "value", path, context),
+	}
+}
+
 function parseRoot(
 	value: unknown,
 	mode: TimestampMode,
@@ -1335,6 +1351,7 @@ function parseRoot(
 			instances: [],
 			glyphs: [],
 			cmap: [],
+			kerning: [],
 		}
 	}
 	checkShape(
@@ -1352,6 +1369,7 @@ function parseRoot(
 			"instances",
 			"glyphs",
 			"cmap",
+			"kerning",
 		],
 		"$",
 		context,
@@ -1388,6 +1406,9 @@ function parseRoot(
 	const instances = requiredArray(record, "instances", "$", context)
 	const glyphs = requiredArray(record, "glyphs", "$", context)
 	const cmap = requiredArray(record, "cmap", "$", context)
+	const kerning = Object.hasOwn(record, "kerning")
+		? requiredArray(record, "kerning", "$", context)
+		: []
 	const defaultMasterId = requiredId<MasterId>(
 		record,
 		"defaultMasterId",
@@ -1439,6 +1460,13 @@ function parseRoot(
 			cmap?.map((entry, index) =>
 				parseCmapEntry(entry, `$.cmap[${index}]`, context),
 			) ?? [],
+		...(kerning !== null && kerning.length > 0
+			? {
+					kerning: kerning.map((pair, index) =>
+						parseKerningPair(pair, `$.kerning[${index}]`, context),
+					),
+				}
+			: {}),
 	}
 }
 
@@ -1692,6 +1720,36 @@ function diagnoseStructure(
 				`Unknown glyph reference ${JSON.stringify(entry.glyphId)}.`,
 			)
 		}
+	}
+	const pairKeys = new Set<string>()
+	for (let index = 0; index < (source.kerning ?? []).length; index += 1) {
+		const pair = source.kerning?.[index]
+		if (pair === undefined) continue
+		for (const side of ["left", "right"] as const) {
+			if (!glyphIds.has(pair[side]))
+				add(
+					context,
+					"source.reference",
+					`$.kerning[${index}].${side}`,
+					`Unknown glyph reference ${JSON.stringify(pair[side])}.`,
+				)
+		}
+		if (!Number.isInteger(pair.value))
+			add(
+				context,
+				"source.number",
+				`$.kerning[${index}].value`,
+				"Kerning values must be integer font units.",
+			)
+		const key = `${pair.left}/${pair.right}`
+		if (pairKeys.has(key))
+			add(
+				context,
+				"source.duplicate",
+				`$.kerning[${index}]`,
+				"Kerning pairs must be unique.",
+			)
+		pairKeys.add(key)
 	}
 }
 

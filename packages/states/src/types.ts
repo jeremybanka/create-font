@@ -183,6 +183,13 @@ export interface EditorCmapEntrySource {
 	readonly glyphId: GlyphId
 }
 
+/** A stable glyph-ID pair and its horizontal advance adjustment. */
+export interface EditorKerningPairSource {
+	readonly left: GlyphId
+	readonly right: GlyphId
+	readonly value: number
+}
+
 /**
  * Serializable high-level source for one variable-font editor document.
  * Entity arrays preserve author order while stable IDs allow atom families to
@@ -202,6 +209,7 @@ export interface EditorFontSource {
 	/** Array order is glyph ID order in the projected font. */
 	readonly glyphs: readonly EditorGlyphSource[]
 	readonly cmap: readonly EditorCmapEntrySource[]
+	readonly kerning?: readonly EditorKerningPairSource[]
 }
 
 export type ProjectionIssueSeverity = "error" | "warning"
