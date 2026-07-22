@@ -382,5 +382,9 @@
 	{
 		"id": "glyph:asciitilde",
 		"path": "glyphs/glyph%3Aasciitilde~67032ebe.json"
+	},
+	{
+		"id": "glyph:f_i",
+		"path": "glyphs/glyph%3Af_i~d23284f9.json"
 	}
 ]

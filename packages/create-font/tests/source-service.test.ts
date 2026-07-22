@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
@@ -10,8 +10,14 @@ import {
 	SourceVersionControlError,
 	type SourceChangedEvent,
 } from "@create-font/server"
-import { assembleEditorFontSource } from "@create-font/source"
+import {
+	assembleEditorFontSource,
+	lowerFeaSubstitutions,
+	parseFea,
+} from "@create-font/source"
+import { assembleEditorFontSource as assembleBrowserEditorFontSource } from "@create-font/source/browser"
 import { createFontEditorState } from "@create-font/states"
+import { applySubstitutions } from "@create-font/target"
 
 import {
 	createFileSystemSourceService,
@@ -90,6 +96,18 @@ describe(`font workspace discovery`, () => {
 describe(`filesystem font source service`, () => {
 	it(`compares the complete working source with HEAD and arbitrary immutable refs`, async () => {
 		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
+		const featurePath = resolve(projectRoot, `features`, `nested`, `layout.fea`)
+		await mkdir(resolve(featurePath, `..`), { recursive: true })
+		await writeFile(featurePath, `feature liga { sub A O by O; } liga;\n`)
+		const featureIndexPath = resolve(projectRoot, `features`, `index.json`)
+		const featureIndex = JSON.parse(
+			await readFile(featureIndexPath, `utf8`),
+		) as { path: string }[]
+		featureIndex.push({ path: `features/nested/layout.fea` })
+		await writeFile(
+			featureIndexPath,
+			`${JSON.stringify(featureIndex, null, `\t`)}\n`,
+		)
 		await initializeGitRepository(workspaceRoot)
 		const source = await createFileSystemSourceService(projectRoot)
 		const clean = await source.readComparison?.({ baseRef: `HEAD` })
@@ -113,6 +131,22 @@ describe(`filesystem font source service`, () => {
 				paths: [`names.json`],
 			}),
 		)
+		await writeFile(featurePath, `feature liga { sub A O by A; } liga;\n`)
+		const featureWorking = await source.readComparison?.({ baseRef: `HEAD` })
+		expect(featureWorking?.changes).toContainEqual(
+			expect.objectContaining({
+				change: `modified`,
+				paths: [`features/nested/layout.fea`],
+			}),
+		)
+		await source.commitUnits?.({
+			expectedComparisonIdentity: featureWorking?.identity ?? ``,
+			message: `Update ligature`,
+			paths: [`features/nested/layout.fea`],
+		})
+		expect(
+			(await source.readComparison?.({ baseRef: `HEAD` }))?.changes,
+		).toEqual([expect.objectContaining({ paths: [`names.json`] })])
 
 		await git(workspaceRoot, `add`, `fonts/workbench-sans/names.json`)
 		await git(workspaceRoot, `commit`, `-m`, `Rename font`)
@@ -410,34 +444,93 @@ describe(`filesystem font source service`, () => {
 		)
 	})
 
-	it(`loads and compiles the complete two-master printable ASCII family`, async () => {
+	it(`loads and compiles printable ASCII with the f_i ligature`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)
 		const manifest = await source.readManifest()
-		const entries = await Promise.all(
-			manifest.units.map(
-				async ({ path }) =>
-					[
-						path,
-						JSON.parse(
-							await readFile(resolve(projectRoot, path), `utf8`),
-						) as unknown,
-					] as const,
-			),
+		expect(manifest.units.map(({ path }) => path)).toContain(
+			`features/index.json`,
 		)
-		const assembled = assembleEditorFontSource(Object.fromEntries(entries))
+		expect(manifest.units.map(({ path }) => path)).toContain(
+			`features/layout.fea`,
+		)
+		expect((await source.readUnit(`features/layout.fea`)).value).toBe(
+			`feature liga { sub f i by f_i; } liga;\n`,
+		)
+		const snapshot = await source.readSnapshot()
+		const assembled = assembleEditorFontSource(
+			Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
+		)
 		expect(assembled.ok).toBe(true)
 		if (!assembled.ok) return
+		const neutralManifest = Object.fromEntries(
+			snapshot.units.map((unit) => [unit.path, unit.value]),
+		)
+		const browserAssembled = assembleBrowserEditorFontSource(neutralManifest)
+		expect(browserAssembled.ok).toBe(true)
+		const withUnindexedFeature = {
+			...neutralManifest,
+			"features/unindexed.fea": `feature calt { sub f by i; } calt;\n`,
+		}
+		const rejected = assembleBrowserEditorFontSource(withUnindexedFeature)
+		expect(rejected.ok).toBe(false)
+		if (!rejected.ok) {
+			expect(rejected.errors[0]).toMatchObject({
+				code: `directory.unknown_file`,
+				unitPath: `features/unindexed.fea`,
+			})
+		}
 
 		expect(assembled.value.names.family).toBe(`Workbench Sans`)
 		expect(assembled.value.cmap).toHaveLength(95)
 		expect(assembled.value.cmap.map(({ codePoint }) => codePoint)).toEqual(
 			Array.from({ length: 95 }, (_, index) => 0x20 + index),
 		)
-		expect(assembled.value.glyphs).toHaveLength(96)
+		expect(assembled.value.glyphs).toHaveLength(97)
 		expect(
 			assembled.value.glyphs.every((glyph) => glyph.layers.length === 2),
 		).toBe(true)
+		const ligature = assembled.value.glyphs.find(
+			(glyph) => glyph.name === `f_i`,
+		)
+		expect(ligature).toMatchObject({ id: `glyph:f_i`, export: true })
+		expect(ligature?.layers.map((layer) => layer.contours.length)).toEqual([
+			7, 7,
+		])
+		expect(
+			assembled.value.cmap.some((entry) => entry.glyphId === `glyph:f_i`),
+		).toBe(false)
+
+		const parsedFeatures = parseFea(
+			await readFile(resolve(projectRoot, `features`, `layout.fea`), `utf8`),
+		)
+		expect(parsedFeatures.ok).toBe(true)
+		if (!parsedFeatures.ok) return
+		const glyphIndices = new Map(
+			assembled.value.glyphs.map((glyph, index) => [glyph.name, index]),
+		)
+		const loweredFeatures = lowerFeaSubstitutions(
+			parsedFeatures.value,
+			glyphIndices,
+		)
+		expect(loweredFeatures.errors).toEqual([])
+		expect(loweredFeatures.ir).toEqual([
+			expect.objectContaining({
+				feature: `liga`,
+				from: [glyphIndices.get(`f`), glyphIndices.get(`i`)],
+				to: glyphIndices.get(`f_i`),
+			}),
+		])
+		const input = [
+			{ glyph: glyphIndices.get(`f`)!, textStart: 0, textEnd: 1 },
+			{ glyph: glyphIndices.get(`i`)!, textStart: 1, textEnd: 2 },
+		]
+		expect(
+			applySubstitutions(input, loweredFeatures.ir, new Set([`liga`])),
+		).toEqual([{ glyph: glyphIndices.get(`f_i`), textStart: 0, textEnd: 2 }])
+		expect(applySubstitutions(input, loweredFeatures.ir, new Set())).toEqual(
+			input,
+		)
 
 		const editor = createFontEditorState({ key: `test/workbench-sans` })
 		editor.actions.load(assembled.value)
@@ -446,6 +539,6 @@ describe(`filesystem font source service`, () => {
 		expect(compilation.ok).toBe(true)
 		if (!compilation.ok) return
 		expect(compilation.source.cmap).toHaveLength(95)
-		expect(compilation.source.glyphs).toHaveLength(96)
+		expect(compilation.source.glyphs).toHaveLength(97)
 	})
 })

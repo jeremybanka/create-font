@@ -10,6 +10,7 @@ import type {
 	VariableFont,
 	VariationAxis,
 } from "./model.ts"
+import { serializeGsub, type FeatureSubstitution } from "./opentype-layout.ts"
 
 function serializeGpos(font: VariableFont): Uint8Array {
 	const grouped = new Map<number, { right: number; value: number }[]>()
@@ -923,7 +924,14 @@ function setTag(bytes: Uint8Array, offset: number, tag: string): void {
 }
 
 /** Serializes one validated target-v1 font to deterministic TrueType SFNT bytes. */
-export function serializeVariableFont(font: VariableFont): Uint8Array {
+export interface SerializeVariableFontOptions {
+	readonly substitutions?: readonly FeatureSubstitution[]
+}
+
+export function serializeVariableFont(
+	font: VariableFont,
+	options: SerializeVariableFontOptions = {},
+): Uint8Array {
 	const plan = createLoweringPlan(font)
 	const names = createNamePlan(font)
 	const glyf = serializeGlyf(font, plan)
@@ -949,6 +957,10 @@ export function serializeVariableFont(font: VariableFont): Uint8Array {
 		tables.set("avar", serializeAvar(font.axes))
 	}
 	if (font.kerning.length > 0) tables.set("GPOS", serializeGpos(font))
+	const substitutions = options.substitutions ?? font.substitutions ?? []
+	if (substitutions.length > 0) {
+		tables.set("GSUB", serializeGsub(substitutions))
+	}
 	for (const tag of plan.tableTags) {
 		const table = tables.get(tag)
 		const expected = expectedLengths.get(tag)
@@ -957,9 +969,17 @@ export function serializeVariableFont(font: VariableFont): Uint8Array {
 		}
 		assertLength(tag, table, expected)
 	}
-	const bytes = new Uint8Array(plan.encoding.sfntSize)
+	const tableTags = [...tables.keys()].toSorted()
+	const sfntSize =
+		12 +
+		tableTags.length * 16 +
+		[...tables.values()].reduce(
+			(size, table) => size + Math.ceil(table.length / 4) * 4,
+			0,
+		)
+	const bytes = new Uint8Array(sfntSize)
 	const view = new DataView(bytes.buffer)
-	const numTables = plan.tableTags.length
+	const numTables = tableTags.length
 	const power = 2 ** Math.floor(Math.log2(numTables))
 	setU32(view, 0, plan.sfntVersion)
 	setU16(view, 4, numTables)
@@ -968,8 +988,8 @@ export function serializeVariableFont(font: VariableFont): Uint8Array {
 	setU16(view, 10, numTables * 16 - power * 16)
 	let tableOffset = 12 + numTables * 16
 	let headOffset = -1
-	for (let index = 0; index < plan.tableTags.length; index += 1) {
-		const tag = plan.tableTags[index]
+	for (let index = 0; index < tableTags.length; index += 1) {
+		const tag = tableTags[index]
 		if (tag === undefined) continue
 		const table = tables.get(tag)
 		if (table === undefined) throw new Error(`Missing ${tag} table.`)

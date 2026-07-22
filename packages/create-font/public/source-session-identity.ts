@@ -1,13 +1,26 @@
 import { CREATE_FONT_EDITOR_VERSION } from "@create-font/states"
 
-export function sourceSessionWorkerName(editorVersion: number): string {
-	return `create-font-source-session-v${editorVersion}`
+export const SOURCE_SESSION_PROTOCOL_VERSION = 2
+
+export function sourceSessionWorkerName(
+	editorVersion: number,
+	protocolVersion: number,
+): string {
+	return `create-font-source-session-v${editorVersion}.${protocolVersion}`
 }
 
 /**
- * Prevent an upgraded editor from reconnecting to a SharedWorker that still
- * holds source assembled for an older editor contract.
+ * Prevent an upgraded editor or source protocol from reconnecting to a
+ * SharedWorker that still holds source assembled by an incompatible bundle.
  */
 export const SOURCE_SESSION_WORKER_NAME = sourceSessionWorkerName(
 	CREATE_FONT_EDITOR_VERSION,
+	SOURCE_SESSION_PROTOCOL_VERSION,
 )
+
+export function sourceSessionProtocolError(
+	actualVersion: unknown,
+): string | null {
+	if (actualVersion === SOURCE_SESSION_PROTOCOL_VERSION) return null
+	return `The source session worker protocol is ${String(actualVersion)}; this editor requires ${SOURCE_SESSION_PROTOCOL_VERSION}. Restart the development server and reload the editor.`
+}

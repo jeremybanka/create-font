@@ -8,7 +8,9 @@ const subprocesses = [
 	Bun.spawn(
 		[
 			`bun`,
-			`--hot`,
+			// A hard restart keeps workspace dependencies and generated source in
+			// one revision after an in-place pull. Hot reload can retain old exports.
+			`--watch`,
 			`--conditions=development`,
 			`./src/font-cli.ts`,
 			`dev`,

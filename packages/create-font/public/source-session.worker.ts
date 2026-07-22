@@ -29,9 +29,11 @@ import {
 import type {
 	FontValidationStatus,
 	SourceSessionEvent,
+	SourceSessionEventPayload,
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
 } from "./source-session.ts"
+import { SOURCE_SESSION_PROTOCOL_VERSION } from "./source-session-identity.ts"
 import { createSourceSnapshotRefreshController } from "./source-session-refresh.ts"
 import { sourceProjectSnapshotFromResponse } from "./source-session-snapshot.ts"
 import {
@@ -54,6 +56,7 @@ let sourceUnits = new Map<string, SourceUnitSnapshot>()
 let source: EditorFontSource | null = null
 let revision: string | null = null
 let validation: FontValidationStatus | null = null
+let featureSources: readonly string[] = []
 let writeQueue = Promise.resolve()
 let startupProfile: SourceSessionStartupProfile | null = null
 
@@ -100,17 +103,23 @@ function pathOptions(files: FontSourceDirectoryFiles): SplitFontSourceOptions {
 	}
 }
 
-function post(port: MessagePort, event: SourceSessionEvent): void {
-	port.postMessage(event)
+function post(port: MessagePort, event: SourceSessionEventPayload): void {
+	port.postMessage({
+		...event,
+		protocolVersion: SOURCE_SESSION_PROTOCOL_VERSION,
+	} satisfies SourceSessionEvent)
 }
 
-function broadcast(event: SourceSessionEvent, except?: MessagePort): void {
+function broadcast(
+	event: SourceSessionEventPayload,
+	except?: MessagePort,
+): void {
 	for (const port of ports) {
 		if (port !== except) post(port, event)
 	}
 }
 
-function currentSourceEvent(): SourceSessionEvent | null {
+function currentSourceEvent(): SourceSessionEventPayload | null {
 	if (
 		source === null ||
 		revision === null ||
@@ -120,6 +129,7 @@ function currentSourceEvent(): SourceSessionEvent | null {
 		return null
 	return {
 		type: `source`,
+		featureSources,
 		sentAtEpochMilliseconds: performance.timeOrigin + performance.now(),
 		revision,
 		source,
@@ -155,6 +165,14 @@ const refreshController = createSourceSnapshotRefreshController({
 		const files = Object.fromEntries(
 			snapshots.map((snapshot) => [snapshot.path, snapshot.value]),
 		)
+		featureSources = snapshots
+			.filter(
+				(snapshot) =>
+					snapshot.path.startsWith(`features/`) &&
+					snapshot.path.endsWith(`.fea`) &&
+					typeof snapshot.value === `string`,
+			)
+			.map((snapshot) => snapshot.value as string)
 		const finishAssembly = initialLoad
 			? startupTimeline.startPhase(`source-assembly`)
 			: undefined

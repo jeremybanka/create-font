@@ -33,6 +33,7 @@ if (
 const editorApplication = await staticPlugin({
 	alwaysStatic: true,
 	assets: applicationAssets,
+	ignorePatterns: [`/source-session.worker.js`],
 	indexHTML: true,
 	prefix: `/`,
 })
@@ -67,9 +68,10 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 		)
 		.get(
 			`/source-session.worker.js`,
-			() =>
-				new Response(sourceSessionWorker, {
+			async () =>
+				new Response(await sourceSessionWorker.text(), {
 					headers: {
+						"cache-control": `no-store`,
 						"content-type": `text/javascript; charset=utf-8`,
 					},
 				}),

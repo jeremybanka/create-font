@@ -367,6 +367,20 @@ export const glyphIndexFileSchema = z
 export const cmapIndexFileSchema = z
 	.array(cmapIndexEntrySchema)
 	.meta({ title: "create-font character-map index" })
+export const featureIndexFileSchema = z
+	.array(
+		z
+			.object({
+				path: z
+					.string()
+					.regex(
+						/^features\/(?!index\.json$)[A-Za-z0-9._~%/-]+\.fea$/u,
+						"Expected a feature source path below features/.",
+					),
+			})
+			.strict(),
+	)
+	.meta({ title: "create-font feature source index" })
 
 export type ProjectFile = z.infer<typeof projectFileSchema>
 export type MetadataFile = z.infer<typeof metadataFileSchema>
@@ -384,6 +398,7 @@ export type GlyphFile = z.infer<typeof glyphFileSchema>
 export type CmapIndexFile = z.infer<typeof cmapIndexFileSchema>
 export type CmapEntryFile = z.infer<typeof cmapEntryFileSchema>
 export type KerningFile = z.infer<typeof kerningFileSchema>
+export type FeatureIndexFile = z.infer<typeof featureIndexFileSchema>
 
 export type SourceUnitKind =
 	| "project"
@@ -401,6 +416,7 @@ export type SourceUnitKind =
 	| "glyph"
 	| "cmap-index"
 	| "cmap-entry"
+	| "feature-index"
 	| "kerning"
 
 export interface SingletonSourceUnitDescriptor<Schema extends z.ZodType> {
@@ -518,6 +534,12 @@ export const sourceUnitDescriptors = {
 		kind: "cmap-entry",
 		schema: cmapEntryFileSchema,
 	},
+	featureIndex: {
+		cardinality: "singleton",
+		kind: "feature-index",
+		path: "features/index.json",
+		schema: featureIndexFileSchema,
+	},
 	kerning: {
 		cardinality: "singleton",
 		kind: "kerning",
@@ -546,6 +568,7 @@ type SourceUnitValueByKind = {
 	readonly glyph: GlyphFile
 	readonly "cmap-index": CmapIndexFile
 	readonly "cmap-entry": CmapEntryFile
+	readonly "feature-index": FeatureIndexFile
 	readonly kerning: KerningFile
 }
 
@@ -567,6 +590,7 @@ const descriptorByKind: {
 	glyph: sourceUnitDescriptors.glyph,
 	"cmap-index": sourceUnitDescriptors.cmapIndex,
 	"cmap-entry": sourceUnitDescriptors.cmapEntry,
+	"feature-index": sourceUnitDescriptors.featureIndex,
 	kerning: sourceUnitDescriptors.kerning,
 }
 
@@ -1004,6 +1028,17 @@ export function assembleEditorFontSource(
 		"cmap-index",
 	)
 	if (!cmapIndex.ok) return failure(cmapIndex.errors)
+	const featureIndex = Object.hasOwn(
+		files,
+		sourceUnitDescriptors.featureIndex.path,
+	)
+		? validateSourceUnit(
+				"feature-index",
+				files[sourceUnitDescriptors.featureIndex.path],
+				sourceUnitDescriptors.featureIndex.path,
+			)
+		: success([] as FeatureIndexFile)
+	if (!featureIndex.ok) return failure(featureIndex.errors)
 
 	const knownPaths = new Set<string>([
 		sourceUnitDescriptors.project.path,
@@ -1016,6 +1051,9 @@ export function assembleEditorFontSource(
 		sourceUnitDescriptors.instanceIndex.path,
 		sourceUnitDescriptors.glyphIndex.path,
 		sourceUnitDescriptors.cmapIndex.path,
+		// Index files are structural units. They are known independently of the
+		// collection members they enumerate and never need to index themselves.
+		sourceUnitDescriptors.featureIndex.path,
 		...(Object.hasOwn(files, sourceUnitDescriptors.kerning.path)
 			? [sourceUnitDescriptors.kerning.path]
 			: []),
@@ -1133,6 +1171,45 @@ export function assembleEditorFontSource(
 			])
 		}
 		cmap.push(value.value)
+	}
+
+	const featurePaths = new Set<string>()
+	for (let index = 0; index < featureIndex.value.length; index += 1) {
+		const entry = featureIndex.value[index]
+		if (entry === undefined) continue
+		if (featurePaths.has(entry.path)) {
+			return failure([
+				duplicateIndexedPathDiagnostic(
+					sourceUnitDescriptors.featureIndex.path,
+					index,
+					entry.path,
+				),
+			])
+		}
+		featurePaths.add(entry.path)
+		knownPaths.add(entry.path)
+		if (!Object.hasOwn(files, entry.path)) {
+			return failure([
+				{
+					severity: "error",
+					code: "directory.missing_file",
+					unitPath: entry.path,
+					path: "$",
+					message: `Indexed feature source ${JSON.stringify(entry.path)} is missing.`,
+				},
+			])
+		}
+		if (typeof files[entry.path] !== "string") {
+			return failure([
+				{
+					severity: "error",
+					code: "source.string",
+					unitPath: entry.path,
+					path: "$",
+					message: "Expected Adobe feature source text.",
+				},
+			])
+		}
 	}
 
 	for (const path of Object.keys(files)) {

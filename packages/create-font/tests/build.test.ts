@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
@@ -52,6 +52,29 @@ function checksum(bytes: Uint8Array): number {
 }
 
 describe(`buildProject`, () => {
+	it(`compiles feature files into a conventional GSUB table`, async () => {
+		const root = await copyWorkbenchSans()
+		await mkdir(resolve(root, `features`, `nested`), { recursive: true })
+		await writeFile(
+			resolve(root, `features`, `nested`, `layout.fea`),
+			`feature calt { sub A' O by O; } calt;\n`,
+		)
+		const featureIndexPath = resolve(root, `features`, `index.json`)
+		const featureIndex = JSON.parse(
+			await readFile(featureIndexPath, `utf8`),
+		) as { path: string }[]
+		featureIndex.push({ path: `features/nested/layout.fea` })
+		await writeFile(
+			featureIndexPath,
+			`${JSON.stringify(featureIndex, null, `\t`)}\n`,
+		)
+		const result = await buildProject(root)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const bytes = new Uint8Array(await readFile(result.outputs[0]!))
+		expect(tableTags(bytes)).toContain(`GSUB`)
+		expect(checksum(bytes)).toBe(0xb1b0_afba)
+	})
 	it(`builds Workbench Sans deterministically through the complete pipeline`, async () => {
 		const root = await copyWorkbenchSans()
 		const first = await buildProject(root)
@@ -76,6 +99,7 @@ describe(`buildProject`, () => {
 		expect(firstBytes).toEqual(secondBytes)
 		expect(checksum(firstBytes)).toBe(0xb1b0_afba)
 		expect(tableTags(firstBytes)).toEqual([
+			`GSUB`,
 			`OS/2`,
 			`STAT`,
 			`cmap`,

@@ -15,6 +15,7 @@ import {
 } from "@create-font/server"
 import {
 	assembleEditorFontSource,
+	parseFea,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
 	type SourceDiagnostic,
@@ -194,7 +195,13 @@ async function snapshotAtCommit(
 		.decode(listed.stdout)
 		.split(`\0`)
 		.filter(Boolean)
-		.filter((path) => path.startsWith(prefix) && path.endsWith(`.json`))
+		.filter(
+			(path) =>
+				path.startsWith(prefix) &&
+				(path.endsWith(`.json`) ||
+					(path.slice(prefix.length).startsWith(`features/`) &&
+						path.endsWith(`.fea`))),
+		)
 		.map((path) => validUnitPath(path.slice(prefix.length)))
 		.toSorted()
 	if (paths.length === 0) {
@@ -214,7 +221,8 @@ async function snapshotAtCommit(
 	const values: Record<string, unknown> = {}
 	for (const path of paths) {
 		const kind = sourceUnitKindForPath(path)
-		if (kind === null) {
+		const isFeature = path.startsWith(`features/`) && path.endsWith(`.fea`)
+		if (kind === null && !isFeature) {
 			throw new SourceValidationError([
 				{
 					code: `directory.unknown_file`,
@@ -237,14 +245,28 @@ async function snapshotAtCommit(
 			)
 		}
 		const text = new TextDecoder().decode(blob.stdout)
-		const parsed = parseSourceUnitText(kind, text, path)
-		if (!parsed.ok)
+		const parsed = isFeature
+			? parseFea(text)
+			: parseSourceUnitText(kind!, text, path)
+		if (!parsed.ok) {
+			if (isFeature) {
+				throw new SourceValidationError(
+					parsed.errors.map((error) => ({
+						code: `source.schema`,
+						message: error.message,
+						path: `$:${error.range.line}:${error.range.column}`,
+						unitPath: path,
+					})),
+				)
+			}
 			throw new SourceValidationError(validationIssues(parsed.errors))
-		values[path] = parsed.value
+		}
+		const value = isFeature ? text : parsed.value
+		values[path] = value
 		units.push({
 			path,
 			revision: textRevision(text),
-			value: parsed.value as JsonValue,
+			value: value as JsonValue,
 		})
 	}
 	const assembled = assembleEditorFontSource(values)

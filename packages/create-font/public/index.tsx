@@ -5,7 +5,11 @@ import type {
 import type { EditorFontSource } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type { SourceComparison } from "@create-font/server"
-import { assembleEditorFontSource } from "@create-font/source/browser"
+import {
+	assembleEditorFontSource,
+	lowerFeaSubstitutions,
+	parseFea,
+} from "@create-font/source/browser"
 import { render } from "preact"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
@@ -21,7 +25,11 @@ import type {
 	SourceSessionRequest,
 	SourceSessionStartupProfile,
 } from "./source-session.ts"
-import { SOURCE_SESSION_WORKER_NAME } from "./source-session-identity.ts"
+import {
+	SOURCE_SESSION_PROTOCOL_VERSION,
+	SOURCE_SESSION_WORKER_NAME,
+	sourceSessionProtocolError,
+} from "./source-session-identity.ts"
 import {
 	createStartupTimeline,
 	startupEpochMilliseconds,
@@ -180,6 +188,9 @@ let renderedSource = false
 let mountedEditor: MountedEditor | null = null
 let currentSource: EditorFontSource | null = null
 let currentValidation: FontValidationStatus | null = null
+let currentFeatureSubstitutions: NonNullable<
+	EditorBrowserOptions["featureSubstitutions"]
+> = []
 let versionControlState: Readonly<{
 	comparison?: NonNullable<EditorBrowserOptions["versionControl"]>["comparison"]
 	error?: string
@@ -359,16 +370,36 @@ async function commitSourceUnits(
 async function showSource(
 	source: EditorFontSource,
 	validation: FontValidationStatus,
+	featureSources?: readonly string[],
 ): Promise<void> {
 	const editorModule = await editorModulePromise
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
 	currentValidation = validation
+	const glyphIndices = new Map(
+		source.glyphs.map((glyph, index) => [glyph.name, index]),
+	)
+	if (featureSources !== undefined)
+		currentFeatureSubstitutions = featureSources.flatMap((featureSource) => {
+			const parsed = parseFea(featureSource)
+			if (!parsed.ok) throw new Error(parsed.errors[0]?.message)
+			const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
+			if (lowered.errors.length > 0) throw new Error(lowered.errors[0]?.message)
+			return lowered.ir.map((rule) => ({
+				feature: rule.feature,
+				from: rule.from.map((index) => source.glyphs[index]?.id ?? ""),
+				to: source.glyphs[rule.to]?.id ?? "",
+				...(rule.contextIndex === undefined
+					? {}
+					: { contextIndex: rule.contextIndex }),
+			}))
+		})
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
 	const options: EditorBrowserOptions = {
+		featureSubstitutions: currentFeatureSubstitutions,
 		onSourceChange: saveSource,
 		source,
 		validation,
@@ -426,6 +457,11 @@ function handleSourceSessionEvent(
 	message: MessageEvent<SourceSessionEvent>,
 ): void {
 	const event = message.data
+	const protocolError = sourceSessionProtocolError(event.protocolVersion)
+	if (protocolError !== null) {
+		showBootstrapError(protocolError)
+		return
+	}
 	switch (event.type) {
 		case `source`:
 			startupTimeline.mark(`source-message-received`)
@@ -435,15 +471,17 @@ function handleSourceSessionEvent(
 				performance.timeOrigin + performance.now(),
 			)
 			revision = event.revision
-			void showSource(event.source, event.validation).catch(
-				(error: unknown) => {
-					showBootstrapError(
-						error instanceof Error
-							? error.message
-							: `The editor application did not load.`,
-					)
-				},
-			)
+			void showSource(
+				event.source,
+				event.validation,
+				event.featureSources,
+			).catch((error: unknown) => {
+				showBootstrapError(
+					error instanceof Error
+						? error.message
+						: `The editor application did not load.`,
+				)
+			})
 			void refreshWorkingComparison(
 				versionControlSelection,
 				loadComparison,
@@ -498,10 +536,21 @@ function connectSourceSession(): void {
 	}
 	try {
 		const finish = startupTimeline.startPhase(`shared-worker-construction`)
-		const worker = new SharedWorker("/source-session.worker.js", {
-			name: SOURCE_SESSION_WORKER_NAME,
-			type: `module`,
-		})
+		const worker = __CREATE_FONT_DEVELOPMENT__
+			? new SharedWorker(
+					new URL("./source-session.worker.ts", import.meta.url),
+					{
+						name: SOURCE_SESSION_WORKER_NAME,
+						type: "module",
+					},
+				)
+			: new SharedWorker(
+					`/source-session.worker.js?v=${SOURCE_SESSION_PROTOCOL_VERSION}`,
+					{
+						name: SOURCE_SESSION_WORKER_NAME,
+						type: "module",
+					},
+				)
 		finish()
 		startupTimeline.mark(`shared-worker-constructed`)
 		port = worker.port

@@ -168,6 +168,13 @@ export interface KerningPairSource {
 	readonly value: number
 }
 
+export interface FeatureSubstitutionSource {
+	readonly feature: string
+	readonly from: readonly number[]
+	readonly to: number
+	readonly contextIndex?: number
+}
+
 export interface VariableFontSource {
 	readonly format: typeof CREATE_FONT_FORMAT
 	readonly irVersion: typeof CREATE_FONT_IR_VERSION
@@ -181,6 +188,7 @@ export interface VariableFontSource {
 	readonly cmap: readonly CharacterMapEntrySource[]
 	/** Conventional GPOS `kern` pair adjustments. */
 	readonly kerning?: readonly KerningPairSource[]
+	readonly substitutions?: readonly FeatureSubstitutionSource[]
 }
 
 export interface FontMetadata {
@@ -322,6 +330,7 @@ export type VariableFont = {
 	readonly glyphs: NonEmptyReadonlyArray<SimpleGlyph>
 	readonly cmap: NonEmptyReadonlyArray<CharacterMapEntry>
 	readonly kerning: readonly KerningPair[]
+	readonly substitutions?: readonly FeatureSubstitutionSource[]
 } & ValidatedFontProof
 
 export type DiagnosticSeverity = "error" | "warning"

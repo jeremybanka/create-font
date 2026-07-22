@@ -6,7 +6,6 @@ import type {
 	EditorGlyphSource,
 	GlyphId,
 	MasterId,
-	PointId,
 } from "../packages/states/src/index.ts"
 import {
 	formatSourceUnit,
@@ -350,14 +349,6 @@ function rectangleForStroke(
 	]
 }
 
-function pointId(
-	glyphId: GlyphId,
-	contourIndex: number,
-	pointIndex: number,
-): PointId {
-	return `point:${glyphId}:${contourIndex}:${pointIndex}` as PointId
-}
-
 function glyphName(character: string): string {
 	if (/^[A-Za-z]$/.test(character)) return character
 	const names: Readonly<Record<string, string>> = {
@@ -417,40 +408,46 @@ function advanceForCharacter(character: string): number {
 	return 700
 }
 
-function strokeGlyph(character: string): EditorGlyphSource {
-	const name = glyphName(character)
+function glyphFromStrokes(
+	name: string,
+	strokes: readonly Stroke[],
+	advanceWidth: number,
+): EditorGlyphSource {
 	const id = `glyph:${name}` as GlyphId
-	const strokes = strokesForCharacter(character)
 	const textContours = strokes.map((item) =>
 		rectangleForStroke(item, TEXT_STROKE),
 	)
 	const heavyContours = strokes.map((item) =>
 		rectangleForStroke(item, HEAVY_STROKE),
 	)
-	const contours = strokes.map((_, contourIndex) => ({
-		id: `contour:${id}:${contourIndex}`,
-		closed: true,
-		points: [0, 1, 2, 3].map((pointIndex) => ({
-			id: pointId(id, contourIndex, pointIndex),
-			mode: "hard" as const,
-		})),
-	}))
 	const layer = (
 		masterId: MasterId,
 		coordinates: readonly (readonly Coordinate[])[],
 	) => {
-		const points = coordinates.flatMap((contour, contourIndex) =>
-			contour.map((coordinate, pointIndex) => ({
-				pointId: pointId(id, contourIndex, pointIndex),
-				...coordinate,
-			})),
-		)
+		const masterPrefix = masterId === textMasterId ? "" : `${masterId}:`
+		const points = coordinates.flat()
 		return {
 			masterId,
-			advanceWidth: advanceForCharacter(character),
+			advanceWidth,
 			leftSideBearing:
 				points.length === 0 ? 0 : Math.min(...points.map((point) => point.x)),
-			points,
+			contours: coordinates.map((contour, contourIndex) => {
+				const preservePastedHIds =
+					masterId === textMasterId && id === "glyph:H" && contourIndex === 4
+				return {
+					id: preservePastedHIds
+						? "contour:glyph:H:paste:0"
+						: `contour:${masterPrefix}${id}:${contourIndex}`,
+					closed: true,
+					points: contour.map((coordinate, pointIndex) => ({
+						id: preservePastedHIds
+							? `point:glyph:H:paste:${pointIndex + 1}`
+							: `point:${masterPrefix}${id}:${contourIndex}:${pointIndex}`,
+						mode: "hard" as const,
+						...coordinate,
+					})),
+				}
+			}),
 		}
 	}
 	return {
@@ -458,7 +455,6 @@ function strokeGlyph(character: string): EditorGlyphSource {
 		name,
 		export: true,
 		...(strokes.length > 1 ? { overlap: true } : {}),
-		contours,
 		layers: [
 			layer(textMasterId, textContours),
 			layer(heavyMasterId, heavyContours),
@@ -466,8 +462,26 @@ function strokeGlyph(character: string): EditorGlyphSource {
 	}
 }
 
+function strokeGlyph(character: string): EditorGlyphSource {
+	return glyphFromStrokes(
+		glyphName(character),
+		strokesForCharacter(character),
+		advanceForCharacter(character),
+	)
+}
+
+function fiLigatureGlyph(): EditorGlyphSource {
+	return glyphFromStrokes(
+		"f_i",
+		[
+			...strokesForCharacter("f"),
+			...transformStrokes(strokesForCharacter("i"), 1, 1, 500, 0),
+		],
+		1_200,
+	)
+}
+
 function notdefGlyph(): EditorGlyphSource {
-	const id = "glyph:.notdef" as GlyphId
 	const strokes = [
 		stroke(80, -100, 620, -100),
 		stroke(620, -100, 620, 760),
@@ -476,59 +490,21 @@ function notdefGlyph(): EditorGlyphSource {
 		stroke(80, -100, 620, 760),
 		stroke(80, 760, 620, -100),
 	]
-	const characterGlyph = strokeGlyph("#")
-	const textContours = strokes.map((item) =>
-		rectangleForStroke(item, TEXT_STROKE),
-	)
-	const heavyContours = strokes.map((item) =>
-		rectangleForStroke(item, HEAVY_STROKE),
-	)
-	const contours = strokes.map((_, contourIndex) => ({
-		id: `contour:${id}:${contourIndex}`,
-		closed: true,
-		points: [0, 1, 2, 3].map((pointIndex) => ({
-			id: pointId(id, contourIndex, pointIndex),
-			mode: "hard" as const,
-		})),
-	}))
-	const layer = (
-		masterId: MasterId,
-		coordinates: readonly (readonly Coordinate[])[],
-	) => {
-		const points = coordinates.flatMap((contour, contourIndex) =>
-			contour.map((coordinate, pointIndex) => ({
-				pointId: pointId(id, contourIndex, pointIndex),
-				...coordinate,
-			})),
-		)
-		return {
-			masterId,
-			advanceWidth: 700,
-			leftSideBearing: Math.min(...points.map((point) => point.x)),
-			points,
-		}
-	}
-	return {
-		...characterGlyph,
-		id,
-		name: ".notdef",
-		overlap: true,
-		contours,
-		layers: [
-			layer(textMasterId, textContours),
-			layer(heavyMasterId, heavyContours),
-		],
-	}
+	return glyphFromStrokes(".notdef", strokes, 700)
 }
 
 export function makeWorkbenchSans(): EditorFontSource {
 	const printableAscii = Array.from({ length: 0x7f - 0x20 }, (_, index) =>
 		String.fromCodePoint(0x20 + index),
 	)
-	const glyphs = [notdefGlyph(), ...printableAscii.map(strokeGlyph)]
+	const glyphs = [
+		notdefGlyph(),
+		...printableAscii.map(strokeGlyph),
+		fiLigatureGlyph(),
+	]
 	return {
 		format: "create-font.editor",
-		editorVersion: 4,
+		editorVersion: 5,
 		metadata: {
 			unitsPerEm: 1_000,
 			fontRevision: 1.1,
@@ -632,7 +608,20 @@ for (const [path, value] of Object.entries(split.value)) {
 	await mkdir(dirname(destination), { recursive: true })
 	await writeFile(destination, formatted.value)
 }
+await mkdir(resolve(projectRoot, "features"), { recursive: true })
+const featureIndexPath = "features/index.json"
+const featureIndex = formatSourceUnit(
+	"feature-index",
+	[{ path: "features/layout.fea" }],
+	featureIndexPath,
+)
+if (!featureIndex.ok) throw new Error(featureIndex.errors[0].message)
+await writeFile(resolve(projectRoot, featureIndexPath), featureIndex.value)
+await writeFile(
+	resolve(projectRoot, "features", "layout.fea"),
+	"feature liga { sub f i by f_i; } liga;\n",
+)
 await writeFile(
 	resolve(projectRoot, "README.md"),
-	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef and every printable\nASCII character from U+0020 through U+007E, with compatible topology across\nweights and reviewable per-entity JSON source units.\n\nRegenerate the checked-in source with \`bun scripts/workbench-sans.ts\`.\n`,
+	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef, every printable\nASCII character from U+0020 through U+007E, and an unencoded f_i ligature, with\ncompatible topology across weights and reviewable per-entity JSON source units.\nThe Adobe feature source enables the f_i glyph through the standard liga feature.\n\nRegenerate the checked-in source with \`bun scripts/workbench-sans.ts\`.\n\nFrom the repository root, build the installable variable TrueType artifact with\n\`bun font build workbench-sans\`. The deterministic output is written to\n\`artifacts/workbench-sans/WorkbenchSans-Text.ttf\`.\n`,
 )

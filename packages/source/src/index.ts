@@ -1,3 +1,13 @@
+export { parseFea, lowerFeaSubstitutions } from "./fea.ts"
+export type {
+	FeaDiagnostic,
+	FeaDocumentAst,
+	FeaFeatureAst,
+	FeaParseResult,
+	FeaSourceRange,
+	FeaSubstitutionAst,
+	FeatureSubstitutionIr,
+} from "./fea.ts"
 export {
 	canonicalizeEditorFontSource,
 	decodeEditorFontSource,
@@ -23,6 +33,7 @@ export {
 	defaultInstanceUnitPath,
 	defaultMasterUnitPath,
 	formatSourceUnit,
+	featureIndexFileSchema,
 	glyphFileSchema,
 	glyphIdSchema,
 	glyphIndexFileSchema,
@@ -52,6 +63,7 @@ export {
 	type CmapEntryFile,
 	type CmapIndexFile,
 	type FontSourceDirectoryFiles,
+	type FeatureIndexFile,
 	type GlyphFile,
 	type GlyphIndexFile,
 	type InstanceFile,

@@ -55,6 +55,20 @@ export function layoutTextRun(
 		x += item.kerningBefore ?? 0
 		carets.set(item.textStart, { textIndex: item.textStart, x, baseline })
 		glyphs.push({ item, x, baseline, advance })
+		for (
+			let textIndex = item.textStart + 1;
+			textIndex < item.textEnd;
+			textIndex += 1
+		) {
+			carets.set(textIndex, {
+				textIndex,
+				x:
+					x +
+					advance *
+						((textIndex - item.textStart) / (item.textEnd - item.textStart)),
+				baseline,
+			})
+		}
 		x += advance
 		carets.set(item.textEnd, { textIndex: item.textEnd, x, baseline })
 	}

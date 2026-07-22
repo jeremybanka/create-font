@@ -34,9 +34,10 @@ export type SourceSessionRequest =
 			type: `refresh`
 	  }>
 
-export type SourceSessionEvent =
+export type SourceSessionEventPayload =
 	| Readonly<{
 			type: `source`
+			featureSources: readonly string[]
 			sentAtEpochMilliseconds: number
 			revision: string
 			source: EditorFontSource
@@ -54,3 +55,6 @@ export type SourceSessionEvent =
 			message: string
 			requestId?: string
 	  }>
+
+export type SourceSessionEvent = SourceSessionEventPayload &
+	Readonly<{ protocolVersion: number }>
