@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/editor",
-	"version": "0.7.3",
+	"version": "0.7.4",
 	"description": "Interactive variable-font editor for the create-font state model",
 	"repository": {
 		"type": "git",

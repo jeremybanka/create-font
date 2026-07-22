@@ -1,5 +1,21 @@
 # create-font
 
+## 0.3.8
+
+### Patch Changes
+
+- 04000ab: Compile Adobe feature sources into GSUB tables and apply enabled substitutions in the Canvas preview.
+- Updated dependencies [0874e0d]
+- Updated dependencies [7d0b55c]
+- Updated dependencies [5ff7ace]
+- Updated dependencies [f87a70c]
+- Updated dependencies [04000ab]
+- Updated dependencies [eed4136]
+  - @create-font/editor@0.7.4
+  - @create-font/target@0.0.2
+  - @create-font/states@0.6.2
+  - @create-font/source@0.2.2
+
 ## 0.3.7
 
 ### Patch Changes

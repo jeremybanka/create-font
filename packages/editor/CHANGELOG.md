@@ -1,5 +1,21 @@
 # @create-font/editor
 
+## 0.7.4
+
+### Patch Changes
+
+- 0874e0d: Visualize native textarea selection ranges on the glyph canvas across lines and Unicode text.
+- 7d0b55c: Allow marquee selection from outline helper targets and reduce point helper sizes while keeping segment targets forgiving.
+- 5ff7ace: Add persisted pair kerning, canvas editing controls, and conventional GPOS Pair Adjustment compilation.
+- f87a70c: Compile live editor fonts and render Preview tiles through managed browser FontFace resources.
+- 04000ab: Compile Adobe feature sources into GSUB tables and apply enabled substitutions in the Canvas preview.
+- eed4136: Add center-pivot rotation with Shift-based 15 degree snapping to the Transform tool.
+- Updated dependencies [5ff7ace]
+- Updated dependencies [f87a70c]
+- Updated dependencies [04000ab]
+  - @create-font/target@0.0.2
+  - @create-font/states@0.6.2
+
 ## 0.7.3
 
 ### Patch Changes
