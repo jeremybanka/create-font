@@ -9,3 +9,5 @@ artifacts/
 .env
 *.log
 
+Lasertag.vsix
+.lasertag-vsix
