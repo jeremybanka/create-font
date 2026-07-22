@@ -90,6 +90,7 @@ describe(`buildProject`, () => {
 		expect(firstBytes).toEqual(secondBytes)
 		expect(checksum(firstBytes)).toBe(0xb1b0_afba)
 		expect(tableTags(firstBytes)).toEqual([
+			`GSUB`,
 			`OS/2`,
 			`STAT`,
 			`cmap`,

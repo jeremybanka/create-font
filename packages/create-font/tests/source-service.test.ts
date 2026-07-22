@@ -10,8 +10,13 @@ import {
 	SourceVersionControlError,
 	type SourceChangedEvent,
 } from "@create-font/server"
-import { assembleEditorFontSource } from "@create-font/source"
+import {
+	assembleEditorFontSource,
+	lowerFeaSubstitutions,
+	parseFea,
+} from "@create-font/source"
 import { createFontEditorState } from "@create-font/states"
+import { applySubstitutions } from "@create-font/target"
 
 import {
 	createFileSystemSourceService,
@@ -270,7 +275,11 @@ describe(`filesystem font source service`, () => {
 			)
 		}
 		const assembled = assembleEditorFontSource(
-			Object.fromEntries(project.units.map((unit) => [unit.path, unit.value])),
+			Object.fromEntries(
+				project.units
+					.filter((unit) => unit.path.endsWith(`.json`))
+					.map((unit) => [unit.path, unit.value]),
+			),
 		)
 		expect(assembled.ok).toBe(true)
 		expect(project.revision).toBe(
@@ -429,20 +438,22 @@ describe(`filesystem font source service`, () => {
 		)
 	})
 
-	it(`loads and compiles the complete two-master printable ASCII family`, async () => {
+	it(`loads and compiles printable ASCII with the f_i ligature`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)
 		const manifest = await source.readManifest()
 		const entries = await Promise.all(
-			manifest.units.map(
-				async ({ path }) =>
-					[
-						path,
-						JSON.parse(
-							await readFile(resolve(projectRoot, path), `utf8`),
-						) as unknown,
-					] as const,
-			),
+			manifest.units
+				.filter(({ path }) => path.endsWith(`.json`))
+				.map(
+					async ({ path }) =>
+						[
+							path,
+							JSON.parse(
+								await readFile(resolve(projectRoot, path), `utf8`),
+							) as unknown,
+						] as const,
+				),
 		)
 		const assembled = assembleEditorFontSource(Object.fromEntries(entries))
 		expect(assembled.ok).toBe(true)
@@ -453,10 +464,51 @@ describe(`filesystem font source service`, () => {
 		expect(assembled.value.cmap.map(({ codePoint }) => codePoint)).toEqual(
 			Array.from({ length: 95 }, (_, index) => 0x20 + index),
 		)
-		expect(assembled.value.glyphs).toHaveLength(96)
+		expect(assembled.value.glyphs).toHaveLength(97)
 		expect(
 			assembled.value.glyphs.every((glyph) => glyph.layers.length === 2),
 		).toBe(true)
+		const ligature = assembled.value.glyphs.find(
+			(glyph) => glyph.name === `f_i`,
+		)
+		expect(ligature).toMatchObject({ id: `glyph:f_i`, export: true })
+		expect(ligature?.layers.map((layer) => layer.contours.length)).toEqual([
+			7, 7,
+		])
+		expect(
+			assembled.value.cmap.some((entry) => entry.glyphId === `glyph:f_i`),
+		).toBe(false)
+
+		const parsedFeatures = parseFea(
+			await readFile(resolve(projectRoot, `features`, `layout.fea`), `utf8`),
+		)
+		expect(parsedFeatures.ok).toBe(true)
+		if (!parsedFeatures.ok) return
+		const glyphIndices = new Map(
+			assembled.value.glyphs.map((glyph, index) => [glyph.name, index]),
+		)
+		const loweredFeatures = lowerFeaSubstitutions(
+			parsedFeatures.value,
+			glyphIndices,
+		)
+		expect(loweredFeatures.errors).toEqual([])
+		expect(loweredFeatures.ir).toEqual([
+			expect.objectContaining({
+				feature: `liga`,
+				from: [glyphIndices.get(`f`), glyphIndices.get(`i`)],
+				to: glyphIndices.get(`f_i`),
+			}),
+		])
+		const input = [
+			{ glyph: glyphIndices.get(`f`)!, textStart: 0, textEnd: 1 },
+			{ glyph: glyphIndices.get(`i`)!, textStart: 1, textEnd: 2 },
+		]
+		expect(
+			applySubstitutions(input, loweredFeatures.ir, new Set([`liga`])),
+		).toEqual([{ glyph: glyphIndices.get(`f_i`), textStart: 0, textEnd: 2 }])
+		expect(applySubstitutions(input, loweredFeatures.ir, new Set())).toEqual(
+			input,
+		)
 
 		const editor = createFontEditorState({ key: `test/workbench-sans` })
 		editor.actions.load(assembled.value)
@@ -465,6 +517,6 @@ describe(`filesystem font source service`, () => {
 		expect(compilation.ok).toBe(true)
 		if (!compilation.ok) return
 		expect(compilation.source.cmap).toHaveLength(95)
-		expect(compilation.source.glyphs).toHaveLength(96)
+		expect(compilation.source.glyphs).toHaveLength(97)
 	})
 })

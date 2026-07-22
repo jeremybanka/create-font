@@ -114,6 +114,59 @@ canvas-toolbar.class {
 			}
 		}
 
+		> button[data-features] {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			min-height: 29px;
+			padding: 0 8px 0 10px;
+			border: 1px solid var(--line);
+			border-radius: 7px;
+			background: var(--paper);
+			font-size: 9px;
+			font-weight: 650;
+			color: var(--ink-muted);
+			cursor: pointer;
+
+			&:hover {
+				border-color: var(--line-strong);
+				background: var(--hover);
+				color: var(--ink);
+			}
+
+			&:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+			}
+
+			&[aria-pressed="true"] {
+				border-color: var(--accent);
+				background: color-mix(in srgb, var(--accent) 14%, var(--paper));
+				color: var(--ink);
+			}
+
+			> span {
+				color: inherit;
+			}
+
+			> small {
+				min-width: 24px;
+				padding: 2px 5px;
+				border-radius: 999px;
+				background: var(--hover);
+				font-size: 8px;
+				font-weight: 720;
+				line-height: 1;
+				text-align: center;
+				color: var(--ink-faint);
+			}
+
+			&[aria-pressed="true"] > small {
+				background: var(--accent);
+				color: var(--paper);
+			}
+		}
+
 		> button[data-nodes] {
 			display: flex;
 			align-items: center;

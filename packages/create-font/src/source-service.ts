@@ -464,7 +464,11 @@ export async function createFileSystemSourceService(
 			candidate[path] = write.value
 			formatted.set(path, result.value)
 		}
-		const assembled = assembleEditorFontSource(candidate)
+		const assembled = assembleEditorFontSource(
+			Object.fromEntries(
+				Object.entries(candidate).filter(([path]) => path.endsWith(`.json`)),
+			),
+		)
 		if (!assembled.ok) throw validationError(assembled.errors)
 
 		const transactionRoot = join(

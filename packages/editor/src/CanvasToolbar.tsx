@@ -98,11 +98,13 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 				{editingTextIndex === null ? (
 					<button
 						type="button"
+						data-features
 						aria-label="Toggle font features"
 						aria-pressed={fontFeaturesEnabled}
 						onClick={workspace.actions.toggleFontFeatures}
 					>
-						Features
+						<span>Features</span>
+						<small>{fontFeaturesEnabled ? "On" : "Off"}</small>
 					</button>
 				) : null}
 				<zoom-controls aria-label="Canvas zoom">
