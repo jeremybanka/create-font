@@ -77,7 +77,11 @@ function mountMarqueeCanvas() {
 	const background = stage?.findOne(".canvas-background")
 	if (stage === undefined || background === undefined)
 		throw new Error("GlyphCanvas stage did not mount.")
-	return { background, nodes, stage, workspace }
+	const controlHelper = stage.findOne(".outline-control-helper")
+	const segmentHelper = stage.findOne(".outline-segment-helper")
+	if (controlHelper === undefined || segmentHelper === undefined)
+		throw new Error("GlyphCanvas helper targets did not mount.")
+	return { background, controlHelper, nodes, segmentHelper, stage, workspace }
 }
 
 async function marquee(
@@ -159,5 +163,105 @@ describe("GlyphCanvas marquee completion", () => {
 		expect(
 			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
 		).toEqual([`node/${second.pointId}`])
+	})
+
+	it.each([
+		["control", "controlHelper"],
+		["segment", "segmentHelper"],
+	] as const)(
+		"starts a marquee from a %s helper target",
+		async (_kind, helperKey) => {
+			const mounted = mountMarqueeCanvas()
+			const { nodes, stage, workspace } = mounted
+			const first = nodes[0]
+			if (first === undefined) throw new Error("Expected a node.")
+			const rendered = stage.findOne(`#${first.pointId}`)
+			if (rendered === undefined) throw new Error("Expected a rendered point.")
+			const point = rendered.getAbsolutePosition()
+			const from = { x: point.x + 8, y: point.y + 8 }
+			const to = { x: point.x - 2, y: point.y - 2 }
+			const mouse = (type: string, position: { x: number; y: number }) =>
+				new MouseEvent(type, {
+					bubbles: true,
+					clientX: position.x,
+					clientY: position.y,
+				})
+
+			workspace.font.silo.setState(workspace.ui.selection, Object.freeze([]))
+			const down = mouse("mousedown", from)
+			await act(async () => {
+				stage.setPointersPositions(down)
+				mounted[helperKey].fire("mousedown", { evt: down }, true)
+				await Promise.resolve()
+			})
+			const move = mouse("mousemove", to)
+			await act(async () => {
+				stage.setPointersPositions(move)
+				stage.fire("mousemove", { evt: move })
+				await Promise.resolve()
+			})
+			await act(async () => {
+				stage.fire("mouseup", { evt: mouse("mouseup", to) })
+				await Promise.resolve()
+			})
+
+			expect(
+				workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
+			).toContain(`node/${first.pointId}`)
+		},
+	)
+
+	it("keeps visible point geometry out of the marquee path", async () => {
+		const { nodes, stage, workspace } = mountMarqueeCanvas()
+		const first = nodes[0]
+		if (first === undefined) throw new Error("Expected a node.")
+		const rendered = stage.findOne(`#${first.pointId}`)
+		if (rendered === undefined) throw new Error("Expected a rendered point.")
+		const point = rendered.getAbsolutePosition()
+		const down = new MouseEvent("mousedown", {
+			bubbles: true,
+			clientX: point.x,
+			clientY: point.y,
+		})
+		workspace.font.silo.setState(
+			workspace.ui.selection,
+			Object.freeze([{ kind: "node", pointId: first.pointId }]),
+		)
+
+		await act(async () => {
+			stage.setPointersPositions(down)
+			rendered.fire("mousedown", { evt: down }, true)
+			stage.fire("mouseup", { evt: new MouseEvent("mouseup") })
+			await Promise.resolve()
+		})
+
+		expect(
+			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
+		).toEqual([`node/${first.pointId}`])
+	})
+
+	it("keeps forgiving helper clicks routed to the nearest control", async () => {
+		const { controlHelper, nodes, stage, workspace } = mountMarqueeCanvas()
+		const first = nodes[0]
+		if (first === undefined) throw new Error("Expected a node.")
+		const rendered = stage.findOne(`#${first.pointId}`)
+		if (rendered === undefined) throw new Error("Expected a rendered point.")
+		const point = rendered.getAbsolutePosition()
+		const click = new MouseEvent("click", {
+			bubbles: true,
+			clientX: point.x + 8,
+			clientY: point.y,
+		})
+		workspace.font.silo.setState(workspace.ui.selection, Object.freeze([]))
+
+		await act(async () => {
+			stage.setPointersPositions(click)
+			controlHelper.fire("click", { evt: click }, true)
+			await Promise.resolve()
+		})
+
+		expect(
+			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
+		).toEqual([`node/${first.pointId}`])
 	})
 })

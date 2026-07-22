@@ -176,7 +176,10 @@ export function reverseSelectionHandles(
 }
 
 export const canStartBoxSelectionOn = (targetName: string): boolean =>
-	targetName === "canvas-background" || targetName === "typed-glyph"
+	targetName === "canvas-background" ||
+	targetName === "typed-glyph" ||
+	targetName === "outline-control-helper" ||
+	targetName === "outline-segment-helper"
 
 /** Resolves nodes and relative handles to absolute font-unit positions. */
 export function resolveSelectionControls(

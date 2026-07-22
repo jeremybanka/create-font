@@ -4122,12 +4122,54 @@ export function GlyphCanvas({
 									{visibleContours.map((contour) => (
 										<Path
 											key={`segment-hit:${contour.id}`}
-											name="outline-segment"
+											name="outline-segment-helper"
 											data={editorContourToPath(contour.nodes, contour.closed)}
 											fillEnabled={false}
 											stroke="rgb(0 0 0 / 0.001)"
 											strokeWidth={inverseScale}
 											hitStrokeWidth={SEGMENT_HIT_RADIUS_PX * 2 * inverseScale}
+											listening={
+												activeTool === "select" ||
+												activeTool === "pen" ||
+												activeTool === "knife"
+											}
+											onPointerDown={(event) => {
+												if (activeTool !== "pen") return
+												event.cancelBubble = true
+												if (penPointerAction("segment") === "split")
+													splitContourSegment(contour, event)
+											}}
+											onClick={(event) => {
+												if (activeTool !== "knife") return
+												event.cancelBubble = true
+												cutContourSegment(contour, event)
+											}}
+											onTap={(event) => {
+												if (activeTool !== "knife") return
+												event.cancelBubble = true
+												cutContourSegment(contour, event)
+											}}
+											onMouseDown={(event) => {
+												if (activeTool !== "select") return
+												const action = segmentPointerAction(
+													activeTool,
+													event.evt,
+												)
+												if (action === "add-handles") {
+													addHandlesToSegment(contour, event)
+												}
+											}}
+										/>
+									))}
+									{visibleContours.map((contour) => (
+										<Path
+											key={`segment-direct:${contour.id}`}
+											name="outline-segment"
+											data={editorContourToPath(contour.nodes, contour.closed)}
+											fillEnabled={false}
+											stroke="rgb(0 0 0 / 0.001)"
+											strokeWidth={inverseScale}
+											hitStrokeWidth={2.5 * inverseScale}
 											listening={
 												activeTool === "select" ||
 												activeTool === "pen" ||
@@ -4157,9 +4199,8 @@ export function GlyphCanvas({
 													activeTool,
 													event.evt,
 												)
-												if (action === "add-handles") {
+												if (action === "add-handles")
 													addHandlesToSegment(contour, event)
-												}
 											}}
 											onDragStart={(event) => {
 												if (
@@ -4603,6 +4644,21 @@ export function GlyphCanvas({
 																			key={`incoming-control:${point.pointId}`}
 																		>
 																			<Circle
+																				name="outline-control-helper"
+																				x={point.x + point.incoming.x}
+																				y={point.y + point.incoming.y}
+																				radius={controlHitRadius(
+																					{
+																						kind: "handle",
+																						pointId: point.pointId,
+																						handle: "incoming",
+																					},
+																					3.5,
+																				)}
+																				fill="rgb(0 0 0 / 0.001)"
+																				listening={activeTool === "select"}
+																			/>
+																			<Circle
 																				key={`incoming-handle:${point.pointId}`}
 																				name="bezier-handle"
 																				x={point.x + point.incoming.x}
@@ -4626,16 +4682,20 @@ export function GlyphCanvas({
 																				}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
-																				hitFunc={circularHitRegion(
-																					controlHitRadius(
-																						{
-																							kind: "handle",
-																							pointId: point.pointId,
-																							handle: "incoming",
-																						},
-																						3.5,
-																					),
-																				)}
+																				{...(activeTool === "select"
+																					? {}
+																					: {
+																							hitFunc: circularHitRegion(
+																								controlHitRadius(
+																									{
+																										kind: "handle",
+																										pointId: point.pointId,
+																										handle: "incoming",
+																									},
+																									3.5,
+																								),
+																							),
+																						})}
 																				draggable={activeTool === "select"}
 																				onPointerDown={(
 																					event: KonvaEventObject<PointerEvent>,
@@ -4753,6 +4813,21 @@ export function GlyphCanvas({
 																			key={`outgoing-control:${point.pointId}`}
 																		>
 																			<Circle
+																				name="outline-control-helper"
+																				x={point.x + point.outgoing.x}
+																				y={point.y + point.outgoing.y}
+																				radius={controlHitRadius(
+																					{
+																						kind: "handle",
+																						pointId: point.pointId,
+																						handle: "outgoing",
+																					},
+																					3.5,
+																				)}
+																				fill="rgb(0 0 0 / 0.001)"
+																				listening={activeTool === "select"}
+																			/>
+																			<Circle
 																				key={`outgoing-handle:${point.pointId}`}
 																				name="bezier-handle"
 																				x={point.x + point.outgoing.x}
@@ -4776,16 +4851,20 @@ export function GlyphCanvas({
 																				}
 																				stroke={palette.nodeStroke}
 																				strokeWidth={inverseScale}
-																				hitFunc={circularHitRegion(
-																					controlHitRadius(
-																						{
-																							kind: "handle",
-																							pointId: point.pointId,
-																							handle: "outgoing",
-																						},
-																						3.5,
-																					),
-																				)}
+																				{...(activeTool === "select"
+																					? {}
+																					: {
+																							hitFunc: circularHitRegion(
+																								controlHitRadius(
+																									{
+																										kind: "handle",
+																										pointId: point.pointId,
+																										handle: "outgoing",
+																									},
+																									3.5,
+																								),
+																							),
+																						})}
 																				draggable={activeTool === "select"}
 																				onPointerDown={(
 																					event: KonvaEventObject<PointerEvent>,
@@ -4909,6 +4988,14 @@ export function GlyphCanvas({
 																			listening={false}
 																		/>
 																	) : null}
+																	<Circle
+																		name="outline-control-helper"
+																		x={point.x}
+																		y={point.y}
+																		radius={controlHitRadius(nodeTarget, 6.5)}
+																		fill="rgb(0 0 0 / 0.001)"
+																		listening={activeTool === "select"}
+																	/>
 																	{endpointNormal !== null ? (
 																		<Line
 																			key={`point:${point.pointId}`}
@@ -4920,9 +5007,13 @@ export function GlyphCanvas({
 																				endpointNormal.y * 6 * inverseScale,
 																			]}
 																			strokeWidth={2 * inverseScale}
-																			hitFunc={circularHitRegion(
-																				controlHitRadius(nodeTarget, 6),
-																			)}
+																			{...(activeTool === "select"
+																				? {}
+																				: {
+																						hitFunc: circularHitRegion(
+																							controlHitRadius(nodeTarget, 6),
+																						),
+																					})}
 																			lineCap="round"
 																		/>
 																	) : point.mode === "soft" ? (
@@ -4930,9 +5021,13 @@ export function GlyphCanvas({
 																			key={`point:${point.pointId}`}
 																			{...nodeProps}
 																			radius={5 * inverseScale}
-																			hitFunc={circularHitRegion(
-																				controlHitRadius(nodeTarget, 5),
-																			)}
+																			{...(activeTool === "select"
+																				? {}
+																				: {
+																						hitFunc: circularHitRegion(
+																							controlHitRadius(nodeTarget, 5),
+																						),
+																					})}
 																		/>
 																	) : (
 																		<Rect
@@ -4942,13 +5037,17 @@ export function GlyphCanvas({
 																			height={9 * inverseScale}
 																			offsetX={4.5 * inverseScale}
 																			offsetY={4.5 * inverseScale}
-																			hitFunc={circularHitRegion(
-																				controlHitRadius(nodeTarget, 6.5),
-																				{
-																					x: 4.5 * inverseScale,
-																					y: 4.5 * inverseScale,
-																				},
-																			)}
+																			{...(activeTool === "select"
+																				? {}
+																				: {
+																						hitFunc: circularHitRegion(
+																							controlHitRadius(nodeTarget, 6.5),
+																							{
+																								x: 4.5 * inverseScale,
+																								y: 4.5 * inverseScale,
+																							},
+																						),
+																					})}
 																		/>
 																	)}
 																	{pointIndex === 0 && direction !== null ? (

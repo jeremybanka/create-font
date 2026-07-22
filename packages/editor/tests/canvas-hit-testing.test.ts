@@ -35,8 +35,8 @@ const contours: readonly EditorCanvasContour[] = [
 ]
 
 describe("canvas hit testing", () => {
-	it("uses a 24px maximum radius for controls and segments", () => {
-		expect(CONTROL_HIT_RADIUS_PX).toBe(24)
+	it("keeps control helpers modest while segments remain forgiving", () => {
+		expect(CONTROL_HIT_RADIUS_PX).toBe(10)
 		expect(SEGMENT_HIT_RADIUS_PX).toBe(24)
 	})
 
@@ -79,13 +79,13 @@ describe("canvas hit testing", () => {
 	it("uses zoom-stable screen distances", () => {
 		const controls = [editorControlHitCandidates(contours)[0]!]
 		expect(
-			nearestEditorControlHit(controls, { x: 23, y: 0 }, 1)?.target,
+			nearestEditorControlHit(controls, { x: 10, y: 0 }, 1)?.target,
 		).toEqual({ kind: "node", pointId: pointId("a") })
-		expect(nearestEditorControlHit(controls, { x: 25, y: 0 }, 1)).toBeNull()
+		expect(nearestEditorControlHit(controls, { x: 10.01, y: 0 }, 1)).toBeNull()
 		expect(
-			nearestEditorControlHit(controls, { x: 11.5, y: 0 }, 2)?.target,
+			nearestEditorControlHit(controls, { x: 5, y: 0 }, 2)?.target,
 		).toEqual({ kind: "node", pointId: pointId("a") })
-		expect(nearestEditorControlHit(controls, { x: 12.5, y: 0 }, 2)).toBeNull()
+		expect(nearestEditorControlHit(controls, { x: 5.01, y: 0 }, 2)).toBeNull()
 	})
 
 	it("gives every distinct crowded control its nearest-side region", () => {
