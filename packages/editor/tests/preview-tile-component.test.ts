@@ -110,7 +110,7 @@ describe("PreviewTile", () => {
 		expect(secondProof?.getAttribute("data-colors")).toBe(initialColors)
 	})
 
-	it("repaints uses without rebuilding glyph definitions or placements", () => {
+	it("updates colors without replacing the browser text proof", () => {
 		const { first, second } = mountTwo()
 		const firstText = first.querySelector('textarea[aria-label="Preview text"]')
 		const firstColors = first.querySelector(
@@ -127,53 +127,16 @@ describe("PreviewTile", () => {
 			throw new Error("Preview color controls were not rendered.")
 
 		input(firstText, "AAAAOOOO")
-		const definitions = [...firstProof.querySelectorAll("defs > g")]
-		const paths = [...firstProof.querySelectorAll("defs path")]
-		const placements = [...firstProof.querySelectorAll("use")]
-		const pathData = paths.map((path) => path.getAttribute("d"))
-		const placementData = placements.map((placement) => [
-			placement.getAttribute("href"),
-			placement.getAttribute("transform"),
-		])
+		const proof = firstProof.querySelector("preview-proof")
+		if (proof === null)
+			throw new Error("The browser text proof was not rendered.")
 		const initialColors = firstProof.getAttribute("data-colors")
 		const secondColors = secondProof.getAttribute("data-colors")
 		if (initialColors !== "dark" && initialColors !== "light")
 			throw new Error("The initial Preview color preset is invalid.")
 		const otherColors = initialColors === "light" ? "dark" : "light"
 
-		expect(definitions).toHaveLength(2)
-		expect(paths).toHaveLength(4)
-		expect(placements).toHaveLength(8)
-		expect(new Set(placementData.map(([href]) => href)).size).toBe(2)
-		expect(
-			paths
-				.filter((path) => !path.hasAttribute("data-open"))
-				.map((path) => [
-					path.getAttribute("fill"),
-					path.getAttribute("stroke"),
-				]),
-		).toEqual([
-			["inherit", "none"],
-			["inherit", "none"],
-		])
-		expect(
-			paths
-				.filter((path) => path.hasAttribute("data-open"))
-				.map((path) => [
-					path.getAttribute("fill"),
-					path.getAttribute("stroke"),
-				]),
-		).toEqual([
-			["none", "inherit"],
-			["none", "inherit"],
-		])
-		expect(
-			placements.every(
-				(placement) =>
-					placement.getAttribute("fill") === "currentColor" &&
-					placement.getAttribute("stroke") === "currentColor",
-			),
-		).toBe(true)
+		expect(proof.textContent).toBe("AAAAOOOO")
 
 		for (const colors of [
 			otherColors,
@@ -182,28 +145,9 @@ describe("PreviewTile", () => {
 			initialColors,
 		]) {
 			change(firstColors, colors)
-			const currentDefinitions = [...firstProof.querySelectorAll("defs > g")]
-			const currentPaths = [...firstProof.querySelectorAll("defs path")]
-			const currentPlacements = [...firstProof.querySelectorAll("use")]
 			expect(firstProof.getAttribute("data-colors")).toBe(colors)
-			expect(
-				currentDefinitions.every((node, index) => node === definitions[index]),
-			).toBe(true)
-			expect(currentPaths.every((node, index) => node === paths[index])).toBe(
-				true,
-			)
-			expect(
-				currentPlacements.every((node, index) => node === placements[index]),
-			).toBe(true)
-			expect(currentPaths.map((path) => path.getAttribute("d"))).toEqual(
-				pathData,
-			)
-			expect(
-				currentPlacements.map((placement) => [
-					placement.getAttribute("href"),
-					placement.getAttribute("transform"),
-				]),
-			).toEqual(placementData)
+			expect(firstProof.querySelector("preview-proof")).toBe(proof)
+			expect(proof.textContent).toBe("AAAAOOOO")
 			expect(secondProof.getAttribute("data-colors")).toBe(secondColors)
 		}
 	})
@@ -232,9 +176,9 @@ describe("PreviewTile", () => {
 		act(() => {
 			vi.advanceTimersByTime(120)
 		})
-		const characters = [...first.querySelectorAll("use[data-character]")].map(
-			(glyph) => glyph.getAttribute("data-character"),
-		)
+		const characters = [
+			...(first.querySelector("preview-proof")?.textContent ?? ""),
+		]
 		expect(characters.length).toBeGreaterThanOrEqual(384)
 		expect(new Set(characters)).toEqual(new Set(["n", "e"]))
 		expect(
@@ -261,7 +205,8 @@ describe("PreviewTile", () => {
 			if (!(sample instanceof HTMLSelectElement))
 				throw new Error("Preview sample controls were not rendered.")
 			change(sample, "noise")
-			const before = first.querySelectorAll("use[data-character]").length
+			const before =
+				first.querySelector("preview-proof")?.textContent?.length ?? 0
 			act(() => {
 				for (const resize of resizeCallbacks)
 					resize(
@@ -274,21 +219,19 @@ describe("PreviewTile", () => {
 					)
 			})
 			expect(
-				first.querySelectorAll("use[data-character]").length,
+				first.querySelector("preview-proof")?.textContent?.length ?? 0,
 			).toBeGreaterThan(before)
 		} finally {
 			globalThis.ResizeObserver = OriginalResizeObserver
 		}
 	})
 
-	it("renders proof glyphs as live inline outlines", () => {
+	it("renders proof text through the browser font path rather than SVG uses", () => {
 		const { first } = mountTwo()
-		expect(first.querySelectorAll("preview-scroll svg").length).toBeGreaterThan(
-			0,
-		)
-		expect(first.querySelectorAll("preview-scroll svg")).toHaveLength(1)
 		expect(
-			first.querySelector("preview-scroll path")?.getAttribute("d"),
-		).toContain("M")
+			first.querySelector("preview-scroll preview-proof")?.textContent,
+		).toBe("Hamburgefontsiv")
+		expect(first.querySelector("preview-scroll svg")).toBeNull()
+		expect(first.querySelector("preview-scroll use")).toBeNull()
 	})
 })

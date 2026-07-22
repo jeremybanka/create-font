@@ -32,10 +32,12 @@
 		"build": "tsc --project tsconfig.json --noEmit && bun run ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
+		"profile:live-font": "node --conditions=development ./scripts/profile-live-compilation.ts",
 		"test": "vp test"
 	},
 	"dependencies": {
-		"@create-font/states": "workspace:*"
+		"@create-font/states": "workspace:*",
+		"@create-font/target": "workspace:*"
 	},
 	"devDependencies": {
 		"@create-font/preact-konva": "workspace:*",

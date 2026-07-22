@@ -14,6 +14,7 @@ import { makeDemoFont } from "./demo-font.ts"
 import type { CanvasView } from "./canvas-view.ts"
 import { createFontFaviconPreview } from "./document-metadata.ts"
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
+import { createLiveFontCompiler } from "./live-font-compilation.ts"
 import { resolveVariableGlyph, type ResolvedGlyph } from "./geometry.ts"
 import type { EditorSelectionTarget } from "./outline-selection.ts"
 import { isRoute, type Pathname, type Route, routeName } from "./routing.ts"
@@ -179,6 +180,11 @@ export function createEditorWorkspace(
 	const validationAtom = font.silo.atom<EditorValidationStatus>({
 		key: "validation",
 		default: initialValidation ?? validationStatus(font.read.compilation()),
+	})
+	const liveFontCompiler = createLiveFontCompiler({
+		silo: font.silo,
+		documentRevision: font.atoms.documentRevision,
+		compilation: font.read.compilation,
 	})
 	const pathnameAtom = font.silo.atom<string>({
 		key: "pathname",
@@ -542,6 +548,14 @@ export function createEditorWorkspace(
 
 	return {
 		font,
+		liveFont: {
+			family: "Create Font Live Preview",
+			compilation: liveFontCompiler.state,
+			active: liveFontCompiler.active,
+			start: liveFontCompiler.start,
+			stop: liveFontCompiler.stop,
+			request: liveFontCompiler.request,
+		},
 		document,
 		ui: {
 			selectedGlyphId: selectedGlyphIdAtom,

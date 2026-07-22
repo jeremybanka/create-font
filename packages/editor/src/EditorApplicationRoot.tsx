@@ -2,6 +2,7 @@ import type { EditorFontSource } from "@create-font/states"
 import { useEffect, useRef, useState } from "preact/hooks"
 
 import { AppShell } from "./AppShell.tsx"
+import { startBrowserLiveFont } from "./browser-font-face.ts"
 import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
@@ -24,6 +25,20 @@ export function EditorApplicationRoot({
 	const [workspace] = useState(() => createEditorWorkspace(source, validation))
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
+
+	useEffect(() => {
+		workspace.liveFont.start()
+		const stopBrowserFont = startBrowserLiveFont(
+			workspace.font.silo,
+			workspace.liveFont.compilation,
+			workspace.liveFont.active,
+			workspace.liveFont.family,
+		)
+		return () => {
+			stopBrowserFont()
+			workspace.liveFont.stop()
+		}
+	}, [workspace])
 
 	useEffect(() => {
 		if (currentSource.current === source) return
@@ -63,13 +78,18 @@ export function EditorApplicationRoot({
 		const unsubscribe = workspace.font.silo.subscribe(
 			workspace.font.atoms.documentRevision,
 			() => {
-				if (applyingSource.current || idleCallback !== null || timeout !== null)
-					return
-				if (typeof requestIdleCallback === "function") {
-					idleCallback = requestIdleCallback(flush, { timeout: 500 })
-				} else {
-					timeout = setTimeout(flush, 0)
-				}
+				if (applyingSource.current) return
+				if (idleCallback !== null) cancelIdleCallback(idleCallback)
+				if (timeout !== null) clearTimeout(timeout)
+				// Persist a settled edit burst after the latency-sensitive live font has
+				// compiled. An immediate idle callback can otherwise win the race with
+				// the compilation timer and assemble the complete editor source first.
+				timeout = setTimeout(() => {
+					timeout = null
+					if (typeof requestIdleCallback === "function") {
+						idleCallback = requestIdleCallback(flush, { timeout: 500 })
+					} else flush()
+				}, 100)
 			},
 		)
 		return () => {

@@ -1,9 +1,7 @@
-import type { EditorAxisSource, GlyphId } from "@create-font/states"
-import { useEffect, useMemo, useRef, useState } from "preact/hooks"
+import type { EditorAxisSource } from "@create-font/states"
+import { useEffect, useRef, useState } from "preact/hooks"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
-import { contoursToPath, resolveVariableGlyph } from "./geometry.ts"
-import { createGlyphPreview } from "./glyph-preview.ts"
 import {
 	estimateNoiseCharacterCount,
 	generateGlyphNoise,
@@ -19,35 +17,22 @@ export interface PreviewTileProps {
 	readonly tileId: string
 }
 
-type PreviewGlyph = Readonly<{
-	advance: number
-	fillPath: string
-	openPath: string
-}>
-
-type ProofGlyph = Readonly<{
-	character: string
-	glyphId: GlyphId
-	x: number
-	y: number
-}>
-
 const DEFAULT_TEXT = "Hamburgefontsiv"
-let previewInstance = 0
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
-	useO(workspace.font.atoms.documentRevision)
-	const source = workspace.font.read.editorSource() ?? workspace.document
-	const axes = source.axes as readonly EditorAxisSource[]
+	const compilation = useO(workspace.liveFont.compilation)
+	const activeFont = useO(workspace.liveFont.active)
+	const axes = (useO(workspace.font.selectors.editorAxesSource) ??
+		workspace.document.axes) as readonly EditorAxisSource[]
 	const [text, setText] = useState(DEFAULT_TEXT)
 	const [sample, setSample] = useState<PreviewSampleId>("custom")
 	const [noiseSeed, setNoiseSeed] = useState("can")
 	const [renderedNoiseSeed, setRenderedNoiseSeed] = useState("can")
 	const [fontSize, setFontSize] = useState(42)
 	const [lineHeight, setLineHeight] = useState(1.15)
+	const [paintDuration, setPaintDuration] = useState<number | null>(null)
 	const [proofSize, setProofSize] = useState({ width: 0, height: 0 })
 	const proofRef = useRef<HTMLElement>(null)
-	const proofId = useRef(`preview-proof-${++previewInstance}`).current
 	const [coordinates, setCoordinates] = useState<
 		Readonly<Record<string, number>>
 	>(() => Object.fromEntries(axes.map((axis) => [axis.id, axis.default])))
@@ -58,40 +43,6 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				window.matchMedia("(prefers-color-scheme: light)").matches,
 		),
 	)
-	const glyphs = useMemo(() => {
-		const byCodePoint = new Map(
-			source.cmap.map((entry) => [entry.codePoint, entry.glyphId] as const),
-		)
-		const fallback =
-			source.glyphs.find((glyph) => glyph.name === ".notdef") ??
-			source.glyphs.find((glyph) => glyph.export)
-		const previews = new Map<GlyphId, PreviewGlyph>()
-		for (const glyph of source.glyphs) {
-			const compiled = workspace.font.silo.getState(
-				workspace.font.selectors.glyphSource,
-				glyph.id,
-			)
-			const resolved = compiled.ok
-				? resolveVariableGlyph(glyph.id, compiled.value, axes, coordinates)
-				: null
-			const authoring = createGlyphPreview(
-				glyph,
-				source.defaultMasterId,
-				source.metrics,
-				source.metadata.unitsPerEm,
-			)
-			previews.set(glyph.id, {
-				advance: resolved?.advanceWidth ?? authoring?.advanceWidth ?? 0,
-				fillPath:
-					resolved === null
-						? (authoring?.path ?? "")
-						: contoursToPath(resolved.contours),
-				openPath: authoring?.openPath ?? "",
-			})
-		}
-		return { byCodePoint, fallbackId: fallback?.id, previews }
-	}, [axes, coordinates, source, workspace])
-	const unitsPerEm = source.metadata.unitsPerEm
 	const noiseLength = estimateNoiseCharacterCount({
 		...proofSize,
 		fontSize,
@@ -125,68 +76,55 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 		return () => observer.disconnect()
 	}, [])
 
+	useEffect(() => {
+		if (
+			activeFont.status !== "ready" ||
+			typeof requestAnimationFrame !== "function"
+		)
+			return
+		const started = performance.now()
+		let secondFrame = 0
+		const firstFrame = requestAnimationFrame(() => {
+			secondFrame = requestAnimationFrame(() => {
+				setPaintDuration(performance.now() - started)
+			})
+		})
+		return () => {
+			cancelAnimationFrame(firstFrame)
+			if (secondFrame !== 0) cancelAnimationFrame(secondFrame)
+		}
+	}, [activeFont.generation, activeFont.status])
+
 	const proofText =
 		sample === "noise"
 			? generateGlyphNoise(renderedNoiseSeed, noiseLength)
 			: text
-	const proofLayout = useMemo(() => {
-		const lineAdvance = unitsPerEm * lineHeight
-		const width = Math.max(
-			unitsPerEm,
-			((proofSize.width || fontSize * 8) / fontSize) * unitsPerEm,
-		)
-		const placements: ProofGlyph[] = []
-		let x = 0
-		let line = 0
-		for (const character of proofText) {
-			if (character === "\n") {
-				x = 0
-				line++
-				continue
-			}
-			const glyphId =
-				glyphs.byCodePoint.get(character.codePointAt(0) ?? -1) ??
-				glyphs.fallbackId
-			if (glyphId === undefined) continue
-			const glyph = glyphs.previews.get(glyphId)
-			if (glyph === undefined) continue
-			const advance = Math.max(glyph.advance, 1)
-			if (x > 0 && x + advance > width) {
-				x = 0
-				line++
-			}
-			placements.push({
-				character,
-				glyphId,
-				x,
-				y: source.metrics.ascender + line * lineAdvance,
-			})
-			x += advance
-		}
-		const usedGlyphIds = [...new Set(placements.map(({ glyphId }) => glyphId))]
-		return {
-			definitionIndex: new Map(
-				usedGlyphIds.map((glyphId, index) => [glyphId, index] as const),
-			),
-			height: Math.max(lineAdvance, (line + 1) * lineAdvance),
-			placements,
-			usedGlyphIds,
-			width,
-		}
-	}, [
-		fontSize,
-		glyphs,
-		lineHeight,
-		proofSize.width,
-		proofText,
-		source.metrics.ascender,
-		unitsPerEm,
-	])
-
 	const chooseSample = (next: PreviewSampleId): void => {
 		setSample(next)
 		if (next !== "custom" && next !== "noise") setText(PREVIEW_SAMPLES[next])
 	}
+	const fontVariationSettings = axes
+		.map((axis) => `"${axis.tag}" ${coordinates[axis.id] ?? axis.default}`)
+		.join(", ")
+	const activeFamily =
+		activeFont.status === "ready" || activeFont.family !== null
+			? activeFont.family
+			: null
+	const diagnostic =
+		compilation.status === "failed"
+			? compilation.diagnostics[0]?.message
+			: activeFont.status === "failed"
+				? activeFont.diagnostic.message
+				: undefined
+	const status =
+		diagnostic ??
+		(compilation.status === "compiling" || activeFont.status === "loading"
+			? activeFamily === null
+				? "Compiling preview font…"
+				: "Updating preview font…"
+			: activeFamily === null
+				? "Preview font pending"
+				: `Live font · ${compilation.status === "ready" ? compilation.artifact.timings.total.toFixed(1) : "0.0"} ms`)
 
 	return (
 		<preview-tile className={css.class} data-tile-id={tileId}>
@@ -214,9 +152,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<input
 							aria-label="Noise glyphs"
 							value={noiseSeed}
-							onInput={(event) => {
-								setNoiseSeed(event.currentTarget.value)
-							}}
+							onInput={(event) => setNoiseSeed(event.currentTarget.value)}
 						/>
 					</label>
 				) : null}
@@ -297,56 +233,52 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						/>
 					</label>
 				)}
+				<output
+					data-live-font-status
+					data-error={diagnostic !== undefined}
+					aria-live="polite"
+				>
+					{status}
+				</output>
 			</preview-options>
 			<preview-scroll
 				ref={proofRef}
 				tabIndex={0}
 				aria-label="Rendered preview"
 				data-colors={colors}
-				style={{ fontSize: `${fontSize}px`, lineHeight }}
+				data-live-font={activeFamily === null ? "pending" : "ready"}
+				data-compilation-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.total
+						: undefined
+				}
+				data-projection-ingestion-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.projectionAndIngestion
+						: undefined
+				}
+				data-compilation-queue-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.queueing
+						: undefined
+				}
+				data-serialization-ms={
+					compilation.status === "ready"
+						? compilation.artifact.timings.serialization
+						: undefined
+				}
+				data-activation-ms={
+					activeFont.status === "ready" ? activeFont.activation : undefined
+				}
+				data-paint-ms={paintDuration ?? undefined}
+				style={{
+					fontFamily: activeFamily === null ? undefined : `"${activeFamily}"`,
+					fontSize: `${fontSize}px`,
+					fontVariationSettings,
+					lineHeight,
+				}}
 			>
-				<svg
-					aria-hidden="true"
-					data-proof
-					viewBox={`0 0 ${proofLayout.width} ${proofLayout.height}`}
-					style={{
-						height: `${(proofLayout.height / unitsPerEm) * fontSize}px`,
-					}}
-				>
-					<defs>
-						{proofLayout.usedGlyphIds.map((glyphId, index) => {
-							const glyph = glyphs.previews.get(glyphId)
-							return glyph === undefined ? null : (
-								<g id={`${proofId}-${index}`} key={glyphId}>
-									<path d={glyph.fillPath} fill="inherit" stroke="none" />
-									<path
-										data-open
-										d={glyph.openPath}
-										fill="none"
-										stroke="inherit"
-										strokeWidth="1.25"
-										vectorEffect="non-scaling-stroke"
-									/>
-								</g>
-							)
-						})}
-					</defs>
-					{proofLayout.placements.map((placement, index) => {
-						const definitionIndex = proofLayout.definitionIndex.get(
-							placement.glyphId,
-						)
-						return definitionIndex === undefined ? null : (
-							<use
-								key={index}
-								data-character={placement.character}
-								fill="currentColor"
-								href={`#${proofId}-${definitionIndex}`}
-								stroke="currentColor"
-								transform={`translate(${placement.x} ${placement.y}) scale(1 -1)`}
-							/>
-						)
-					})}
-				</svg>
+				<preview-proof>{proofText}</preview-proof>
 			</preview-scroll>
 		</preview-tile>
 	)
