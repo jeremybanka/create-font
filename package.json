@@ -12,12 +12,13 @@
 		"check:peers": "pnpm peers check",
 		"check:vp": "vp check --no-fmt",
 		"dev": "pnpm --filter create-font dev",
+		"dev:design": "pnpm --filter create-design dev",
 		"fmt": "dprint fmt",
 		"fmt:check": "dprint check",
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter create-font --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --fail-if-no-match test"
+		"test": "vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.1",

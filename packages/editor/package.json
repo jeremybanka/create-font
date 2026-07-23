@@ -26,6 +26,12 @@
 			"browser": "./dist/browser/editor.js",
 			"import": "./dist/browser/editor.js"
 		},
+		"./shared": {
+			"development": "./src/shared.ts",
+			"types": "./src/shared.ts",
+			"browser": "./dist/browser/shared.js",
+			"import": "./dist/browser/shared.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"scripts": {

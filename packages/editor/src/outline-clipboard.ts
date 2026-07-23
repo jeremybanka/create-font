@@ -45,6 +45,8 @@ export interface OutlineClipboardWriter {
 export interface OutlineClipboardPayload {
 	readonly format: "create-font.outline"
 	readonly version: typeof OUTLINE_CLIPBOARD_VERSION
+	/** Allows another create-* editor to request safe active-layer remapping. */
+	readonly sourceApplication?: "create-font" | "create-design"
 	/** Present on new copies so a one-layer payload can be remapped safely. */
 	readonly sourceGlyphId?: GlyphId
 	/** Full source glyph master set preserves document compatibility on remap. */
@@ -267,6 +269,7 @@ export function parseOutlineClipboard(
 	const candidate = value as {
 		format?: unknown
 		version?: unknown
+		sourceApplication?: unknown
 		sourceGlyphId?: unknown
 		sourceGlyphMasterIds?: unknown
 		masterIds?: unknown
@@ -283,6 +286,16 @@ export function parseOutlineClipboard(
 		return {
 			ok: false,
 			error: "This outline clipboard version is not supported.",
+		}
+	}
+	if (
+		candidate.sourceApplication !== undefined &&
+		candidate.sourceApplication !== "create-font" &&
+		candidate.sourceApplication !== "create-design"
+	) {
+		return {
+			ok: false,
+			error: "The clipboard source application is malformed.",
 		}
 	}
 	if (
@@ -450,14 +463,17 @@ export function prepareOutlinePaste(
 		destinationMasterIds.every((destinationMasterId) =>
 			payload.masterIds.includes(destinationMasterId),
 		)
-	const remapSingleLayer =
-		!mastersMatch &&
+	const remapSameGlyphLayer =
 		payload.sourceGlyphId === glyphId &&
 		payload.sourceGlyphMasterIds !== undefined &&
 		payload.sourceGlyphMasterIds.length === destinationGlyphMasterIds.length &&
 		destinationGlyphMasterIds.every((destinationMasterId) =>
 			payload.sourceGlyphMasterIds?.includes(destinationMasterId),
-		) &&
+		)
+	const remapExternalLayer = payload.sourceApplication === "create-design"
+	const remapSingleLayer =
+		!mastersMatch &&
+		(remapSameGlyphLayer || remapExternalLayer) &&
 		payload.masterIds.length === 1 &&
 		payload.layers.length === 1 &&
 		destinationMasterIds.length === 1 &&

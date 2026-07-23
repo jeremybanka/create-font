@@ -293,6 +293,49 @@ describe("outline clipboard", () => {
 		).toHaveLength((destinationBefore?.contours.length ?? 0) + 1)
 	})
 
+	it("remaps a single create-design layer to the active font master", () => {
+		const payload = {
+			format: "create-font.outline",
+			version: 1,
+			sourceApplication: "create-design",
+			masterIds: ["master:create-design"],
+			contours: [
+				{
+					closed: true,
+					points: [
+						{ key: "0/0", mode: "hard" },
+						{ key: "0/1", mode: "hard" },
+						{ key: "0/2", mode: "hard" },
+					],
+				},
+			],
+			layers: [
+				{
+					masterId: "master:create-design",
+					points: [
+						{ key: "0/0", x: 0, y: 0 },
+						{ key: "0/1", x: 100, y: 0 },
+						{ key: "0/2", x: 0, y: 100 },
+					],
+				},
+			],
+		} as const
+		const parsed = parseOutlineClipboard(JSON.stringify(payload))
+		expect(parsed.ok).toBe(true)
+		if (!parsed.ok) return
+		let sequence = 0
+		const prepared = prepareOutlinePaste(
+			parsed.value,
+			blackMasterId,
+			oGlyphId,
+			[blackMasterId],
+			(kind) => `${kind}:design:${sequence++}`,
+		)
+		expect(prepared.ok).toBe(true)
+		if (!prepared.ok) return
+		expect(prepared.value.layers[0]?.masterId).toBe(blackMasterId)
+	})
+
 	it("does not remap legacy, cross-glyph, or multi-master payloads", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)
