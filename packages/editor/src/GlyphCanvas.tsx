@@ -1904,6 +1904,15 @@ export function GlyphCanvas({
 		setSelectedRuleIds(Object.freeze([rule.id]))
 		setRuleEndpointPreview({ ruleId: rule.id, endpoint, point: rule[endpoint] })
 	}
+	const selectRuleEndpoint = (
+		event: KonvaEventObject<PointerEvent>,
+		rule: EditorRuleSource,
+	): void => {
+		event.cancelBubble = true
+		if (activeTool !== "select" && activeTool !== "rule") return
+		setSelection(Object.freeze([]))
+		setSelectedRuleIds(Object.freeze([rule.id]))
+	}
 	const previewRuleEndpointDrag = (
 		rule: EditorRuleSource,
 		endpoint: "a" | "b",
@@ -5781,6 +5790,9 @@ export function GlyphCanvas({
 														opacity={0.001}
 														draggable={
 															activeTool === "select" || activeTool === "rule"
+														}
+														onPointerDown={(event) =>
+															selectRuleEndpoint(event, rule)
 														}
 														onDragStart={() =>
 															startRuleEndpointDrag(rule, endpoint)

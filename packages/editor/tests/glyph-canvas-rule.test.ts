@@ -136,12 +136,20 @@ describe("GlyphCanvas rules", () => {
 	it("previews an endpoint drag and commits one undoable rule edit", async () => {
 		const { host, stage, workspace } = mountCanvas()
 		await installSelectedRule(workspace)
+		await act(async () => {
+			workspace.actions.selectTool("rule")
+			await Promise.resolve()
+		})
 		const handle = stage.findOne(".rule-endpoint-b")
 		if (handle === undefined)
 			throw new Error("Rule endpoint B interaction target was not rendered.")
 		const beforeSummary = host.querySelector("[data-rule-summary]")?.textContent
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue({ x: 400, y: 300 })
 
 		act(() => {
+			// Use real Konva bubbling: without the endpoint pointer boundary this
+			// reaches Stage.onPointerDown and silently plants pending rule point A.
+			handle.fire("pointerdown", { evt: { type: "pointerdown" } }, true)
 			handle.fire("dragstart", { evt: { type: "pointerdown" } })
 			handle.position({ x: 650, y: 360 })
 			handle.fire("dragmove", { evt: { type: "pointermove" } })
@@ -156,6 +164,15 @@ describe("GlyphCanvas rules", () => {
 		expect(
 			workspace.font.read.editorGlyphSource(oGlyphId)?.rules?.[0]?.b,
 		).toEqual({ x: 650, y: 360 })
+		const background = stage.findOne(".canvas-background")
+		if (background === undefined)
+			throw new Error("Canvas background was not rendered.")
+		act(() => {
+			background.fire("pointerdown", { evt: { type: "pointerdown" } }, true)
+		})
+		expect(workspace.font.read.editorGlyphSource(oGlyphId)?.rules).toHaveLength(
+			1,
+		)
 
 		workspace.font.undo(oGlyphId)
 		expect(
