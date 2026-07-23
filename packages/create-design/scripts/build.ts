@@ -1,21 +1,20 @@
 import { rm } from "node:fs/promises"
 import { resolve } from "node:path"
 
-const packageRoot = resolve(import.meta.dir, `..`)
+import { build } from "vite"
+
+const packageRoot = resolve(import.meta.dirname, `..`)
 const outdir = resolve(packageRoot, `dist`)
 
 await rm(outdir, { force: true, recursive: true })
 
-const result = await Bun.build({
-	conditions: [`development`],
-	entrypoints: [resolve(packageRoot, `public/index.html`)],
-	minify: true,
-	outdir,
-	splitting: true,
-	target: `browser`,
+await build({
+	configFile: resolve(packageRoot, `vite.config.ts`),
+	build: {
+		emptyOutDir: true,
+		minify: true,
+		outDir: outdir,
+		sourcemap: true,
+		target: `es2024`,
+	},
 })
-
-if (!result.success) {
-	for (const failure of result.logs) console.error(failure)
-	process.exitCode = 1
-}

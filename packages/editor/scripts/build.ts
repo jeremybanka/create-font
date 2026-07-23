@@ -14,11 +14,24 @@ await build({
 		emptyOutDir: true,
 		lib: {
 			cssFileName: `editor`,
-			entry: {
-				editor: resolve(packageRoot, `src/browser.ts`),
-				shared: resolve(packageRoot, `src/shared.ts`),
-			},
-			fileName: (_format, entryName) => entryName,
+			entry: resolve(packageRoot, `src/browser.ts`),
+			fileName: `editor`,
+			formats: [`es`],
+		},
+		minify: true,
+		outDir: outdir,
+		sourcemap: true,
+	},
+})
+
+await build({
+	configFile: false,
+	build: {
+		emptyOutDir: false,
+		lib: {
+			cssFileName: `shared`,
+			entry: resolve(packageRoot, `src/shared.ts`),
+			fileName: `shared`,
 			formats: [`es`],
 		},
 		minify: true,
