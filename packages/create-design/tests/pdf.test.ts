@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
+import { validatePdf } from "mondrian.pdf"
 
 import { createInitialDocument } from "../src/document.ts"
-import { exportPdf, pdfContentStream } from "../src/pdf.ts"
+import { createPdfIr, exportPdf, pdfContentStream } from "../src/pdf.ts"
 
 describe("PDF export", () => {
 	it("keeps RGB and CMYK fills as native vector operators", () => {
@@ -12,12 +13,20 @@ describe("PDF export", () => {
 		expect(content).toContain("f*")
 	})
 
-	it("writes a valid single-page PDF structure and xref", () => {
+	it("builds a valid mondrian.pdf object graph", () => {
+		const ir = createPdfIr(createInitialDocument())
+		expect(ir.version).toBe("1.7")
+		expect(ir.objects).toHaveLength(5)
+		expect(validatePdf(ir)).toEqual([])
+	})
+
+	it("serializes the mondrian.pdf IR as a single-page PDF", () => {
 		const bytes = exportPdf(createInitialDocument())
 		const pdf = new TextDecoder().decode(bytes)
-		expect(pdf.startsWith("%PDF-1.4")).toBe(true)
+		expect(pdf.startsWith("%PDF-1.7")).toBe(true)
 		expect(pdf).toContain("/MediaBox [0 0 612 792]")
 		expect(pdf).toContain("/Creator (create-design)")
+		expect(pdf).toContain("/Producer (mondrian.pdf)")
 		expect(pdf).toContain("xref")
 		expect(pdf.endsWith("%%EOF\n")).toBe(true)
 	})

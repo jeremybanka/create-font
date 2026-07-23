@@ -61,6 +61,9 @@ importers:
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(@preact/compat@18.3.2(preact@10.29.7))
+      mondrian.pdf:
+        specifier: 0.0.0
+        version: 0.0.0
       preact:
         specifier: 10.29.7
         version: 10.29.7
@@ -2918,6 +2921,10 @@ packages:
 
   mkdirp-classic@0.5.3:
     resolution: {integrity: sha512-gKLcREMhtuZRwRAfqP3RFW+TK4JqApVBtOIftVgjuABpAtpxhPGaDcfvbhNvD0B8iD1oUr/txX35NjcaY6Ns/A==}
+
+  mondrian.pdf@0.0.0:
+    resolution: {integrity: sha512-lo6g4dDZt2EedV7J1hOwUhYSeeOS99JHclVlQ/7iUQLM4YL/R91lgWY3GiZ/GaWSrNAimzKNo77sxTBrb0evvg==}
+    engines: {node: '>=22.0.0'}
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -6246,6 +6253,8 @@ snapshots:
 
   mkdirp-classic@0.5.3:
     optional: true
+
+  mondrian.pdf@0.0.0: {}
 
   mri@1.2.0: {}
 

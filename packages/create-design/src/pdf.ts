@@ -1,3 +1,20 @@
+import {
+	array,
+	ascii,
+	asciiTextString,
+	createPdfObjectBuilder,
+	dictionary,
+	name,
+	serializePdf,
+	stream,
+	textString,
+	type PdfCatalogDictionary,
+	type PdfDocument,
+	type PdfInfoDictionary,
+	type PdfPageDictionary,
+	type PdfPagesDictionary,
+} from "mondrian.pdf"
+
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
 import type {
 	DesignContour,
@@ -83,55 +100,54 @@ export function pdfContentStream(document: DesignDocument): string {
 	return commands.join("\n")
 }
 
-function pdfString(value: string): string {
-	return value
-		.replaceAll("\\", "\\\\")
-		.replaceAll("(", "\\(")
-		.replaceAll(")", "\\)")
-		.replace(/[^\x20-\x7e]/g, "?")
+/**
+ * Lowers a design document into mondrian.pdf's validated object IR. The
+ * content stream remains low-level so cubic curves, even-odd fills, and native
+ * DeviceCMYK colors are retained.
+ */
+export function createPdfIr(document: DesignDocument): PdfDocument {
+	const content = pdfContentStream(document)
+	const objects = createPdfObjectBuilder()
+	const pages = objects.reserve<PdfPagesDictionary>()
+	const contents = objects.add(stream({}, ascii(content)))
+	const page = objects.add(
+		dictionary({
+			Type: name("Page"),
+			Parent: pages.ref,
+			MediaBox: array(0, 0, document.page.width, document.page.height),
+			Resources: dictionary({}),
+			Contents: contents,
+		}) satisfies PdfPageDictionary,
+	)
+	pages.set(
+		dictionary({
+			Type: name("Pages"),
+			Kids: array(page),
+			Count: 1,
+		}) satisfies PdfPagesDictionary,
+	)
+	const root = objects.add(
+		dictionary({
+			Type: name("Catalog"),
+			Pages: pages.ref,
+		}) satisfies PdfCatalogDictionary,
+	)
+	const info = objects.add(
+		dictionary({
+			Title: textString(document.title),
+			Creator: asciiTextString("create-design"),
+			Producer: asciiTextString("mondrian.pdf"),
+		}) satisfies PdfInfoDictionary,
+	)
+	return objects.build({ version: "1.7", root, info })
 }
 
 /**
- * Produces a compact, dependency-free, single-page PDF 1.4 file. Each fill
- * remains in its authored RGB or CMYK space instead of being rasterized.
+ * Serializes the validated mondrian.pdf IR. Each fill remains in its authored
+ * RGB or CMYK space instead of being rasterized.
  */
 export function exportPdf(document: DesignDocument): Uint8Array {
-	const content = pdfContentStream(document)
-	const width = number(document.page.width)
-	const height = number(document.page.height)
-	const objects = [
-		"<< /Type /Catalog /Pages 2 0 R >>",
-		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << >> /Contents 4 0 R >>`,
-		`<< /Length ${new TextEncoder().encode(content).byteLength} >>\nstream\n${content}\nendstream`,
-		`<< /Title (${pdfString(document.title)}) /Creator (create-design) >>`,
-	]
-	const chunks = ["%PDF-1.4\n%create-design\n"]
-	const offsets = [0]
-	let byteLength = new TextEncoder().encode(chunks[0] ?? "").byteLength
-	for (let index = 0; index < objects.length; index += 1) {
-		offsets.push(byteLength)
-		const chunk = `${index + 1} 0 obj\n${objects[index]}\nendobj\n`
-		chunks.push(chunk)
-		byteLength += new TextEncoder().encode(chunk).byteLength
-	}
-	const xrefOffset = byteLength
-	const xref = [
-		"xref",
-		`0 ${objects.length + 1}`,
-		"0000000000 65535 f ",
-		...offsets
-			.slice(1)
-			.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `),
-		"trailer",
-		`<< /Size ${objects.length + 1} /Root 1 0 R /Info 5 0 R >>`,
-		"startxref",
-		String(xrefOffset),
-		"%%EOF",
-		"",
-	].join("\n")
-	chunks.push(xref)
-	return new TextEncoder().encode(chunks.join(""))
+	return serializePdf(createPdfIr(document))
 }
 
 export function downloadPdf(document: DesignDocument): void {
