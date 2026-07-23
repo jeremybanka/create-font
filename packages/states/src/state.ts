@@ -95,6 +95,21 @@ export function isLivePreviewCompatibilityError(
 	return LIVE_PREVIEW_COMPATIBILITY_CODES.has(error.code)
 }
 
+function isLivePreviewRecoverableGlyphError(
+	error: ProjectionError,
+	errors: readonly ProjectionError[],
+	glyphId: GlyphId,
+	defaultMasterId: MasterId,
+): boolean {
+	if (isLivePreviewCompatibilityError(error)) return true
+	if (error.code !== "topology.open_contour") return false
+	if (!errors.some((issue) => issue.code === "compatibility.closure")) {
+		return false
+	}
+	const defaultLayerPath = `$.glyphs[${glyphId}].layers[${defaultMasterId}]`
+	return !error.path.startsWith(defaultLayerPath)
+}
+
 interface Vector2 {
 	readonly x: number
 	readonly y: number
@@ -2558,7 +2573,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							errors.push(
 								projectionError(
 									"topology.open_contour",
-									`$.glyphs[${glyphId}].contours[${contourId}]`,
+									`${path}.contours[${contourId}]`,
 									"Open editor contours must be closed before font export.",
 									contourId,
 								),
@@ -3113,14 +3128,22 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			({ get }) => {
 				const strict = get(glyphSourceSelectors, glyphId)
 				if (strict.ok) return strict
-				if (
-					strict.errors.some((error) => !isLivePreviewCompatibilityError(error))
-				) {
-					return strict
-				}
 				const glyph = get(glyphAtoms, glyphId)
 				const defaultMasterId = get(defaultMasterIdAtom)
 				if (glyph === null || defaultMasterId === null) return strict
+				if (
+					strict.errors.some(
+						(error) =>
+							!isLivePreviewRecoverableGlyphError(
+								error,
+								strict.errors,
+								glyphId,
+								defaultMasterId,
+							),
+					)
+				) {
+					return strict
+				}
 				const layer = get(singleMasterGlyphLayerSelectors, [
 					defaultMasterId,
 					glyphId,

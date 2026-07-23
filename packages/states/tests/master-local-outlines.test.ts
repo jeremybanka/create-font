@@ -278,6 +278,109 @@ describe("master-local outlines", () => {
 		).toBe(false)
 	})
 
+	it("freezes a glyph when only a nondefault master has an open contour", () => {
+		const original = makeGeometricOEditorFont()
+		const source = {
+			...original,
+			glyphs: original.glyphs.map((glyph) =>
+				glyph.id !== oGlyphId
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer) =>
+								layer.masterId !== blackMasterId
+									? layer
+									: {
+											...layer,
+											contours: layer.contours.map((contour, pathIndex) =>
+												pathIndex === 0
+													? { ...contour, closed: false }
+													: contour,
+											),
+										},
+							),
+						},
+			),
+		}
+		const editor = createFontEditorState({
+			key: "master-local/live-nondefault-open",
+		})
+		editor.actions.load(source)
+
+		const strict = editor.read.compilation()
+		if (strict.ok || strict.stage !== "projection-failed")
+			throw new Error("Strict compilation unexpectedly succeeded.")
+		expect(strict.projectionErrors.map((error) => error.code)).toEqual(
+			expect.arrayContaining([
+				"compatibility.closure",
+				"topology.open_contour",
+			]),
+		)
+
+		const live = editor.read.livePreviewCompilation()
+		if (!live.ok)
+			throw new Error(
+				`Nondefault open contour was not recoverable: ${JSON.stringify(live)}`,
+			)
+		expect(
+			live.source.glyphs.find((glyph) => glyph.name === "O")?.variations,
+		).toEqual([])
+		expect(live.projectionWarnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "compatibility.closure",
+					entityId: oGlyphId,
+				}),
+			]),
+		)
+	})
+
+	it("keeps an open default-master contour fatal for live preview", () => {
+		const original = makeGeometricOEditorFont()
+		const source = {
+			...original,
+			glyphs: original.glyphs.map((glyph) =>
+				glyph.id !== oGlyphId
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer) =>
+								layer.masterId !== razorMasterId
+									? layer
+									: {
+											...layer,
+											contours: layer.contours.map((contour, pathIndex) =>
+												pathIndex === 0
+													? { ...contour, closed: false }
+													: contour,
+											),
+										},
+							),
+						},
+			),
+		}
+		const editor = createFontEditorState({
+			key: "master-local/live-default-open",
+		})
+		editor.actions.load(source)
+
+		const live = editor.read.livePreviewCompilation()
+		expect(live).toMatchObject({
+			ok: false,
+			stage: "projection-failed",
+		})
+		if (live.ok || live.stage !== "projection-failed")
+			throw new Error("Open default contour unexpectedly compiled.")
+		expect(live.projectionErrors).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "topology.open_contour",
+					path: expect.stringContaining(`.layers[${razorMasterId}].contours`),
+				}),
+			]),
+		)
+	})
+
 	it("allowlists every typed topology compatibility error and nothing broader", () => {
 		for (const code of [
 			"compatibility.path_count",
