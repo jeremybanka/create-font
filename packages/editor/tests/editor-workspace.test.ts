@@ -663,6 +663,25 @@ describe("editor workspace", () => {
 		expect(workspace.font.read.editorSource()?.kerning?.[0]?.value).toBe(-80)
 	})
 
+	it("ignores the caret kerning pair while editing a glyph", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.previewText, "AO")
+		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeKerningPair),
+		).toMatchObject({ left: aGlyphId, right: oGlyphId })
+
+		workspace.actions.enterGlyphEdit(0, aGlyphId)
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeKerningPair),
+		).toBeNull()
+
+		workspace.actions.exitGlyphEdit()
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeKerningPair),
+		).toMatchObject({ left: aGlyphId, right: oGlyphId })
+	})
+
 	it("enters, switches, and exits outline editing occurrences", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.enterGlyphEdit(0, oGlyphId)

@@ -484,6 +484,7 @@ export function createEditorWorkspace(
 	}> | null>({
 		key: "activeKerningPair",
 		get: ({ get }) => {
+			if (get(editingTextIndexAtom) !== null) return null
 			if (!get(textSelectionCollapsedAtom)) return null
 			const caret = get(caretIndexAtom)
 			const glyphs = get(previewRunSelector).filter(
