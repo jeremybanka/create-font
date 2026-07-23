@@ -56,7 +56,6 @@ export type SourceProjectLoadTrigger =
 	| `standalone-load`
 	| `watch-refresh`
 	| `write-before`
-	| `write-after`
 
 export type SourceProjectLoadDiagnostic = Readonly<{
 	assembleDuration: number
@@ -120,6 +119,32 @@ function validationError(
 	errors: readonly [SourceDiagnostic, ...SourceDiagnostic[]],
 ): SourceValidationError {
 	return new SourceValidationError(asValidationIssues(errors))
+}
+
+function validateFeatureReferences(
+	values: FontSourceDirectoryFiles,
+	source: EditorFontSource,
+): void {
+	const glyphIndices = new Map(
+		source.glyphs.map((glyph, index) => [glyph.name, index]),
+	)
+	for (const [path, value] of Object.entries(values)) {
+		if (!path.startsWith(`features/`) || !path.endsWith(`.fea`)) continue
+		const parsed = parseFea(value as string)
+		if (!parsed.ok) continue
+		const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
+		if (lowered.errors.length > 0) {
+			throw validationError(
+				lowered.errors.map((error) => ({
+					severity: `error`,
+					code: `source.reference`,
+					unitPath: path,
+					path: `$:${error.range.line}:${error.range.column}`,
+					message: error.message,
+				})) as [SourceDiagnostic, ...SourceDiagnostic[]],
+			)
+		}
+	}
 }
 
 function normalizeUnitPath(path: string): string {
@@ -305,26 +330,7 @@ async function loadProjectDirectory(
 	if (!assembled.ok) throw validationError(assembled.errors)
 	const assembledAt =
 		onProjectLoad === undefined ? undefined : performance.now()
-	const glyphIndices = new Map(
-		assembled.value.glyphs.map((glyph, index) => [glyph.name, index]),
-	)
-	for (const [path, value] of Object.entries(values)) {
-		if (!path.startsWith(`features/`) || !path.endsWith(`.fea`)) continue
-		const parsed = parseFea(value as string)
-		if (!parsed.ok) continue
-		const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
-		if (lowered.errors.length > 0) {
-			throw validationError(
-				lowered.errors.map((error) => ({
-					severity: `error`,
-					code: `source.reference`,
-					unitPath: path,
-					path: `$:${error.range.line}:${error.range.column}`,
-					message: error.message,
-				})) as [SourceDiagnostic, ...SourceDiagnostic[]],
-			)
-		}
-	}
+	validateFeatureReferences(values, assembled.value)
 	const units = paths.map((path) => ({
 		path,
 		revision: revisions.get(path) ?? revisionForText(``),
@@ -394,7 +400,11 @@ export async function createFileSystemSourceService(
 		Readonly<{ fingerprint: string; result: WriteSourceUnitsResult }>
 	>()
 	const sourceListeners = new Set<(event: SourceChangedEvent) => void>()
-	let publishedRevision: string | null = null
+	let publishedProject = await loadProjectDirectory(
+		projectRoot,
+		`initialization`,
+		options.onProjectLoad,
+	)
 
 	const loadProject = (
 		trigger: SourceProjectLoadTrigger,
@@ -417,8 +427,37 @@ export async function createFileSystemSourceService(
 		revision: project.manifest.revision,
 		units: project.manifest.units.map(({ path }) => snapshot(project, path)),
 	})
-	const versionControl = createSourceVersionControl(projectRoot, async () =>
-		projectSnapshot(await loadProject(`read-snapshot`)),
+	const publishProject = (
+		project: LoadedProject,
+		operationId?: string,
+	): void => {
+		if (project.manifest.revision === publishedProject.manifest.revision) return
+		const previous = publishedProject
+		const previousRevisions = previous.revisions
+		const nextPaths = new Set(project.manifest.units.map(({ path }) => path))
+		const event: SourceChangedEvent = {
+			type: `source.changed`,
+			...(operationId === undefined ? {} : { operationId }),
+			previousRevision: previous.manifest.revision,
+			removedPaths: previous.manifest.units
+				.map(({ path }) => path)
+				.filter((path) => !nextPaths.has(path)),
+			revision: project.manifest.revision,
+			units: project.manifest.units
+				.filter(
+					({ path, revision }) => previousRevisions.get(path) !== revision,
+				)
+				.map(({ path }) => snapshot(project, path)),
+		}
+		publishedProject = project
+		for (const listener of sourceListeners) listener(event)
+	}
+	const comparisonVersionControl = createSourceVersionControl(projectRoot, () =>
+		withLock(async () => projectSnapshot(await loadProject(`read-snapshot`))),
+	)
+	const commitVersionControl = createSourceVersionControl(
+		projectRoot,
+		async () => projectSnapshot(await loadProject(`read-snapshot`)),
 	)
 
 	const writeUnitsUnlocked = async (
@@ -462,6 +501,10 @@ export async function createFileSystemSourceService(
 		}
 		const assembled = assembleEditorFontSource(candidate)
 		if (!assembled.ok) throw validationError(assembled.errors)
+		validateFeatureReferences(
+			candidate as FontSourceDirectoryFiles,
+			assembled.value,
+		)
 
 		const transactionRoot = join(
 			projectRoot,
@@ -504,36 +547,47 @@ export async function createFileSystemSourceService(
 			throw error
 		}
 
-		const updated = await loadProject(`write-after`)
+		const revisions = new Map(project.revisions)
+		const texts = new Map(project.texts)
+		for (const [path, text] of formatted) {
+			revisions.set(path, revisionForText(text))
+			texts.set(path, text)
+		}
+		const descriptors = Object.keys(candidate)
+			.toSorted()
+			.map((path) => ({
+				path,
+				revision: revisions.get(path) ?? revisionForText(``),
+			}))
+		const updated: LoadedProject = {
+			manifest: {
+				revision: manifestRevision(descriptors),
+				units: descriptors,
+			},
+			revisions,
+			source: assembled.value,
+			texts,
+			values: candidate as FontSourceDirectoryFiles,
+		}
 		const units = input.writes.map((write) =>
 			snapshot(updated, normalizeUnitPath(write.path)),
 		) as unknown as readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
 		const result = {
+			previousRevision: project.manifest.revision,
 			revision: updated.manifest.revision,
 			units,
 		}
 		idempotentWrites.set(input.idempotencyKey, { fingerprint, result })
+		publishProject(updated, input.idempotencyKey)
 		return result
 	}
-
-	const publishManifest = (manifest: SourceManifest): void => {
-		if (manifest.revision === publishedRevision) return
-		publishedRevision = manifest.revision
-		const event: SourceChangedEvent = {
-			type: `source.changed`,
-			manifest,
-		}
-		for (const listener of sourceListeners) listener(event)
-	}
-
-	publishedRevision = (await loadProject(`initialization`)).manifest.revision
 	let refreshTimer: ReturnType<typeof setTimeout> | undefined
 	const scheduleRefresh = (): void => {
 		if (refreshTimer !== undefined) clearTimeout(refreshTimer)
 		refreshTimer = setTimeout(() => {
 			refreshTimer = undefined
 			void withLock(async () => {
-				publishManifest((await loadProject(`watch-refresh`)).manifest)
+				publishProject(await loadProject(`watch-refresh`))
 			}).catch(() => undefined)
 		}, 50)
 	}
@@ -545,12 +599,11 @@ export async function createFileSystemSourceService(
 	return {
 		commitUnits: (input) =>
 			withLock(async () => {
-				const result = await versionControl.commitUnits(input)
-				publishManifest((await loadProject(`read-manifest`)).manifest)
+				const result = await commitVersionControl.commitUnits(input)
+				publishProject(await loadProject(`read-manifest`))
 				return result
 			}),
-		readComparison: (input) =>
-			withLock(() => versionControl.readComparison(input)),
+		readComparison: (input) => comparisonVersionControl.readComparison(input),
 		readManifest: () =>
 			withLock(async () => (await loadProject(`read-manifest`)).manifest),
 		readSnapshot: () =>

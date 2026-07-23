@@ -33,13 +33,9 @@ if (
 const editorApplication = await staticPlugin({
 	alwaysStatic: true,
 	assets: applicationAssets,
-	ignorePatterns: [`/source-session.worker.js`],
 	indexHTML: true,
 	prefix: `/`,
 })
-const sourceSessionWorker = Bun.file(
-	resolve(applicationAssets, `source-session.worker.js`),
-)
 
 export type CreateFontServerOptions = CreateFontRpcOptions
 
@@ -63,16 +59,6 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 					headers: {
 						"cache-control": `public, max-age=0, must-revalidate`,
 						"content-type": `text/css; charset=utf-8`,
-					},
-				}),
-		)
-		.get(
-			`/source-session.worker.js`,
-			async () =>
-				new Response(await sourceSessionWorker.text(), {
-					headers: {
-						"cache-control": `no-store`,
-						"content-type": `text/javascript; charset=utf-8`,
 					},
 				}),
 		)

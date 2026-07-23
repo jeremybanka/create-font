@@ -41,12 +41,6 @@ const builds = await Promise.all([
 		splitting: true,
 		target: `browser`,
 	}),
-	Bun.build({
-		define: { __CREATE_FONT_DEVELOPMENT__: `false` },
-		entrypoints: [resolve(packageRoot, `public/source-session.worker.ts`)],
-		outdir: resolve(outdir, `public`),
-		target: `browser`,
-	}),
 ])
 
 const failures = builds.flatMap((build) => (build.success ? [] : build.logs))

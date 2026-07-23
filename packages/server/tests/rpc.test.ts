@@ -255,6 +255,7 @@ describe(`create-font workspace RPC`, () => {
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(),
 			writeUnits: vi.fn(async (input) => ({
+				previousRevision: `manifest-1`,
 				revision: `manifest-2`,
 				units: input.writes.map((write) => ({
 					path: write.path,
@@ -303,6 +304,7 @@ describe(`create-font workspace RPC`, () => {
 		expect(response.status).toBe(200)
 		expect(await response.json()).toEqual(
 			expect.objectContaining({
+				previousRevision: `manifest-1`,
 				revision: `manifest-2`,
 				units: expect.arrayContaining([
 					expect.objectContaining({ path: `names.json` }),

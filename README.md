@@ -65,7 +65,8 @@ pnpm dev
 The development command enables the packages' `development` export condition,
 so both servers load workspace TypeScript entrypoints directly. Bun runs the
 workspace API with `--hot` on port 3001; Vite serves the browser on port 3000
-with Preact and CSS HMR and proxies the API and SharedWorker to Bun. Startup
-creates one awaited browser/worker fallback bundle, but it does not build or
-watch workspace package outputs. Production and published consumers continue
-to resolve the compiled `dist` entrypoints.
+with Preact and CSS HMR and proxies HTTP and WebSocket API traffic to Bun. Each
+tab keeps local editor state, persists changed source units directly to the
+server, and consumes ordered unit deltas from the server's source event stream.
+Development does not build or watch workspace package outputs. Production and
+published consumers continue to resolve the compiled `dist` entrypoints.

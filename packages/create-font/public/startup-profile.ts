@@ -1,4 +1,4 @@
-export type StartupContext = `browser-main` | `shared-worker`
+export type StartupContext = `browser-main`
 
 export type StartupPhase = Readonly<{
 	duration: number
@@ -69,21 +69,6 @@ export function createStartupTimeline(
 			})
 		},
 	}
-}
-
-export function startupEpochMilliseconds(
-	timeline: StartupTimelineSnapshot,
-	milestone: string,
-): number | undefined {
-	const relative = timeline.milestones[milestone]
-	return relative === undefined ? undefined : timeline.timeOrigin + relative
-}
-
-export function startupTransitDuration(
-	sentAtEpochMilliseconds: number,
-	receivedAtEpochMilliseconds: number,
-): number {
-	return Math.max(0, receivedAtEpochMilliseconds - sentAtEpochMilliseconds)
 }
 
 export function startupResourceTimings(

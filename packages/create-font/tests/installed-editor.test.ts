@@ -124,8 +124,8 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 	const scriptSource = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
 	if (scriptSource === undefined) throw new Error("The installed app has no browser script.")
 	const publicRoot = resolve(dirname(createFontPackagePath), "dist/public")
-	const applicationScripts = (await readdir(publicRoot)).filter(
-		(file) => file.endsWith(".js") && file !== "source-session.worker.js",
+	const applicationScripts = (await readdir(publicRoot)).filter((file) =>
+		file.endsWith(".js"),
 	)
 	const main = (await Promise.all(
 		applicationScripts.map(async (file) => (await request("/" + file)).text()),
