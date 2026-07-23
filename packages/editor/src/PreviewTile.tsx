@@ -116,8 +116,13 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 			: activeFont.status === "failed"
 				? activeFont.diagnostic.message
 				: undefined
+	const degradedDiagnostic =
+		compilation.status === "ready"
+			? compilation.diagnostics[0]?.message
+			: undefined
 	const status =
 		diagnostic ??
+		degradedDiagnostic ??
 		(compilation.status === "compiling" || activeFont.status === "loading"
 			? activeFamily === null
 				? "Compiling preview font…"
@@ -236,6 +241,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 				<output
 					data-live-font-status
 					data-error={diagnostic !== undefined}
+					data-degraded={degradedDiagnostic !== undefined}
 					aria-live="polite"
 				>
 					{status}

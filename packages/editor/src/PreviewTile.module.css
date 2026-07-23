@@ -72,6 +72,10 @@ preview-tile.class {
 			overflow: hidden;
 			white-space: nowrap;
 
+			&[data-degraded="true"] {
+				color: var(--warning);
+			}
+
 			&[data-error="true"] {
 				color: var(--danger);
 			}

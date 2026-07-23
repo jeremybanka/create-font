@@ -35,6 +35,7 @@ export type LiveFontCompilationState =
 			generation: number
 			revision: number
 			artifact: LiveFontArtifact
+			diagnostics: readonly LiveFontDiagnostic[]
 			lastGood: LiveFontArtifact
 	  }>
 	| Readonly<{
@@ -191,6 +192,15 @@ export function createLiveFontCompiler(
 						generation: currentGeneration,
 						revision,
 						artifact,
+						diagnostics: Object.freeze(
+							compilation.projectionWarnings
+								.filter((issue) => issue.code.startsWith("compatibility."))
+								.map((issue) => ({
+									code: issue.code,
+									message: issue.message,
+									stage: "projection" as const,
+								})),
+						),
 						lastGood: artifact,
 					}),
 				)

@@ -52,7 +52,7 @@ function mountTwo() {
 	)
 	const tiles = [...host.querySelectorAll("preview-tile")]
 	if (tiles.length !== 2) throw new Error("The preview tiles did not mount.")
-	return { first: tiles[0]!, second: tiles[1]! }
+	return { first: tiles[0]!, second: tiles[1]!, workspace }
 }
 
 describe("PreviewTile", () => {
@@ -150,6 +150,54 @@ describe("PreviewTile", () => {
 			expect(proof.textContent).toBe("AAAAOOOO")
 			expect(secondProof.getAttribute("data-colors")).toBe(secondColors)
 		}
+	})
+
+	it("announces a degraded live font while keeping the preview ready", async () => {
+		const { first, workspace } = mountTwo()
+		act(() => {
+			workspace.font.silo.setState(workspace.liveFont.compilation, {
+				status: "ready",
+				generation: 2,
+				revision: 3,
+				artifact: {
+					bytes: new Uint8Array([1]),
+					generation: 2,
+					revision: 3,
+					timings: {
+						queueing: 1,
+						projectionAndIngestion: 2,
+						serialization: 3,
+						total: 6,
+					},
+				},
+				diagnostics: [
+					{
+						code: "compatibility.node_count",
+						message: "Live preview froze O to its default master.",
+						stage: "projection",
+					},
+				],
+				lastGood: {
+					bytes: new Uint8Array([1]),
+					generation: 2,
+					revision: 3,
+					timings: {
+						queueing: 1,
+						projectionAndIngestion: 2,
+						serialization: 3,
+						total: 6,
+					},
+				},
+			})
+		})
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		const status = first.querySelector("[data-live-font-status]")
+		expect(status?.getAttribute("data-degraded")).toBe("true")
+		expect(status?.getAttribute("data-error")).toBe("false")
+		expect(status?.textContent).toContain("froze O")
 	})
 
 	it("loads long samples and regenerates glyph noise", () => {

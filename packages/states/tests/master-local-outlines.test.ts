@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	createFontEditorState,
+	isLivePreviewCompatibilityError,
 	type ContourId,
 	type PointId,
 } from "../src/index.ts"
@@ -197,5 +198,103 @@ describe("master-local outlines", () => {
 			editor.read.glyphCompatibility(razorMasterId, blackMasterId, oGlyphId)
 				.compatible,
 		).toBe(true)
+	})
+
+	it("freezes only incompatible glyphs in live preview while strict compilation stays strict", () => {
+		const original = makeGeometricOEditorFont()
+		const source = {
+			...original,
+			glyphs: original.glyphs.map((glyph) =>
+				glyph.id !== oGlyphId
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer) =>
+								layer.masterId !== blackMasterId
+									? layer
+									: {
+											...layer,
+											contours: layer.contours.map((contour, pathIndex) =>
+												pathIndex === 0
+													? { ...contour, points: contour.points.slice(0, -1) }
+													: contour,
+											),
+										},
+							),
+						},
+			),
+		}
+		const editor = createFontEditorState({ key: "master-local/live-fallback" })
+		editor.actions.load(source)
+
+		const strict = editor.read.compilation()
+		expect(strict).toMatchObject({
+			ok: false,
+			stage: "projection-failed",
+		})
+		if (strict.ok || strict.stage !== "projection-failed")
+			throw new Error("Strict compilation unexpectedly succeeded.")
+		expect(strict.projectionErrors).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ code: "compatibility.node_count" }),
+			]),
+		)
+
+		const live = editor.read.livePreviewCompilation()
+		if (!live.ok)
+			throw new Error(
+				`Best-effort live compilation failed: ${JSON.stringify(live)}`,
+			)
+		const frozen = live.source.glyphs.find((glyph) => glyph.name === "O")
+		const compatible = live.source.glyphs.find(
+			(glyph) => glyph.name === ".notdef",
+		)
+		expect(frozen).toMatchObject({
+			advanceWidth: 1_000,
+			variations: [],
+		})
+		expect(compatible?.variations.length).toBeGreaterThan(0)
+		expect(live.projectionWarnings).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "compatibility.node_count",
+					entityId: oGlyphId,
+					severity: "warning",
+				}),
+			]),
+		)
+
+		editor.actions.load(original)
+		const recovered = editor.read.livePreviewCompilation()
+		if (!recovered.ok) throw new Error("Live compilation did not recover.")
+		expect(
+			recovered.source.glyphs.find((glyph) => glyph.name === "O")?.variations
+				.length,
+		).toBeGreaterThan(0)
+		expect(
+			recovered.projectionWarnings.some((warning) =>
+				warning.code.startsWith("compatibility."),
+			),
+		).toBe(false)
+	})
+
+	it("allowlists every typed topology compatibility error and nothing broader", () => {
+		for (const code of [
+			"compatibility.path_count",
+			"compatibility.closure",
+			"compatibility.node_count",
+			"compatibility.flattened_count",
+			"compatibility.flattened_pattern",
+		]) {
+			expect(isLivePreviewCompatibilityError({ code })).toBe(true)
+		}
+		for (const code of [
+			"topology.open_contour",
+			"curve.approximation_limit",
+			"entity.missing",
+			"compatibility.future_unknown",
+		]) {
+			expect(isLivePreviewCompatibilityError({ code })).toBe(false)
+		}
 	})
 })
