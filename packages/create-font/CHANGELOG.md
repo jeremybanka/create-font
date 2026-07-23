@@ -1,5 +1,19 @@
 # create-font
 
+## 0.3.12
+
+### Patch Changes
+
+- fbd5a2f: Run the workspace HTTP and WebSocket server under Node with Elysia's native runtime adapters.
+- fbd5a2f: Remove Bun-specific globals from installed runtime code and add an explicit package-manager and process adapter boundary.
+- ccd346e: Build and test the browser and server workflow with Node while retaining Bun runtime compatibility.
+- Updated dependencies [fbd5a2f]
+- Updated dependencies [ccd346e]
+  - @create-font/server@0.2.1
+  - @create-font/editor@0.7.8
+  - @create-font/states@0.6.5
+  - @create-font/source@0.2.5
+
 ## 0.3.11
 
 ### Patch Changes

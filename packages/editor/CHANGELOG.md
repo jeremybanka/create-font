@@ -1,5 +1,12 @@
 # @create-font/editor
 
+## 0.7.8
+
+### Patch Changes
+
+- ccd346e: Build and test the browser and server workflow with Node while retaining Bun runtime compatibility.
+  - @create-font/states@0.6.5
+
 ## 0.7.7
 
 ### Patch Changes
