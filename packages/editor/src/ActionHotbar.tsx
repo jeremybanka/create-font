@@ -14,6 +14,10 @@ import { EditorIcon } from "./EditorIcon.tsx"
 import css from "./ActionHotbar.module.css"
 import { TooltipButton } from "./TooltipButton.tsx"
 
+const svg = {
+	Plus: PlusIcon,
+}
+
 const HOTBAR_SLOT_MIME = "application/x-create-font-hotbar-slot"
 
 export interface ActionHotbarProps {
@@ -120,7 +124,7 @@ export function ActionHotbar({
 								placement="top"
 								onClick={onOpenCommands}
 							>
-								<PlusIcon aria-hidden="true" />
+								<svg.Plus aria-hidden="true" />
 							</TooltipButton>
 						) : (
 							<TooltipButton

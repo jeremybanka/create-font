@@ -4,6 +4,7 @@ editor-icon.class {
 	width: 1em;
 	height: 1em;
 
+	/* @lasertag-expect-error: the dynamic Radix icon map contains SVG components */
 	> svg {
 		display: block;
 		width: 100%;

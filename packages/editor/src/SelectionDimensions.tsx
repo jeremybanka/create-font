@@ -169,6 +169,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 								<span>{field}</span>
 								<NumericInput
 									aria-label={`Selection ${field}`}
+									appearance="strong"
 									value={0}
 									min={-65_535}
 									max={65_535}
@@ -210,6 +211,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							<span>X</span>
 							<NumericInput
 								aria-label="Selection origin X"
+								appearance="strong"
 								value={position.x}
 								step="any"
 								min={-65_535}
@@ -221,6 +223,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							<span>Y</span>
 							<NumericInput
 								aria-label="Selection origin Y"
+								appearance="strong"
 								value={position.y}
 								step="any"
 								min={-65_535}
@@ -232,6 +235,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							<span>W</span>
 							<NumericInput
 								aria-label="Selection width"
+								appearance="strong"
 								value={width}
 								min={0}
 								max={65_535}
@@ -243,6 +247,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 							<span>H</span>
 							<NumericInput
 								aria-label="Selection height"
+								appearance="strong"
 								value={height}
 								min={0}
 								max={65_535}

@@ -104,10 +104,7 @@ app-shell.class {
 				background: var(--paper);
 				box-shadow: 0 1px 2px var(--shadow-subtle);
 
-				> app-anchor {
-					display: contents;
-				}
-
+				/* @lasertag-disable [selector-crosses-ownership-boundary] AppAnchor intentionally exposes its routed anchor */
 				> app-anchor > a {
 					padding: 6px 9px;
 					border-radius: 5px;
@@ -127,6 +124,7 @@ app-shell.class {
 						color: var(--ink);
 					}
 				}
+				/* @lasertag-enable [selector-crosses-ownership-boundary] */
 			}
 		}
 
@@ -205,10 +203,7 @@ app-shell.class {
 			gap: 10px;
 			text-align: center;
 
-			> app-anchor {
-				display: contents;
-			}
-
+			/* @lasertag-expect-error: AppAnchor intentionally exposes its routed anchor */
 			> app-anchor > a {
 				font-size: 11px;
 				color: var(--accent);
@@ -298,10 +293,7 @@ app-shell.class {
 				> view-tabs {
 					width: auto;
 
-					> app-anchor {
-						display: contents;
-					}
-
+					/* @lasertag-expect-error: AppAnchor intentionally exposes its routed anchor */
 					> app-anchor > a {
 						padding-inline: 7px;
 						text-align: center;
@@ -326,6 +318,7 @@ app-shell.class {
 			display: none;
 		}
 
+		/* @lasertag-expect-error: AppAnchor intentionally exposes its routed anchor */
 		> header-actions > view-tabs > app-anchor > a {
 			padding-inline: 5px;
 			font-size: 9px;

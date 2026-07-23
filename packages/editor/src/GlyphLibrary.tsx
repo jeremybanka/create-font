@@ -16,6 +16,12 @@ import {
 	type EditorVersionControl,
 } from "./version-control.ts"
 
+const svg = {
+	Cross: Cross1Icon,
+	MagnifyingGlass: MagnifyingGlassIcon,
+	Plus: PlusIcon,
+}
+
 export interface GlyphLibraryProps {
 	readonly addingGlyphs: boolean
 	readonly onAddingGlyphsChange: (addingGlyphs: boolean) => void
@@ -75,7 +81,7 @@ export function GlyphLibrary({
 				</view-title>
 				<library-actions>
 					<label>
-						<MagnifyingGlassIcon aria-hidden="true" />
+						<svg.MagnifyingGlass aria-hidden="true" />
 						<span className="sr-only">Search glyphs</span>
 						<input
 							type="search"
@@ -90,7 +96,7 @@ export function GlyphLibrary({
 						aria-expanded={addingGlyphs}
 						onClick={() => onAddingGlyphsChange(true)}
 					>
-						<PlusIcon aria-hidden="true" />
+						<svg.Plus aria-hidden="true" />
 						Add glyphs
 					</button>
 				</library-actions>
@@ -136,7 +142,7 @@ export function GlyphLibrary({
 								placement="left"
 								onClick={closeAddGlyphs}
 							>
-								<Cross1Icon aria-hidden="true" />
+								<svg.Cross aria-hidden="true" />
 							</TooltipButton>
 						</dialog-heading>
 						<form

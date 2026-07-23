@@ -1,6 +1,33 @@
 numeric-input.class {
 	display: contents;
 
+	> input {
+		box-sizing: border-box;
+		width: 100%;
+		min-width: 0;
+		padding: 6px;
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		background: var(--paper);
+		font: 570 10px/1 var(--ui-font);
+		font-variant-numeric: tabular-nums;
+		color: var(--ink);
+	}
+
+	&[data-appearance="strong"] > input {
+		border-color: var(--line-strong);
+		font-weight: 550;
+		font-variant-numeric: normal;
+	}
+
+	&[data-appearance="roomy"] > input {
+		padding: 9px 10px;
+		border-color: var(--line-strong);
+		border-radius: 6px;
+		font: 500 11px/1.2 var(--ui-font);
+		font-variant-numeric: normal;
+	}
+
 	> input[aria-invalid="true"] {
 		outline: 1px solid var(--danger, #c42b1c);
 		outline-offset: 1px;

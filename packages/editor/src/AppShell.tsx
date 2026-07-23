@@ -46,6 +46,10 @@ import {
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
 
+const svg = {
+	MagnifyingGlass: MagnifyingGlassIcon,
+}
+
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
@@ -244,7 +248,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 						aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
 						onClick={openCommandPalette}
 					>
-						<MagnifyingGlassIcon aria-hidden="true" />
+						<svg.MagnifyingGlass aria-hidden="true" />
 						<strong>Commands</strong>
 						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
 					</button>

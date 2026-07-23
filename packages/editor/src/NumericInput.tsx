@@ -13,6 +13,7 @@ import {
 
 export interface NumericInputProps {
 	readonly "aria-label": string
+	readonly appearance?: "roomy" | "strong"
 	readonly value: number
 	readonly min?: number
 	readonly max?: number
@@ -72,7 +73,7 @@ export function NumericInput(props: NumericInputProps) {
 	}
 
 	return (
-		<numeric-input className={css.class}>
+		<numeric-input className={css.class} data-appearance={props.appearance}>
 			<input
 				type="text"
 				role="spinbutton"

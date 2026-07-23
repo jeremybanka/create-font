@@ -107,6 +107,7 @@ command-palette.class {
 					background: var(--paper);
 					color: var(--ink-muted);
 
+					/* @lasertag-expect-error: EditorIcon exposes its root for contextual sizing */
 					> editor-icon {
 						width: 15px;
 						height: 15px;

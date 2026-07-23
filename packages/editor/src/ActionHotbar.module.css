@@ -34,6 +34,7 @@ action-hotbar.class {
 			opacity: 0.42;
 		}
 
+		/* @lasertag-disable [selector-crosses-ownership-boundary] TooltipButton intentionally exposes caller-owned button presentation */
 		> tooltip-button > button {
 			display: grid;
 			place-items: center;
@@ -70,6 +71,7 @@ action-hotbar.class {
 				color: var(--ink-muted);
 			}
 		}
+		/* @lasertag-enable [selector-crosses-ownership-boundary] */
 
 		> kbd {
 			position: absolute;
