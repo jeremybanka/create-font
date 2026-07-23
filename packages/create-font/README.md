@@ -1,13 +1,13 @@
 # create-font
 
 `create-font` is the application package for the create-font font toolchain. It
-ships two Bun executables with separate roles. Create a new workspace with the
-initializer:
+ships two Node- and Bun-compatible executables with separate roles. Create a new
+workspace with the initializer:
 
 ```sh
-bun create font my-font
+npx create-font my-font
 cd my-font
-bun font dev
+npm exec -- font dev
 ```
 
 The generated workspace lists only `create-font` as a development dependency.
@@ -15,13 +15,15 @@ Installing that package links both `create-font` and `font` locally. Inside an
 existing workspace, the initializer adds another font project without replacing
 the workspace or reinstalling its dependencies:
 
-```sh
-bun create-font display-font
-```
+Run `npx create-font display-font` to add another font.
 
-The application runs on the Bun version pinned by the repository's
-`mise.toml`. Its command-line interface is defined with `comline`; its
-interactive server is an Elysia application; and
+The repository development workflow runs on the Bun version pinned by
+`mise.toml`. The installed runtime source uses Node-compatible APIs that Bun also
+implements. The interactive Elysia server selects its native Bun adapter under
+Bun and its official Node adapter otherwise. Browser builds, most tests, and
+development orchestration remain Bun-backed portability phases. The command-line
+interface is defined with `comline`; its interactive server is an Elysia
+application; and
 `create-font/rpc-client` exposes the corresponding Eden Treaty client factory.
 The reusable workspace routes and client typing live in `@create-font/server`;
 this package composes them with the editor application and CLI build handler.
@@ -36,7 +38,9 @@ atom.io implementation in `@create-font/states`.
 or creates `fonts/<name>` when run inside an existing create-font workspace. A
 new workspace contains a private `package.json`, the local `create-font`
 development dependency, and a minimal validated Regular font source with one
-default master. Pass `--no-install` to defer the initial `bun install`.
+default master. New workspaces use `npm install` by default. Pass
+`--package-manager=pnpm`, `--package-manager=yarn`, or `--package-manager=bun`
+to choose another installer, or `--no-install` to defer installation.
 
 `font build [name]` validates the selected directory source, projects it through
 the editor compiler, and emits a deterministic variable TrueType font. Outputs
@@ -45,9 +49,8 @@ stay outside canonical source below
 artifact path on success. The file is replaced atomically only after source
 validation, target ingestion, and serialization complete.
 
-```sh
-bun font build workbench-sans
-```
+Run `npm exec -- font build workbench-sans` to build with Node, or invoke the
+same local executable with Bun.
 
 The target-v1 profile supports simple unhinted quadratic glyphs, complete
 `gvar` point deltas, a Windows Unicode `cmap`, named instances, the required
@@ -60,9 +63,8 @@ discovers `fonts/*/create-font.json`, selects the sole project automatically, an
 serves its validated source units through the workspace RPC. With multiple font
 projects, select one by directory name:
 
-```sh
-bun font dev workbench-sans --port=4173
-```
+Run `npm exec -- font dev workbench-sans --port=4173` with Node, or invoke the
+same local executable with Bun.
 
 `font serve` remains an alias for `font dev`.
 

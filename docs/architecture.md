@@ -220,7 +220,10 @@ The intended public distribution is the `create-font` npm package:
 Today, `@create-font/target` provides the logical-SFNT TypeScript library;
 `@create-font/source` defines the JSON directory contract; `@create-font/server`
 provides the Elysia/Eden workspace boundary; and the unscoped `create-font`
-package owns the Bun CLI and composes the server with the editor application.
+package owns the runtime-portable CLI and composes the server with the editor
+application. The remaining build, test, and development dependencies are
+inventoried in
+[runtime portability](runtime-portability.md).
 The private `@create-font/editor` package exports its Preact application root,
 which the `create-font` browser entry serves through Elysia's Bun full-stack
 development pattern. The application discovers `fonts/*/create-font.json`, serves

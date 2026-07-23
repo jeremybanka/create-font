@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import {
 	cli,
@@ -15,6 +15,7 @@ import { buildProject } from "./build.ts"
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { startCreateFontServer } from "./server.ts"
 import { createFileSystemSourceService } from "./source-service.ts"
+import { isMainModule } from "./runtime.ts"
 import { selectFontProject } from "./workspace.ts"
 
 const helpSchema = { help: z.boolean().optional() }
@@ -96,7 +97,7 @@ export const fontCli = cli({
 })
 
 export async function runFontCli(
-	args: string[] = [`font`, ...Bun.argv.slice(2)],
+	args: string[] = [`font`, ...process.argv.slice(2)],
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {
@@ -137,4 +138,4 @@ export async function runFontCli(
 	}
 }
 
-if (import.meta.main) process.exitCode = await runFontCli()
+if (isMainModule(import.meta.url)) process.exitCode = await runFontCli()

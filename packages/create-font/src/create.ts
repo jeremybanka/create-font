@@ -13,13 +13,23 @@ import {
 	CREATE_FONT_EDITOR_VERSION,
 } from "@create-font/states"
 
+import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
+
 const PACKAGE_NAME = "create-font"
 const fontNamePattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u
+export const packageManagers = [`npm`, `pnpm`, `yarn`, `bun`] as const
+export type PackageManager = (typeof packageManagers)[number]
+
+export function isPackageManager(value: string): value is PackageManager {
+	return packageManagers.some((packageManager) => packageManager === value)
+}
 
 export type CreateFontWorkspaceOptions = Readonly<{
 	cwd?: string
 	install?: boolean
 	name?: string
+	packageManager?: PackageManager
+	runtime?: RuntimeAdapter
 }>
 
 export type CreatedFontWorkspace = Readonly<{
@@ -151,7 +161,7 @@ function initialFontFiles(name: string): FontSourceDirectoryFiles {
 
 async function packageVersion(): Promise<string> {
 	const value = JSON.parse(
-		await readFile(resolve(import.meta.dir, "../package.json"), "utf8"),
+		await readFile(resolve(import.meta.dirname, "../package.json"), "utf8"),
 	) as { version?: unknown }
 	if (typeof value.version !== "string") {
 		throw new Error("The create-font package has no valid version.")
@@ -202,15 +212,21 @@ async function createFontFiles(root: string, name: string): Promise<void> {
 	}
 }
 
-async function installWorkspace(root: string): Promise<void> {
-	const child = Bun.spawn([process.execPath, "install"], {
+async function installWorkspace(
+	root: string,
+	packageManager: PackageManager,
+	runtime: RuntimeAdapter,
+): Promise<void> {
+	const result = await runtime.run(packageManager, [`install`], {
 		cwd: root,
-		stderr: "inherit",
-		stdout: "inherit",
+		stderr: `inherit`,
+		stdout: `inherit`,
 	})
-	const exitCode = await child.exited
-	if (exitCode !== 0)
-		throw new Error(`bun install exited with status ${exitCode}.`)
+	if (result.exitCode !== 0) {
+		throw new Error(
+			`${packageManager} install exited with status ${result.exitCode ?? `unknown`}.`,
+		)
+	}
 }
 
 export async function createFontWorkspace(
@@ -253,7 +269,13 @@ export async function createFontWorkspace(
 	await createFontFiles(fontRoot, fontName)
 
 	const install = options.install ?? workspaceCreated
-	if (install) await installWorkspace(workspaceRoot)
+	if (install) {
+		await installWorkspace(
+			workspaceRoot,
+			options.packageManager ?? `npm`,
+			options.runtime ?? nodeRuntimeAdapter,
+		)
+	}
 	return {
 		fontName,
 		fontRoot,

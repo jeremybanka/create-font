@@ -1,16 +1,25 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
-import { cli, help, options, optional, parseBooleanOption } from "comline"
+import {
+	cli,
+	help,
+	options,
+	optional,
+	parseBooleanOption,
+	parseStringOption,
+} from "comline"
 import { z } from "zod/v4"
 
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
-import { createFontWorkspace } from "./create.ts"
+import { createFontWorkspace, isPackageManager } from "./create.ts"
+import { isMainModule } from "./runtime.ts"
 
 const createOptions = options(
 	`Create a workspace, or add a font to the current workspace.`,
 	z.object({
 		help: z.boolean().optional(),
 		"no-install": z.boolean().optional(),
+		"package-manager": z.string().optional(),
 	}),
 	{
 		help: {
@@ -26,6 +35,12 @@ const createOptions = options(
 			parse: parseBooleanOption,
 			required: false,
 		},
+		"package-manager": {
+			description: `Package manager used to install a new workspace.`,
+			example: `--package-manager=pnpm`,
+			parse: parseStringOption,
+			required: false,
+		},
 	},
 )
 
@@ -37,7 +52,7 @@ export const createFontCli = cli({
 })
 
 export async function runCreateFontCli(
-	args: string[] = [`create-font`, ...Bun.argv.slice(2)],
+	args: string[] = [`create-font`, ...process.argv.slice(2)],
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {
@@ -46,9 +61,14 @@ export async function runCreateFontCli(
 			writeLine(io.stdout, help(createFontCli.definition))
 			return 0
 		}
+		const packageManager = inputs.opts["package-manager"]
+		if (packageManager !== undefined && !isPackageManager(packageManager)) {
+			throw new Error(`Package manager must be npm, pnpm, yarn, or bun.`)
+		}
 		const result = await createFontWorkspace({
 			...(inputs.opts["no-install"] ? { install: false } : {}),
-			name: inputs.path[0],
+			...(inputs.path[0] === undefined ? {} : { name: inputs.path[0] }),
+			...(packageManager === undefined ? {} : { packageManager }),
 		})
 		writeLine(
 			io.stdout,
@@ -64,4 +84,4 @@ export async function runCreateFontCli(
 	}
 }
 
-if (import.meta.main) process.exitCode = await runCreateFontCli()
+if (isMainModule(import.meta.url)) process.exitCode = await runCreateFontCli()

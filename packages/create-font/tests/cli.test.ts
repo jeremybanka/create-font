@@ -48,6 +48,7 @@ describe(`create-font CLI`, () => {
 
 		expect(exitCode).toBe(0)
 		expect(captured.stdout.join(``)).toContain(`Create a font workspace`)
+		expect(captured.stdout.join(``)).toContain(`--package-manager`)
 	})
 
 	it(`creates a workspace with one valid font and the local tool dependency`, async () => {
@@ -95,6 +96,44 @@ describe(`create-font CLI`, () => {
 				(project) => project.name,
 			),
 		).toEqual([`display-font`, `my-font`])
+	})
+
+	it(`installs with the explicitly selected package manager`, async () => {
+		const cwd = await temporaryRoot()
+		const commands: {
+			args: readonly string[]
+			command: string
+			cwd?: string
+		}[] = []
+		const result = await createFontWorkspace({
+			cwd,
+			install: true,
+			name: `my-font`,
+			packageManager: `pnpm`,
+			runtime: {
+				async run(command, args, options) {
+					commands.push({
+						args,
+						command,
+						...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+					})
+					return {
+						exitCode: 0,
+						stderr: ``,
+						stdout: new Uint8Array(),
+					}
+				},
+			},
+		})
+
+		expect(commands).toEqual([
+			{
+				args: [`install`],
+				command: `pnpm`,
+				cwd: result.workspaceRoot,
+			},
+		])
+		expect(result.installed).toBe(true)
 	})
 })
 

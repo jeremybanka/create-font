@@ -1,6 +1,7 @@
 import { resolve } from "node:path"
 
 import { Elysia, status, t } from "elysia"
+import type { ElysiaAdapter } from "elysia/adapter"
 
 import {
 	SourceUnitConflictError,
@@ -24,6 +25,7 @@ import type {
 export const CREATE_FONT_RPC_VERSION = 6 as const
 
 export type CreateFontRpcOptions = Readonly<{
+	adapter?: ElysiaAdapter
 	build: () => Promise<BuildResult>
 	root?: string
 	source?: CreateFontSourceService
@@ -81,6 +83,7 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 	return new Elysia({
 		name: `create-font-rpc`,
 		prefix: `/api`,
+		...(options.adapter === undefined ? {} : { adapter: options.adapter }),
 	})
 		.get(`/health`, () => ({
 			ok: true as const,
@@ -99,11 +102,11 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 				const unsubscribe = options.source.subscribe((event) => {
 					ws.send(event)
 				})
-				sourceConnections.set(ws, unsubscribe)
+				sourceConnections.set(ws.raw, unsubscribe)
 			},
 			close(ws) {
-				sourceConnections.get(ws)?.()
-				sourceConnections.delete(ws)
+				sourceConnections.get(ws.raw)?.()
+				sourceConnections.delete(ws.raw)
 			},
 			response: t.Object({
 				type: t.Literal(`source.changed`),
