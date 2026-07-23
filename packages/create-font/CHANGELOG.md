@@ -1,5 +1,16 @@
 # create-font
 
+## 0.3.10
+
+### Patch Changes
+
+- Updated dependencies [6601452]
+- Updated dependencies [e610e37]
+- Updated dependencies [1f74d99]
+  - @create-font/editor@0.7.6
+  - @create-font/states@0.6.3
+  - @create-font/source@0.2.3
+
 ## 0.3.9
 
 ### Patch Changes

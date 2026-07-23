@@ -1,5 +1,16 @@
 # @create-font/editor
 
+## 0.7.6
+
+### Patch Changes
+
+- 6601452: Keep live font previews updating by freezing incompatible glyphs to their default master while preserving strict export validation.
+- e610e37: Add persisted glyph measuring rules, derived one-dimensional form and counterform measures, and the Rule canvas tool.
+- 1f74d99: Allow whole-contour selection by double-clicking outline segments in Transform mode.
+- Updated dependencies [6601452]
+- Updated dependencies [e610e37]
+  - @create-font/states@0.6.3
+
 ## 0.7.5
 
 ### Patch Changes

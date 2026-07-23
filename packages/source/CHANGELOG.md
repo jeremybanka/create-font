@@ -1,5 +1,14 @@
 # @create-font/source
 
+## 0.2.3
+
+### Patch Changes
+
+- e610e37: Add persisted glyph measuring rules, derived one-dimensional form and counterform measures, and the Rule canvas tool.
+- Updated dependencies [6601452]
+- Updated dependencies [e610e37]
+  - @create-font/states@0.6.3
+
 ## 0.2.2
 
 ### Patch Changes
