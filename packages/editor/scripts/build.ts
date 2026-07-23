@@ -23,3 +23,19 @@ await build({
 		sourcemap: true,
 	},
 })
+
+await build({
+	configFile: false,
+	build: {
+		emptyOutDir: false,
+		lib: {
+			cssFileName: `shared`,
+			entry: resolve(packageRoot, `src/shared.ts`),
+			fileName: `shared`,
+			formats: [`es`],
+		},
+		minify: true,
+		outDir: outdir,
+		sourcemap: true,
+	},
+})

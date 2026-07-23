@@ -1,0 +1,39 @@
+{
+	"name": "create-design",
+	"version": "0.1.0",
+	"description": "Browser-based vector design editor with native RGB and CMYK PDF export",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-design"
+	},
+	"type": "module",
+	"files": [
+		"dist",
+		"src",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
+		"dev": "vp dev ./public --config=./vite.config.ts --host=127.0.0.1 --port=3010",
+		"test": "vp test --config=./vitest.config.ts"
+	},
+	"dependencies": {
+		"@create-font/editor": "workspace:*",
+		"@radix-ui/react-icons": "^1.3.2",
+		"mondrian.pdf": "0.0.0",
+		"preact": "10.29.7"
+	},
+	"devDependencies": {
+		"@preact/preset-vite": "2.10.6",
+		"@types/node": "25.9.5",
+		"react": "npm:@preact/compat@18.3.2",
+		"react-dom": "npm:@preact/compat@18.3.2",
+		"vite": "8.1.5",
+		"vite-plus": "0.2.5",
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": "26.5.0"
+	}
+}
