@@ -54,7 +54,7 @@
 		"react": "npm:@preact/compat@18.3.2",
 		"react-dom": "npm:@preact/compat@18.3.2",
 		"treetrunks": "0.1.8",
-		"vite": "8.1.4",
+		"vite": "8.1.5",
 		"vitest": "4.1.10"
 	},
 	"engines": {
