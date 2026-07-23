@@ -1,5 +1,11 @@
 # @create-font/server
 
+## 0.2.0
+
+### Minor Changes
+
+- 475f2f7: Replace SharedWorker source coordination with server-authoritative ordered unit deltas, direct revision-guarded writes, snapshot recovery, and faster dirty-edit persistence.
+
 ## 0.1.1
 
 ### Patch Changes

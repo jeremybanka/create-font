@@ -1,5 +1,13 @@
 # @create-font/editor
 
+## 0.7.7
+
+### Patch Changes
+
+- 475f2f7: Replace SharedWorker source coordination with server-authoritative ordered unit deltas, direct revision-guarded writes, snapshot recovery, and faster dirty-edit persistence.
+- Updated dependencies [475f2f7]
+  - @create-font/states@0.6.4
+
 ## 0.7.6
 
 ### Patch Changes
