@@ -1,7 +1,8 @@
 # create-font
 
 `create-font` is the application package for the create-font font toolchain. It
-ships two Bun executables with separate roles. Create a new workspace with the
+ships two Node-compatible executables with separate roles. Create a new workspace
+with the
 initializer:
 
 ```sh
@@ -19,8 +20,11 @@ the workspace or reinstalling its dependencies:
 bun create-font display-font
 ```
 
-The application runs on the Bun version pinned by the repository's
-`mise.toml`. Its command-line interface is defined with `comline`; its
+The repository development workflow runs on the Bun version pinned by
+`mise.toml`. The installed runtime source uses Node-compatible APIs that Bun also
+implements; browser builds, tests, development orchestration, and Elysia server
+startup remain Bun-backed portability phases. The command-line interface is
+defined with `comline`; its
 interactive server is an Elysia application; and
 `create-font/rpc-client` exposes the corresponding Eden Treaty client factory.
 The reusable workspace routes and client typing live in `@create-font/server`;
@@ -36,7 +40,9 @@ atom.io implementation in `@create-font/states`.
 or creates `fonts/<name>` when run inside an existing create-font workspace. A
 new workspace contains a private `package.json`, the local `create-font`
 development dependency, and a minimal validated Regular font source with one
-default master. Pass `--no-install` to defer the initial `bun install`.
+default master. New workspaces use `npm install` by default. Pass
+`--package-manager=pnpm`, `--package-manager=yarn`, or `--package-manager=bun`
+to choose another installer, or `--no-install` to defer installation.
 
 `font build [name]` validates the selected directory source, projects it through
 the editor compiler, and emits a deterministic variable TrueType font. Outputs

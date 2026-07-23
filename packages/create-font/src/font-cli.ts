@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import {
 	cli,
@@ -96,7 +96,7 @@ export const fontCli = cli({
 })
 
 export async function runFontCli(
-	args: string[] = [`font`, ...Bun.argv.slice(2)],
+	args: string[] = [`font`, ...process.argv.slice(2)],
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {

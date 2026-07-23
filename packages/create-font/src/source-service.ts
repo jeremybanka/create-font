@@ -38,6 +38,7 @@ import {
 } from "@create-font/source"
 import type { EditorFontSource } from "@create-font/states"
 
+import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
 import { createSourceVersionControl } from "./source-version-control.ts"
 
 type LoadedProject = Readonly<{
@@ -68,6 +69,7 @@ export type SourceProjectLoadDiagnostic = Readonly<{
 
 export type FileSystemSourceServiceOptions = Readonly<{
 	onProjectLoad?: (diagnostic: SourceProjectLoadDiagnostic) => void
+	runtime?: RuntimeAdapter
 }>
 
 type TransactionEntry = Readonly<{
@@ -452,12 +454,17 @@ export async function createFileSystemSourceService(
 		publishedProject = project
 		for (const listener of sourceListeners) listener(event)
 	}
-	const comparisonVersionControl = createSourceVersionControl(projectRoot, () =>
-		withLock(async () => projectSnapshot(await loadProject(`read-snapshot`))),
+	const runtime = options.runtime ?? nodeRuntimeAdapter
+	const comparisonVersionControl = createSourceVersionControl(
+		projectRoot,
+		() =>
+			withLock(async () => projectSnapshot(await loadProject(`read-snapshot`))),
+		runtime,
 	)
 	const commitVersionControl = createSourceVersionControl(
 		projectRoot,
 		async () => projectSnapshot(await loadProject(`read-snapshot`)),
+		runtime,
 	)
 
 	const writeUnitsUnlocked = async (

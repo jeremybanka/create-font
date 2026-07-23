@@ -21,6 +21,8 @@ import {
 	type SourceDiagnostic,
 } from "@create-font/source"
 
+import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
+
 const MAX_SNAPSHOT_UNITS = 2_000
 const MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024
 const GIT_TIMEOUT_MS = 15_000
@@ -89,38 +91,39 @@ function validUnitPath(path: string): string {
 async function runGit(
 	context: GitContext | string,
 	args: readonly string[],
+	runtime: RuntimeAdapter,
 	options: Readonly<{
 		env?: Readonly<Record<string, string>>
 		input?: string
 	}> = {},
 ): Promise<GitResult> {
 	const cwd = typeof context === `string` ? context : context.repositoryRoot
-	const processHandle = Bun.spawn([`git`, ...args], {
+	const result = await runtime.run(`git`, args, {
 		cwd,
 		env: { ...process.env, ...options.env },
-		stdin: options.input === undefined ? undefined : new Blob([options.input]),
-		stdout: `pipe`,
-		stderr: `pipe`,
+		...(options.input === undefined ? {} : { input: options.input }),
+		timeout: GIT_TIMEOUT_MS,
 	})
-	const timeout = setTimeout(() => processHandle.kill(), GIT_TIMEOUT_MS)
-	const [exitCode, stdout, stderr] = await Promise.all([
-		processHandle.exited,
-		new Response(processHandle.stdout).bytes(),
-		new Response(processHandle.stderr).text(),
-	]).finally(() => clearTimeout(timeout))
-	if (exitCode !== 0) {
+	if (result.exitCode !== 0) {
 		throw new SourceVersionControlError(
 			`source.repository_state`,
-			stderr.trim() || `Git could not read the font repository.`,
+			result.stderr.trim() || `Git could not read the font repository.`,
 		)
 	}
-	return { stdout, stderr }
+	return { stdout: result.stdout, stderr: result.stderr }
 }
 
-async function discoverGitContext(projectRoot: string): Promise<GitContext> {
+async function discoverGitContext(
+	projectRoot: string,
+	runtime: RuntimeAdapter,
+): Promise<GitContext> {
 	let repositoryRoot: string
 	try {
-		const result = await runGit(projectRoot, [`rev-parse`, `--show-toplevel`])
+		const result = await runGit(
+			projectRoot,
+			[`rev-parse`, `--show-toplevel`],
+			runtime,
+		)
 		repositoryRoot = new TextDecoder().decode(result.stdout).trim()
 	} catch (error) {
 		throw new SourceVersionControlError(
@@ -151,14 +154,19 @@ async function discoverGitContext(projectRoot: string): Promise<GitContext> {
 async function resolveCommit(
 	context: GitContext,
 	ref: string,
+	runtime: RuntimeAdapter,
 ): Promise<string> {
 	try {
-		const result = await runGit(context, [
-			`rev-parse`,
-			`--verify`,
-			`--end-of-options`,
-			`${validRef(ref)}^{commit}`,
-		])
+		const result = await runGit(
+			context,
+			[
+				`rev-parse`,
+				`--verify`,
+				`--end-of-options`,
+				`${validRef(ref)}^{commit}`,
+			],
+			runtime,
+		)
 		return new TextDecoder().decode(result.stdout).trim()
 	} catch (error) {
 		throw new SourceVersionControlError(
@@ -179,17 +187,14 @@ function repositoryPath(context: GitContext, path: string): string {
 async function snapshotAtCommit(
 	context: GitContext,
 	commit: string,
+	runtime: RuntimeAdapter,
 ): Promise<SourceProjectSnapshot> {
 	const pathspec = context.projectPrefix === `` ? `.` : context.projectPrefix
-	const listed = await runGit(context, [
-		`ls-tree`,
-		`-r`,
-		`-z`,
-		`--name-only`,
-		commit,
-		`--`,
-		pathspec,
-	])
+	const listed = await runGit(
+		context,
+		[`ls-tree`, `-r`, `-z`, `--name-only`, commit, `--`, pathspec],
+		runtime,
+	)
 	const prefix = context.projectPrefix === `` ? `` : `${context.projectPrefix}/`
 	const paths = new TextDecoder()
 		.decode(listed.stdout)
@@ -232,11 +237,11 @@ async function snapshotAtCommit(
 				},
 			])
 		}
-		const blob = await runGit(context, [
-			`show`,
-			`--no-textconv`,
-			`${commit}:${repositoryPath(context, path)}`,
-		])
+		const blob = await runGit(
+			context,
+			[`show`, `--no-textconv`, `${commit}:${repositoryPath(context, path)}`],
+			runtime,
+		)
 		totalBytes += blob.stdout.byteLength
 		if (totalBytes > MAX_SNAPSHOT_BYTES) {
 			throw new SourceVersionControlError(
@@ -324,18 +329,19 @@ function sourceChangeUnits(
 export function createSourceVersionControl(
 	projectRoot: string,
 	readWorkingSnapshot: () => Promise<SourceProjectSnapshot>,
+	runtime: RuntimeAdapter = nodeRuntimeAdapter,
 ) {
 	let contextPromise: Promise<GitContext> | undefined
 	const snapshotCache = new Map<string, Promise<SourceProjectSnapshot>>()
 	const context = (): Promise<GitContext> =>
-		(contextPromise ??= discoverGitContext(projectRoot))
+		(contextPromise ??= discoverGitContext(projectRoot, runtime))
 	const immutableSnapshot = (
 		git: GitContext,
 		commit: string,
 	): Promise<SourceProjectSnapshot> => {
 		let cached = snapshotCache.get(commit)
 		if (cached === undefined) {
-			cached = snapshotAtCommit(git, commit)
+			cached = snapshotAtCommit(git, commit, runtime)
 			snapshotCache.set(commit, cached)
 			if (snapshotCache.size > 4) {
 				const oldest = snapshotCache.keys().next().value
@@ -349,12 +355,12 @@ export function createSourceVersionControl(
 		input: ReadSourceComparisonInput,
 	): Promise<SourceComparison> => {
 		const git = await context()
-		const baseCommit = await resolveCommit(git, input.baseRef)
+		const baseCommit = await resolveCommit(git, input.baseRef, runtime)
 		const baseSnapshot = await immutableSnapshot(git, baseCommit)
 		const targetCommit =
 			input.targetRef === undefined
 				? undefined
-				: await resolveCommit(git, input.targetRef)
+				: await resolveCommit(git, input.targetRef, runtime)
 		const targetSnapshot =
 			targetCommit === undefined
 				? await readWorkingSnapshot()
@@ -411,9 +417,9 @@ export function createSourceVersionControl(
 			)
 		}
 		const git = await context()
-		const oldHead = await resolveCommit(git, `HEAD`)
+		const oldHead = await resolveCommit(git, `HEAD`, runtime)
 		const gitDirectoryText = new TextDecoder().decode(
-			(await runGit(git, [`rev-parse`, `--absolute-git-dir`])).stdout,
+			(await runGit(git, [`rev-parse`, `--absolute-git-dir`], runtime)).stdout,
 		)
 		const temporaryIndex = resolve(
 			gitDirectoryText.trim(),
@@ -423,23 +429,34 @@ export function createSourceVersionControl(
 		const repoPaths = paths.map((path) => repositoryPath(git, path))
 		let commit: string
 		try {
-			await runGit(git, [`read-tree`, oldHead], { env })
-			await runGit(git, [`add`, `-A`, `--`, ...repoPaths], { env })
+			await runGit(git, [`read-tree`, oldHead], runtime, { env })
+			await runGit(git, [`add`, `-A`, `--`, ...repoPaths], runtime, {
+				env,
+			})
 			const tree = new TextDecoder()
-				.decode((await runGit(git, [`write-tree`], { env })).stdout)
+				.decode((await runGit(git, [`write-tree`], runtime, { env })).stdout)
 				.trim()
 			commit = new TextDecoder()
 				.decode(
 					(
-						await runGit(git, [`commit-tree`, tree, `-p`, oldHead, `-F`, `-`], {
-							env,
-							input: `${message}\n`,
-						})
+						await runGit(
+							git,
+							[`commit-tree`, tree, `-p`, oldHead, `-F`, `-`],
+							runtime,
+							{
+								env,
+								input: `${message}\n`,
+							},
+						)
 					).stdout,
 				)
 				.trim()
-			await runGit(git, [`update-ref`, `HEAD`, commit, oldHead])
-			await runGit(git, [`reset`, `--quiet`, commit, `--`, ...repoPaths])
+			await runGit(git, [`update-ref`, `HEAD`, commit, oldHead], runtime)
+			await runGit(
+				git,
+				[`reset`, `--quiet`, commit, `--`, ...repoPaths],
+				runtime,
+			)
 		} finally {
 			await rm(temporaryIndex, { force: true })
 		}
