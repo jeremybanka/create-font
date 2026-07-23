@@ -1,5 +1,11 @@
 # @create-font/editor
 
+## 0.7.5
+
+### Patch Changes
+
+- 9ed0716: Keep glyph undo and redo active while editing an outline at a text caret.
+
 ## 0.7.4
 
 ### Patch Changes
