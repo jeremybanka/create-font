@@ -1,5 +1,11 @@
 # @create-font/server
 
+## 0.2.1
+
+### Patch Changes
+
+- fbd5a2f: Run the workspace HTTP and WebSocket server under Node with Elysia's native runtime adapters.
+
 ## 0.2.0
 
 ### Minor Changes
