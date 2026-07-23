@@ -22,7 +22,7 @@ export function shouldSelectContourOnSegmentDoubleClick(
 	tool: EditorToolId,
 	event: Readonly<{ altKey: boolean }>,
 ): boolean {
-	return tool === "select" && !event.altKey
+	return tool === "transform" || (tool === "select" && !event.altKey)
 }
 
 /** Keeps non-Select tools from selecting or mutating nodes and handles. */

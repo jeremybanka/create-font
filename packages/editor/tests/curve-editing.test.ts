@@ -18,13 +18,19 @@ describe("curve editing gestures", () => {
 		expect(segmentPointerAction("pen", { altKey: true })).toBe("split")
 	})
 
-	it("does not let a modified double-click also select the contour", () => {
+	it("selects contours in Select and Transform without regressing Select Alt", () => {
 		expect(
 			shouldSelectContourOnSegmentDoubleClick("select", { altKey: false }),
 		).toBe(true)
 		expect(
 			shouldSelectContourOnSegmentDoubleClick("select", { altKey: true }),
 		).toBe(false)
+		expect(
+			shouldSelectContourOnSegmentDoubleClick("transform", { altKey: false }),
+		).toBe(true)
+		expect(
+			shouldSelectContourOnSegmentDoubleClick("transform", { altKey: true }),
+		).toBe(true)
 		expect(
 			shouldSelectContourOnSegmentDoubleClick("pen", { altKey: false }),
 		).toBe(false)
