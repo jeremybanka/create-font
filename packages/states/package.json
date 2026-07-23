@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/states",
-	"version": "0.6.3",
+	"version": "0.6.4",
 	"description": "Atom.io state and compilation model for variable-font editors",
 	"repository": {
 		"type": "git",
