@@ -5,6 +5,7 @@ import type { EditorVersionControl } from "./version-control.ts"
 export type EditorBrowserOptions = Readonly<{
 	featureSubstitutions?: readonly EditorFeatureSubstitution[]
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
+	onSourceDirty?: () => void
 	source: EditorFontSource
 	validation?: Readonly<{ ok: boolean; issueCount: number }>
 	versionControl?: EditorVersionControl

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test"
 
-import { sourceProjectSnapshotFromResponse } from "../public/source-session-snapshot.ts"
+import { sourceProjectSnapshotFromResponse } from "../public/source-snapshot-response.ts"
 
-describe(`source-session snapshot loading`, () => {
+describe(`source snapshot response`, () => {
 	it(`returns one revision-consistent project snapshot`, () => {
 		const snapshot = {
 			revision: `manifest-1`,

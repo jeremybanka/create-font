@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { SourceProjectSnapshot } from "@create-font/server"
 
-import { createSourceSnapshotRefreshController } from "../public/source-session-refresh.ts"
+import { createSourceSnapshotRefreshController } from "../public/source-refresh.ts"
 
 function deferred<Value>() {
 	let resolve!: (value: Value) => void
@@ -15,7 +15,7 @@ function project(revision: string): SourceProjectSnapshot {
 	return { revision, units: [] }
 }
 
-describe(`source-session refresh coalescing`, () => {
+describe(`source refresh coalescing`, () => {
 	it(`drains a newer manifest queued while a snapshot RPC is in flight`, async () => {
 		let revision: string | null = null
 		const first = deferred<SourceProjectSnapshot>()

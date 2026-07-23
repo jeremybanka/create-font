@@ -8,7 +8,7 @@ export type SourceProjectSnapshotResponse = Readonly<{
 	error: Readonly<{ status: number }> | null
 }>
 
-/** Translate the typed RPC result into the worker's startup contract. */
+/** Translate the typed RPC result into the browser startup contract. */
 export function sourceProjectSnapshotFromResponse(
 	response: SourceProjectSnapshotResponse,
 ): SourceProjectSnapshot {

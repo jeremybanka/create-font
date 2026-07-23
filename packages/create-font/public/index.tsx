@@ -2,9 +2,16 @@ import type {
 	EditorBrowserOptions,
 	MountedEditor,
 } from "@create-font/editor/browser"
-import type { EditorFontSource } from "@create-font/states"
+import {
+	createFontEditorState,
+	type EditorFontSource,
+} from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
-import type { SourceComparison } from "@create-font/server"
+import type {
+	SourceChangedEvent,
+	SourceComparison,
+	WriteSourceUnitsResult,
+} from "@create-font/server"
 import {
 	assembleEditorFontSource,
 	lowerFeaSubstitutions,
@@ -19,22 +26,18 @@ import {
 	nextBootstrapState,
 	type BootstrapState,
 } from "./bootstrap-state.ts"
-import type {
-	FontValidationStatus,
-	SourceSessionEvent,
-	SourceSessionRequest,
-	SourceSessionStartupProfile,
-} from "./source-session.ts"
+import { createSourceSnapshotRefreshController } from "./source-refresh.ts"
+import { sourceProjectSnapshotFromResponse } from "./source-snapshot-response.ts"
 import {
-	SOURCE_SESSION_PROTOCOL_VERSION,
-	SOURCE_SESSION_WORKER_NAME,
-	sourceSessionProtocolError,
-} from "./source-session-identity.ts"
+	applySourceSyncDelta,
+	assembleSourceSyncState,
+	sourceSyncStateFromSnapshot,
+	sourceUnitWrites,
+	type SourceSyncState,
+} from "./source-sync.ts"
 import {
 	createStartupTimeline,
-	startupEpochMilliseconds,
 	startupResourceTimings,
-	startupTransitDuration,
 	type StartupPhase,
 } from "./startup-profile.ts"
 import {
@@ -44,12 +47,15 @@ import {
 
 type StartupProfileStatus = `loading` | `error` | `editor-usable`
 type EditorBrowserModule = typeof import("@create-font/editor/browser")
+type FontValidationStatus = Readonly<{
+	ok: boolean
+	issueCount: number
+}>
 
 declare const __CREATE_FONT_DEVELOPMENT__: boolean
 
 type BrowserStartupProfile = Readonly<{
 	longTasks: readonly StartupPhase[]
-	messageTransitDuration?: number
 	navigation?: Readonly<{
 		domContentLoaded: number
 		loadEventEnd: number
@@ -57,22 +63,16 @@ type BrowserStartupProfile = Readonly<{
 	}>
 	paints: readonly Readonly<{ name: string; start: number }>[]
 	resources: ReturnType<typeof startupResourceTimings>
-	session: `cold-worker` | `warm-worker` | `unknown`
+	session: `direct-server`
 	status: StartupProfileStatus
 	summary: Readonly<{
 		bootstrapRendered?: number
 		editorUsable?: number
 		mainThreadTotalBlockingTime: number
 		sourceMessageReceived?: number
-		workerAssembly?: number
-		workerManifestRpc?: number
-		workerSnapshotRpc?: number
-		workerSourceReady?: number
-		workerUnitRpcFanout?: number
-		workerValidationCompilation?: number
+		sourceSnapshotRpc?: number
 	}>
 	timeline: ReturnType<ReturnType<typeof createStartupTimeline>["snapshot"]>
-	worker?: SourceSessionStartupProfile
 }>
 
 declare global {
@@ -93,8 +93,6 @@ const editorModulePromise = __CREATE_FONT_DEVELOPMENT__
 	: (import(editorBrowserUrl) as Promise<EditorBrowserModule>)
 const longTasks: StartupPhase[] = []
 let startupProfileStatus: StartupProfileStatus = `loading`
-let sourceSessionStartup: SourceSessionStartupProfile | undefined
-let messageTransitDuration: number | undefined
 
 if (`PerformanceObserver` in globalThis) {
 	try {
@@ -118,16 +116,10 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 	const navigation = performance.getEntriesByType(`navigation`)[0] as
 		| PerformanceNavigationTiming
 		| undefined
-	const workerReady =
-		sourceSessionStartup === undefined
-			? undefined
-			: startupEpochMilliseconds(sourceSessionStartup.timeline, `source-ready`)
 	const phaseDuration = (name: string): number | undefined =>
-		sourceSessionStartup?.timeline.phases.find((phase) => phase.name === name)
-			?.duration
+		timeline.phases.find((phase) => phase.name === name)?.duration
 	return {
 		longTasks: Object.freeze([...longTasks]),
-		...(messageTransitDuration === undefined ? {} : { messageTransitDuration }),
 		...(navigation === undefined
 			? {}
 			: {
@@ -144,12 +136,7 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 			})),
 		),
 		resources: startupResourceTimings(performance.getEntriesByType(`resource`)),
-		session:
-			workerReady === undefined
-				? `unknown`
-				: workerReady < timeline.timeOrigin
-					? `warm-worker`
-					: `cold-worker`,
+		session: `direct-server`,
 		status: startupProfileStatus,
 		summary: {
 			bootstrapRendered: timeline.milestones[`bootstrap-rendered`],
@@ -159,30 +146,16 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 				0,
 			),
 			sourceMessageReceived: timeline.milestones[`source-message-received`],
-			workerAssembly: phaseDuration(`source-assembly`),
-			workerManifestRpc: phaseDuration(`source-manifest-rpc`),
-			workerSnapshotRpc: phaseDuration(`source-snapshot-rpc`),
-			workerSourceReady:
-				workerReady === undefined
-					? undefined
-					: workerReady - timeline.timeOrigin,
-			workerUnitRpcFanout: phaseDuration(`source-unit-rpc-fanout`),
-			workerValidationCompilation: phaseDuration(
-				`source-validation-compilation`,
-			),
+			sourceSnapshotRpc: phaseDuration(`source-snapshot-rpc`),
 		},
 		timeline,
-		...(sourceSessionStartup === undefined
-			? {}
-			: { worker: sourceSessionStartup }),
 	}
 }
 
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
-let port: MessagePort | null = null
-let revision: string | null = null
+let sourceState: SourceSyncState | null = null
 let saveQueue = Promise.resolve()
 let renderedSource = false
 let mountedEditor: MountedEditor | null = null
@@ -200,23 +173,25 @@ const rpcClient = createFontRpcClient(window.location.origin)
 let comparisonRequestSequence = 0
 let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
-const pending = new Map<
-	string,
-	Readonly<{
-		reject: (reason: Error) => void
-		resolve: () => void
-	}>
->()
+let dirtySequence = 0
+let sourceDirty = false
+const bufferedSourceEvents: SourceChangedEvent[] = []
+let sourceEventQueue = Promise.resolve()
+let sourceEventReconnectDelay = 250
+let sourceEventsHaveConnected = false
 
 function retrySource(): void {
 	bootstrapState = nextBootstrapState(bootstrapState, { type: `retry` })
 	renderBootstrap()
-	if (port === null) {
-		connectSourceSession()
-		return
-	}
-	const request: SourceSessionRequest = { type: `refresh` }
-	port.postMessage(request)
+	void refreshSource(true)
+		.then(queueSourceEventDrain)
+		.catch((error: unknown) => {
+			showBootstrapError(
+				error instanceof Error
+					? error.message
+					: `The font source did not load.`,
+			)
+		})
 }
 
 function renderBootstrap(): void {
@@ -401,6 +376,7 @@ async function showSource(
 	const options: EditorBrowserOptions = {
 		featureSubstitutions: currentFeatureSubstitutions,
 		onSourceChange: saveSource,
+		onSourceDirty: markSourceDirty,
 		source,
 		validation,
 		versionControl: versionControlOptions(),
@@ -425,82 +401,148 @@ async function showSource(
 	}
 }
 
-function saveSource(source: EditorFontSource): Promise<void> {
-	currentSource = source
-	saveQueue = saveQueue
-		.catch(() => undefined)
-		.then(
-			() =>
-				new Promise<void>((resolve, reject) => {
-					if (revision === null) {
-						reject(new Error(`The source session has not loaded yet.`))
-						return
-					}
-					const requestId = crypto.randomUUID()
-					pending.set(requestId, { reject, resolve })
-					const request: SourceSessionRequest = {
-						type: `save`,
-						baseRevision: revision,
-						requestId,
-						source,
-					}
-					port?.postMessage(request)
-				}),
-		)
-	return saveQueue.catch((error: unknown) => {
-		console.error(`Unable to save font source.`, error)
-		throw error
-	})
+const validationState = createFontEditorState({
+	key: `create-font/source-validation`,
+	isProduction: true,
+})
+
+function compileValidation(source: EditorFontSource): FontValidationStatus {
+	validationState.actions.load(source)
+	const compilation = validationState.read.compilation()
+	const issueCount = compilation.ok
+		? compilation.projectionWarnings.length +
+			compilation.ingestionWarnings.length
+		: compilation.stage === `projection-failed`
+			? compilation.projectionErrors.length +
+				compilation.projectionWarnings.length
+			: compilation.projectionWarnings.length +
+				compilation.ingestionErrors.length +
+				compilation.ingestionWarnings.length
+	return { ok: compilation.ok, issueCount }
 }
 
-function handleSourceSessionEvent(
-	message: MessageEvent<SourceSessionEvent>,
-): void {
-	const event = message.data
-	const protocolError = sourceSessionProtocolError(event.protocolVersion)
-	if (protocolError !== null) {
-		showBootstrapError(protocolError)
+async function showSourceState(state: SourceSyncState): Promise<void> {
+	const assembled = assembleSourceSyncState(state)
+	await showSource(
+		assembled.source,
+		compileValidation(assembled.source),
+		assembled.featureSources,
+	)
+}
+
+const refreshController = createSourceSnapshotRefreshController({
+	async applySnapshot(snapshot, initialLoad) {
+		sourceState = sourceSyncStateFromSnapshot(snapshot)
+		startupTimeline.mark(`source-message-received`)
+		await showSourceState(sourceState)
+		if (initialLoad) startupTimeline.mark(`source-ready`)
+	},
+	currentRevision: () => sourceState?.revision ?? null,
+	async readSnapshot(initialLoad) {
+		const finish = initialLoad
+			? startupTimeline.startPhase(`source-snapshot-rpc`)
+			: undefined
+		const snapshot = sourceProjectSnapshotFromResponse(
+			await rpcClient.api.source.snapshot.get(),
+		)
+		finish?.()
+		return snapshot
+	},
+})
+
+async function refreshSource(renderSnapshot: boolean): Promise<void> {
+	if (renderSnapshot) {
+		await refreshController.refresh()
 		return
 	}
-	switch (event.type) {
-		case `source`:
-			startupTimeline.mark(`source-message-received`)
-			sourceSessionStartup = event.startup
-			messageTransitDuration = startupTransitDuration(
-				event.sentAtEpochMilliseconds,
-				performance.timeOrigin + performance.now(),
-			)
-			revision = event.revision
-			void showSource(
-				event.source,
-				event.validation,
-				event.featureSources,
-			).catch((error: unknown) => {
-				showBootstrapError(
-					error instanceof Error
-						? error.message
-						: `The editor application did not load.`,
-				)
-			})
-			void refreshWorkingComparison(
-				versionControlSelection,
-				loadComparison,
-			).catch((error: unknown) => {
-				console.error(`Unable to refresh version-control changes.`, error)
-			})
-			break
-		case `saved`: {
-			revision = event.revision
-			if (currentSource !== null) {
-				void showSource(currentSource, event.validation).catch(
-					(error: unknown) => {
-						console.error(`Unable to update editor validation.`, error)
-					},
-				)
+	const snapshot = sourceProjectSnapshotFromResponse(
+		await rpcClient.api.source.snapshot.get(),
+	)
+	sourceState = sourceSyncStateFromSnapshot(snapshot)
+}
+
+function markSourceDirty(): void {
+	dirtySequence += 1
+	sourceDirty = true
+}
+
+function writeResultFromResponse(
+	response: Awaited<ReturnType<typeof rpcClient.api.source.units.put>>,
+): WriteSourceUnitsResult {
+	if (response.error !== null || response.data === null) {
+		throw new Error(
+			responseErrorMessage(
+				response.error,
+				`Write font source failed with HTTP ${response.error?.status ?? 500}.`,
+			),
+		)
+	}
+	if (`code` in response.data) {
+		throw new Error(response.data.message)
+	}
+	return response.data as WriteSourceUnitsResult
+}
+
+function saveSource(source: EditorFontSource): Promise<void> {
+	currentSource = source
+	const saveSequence = dirtySequence
+	saveQueue = saveQueue
+		.catch(() => undefined)
+		.then(async () => {
+			const base = sourceState
+			let renderCanonical = false
+			if (base === null) {
+				throw new Error(`The source session has not loaded yet.`)
 			}
-			const request = pending.get(event.requestId)
-			pending.delete(event.requestId)
-			request?.resolve()
+			const writes = sourceUnitWrites(base, source)
+			if (writes.length === 0) {
+				currentValidation = compileValidation(source)
+			} else {
+				const operationId = crypto.randomUUID()
+				const result = writeResultFromResponse(
+					await rpcClient.api.source.units.put({
+						idempotencyKey: operationId,
+						writes: writes as [
+							(typeof writes)[number],
+							...(typeof writes)[number][],
+						],
+					}),
+				)
+				if (
+					sourceState !== null &&
+					sourceState.revision === result.previousRevision
+				) {
+					const applied = applySourceSyncDelta(sourceState, {
+						type: `source.changed`,
+						operationId,
+						previousRevision: result.previousRevision,
+						removedPaths: [],
+						revision: result.revision,
+						units: result.units,
+					})
+					if (applied.status === `applied`) sourceState = applied.state
+				} else {
+					// A non-overlapping remote write committed before this one. Refresh
+					// the canonical unit map without replacing the still-dirty editor.
+					await refreshSource(false)
+					renderCanonical = true
+				}
+				currentValidation = compileValidation(source)
+			}
+			if (dirtySequence !== saveSequence) return
+			sourceDirty = false
+			const hadBufferedSourceEvents = bufferedSourceEvents.length > 0
+			await drainSourceEvents()
+			if (renderCanonical && sourceState !== null) {
+				await showSourceState(sourceState)
+			} else if (
+				!hadBufferedSourceEvents &&
+				currentSource !== null &&
+				currentValidation !== null &&
+				bufferedSourceEvents.length === 0
+			) {
+				await showSource(currentSource, currentValidation)
+			}
 			void refreshWorkingComparison(
 				versionControlSelection,
 				loadComparison,
@@ -510,60 +552,89 @@ function handleSourceSessionEvent(
 					error,
 				)
 			})
+		})
+	return saveQueue.catch((error: unknown) => {
+		console.error(`Unable to save font source.`, error)
+		throw error
+	})
+}
+
+async function drainSourceEvents(): Promise<void> {
+	if (sourceDirty || sourceState === null || bufferedSourceEvents.length === 0)
+		return
+	let changed = false
+	while (bufferedSourceEvents.length > 0) {
+		const event = bufferedSourceEvents.shift()
+		if (event === undefined) break
+		const result = applySourceSyncDelta(sourceState, event)
+		if (result.status === `gap`) {
+			bufferedSourceEvents.length = 0
+			await refreshSource(true)
+			changed = false
 			break
 		}
-		case `error`: {
-			const error = new Error(event.message)
-			if (event.requestId === undefined) {
-				console.error(error)
-				if (!renderedSource) showBootstrapError(event.message)
-				break
-			}
-			const request = pending.get(event.requestId)
-			pending.delete(event.requestId)
-			request?.reject(error)
-			break
-		}
+		sourceState = result.state
+		changed ||= result.status === `applied`
+	}
+	if (changed) {
+		await showSourceState(sourceState)
+		void refreshWorkingComparison(
+			versionControlSelection,
+			loadComparison,
+		).catch((error: unknown) => {
+			console.error(`Unable to refresh version-control changes.`, error)
+		})
 	}
 }
 
-function connectSourceSession(): void {
-	if (!(`SharedWorker` in globalThis)) {
-		showBootstrapError(
-			`This browser cannot open a shared font source session. Try a recent version of Chrome, Edge, or Firefox.`,
-		)
-		return
-	}
-	try {
-		const finish = startupTimeline.startPhase(`shared-worker-construction`)
-		const worker = __CREATE_FONT_DEVELOPMENT__
-			? new SharedWorker(
-					new URL("./source-session.worker.ts", import.meta.url),
-					{
-						name: SOURCE_SESSION_WORKER_NAME,
-						type: "module",
-					},
+function enqueueSourceEvent(event: SourceChangedEvent): void {
+	bufferedSourceEvents.push(event)
+	queueSourceEventDrain()
+}
+
+function queueSourceEventDrain(): void {
+	sourceEventQueue = sourceEventQueue
+		.then(drainSourceEvents)
+		.catch((error: unknown) => {
+			console.error(`Unable to apply a source update.`, error)
+			if (!renderedSource) {
+				showBootstrapError(
+					error instanceof Error
+						? error.message
+						: `The font source did not load.`,
 				)
-			: new SharedWorker(
-					`/source-session.worker.js?v=${SOURCE_SESSION_PROTOCOL_VERSION}`,
-					{
-						name: SOURCE_SESSION_WORKER_NAME,
-						type: "module",
-					},
-				)
-		finish()
-		startupTimeline.mark(`shared-worker-constructed`)
-		port = worker.port
-		port.addEventListener(`message`, handleSourceSessionEvent)
-		port.start()
-	} catch (error: unknown) {
-		showBootstrapError(
-			error instanceof Error
-				? error.message
-				: `The source session did not start.`,
-		)
-	}
+			}
+		})
+}
+
+function connectSourceEvents(): void {
+	const events = rpcClient.api.source.events.subscribe()
+	events.subscribe((event) => enqueueSourceEvent(event.data))
+	events.on(`open`, () => {
+		sourceEventReconnectDelay = 250
+		if (sourceEventsHaveConnected && !sourceDirty) {
+			sourceEventQueue = sourceEventQueue
+				.then(() => refreshSource(true))
+				.then(drainSourceEvents)
+				.catch((error: unknown) => {
+					console.error(`Unable to recover the source event stream.`, error)
+				})
+		}
+		sourceEventsHaveConnected = true
+	})
+	events.on(`close`, () => {
+		const delay = sourceEventReconnectDelay
+		sourceEventReconnectDelay = Math.min(sourceEventReconnectDelay * 2, 5_000)
+		setTimeout(connectSourceEvents, delay)
+	})
 }
 
 renderBootstrap()
-connectSourceSession()
+connectSourceEvents()
+void refreshSource(true)
+	.then(queueSourceEventDrain)
+	.catch((error: unknown) => {
+		showBootstrapError(
+			error instanceof Error ? error.message : `The font source did not load.`,
+		)
+	})

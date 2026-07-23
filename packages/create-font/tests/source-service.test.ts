@@ -406,6 +406,44 @@ describe(`filesystem font source service`, () => {
 		)
 	})
 
+	it(`publishes a durable RPC write as an ordered unit delta`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot)
+		const names = await source.readUnit(`names.json`)
+		let unsubscribe = (): void => undefined
+		const changed = new Promise<SourceChangedEvent>((resolveChanged) => {
+			unsubscribe =
+				source.subscribe?.((event) => {
+					unsubscribe()
+					resolveChanged(event)
+				}) ?? unsubscribe
+		})
+
+		const result = await source.writeUnits({
+			idempotencyKey: `rename-for-delta`,
+			writes: [
+				{
+					expectedRevision: names.revision,
+					path: names.path,
+					value: {
+						...(names.value as Record<string, string>),
+						family: `Workbench Delta Sans`,
+					},
+				},
+			],
+		})
+		const event = await changed
+
+		expect(event).toEqual({
+			type: `source.changed`,
+			operationId: `rename-for-delta`,
+			previousRevision: result.previousRevision,
+			removedPaths: [],
+			revision: result.revision,
+			units: result.units,
+		})
+	})
+
 	it(`publishes validated source changes made outside the RPC`, async () => {
 		const { projectRoot } = await copyDevelopmentFont()
 		const source = await createFileSystemSourceService(projectRoot)
@@ -438,7 +476,17 @@ describe(`filesystem font source service`, () => {
 			}),
 		])
 		expect(event.type).toBe(`source.changed`)
-		expect(event.manifest.revision).not.toBe(before.revision)
+		expect(event.previousRevision).toBe(before.revision)
+		expect(event.revision).not.toBe(before.revision)
+		expect(event.removedPaths).toEqual([])
+		expect(event.units).toEqual([
+			expect.objectContaining({
+				path: `names.json`,
+				value: expect.objectContaining({
+					family: `Workbench Sans External`,
+				}),
+			}),
+		])
 		expect((await source.readUnit(`names.json`)).value).toEqual(
 			expect.objectContaining({ family: `Workbench Sans External` }),
 		)

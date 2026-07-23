@@ -74,10 +74,18 @@ or roll back.
 ## Editor application boundary
 
 The consumer package owns `public/index.html` and `public/index.tsx`. Its small
-browser bootstrap loads the selected project's source units through Eden,
-assembles them into editor state, and persists changed units back through the
-multi-write route. It uses the browser-only `@create-font/source/browser`
-entrypoint, leaving Zod schemas and per-unit validation in the server process.
+browser bootstrap opens the server event stream before loading one coherent
+source snapshot, assembles that snapshot into local editor state, and persists
+changed units directly through the multi-write route. Ordered events carry only
+changed and removed units. A revision gap or reconnected stream recovers through
+one fresh snapshot. Dirty tabs buffer remote events until their local
+revision-guarded write completes, so another window cannot silently replace an
+edit that is waiting to save.
+
+The server is the sole source revision sequencer and durable authority. The
+browser uses the browser-only `@create-font/source/browser` entrypoint to split
+editor state into unit writes; Zod schemas, whole-project validation, and the
+transaction journal stay in the server process.
 
 `@create-font/editor` publishes its own browser-ready `editor.js` and
 `editor.css`. The Elysia server resolves those files from the installed
@@ -87,10 +95,10 @@ boundary. The editor artifact owns its Preact renderer and hooks; it never
 shares component state with the bootstrap bundle.
 
 The repository's `pnpm dev` command splits the development serving path at a
-deliberate boundary. Bun runs the Elysia API and SharedWorker endpoint with
-runtime `--hot` on port 3001. Vite serves `public/index.tsx` on port 3000 with
-Preact and CSS HMR. Vite aliases the editor browser entry to its workspace
-source and proxies `/api` and `/source-session.worker.js` to Bun, so editor
-changes retain HMR without requiring a package build. Production emits only
-the bootstrap under `dist/public`; the editor implementation remains in the
-dependency package instead of being duplicated there.
+deliberate boundary. Bun runs the Elysia HTTP and WebSocket API with runtime
+`--hot` on port 3001. Vite serves `public/index.tsx` on port 3000 with Preact and
+CSS HMR. Vite aliases the editor browser entry to its workspace source and
+proxies `/api`, including WebSocket upgrades, to Bun, so editor changes retain
+HMR without requiring a package build. Production emits only the bootstrap
+under `dist/public`; the editor implementation remains in the dependency
+package instead of being duplicated there.

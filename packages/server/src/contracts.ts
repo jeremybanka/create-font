@@ -42,15 +42,24 @@ export type SourceManifest = Readonly<{
 	units: readonly SourceUnitDescriptor[]
 }>
 
-export type SourceChangedEvent = Readonly<{
-	type: `source.changed`
-	manifest: SourceManifest
-}>
-
 export type SourceUnitSnapshot = SourceUnitDescriptor &
 	Readonly<{
 		value: JsonValue
 	}>
+
+/**
+ * One ordered, validated transition in the live source. Consumers can apply
+ * the delta only when `previousRevision` matches their current revision;
+ * otherwise they must recover through a coherent project snapshot.
+ */
+export type SourceChangedEvent = Readonly<{
+	type: `source.changed`
+	operationId?: string
+	previousRevision: string
+	removedPaths: readonly SourceUnitPath[]
+	revision: string
+	units: readonly SourceUnitSnapshot[]
+}>
 
 /**
  * One validated, revision-consistent view of every logical source unit.
@@ -129,6 +138,7 @@ export type WriteSourceUnitsInput = Readonly<{
 }>
 
 export type WriteSourceUnitsResult = Readonly<{
+	previousRevision: string
 	revision: string
 	units: readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
 }>

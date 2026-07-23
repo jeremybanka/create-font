@@ -21,7 +21,7 @@ import type {
 	CommitSourceUnitsInput,
 } from "./contracts.ts"
 
-export const CREATE_FONT_RPC_VERSION = 5 as const
+export const CREATE_FONT_RPC_VERSION = 6 as const
 
 export type CreateFontRpcOptions = Readonly<{
 	build: () => Promise<BuildResult>
@@ -107,15 +107,17 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			},
 			response: t.Object({
 				type: t.Literal(`source.changed`),
-				manifest: t.Object({
-					revision: t.String(),
-					units: t.Array(
-						t.Object({
-							path: t.String(),
-							revision: t.String(),
-						}),
-					),
-				}),
+				operationId: t.Optional(t.String()),
+				previousRevision: t.String(),
+				removedPaths: t.Array(t.String()),
+				revision: t.String(),
+				units: t.Array(
+					t.Object({
+						path: t.String(),
+						revision: t.String(),
+						value: t.Any(),
+					}),
+				),
 			}),
 		})
 		.get(`/source`, async () => {

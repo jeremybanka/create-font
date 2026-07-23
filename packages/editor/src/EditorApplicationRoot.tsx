@@ -10,9 +10,12 @@ import { EditorStateContext } from "./state-hooks.ts"
 import type { EditorVersionControl } from "./version-control.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
 
+const SOURCE_SAVE_DEBOUNCE_MS = 40
+
 export type EditorApplicationRootProps = Readonly<{
 	featureSubstitutions?: readonly EditorFeatureSubstitution[]
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
+	onSourceDirty?: () => void
 	source: EditorFontSource
 	validation?: Readonly<{ ok: boolean; issueCount: number }>
 	versionControl?: EditorVersionControl
@@ -21,6 +24,7 @@ export type EditorApplicationRootProps = Readonly<{
 export function EditorApplicationRoot({
 	featureSubstitutions,
 	onSourceChange,
+	onSourceDirty,
 	source,
 	validation,
 	versionControl,
@@ -68,10 +72,8 @@ export function EditorApplicationRoot({
 
 	useEffect(() => {
 		if (onSourceChange === undefined) return
-		let idleCallback: number | null = null
 		let timeout: ReturnType<typeof setTimeout> | null = null
 		const flush = (): void => {
-			idleCallback = null
 			timeout = null
 			if (applyingSource.current) return
 			const nextSource = workspace.font.read.editorSource()
@@ -88,25 +90,18 @@ export function EditorApplicationRoot({
 			workspace.font.atoms.documentRevision,
 			() => {
 				if (applyingSource.current) return
-				if (idleCallback !== null) cancelIdleCallback(idleCallback)
+				onSourceDirty?.()
 				if (timeout !== null) clearTimeout(timeout)
 				// Persist a settled edit burst after the latency-sensitive live font has
-				// compiled. An immediate idle callback can otherwise win the race with
-				// the compilation timer and assemble the complete editor source first.
-				timeout = setTimeout(() => {
-					timeout = null
-					if (typeof requestIdleCallback === "function") {
-						idleCallback = requestIdleCallback(flush, { timeout: 500 })
-					} else flush()
-				}, 100)
+				// compiled, without deferring cross-window delivery to browser idle time.
+				timeout = setTimeout(flush, SOURCE_SAVE_DEBOUNCE_MS)
 			},
 		)
 		return () => {
 			unsubscribe()
-			if (idleCallback !== null) cancelIdleCallback(idleCallback)
 			if (timeout !== null) clearTimeout(timeout)
 		}
-	}, [onSourceChange, workspace])
+	}, [onSourceChange, onSourceDirty, workspace])
 
 	return (
 		<editor-application-root className={css.class}>

@@ -26,8 +26,10 @@ export default defineConfig({
 	root: resolve(import.meta.dirname, `public`),
 	server: {
 		proxy: {
-			"/api": backend,
-			"/source-session.worker.js": backend,
+			"/api": {
+				target: backend,
+				ws: true,
+			},
 		},
 	},
 })
