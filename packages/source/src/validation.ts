@@ -16,10 +16,12 @@ import type {
 	EditorMasterSource,
 	EditorMasterSupportSource,
 	EditorPointSource,
+	EditorRuleSource,
 	GlyphId,
 	InstanceId,
 	MasterId,
 	PointId,
+	RuleId,
 } from "@create-font/states"
 
 import { diagnostic, failure, success } from "./result.ts"
@@ -1151,6 +1153,7 @@ function parseGlyph(
 			"note",
 			"color",
 			"overlap",
+			"rules",
 			...(sharedTopology ? ["contours"] : []),
 			"layers",
 		],
@@ -1160,6 +1163,33 @@ function parseGlyph(
 	const note = optionalString(record, "note", path, context)
 	const color = optionalString(record, "color", path, context)
 	const overlap = optionalBoolean(record, "overlap", path, context)
+	const rawRules = Object.hasOwn(record, "rules")
+		? requiredArray(record, "rules", path, context)
+		: undefined
+	const rules: EditorRuleSource[] | undefined = rawRules?.map(
+		(value, index) => {
+			const rulePath = `${path}.rules[${index}]`
+			const rule = objectValue(value, rulePath, context)
+			if (rule === null)
+				return { id: "rule:", a: { x: 0, y: 0 }, b: { x: 1, y: 0 } }
+			checkShape(rule, ["id", "a", "b"], rulePath, context)
+			const point = (key: "a" | "b") => {
+				const pointPath = `${rulePath}.${key}`
+				const value = objectValue(rule[key], pointPath, context)
+				if (value === null) return { x: 0, y: 0 }
+				checkShape(value, ["x", "y"], pointPath, context)
+				return {
+					x: requiredNumber(value, "x", pointPath, context),
+					y: requiredNumber(value, "y", pointPath, context),
+				}
+			}
+			return {
+				id: requiredId<RuleId>(rule, "id", "rule:", rulePath, context),
+				a: point("a"),
+				b: point("b"),
+			}
+		},
+	)
 	const layers = requiredArray(record, "layers", path, context)
 	let parsedLayers: readonly EditorGlyphLayerSource[]
 	if (sharedTopology) {
@@ -1248,6 +1278,7 @@ function parseGlyph(
 		...(note === undefined ? {} : { note }),
 		...(color === undefined ? {} : { color }),
 		...(overlap === undefined ? {} : { overlap }),
+		...(rules === undefined ? {} : { rules }),
 		layers: parsedLayers,
 	}
 }
@@ -1625,6 +1656,29 @@ function diagnoseStructure(
 		if (glyph === undefined) continue
 		const glyphPath = `$.glyphs[${glyphIndex}]`
 		diagnoseDuplicates(
+			(glyph.rules ?? []).map((rule) => rule.id),
+			(index) => `${glyphPath}.rules[${index}].id`,
+			"glyph rule ID",
+			context,
+		)
+		for (
+			let ruleIndex = 0;
+			ruleIndex < (glyph.rules?.length ?? 0);
+			ruleIndex += 1
+		) {
+			const rule = glyph.rules?.[ruleIndex]
+			if (
+				rule !== undefined &&
+				Math.hypot(rule.b.x - rule.a.x, rule.b.y - rule.a.y) <= 1e-6
+			)
+				add(
+					context,
+					"source.number",
+					`${glyphPath}.rules[${ruleIndex}]`,
+					"Rule endpoints must be distinct.",
+				)
+		}
+		diagnoseDuplicates(
 			glyph.layers.map((layer) => layer.masterId),
 			(index) => `${glyphPath}.layers[${index}].masterId`,
 			"glyph-layer master ID",
@@ -1786,6 +1840,9 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 					: { note: glyph.note }),
 				...(glyph.color === undefined ? {} : { color: glyph.color }),
 				...(glyph.overlap ? { overlap: true } : {}),
+				...(glyph.rules === undefined || glyph.rules.length === 0
+					? {}
+					: { rules: glyph.rules }),
 				layers: glyph.layers.map((layer) => ({
 					masterId: layer.masterId,
 					advanceWidth: layer.advanceWidth,

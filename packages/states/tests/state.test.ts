@@ -38,6 +38,25 @@ function firstContourPoints(
 }
 
 describe("font editor state", () => {
+	it("persists glyph rules in history while excluding them from compilation", () => {
+		const editor = loaded("state/rules")
+		const rule = {
+			id: "rule:measure" as const,
+			a: { x: 0, y: 50 },
+			b: { x: 500, y: 50 },
+		}
+		editor.actions.setGlyphRules({ glyphId: oGlyphId, rules: [rule] })
+		expect(editor.read.editorGlyphSource(oGlyphId)?.rules).toEqual([rule])
+		const compilation = editor.read.compilation()
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok)
+			expect(compilation.source.glyphs[1]).not.toHaveProperty("rules")
+		editor.undo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)?.rules).toBeUndefined()
+		editor.redo(oGlyphId)
+		expect(editor.read.editorGlyphSource(oGlyphId)?.rules).toEqual([rule])
+	})
+
 	it("projects the compatible geometric O through target ingestion", () => {
 		const compilation = loaded("state/compile").read.compilation()
 		expect(compilation.stage).toBe("compiled")

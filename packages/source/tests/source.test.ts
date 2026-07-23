@@ -108,6 +108,34 @@ function expectFailure(
 }
 
 describe("@create-font/source", () => {
+	test("round trips glyph-scoped measuring rules", () => {
+		const source = makeGeometricOEditorFont()
+		const withRules: EditorFontSource = {
+			...source,
+			glyphs: source.glyphs.map((glyph, index) =>
+				index === 1
+					? {
+							...glyph,
+							rules: [
+								{
+									id: "rule:horizontal",
+									a: { x: -100, y: 250 },
+									b: { x: 700, y: 250 },
+								},
+							],
+						}
+					: glyph,
+			),
+		}
+		const encoded = encodeEditorFontSource(withRules)
+		expect(encoded.ok).toBe(true)
+		if (!encoded.ok) return
+		const decoded = decodeEditorFontSource(encoded.value)
+		expect(decoded.ok).toBe(true)
+		if (decoded.ok)
+			expect(decoded.value.glyphs[1]?.rules).toEqual(withRules.glyphs[1]?.rules)
+	})
+
 	test("splits the state graph into loadable-aligned directory units", () => {
 		const source = geometricOWithEveryEditorField()
 		const split = splitEditorFontSource(source)

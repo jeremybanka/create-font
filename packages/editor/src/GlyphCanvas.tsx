@@ -2,9 +2,11 @@ import type {
 	ContourId,
 	EditorHandleKind,
 	EditorLayerNode,
+	EditorRuleSource,
 	GlyphId,
 	MasterId,
 	PointId,
+	RuleId,
 } from "@create-font/states"
 import {
 	resolveVerticalMetricAlignment,
@@ -64,6 +66,7 @@ import {
 	orthogonalConstraint,
 	projectionGuidePoints,
 	resolveGesturePoint,
+	snapDraggedPoint,
 	snapGroupTranslation,
 	type ActiveSnap,
 	type DragPositionTarget,
@@ -189,6 +192,18 @@ import {
 	prepareOutlineClipboardCopy,
 	writeOutlineClipboard,
 } from "./outline-clipboard.ts"
+import {
+	createRuleClipboardPayload,
+	parseRuleClipboard,
+	pastedRules,
+	RULE_CLIPBOARD_MIME,
+} from "./rule-clipboard.ts"
+import {
+	constrainRulePointToAngle,
+	measureRule,
+	RULE_ANGLE_SNAP_DEGREES,
+	ruleViewportEndpoints,
+} from "./rule-geometry.ts"
 import {
 	compatibilityNodeTraceStyle,
 	compatibilityPathColor,
@@ -415,6 +430,9 @@ export function GlyphCanvas({
 	const setSelection = useI(workspace.ui.selection)
 	const showNodes = useO(workspace.ui.showNodes)
 	const setShowNodes = useI(workspace.ui.showNodes)
+	const showMeasures = useO(workspace.ui.showMeasures)
+	const selectedRuleIds = useO(workspace.ui.selectedRuleIds)
+	const setSelectedRuleIds = useI(workspace.ui.selectedRuleIds)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const compatibilityOffsetPixels = useO(workspace.ui.compatibilityGhostOffset)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
@@ -458,6 +476,14 @@ export function GlyphCanvas({
 	const shapeEntitySequence = useRef(0)
 	const clipboardEntitySequence = useRef(0)
 	const [clipboardStatus, setClipboardStatus] = useState<string | null>(null)
+	const [pendingRulePoint, setPendingRulePoint] = useState<Readonly<{
+		x: number
+		y: number
+	}> | null>(null)
+	const [ruleHoverPoint, setRuleHoverPoint] = useState<Readonly<{
+		x: number
+		y: number
+	}> | null>(null)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const penHoverRef = useRef<PenHoverPreview | null>(null)
@@ -787,6 +813,64 @@ export function GlyphCanvas({
 		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
+	const resolveRulePoint = (
+		origin: Readonly<{ x: number; y: number }> | null,
+		candidate: Readonly<{ x: number; y: number }>,
+		constrained: boolean,
+	): SnappedPoint => {
+		if (constrained)
+			return {
+				...constrainRulePointToAngle(origin ?? candidate, candidate, true),
+				snaps: Object.freeze([]),
+			}
+		return snapDraggedPoint({
+			pointId: "point:rule-preview" as PointId,
+			x: candidate.x,
+			y: candidate.y,
+			nodes: allPoints,
+			metrics: [],
+			worldScale,
+		})
+	}
+	const rules = glyph?.rules ?? []
+	const selectedRules = useMemo(
+		() => rules.filter((rule) => selectedRuleIds.includes(rule.id)),
+		[rules, selectedRuleIds],
+	)
+	const initialRuleResolution = useMemo(() => {
+		if (pendingRulePoint !== null || ruleHoverPoint === null) return null
+		return resolveRulePoint(null, ruleHoverPoint, false)
+	}, [allPoints, pendingRulePoint, ruleHoverPoint, worldScale])
+	const pendingRuleResolution = useMemo(() => {
+		if (pendingRulePoint === null || ruleHoverPoint === null) return null
+		return resolveRulePoint(pendingRulePoint, ruleHoverPoint, shiftHeld)
+	}, [allPoints, pendingRulePoint, ruleHoverPoint, shiftHeld, worldScale])
+	const pendingRulePreview = useMemo(() => {
+		if (pendingRulePoint === null || pendingRuleResolution === null) return null
+		const b = pendingRuleResolution
+		if (Math.hypot(b.x - pendingRulePoint.x, b.y - pendingRulePoint.y) <= 1e-6)
+			return null
+		const rule: EditorRuleSource = {
+			id: "rule:pending-preview" as RuleId,
+			a: pendingRulePoint,
+			b,
+		}
+		return {
+			rule,
+			measurement: measureRule(rule, visibleContours),
+		}
+	}, [pendingRulePoint, pendingRuleResolution, visibleContours])
+	const ruleMeasurements = useMemo(
+		() =>
+			rules.map((rule) => ({
+				rule,
+				measurement: measureRule(rule, visibleContours),
+			})),
+		[rules, visibleContours],
+	)
+	const ruleExtent =
+		Math.hypot(width, height) / Math.max(worldScale, 1e-6) +
+		Math.max(advanceWidth, metrics.ascender - metrics.descender) * 2
 	const activeRotation =
 		transformDrag?.handle === "rotation"
 			? resolveTransformRotation({
@@ -1096,9 +1180,11 @@ export function GlyphCanvas({
 	const visibleSnaps =
 		activeTool === "pen"
 			? (penPlacement?.snaps ?? [])
-			: activeShapeKind !== null
-				? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
-				: activeSnaps
+			: activeTool === "rule"
+				? (pendingRuleResolution?.snaps ?? initialRuleResolution?.snaps ?? [])
+				: activeShapeKind !== null
+					? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
+					: activeSnaps
 	const rememberTangentDirection = (
 		constraint: TangentSlideConstraint,
 	): void => {
@@ -1547,6 +1633,15 @@ export function GlyphCanvas({
 			setTransformCursor(null)
 	}, [activeTool, transformBounds === null])
 
+	useEffect(() => {
+		if (
+			selectedRules.length === selectedRuleIds.length &&
+			selectedRules.every((rule, index) => rule.id === selectedRuleIds[index])
+		)
+			return
+		setSelectedRuleIds(Object.freeze(selectedRules.map((rule) => rule.id)))
+	}, [selectedRuleIds, selectedRules, setSelectedRuleIds])
+
 	useLayoutEffect(() => {
 		tangentDirectionRef.current = null
 		penPreviewPublisher.cancel()
@@ -1607,6 +1702,8 @@ export function GlyphCanvas({
 		setJoinTarget(null)
 		setTransformCursor(null)
 		setMomentaryPreview(false)
+		setPendingRulePoint(null)
+		setRuleHoverPoint(null)
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
@@ -1771,6 +1868,15 @@ export function GlyphCanvas({
 		focusTypingAt(nextCaret)
 	}
 	const deleteSelected = (breakPaths: boolean): void => {
+		if (selectedRules.length > 0 && activeGlyphId !== null) {
+			const selectedIds = new Set(selectedRules.map((rule) => rule.id))
+			workspace.font.actions.setGlyphRules({
+				glyphId: activeGlyphId,
+				rules: rules.filter((rule) => !selectedIds.has(rule.id)),
+			})
+			setSelectedRuleIds(Object.freeze([]))
+			return
+		}
 		if (selection.length === 0 || activeGlyphId === null) return
 		workspace.font.actions.deleteSelection({
 			masterId: activeMasterId,
@@ -1787,6 +1893,65 @@ export function GlyphCanvas({
 			breakPaths,
 		})
 		setSelection(Object.freeze([]))
+	}
+	const nextRuleId = (): RuleId => {
+		const occupied = new Set(rules.map((rule) => rule.id))
+		while (true) {
+			const sequence = clipboardEntitySequence.current++
+			const id = `rule:${activeGlyphId}:${sequence}` as RuleId
+			if (!occupied.has(id)) return id
+		}
+	}
+	const plotRulePoint = (event: KonvaEventObject<PointerEvent>): void => {
+		if (activeTool !== "rule" || activeGlyphId === null) return
+		const point = pointerInEditingGlyph(event)
+		if (point === null) return
+		event.cancelBubble = true
+		if (pendingRulePoint === null) {
+			const resolved = resolveRulePoint(null, point, false)
+			setPendingRulePoint({ x: resolved.x, y: resolved.y })
+			setRuleHoverPoint(null)
+			setClipboardStatus(
+				`Rule point A at ${resolved.x.toFixed(1)}, ${resolved.y.toFixed(1)}.`,
+			)
+			return
+		}
+		const resolved = resolveRulePoint(
+			pendingRulePoint,
+			point,
+			event.evt.shiftKey,
+		)
+		if (
+			Math.hypot(
+				resolved.x - pendingRulePoint.x,
+				resolved.y - pendingRulePoint.y,
+			) <= 1e-6
+		) {
+			setClipboardStatus("Rule points A and B must be distinct.")
+			return
+		}
+		const id = nextRuleId()
+		workspace.font.actions.setGlyphRules({
+			glyphId: activeGlyphId,
+			rules: [
+				...rules,
+				{ id, a: pendingRulePoint, b: { x: resolved.x, y: resolved.y } },
+			],
+		})
+		setPendingRulePoint(null)
+		setRuleHoverPoint(null)
+		setSelection(Object.freeze([]))
+		setSelectedRuleIds(Object.freeze([id]))
+		setClipboardStatus("Created measuring rule.")
+	}
+	const updateRuleHover = (
+		event: KonvaEventObject<MouseEvent | PointerEvent>,
+	): void => {
+		if (activeTool !== "rule" || activeGlyphId === null) return
+		const point = pointerInEditingGlyph(event)
+		if (point === null) return
+		setShiftHeld(event.evt.shiftKey)
+		setRuleHoverPoint(point)
 	}
 	const nextPenEntityId = (kind: "contour" | "point") => {
 		const occupied = new Set<string>([
@@ -2993,6 +3158,24 @@ export function GlyphCanvas({
 					setClipboardStatus("The active glyph is unavailable for copying.")
 					return
 				}
+				if (selectedRules.length > 0) {
+					const payload = createRuleClipboardPayload(selectedRules)
+					const serialized = JSON.stringify(payload)
+					try {
+						clipboard.setData(RULE_CLIPBOARD_MIME, serialized)
+						clipboard.setData("text/plain", serialized)
+					} catch {
+						setClipboardStatus(
+							"The rules could not be written to the clipboard.",
+						)
+						return
+					}
+					event.preventDefault()
+					setClipboardStatus(
+						`Copied ${selectedRules.length} rule${selectedRules.length === 1 ? "" : "s"}.`,
+					)
+					return
+				}
 				const copied = prepareOutlineClipboardCopy(
 					glyph,
 					activeMasterId,
@@ -3030,6 +3213,30 @@ export function GlyphCanvas({
 				}
 				if (glyph === null) {
 					setClipboardStatus("The active glyph is unavailable for cutting.")
+					return
+				}
+				if (selectedRules.length > 0) {
+					const selectedIds = new Set(selectedRules.map((rule) => rule.id))
+					const payload = createRuleClipboardPayload(selectedRules)
+					const serialized = JSON.stringify(payload)
+					try {
+						clipboard.setData(RULE_CLIPBOARD_MIME, serialized)
+						clipboard.setData("text/plain", serialized)
+					} catch {
+						setClipboardStatus(
+							"The rules could not be written to the clipboard.",
+						)
+						return
+					}
+					event.preventDefault()
+					workspace.font.actions.setGlyphRules({
+						glyphId: activeGlyphId,
+						rules: rules.filter((rule) => !selectedIds.has(rule.id)),
+					})
+					setSelectedRuleIds(Object.freeze([]))
+					setClipboardStatus(
+						`Cut ${selectedRules.length} rule${selectedRules.length === 1 ? "" : "s"}.`,
+					)
 					return
 				}
 				const copied = prepareOutlineClipboardCopy(
@@ -3080,11 +3287,31 @@ export function GlyphCanvas({
 					return
 				}
 				const serialized =
+					clipboard.getData(RULE_CLIPBOARD_MIME) ||
 					clipboard.getData(OUTLINE_CLIPBOARD_MIME) ||
 					clipboard.getData("text/plain")
 				if (serialized.length === 0) {
 					setClipboardStatus(
 						"The clipboard does not contain create-font outlines.",
+					)
+					return
+				}
+				if (serialized.includes('"create-font.rules"')) {
+					const parsedRules = parseRuleClipboard(serialized)
+					if (!parsedRules.ok) {
+						setClipboardStatus(parsedRules.error)
+						return
+					}
+					const additions = pastedRules(parsedRules.value, () => nextRuleId())
+					workspace.font.actions.setGlyphRules({
+						glyphId: activeGlyphId,
+						rules: [...rules, ...additions],
+					})
+					event.preventDefault()
+					setSelection(Object.freeze([]))
+					setSelectedRuleIds(Object.freeze(additions.map((rule) => rule.id)))
+					setClipboardStatus(
+						`Pasted ${additions.length} rule${additions.length === 1 ? "" : "s"}.`,
 					)
 					return
 				}
@@ -3172,6 +3399,13 @@ export function GlyphCanvas({
 					cancelShapeGesture()
 					return
 				}
+				if (event.key === "Escape" && pendingRulePoint !== null) {
+					event.preventDefault()
+					setPendingRulePoint(null)
+					setRuleHoverPoint(null)
+					setClipboardStatus("Canceled rule.")
+					return
+				}
 				if (event.key === "Escape" && cancelTransform()) {
 					event.preventDefault()
 					return
@@ -3194,6 +3428,11 @@ export function GlyphCanvas({
 					event.key.toLowerCase() === "a"
 				) {
 					event.preventDefault()
+					if (activeTool === "rule") {
+						setSelection(Object.freeze([]))
+						setSelectedRuleIds(Object.freeze(rules.map((rule) => rule.id)))
+						return
+					}
 					setSelection(
 						Object.freeze(
 							allPoints.flatMap((point): EditorSelectionTarget[] => [
@@ -3225,7 +3464,7 @@ export function GlyphCanvas({
 				if (
 					editingTextIndex !== null &&
 					(event.key === "Delete" || event.key === "Backspace") &&
-					selection.length > 0
+					(selection.length > 0 || selectedRules.length > 0)
 				) {
 					event.preventDefault()
 					deleteSelected(event.altKey)
@@ -3451,8 +3690,12 @@ export function GlyphCanvas({
 					width={width}
 					height={height}
 					onPointerDown={(event: KonvaEventObject<PointerEvent>) => {
-						if (momentaryPreview || activeShapeKind === null) return
-						beginShapeGesture(event)
+						if (momentaryPreview) return
+						if (activeTool === "rule") {
+							plotRulePoint(event)
+							return
+						}
+						if (activeShapeKind !== null) beginShapeGesture(event)
 					}}
 					onClick={selectNearestCanvasControl}
 					onTap={selectNearestCanvasControl}
@@ -3530,6 +3773,7 @@ export function GlyphCanvas({
 							clearPenHoverPreview()
 						if (activeShapeKind !== null && shapeGestureRef.current === null)
 							clearShapeHoverGuides()
+						if (activeTool === "rule") setRuleHoverPoint(null)
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
@@ -3537,6 +3781,8 @@ export function GlyphCanvas({
 							updatePenPointer(event)
 						else if (editingTextIndex !== null && activeShapeKind !== null)
 							updateShapePointer(event)
+						else if (editingTextIndex !== null && activeTool === "rule")
+							updateRuleHover(event)
 					}}
 					onPointerUp={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
@@ -3585,6 +3831,10 @@ export function GlyphCanvas({
 							fill={palette.surface}
 							onPointerDown={(event: KonvaEventObject<PointerEvent>) => {
 								if (momentaryPreview) return
+								if (editingTextIndex !== null && activeTool === "rule") {
+									plotRulePoint(event)
+									return
+								}
 								if (editingTextIndex === null || activeTool !== "pen") return
 								if (penPointerAction("background") === "place")
 									beginPenGesture(event)
@@ -3740,6 +3990,203 @@ export function GlyphCanvas({
 									y={editingPosition.baseline}
 									scaleY={-1}
 								>
+									{ruleMeasurements.map(({ rule, measurement }) => {
+										const selected = selectedRuleIds.includes(rule.id)
+										return (
+											<Group key={rule.id} name="glyph-rule">
+												<Line
+													name="glyph-rule-line"
+													points={[...ruleViewportEndpoints(rule, ruleExtent)]}
+													stroke={palette.accent}
+													opacity={selected ? 0.3 : 0.1}
+													strokeWidth={(selected ? 1.5 : 1) * inverseScale}
+													hitStrokeWidth={12 * inverseScale}
+													onPointerDown={(event) => {
+														if (
+															activeTool !== "select" &&
+															activeTool !== "rule"
+														)
+															return
+														event.cancelBubble = true
+														setSelection(Object.freeze([]))
+														setSelectedRuleIds(
+															Object.freeze(
+																event.evt.shiftKey
+																	? selected
+																		? selectedRuleIds.filter(
+																				(id) => id !== rule.id,
+																			)
+																		: [...selectedRuleIds, rule.id]
+																	: [rule.id],
+															),
+														)
+													}}
+												/>
+												{showMeasures
+													? measurement.measures.map((measure, index) => (
+															<Group
+																key={`${rule.id}:measure:${index}`}
+																listening={false}
+															>
+																<Line
+																	name="rule-measure"
+																	points={[
+																		measure.from.x,
+																		measure.from.y,
+																		measure.to.x,
+																		measure.to.y,
+																	]}
+																	stroke={palette.guideStrong}
+																	strokeWidth={3 * inverseScale}
+																	opacity={0.85}
+																/>
+																<Text
+																	name="rule-measure-label"
+																	x={(measure.from.x + measure.to.x) / 2}
+																	y={(measure.from.y + measure.to.y) / 2}
+																	offsetX={
+																		measure.label.length * 3 * inverseScale
+																	}
+																	offsetY={-6 * inverseScale}
+																	scaleY={-1}
+																	text={measure.label}
+																	fontSize={11 * inverseScale}
+																	fill={palette.guideStrong}
+																/>
+															</Group>
+														))
+													: null}
+												{showMeasures
+													? measurement.events.map((event, index) => (
+															<Circle
+																key={`${rule.id}:event:${index}`}
+																name={`rule-${event.kind}`}
+																x={event.x}
+																y={event.y}
+																radius={3.5 * inverseScale}
+																fill={
+																	event.kind === "entry"
+																		? palette.accent
+																		: palette.surface
+																}
+																stroke={palette.accent}
+																strokeWidth={inverseScale}
+																listening={false}
+															/>
+														))
+													: null}
+											</Group>
+										)
+									})}
+									{initialRuleResolution === null ? null : (
+										<Circle
+											name="rule-hover-point-a"
+											x={initialRuleResolution.x}
+											y={initialRuleResolution.y}
+											radius={5 * inverseScale}
+											fill={palette.surface}
+											stroke={palette.accent}
+											strokeWidth={1.5 * inverseScale}
+											opacity={0.85}
+											listening={false}
+										/>
+									)}
+									{pendingRulePreview === null ? null : (
+										<Group name="rule-hover-preview" listening={false}>
+											<Line
+												name="rule-hover-preview-line"
+												points={[
+													...ruleViewportEndpoints(
+														pendingRulePreview.rule,
+														ruleExtent,
+													),
+												]}
+												stroke={palette.accent}
+												strokeWidth={1.5 * inverseScale}
+												dash={[8 * inverseScale, 5 * inverseScale]}
+												opacity={0.72}
+											/>
+											{showMeasures
+												? pendingRulePreview.measurement.measures.map(
+														(measure, index) => (
+															<Group
+																key={`pending-rule:measure:${index}`}
+																listening={false}
+															>
+																<Line
+																	name="rule-hover-measure"
+																	points={[
+																		measure.from.x,
+																		measure.from.y,
+																		measure.to.x,
+																		measure.to.y,
+																	]}
+																	stroke={palette.guideStrong}
+																	strokeWidth={3 * inverseScale}
+																	opacity={0.6}
+																/>
+																<Text
+																	name="rule-hover-measure-label"
+																	x={(measure.from.x + measure.to.x) / 2}
+																	y={(measure.from.y + measure.to.y) / 2}
+																	offsetX={
+																		measure.label.length * 3 * inverseScale
+																	}
+																	offsetY={-6 * inverseScale}
+																	scaleY={-1}
+																	text={measure.label}
+																	fontSize={11 * inverseScale}
+																	fill={palette.guideStrong}
+																	opacity={0.75}
+																/>
+															</Group>
+														),
+													)
+												: null}
+											{showMeasures
+												? pendingRulePreview.measurement.events.map(
+														(event, index) => (
+															<Circle
+																key={`pending-rule:event:${index}`}
+																name={`rule-hover-${event.kind}`}
+																x={event.x}
+																y={event.y}
+																radius={3.5 * inverseScale}
+																fill={
+																	event.kind === "entry"
+																		? palette.accent
+																		: palette.surface
+																}
+																stroke={palette.accent}
+																strokeWidth={inverseScale}
+																opacity={0.72}
+															/>
+														),
+													)
+												: null}
+											<Circle
+												name="rule-hover-point-b"
+												x={pendingRulePreview.rule.b.x}
+												y={pendingRulePreview.rule.b.y}
+												radius={5 * inverseScale}
+												fill={palette.accent}
+												stroke={palette.surface}
+												strokeWidth={inverseScale}
+											/>
+										</Group>
+									)}
+									{pendingRulePoint === null ? null : (
+										<Circle
+											name="rule-pending-point-a"
+											x={pendingRulePoint.x}
+											y={pendingRulePoint.y}
+											radius={5 * inverseScale}
+											fill={palette.surface}
+											stroke={palette.accent}
+											strokeWidth={1.5 * inverseScale}
+											listening={false}
+										/>
+									)}
 									{overshootBandSegments.map((segment) => {
 										const metricIds = segment.lines.map((line) => line.id)
 										return (
@@ -5429,6 +5876,19 @@ export function GlyphCanvas({
 					Rotation handle
 				</span>
 			) : null}
+			{ruleMeasurements.map(({ rule, measurement }, ruleIndex) => (
+				<span
+					key={`accessible:${rule.id}`}
+					className="sr-only"
+					data-rule-summary={rule.id}
+				>
+					Rule {ruleIndex + 1}, A {rule.a.x.toFixed(1)}, {rule.a.y.toFixed(1)}{" "}
+					to B {rule.b.x.toFixed(1)}, {rule.b.y.toFixed(1)}.
+					{showMeasures
+						? ` Measures: ${measurement.measures.map((measure) => `${measure.label} units`).join(", ") || "none"}.`
+						: " Measures hidden."}
+				</span>
+			))}
 			<p id="canvas-instructions">
 				Type and add line breaks normally. Scroll to pan; use Command, Control,
 				Option, or Alt with the wheel to zoom. Double-click a glyph to edit its
@@ -5455,30 +5915,59 @@ export function GlyphCanvas({
 				move it without moving its handles. Use Command or Control+C, X, and V
 				to copy, cut, and paste outline selections. Hold Option or Alt while
 				deleting nodes to break paths open, or while deleting a handle to remove
-				its adjoining segment.
+				its adjoining segment. Use the Rule tool to click points A and B; rules
+				persist with the glyph and can be selected, copied, cut, pasted,
+				deleted, undone, and redone. Before plotting A, its hover preview snaps
+				independently to nearby node x and y coordinates. After plotting A, move
+				the pointer to preview the rule and its measures with the same free
+				node-space snapping; hold Shift to constrain the rule to{" "}
+				{RULE_ANGLE_SNAP_DEGREES} degree increments instead. Click a completed
+				rule line with the Rule tool to select it, then press Delete to remove
+				it. The View Measures control hides derived intersections and
+				one-decimal labels without hiding rules.
 			</p>
 			<output role="status" aria-live="polite">
-				{clipboardStatus ??
-					(momentaryPreview
-						? `Momentary preview of ${glyph?.name ?? "glyph"}.`
-						: editingTextIndex === null
-							? textSelectionRange.selectionStart ===
-								textSelectionRange.selectionEnd
-								? `Typing mode at text position ${caretIndex}.`
-								: `Typing mode with text positions ${textSelectionRange.selectionStart} through ${textSelectionRange.selectionEnd} selected; focus at ${caretIndex}.`
-							: joinTarget !== null
-								? `Release to join endpoint ${joinTarget.pointId}.`
-								: activeTool === "pen" && penPlacement !== null
-									? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
-									: shapeGestureResolution !== null && shapeGesture !== null
-										? `${shapeGesture.kind === "rect" ? "Rect" : "Ellipse"} preview from ${shapeGestureResolution.bounds.minX}, ${shapeGestureResolution.bounds.minY} to ${shapeGestureResolution.bounds.maxX}, ${shapeGestureResolution.bounds.maxY}.`
-										: rotationAngleDegrees !== null
-											? `Rotation preview ${rotationAngleDegrees} degrees${transformDrag?.shiftKey ? `, snapped to ${TRANSFORM_ROTATION_SNAP_DEGREES} degree increments` : ""}.`
-											: selection.length === 0
-												? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
-												: selection.length === 1 && selectedPoint !== undefined
-													? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
-													: `${selection.length} outline controls selected.`)}
+				{pendingRulePreview !== null
+					? `Rule preview from A ${pendingRulePreview.rule.a.x.toFixed(1)}, ${pendingRulePreview.rule.a.y.toFixed(1)} to B ${pendingRulePreview.rule.b.x.toFixed(1)}, ${pendingRulePreview.rule.b.y.toFixed(1)}${
+							shiftHeld
+								? `, snapped to ${RULE_ANGLE_SNAP_DEGREES} degree increments`
+								: pendingRuleResolution === null ||
+									  pendingRuleResolution.snaps.length === 0
+									? ""
+									: `, snapped to ${pendingRuleResolution.snaps
+											.map((snap) => snap.label.toLowerCase())
+											.join(" and ")}`
+						}.`
+					: initialRuleResolution !== null
+						? `Rule point A preview at ${initialRuleResolution.x.toFixed(1)}, ${initialRuleResolution.y.toFixed(1)}${
+								initialRuleResolution.snaps.length === 0
+									? ""
+									: `, snapped to ${initialRuleResolution.snaps
+											.map((snap) => snap.label.toLowerCase())
+											.join(" and ")}`
+							}.`
+						: (clipboardStatus ??
+							(momentaryPreview
+								? `Momentary preview of ${glyph?.name ?? "glyph"}.`
+								: editingTextIndex === null
+									? textSelectionRange.selectionStart ===
+										textSelectionRange.selectionEnd
+										? `Typing mode at text position ${caretIndex}.`
+										: `Typing mode with text positions ${textSelectionRange.selectionStart} through ${textSelectionRange.selectionEnd} selected; focus at ${caretIndex}.`
+									: joinTarget !== null
+										? `Release to join endpoint ${joinTarget.pointId}.`
+										: activeTool === "pen" && penPlacement !== null
+											? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
+											: shapeGestureResolution !== null && shapeGesture !== null
+												? `${shapeGesture.kind === "rect" ? "Rect" : "Ellipse"} preview from ${shapeGestureResolution.bounds.minX}, ${shapeGestureResolution.bounds.minY} to ${shapeGestureResolution.bounds.maxX}, ${shapeGestureResolution.bounds.maxY}.`
+												: rotationAngleDegrees !== null
+													? `Rotation preview ${rotationAngleDegrees} degrees${transformDrag?.shiftKey ? `, snapped to ${TRANSFORM_ROTATION_SNAP_DEGREES} degree increments` : ""}.`
+													: selection.length === 0
+														? `Editing ${glyph?.name ?? "glyph"}; no outline controls selected.`
+														: selection.length === 1 &&
+															  selectedPoint !== undefined
+															? `${selectedPoint.mode === "soft" ? "Soft" : "Hard"} node ${allPoints.indexOf(selectedPoint) + 1} selected at ${selectedPoint.x}, ${selectedPoint.y}.`
+															: `${selection.length} outline controls selected.`))}
 			</output>
 		</glyph-canvas>
 	)

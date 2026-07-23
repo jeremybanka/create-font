@@ -30,8 +30,10 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
 	const location = useO(workspace.ui.previewLocation)
 	const showNodes = useO(workspace.ui.showNodes)
+	const showMeasures = useO(workspace.ui.showMeasures)
 	const fontFeaturesEnabled = useO(workspace.ui.fontFeaturesEnabled)
 	const setShowNodes = useI(workspace.ui.showNodes)
+	const setShowMeasures = useI(workspace.ui.showMeasures)
 	const view = useO(workspace.ui.canvasView)
 	const setView = useI(workspace.ui.canvasView)
 	const viewport = useO(workspace.ui.canvasViewport)
@@ -62,7 +64,9 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 									? "Ellipse · drag an oval · hold Shift for a circle."
 									: activeTool === "knife"
 										? "Knife · click a path to break it open."
-										: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
+										: activeTool === "rule"
+											? "Rule · click A, then click B to measure."
+											: `${master?.name ?? "No master"} layer · Escape returns to typing.`}
 				</span>
 			</toolbar-context>
 
@@ -145,6 +149,18 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 					>
 						<svg.DotsHorizontal aria-hidden="true" />
 						Nodes
+					</button>
+				)}
+				{editingTextIndex === null ? null : (
+					<button
+						type="button"
+						data-measures
+						aria-label="Toggle measures"
+						aria-pressed={showMeasures}
+						onClick={() => setShowMeasures((visible) => !visible)}
+					>
+						Measures
+						<small>{showMeasures ? "On" : "Off"}</small>
 					</button>
 				)}
 			</toolbar-section>

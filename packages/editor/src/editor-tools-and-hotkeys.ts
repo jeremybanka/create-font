@@ -250,6 +250,21 @@ export const TOOLS = {
 					: "ready",
 		do: ({ workspace }) => workspace.actions.selectTool("knife"),
 	},
+	RULE: {
+		description:
+			"Plot two points to add a measuring rule; free points snap to node coordinates, while Shift constrains its angle.",
+		id: "rule",
+		displayName: "Rule",
+		hotkey: { key: "m" },
+		icon: "Half2Icon",
+		status: ({ activeTool, editingTextIndex }) =>
+			editingTextIndex === null
+				? "disabled"
+				: activeTool === "rule"
+					? "active"
+					: "ready",
+		do: ({ workspace }) => workspace.actions.selectTool("rule"),
+	},
 	TRANSFORM: {
 		description:
 			"Move or resize selected nodes and handles with a bounding box.",
@@ -418,6 +433,7 @@ export const TOOLBAR_LAYOUT = [
 		TOOLS.RECT,
 		TOOLS.ELLIPSE,
 		TOOLS.KNIFE,
+		TOOLS.RULE,
 		TOOLS.TRANSFORM,
 	],
 	[TOOLS.UNDO, TOOLS.REDO],

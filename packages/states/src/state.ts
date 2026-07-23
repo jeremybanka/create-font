@@ -52,6 +52,7 @@ import {
 	type EditorMasterSource,
 	type EditorNodeMode,
 	type EditorPointSource,
+	type EditorRuleSource,
 	type FontCompilation,
 	type GlyphId,
 	type InstanceId,
@@ -248,6 +249,11 @@ export interface SetKerningPairInput {
 	readonly value: number | null
 }
 
+export interface SetGlyphRulesInput {
+	readonly glyphId: GlyphId
+	readonly rules: readonly EditorRuleSource[]
+}
+
 function splitContourId(glyphId: GlyphId, firstPointId: PointId): ContourId {
 	return `contour:${glyphId}:split:${firstPointId}`
 }
@@ -346,6 +352,7 @@ interface GlyphState {
 interface GlyphEditorState {
 	readonly note: string
 	readonly color: string | null
+	readonly rules: readonly EditorRuleSource[]
 }
 
 interface PointState {
@@ -1014,6 +1021,16 @@ function validateEditorSourceStructure(source: EditorFontSource): void {
 					}
 				}
 			}
+		}
+		const ruleIds = new Set<string>()
+		for (const rule of glyph.rules ?? []) {
+			if (ruleIds.has(rule.id))
+				throw new TypeError(`Duplicate rule ID ${rule.id}.`)
+			ruleIds.add(rule.id)
+			for (const point of [rule.a, rule.b])
+				assertFiniteVector(point, `Rule ${rule.id}`)
+			if (Math.hypot(rule.b.x - rule.a.x, rule.b.y - rule.a.y) <= 1e-6)
+				throw new TypeError(`Rule ${rule.id} endpoints must be distinct.`)
 		}
 	}
 	for (const entry of source.cmap) {
@@ -4011,6 +4028,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					...(glyphEditor.note.length === 0 ? {} : { note: glyphEditor.note }),
 					...(glyphEditor.color === null ? {} : { color: glyphEditor.color }),
 					...(glyph.overlap ? { overlap: true } : {}),
+					...(glyphEditor.rules.length === 0
+						? {}
+						: { rules: glyphEditor.rules }),
 					layers,
 				})
 			},
@@ -4251,6 +4271,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					deepFreeze({
 						note: glyph.note ?? "",
 						color: glyph.color ?? null,
+						rules: glyph.rules ?? [],
 					}),
 				)
 				set(
@@ -7806,6 +7827,28 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		glyphHistoryTimelines,
 		kerningTimeline,
 		actions: {
+			setGlyphRules({ glyphId, rules }: SetGlyphRulesInput): void {
+				assertKnownGlyphHistory(glyphId)
+				const editor = silo.getState(glyphEditorAtoms, glyphId)
+				if (editor === null) throw new TypeError(`Unknown glyph ${glyphId}.`)
+				const seen = new Set<string>()
+				for (const rule of rules) {
+					if (seen.has(rule.id))
+						throw new TypeError(`Duplicate rule ID ${rule.id}.`)
+					seen.add(rule.id)
+					if (
+						![rule.a.x, rule.a.y, rule.b.x, rule.b.y].every(Number.isFinite) ||
+						Math.hypot(rule.b.x - rule.a.x, rule.b.y - rule.a.y) <= 1e-6
+					)
+						throw new TypeError(`Rule ${rule.id} is invalid.`)
+				}
+				silo.setState(
+					glyphEditorAtoms,
+					glyphId,
+					deepFreeze({ ...editor, rules: [...rules] }),
+				)
+				markDocumentChanged()
+			},
 			setFeatureSubstitutions(
 				substitutions: readonly {
 					readonly feature: string
