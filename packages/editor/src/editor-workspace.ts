@@ -818,6 +818,7 @@ export function createEditorWorkspace(
 						: String.fromCodePoint(mapping.codePoint)
 				font.silo.setState(selectedGlyphIdAtom, glyphId)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(selectedRuleIdsAtom, Object.freeze([]))
 				font.silo.setState(activeToolAtom, "select")
 				if (character !== undefined) {
 					font.silo.setState(previewTextAtom, character)
@@ -836,11 +837,13 @@ export function createEditorWorkspace(
 				font.silo.setState(selectedGlyphIdAtom, glyphId)
 				font.silo.setState(editingTextIndexAtom, textStart)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(selectedRuleIdsAtom, Object.freeze([]))
 				font.silo.setState(activeToolAtom, "select")
 			},
 			exitGlyphEdit(): void {
 				font.silo.setState(editingTextIndexAtom, null)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(selectedRuleIdsAtom, Object.freeze([]))
 				font.silo.setState(activeToolAtom, "select")
 			},
 			selectTool(tool: EditorToolId): void {

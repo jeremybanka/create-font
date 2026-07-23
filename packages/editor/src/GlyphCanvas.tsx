@@ -2,6 +2,7 @@ import type {
 	ContourId,
 	EditorHandleKind,
 	EditorLayerNode,
+	EditorRuleSource,
 	GlyphId,
 	MasterId,
 	PointId,
@@ -473,6 +474,11 @@ export function GlyphCanvas({
 		x: number
 		y: number
 	}> | null>(null)
+	const [ruleEndpointPreview, setRuleEndpointPreview] = useState<Readonly<{
+		ruleId: RuleId
+		endpoint: "a" | "b"
+		point: Readonly<{ x: number; y: number }>
+	}> | null>(null)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const penHoverRef = useRef<PenHoverPreview | null>(null)
@@ -803,13 +809,31 @@ export function GlyphCanvas({
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
 	const rules = glyph?.rules ?? []
+	const selectedRules = useMemo(
+		() => rules.filter((rule) => selectedRuleIds.includes(rule.id)),
+		[rules, selectedRuleIds],
+	)
+	const displayRules = useMemo(
+		() =>
+			ruleEndpointPreview === null
+				? rules
+				: rules.map((rule) =>
+						rule.id === ruleEndpointPreview.ruleId
+							? {
+									...rule,
+									[ruleEndpointPreview.endpoint]: ruleEndpointPreview.point,
+								}
+							: rule,
+					),
+		[rules, ruleEndpointPreview],
+	)
 	const ruleMeasurements = useMemo(
 		() =>
-			rules.map((rule) => ({
+			displayRules.map((rule) => ({
 				rule,
 				measurement: measureRule(rule, visibleContours),
 			})),
-		[rules, visibleContours],
+		[displayRules, visibleContours],
 	)
 	const ruleExtent =
 		Math.hypot(width, height) / Math.max(worldScale, 1e-6) +
@@ -1574,6 +1598,15 @@ export function GlyphCanvas({
 			setTransformCursor(null)
 	}, [activeTool, transformBounds === null])
 
+	useEffect(() => {
+		if (
+			selectedRules.length === selectedRuleIds.length &&
+			selectedRules.every((rule, index) => rule.id === selectedRuleIds[index])
+		)
+			return
+		setSelectedRuleIds(Object.freeze(selectedRules.map((rule) => rule.id)))
+	}, [selectedRuleIds, selectedRules, setSelectedRuleIds])
+
 	useLayoutEffect(() => {
 		tangentDirectionRef.current = null
 		penPreviewPublisher.cancel()
@@ -1635,6 +1668,7 @@ export function GlyphCanvas({
 		setTransformCursor(null)
 		setMomentaryPreview(false)
 		setPendingRulePoint(null)
+		setRuleEndpointPreview(null)
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
@@ -1799,10 +1833,11 @@ export function GlyphCanvas({
 		focusTypingAt(nextCaret)
 	}
 	const deleteSelected = (breakPaths: boolean): void => {
-		if (selectedRuleIds.length > 0 && activeGlyphId !== null) {
+		if (selectedRules.length > 0 && activeGlyphId !== null) {
+			const selectedIds = new Set(selectedRules.map((rule) => rule.id))
 			workspace.font.actions.setGlyphRules({
 				glyphId: activeGlyphId,
-				rules: rules.filter((rule) => !selectedRuleIds.includes(rule.id)),
+				rules: rules.filter((rule) => !selectedIds.has(rule.id)),
 			})
 			setSelectedRuleIds(Object.freeze([]))
 			return
@@ -1860,6 +1895,45 @@ export function GlyphCanvas({
 		setSelection(Object.freeze([]))
 		setSelectedRuleIds(Object.freeze([id]))
 		setClipboardStatus("Created measuring rule.")
+	}
+	const startRuleEndpointDrag = (
+		rule: EditorRuleSource,
+		endpoint: "a" | "b",
+	): void => {
+		setSelection(Object.freeze([]))
+		setSelectedRuleIds(Object.freeze([rule.id]))
+		setRuleEndpointPreview({ ruleId: rule.id, endpoint, point: rule[endpoint] })
+	}
+	const previewRuleEndpointDrag = (
+		rule: EditorRuleSource,
+		endpoint: "a" | "b",
+		point: Readonly<{ x: number; y: number }>,
+	): void => {
+		setRuleEndpointPreview({ ruleId: rule.id, endpoint, point })
+	}
+	const finishRuleEndpointDrag = (
+		rule: EditorRuleSource,
+		endpoint: "a" | "b",
+		point: Readonly<{ x: number; y: number }>,
+		cancelled: boolean,
+	): void => {
+		setRuleEndpointPreview(null)
+		if (cancelled) return
+		const other = endpoint === "a" ? rule.b : rule.a
+		if (Math.hypot(point.x - other.x, point.y - other.y) <= 1e-6) {
+			setClipboardStatus("Rule points A and B must be distinct.")
+			return
+		}
+		if (activeGlyphId === null) return
+		workspace.font.actions.setGlyphRules({
+			glyphId: activeGlyphId,
+			rules: rules.map((candidate) =>
+				candidate.id === rule.id
+					? { ...candidate, [endpoint]: point }
+					: candidate,
+			),
+		})
+		setClipboardStatus(`Moved rule point ${endpoint.toUpperCase()}.`)
 	}
 	const nextPenEntityId = (kind: "contour" | "point") => {
 		const occupied = new Set<string>([
@@ -3066,10 +3140,7 @@ export function GlyphCanvas({
 					setClipboardStatus("The active glyph is unavailable for copying.")
 					return
 				}
-				if (selectedRuleIds.length > 0) {
-					const selectedRules = rules.filter((rule) =>
-						selectedRuleIds.includes(rule.id),
-					)
+				if (selectedRules.length > 0) {
 					const payload = createRuleClipboardPayload(selectedRules)
 					const serialized = JSON.stringify(payload)
 					try {
@@ -3126,10 +3197,8 @@ export function GlyphCanvas({
 					setClipboardStatus("The active glyph is unavailable for cutting.")
 					return
 				}
-				if (selectedRuleIds.length > 0) {
-					const selectedRules = rules.filter((rule) =>
-						selectedRuleIds.includes(rule.id),
-					)
+				if (selectedRules.length > 0) {
+					const selectedIds = new Set(selectedRules.map((rule) => rule.id))
 					const payload = createRuleClipboardPayload(selectedRules)
 					const serialized = JSON.stringify(payload)
 					try {
@@ -3144,7 +3213,7 @@ export function GlyphCanvas({
 					event.preventDefault()
 					workspace.font.actions.setGlyphRules({
 						glyphId: activeGlyphId,
-						rules: rules.filter((rule) => !selectedRuleIds.includes(rule.id)),
+						rules: rules.filter((rule) => !selectedIds.has(rule.id)),
 					})
 					setSelectedRuleIds(Object.freeze([]))
 					setClipboardStatus(
@@ -3376,7 +3445,7 @@ export function GlyphCanvas({
 				if (
 					editingTextIndex !== null &&
 					(event.key === "Delete" || event.key === "Backspace") &&
-					(selection.length > 0 || selectedRuleIds.length > 0)
+					(selection.length > 0 || selectedRules.length > 0)
 				) {
 					event.preventDefault()
 					deleteSelected(event.altKey)
@@ -5696,6 +5765,46 @@ export function GlyphCanvas({
 											strokeWidth={inverseScale}
 											listening={false}
 										/>
+									)}
+									{/* Render interaction targets last so rule endpoints win hits
+									    when they overlap outline controls. */}
+									{ruleMeasurements.flatMap(({ rule }) =>
+										selectedRuleIds.includes(rule.id) || activeTool === "rule"
+											? (["a", "b"] as const).map((endpoint) => (
+													<Circle
+														key={`${rule.id}:endpoint-hit:${endpoint}`}
+														name={`rule-endpoint-hit rule-endpoint-${endpoint}`}
+														x={rule[endpoint].x}
+														y={rule[endpoint].y}
+														radius={9 * inverseScale}
+														fill={palette.accent}
+														opacity={0.001}
+														draggable={
+															activeTool === "select" || activeTool === "rule"
+														}
+														onDragStart={() =>
+															startRuleEndpointDrag(rule, endpoint)
+														}
+														onDragMove={(event) =>
+															previewRuleEndpointDrag(rule, endpoint, {
+																x: event.target.x(),
+																y: event.target.y(),
+															})
+														}
+														onDragEnd={(event) =>
+															finishRuleEndpointDrag(
+																rule,
+																endpoint,
+																{
+																	x: event.target.x(),
+																	y: event.target.y(),
+																},
+																event.evt.type === "pointercancel",
+															)
+														}
+													/>
+												))
+											: [],
 									)}
 								</Group>
 							)}
