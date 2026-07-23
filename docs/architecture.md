@@ -221,12 +221,15 @@ Today, `@create-font/target` provides the logical-SFNT TypeScript library;
 `@create-font/source` defines the JSON directory contract; `@create-font/server`
 provides the Elysia/Eden workspace boundary; and the unscoped `create-font`
 package owns the runtime-portable CLI and composes the server with the editor
-application. The remaining build, test, and development dependencies are
-inventoried in
-[runtime portability](runtime-portability.md).
+application. Vite builds its browser artifacts, Vitest runs its behavioral
+suite under Node, and the development supervisor uses Node child processes.
+The supported Node and Bun boundaries are documented in
+[runtime portability](runtime-portability.md), and the retained RPC transport is
+documented in [the transport decision](rpc-transport-decision.md).
 The private `@create-font/editor` package exports its Preact application root,
-which the `create-font` browser entry serves through Elysia's Bun full-stack
-development pattern. The application discovers `fonts/*/create-font.json`, serves
+which the `create-font` browser entry serves through Vite during development
+and compiled assets in production. The application discovers
+`fonts/*/create-font.json`, serves
 the selected project through a filesystem-backed source service, hydrates the
 browser from individual source units, and persists coordinated edits through
 conditional multi-unit writes. Watching and reconciliation, immutable release

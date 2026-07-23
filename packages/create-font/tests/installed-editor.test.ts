@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test"
+import { execFile } from "node:child_process"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import {
 	cp,
 	mkdir,
@@ -11,32 +12,25 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { basename, resolve } from "node:path"
+import { promisify } from "node:util"
 
-const workspaceRoot = resolve(import.meta.dir, `../../..`)
+const workspaceRoot = resolve(import.meta.dirname, `../../..`)
 const packageDirectories = [`packages/create-font`, `packages/editor`] as const
 
 let fixtureRoot = ``
+const execFileAsync = promisify(execFile)
 
 async function run(
 	command: readonly string[],
 	cwd: string,
 ): Promise<Readonly<{ stderr: string; stdout: string }>> {
-	const process = Bun.spawn(command, {
+	const [executable, ...args] = command
+	if (executable === undefined) throw new Error(`A command is required.`)
+	const { stderr, stdout } = await execFileAsync(executable, args, {
 		cwd,
-		env: { ...Bun.env, CI: `true` },
-		stderr: `pipe`,
-		stdout: `pipe`,
+		env: { ...process.env, CI: `true` },
+		encoding: `utf8`,
 	})
-	const [exitCode, stderr, stdout] = await Promise.all([
-		process.exited,
-		new Response(process.stderr).text(),
-		new Response(process.stdout).text(),
-	])
-	if (exitCode !== 0) {
-		throw new Error(
-			`${command.join(` `)} failed with exit code ${exitCode}:\n${stderr}\n${stdout}`,
-		)
-	}
 	return { stderr, stdout }
 }
 
@@ -124,7 +118,7 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 	const scriptSource = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
 	if (scriptSource === undefined) throw new Error("The installed app has no browser script.")
 	const publicRoot = resolve(dirname(createFontPackagePath), "dist/public")
-	const applicationScripts = (await readdir(publicRoot)).filter((file) =>
+	const applicationScripts = (await readdir(publicRoot, { recursive: true })).filter((file) =>
 		file.endsWith(".js"),
 	)
 	const main = (await Promise.all(
@@ -134,7 +128,7 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 	const editorJavaScript = await editorJavaScriptResponse.text()
 	const editorStylesResponse = await request("/editor/editor.css")
 	const editorStyles = await editorStylesResponse.text()
-	await Bun.write(Bun.stdout, "RESULT " + JSON.stringify({
+	process.stdout.write("RESULT " + JSON.stringify({
 		dependency: createFontPackage.dependencies["@create-font/editor"],
 		editorContentType: editorJavaScriptResponse.headers.get("content-type"),
 		editorHasImplementation: editorJavaScript.includes("editor-application-root"),
@@ -177,10 +171,10 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 		expect(result.dependency).toBe(editorPackage.version)
 		expect(result.mainHasEditorImplementation).toBe(false)
 		expect(result.mainLoadsEditorArtifact).toBe(true)
-		expect(result.editorContentType).toStartWith(`text/javascript`)
+		expect(result.editorContentType).toMatch(/^text\/javascript/u)
 		expect(result.editorHasImplementation).toBe(true)
 		expect(result.editorSize).toBeGreaterThan(100_000)
-		expect(result.stylesContentType).toStartWith(`text/css`)
+		expect(result.stylesContentType).toMatch(/^text\/css/u)
 		expect(result.stylesHaveEditorRoot).toBe(true)
 		expect(result.mountType).toBe(`function`)
 	}, 60_000)

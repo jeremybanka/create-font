@@ -12,9 +12,9 @@ The workspace is divided into four dependency classes:
 | Class                  | Current boundary                                                               | Portability plan                                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Installed runtime      | `packages/create-font/src`                                                     | Use Node-compatible and Web-standard APIs. Process execution goes through the injectable `RuntimeAdapter`. |
-| Browser build          | `packages/create-font/scripts/build.ts` and `packages/editor/scripts/build.ts` | Replace `Bun.build` with the Vite toolchain in the build-portability phase.                                |
-| Tests                  | `packages/create-font/tests`                                                   | Move `bun:test` suites and Bun-only fixtures to Vitest in the test-portability phase.                      |
-| Repository development | `packages/create-font/scripts/dev.ts` and package scripts                      | Replace direct Bun orchestration with the runtime-selected server entry point.                             |
+| Browser build          | `packages/create-font/scripts/build.ts` and `packages/editor/scripts/build.ts` | Vite builds application pages, the editor artifact, and published library entrypoints under Node.          |
+| Tests                  | `packages/create-font/tests`                                                   | Vitest runs the behavioral suite under Node; a shared runtime smoke script also runs under Bun.            |
+| Repository development | `packages/create-font/scripts/dev.ts` and package scripts                      | Node supervises the watched Elysia backend and Vite development server.                                    |
 
 The source and application contracts are already runtime-neutral:
 
@@ -55,7 +55,31 @@ The second portability phase gives the installed server a Node execution path:
 - a Node integration test covers HTTP, production editor assets, two-client
   source-event propagation, disconnect cleanup, and reconnect delivery.
 
-Browser bundles still use `Bun.build`, most create-font tests still use
-`bun:test`, and repository development orchestration still invokes Bun. Those
-are isolated follow-up phases rather than hidden dependencies of the installed
-server or source-service contracts.
+## Build, test, and development decisions
+
+The portability work is complete across the repository workflow:
+
+- Vite replaces `Bun.build` for the editor library, application pages, browser
+  RPC client, and published CLI/server entrypoints.
+- Vitest runs every `create-font` behavioral test. Test fixtures use Node child
+  processes and standard filesystem APIs.
+- Node's watch mode runs the TypeScript backend while a Node child process runs
+  the Vite development server.
+- the primary CI job builds and tests with the tools declared in `mise.toml`,
+  which no longer installs Bun.
+- a separate compatibility job installs Bun explicitly, runs the same
+  HTTP/assets/two-client/reconnect server smoke test through Elysia's native Bun
+  adapter, and executes the built font CLI.
+
+Node is the compatibility baseline. Bun remains a supported host for the
+published CLI and server, but it is not required to install, initialize, edit,
+persist, build, test, or use version-control features with create-font.
+
+## RPC transport
+
+Elysia and Eden remain the RPC framework. The Node and Bun adapters pass the
+same runtime behavior test, so changing frameworks would not improve runtime
+portability. A test-only tRPC standalone/SSE prototype verifies query, mutation,
+two-client delivery, disconnect cleanup, and tracked reconnect input. The
+measured surface and decision are documented in
+[RPC transport decision](rpc-transport-decision.md).

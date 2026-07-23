@@ -1,9 +1,11 @@
+import { execFile } from "node:child_process"
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
+import { promisify } from "node:util"
 
-import { afterEach, describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it } from "vitest"
 import {
 	SourceUnitConflictError,
 	SourceValidationError,
@@ -26,19 +28,13 @@ import {
 import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
+const execFileAsync = promisify(execFile)
 
 async function git(root: string, ...args: readonly string[]): Promise<string> {
-	const process = Bun.spawn([`git`, ...args], {
+	const { stdout } = await execFileAsync(`git`, args, {
 		cwd: root,
-		stdout: `pipe`,
-		stderr: `pipe`,
+		encoding: `utf8`,
 	})
-	const [code, stdout, stderr] = await Promise.all([
-		process.exited,
-		new Response(process.stdout).text(),
-		new Response(process.stderr).text(),
-	])
-	if (code !== 0) throw new Error(stderr)
 	return stdout.trim()
 }
 
@@ -59,7 +55,7 @@ async function copyDevelopmentFont() {
 	temporaryRoots.push(root)
 	const fontsRoot = resolve(root, `fonts`)
 	await cp(
-		resolve(import.meta.dir, `../../../fonts/workbench-sans`),
+		resolve(import.meta.dirname, `../../../fonts/workbench-sans`),
 		resolve(fontsRoot, `workbench-sans`),
 		{ recursive: true },
 	)

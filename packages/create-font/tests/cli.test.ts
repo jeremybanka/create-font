@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it } from "vitest"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -42,7 +42,7 @@ describe(`create-font CLI`, () => {
 	it(`renders initializer help`, async () => {
 		const captured = captureIo()
 		const exitCode = await runCreateFontCli(
-			[`bun`, `create-font`, `--help`],
+			[`node`, `create-font`, `--help`],
 			captured.io,
 		)
 
@@ -62,7 +62,7 @@ describe(`create-font CLI`, () => {
 		expect(result.workspaceCreated).toBe(true)
 		expect(result.fontName).toBe(`my-font`)
 		const createFontPackageJson = JSON.parse(
-			await readFile(join(import.meta.dir, `../package.json`), `utf8`),
+			await readFile(join(import.meta.dirname, `../package.json`), `utf8`),
 		) as { version: string }
 		const packageJson = JSON.parse(
 			await readFile(join(result.workspaceRoot, `package.json`), `utf8`),
@@ -70,6 +70,7 @@ describe(`create-font CLI`, () => {
 		expect(packageJson.devDependencies[`create-font`]).toBe(
 			createFontPackageJson.version,
 		)
+		expect(result.installed).toBe(false)
 
 		const projects = await discoverFontProjects(result.workspaceRoot)
 		expect(projects.map((project) => project.name)).toEqual([`my-font`])
@@ -140,7 +141,7 @@ describe(`create-font CLI`, () => {
 describe(`font CLI`, () => {
 	it(`renders workspace command help`, async () => {
 		const captured = captureIo()
-		const exitCode = await runFontCli([`bun`, `font`], captured.io)
+		const exitCode = await runFontCli([`node`, `font`], captured.io)
 
 		expect(exitCode).toBe(0)
 		expect(captured.stdout.join(``)).toContain(`font`)
@@ -151,7 +152,7 @@ describe(`font CLI`, () => {
 	it(`builds a selected font and prints its artifact path`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli(
-			[`bun`, `font`, `build`, `workbench-sans`, `--root`, `../..`],
+			[`node`, `font`, `build`, `workbench-sans`, `--root`, `../..`],
 			captured.io,
 		)
 

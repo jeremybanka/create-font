@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "vitest"
 import type { SourceProjectSnapshot } from "@create-font/server"
 
 import { createSourceSnapshotRefreshController } from "../public/source-refresh.ts"

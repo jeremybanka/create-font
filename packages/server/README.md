@@ -25,6 +25,8 @@ the complete project before committing a write.
 adapter must be supplied before the RPC plugin is constructed because Elysia
 registers WebSocket routes through the active adapter. The `create-font` host
 selects Elysia's Bun adapter under Bun and its official Node adapter under Node.
+The measured Elysia-versus-tRPC decision is recorded in
+[`docs/rpc-transport-decision.md`](../../docs/rpc-transport-decision.md).
 
 The server is the synchronization authority. A client applies an event only
 when its current revision equals the event's `previousRevision`; otherwise it

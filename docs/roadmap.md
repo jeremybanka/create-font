@@ -27,9 +27,10 @@ The repository already contains:
 - a browser editor prototype with text preview, outline editing, selection, and
   glyph-local history, now hydrated from and persisted to that source over RPC.
 
-The `create-font` package provides a preliminary Bun/comline CLI and composes
-`@create-font/server` with the editor's exported Preact application root through
-Bun's full-stack development server. It opens and persists a real project
+The `create-font` package provides a Node- and Bun-compatible comline CLI and
+composes `@create-font/server` with the editor's exported Preact application
+root. Vite owns browser builds and development serving, while Elysia selects its
+Node or Bun server adapter at runtime. It opens and persists a real project
 source and compiles `.ttf` artifacts, but does not yet publish live build status
 through the workspace protocol.
 

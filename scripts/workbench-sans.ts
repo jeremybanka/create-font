@@ -594,7 +594,12 @@ export function makeWorkbenchSans(): EditorFontSource {
 	}
 }
 
-const projectRoot = resolve(import.meta.dir, "..", "fonts", "workbench-sans")
+const projectRoot = resolve(
+	import.meta.dirname,
+	"..",
+	"fonts",
+	"workbench-sans",
+)
 const split = splitEditorFontSource(makeWorkbenchSans())
 if (!split.ok) throw new Error(split.errors[0].message)
 
@@ -623,5 +628,5 @@ await writeFile(
 )
 await writeFile(
 	resolve(projectRoot, "README.md"),
-	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef, every printable\nASCII character from U+0020 through U+007E, and an unencoded f_i ligature, with\ncompatible topology across weights and reviewable per-entity JSON source units.\nThe Adobe feature source enables the f_i glyph through the standard liga feature.\n\nRegenerate the checked-in source with \`bun scripts/workbench-sans.ts\`.\n\nFrom the repository root, build the installable variable TrueType artifact with\n\`bun font build workbench-sans\`. The deterministic output is written to\n\`artifacts/workbench-sans/WorkbenchSans-Text.ttf\`.\n`,
+	`# Workbench Sans\n\nWorkbench Sans is create-font's live development family: a geometric, monoline\ndisplay sans with Text and Heavy masters. It includes .notdef, every printable\nASCII character from U+0020 through U+007E, and an unencoded f_i ligature, with\ncompatible topology across weights and reviewable per-entity JSON source units.\nThe Adobe feature source enables the f_i glyph through the standard liga feature.\n\nRegenerate the checked-in source with \`node scripts/workbench-sans.ts\`.\n\nFrom the repository root, build the installable variable TrueType artifact with\n\`pnpm font build workbench-sans\`. The deterministic output is written to\n\`artifacts/workbench-sans/WorkbenchSans-Text.ttf\`.\n`,
 )

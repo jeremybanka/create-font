@@ -15,9 +15,9 @@ other character in the preview visibly exercises `.notdef`.
 
 ## Stack
 
-- The application shell and all DOM UI are Preact. Bun's full-stack bundler
-  compiles the application entry, TypeScript, JSX, global CSS, and CSS Modules
-  when `create-font serve` starts.
+- The application shell and all DOM UI are Preact. Vite compiles the browser
+  entry, TypeScript, JSX, global CSS, and CSS Modules for published assets and
+  serves the same workspace sources during development.
 - `@create-font/states` owns all editable font facts, its isolated atom.io Silo,
   transactions, selector graph, ingestion proof, and one undo timeline per
   glyph.

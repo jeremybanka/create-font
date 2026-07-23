@@ -6,8 +6,8 @@ ASCII character from U+0020 through U+007E, and an unencoded f_i ligature, with
 compatible topology across weights and reviewable per-entity JSON source units.
 The Adobe feature source enables the f_i glyph through the standard liga feature.
 
-Regenerate the checked-in source with `bun scripts/workbench-sans.ts`.
+Regenerate the checked-in source with `node scripts/workbench-sans.ts`.
 
 From the repository root, build the installable variable TrueType artifact with
-`bun font build workbench-sans`. The deterministic output is written to
+`pnpm font build workbench-sans`. The deterministic output is written to
 `artifacts/workbench-sans/WorkbenchSans-Text.ttf`.
