@@ -1,5 +1,12 @@
 # @create-font/states
 
+## 0.6.3
+
+### Patch Changes
+
+- 6601452: Keep live font previews updating by freezing incompatible glyphs to their default master while preserving strict export validation.
+- e610e37: Add persisted glyph measuring rules, derived one-dimensional form and counterform measures, and the Rule canvas tool.
+
 ## 0.6.2
 
 ### Patch Changes
