@@ -24,7 +24,7 @@
 		"@changesets/config": "3.1.4",
 		"@dprint/json": "0.23.0",
 		"@dprint/markdown": "0.22.1",
-		"@dprint/oxc": "0.30.0",
+		"@dprint/oxc": "0.31.0",
 		"@dprint/toml": "0.7.0",
 		"@preact/preset-vite": "2.10.6",
 		"agents.yaml": "0.2.2",
