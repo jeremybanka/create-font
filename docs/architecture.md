@@ -221,8 +221,8 @@ Today, `@create-font/target` provides the logical-SFNT TypeScript library;
 `@create-font/source` defines the JSON directory contract; `@create-font/server`
 provides the Elysia/Eden workspace boundary; and the unscoped `create-font`
 package owns the runtime-portable CLI and composes the server with the editor
-application. The remaining build, test, development, and server-adapter
-dependencies are inventoried in
+application. The remaining build, test, and development dependencies are
+inventoried in
 [runtime portability](runtime-portability.md).
 The private `@create-font/editor` package exports its Preact application root,
 which the `create-font` browser entry serves through Elysia's Bun full-stack

@@ -1,9 +1,9 @@
 # Runtime portability
 
-create-font supports Node and Bun as runtime choices in principle, with Node as
-the compatibility baseline. Runtime portability is separate from the RPC
-framework: changing Elysia/Eden would not replace build, test, process, file, or
-CLI APIs on its own.
+create-font supports Node and Bun as installed runtime choices, with Node as the
+compatibility baseline. Runtime portability is separate from the RPC framework:
+changing Elysia/Eden would not replace build, test, process, file, or CLI APIs
+on its own.
 
 ## Portability boundary
 
@@ -14,7 +14,7 @@ The workspace is divided into four dependency classes:
 | Installed runtime      | `packages/create-font/src`                                                     | Use Node-compatible and Web-standard APIs. Process execution goes through the injectable `RuntimeAdapter`. |
 | Browser build          | `packages/create-font/scripts/build.ts` and `packages/editor/scripts/build.ts` | Replace `Bun.build` with the Vite toolchain in the build-portability phase.                                |
 | Tests                  | `packages/create-font/tests`                                                   | Move `bun:test` suites and Bun-only fixtures to Vitest in the test-portability phase.                      |
-| Repository development | `packages/create-font/scripts/dev.ts` and package scripts                      | Replace direct Bun orchestration after the Node server entry point exists.                                 |
+| Repository development | `packages/create-font/scripts/dev.ts` and package scripts                      | Replace direct Bun orchestration with the runtime-selected server entry point.                             |
 
 The source and application contracts are already runtime-neutral:
 
@@ -42,8 +42,20 @@ The first portability phase removes Bun globals from installed runtime source:
 - workspace installation invokes an explicit package manager. `npm` is the
   default, and callers can choose `npm`, `pnpm`, `yarn`, or `bun`.
 
-This phase intentionally does not claim a complete Node execution path.
-Elysia server startup still uses its current Bun adapter, browser bundles still
-use `Bun.build`, and the create-font application tests still use `bun:test`.
-Those are isolated follow-up phases rather than hidden dependencies of the
-source-service contract.
+## Phase-two decisions
+
+The second portability phase gives the installed server a Node execution path:
+
+- Elysia uses its native Bun adapter when the Bun global is present and loads
+  the official `@elysia/node` adapter otherwise.
+- the selected adapter is passed to the application and RPC plugin before
+  routes are registered, so the HTTP and WebSocket contracts are identical.
+- the Node adapter lifecycle is normalized to preserve Elysia's `app.server`
+  and `app.stop()` behavior.
+- a Node integration test covers HTTP, production editor assets, two-client
+  source-event propagation, disconnect cleanup, and reconnect delivery.
+
+Browser bundles still use `Bun.build`, most create-font tests still use
+`bun:test`, and repository development orchestration still invokes Bun. Those
+are isolated follow-up phases rather than hidden dependencies of the installed
+server or source-service contracts.

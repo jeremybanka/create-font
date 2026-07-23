@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { pathToFileURL } from "node:url"
 
 export type RuntimeCommandOptions = Readonly<{
 	cwd?: string
@@ -63,6 +64,11 @@ export const nodeRuntimeAdapter: RuntimeAdapter = {
 			if (child.stdin !== null) child.stdin.end(options.input)
 		})
 	},
+}
+
+export function isMainModule(url: string): boolean {
+	const entrypoint = process.argv[1]
+	return entrypoint !== undefined && pathToFileURL(entrypoint).href === url
 }
 
 function concatenate(chunks: readonly Uint8Array[]): Uint8Array {

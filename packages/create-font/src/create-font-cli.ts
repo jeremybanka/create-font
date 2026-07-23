@@ -12,6 +12,7 @@ import { z } from "zod/v4"
 
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { createFontWorkspace, isPackageManager } from "./create.ts"
+import { isMainModule } from "./runtime.ts"
 
 const createOptions = options(
 	`Create a workspace, or add a font to the current workspace.`,
@@ -83,4 +84,4 @@ export async function runCreateFontCli(
 	}
 }
 
-if (import.meta.main) process.exitCode = await runCreateFontCli()
+if (isMainModule(import.meta.url)) process.exitCode = await runCreateFontCli()

@@ -1,14 +1,13 @@
 # create-font
 
 `create-font` is the application package for the create-font font toolchain. It
-ships two Node-compatible executables with separate roles. Create a new workspace
-with the
-initializer:
+ships two Node- and Bun-compatible executables with separate roles. Create a new
+workspace with the initializer:
 
 ```sh
-bun create font my-font
+npx create-font my-font
 cd my-font
-bun font dev
+npm exec -- font dev
 ```
 
 The generated workspace lists only `create-font` as a development dependency.
@@ -16,16 +15,15 @@ Installing that package links both `create-font` and `font` locally. Inside an
 existing workspace, the initializer adds another font project without replacing
 the workspace or reinstalling its dependencies:
 
-```sh
-bun create-font display-font
-```
+Run `npx create-font display-font` to add another font.
 
 The repository development workflow runs on the Bun version pinned by
 `mise.toml`. The installed runtime source uses Node-compatible APIs that Bun also
-implements; browser builds, tests, development orchestration, and Elysia server
-startup remain Bun-backed portability phases. The command-line interface is
-defined with `comline`; its
-interactive server is an Elysia application; and
+implements. The interactive Elysia server selects its native Bun adapter under
+Bun and its official Node adapter otherwise. Browser builds, most tests, and
+development orchestration remain Bun-backed portability phases. The command-line
+interface is defined with `comline`; its interactive server is an Elysia
+application; and
 `create-font/rpc-client` exposes the corresponding Eden Treaty client factory.
 The reusable workspace routes and client typing live in `@create-font/server`;
 this package composes them with the editor application and CLI build handler.
@@ -51,9 +49,8 @@ stay outside canonical source below
 artifact path on success. The file is replaced atomically only after source
 validation, target ingestion, and serialization complete.
 
-```sh
-bun font build workbench-sans
-```
+Run `npm exec -- font build workbench-sans` to build with Node, or invoke the
+same local executable with Bun.
 
 The target-v1 profile supports simple unhinted quadratic glyphs, complete
 `gvar` point deltas, a Windows Unicode `cmap`, named instances, the required
@@ -66,9 +63,8 @@ discovers `fonts/*/create-font.json`, selects the sole project automatically, an
 serves its validated source units through the workspace RPC. With multiple font
 projects, select one by directory name:
 
-```sh
-bun font dev workbench-sans --port=4173
-```
+Run `npm exec -- font dev workbench-sans --port=4173` with Node, or invoke the
+same local executable with Bun.
 
 `font serve` remains an alias for `font dev`.
 

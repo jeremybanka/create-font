@@ -42,16 +42,18 @@
 	"scripts": {
 		"build": "bun run ./scripts/build.ts",
 		"dev": "bun run ./scripts/build-development.ts && bun run ./scripts/dev.ts",
-		"test": "bun run ./scripts/build-development.ts && bun run test:browser-bundle && bun test --conditions=development --path-ignore-patterns='**/preact-compat.test.ts'",
-		"test:browser-bundle": "bun test --conditions=development ./tests/preact-compat.test.ts"
+		"test": "bun run ./scripts/build-development.ts && bun run test:browser-bundle && bun test --conditions=development --path-ignore-patterns='**/preact-compat.test.ts' && pnpm run test:node-server",
+		"test:browser-bundle": "bun test --conditions=development ./tests/preact-compat.test.ts",
+		"test:node-server": "node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {
-		"@elysia/static": "1.4.11",
 		"@create-font/editor": "workspace:*",
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
+		"@elysia/node": "1.4.6",
+		"@elysia/static": "1.4.11",
 		"comline": "0.5.1",
 		"elysia": "1.4.29",
 		"preact": "10.29.7",
@@ -60,5 +62,8 @@
 	"devDependencies": {
 		"@types/bun": "npm:bun-types@1.3.14",
 		"@types/node": "25.9.5"
+	},
+	"engines": {
+		"node": ">=22.0.0"
 	}
 }

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import { staticPlugin } from "@elysia/static"
 import { Elysia } from "elysia"
 
+import { runtimeElysiaAdapter } from "./elysia-adapter.ts"
 import { createFontRpc, type CreateFontRpcOptions } from "./rpc.ts"
 
 const isBundledApplication = basename(import.meta.dirname) === `dist`
@@ -47,8 +48,9 @@ const editorApplication = await staticPlugin({
 export type CreateFontServerOptions = CreateFontRpcOptions
 
 export function createFontServerApp(options: CreateFontServerOptions = {}) {
-	return new Elysia({ name: `create-font-server` })
-		.use(createFontRpc(options))
+	const adapter = options.adapter ?? runtimeElysiaAdapter
+	return new Elysia({ adapter, name: `create-font-server` })
+		.use(createFontRpc({ ...options, adapter }))
 		.get(
 			`/editor/editor.js`,
 			async () =>
