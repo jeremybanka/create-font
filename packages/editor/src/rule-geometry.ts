@@ -3,6 +3,25 @@ import type { EditorRuleSource } from "@create-font/states"
 import { editorSegmentCubic, type EditorOutlineNode } from "./geometry.ts"
 
 const EPSILON = 1e-7
+export const RULE_ANGLE_SNAP_DEGREES = 15
+
+export function constrainRulePointToAngle(
+	origin: Readonly<{ x: number; y: number }>,
+	target: Readonly<{ x: number; y: number }>,
+	constrained: boolean,
+): Readonly<{ x: number; y: number }> {
+	if (!constrained) return target
+	const x = target.x - origin.x
+	const y = target.y - origin.y
+	const length = Math.hypot(x, y)
+	if (!Number.isFinite(length) || length <= EPSILON) return target
+	const step = (RULE_ANGLE_SNAP_DEGREES * Math.PI) / 180
+	const angle = Math.round(Math.atan2(y, x) / step) * step
+	return {
+		x: origin.x + Math.cos(angle) * length,
+		y: origin.y + Math.sin(angle) * length,
+	}
+}
 
 export interface RuleContour {
 	readonly closed: boolean

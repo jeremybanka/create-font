@@ -251,7 +251,8 @@ export const TOOLS = {
 		do: ({ workspace }) => workspace.actions.selectTool("knife"),
 	},
 	RULE: {
-		description: "Plot two points to add an oriented glyph measuring rule.",
+		description:
+			"Plot two points to add an oriented glyph measuring rule; hold Shift to constrain its angle.",
 		id: "rule",
 		displayName: "Rule",
 		hotkey: { key: "m" },

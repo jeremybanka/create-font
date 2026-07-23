@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { measureRule } from "../src/rule-geometry.ts"
+import { constrainRulePointToAngle, measureRule } from "../src/rule-geometry.ts"
 
 const nodes = (points: readonly (readonly [number, number])[]) =>
 	points.map(([x, y]) => ({ x, y }))
@@ -12,6 +12,25 @@ const rule = {
 }
 
 describe("rule geometry", () => {
+	it("constrains rule directions to 15-degree increments", () => {
+		const origin = { x: 10, y: 20 }
+		const target = { x: 110, y: 44.9 }
+		const constrained = constrainRulePointToAngle(origin, target, true)
+		const length = Math.hypot(target.x - origin.x, target.y - origin.y)
+
+		expect(constrained.x).toBeCloseTo(
+			origin.x + Math.cos(Math.PI / 12) * length,
+		)
+		expect(constrained.y).toBeCloseTo(
+			origin.y + Math.sin(Math.PI / 12) * length,
+		)
+		expect(
+			Math.hypot(constrained.x - origin.x, constrained.y - origin.y),
+		).toBeCloseTo(length)
+		expect(constrainRulePointToAngle(origin, target, false)).toBe(target)
+		expect(constrainRulePointToAngle(origin, origin, true)).toBe(origin)
+	})
+
 	it("measures a clockwise form and reverses event order with A/B", () => {
 		const contours = [
 			{

@@ -89,6 +89,61 @@ async function installSelectedRule(
 }
 
 describe("GlyphCanvas rules", () => {
+	it("previews a pending rule and commits its Shift-constrained angle", async () => {
+		const { stage, workspace } = mountCanvas()
+		await act(async () => {
+			workspace.actions.selectTool("rule")
+			await Promise.resolve()
+		})
+		const background = stage.findOne(".canvas-background")
+		if (background === undefined)
+			throw new Error("Canvas background was not rendered.")
+		let pointer = { x: 300, y: 300 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+
+		act(() => {
+			background.fire(
+				"pointerdown",
+				{ evt: { type: "pointerdown", shiftKey: false } },
+				true,
+			)
+		})
+		expect(stage.findOne(".rule-pending-point-a")).toBeDefined()
+		expect(stage.findOne(".rule-hover-preview")).toBeUndefined()
+
+		pointer = { x: 430, y: 337 }
+		act(() => {
+			background.fire(
+				"pointermove",
+				{ evt: { type: "pointermove", shiftKey: true } },
+				true,
+			)
+		})
+		const previewA = stage.findOne(".rule-pending-point-a")
+		const previewB = stage.findOne(".rule-hover-point-b")
+		if (previewA === undefined || previewB === undefined)
+			throw new Error("Rule hover preview was not rendered.")
+		const angle =
+			(Math.atan2(previewB.y() - previewA.y(), previewB.x() - previewA.x()) *
+				180) /
+			Math.PI
+		expect(angle / 15).toBeCloseTo(Math.round(angle / 15))
+		expect(stage.findOne(".rule-hover-preview-line")).toBeDefined()
+
+		act(() => {
+			background.fire(
+				"pointerdown",
+				{ evt: { type: "pointerdown", shiftKey: true } },
+				true,
+			)
+		})
+		const saved = workspace.font.read.editorGlyphSource(oGlyphId)?.rules?.[0]
+		expect(saved?.a).toEqual({ x: previewA.x(), y: previewA.y() })
+		expect(saved?.b.x).toBeCloseTo(previewB.x())
+		expect(saved?.b.y).toBeCloseTo(previewB.y())
+		expect(stage.findOne(".rule-hover-preview")).toBeUndefined()
+	})
+
 	it("clears rule selection when editing a different glyph", async () => {
 		const { workspace } = mountCanvas()
 		await installSelectedRule(workspace)
