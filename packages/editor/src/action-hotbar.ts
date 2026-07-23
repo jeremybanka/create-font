@@ -38,7 +38,7 @@ export const DEFAULT_HOTBAR_SLOTS: HotbarSlots = [
 	"align-selection",
 	"reverse-path",
 	"make-node-first",
-	null,
+	"rule",
 ]
 
 const HOTBAR_CODES = [

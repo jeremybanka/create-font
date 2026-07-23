@@ -8,6 +8,7 @@ import {
 	type GlyphId,
 	type InstanceId,
 	type MasterId,
+	type RuleId,
 } from "@create-font/states"
 
 import { makeDemoFont } from "./demo-font.ts"
@@ -75,6 +76,7 @@ export type EditorToolId =
 	| "rect"
 	| "ellipse"
 	| "knife"
+	| "rule"
 	| "transform"
 
 export interface EditorValidationStatus {
@@ -186,6 +188,14 @@ export function createEditorWorkspace(
 	const showNodesAtom = font.silo.atom<boolean>({
 		key: "showNodes",
 		default: true,
+	})
+	const showMeasuresAtom = font.silo.atom<boolean>({
+		key: "showMeasures",
+		default: true,
+	})
+	const selectedRuleIdsAtom = font.silo.atom<readonly RuleId[]>({
+		key: "selectedRuleIds",
+		default: Object.freeze([]),
 	})
 	const constrainProportionsAtom = font.silo.atom<boolean>({
 		key: "constrainProportions",
@@ -718,6 +728,8 @@ export function createEditorWorkspace(
 			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
+			showMeasures: showMeasuresAtom,
+			selectedRuleIds: selectedRuleIdsAtom,
 			constrainProportions: constrainProportionsAtom,
 			canvasView: canvasViewAtom,
 			canvasViewport: canvasViewportAtom,
@@ -790,6 +802,7 @@ export function createEditorWorkspace(
 					return
 				font.silo.setState(selectedGlyphIdAtom, glyphId)
 				font.silo.setState(selectionAtom, Object.freeze([]))
+				font.silo.setState(selectedRuleIdsAtom, Object.freeze([]))
 				font.silo.setState(editingTextIndexAtom, null)
 				font.silo.setState(activeToolAtom, "select")
 			},
@@ -832,6 +845,8 @@ export function createEditorWorkspace(
 			},
 			selectTool(tool: EditorToolId): void {
 				font.silo.setState(activeToolAtom, tool)
+				if (tool !== "select" && tool !== "rule")
+					font.silo.setState(selectedRuleIdsAtom, Object.freeze([]))
 			},
 			addGlyphs(names: readonly string[]): readonly GlyphId[] {
 				const currentDocument = font.read.editorSource()

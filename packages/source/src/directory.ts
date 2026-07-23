@@ -35,6 +35,7 @@ export const instanceIdSchema = z.templateLiteral(["instance:", z.string()])
 export const glyphIdSchema = z.templateLiteral(["glyph:", z.string()])
 export const contourIdSchema = z.templateLiteral(["contour:", z.string()])
 export const pointIdSchema = z.templateLiteral(["point:", z.string()])
+export const ruleIdSchema = z.templateLiteral(["rule:", z.string()])
 
 const locationSchema = z.record(axisIdSchema, finiteNumberSchema)
 
@@ -213,6 +214,13 @@ const glyphLayerSchema = z
 		contours: z.array(contourSchema),
 	})
 	.strict()
+const ruleSchema = z
+	.object({
+		id: ruleIdSchema,
+		a: handleSchema,
+		b: handleSchema,
+	})
+	.strict()
 
 const currentGlyphFileSchema = z
 	.object({
@@ -222,6 +230,7 @@ const currentGlyphFileSchema = z
 		note: z.string().optional(),
 		color: z.string().optional(),
 		overlap: z.boolean().optional(),
+		rules: z.array(ruleSchema).optional(),
 		layers: z.array(glyphLayerSchema),
 	})
 	.strict()

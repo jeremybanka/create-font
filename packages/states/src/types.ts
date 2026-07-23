@@ -19,6 +19,7 @@ export type InstanceId = `instance:${string}`
 export type GlyphId = `glyph:${string}`
 export type ContourId = `contour:${string}`
 export type PointId = `point:${string}`
+export type RuleId = `rule:${string}`
 
 export type EditorEntityId =
 	| AxisId
@@ -27,6 +28,7 @@ export type EditorEntityId =
 	| GlyphId
 	| ContourId
 	| PointId
+	| RuleId
 
 /**
  * A user-space design location keyed by stable axis identity, not by an axis
@@ -164,6 +166,13 @@ export interface EditorGlyphLayerSource {
 	readonly contours: readonly EditorContourSource[]
 }
 
+/** A glyph-scoped, editor-only oriented measuring line. */
+export interface EditorRuleSource {
+	readonly id: RuleId
+	readonly a: Readonly<{ x: number; y: number }>
+	readonly b: Readonly<{ x: number; y: number }>
+}
+
 export interface EditorGlyphSource {
 	readonly id: GlyphId
 	readonly name: string
@@ -174,6 +183,8 @@ export interface EditorGlyphSource {
 	/** Editor-only color label expressed as a CSS color string. */
 	readonly color?: string
 	readonly overlap?: boolean
+	/** Editor-only measuring guides, shared by every master of this glyph. */
+	readonly rules?: readonly EditorRuleSource[]
 	/** At most one independently authored layer per master. */
 	readonly layers: readonly EditorGlyphLayerSource[]
 }
