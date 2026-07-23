@@ -170,8 +170,22 @@ describe("GlyphCanvas rules", () => {
 
 		act(() => {
 			background.fire(
+				"pointermove",
+				{ evt: { type: "pointermove", shiftKey: true } },
+				true,
+			)
+		})
+		const previewA = stage.findOne(".rule-hover-point-a")
+		expect({ x: previewA?.x(), y: previewA?.y() }).toEqual({
+			x: a.x,
+			y: a.y,
+		})
+		expect(stage.find(".active-snap")).toHaveLength(2)
+
+		act(() => {
+			background.fire(
 				"pointerdown",
-				{ evt: { type: "pointerdown", shiftKey: false } },
+				{ evt: { type: "pointerdown", shiftKey: true } },
 				true,
 			)
 		})
@@ -180,6 +194,7 @@ describe("GlyphCanvas rules", () => {
 			x: a.x,
 			y: a.y,
 		})
+		expect(stage.findOne(".rule-hover-point-a")).toBeUndefined()
 
 		pointer = outline.getAbsoluteTransform().point({ x: b.x - 1, y: b.y + 1 })
 		act(() => {
