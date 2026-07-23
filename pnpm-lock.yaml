@@ -130,8 +130,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       lasertag:
-        specifier: 0.6.6
-        version: 0.6.6(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.0)(preact@10.29.7)(supports-color@7.2.0)
+        specifier: 0.6.7
+        version: 0.6.7(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.0)(preact@10.29.7)(supports-color@7.2.0)
       preact:
         specifier: 10.29.7
         version: 10.29.7
@@ -2647,8 +2647,8 @@ packages:
   konva@10.3.0:
     resolution: {integrity: sha512-gt19K2gzY4lHbnkvsku7eSmB+A9PTS2jG4F9coBMsdjM1UKfJNxJbDbXVpeCW1wjEGRwBD3nBamcHnqJhAeKlg==}
 
-  lasertag@0.6.6:
-    resolution: {integrity: sha512-1cb9Hpgzfd5tDvquHSzjT4SWfVRVrnv6ZYjilTiGpboTkaew/eQo6xTyCDFfsK29b1ZlM5+Wt5HQ+D/dl8/Kdw==}
+  lasertag@0.6.7:
+    resolution: {integrity: sha512-IIpYtwPYYxLbyZlsRkVGaUOCrQECewVquh7Y47cMiZ2aRCYDiw1KVPtV3IOrDU5lOONS4ehiOar/vNrkhm8xww==}
     engines: {node: 26.5.0, pnpm: 11.15.1}
     hasBin: true
     peerDependencies:
@@ -5984,7 +5984,7 @@ snapshots:
 
   konva@10.3.0: {}
 
-  lasertag@0.6.6(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.0)(preact@10.29.7)(supports-color@7.2.0):
+  lasertag@0.6.7(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.0)(preact@10.29.7)(supports-color@7.2.0):
     dependencies:
       '@astrojs/compiler': 4.0.0
       '@vscode/vsce': 3.9.2(supports-color@7.2.0)

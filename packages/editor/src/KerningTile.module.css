@@ -81,7 +81,6 @@ kerning-tile.class {
 				display: grid;
 				gap: 5px;
 
-				/* @lasertag-expect-error: full-batch analysis leaves NumericInput opaque; isolated analysis resolves its root */
 				> span {
 					font-size: 9px;
 					font-weight: 690;

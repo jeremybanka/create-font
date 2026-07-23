@@ -1,9 +1,9 @@
-# Lasertag 0.6.6 ownership plan
+# Lasertag 0.6 ownership plan and implementation
 
 Date: 2026-07-22
 
 Scope: Renovate PR [#196](https://github.com/jeremybanka/create-font/pull/196),
-now carrying `lasertag` 0.6.6.
+now carrying `lasertag` 0.6.7.
 
 ## What changed in 0.6.6
 
@@ -99,7 +99,7 @@ By diagnostic code, the full run reports:
 
 At distinct locations, those counts are 82, 5, and 2 respectively.
 
-### Batch-analysis discrepancy
+### Batch-analysis discrepancy, resolved in 0.6.7
 
 `KerningTile.module.css` is the only inconsistent result observed during the
 inventory. In the full glob it reports two grouped
@@ -107,12 +107,15 @@ inventory. In the full glob it reports two grouped
 alone or in a small explicit file set, the same selectors become one verified
 root match and one crossing beneath `<numeric-input>`.
 
-The parent no longer owns `NumericInput`'s input chrome. One narrow expectation
-remains immediately above `kerning-tile > label > span`, because the full-batch
-analysis still leaves the adjacent imported `NumericInput` opaque even though
-the isolated analysis resolves its root. The full repository check is the
-authoritative invocation for this directive; the comment records the upstream
-batch/single-file discrepancy instead of disguising it as an ownership policy.
+The parent no longer owns `NumericInput`'s input chrome. In 0.6.6, one narrow
+expectation remained immediately above `kerning-tile > label > span`, because
+the result depended on the previous root analyzed in the same worker's reused
+TypeScript session. The issue was reported as
+[Lasertag #165](https://github.com/jeremybanka/lasertag/issues/165).
+
+Lasertag 0.6.7 fixes that session transition. The full batch, isolated analysis,
+the editor extension, and CI now resolve the adjacent `NumericInput` root
+consistently, so the temporary expectation has been removed.
 
 ## Implementation result
 
@@ -121,6 +124,9 @@ Implemented on 2026-07-22. The full repository check now reports:
 ```text
 ✓ No dead CSS found in 20 files.
 ```
+
+Reverified after upgrading to Lasertag 0.6.7: the result remains clean without
+the Kerning batch-analysis expectation.
 
 The changes follow the plan without introducing inline presentation or
 analysis-only wrappers:
