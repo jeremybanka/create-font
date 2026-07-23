@@ -52,9 +52,9 @@ These packages are the current implementation layers. The `create-font`
 application composes the reusable server boundary with the browser entry that
 imports `EditorApplicationRoot` from `@create-font/editor`.
 
-The workspace toolchain pins Bun through `mise.toml`; Bun is a repository
-runtime, not an npm dependency. Run the complete development stack from the
-workspace root:
+The workspace toolchain pins Node and pnpm through `mise.toml`. Bun is optional
+and is exercised only by its compatibility CI job. Run the complete development
+stack from the workspace root:
 
 ```sh
 mise install
@@ -63,9 +63,9 @@ pnpm dev
 ```
 
 The development command enables the packages' `development` export condition,
-so both servers load workspace TypeScript entrypoints directly. Bun runs the
-workspace API with `--hot` on port 3001; Vite serves the browser on port 3000
-with Preact and CSS HMR and proxies HTTP and WebSocket API traffic to Bun. Each
+so both processes load workspace TypeScript entrypoints directly. Node runs the
+workspace API in watch mode on port 3001; Vite serves the browser on port 3000
+with Preact and CSS HMR and proxies HTTP and WebSocket API traffic to Node. Each
 tab keeps local editor state, persists changed source units directly to the
 server, and consumes ordered unit deltas from the server's source event stream.
 Development does not build or watch workspace package outputs. Production and

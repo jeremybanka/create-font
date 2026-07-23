@@ -1,13 +1,15 @@
+import { spawn } from "node:child_process"
 import { resolve } from "node:path"
 
-const packageRoot = resolve(import.meta.dir, `..`)
+const packageRoot = resolve(import.meta.dirname, `..`)
 const workspaceRoot = resolve(packageRoot, `../..`)
 const backendPort = 3001
+const vpEntrypoint = resolve(workspaceRoot, `node_modules/vite-plus/bin/vp`)
 
 const subprocesses = [
-	Bun.spawn(
+	spawn(
+		process.execPath,
 		[
-			`bun`,
 			// A hard restart keeps workspace dependencies and generated source in
 			// one revision after an in-place pull. Hot reload can retain old exports.
 			`--watch`,
@@ -19,13 +21,13 @@ const subprocesses = [
 		],
 		{
 			cwd: packageRoot,
-			stderr: `inherit`,
-			stdout: `inherit`,
+			stdio: `inherit`,
 		},
 	),
-	Bun.spawn(
+	spawn(
+		process.execPath,
 		[
-			resolve(workspaceRoot, `node_modules/vite-plus/bin/vp`),
+			vpEntrypoint,
 			`dev`,
 			`./public`,
 			`--config=./vite.config.ts`,
@@ -39,8 +41,7 @@ const subprocesses = [
 				...process.env,
 				CREATE_FONT_BACKEND_PORT: String(backendPort),
 			},
-			stderr: `inherit`,
-			stdout: `inherit`,
+			stdio: `inherit`,
 		},
 	),
 ]
@@ -55,10 +56,20 @@ function stop(): void {
 process.on(`SIGINT`, stop)
 process.on(`SIGTERM`, stop)
 
-const exitCode = await Promise.race(
-	subprocesses.map((subprocess) => subprocess.exited),
-)
-stop()
-await Promise.all(subprocesses.map((subprocess) => subprocess.exited))
+function exited(subprocess: (typeof subprocesses)[number]): Promise<number> {
+	return new Promise((resolveExit, reject) => {
+		subprocess.once(`error`, reject)
+		subprocess.once(`exit`, (code, signal) => {
+			resolveExit(code ?? (signal === `SIGTERM` ? 143 : 1))
+		})
+	})
+}
 
-if (exitCode !== 0 && exitCode !== 143) process.exitCode = exitCode
+const exits = subprocesses.map(exited)
+const exitCode = await Promise.race(exits)
+stop()
+await Promise.all(exits)
+
+if (exitCode !== 0 && exitCode !== 143) {
+	process.exitCode = exitCode
+}

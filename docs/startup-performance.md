@@ -22,13 +22,14 @@ The instrumentation is observational and does not add retries or caching.
 
 ## Reproducible capture protocol
 
-Record the commit, OS/hardware, Bun and browser versions, build mode, font
-project, source-unit count, cache state, and whether DevTools was open.
+Record the commit, OS/hardware, Node and browser versions, build mode, font
+project, source-unit count, cache state, and whether DevTools was open. Record
+the Bun version as well when measuring the optional Bun compatibility path.
 
 For a development profile:
 
 ```sh
-bun packages/create-font/src/font-cli.ts dev workbench-sans --root=. --port=4173
+node packages/create-font/src/font-cli.ts dev workbench-sans --root=. --port=4173
 ```
 
 Use another unoccupied loopback port when 4173 is already in use. Open the URL
@@ -50,7 +51,7 @@ long-task entries are needed to explain the headline durations.
 Profile the server-side source service separately from HTTP and browser work:
 
 ```sh
-bun packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
+node packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
 ```
 
 This opt-in diagnostic records why each complete project load occurred and

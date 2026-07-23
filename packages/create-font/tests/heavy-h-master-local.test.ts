@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "vitest"
 import { createFontEditorState } from "@create-font/states"
 
 import { loadEditorFontSourceDirectory } from "../src/source-service.ts"
@@ -8,7 +8,7 @@ import { loadEditorFontSourceDirectory } from "../src/source-service.ts"
 describe("Workbench Sans Heavy H master-local editing", () => {
 	it("moves the four selected Heavy points exactly once and leaves Text unchanged", async () => {
 		const source = await loadEditorFontSourceDirectory(
-			resolve(import.meta.dir, "../../../fonts/workbench-sans"),
+			resolve(import.meta.dirname, "../../../fonts/workbench-sans"),
 		)
 		expect(source.editorVersion).toBe(5)
 		const h = source.glyphs.find((glyph) => glyph.id === "glyph:H")

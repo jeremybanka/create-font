@@ -1,24 +1,25 @@
 import { rm } from "node:fs/promises"
 import { resolve } from "node:path"
 
-const packageRoot = resolve(import.meta.dir, `..`)
+import { build } from "vite"
+
+const packageRoot = resolve(import.meta.dirname, `..`)
 const outdir = resolve(packageRoot, `dist/browser`)
 
 await rm(resolve(packageRoot, `dist`), { force: true, recursive: true })
 
-const result = await Bun.build({
-	entrypoints: [resolve(packageRoot, `src/browser.ts`)],
-	minify: true,
-	naming: {
-		asset: `[name].[ext]`,
-		entry: `editor.[ext]`,
+await build({
+	configFile: false,
+	build: {
+		emptyOutDir: true,
+		lib: {
+			cssFileName: `editor`,
+			entry: resolve(packageRoot, `src/browser.ts`),
+			fileName: `editor`,
+			formats: [`es`],
+		},
+		minify: true,
+		outDir: outdir,
+		sourcemap: true,
 	},
-	outdir,
-	sourcemap: `external`,
-	target: `browser`,
 })
-
-if (!result.success) {
-	for (const failure of result.logs) console.error(failure)
-	process.exitCode = 1
-}

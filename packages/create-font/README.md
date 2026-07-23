@@ -17,13 +17,13 @@ the workspace or reinstalling its dependencies:
 
 Run `npx create-font display-font` to add another font.
 
-The repository development workflow runs on the Bun version pinned by
-`mise.toml`. The installed runtime source uses Node-compatible APIs that Bun also
-implements. The interactive Elysia server selects its native Bun adapter under
-Bun and its official Node adapter otherwise. Browser builds, most tests, and
-development orchestration remain Bun-backed portability phases. The command-line
-interface is defined with `comline`; its interactive server is an Elysia
-application; and
+The repository development workflow, browser builds, and test suite use the
+Node and pnpm versions pinned by `mise.toml`. The installed runtime source uses
+Node-compatible APIs that Bun also implements. The interactive Elysia server
+selects its native Bun adapter under Bun and its official Node adapter
+otherwise. A smaller Bun CI job exercises the native adapter and built CLI. The
+command-line interface is defined with `comline`; its interactive server is an
+Elysia application; and
 `create-font/rpc-client` exposes the corresponding Eden Treaty client factory.
 The reusable workspace routes and client typing live in `@create-font/server`;
 this package composes them with the editor application and CLI build handler.
@@ -97,10 +97,10 @@ boundary. The editor artifact owns its Preact renderer and hooks; it never
 shares component state with the bootstrap bundle.
 
 The repository's `pnpm dev` command splits the development serving path at a
-deliberate boundary. Bun runs the Elysia HTTP and WebSocket API with runtime
-`--hot` on port 3001. Vite serves `public/index.tsx` on port 3000 with Preact and
-CSS HMR. Vite aliases the editor browser entry to its workspace source and
-proxies `/api`, including WebSocket upgrades, to Bun, so editor changes retain
-HMR without requiring a package build. Production emits only the bootstrap
-under `dist/public`; the editor implementation remains in the dependency
-package instead of being duplicated there.
+deliberate boundary. Node runs the Elysia HTTP and WebSocket API in watch mode
+on port 3001. Vite serves `public/index.tsx` on port 3000 with Preact and CSS
+HMR. Vite aliases the editor browser entry to its workspace source and proxies
+`/api`, including WebSocket upgrades, to Node, so editor changes retain HMR
+without requiring a package build. Production emits only the bootstrap under
+`dist/public`; the editor implementation remains in the dependency package
+instead of being duplicated there.

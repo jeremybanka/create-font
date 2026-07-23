@@ -90,7 +90,9 @@ editorStyles.href = `/editor/editor.css`
 if (!__CREATE_FONT_DEVELOPMENT__) document.head.append(editorStyles)
 const editorModulePromise = __CREATE_FONT_DEVELOPMENT__
 	? import("@create-font/editor/browser")
-	: (import(editorBrowserUrl) as Promise<EditorBrowserModule>)
+	: (import(
+			/* @vite-ignore */ editorBrowserUrl
+		) as Promise<EditorBrowserModule>)
 const longTasks: StartupPhase[] = []
 let startupProfileStatus: StartupProfileStatus = `loading`
 

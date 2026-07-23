@@ -2,7 +2,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 
-import { afterEach, describe, expect, it } from "bun:test"
+import { afterEach, describe, expect, it } from "vitest"
 
 import { buildProject } from "../src/build.ts"
 
@@ -13,7 +13,7 @@ async function copyWorkbenchSans(): Promise<string> {
 	temporaryRoots.push(workspaceRoot)
 	const projectRoot = resolve(workspaceRoot, `fonts`, `workbench-sans`)
 	await cp(
-		resolve(import.meta.dir, `../../../fonts/workbench-sans`),
+		resolve(import.meta.dirname, `../../../fonts/workbench-sans`),
 		projectRoot,
 		{
 			recursive: true,

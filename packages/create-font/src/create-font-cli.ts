@@ -76,7 +76,10 @@ export async function runCreateFontCli(
 				? `Created font workspace ${result.workspaceRoot}.`
 				: `Added font ${result.fontName} to ${result.workspaceRoot}.`,
 		)
-		writeLine(io.stdout, `Run: cd ${result.workspaceRoot} && bun font dev`)
+		writeLine(
+			io.stdout,
+			`Run: cd ${result.workspaceRoot} && ${packageManager ?? `npm`} run dev`,
+		)
 		return 0
 	} catch (error) {
 		writeLine(io.stderr, error instanceof Error ? error.message : String(error))

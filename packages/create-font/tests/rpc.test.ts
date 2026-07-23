@@ -1,10 +1,10 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "vitest"
 
 import { createFontServerApp } from "../src/server.ts"
 
 describe(`create-font RPC`, () => {
 	it(`composes health, workspace, and build operations with the editor app`, async () => {
-		const app = createFontServerApp({ root: import.meta.dir })
+		const app = createFontServerApp({ root: import.meta.dirname })
 
 		const health = await app
 			.handle(new Request(`http://localhost/api/health`))
@@ -17,7 +17,7 @@ describe(`create-font RPC`, () => {
 		const workspace = await app
 			.handle(new Request(`http://localhost/api/workspace`))
 			.then((response) => response.json())
-		expect(workspace.root).toBe(import.meta.dir)
+		expect(workspace.root).toBe(import.meta.dirname)
 
 		const build = await app
 			.handle(
