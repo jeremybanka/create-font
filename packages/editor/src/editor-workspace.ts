@@ -218,7 +218,7 @@ export function createEditorWorkspace(
 	const liveFontCompiler = createLiveFontCompiler({
 		silo: font.silo,
 		documentRevision: font.atoms.documentRevision,
-		compilation: font.read.compilation,
+		compilation: font.read.livePreviewCompilation,
 	})
 	const pathnameAtom = font.silo.atom<string>({
 		key: "pathname",

@@ -125,6 +125,66 @@ describe("live font compilation", () => {
 		compiler.stop()
 	})
 
+	it("publishes recoverable compatibility diagnostics and clears them after repair", async () => {
+		const silo = new Silo({
+			name: "live-font-degraded-test",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const revision = silo.atom({ key: "revision", default: 0 })
+		const scheduled: (() => void)[] = []
+		let degraded = true
+		const compiler = createLiveFontCompiler(
+			{
+				silo,
+				documentRevision: revision,
+				compilation: () => ({
+					...successfulCompilation(),
+					projectionWarnings: degraded
+						? [
+								{
+									code: "compatibility.node_count",
+									path: "$.glyphs[glyph:O]",
+									message: "O is frozen to its default master.",
+									severity: "warning",
+									entityId: "glyph:O",
+								},
+							]
+						: [],
+				}),
+			},
+			{
+				schedule: (work) => scheduled.push(work),
+				serialize: () => new Uint8Array([1]),
+			},
+		)
+
+		compiler.start()
+		scheduled.shift()?.()
+		await settle()
+		expect(silo.getState(compiler.state)).toMatchObject({
+			status: "ready",
+			diagnostics: [
+				{
+					code: "compatibility.node_count",
+					message: "O is frozen to its default master.",
+					stage: "projection",
+				},
+			],
+		})
+
+		degraded = false
+		silo.setState(revision, 1)
+		scheduled.shift()?.()
+		await settle()
+		expect(silo.getState(compiler.state)).toMatchObject({
+			status: "ready",
+			revision: 1,
+			diagnostics: [],
+		})
+		compiler.stop()
+	})
+
 	it("reuses unrelated atom.io glyph projection artifacts after one glyph edit", () => {
 		const workspace = createEditorWorkspace()
 		const beforeCompilation = workspace.font.read.compilation()

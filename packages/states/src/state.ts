@@ -81,6 +81,34 @@ const MAX_UINT16 = 65_535
 /** Maximum geometric error accepted before integer coordinate quantization. */
 export const CUBIC_TO_QUADRATIC_TOLERANCE = 0.5
 export const MAX_CUBIC_SUBDIVISION_DEPTH = 8
+const LIVE_PREVIEW_COMPATIBILITY_CODES = new Set([
+	"compatibility.path_count",
+	"compatibility.closure",
+	"compatibility.node_count",
+	"compatibility.flattened_count",
+	"compatibility.flattened_pattern",
+])
+
+export function isLivePreviewCompatibilityError(
+	error: Pick<ProjectionError, "code">,
+): boolean {
+	return LIVE_PREVIEW_COMPATIBILITY_CODES.has(error.code)
+}
+
+function isLivePreviewRecoverableGlyphError(
+	error: ProjectionError,
+	errors: readonly ProjectionError[],
+	glyphId: GlyphId,
+	defaultMasterId: MasterId,
+): boolean {
+	if (isLivePreviewCompatibilityError(error)) return true
+	if (error.code !== "topology.open_contour") return false
+	if (!errors.some((issue) => issue.code === "compatibility.closure")) {
+		return false
+	}
+	const defaultLayerPath = `$.glyphs[${glyphId}].layers[${defaultMasterId}]`
+	return !error.path.startsWith(defaultLayerPath)
+}
 
 interface Vector2 {
 	readonly x: number
@@ -1758,227 +1786,238 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 	})
 
-	const curveSegmentPlanSelectors = silo.selectorFamily<
-		ProjectionResult<CurveSegmentPlan>,
-		CurveSegmentKey
-	>({
-		key: "curveSegmentPlan",
-		get:
-			([activeMasterId, glyphId, contourId, segmentIndex]) =>
-			({ get }) => {
-				const path = `$.glyphs[${glyphId}].layers[${activeMasterId}].contours[${contourId}].segments[${segmentIndex}]`
-				const activeContourIds = get(glyphContourIdsAtoms, [
-					activeMasterId,
-					glyphId,
-				])
-				const contourIndex = activeContourIds?.indexOf(contourId) ?? -1
-				const pointIds = get(contourPointIdsAtoms, [
-					activeMasterId,
-					glyphId,
-					contourId,
-				])
-				const closed = get(contourClosedAtoms, [
-					activeMasterId,
-					glyphId,
-					contourId,
-				])
-				const masterIds = get(glyphLayerMasterIdsAtoms, glyphId)
-				const segmentCount =
-					pointIds === null
-						? 0
-						: Math.max(0, pointIds.length - (closed ? 0 : 1))
-				if (
-					pointIds === null ||
-					closed === null ||
-					contourIndex < 0 ||
-					!Number.isInteger(segmentIndex) ||
-					segmentIndex < 0 ||
-					segmentIndex >= segmentCount
-				) {
-					return projectionFailure([
-						projectionError(
-							"curve.segment_missing",
-							path,
-							"Curve segment is not present in the contour topology.",
-							contourId,
-						),
-					])
-				}
-				if (masterIds === null) {
-					return projectionFailure([
-						projectionError(
-							"layer.index_missing",
-							`$.glyphs[${glyphId}].layerMasterIds`,
-							"Glyph layer index is missing.",
-							glyphId,
-						),
-					])
-				}
-				const startPointId = pointIds[segmentIndex]
-				const endPointId = closed
-					? pointIds[(segmentIndex + 1) % pointIds.length]
-					: pointIds[segmentIndex + 1]
-				if (startPointId === undefined || endPointId === undefined) {
-					return projectionFailure([
-						projectionError(
-							"curve.segment_missing",
-							path,
-							"Curve segment endpoints are missing.",
-							contourId,
-						),
-					])
-				}
-
-				const errors: ProjectionError[] = []
-				const cubics: {
-					readonly cubic: CubicBezier
-					readonly straight: boolean
-				}[] = []
-				let curved = false
-				for (const masterId of masterIds) {
-					const masterContourIds = get(glyphContourIdsAtoms, [
-						masterId,
+	const createCurveSegmentPlanSelectors = (
+		key: string,
+		singleMaster: boolean,
+	) =>
+		silo.selectorFamily<ProjectionResult<CurveSegmentPlan>, CurveSegmentKey>({
+			key,
+			get:
+				([activeMasterId, glyphId, contourId, segmentIndex]) =>
+				({ get }) => {
+					const path = `$.glyphs[${glyphId}].layers[${activeMasterId}].contours[${contourId}].segments[${segmentIndex}]`
+					const activeContourIds = get(glyphContourIdsAtoms, [
+						activeMasterId,
 						glyphId,
 					])
-					const masterContourId = masterContourIds?.[contourIndex]
-					if (masterContourId === undefined) {
-						errors.push(
+					const contourIndex = activeContourIds?.indexOf(contourId) ?? -1
+					const pointIds = get(contourPointIdsAtoms, [
+						activeMasterId,
+						glyphId,
+						contourId,
+					])
+					const closed = get(contourClosedAtoms, [
+						activeMasterId,
+						glyphId,
+						contourId,
+					])
+					const masterIds = singleMaster
+						? ([activeMasterId] as const)
+						: get(glyphLayerMasterIdsAtoms, glyphId)
+					const segmentCount =
+						pointIds === null
+							? 0
+							: Math.max(0, pointIds.length - (closed ? 0 : 1))
+					if (
+						pointIds === null ||
+						closed === null ||
+						contourIndex < 0 ||
+						!Number.isInteger(segmentIndex) ||
+						segmentIndex < 0 ||
+						segmentIndex >= segmentCount
+					) {
+						return projectionFailure([
 							projectionError(
-								"compatibility.path_count",
-								`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}]`,
-								`Master ${masterId} has no path at ordinal ${contourIndex}.`,
+								"curve.segment_missing",
+								path,
+								"Curve segment is not present in the contour topology.",
+								contourId,
+							),
+						])
+					}
+					if (masterIds === null) {
+						return projectionFailure([
+							projectionError(
+								"layer.index_missing",
+								`$.glyphs[${glyphId}].layerMasterIds`,
+								"Glyph layer index is missing.",
 								glyphId,
 							),
-						)
-						continue
+						])
 					}
-					const masterPointIds = get(contourPointIdsAtoms, [
-						masterId,
-						glyphId,
-						masterContourId,
-					])
-					const masterClosed = get(contourClosedAtoms, [
-						masterId,
-						glyphId,
-						masterContourId,
-					])
-					if (masterClosed !== closed) {
-						errors.push(
+					const startPointId = pointIds[segmentIndex]
+					const endPointId = closed
+						? pointIds[(segmentIndex + 1) % pointIds.length]
+						: pointIds[segmentIndex + 1]
+					if (startPointId === undefined || endPointId === undefined) {
+						return projectionFailure([
 							projectionError(
-								"compatibility.closure",
-								`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}].closed`,
-								`Path ${contourIndex} closure differs from ${activeMasterId}.`,
-								masterContourId,
+								"curve.segment_missing",
+								path,
+								"Curve segment endpoints are missing.",
+								contourId,
 							),
-						)
+						])
 					}
-					if (
-						masterPointIds === null ||
-						masterPointIds.length !== pointIds.length
+
+					const errors: ProjectionError[] = []
+					const cubics: {
+						readonly cubic: CubicBezier
+						readonly straight: boolean
+					}[] = []
+					let curved = false
+					for (const masterId of masterIds) {
+						const masterContourIds = get(glyphContourIdsAtoms, [
+							masterId,
+							glyphId,
+						])
+						const masterContourId = masterContourIds?.[contourIndex]
+						if (masterContourId === undefined) {
+							errors.push(
+								projectionError(
+									"compatibility.path_count",
+									`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}]`,
+									`Master ${masterId} has no path at ordinal ${contourIndex}.`,
+									glyphId,
+								),
+							)
+							continue
+						}
+						const masterPointIds = get(contourPointIdsAtoms, [
+							masterId,
+							glyphId,
+							masterContourId,
+						])
+						const masterClosed = get(contourClosedAtoms, [
+							masterId,
+							glyphId,
+							masterContourId,
+						])
+						if (masterClosed !== closed) {
+							errors.push(
+								projectionError(
+									"compatibility.closure",
+									`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}].closed`,
+									`Path ${contourIndex} closure differs from ${activeMasterId}.`,
+									masterContourId,
+								),
+							)
+						}
+						if (
+							masterPointIds === null ||
+							masterPointIds.length !== pointIds.length
+						) {
+							errors.push(
+								projectionError(
+									"compatibility.node_count",
+									`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}].points`,
+									`Path ${contourIndex} node count differs from ${activeMasterId}.`,
+									masterContourId,
+								),
+							)
+							continue
+						}
+						const masterStartPointId = masterPointIds[segmentIndex]
+						const masterEndPointId = closed
+							? masterPointIds[(segmentIndex + 1) % masterPointIds.length]
+							: masterPointIds[segmentIndex + 1]
+						if (
+							masterStartPointId === undefined ||
+							masterEndPointId === undefined
+						) {
+							continue
+						}
+						const start = get(layerNodeSelectors, [
+							masterId,
+							glyphId,
+							masterStartPointId,
+						])
+						const end = get(layerNodeSelectors, [
+							masterId,
+							glyphId,
+							masterEndPointId,
+						])
+						if (!start.ok) errors.push(...start.errors)
+						if (!end.ok) errors.push(...end.errors)
+						if (!start.ok || !end.ok) continue
+						const outgoing = start.value.outgoing
+						const incoming = end.value.incoming
+						const straight = outgoing === undefined && incoming === undefined
+						curved ||= !straight
+						cubics.push({
+							straight,
+							cubic: {
+								p0: { x: start.value.x, y: start.value.y },
+								c1: {
+									x: start.value.x + (outgoing?.x ?? 0),
+									y: start.value.y + (outgoing?.y ?? 0),
+								},
+								c2: {
+									x: end.value.x + (incoming?.x ?? 0),
+									y: end.value.y + (incoming?.y ?? 0),
+								},
+								p3: { x: end.value.x, y: end.value.y },
+							},
+						})
+					}
+					if (errors.length > 0) return projectionFailure(errors)
+					if (!curved) {
+						return projectionSuccess({
+							startPointId,
+							endPointId,
+							curved: false,
+							subdivisionDepth: 0,
+							maximumError: 0,
+						})
+					}
+
+					let subdivisionDepth = 0
+					for (
+						;
+						subdivisionDepth <= MAX_CUBIC_SUBDIVISION_DEPTH;
+						subdivisionDepth += 1
 					) {
-						errors.push(
+						const fits = cubics.every(
+							({ cubic, straight }) =>
+								straight ||
+								maximumErrorAtDepth(cubic, subdivisionDepth) <=
+									CUBIC_TO_QUADRATIC_TOLERANCE,
+						)
+						if (fits) break
+					}
+					if (subdivisionDepth > MAX_CUBIC_SUBDIVISION_DEPTH) {
+						return projectionFailure([
 							projectionError(
-								"compatibility.node_count",
-								`$.glyphs[${glyphId}].layers[${masterId}].contours[${contourIndex}].points`,
-								`Path ${contourIndex} node count differs from ${activeMasterId}.`,
-								masterContourId,
+								"curve.approximation_limit",
+								path,
+								`Cubic segment could not meet the ${CUBIC_TO_QUADRATIC_TOLERANCE} font-unit error bound by subdivision depth ${MAX_CUBIC_SUBDIVISION_DEPTH}.`,
+								glyphId,
 							),
-						)
-						continue
+						])
 					}
-					const masterStartPointId = masterPointIds[segmentIndex]
-					const masterEndPointId = closed
-						? masterPointIds[(segmentIndex + 1) % masterPointIds.length]
-						: masterPointIds[segmentIndex + 1]
-					if (
-						masterStartPointId === undefined ||
-						masterEndPointId === undefined
-					) {
-						continue
-					}
-					const start = get(layerNodeSelectors, [
-						masterId,
-						glyphId,
-						masterStartPointId,
-					])
-					const end = get(layerNodeSelectors, [
-						masterId,
-						glyphId,
-						masterEndPointId,
-					])
-					if (!start.ok) errors.push(...start.errors)
-					if (!end.ok) errors.push(...end.errors)
-					if (!start.ok || !end.ok) continue
-					const outgoing = start.value.outgoing
-					const incoming = end.value.incoming
-					const straight = outgoing === undefined && incoming === undefined
-					curved ||= !straight
-					cubics.push({
-						straight,
-						cubic: {
-							p0: { x: start.value.x, y: start.value.y },
-							c1: {
-								x: start.value.x + (outgoing?.x ?? 0),
-								y: start.value.y + (outgoing?.y ?? 0),
-							},
-							c2: {
-								x: end.value.x + (incoming?.x ?? 0),
-								y: end.value.y + (incoming?.y ?? 0),
-							},
-							p3: { x: end.value.x, y: end.value.y },
-						},
-					})
-				}
-				if (errors.length > 0) return projectionFailure(errors)
-				if (!curved) {
+					const maximumError = Math.max(
+						0,
+						...cubics.map(({ cubic, straight }) =>
+							straight ? 0 : maximumErrorAtDepth(cubic, subdivisionDepth),
+						),
+					)
 					return projectionSuccess({
 						startPointId,
 						endPointId,
-						curved: false,
-						subdivisionDepth: 0,
-						maximumError: 0,
+						curved: true,
+						subdivisionDepth,
+						maximumError,
 					})
-				}
-
-				let subdivisionDepth = 0
-				for (
-					;
-					subdivisionDepth <= MAX_CUBIC_SUBDIVISION_DEPTH;
-					subdivisionDepth += 1
-				) {
-					const fits = cubics.every(
-						({ cubic, straight }) =>
-							straight ||
-							maximumErrorAtDepth(cubic, subdivisionDepth) <=
-								CUBIC_TO_QUADRATIC_TOLERANCE,
-					)
-					if (fits) break
-				}
-				if (subdivisionDepth > MAX_CUBIC_SUBDIVISION_DEPTH) {
-					return projectionFailure([
-						projectionError(
-							"curve.approximation_limit",
-							path,
-							`Cubic segment could not meet the ${CUBIC_TO_QUADRATIC_TOLERANCE} font-unit error bound by subdivision depth ${MAX_CUBIC_SUBDIVISION_DEPTH}.`,
-							glyphId,
-						),
-					])
-				}
-				const maximumError = Math.max(
-					0,
-					...cubics.map(({ cubic, straight }) =>
-						straight ? 0 : maximumErrorAtDepth(cubic, subdivisionDepth),
-					),
-				)
-				return projectionSuccess({
-					startPointId,
-					endPointId,
-					curved: true,
-					subdivisionDepth,
-					maximumError,
-				})
-			},
-	})
+				},
+		})
+	const curveSegmentPlanSelectors = createCurveSegmentPlanSelectors(
+		"curveSegmentPlan",
+		false,
+	)
+	const singleMasterCurveSegmentPlanSelectors = createCurveSegmentPlanSelectors(
+		"singleMasterCurveSegmentPlan",
+		true,
+	)
 
 	const axisSourceSelectors = silo.selectorFamily<
 		ProjectionResult<VariationAxisSource>,
@@ -2420,267 +2459,288 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const glyphLayerSelectors = silo.selectorFamily<
-		ProjectionResult<CompiledGlyphLayer>,
-		LayerKey
-	>({
-		key: "glyphLayer",
-		get:
-			([masterId, glyphId]) =>
-			({ get }) => {
-				const path = `$.glyphs[${glyphId}].layers[${masterId}]`
-				const glyph = get(glyphAtoms, glyphId)
-				const master = get(masterAtoms, masterId)
-				const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId)
-				const contourIds = get(glyphContourIdsAtoms, [masterId, glyphId])
-				const errors: ProjectionError[] = []
-				const warnings: ProjectionWarning[] = []
-				if (glyph === null) {
-					errors.push(
-						projectionError(
-							"entity.missing",
-							`$.glyphs[${glyphId}]`,
-							"Glyph state is missing.",
-							glyphId,
-						),
-					)
-				}
-				if (master === null) {
-					errors.push(
-						projectionError(
-							"entity.missing",
-							`$.masters[${masterId}]`,
-							"Master state is missing.",
-							masterId,
-						),
-					)
-				}
-				if (layerMasterIds === null || !layerMasterIds.includes(masterId)) {
-					errors.push(
-						projectionError(
-							"layer.missing",
-							path,
-							"Glyph has no layer for this master.",
-							glyphId,
-						),
-					)
-				}
-				if (contourIds === null) {
-					errors.push(
-						projectionError(
-							"topology.missing",
-							`$.glyphs[${glyphId}].contours`,
-							"Glyph contour topology is missing.",
-							glyphId,
-						),
-					)
-				}
-				if (layerMasterIds !== null) {
-					errors.push(
-						...duplicateValueErrors(
-							layerMasterIds,
-							`$.glyphs[${glyphId}].layerMasterIds`,
-							"layer.duplicate_master",
-						),
-					)
-				}
-				if (contourIds !== null) {
-					errors.push(
-						...duplicateValueErrors(
-							contourIds,
-							`$.glyphs[${glyphId}].contourIds`,
-							"topology.duplicate_contour",
-						),
-					)
-				}
-
-				const advanceWidth = projectRoundedInteger(
-					readAdvanceWidth(get, [masterId, glyphId]),
-					0,
-					MAX_UINT16,
-					`${path}.advanceWidth`,
-					glyphId,
-				)
-				warnings.push(...advanceWidth.warnings)
-				if (!advanceWidth.ok) errors.push(...advanceWidth.errors)
-
-				const contours: PointSource[][] = []
-				const flattenedPoints: PointSource[] = []
-				const seenPointIds = new Set<PointId>()
-				for (const contourId of contourIds ?? []) {
-					const pointIds = get(contourPointIdsAtoms, [
-						masterId,
-						glyphId,
-						contourId,
-					])
-					const closed = get(contourClosedAtoms, [masterId, glyphId, contourId])
-					if (pointIds === null) {
+	const createGlyphLayerSelectors = (
+		key: string,
+		segmentPlanSelectors: typeof curveSegmentPlanSelectors,
+	) =>
+		silo.selectorFamily<ProjectionResult<CompiledGlyphLayer>, LayerKey>({
+			key,
+			get:
+				([masterId, glyphId]) =>
+				({ get }) => {
+					const path = `$.glyphs[${glyphId}].layers[${masterId}]`
+					const glyph = get(glyphAtoms, glyphId)
+					const master = get(masterAtoms, masterId)
+					const layerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId)
+					const contourIds = get(glyphContourIdsAtoms, [masterId, glyphId])
+					const errors: ProjectionError[] = []
+					const warnings: ProjectionWarning[] = []
+					if (glyph === null) {
+						errors.push(
+							projectionError(
+								"entity.missing",
+								`$.glyphs[${glyphId}]`,
+								"Glyph state is missing.",
+								glyphId,
+							),
+						)
+					}
+					if (master === null) {
+						errors.push(
+							projectionError(
+								"entity.missing",
+								`$.masters[${masterId}]`,
+								"Master state is missing.",
+								masterId,
+							),
+						)
+					}
+					if (layerMasterIds === null || !layerMasterIds.includes(masterId)) {
+						errors.push(
+							projectionError(
+								"layer.missing",
+								path,
+								"Glyph has no layer for this master.",
+								glyphId,
+							),
+						)
+					}
+					if (contourIds === null) {
 						errors.push(
 							projectionError(
 								"topology.missing",
-								`$.glyphs[${glyphId}].contours[${contourId}]`,
-								"Contour point index is missing.",
-								contourId,
+								`$.glyphs[${glyphId}].contours`,
+								"Glyph contour topology is missing.",
+								glyphId,
 							),
 						)
-						continue
 					}
-					if (closed !== true) {
+					if (layerMasterIds !== null) {
 						errors.push(
-							projectionError(
-								"topology.open_contour",
-								`$.glyphs[${glyphId}].contours[${contourId}]`,
-								"Open editor contours must be closed before font export.",
-								contourId,
+							...duplicateValueErrors(
+								layerMasterIds,
+								`$.glyphs[${glyphId}].layerMasterIds`,
+								"layer.duplicate_master",
 							),
 						)
-						continue
 					}
-					errors.push(
-						...duplicateValueErrors(
-							pointIds,
-							`$.glyphs[${glyphId}].contours[${contourId}].pointIds`,
-							"topology.duplicate_point",
-						),
+					if (contourIds !== null) {
+						errors.push(
+							...duplicateValueErrors(
+								contourIds,
+								`$.glyphs[${glyphId}].contourIds`,
+								"topology.duplicate_contour",
+							),
+						)
+					}
+
+					const advanceWidth = projectRoundedInteger(
+						readAdvanceWidth(get, [masterId, glyphId]),
+						0,
+						MAX_UINT16,
+						`${path}.advanceWidth`,
+						glyphId,
 					)
-					const contour: PointSource[] = []
-					const projectPoint = (
-						value: Vector2,
-						onCurve: boolean,
-						pointPath: string,
-						pointId: PointId,
-					): PointSource | null => {
-						const x = projectRoundedInteger(
-							value.x,
-							MIN_GLYPH_COORDINATE,
-							MAX_GLYPH_COORDINATE,
-							`${pointPath}.x`,
-							pointId,
-						)
-						const y = projectRoundedInteger(
-							value.y,
-							MIN_GLYPH_COORDINATE,
-							MAX_GLYPH_COORDINATE,
-							`${pointPath}.y`,
-							pointId,
-						)
-						warnings.push(...x.warnings, ...y.warnings)
-						if (!x.ok) errors.push(...x.errors)
-						if (!y.ok) errors.push(...y.errors)
-						return x.ok && y.ok ? { x: x.value, y: y.value, onCurve } : null
-					}
-					for (
-						let segmentIndex = 0;
-						segmentIndex < pointIds.length;
-						segmentIndex += 1
-					) {
-						const pointId = pointIds[segmentIndex]
-						if (pointId === undefined) continue
-						if (seenPointIds.has(pointId)) {
-							errors.push(
-								projectionError(
-									"topology.duplicate_point",
-									`$.glyphs[${glyphId}].points[${pointId}]`,
-									"A point ID may occur only once in a glyph topology.",
-									pointId,
-								),
-							)
-						} else seenPointIds.add(pointId)
-						const endPointId = pointIds[(segmentIndex + 1) % pointIds.length]
-						if (endPointId === undefined) continue
-						const start = get(layerNodeSelectors, [masterId, glyphId, pointId])
-						const end = get(layerNodeSelectors, [masterId, glyphId, endPointId])
-						const plan = get(curveSegmentPlanSelectors, [
+					warnings.push(...advanceWidth.warnings)
+					if (!advanceWidth.ok) errors.push(...advanceWidth.errors)
+
+					const contours: PointSource[][] = []
+					const flattenedPoints: PointSource[] = []
+					const seenPointIds = new Set<PointId>()
+					for (const contourId of contourIds ?? []) {
+						const pointIds = get(contourPointIdsAtoms, [
 							masterId,
 							glyphId,
 							contourId,
-							segmentIndex,
 						])
-						if (!start.ok) errors.push(...start.errors)
-						if (!end.ok) errors.push(...end.errors)
-						if (!plan.ok) errors.push(...plan.errors)
-						if (!start.ok || !end.ok || !plan.ok) continue
-
-						const startPoint = projectPoint(
-							start.value,
-							true,
-							`${path}.points[${pointId}]`,
-							pointId,
+						const closed = get(contourClosedAtoms, [
+							masterId,
+							glyphId,
+							contourId,
+						])
+						if (pointIds === null) {
+							errors.push(
+								projectionError(
+									"topology.missing",
+									`$.glyphs[${glyphId}].contours[${contourId}]`,
+									"Contour point index is missing.",
+									contourId,
+								),
+							)
+							continue
+						}
+						if (closed !== true) {
+							errors.push(
+								projectionError(
+									"topology.open_contour",
+									`${path}.contours[${contourId}]`,
+									"Open editor contours must be closed before font export.",
+									contourId,
+								),
+							)
+							continue
+						}
+						errors.push(
+							...duplicateValueErrors(
+								pointIds,
+								`$.glyphs[${glyphId}].contours[${contourId}].pointIds`,
+								"topology.duplicate_point",
+							),
 						)
-						if (startPoint !== null) {
-							contour.push(startPoint)
-							flattenedPoints.push(startPoint)
+						const contour: PointSource[] = []
+						const projectPoint = (
+							value: Vector2,
+							onCurve: boolean,
+							pointPath: string,
+							pointId: PointId,
+						): PointSource | null => {
+							const x = projectRoundedInteger(
+								value.x,
+								MIN_GLYPH_COORDINATE,
+								MAX_GLYPH_COORDINATE,
+								`${pointPath}.x`,
+								pointId,
+							)
+							const y = projectRoundedInteger(
+								value.y,
+								MIN_GLYPH_COORDINATE,
+								MAX_GLYPH_COORDINATE,
+								`${pointPath}.y`,
+								pointId,
+							)
+							warnings.push(...x.warnings, ...y.warnings)
+							if (!x.ok) errors.push(...x.errors)
+							if (!y.ok) errors.push(...y.errors)
+							return x.ok && y.ok ? { x: x.value, y: y.value, onCurve } : null
 						}
-						if (!plan.value.curved) continue
+						for (
+							let segmentIndex = 0;
+							segmentIndex < pointIds.length;
+							segmentIndex += 1
+						) {
+							const pointId = pointIds[segmentIndex]
+							if (pointId === undefined) continue
+							if (seenPointIds.has(pointId)) {
+								errors.push(
+									projectionError(
+										"topology.duplicate_point",
+										`$.glyphs[${glyphId}].points[${pointId}]`,
+										"A point ID may occur only once in a glyph topology.",
+										pointId,
+									),
+								)
+							} else seenPointIds.add(pointId)
+							const endPointId = pointIds[(segmentIndex + 1) % pointIds.length]
+							if (endPointId === undefined) continue
+							const start = get(layerNodeSelectors, [
+								masterId,
+								glyphId,
+								pointId,
+							])
+							const end = get(layerNodeSelectors, [
+								masterId,
+								glyphId,
+								endPointId,
+							])
+							const plan = get(segmentPlanSelectors, [
+								masterId,
+								glyphId,
+								contourId,
+								segmentIndex,
+							])
+							if (!start.ok) errors.push(...start.errors)
+							if (!end.ok) errors.push(...end.errors)
+							if (!plan.ok) errors.push(...plan.errors)
+							if (!start.ok || !end.ok || !plan.ok) continue
 
-						const outgoing = start.value.outgoing
-						const incoming = end.value.incoming
-						const cubic: CubicBezier = {
-							p0: { x: start.value.x, y: start.value.y },
-							c1: {
-								x: start.value.x + (outgoing?.x ?? 0),
-								y: start.value.y + (outgoing?.y ?? 0),
-							},
-							c2: {
-								x: end.value.x + (incoming?.x ?? 0),
-								y: end.value.y + (incoming?.y ?? 0),
-							},
-							p3: { x: end.value.x, y: end.value.y },
-						}
-						const quadratics =
-							outgoing === undefined && incoming === undefined
-								? straightQuadraticsAtDepth(
-										cubic.p0,
-										cubic.p3,
-										plan.value.subdivisionDepth,
-									)
-								: quadraticsAtDepth(cubic, plan.value.subdivisionDepth)
-						for (let index = 0; index < quadratics.length; index += 1) {
-							const quadratic = quadratics[index]
-							if (quadratic === undefined) continue
-							const control = projectPoint(
-								quadratic.control,
-								false,
-								`${path}.segments[${segmentIndex}].quadratics[${index}].control`,
-								pointId,
-							)
-							if (control !== null) {
-								contour.push(control)
-								flattenedPoints.push(control)
-							}
-							if (index === quadratics.length - 1) continue
-							const endpoint = projectPoint(
-								quadratic.p2,
+							const startPoint = projectPoint(
+								start.value,
 								true,
-								`${path}.segments[${segmentIndex}].quadratics[${index}].end`,
+								`${path}.points[${pointId}]`,
 								pointId,
 							)
-							if (endpoint !== null) {
-								contour.push(endpoint)
-								flattenedPoints.push(endpoint)
+							if (startPoint !== null) {
+								contour.push(startPoint)
+								flattenedPoints.push(startPoint)
+							}
+							if (!plan.value.curved) continue
+
+							const outgoing = start.value.outgoing
+							const incoming = end.value.incoming
+							const cubic: CubicBezier = {
+								p0: { x: start.value.x, y: start.value.y },
+								c1: {
+									x: start.value.x + (outgoing?.x ?? 0),
+									y: start.value.y + (outgoing?.y ?? 0),
+								},
+								c2: {
+									x: end.value.x + (incoming?.x ?? 0),
+									y: end.value.y + (incoming?.y ?? 0),
+								},
+								p3: { x: end.value.x, y: end.value.y },
+							}
+							const quadratics =
+								outgoing === undefined && incoming === undefined
+									? straightQuadraticsAtDepth(
+											cubic.p0,
+											cubic.p3,
+											plan.value.subdivisionDepth,
+										)
+									: quadraticsAtDepth(cubic, plan.value.subdivisionDepth)
+							for (let index = 0; index < quadratics.length; index += 1) {
+								const quadratic = quadratics[index]
+								if (quadratic === undefined) continue
+								const control = projectPoint(
+									quadratic.control,
+									false,
+									`${path}.segments[${segmentIndex}].quadratics[${index}].control`,
+									pointId,
+								)
+								if (control !== null) {
+									contour.push(control)
+									flattenedPoints.push(control)
+								}
+								if (index === quadratics.length - 1) continue
+								const endpoint = projectPoint(
+									quadratic.p2,
+									true,
+									`${path}.segments[${segmentIndex}].quadratics[${index}].end`,
+									pointId,
+								)
+								if (endpoint !== null) {
+									contour.push(endpoint)
+									flattenedPoints.push(endpoint)
+								}
 							}
 						}
+						contours.push(contour)
 					}
-					contours.push(contour)
-				}
-				if (errors.length > 0 || !advanceWidth.ok) {
-					return projectionFailure(errors, warnings)
-				}
-				const xMin = xMinOf(flattenedPoints)
-				return projectionSuccess(
-					{
-						masterId,
-						glyphId,
-						contours,
-						flattenedPoints,
-						advanceWidth: advanceWidth.value,
-						leftSideBearing: xMin,
-						xMin,
-					},
-					warnings,
-				)
-			},
-	})
+					if (errors.length > 0 || !advanceWidth.ok) {
+						return projectionFailure(errors, warnings)
+					}
+					const xMin = xMinOf(flattenedPoints)
+					return projectionSuccess(
+						{
+							masterId,
+							glyphId,
+							contours,
+							flattenedPoints,
+							advanceWidth: advanceWidth.value,
+							leftSideBearing: xMin,
+							xMin,
+						},
+						warnings,
+					)
+				},
+		})
+	const glyphLayerSelectors = createGlyphLayerSelectors(
+		"glyphLayer",
+		curveSegmentPlanSelectors,
+	)
+	const singleMasterGlyphLayerSelectors = createGlyphLayerSelectors(
+		"singleMasterGlyphLayer",
+		singleMasterCurveSegmentPlanSelectors,
+	)
 
 	const glyphCompatibilitySelectors = silo.selectorFamily<
 		GlyphCompatibility,
@@ -3058,6 +3118,65 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			},
 	})
 
+	const livePreviewGlyphSourceSelectors = silo.selectorFamily<
+		ProjectionResult<SimpleGlyphSource>,
+		GlyphId
+	>({
+		key: "livePreviewGlyphSource",
+		get:
+			(glyphId) =>
+			({ get }) => {
+				const strict = get(glyphSourceSelectors, glyphId)
+				if (strict.ok) return strict
+				const glyph = get(glyphAtoms, glyphId)
+				const defaultMasterId = get(defaultMasterIdAtom)
+				if (glyph === null || defaultMasterId === null) return strict
+				if (
+					strict.errors.some(
+						(error) =>
+							!isLivePreviewRecoverableGlyphError(
+								error,
+								strict.errors,
+								glyphId,
+								defaultMasterId,
+							),
+					)
+				) {
+					return strict
+				}
+				const layer = get(singleMasterGlyphLayerSelectors, [
+					defaultMasterId,
+					glyphId,
+				])
+				if (!layer.ok) {
+					return projectionFailure(
+						[...strict.errors, ...layer.errors],
+						[...strict.warnings, ...layer.warnings],
+					)
+				}
+				const recoverableWarnings = strict.errors.map((error) =>
+					projectionWarning(
+						error.code,
+						error.path,
+						`Live preview froze ${glyph.name} (${glyphId}) to its default master: ${error.message}`,
+						glyphId,
+					),
+				)
+				return projectionSuccess(
+					{
+						kind: "simple",
+						name: glyph.name,
+						advanceWidth: layer.value.advanceWidth,
+						leftSideBearing: layer.value.leftSideBearing,
+						contours: layer.value.contours,
+						variations: [],
+						...(glyph.overlap ? { overlap: true } : {}),
+					},
+					[...strict.warnings, ...layer.warnings, ...recoverableWarnings],
+				)
+			},
+	})
+
 	const exportedGlyphIdsSelector = silo.selector<
 		ProjectionResult<readonly GlyphId[]>
 	>({
@@ -3110,6 +3229,25 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				collectProjectionResults(
 					ids.value.map((glyphId) =>
 						silo.getState(glyphSourceSelectors, glyphId),
+					),
+				),
+				ids.warnings,
+			)
+		},
+	})
+
+	const livePreviewGlyphsSourceSelector = silo.selector<
+		ProjectionResult<readonly SimpleGlyphSource[]>
+	>({
+		key: "livePreviewGlyphsSource",
+		get: ({ get }) => {
+			get(documentRevisionAtom)
+			const ids = silo.getState(exportedGlyphIdsSelector)
+			if (!ids.ok) return ids
+			return resultWithWarnings(
+				collectProjectionResults(
+					ids.value.map((glyphId) =>
+						silo.getState(livePreviewGlyphSourceSelectors, glyphId),
 					),
 				),
 				ids.warnings,
@@ -3514,130 +3652,145 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const fontSourceSelector = silo.selector<
-		ProjectionResult<VariableFontSource>
-	>({
-		key: "fontSource",
-		get: ({ get }) => {
-			const structure = get(editorStructureSelector)
-			const metadata = get(metadataSourceSelector)
-			const names = get(namesSourceSelector)
-			const metrics = get(metricsSourceSelector)
-			const style = get(styleSourceSelector)
-			const axes = get(axesSourceSelector)
-			const instances = get(instancesSourceSelector)
-			const glyphs = get(glyphsSourceSelector)
-			const cmap = get(cmapSourceSelector)
-			const results = [
-				structure,
-				metadata,
-				names,
-				metrics,
-				style,
-				axes,
-				instances,
-				glyphs,
-				cmap,
-			] as const
-			const errors: ProjectionError[] = []
-			const warnings: ProjectionWarning[] = []
-			for (const result of results) {
-				warnings.push(...result.warnings)
-				if (!result.ok) errors.push(...result.errors)
-			}
-			if (errors.length > 0) return projectionFailure(errors, warnings)
-			if (
-				!structure.ok ||
-				!metadata.ok ||
-				!names.ok ||
-				!metrics.ok ||
-				!style.ok ||
-				!axes.ok ||
-				!instances.ok ||
-				!glyphs.ok ||
-				!cmap.ok
-			) {
-				throw new Error("Projection result bookkeeping failed.")
-			}
-			return projectionSuccess(
-				{
-					format: CREATE_FONT_FORMAT,
-					irVersion: CREATE_FONT_IR_VERSION,
-					metadata: metadata.value,
-					names: names.value,
-					metrics: metrics.value,
-					style: style.value,
-					axes: axes.value,
-					instances: instances.value,
-					glyphs: glyphs.value,
-					cmap: cmap.value,
-					kerning: get(kerningAtom).flatMap((pair) => {
-						const exported = get(exportedGlyphIdsSelector)
-						const exportedIds = exported.ok ? exported.value : []
-						const left = exportedIds.indexOf(pair.left)
-						const right = exportedIds.indexOf(pair.right)
-						return left < 0 || right < 0
-							? []
-							: [{ left, right, value: pair.value }]
-					}),
-				},
-				warnings,
-			)
-		},
-	})
+	const createFontSourceSelector = (
+		key: string,
+		glyphsSelector: typeof glyphsSourceSelector,
+	) =>
+		silo.selector<ProjectionResult<VariableFontSource>>({
+			key,
+			get: ({ get }) => {
+				const structure = get(editorStructureSelector)
+				const metadata = get(metadataSourceSelector)
+				const names = get(namesSourceSelector)
+				const metrics = get(metricsSourceSelector)
+				const style = get(styleSourceSelector)
+				const axes = get(axesSourceSelector)
+				const instances = get(instancesSourceSelector)
+				const glyphs = get(glyphsSelector)
+				const cmap = get(cmapSourceSelector)
+				const results = [
+					structure,
+					metadata,
+					names,
+					metrics,
+					style,
+					axes,
+					instances,
+					glyphs,
+					cmap,
+				] as const
+				const errors: ProjectionError[] = []
+				const warnings: ProjectionWarning[] = []
+				for (const result of results) {
+					warnings.push(...result.warnings)
+					if (!result.ok) errors.push(...result.errors)
+				}
+				if (errors.length > 0) return projectionFailure(errors, warnings)
+				if (
+					!structure.ok ||
+					!metadata.ok ||
+					!names.ok ||
+					!metrics.ok ||
+					!style.ok ||
+					!axes.ok ||
+					!instances.ok ||
+					!glyphs.ok ||
+					!cmap.ok
+				) {
+					throw new Error("Projection result bookkeeping failed.")
+				}
+				return projectionSuccess(
+					{
+						format: CREATE_FONT_FORMAT,
+						irVersion: CREATE_FONT_IR_VERSION,
+						metadata: metadata.value,
+						names: names.value,
+						metrics: metrics.value,
+						style: style.value,
+						axes: axes.value,
+						instances: instances.value,
+						glyphs: glyphs.value,
+						cmap: cmap.value,
+						kerning: get(kerningAtom).flatMap((pair) => {
+							const exported = get(exportedGlyphIdsSelector)
+							const exportedIds = exported.ok ? exported.value : []
+							const left = exportedIds.indexOf(pair.left)
+							const right = exportedIds.indexOf(pair.right)
+							return left < 0 || right < 0
+								? []
+								: [{ left, right, value: pair.value }]
+						}),
+					},
+					warnings,
+				)
+			},
+		})
+	const fontSourceSelector = createFontSourceSelector(
+		"fontSource",
+		glyphsSourceSelector,
+	)
+	const livePreviewFontSourceSelector = createFontSourceSelector(
+		"livePreviewFontSource",
+		livePreviewGlyphsSourceSelector,
+	)
 
-	const fontCompilationSelector = silo.selector<FontCompilation>({
-		key: "fontCompilation",
-		get: ({ get }) => {
-			const projected = get(fontSourceSelector)
-			if (!projected.ok) {
+	const createFontCompilationSelector = (
+		key: string,
+		sourceSelector: typeof fontSourceSelector,
+	) =>
+		silo.selector<FontCompilation>({
+			key,
+			get: ({ get }) => {
+				const projected = get(sourceSelector)
+				if (!projected.ok) {
+					return deepFreeze({
+						ok: false,
+						stage: "projection-failed",
+						projectionErrors: projected.errors,
+						projectionWarnings: projected.warnings,
+					} as const)
+				}
+				const ingested = ingestVariableFont(projected.value)
+				if (!ingested.ok) {
+					return deepFreeze({
+						ok: false,
+						stage: "ingestion-failed",
+						source: projected.value,
+						projectionWarnings: projected.warnings,
+						ingestionErrors: ingested.errors,
+						ingestionWarnings: ingested.warnings,
+					} as const)
+				}
+				const glyphIndices = new Map(
+					get(glyphIdsAtom).map((glyphId, index) => [glyphId, index]),
+				)
+				const substitutions = get(featureSubstitutionsAtom).flatMap((rule) => {
+					const from = rule.from.map((glyphId) => glyphIndices.get(glyphId))
+					const to = glyphIndices.get(rule.to)
+					return from.some((glyphId) => glyphId === undefined) ||
+						to === undefined
+						? []
+						: [
+								{
+									feature: rule.feature,
+									from: from as number[],
+									to,
+									...(rule.contextIndex === undefined
+										? {}
+										: { contextIndex: rule.contextIndex }),
+								},
+							]
+				})
 				return deepFreeze({
-					ok: false,
-					stage: "projection-failed",
-					projectionErrors: projected.errors,
-					projectionWarnings: projected.warnings,
-				} as const)
-			}
-			const ingested = ingestVariableFont(projected.value)
-			if (!ingested.ok) {
-				return deepFreeze({
-					ok: false,
-					stage: "ingestion-failed",
+					ok: true,
+					stage: "compiled",
 					source: projected.value,
+					font: withVariableFontSubstitutions(ingested.value, substitutions),
 					projectionWarnings: projected.warnings,
-					ingestionErrors: ingested.errors,
 					ingestionWarnings: ingested.warnings,
 				} as const)
-			}
-			const glyphIndices = new Map(
-				get(glyphIdsAtom).map((glyphId, index) => [glyphId, index]),
-			)
-			const substitutions = get(featureSubstitutionsAtom).flatMap((rule) => {
-				const from = rule.from.map((glyphId) => glyphIndices.get(glyphId))
-				const to = glyphIndices.get(rule.to)
-				return from.some((glyphId) => glyphId === undefined) || to === undefined
-					? []
-					: [
-							{
-								feature: rule.feature,
-								from: from as number[],
-								to,
-								...(rule.contextIndex === undefined
-									? {}
-									: { contextIndex: rule.contextIndex }),
-							},
-						]
-			})
-			return deepFreeze({
-				ok: true,
-				stage: "compiled",
-				source: projected.value,
-				font: withVariableFontSubstitutions(ingested.value, substitutions),
-				projectionWarnings: projected.warnings,
-				ingestionWarnings: ingested.warnings,
-			} as const)
-		},
-	})
+			},
+		})
 
 	const editorAxisSourceSelectors = silo.selectorFamily<
 		EditorFontSource["axes"][number] | null,
@@ -3916,6 +4069,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			})
 		},
 	})
+	const fontCompilationSelector = createFontCompilationSelector(
+		"fontCompilation",
+		fontSourceSelector,
+	)
+	const livePreviewFontCompilationSelector = createFontCompilationSelector(
+		"livePreviewFontCompilation",
+		livePreviewFontSourceSelector,
+	)
 
 	const replaceFontTransaction = silo.transaction<
 		(source: EditorFontSource) => void
@@ -7601,8 +7762,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			glyphCompatibility: glyphCompatibilitySelectors,
 			glyphVariations: glyphVariationSelectors,
 			glyphSource: glyphSourceSelectors,
+			livePreviewGlyphSource: livePreviewGlyphSourceSelectors,
 			exportedGlyphIds: exportedGlyphIdsSelector,
 			glyphsSource: glyphsSourceSelector,
+			livePreviewGlyphsSource: livePreviewGlyphsSourceSelector,
 			cmapEntry: cmapEntrySelectors,
 			cmapSource: cmapSourceSelector,
 			metadataSource: metadataSourceSelector,
@@ -7611,6 +7774,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			styleSource: styleSourceSelector,
 			fontSource: fontSourceSelector,
 			compilation: fontCompilationSelector,
+			livePreviewCompilation: livePreviewFontCompilationSelector,
 		},
 		transactions: {
 			replaceFont: replaceFontTransaction,
@@ -7801,6 +7965,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			fontSource: () => silo.getState(fontSourceSelector),
 			compilation: (): FontCompilation =>
 				silo.getState(fontCompilationSelector),
+			livePreviewCompilation: (): FontCompilation =>
+				silo.getState(livePreviewFontCompilationSelector),
 		},
 		undo: (glyphId: GlyphId): void => {
 			assertKnownGlyphHistory(glyphId)
