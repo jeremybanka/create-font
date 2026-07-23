@@ -252,7 +252,7 @@ export const TOOLS = {
 	},
 	RULE: {
 		description:
-			"Plot two points to add an oriented glyph measuring rule; hold Shift to constrain its angle.",
+			"Plot two points to add a measuring rule; free points snap to node coordinates, while Shift constrains its angle.",
 		id: "rule",
 		displayName: "Rule",
 		hotkey: { key: "m" },

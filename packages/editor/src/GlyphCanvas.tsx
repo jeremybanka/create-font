@@ -66,6 +66,7 @@ import {
 	orthogonalConstraint,
 	projectionGuidePoints,
 	resolveGesturePoint,
+	snapDraggedPoint,
 	snapGroupTranslation,
 	type ActiveSnap,
 	type DragPositionTarget,
@@ -483,11 +484,6 @@ export function GlyphCanvas({
 		x: number
 		y: number
 	}> | null>(null)
-	const [ruleEndpointPreview, setRuleEndpointPreview] = useState<Readonly<{
-		ruleId: RuleId
-		endpoint: "a" | "b"
-		point: Readonly<{ x: number; y: number }>
-	}> | null>(null)
 	const penContourResumeRef = useRef<ContourId | null>(null)
 	const penGestureRef = useRef<PenPlacementGesture | null>(null)
 	const penHoverRef = useRef<PenHoverPreview | null>(null)
@@ -817,32 +813,37 @@ export function GlyphCanvas({
 		) * 2
 	const worldScale = BASE_CANVAS_SCALE * view.zoom
 	const inverseScale = 1 / worldScale
+	const resolveRulePoint = (
+		origin: Readonly<{ x: number; y: number }> | null,
+		candidate: Readonly<{ x: number; y: number }>,
+		constrained: boolean,
+	): SnappedPoint => {
+		if (constrained)
+			return {
+				...constrainRulePointToAngle(origin ?? candidate, candidate, true),
+				snaps: Object.freeze([]),
+			}
+		return snapDraggedPoint({
+			pointId: "point:rule-preview" as PointId,
+			x: candidate.x,
+			y: candidate.y,
+			nodes: allPoints,
+			metrics: [],
+			worldScale,
+		})
+	}
 	const rules = glyph?.rules ?? []
 	const selectedRules = useMemo(
 		() => rules.filter((rule) => selectedRuleIds.includes(rule.id)),
 		[rules, selectedRuleIds],
 	)
-	const displayRules = useMemo(
-		() =>
-			ruleEndpointPreview === null
-				? rules
-				: rules.map((rule) =>
-						rule.id === ruleEndpointPreview.ruleId
-							? {
-									...rule,
-									[ruleEndpointPreview.endpoint]: ruleEndpointPreview.point,
-								}
-							: rule,
-					),
-		[rules, ruleEndpointPreview],
-	)
-	const pendingRulePreview = useMemo(() => {
+	const pendingRuleResolution = useMemo(() => {
 		if (pendingRulePoint === null || ruleHoverPoint === null) return null
-		const b = constrainRulePointToAngle(
-			pendingRulePoint,
-			ruleHoverPoint,
-			shiftHeld,
-		)
+		return resolveRulePoint(pendingRulePoint, ruleHoverPoint, shiftHeld)
+	}, [allPoints, pendingRulePoint, ruleHoverPoint, shiftHeld, worldScale])
+	const pendingRulePreview = useMemo(() => {
+		if (pendingRulePoint === null || pendingRuleResolution === null) return null
+		const b = pendingRuleResolution
 		if (Math.hypot(b.x - pendingRulePoint.x, b.y - pendingRulePoint.y) <= 1e-6)
 			return null
 		const rule: EditorRuleSource = {
@@ -854,14 +855,14 @@ export function GlyphCanvas({
 			rule,
 			measurement: measureRule(rule, visibleContours),
 		}
-	}, [pendingRulePoint, ruleHoverPoint, shiftHeld, visibleContours])
+	}, [pendingRulePoint, pendingRuleResolution, visibleContours])
 	const ruleMeasurements = useMemo(
 		() =>
-			displayRules.map((rule) => ({
+			rules.map((rule) => ({
 				rule,
 				measurement: measureRule(rule, visibleContours),
 			})),
-		[displayRules, visibleContours],
+		[rules, visibleContours],
 	)
 	const ruleExtent =
 		Math.hypot(width, height) / Math.max(worldScale, 1e-6) +
@@ -1175,9 +1176,11 @@ export function GlyphCanvas({
 	const visibleSnaps =
 		activeTool === "pen"
 			? (penPlacement?.snaps ?? [])
-			: activeShapeKind !== null
-				? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
-				: activeSnaps
+			: activeTool === "rule"
+				? (pendingRuleResolution?.snaps ?? [])
+				: activeShapeKind !== null
+					? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
+					: activeSnaps
 	const rememberTangentDirection = (
 		constraint: TangentSlideConstraint,
 	): void => {
@@ -1697,7 +1700,6 @@ export function GlyphCanvas({
 		setMomentaryPreview(false)
 		setPendingRulePoint(null)
 		setRuleHoverPoint(null)
-		setRuleEndpointPreview(null)
 		cancelledGroupDrag.current = null
 	}, [activeGlyphId, activeMasterId, activeTool, editingTextIndex])
 
@@ -1902,22 +1904,23 @@ export function GlyphCanvas({
 		if (point === null) return
 		event.cancelBubble = true
 		if (pendingRulePoint === null) {
-			setPendingRulePoint(point)
+			const resolved = resolveRulePoint(null, point, event.evt.shiftKey)
+			setPendingRulePoint({ x: resolved.x, y: resolved.y })
 			setRuleHoverPoint(null)
 			setClipboardStatus(
-				`Rule point A at ${point.x.toFixed(1)}, ${point.y.toFixed(1)}.`,
+				`Rule point A at ${resolved.x.toFixed(1)}, ${resolved.y.toFixed(1)}.`,
 			)
 			return
 		}
-		const constrainedPoint = constrainRulePointToAngle(
+		const resolved = resolveRulePoint(
 			pendingRulePoint,
 			point,
 			event.evt.shiftKey,
 		)
 		if (
 			Math.hypot(
-				constrainedPoint.x - pendingRulePoint.x,
-				constrainedPoint.y - pendingRulePoint.y,
+				resolved.x - pendingRulePoint.x,
+				resolved.y - pendingRulePoint.y,
 			) <= 1e-6
 		) {
 			setClipboardStatus("Rule points A and B must be distinct.")
@@ -1926,7 +1929,10 @@ export function GlyphCanvas({
 		const id = nextRuleId()
 		workspace.font.actions.setGlyphRules({
 			glyphId: activeGlyphId,
-			rules: [...rules, { id, a: pendingRulePoint, b: constrainedPoint }],
+			rules: [
+				...rules,
+				{ id, a: pendingRulePoint, b: { x: resolved.x, y: resolved.y } },
+			],
 		})
 		setPendingRulePoint(null)
 		setRuleHoverPoint(null)
@@ -1947,54 +1953,6 @@ export function GlyphCanvas({
 		if (point === null) return
 		setShiftHeld(event.evt.shiftKey)
 		setRuleHoverPoint(point)
-	}
-	const startRuleEndpointDrag = (
-		rule: EditorRuleSource,
-		endpoint: "a" | "b",
-	): void => {
-		setSelection(Object.freeze([]))
-		setSelectedRuleIds(Object.freeze([rule.id]))
-		setRuleEndpointPreview({ ruleId: rule.id, endpoint, point: rule[endpoint] })
-	}
-	const selectRuleEndpoint = (
-		event: KonvaEventObject<PointerEvent>,
-		rule: EditorRuleSource,
-	): void => {
-		event.cancelBubble = true
-		if (activeTool !== "select" && activeTool !== "rule") return
-		setSelection(Object.freeze([]))
-		setSelectedRuleIds(Object.freeze([rule.id]))
-	}
-	const previewRuleEndpointDrag = (
-		rule: EditorRuleSource,
-		endpoint: "a" | "b",
-		point: Readonly<{ x: number; y: number }>,
-	): void => {
-		setRuleEndpointPreview({ ruleId: rule.id, endpoint, point })
-	}
-	const finishRuleEndpointDrag = (
-		rule: EditorRuleSource,
-		endpoint: "a" | "b",
-		point: Readonly<{ x: number; y: number }>,
-		cancelled: boolean,
-	): void => {
-		setRuleEndpointPreview(null)
-		if (cancelled) return
-		const other = endpoint === "a" ? rule.b : rule.a
-		if (Math.hypot(point.x - other.x, point.y - other.y) <= 1e-6) {
-			setClipboardStatus("Rule points A and B must be distinct.")
-			return
-		}
-		if (activeGlyphId === null) return
-		workspace.font.actions.setGlyphRules({
-			glyphId: activeGlyphId,
-			rules: rules.map((candidate) =>
-				candidate.id === rule.id
-					? { ...candidate, [endpoint]: point }
-					: candidate,
-			),
-		})
-		setClipboardStatus(`Moved rule point ${endpoint.toUpperCase()}.`)
 	}
 	const nextPenEntityId = (kind: "contour" | "point") => {
 		const occupied = new Set<string>([
@@ -4041,8 +3999,8 @@ export function GlyphCanvas({
 													name="glyph-rule-line"
 													points={[...ruleViewportEndpoints(rule, ruleExtent)]}
 													stroke={palette.accent}
-													opacity={selected ? 1 : 0.72}
-													strokeWidth={(selected ? 2 : 1.25) * inverseScale}
+													opacity={selected ? 0.3 : 0.1}
+													strokeWidth={(selected ? 1.5 : 1) * inverseScale}
 													hitStrokeWidth={12 * inverseScale}
 													onPointerDown={(event) => {
 														if (
@@ -4118,30 +4076,6 @@ export function GlyphCanvas({
 															/>
 														))
 													: null}
-												{selected || activeTool === "rule" ? (
-													<>
-														<Circle
-															name="rule-point-a"
-															x={rule.a.x}
-															y={rule.a.y}
-															radius={4 * inverseScale}
-															fill={palette.surface}
-															stroke={palette.accent}
-															strokeWidth={1.5 * inverseScale}
-															listening={false}
-														/>
-														<Circle
-															name="rule-point-b"
-															x={rule.b.x}
-															y={rule.b.y}
-															radius={4 * inverseScale}
-															fill={palette.accent}
-															stroke={palette.surface}
-															strokeWidth={inverseScale}
-															listening={false}
-														/>
-													</>
-												) : null}
 											</Group>
 										)
 									})}
@@ -5915,49 +5849,6 @@ export function GlyphCanvas({
 											listening={false}
 										/>
 									)}
-									{/* Render interaction targets last so rule endpoints win hits
-									    when they overlap outline controls. */}
-									{ruleMeasurements.flatMap(({ rule }) =>
-										selectedRuleIds.includes(rule.id) || activeTool === "rule"
-											? (["a", "b"] as const).map((endpoint) => (
-													<Circle
-														key={`${rule.id}:endpoint-hit:${endpoint}`}
-														name={`rule-endpoint-hit rule-endpoint-${endpoint}`}
-														x={rule[endpoint].x}
-														y={rule[endpoint].y}
-														radius={9 * inverseScale}
-														fill={palette.accent}
-														opacity={0.001}
-														draggable={
-															activeTool === "select" || activeTool === "rule"
-														}
-														onPointerDown={(event) =>
-															selectRuleEndpoint(event, rule)
-														}
-														onDragStart={() =>
-															startRuleEndpointDrag(rule, endpoint)
-														}
-														onDragMove={(event) =>
-															previewRuleEndpointDrag(rule, endpoint, {
-																x: event.target.x(),
-																y: event.target.y(),
-															})
-														}
-														onDragEnd={(event) =>
-															finishRuleEndpointDrag(
-																rule,
-																endpoint,
-																{
-																	x: event.target.x(),
-																	y: event.target.y(),
-																},
-																event.evt.type === "pointercancel",
-															)
-														}
-													/>
-												))
-											: [],
-									)}
 								</Group>
 							)}
 						</Group>
@@ -6015,13 +5906,25 @@ export function GlyphCanvas({
 				its adjoining segment. Use the Rule tool to click points A and B; rules
 				persist with the glyph and can be selected, copied, cut, pasted,
 				deleted, undone, and redone. After plotting A, move the pointer to
-				preview the rule and its measures; hold Shift to constrain the rule to{" "}
-				{RULE_ANGLE_SNAP_DEGREES} degree increments. The View Measures control
-				hides derived intersections and one-decimal labels without hiding rules.
+				preview the rule and its measures. Free placement snaps independently to
+				nearby node x and y coordinates; hold Shift to constrain the rule to{" "}
+				{RULE_ANGLE_SNAP_DEGREES} degree increments instead. Click a completed
+				rule line with the Rule tool to select it, then press Delete to remove
+				it. The View Measures control hides derived intersections and
+				one-decimal labels without hiding rules.
 			</p>
 			<output role="status" aria-live="polite">
 				{pendingRulePreview !== null
-					? `Rule preview from A ${pendingRulePreview.rule.a.x.toFixed(1)}, ${pendingRulePreview.rule.a.y.toFixed(1)} to B ${pendingRulePreview.rule.b.x.toFixed(1)}, ${pendingRulePreview.rule.b.y.toFixed(1)}${shiftHeld ? `, snapped to ${RULE_ANGLE_SNAP_DEGREES} degree increments` : ""}.`
+					? `Rule preview from A ${pendingRulePreview.rule.a.x.toFixed(1)}, ${pendingRulePreview.rule.a.y.toFixed(1)} to B ${pendingRulePreview.rule.b.x.toFixed(1)}, ${pendingRulePreview.rule.b.y.toFixed(1)}${
+							shiftHeld
+								? `, snapped to ${RULE_ANGLE_SNAP_DEGREES} degree increments`
+								: pendingRuleResolution === null ||
+									  pendingRuleResolution.snaps.length === 0
+									? ""
+									: `, snapped to ${pendingRuleResolution.snaps
+											.map((snap) => snap.label.toLowerCase())
+											.join(" and ")}`
+						}.`
 					: (clipboardStatus ??
 						(momentaryPreview
 							? `Momentary preview of ${glyph?.name ?? "glyph"}.`

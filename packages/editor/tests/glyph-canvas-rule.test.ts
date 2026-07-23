@@ -144,6 +144,59 @@ describe("GlyphCanvas rules", () => {
 		expect(stage.findOne(".rule-hover-preview")).toBeUndefined()
 	})
 
+	it("snaps unconstrained rule points independently to node coordinates", async () => {
+		const { stage, workspace } = mountCanvas()
+		await act(async () => {
+			workspace.actions.selectTool("rule")
+			await Promise.resolve()
+		})
+		const background = stage.findOne(".canvas-background")
+		const outline = stage.findOne(".outline-segment")
+		const nodes = workspace.font.silo.getState(workspace.ui.activeLayer)
+			?.contours[0]?.nodes
+		const a = nodes?.[0]
+		const b = nodes?.[2]
+		if (
+			background === undefined ||
+			outline === undefined ||
+			a === undefined ||
+			b === undefined
+		)
+			throw new Error("Expected an outline and two nodes.")
+		let pointer = outline
+			.getAbsoluteTransform()
+			.point({ x: a.x + 1, y: a.y - 1 })
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+
+		act(() => {
+			background.fire(
+				"pointerdown",
+				{ evt: { type: "pointerdown", shiftKey: false } },
+				true,
+			)
+		})
+		const pendingA = stage.findOne(".rule-pending-point-a")
+		expect({ x: pendingA?.x(), y: pendingA?.y() }).toEqual({
+			x: a.x,
+			y: a.y,
+		})
+
+		pointer = outline.getAbsoluteTransform().point({ x: b.x - 1, y: b.y + 1 })
+		act(() => {
+			background.fire(
+				"pointermove",
+				{ evt: { type: "pointermove", shiftKey: false } },
+				true,
+			)
+		})
+		const previewB = stage.findOne(".rule-hover-point-b")
+		expect({ x: previewB?.x(), y: previewB?.y() }).toEqual({
+			x: b.x,
+			y: b.y,
+		})
+		expect(stage.find(".active-snap")).toHaveLength(2)
+	})
+
 	it("clears rule selection when editing a different glyph", async () => {
 		const { workspace } = mountCanvas()
 		await installSelectedRule(workspace)
@@ -188,54 +241,43 @@ describe("GlyphCanvas rules", () => {
 		expect(values.get(OUTLINE_CLIPBOARD_MIME)).toBeTruthy()
 	})
 
-	it("previews an endpoint drag and commits one undoable rule edit", async () => {
-		const { host, stage, workspace } = mountCanvas()
+	it("selects a completed rule by its line in Rule mode and deletes it", async () => {
+		const { root, stage, workspace } = mountCanvas()
 		await installSelectedRule(workspace)
 		await act(async () => {
+			workspace.font.silo.setState(workspace.ui.selectedRuleIds, [])
 			workspace.actions.selectTool("rule")
 			await Promise.resolve()
 		})
-		const handle = stage.findOne(".rule-endpoint-b")
-		if (handle === undefined)
-			throw new Error("Rule endpoint B interaction target was not rendered.")
-		const beforeSummary = host.querySelector("[data-rule-summary]")?.textContent
-		vi.spyOn(stage, "getPointerPosition").mockReturnValue({ x: 400, y: 300 })
+		const line = stage.findOne(".glyph-rule-line")
+		const measure = stage.findOne(".rule-measure")
+		if (line === undefined) throw new Error("Rule line was not rendered.")
+		expect(line.opacity()).toBe(0.1)
+		expect(measure?.opacity()).toBe(0.85)
+
+		await act(async () => {
+			line.fire(
+				"pointerdown",
+				{ evt: { type: "pointerdown", shiftKey: false } },
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(workspace.font.silo.getState(workspace.ui.selectedRuleIds)).toEqual([
+			ruleId,
+		])
+		expect(stage.findOne(".glyph-rule-line")?.opacity()).toBe(0.3)
+		expect(stage.findOne(".rule-point-a")).toBeUndefined()
+		expect(stage.findOne(".rule-point-b")).toBeUndefined()
+		expect(stage.findOne(".rule-endpoint-hit")).toBeUndefined()
 
 		act(() => {
-			// Use real Konva bubbling: without the endpoint pointer boundary this
-			// reaches Stage.onPointerDown and silently plants pending rule point A.
-			handle.fire("pointerdown", { evt: { type: "pointerdown" } }, true)
-			handle.fire("dragstart", { evt: { type: "pointerdown" } })
-			handle.position({ x: 650, y: 360 })
-			handle.fire("dragmove", { evt: { type: "pointermove" } })
-		})
-		expect(host.querySelector("[data-rule-summary]")?.textContent).not.toBe(
-			beforeSummary,
-		)
-
-		act(() => {
-			handle.fire("dragend", { evt: { type: "pointerup" } })
+			root.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Delete", bubbles: true }),
+			)
 		})
 		expect(
-			workspace.font.read.editorGlyphSource(oGlyphId)?.rules?.[0]?.b,
-		).toEqual({ x: 650, y: 360 })
-		const background = stage.findOne(".canvas-background")
-		if (background === undefined)
-			throw new Error("Canvas background was not rendered.")
-		act(() => {
-			background.fire("pointerdown", { evt: { type: "pointerdown" } }, true)
-		})
-		expect(workspace.font.read.editorGlyphSource(oGlyphId)?.rules).toHaveLength(
-			1,
-		)
-
-		workspace.font.undo(oGlyphId)
-		expect(
-			workspace.font.read.editorGlyphSource(oGlyphId)?.rules?.[0]?.b,
-		).toEqual(rule.b)
-		workspace.font.redo(oGlyphId)
-		expect(
-			workspace.font.read.editorGlyphSource(oGlyphId)?.rules?.[0]?.b,
-		).toEqual({ x: 650, y: 360 })
+			workspace.font.read.editorGlyphSource(oGlyphId)?.rules,
+		).toBeUndefined()
 	})
 })
