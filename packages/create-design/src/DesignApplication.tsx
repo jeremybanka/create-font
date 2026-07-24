@@ -2,6 +2,7 @@ import {
 	canvasScale,
 	canvasToolCursor,
 	CommandPalette,
+	TilingWorkspace,
 	columnSlotAllocation,
 	isCommandPaletteKeyboardEvent,
 	readVectorClipboard,
@@ -19,6 +20,7 @@ import {
 	VectorShapePreview,
 	VectorSnapGuides,
 	vectorShapeNodes,
+	tileRegistryCommands,
 	type PaletteCommand,
 	type VectorGestureDown,
 	type VectorGestureDownInput,
@@ -27,6 +29,7 @@ import {
 	type VectorEditIntent,
 	type VectorSnapGuide,
 	type VectorTransformHandle,
+	type TileCommandRequest,
 } from "@create-font/editor/shared"
 import {
 	Group,
@@ -96,6 +99,13 @@ import {
 	projectDesignVectorObject,
 } from "./design-vector-adapter.ts"
 import { downloadPdf } from "./pdf.ts"
+import {
+	DEFAULT_DESIGN_TILING_LAYOUT,
+	DESIGN_TILE_REGISTRY,
+	DESIGN_TILING_STORAGE_KEY,
+	type DesignTileContext,
+	type DesignTileKind,
+} from "./design-tile-registry.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
@@ -251,6 +261,8 @@ export function DesignApplication() {
 	const [currentSwatchId, setCurrentSwatchId] = useState("swatch:coral")
 	const [selectedSwatchId, setSelectedSwatchId] = useState("swatch:coral")
 	const [paletteOpen, setPaletteOpen] = useState(false)
+	const [tileCommandRequest, setTileCommandRequest] =
+		useState<TileCommandRequest<DesignTileKind> | null>(null)
 	const [status, setStatus] = useState(
 		"Ready — draw a shape or press ⇧⌘P for commands.",
 	)
@@ -274,6 +286,7 @@ export function DesignApplication() {
 	const penPointsRef = useRef<readonly DesignPoint[]>([])
 	const previewObjectRef = useRef<DesignObject | null>(null)
 	const sequence = useRef(0)
+	const tileCommandSequence = useRef(0)
 	const nextId = useCallback(() => {
 		sequence.current += 1
 		return `${Date.now().toString(36)}:${sequence.current.toString(36)}`
@@ -415,6 +428,19 @@ export function DesignApplication() {
 		)
 	}, [document])
 
+	const designTileContext: DesignTileContext = {
+		document,
+		exportDocument,
+		focusCanvas: () => artboardWrapRef.current?.focus(),
+		selectObject: (object) => setSelection([object.id]),
+		selectSwatch: (swatch) => {
+			setSelectedSwatchId(swatch.id)
+			setCurrentSwatchId(swatch.id)
+		},
+		selectedObjectId: selectedObject?.id ?? null,
+		selectedSwatchId,
+	}
+
 	const commands = useMemo<readonly PaletteCommand[]>(
 		() => [
 			...(
@@ -469,6 +495,19 @@ export function DesignApplication() {
 				disabled: history.future.length === 0,
 				do: () => dispatch({ type: "redo" }),
 			},
+			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
+				(command): PaletteCommand => ({
+					...command,
+					icon: command.icon as PaletteCommand["icon"],
+					do: () => {
+						tileCommandSequence.current += 1
+						setTileCommandRequest({
+							id: tileCommandSequence.current,
+							kind: command.kind,
+						})
+					},
+				}),
+			),
 		],
 		[
 			deleteSelection,
@@ -477,7 +516,10 @@ export function DesignApplication() {
 			history.past.length,
 			selectTool,
 			selection.length,
+			selectedObject?.id,
+			selectedSwatchId,
 			tool,
+			document,
 		],
 	)
 
@@ -1170,6 +1212,7 @@ export function DesignApplication() {
 						class="artboard-wrap"
 						role="application"
 						aria-label="Design artboard"
+						tabIndex={-1}
 					>
 						<Stage
 							width={canvasViewport.width}
@@ -1448,6 +1491,14 @@ export function DesignApplication() {
 						<SwatchEditor swatch={selectedSwatch} onChange={updateSwatch} />
 					)}
 				</aside>
+				<TilingWorkspace
+					context={designTileContext}
+					registry={DESIGN_TILE_REGISTRY}
+					defaultLayout={DEFAULT_DESIGN_TILING_LAYOUT}
+					storageKey={DESIGN_TILING_STORAGE_KEY}
+					commandRequest={tileCommandRequest}
+					enabled={!paletteOpen}
+				/>
 			</div>
 
 			<footer class="status-bar">

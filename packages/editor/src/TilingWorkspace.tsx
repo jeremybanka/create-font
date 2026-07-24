@@ -18,23 +18,17 @@ import {
 	useState,
 } from "preact/hooks"
 
-import type { EditorWorkspace } from "./editor-workspace.ts"
-import { CanvasToolbar } from "./CanvasToolbar.tsx"
-import { CompatibilityTile } from "./CompatibilityTile.tsx"
-import { FontNavigator } from "./FontNavigator.tsx"
-import { GlyphInspector } from "./GlyphInspector.tsx"
-import { PreviewTile } from "./PreviewTile.tsx"
-import { KerningTile } from "./KerningTile.tsx"
-import { SelectionDimensions } from "./SelectionDimensions.tsx"
-import { VersionControlTile } from "./VersionControlTile.tsx"
-import type { EditorVersionControl } from "./version-control.ts"
 import css from "./TilingWorkspace.module.css"
+import {
+	availableTileRegistrations,
+	type TileRegistration,
+	type TileRegistry,
+} from "./tile-registry.ts"
 import {
 	addTile,
 	columnHitSurface,
 	columnOverflowState,
 	columnSlotAllocation,
-	createDefaultTilingLayout,
 	createTilingHistory,
 	duplicateTile,
 	editTilingHistory,
@@ -50,8 +44,6 @@ import {
 	setColumnAlignment,
 	setTileFill,
 	scrollbarScrollTopFromPointer,
-	TILING_DRAFT_STORAGE_KEY,
-	TILING_SAVED_STORAGE_KEY,
 	toggleColumnCollapsed,
 	visibleColumnIds,
 	type ColumnOverflowState,
@@ -82,24 +74,20 @@ export interface TilingWorkspaceStatus {
 	readonly management: boolean
 }
 
-export interface TilingWorkspaceProps {
-	readonly diffView?: boolean
-	readonly workspace: EditorWorkspace
-	readonly enabled?: boolean
-	readonly onStatusChange?: (status: TilingWorkspaceStatus) => void
-	readonly onReviewGlyph?: Parameters<
-		typeof VersionControlTile
-	>[0]["onReviewGlyph"]
-	readonly onDiffViewChange?: Parameters<
-		typeof VersionControlTile
-	>[0]["onDiffViewChange"]
-	readonly versionControl?: EditorVersionControl
+export interface TileCommandRequest<Kind extends string> {
+	readonly id: number
+	readonly kind: Kind
 }
 
-interface TileDefinition {
-	readonly kind: TileKind
-	readonly name: string
-	readonly description: string
+export interface TilingWorkspaceProps<Kind extends string, Context> {
+	readonly context: Context
+	readonly registry: TileRegistry<Kind, Context>
+	readonly defaultLayout: TilingLayout<Kind>
+	readonly storageKey: string
+	readonly parseLayout?: (value: string | null) => TilingLayout | null
+	readonly commandRequest?: TileCommandRequest<Kind> | null
+	readonly enabled?: boolean
+	readonly onStatusChange?: (status: TilingWorkspaceStatus) => void
 }
 
 interface TileShortcut {
@@ -117,49 +105,6 @@ type HistoryAction =
 	| { readonly type: "replace"; readonly layout: TilingLayout }
 	| { readonly type: "undo" }
 	| { readonly type: "redo" }
-
-const TILE_DEFINITIONS: readonly TileDefinition[] = [
-	{
-		kind: "version-control",
-		name: "Version Control",
-		description: "Review and commit discrete working-source changes.",
-	},
-	{
-		kind: "font-navigation",
-		name: "Masters & instances",
-		description: "Navigate font masters and named instances.",
-	},
-	{
-		kind: "canvas-toolbar",
-		name: "Canvas toolbar",
-		description: "Control design-space coordinates and the canvas viewport.",
-	},
-	{
-		kind: "kerning",
-		name: "Kerning",
-		description: "Inspect and edit the glyph pair at the text cursor.",
-	},
-	{
-		kind: "preview",
-		name: "Preview",
-		description: "Proof custom text, samples, and variation settings.",
-	},
-	{
-		kind: "compatibility",
-		name: "Master compatibility",
-		description: "Compare master topology, offset overlays, and reorder paths.",
-	},
-	{
-		kind: "glyph-attributes",
-		name: "Glyph attributes",
-		description: "Inspect glyph metrics, selection, and preview state.",
-	},
-	{
-		kind: "selection-dimensions",
-		name: "Selection dimensions",
-		description: "Inspect and transform a selection from nine origins.",
-	},
-]
 
 const TILE_SHORTCUTS: readonly TileShortcut[] = [
 	{ keys: "⇧ Space", action: "Enter or exit management" },
@@ -204,11 +149,14 @@ function historyReducer(
 	}
 }
 
-function readInitialState(): {
+function readInitialState(
+	fallback: TilingLayout,
+	storageKey: string,
+	parseLayout: (value: string | null) => TilingLayout | null,
+): {
 	readonly history: TilingHistory
 	readonly saved: string
 } {
-	const fallback = createDefaultTilingLayout()
 	if (typeof window === "undefined") {
 		return {
 			history: createTilingHistory(fallback),
@@ -217,11 +165,8 @@ function readInitialState(): {
 	}
 	try {
 		const saved =
-			parseTilingLayout(localStorage.getItem(TILING_SAVED_STORAGE_KEY)) ??
-			fallback
-		const draft = parseTilingLayout(
-			localStorage.getItem(TILING_DRAFT_STORAGE_KEY),
-		)
+			parseLayout(localStorage.getItem(`${storageKey}:saved:v1`)) ?? fallback
+		const draft = parseLayout(localStorage.getItem(`${storageKey}:draft:v1`))
 		return {
 			history: createTilingHistory(draft ?? saved),
 			saved: serializeTilingLayout(saved),
@@ -238,13 +183,6 @@ function isColumnId(value: number): value is TileColumnId {
 	return value === 1 || value === 2 || value === 3 || value === 4
 }
 
-function tileName(kind: TileKind): string {
-	return (
-		TILE_DEFINITIONS.find((definition) => definition.kind === kind)?.name ??
-		kind
-	)
-}
-
 function matchesTypeahead(query: string, value: string): boolean {
 	let previous = -1
 	for (const character of query) {
@@ -255,10 +193,13 @@ function matchesTypeahead(query: string, value: string): boolean {
 	return true
 }
 
-function filterTileDefinitions(query: string): readonly TileDefinition[] {
+function filterTileDefinitions<Kind extends string, Context>(
+	definitions: readonly TileRegistration<Kind, Context>[],
+	query: string,
+): readonly TileRegistration<Kind, Context>[] {
 	const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-	if (tokens.length === 0) return TILE_DEFINITIONS
-	return TILE_DEFINITIONS.filter((definition) => {
+	if (tokens.length === 0) return definitions
+	return definitions.filter((definition) => {
 		const searchable =
 			`${definition.name} ${definition.description} ${definition.kind}`
 				.toLowerCase()
@@ -267,16 +208,19 @@ function filterTileDefinitions(query: string): readonly TileDefinition[] {
 	})
 }
 
-export function TilingWorkspace({
-	workspace,
-	diffView = false,
+export function TilingWorkspace<Kind extends string, Context>({
+	context,
+	registry,
+	defaultLayout,
+	storageKey,
+	commandRequest = null,
 	enabled = true,
-	onDiffViewChange = () => undefined,
 	onStatusChange,
-	onReviewGlyph = () => undefined,
-	versionControl,
-}: TilingWorkspaceProps) {
-	const [initial] = useState(readInitialState)
+	parseLayout = parseTilingLayout,
+}: TilingWorkspaceProps<Kind, Context>) {
+	const [initial] = useState(() =>
+		readInitialState(defaultLayout, storageKey, parseLayout),
+	)
 	const [history, dispatch] = useReducer(historyReducer, initial.history)
 	const [saved, setSaved] = useState(initial.saved)
 	const [management, setManagement] = useState(false)
@@ -284,7 +228,9 @@ export function TilingWorkspace({
 	const [activeLeft, setActiveLeft] = useState<1 | 2>(1)
 	const [activeRight, setActiveRight] = useState<3 | 4>(3)
 	const [selectedTileId, setSelectedTileId] = useState<string | null>(
-		"canvas-toolbar:default",
+		defaultLayout.columns.find((column) => column.id === 3)?.tiles[0]?.id ??
+			defaultLayout.columns.flatMap((column) => column.tiles)[0]?.id ??
+			null,
 	)
 	const [pending, setPending] = useState<PendingCommand>(null)
 	const [poolFocused, setPoolFocused] = useState(false)
@@ -321,7 +267,11 @@ export function TilingWorkspace({
 		activeRight,
 		selectedColumn,
 	)
-	const filteredTileDefinitions = filterTileDefinitions(poolQuery)
+	const tileDefinitions = availableTileRegistrations(registry, context)
+	const filteredTileDefinitions = filterTileDefinitions(
+		tileDefinitions,
+		poolQuery,
+	)
 	const activeTileDefinition = filteredTileDefinitions[poolIndex]
 
 	const selectColumn = (columnId: TileColumnId): void => {
@@ -344,7 +294,13 @@ export function TilingWorkspace({
 		columnId: TileColumnId,
 		beforeTileId?: string,
 	): void => {
-		const added = addTile(layout, kind, columnId, beforeTileId)
+		const added = addTile(
+			layout,
+			kind,
+			columnId,
+			beforeTileId,
+			registry.byKind.get(kind as Kind)?.defaultFill ?? false,
+		)
 		applyEdit(added.layout, added.tileId)
 		selectColumn(columnId)
 		setSelectedTileId(added.tileId)
@@ -374,8 +330,8 @@ export function TilingWorkspace({
 	const save = (): void => {
 		const serialized = serializeTilingLayout(layout)
 		try {
-			localStorage.setItem(TILING_SAVED_STORAGE_KEY, serialized)
-			localStorage.setItem(TILING_DRAFT_STORAGE_KEY, serialized)
+			localStorage.setItem(`${storageKey}:saved:v1`, serialized)
+			localStorage.setItem(`${storageKey}:draft:v1`, serialized)
 		} catch {
 			// Saving still establishes the in-memory baseline when storage is unavailable.
 		}
@@ -383,7 +339,7 @@ export function TilingWorkspace({
 	}
 
 	const revert = (): void => {
-		const savedLayout = parseTilingLayout(saved)
+		const savedLayout = parseLayout(saved)
 		if (savedLayout === null) return
 		dispatch({ type: "replace", layout: savedLayout })
 		setSelectedTileId(
@@ -559,13 +515,63 @@ export function TilingWorkspace({
 	useEffect(() => {
 		try {
 			localStorage.setItem(
-				TILING_DRAFT_STORAGE_KEY,
+				`${storageKey}:draft:v1`,
 				serializeTilingLayout(layout),
 			)
 		} catch {
 			// Recovery is best-effort in restricted or private browsing contexts.
 		}
-	}, [layout])
+	}, [layout, storageKey])
+
+	useEffect(() => {
+		if (commandRequest === null) return
+		const registration = registry.byKind.get(commandRequest.kind)
+		if (
+			registration === undefined ||
+			registration.available?.(context) === false
+		)
+			return
+		const existing = layout.columns
+			.flatMap((column) => column.tiles)
+			.find((tile) => tile.kind === commandRequest.kind)
+		const focus = (tileId: string): void => {
+			const found = findTile(layout, tileId)
+			if (found !== null) {
+				const column = layout.columns.find(
+					(candidate) => candidate.id === found.columnId,
+				)
+				if (column?.collapsed === true) {
+					applyEdit(toggleColumnCollapsed(layout, found.columnId), tileId)
+				}
+				selectColumn(found.columnId)
+			}
+			setSelectedTileId(tileId)
+			setManagement(false)
+			requestAnimationFrame(() => {
+				workspaceRef.current
+					?.querySelector<HTMLElement>(
+						`workspace-tile[data-tile-id="${CSS.escape(tileId)}"]`,
+					)
+					?.focus()
+			})
+		}
+		if (existing !== undefined) {
+			focus(existing.id)
+			return
+		}
+		const columnId = registration.defaultPlacement?.column ?? selectedColumn
+		const added = addTile(
+			layout,
+			registration.kind,
+			columnId,
+			undefined,
+			registration.defaultFill ?? false,
+		)
+		applyEdit(added.layout, added.tileId)
+		selectColumn(columnId)
+		setSelectedTileId(added.tileId)
+		requestAnimationFrame(() => focus(added.tileId))
+	}, [commandRequest?.id])
 
 	useEffect(() => {
 		if (selectedTileId === null) return
@@ -1010,6 +1016,8 @@ export function TilingWorkspace({
 	const renderTile = (column: TileColumn, tile: TileInstance) => (
 		<workspace-tile
 			key={tile.id}
+			tabIndex={-1}
+			data-tile-id={tile.id}
 			data-kind={tile.kind}
 			data-selected={
 				management && selectedTileId === tile.id ? "true" : "false"
@@ -1045,13 +1053,15 @@ export function TilingWorkspace({
 		>
 			<tile-heading>
 				<svg.DragHandleDots aria-hidden="true" />
-				<strong>{tileName(tile.kind)}</strong>
+				<strong>
+					{registry.byKind.get(tile.kind as Kind)?.name ?? tile.kind}
+				</strong>
 				<tile-actions>
 					{tile.fill ? <span>Fill</span> : null}
 					{management ? (
 						<button
 							type="button"
-							aria-label={`Remove ${tileName(tile.kind)}`}
+							aria-label={`Remove ${registry.byKind.get(tile.kind as Kind)?.name ?? tile.kind}`}
 							onClick={(event) => {
 								event.stopPropagation()
 								deleteTile(tile.id)
@@ -1066,28 +1076,33 @@ export function TilingWorkspace({
 				aria-hidden={management ? "true" : undefined}
 				inert={management}
 			>
-				{tile.kind === "version-control" ? (
-					<VersionControlTile
-						diffView={diffView}
-						onDiffViewChange={onDiffViewChange}
-						onReviewGlyph={onReviewGlyph}
-						{...(versionControl === undefined ? {} : { versionControl })}
-					/>
-				) : tile.kind === "font-navigation" ? (
-					<FontNavigator workspace={workspace} />
-				) : tile.kind === "canvas-toolbar" ? (
-					<CanvasToolbar workspace={workspace} />
-				) : tile.kind === "kerning" ? (
-					<KerningTile workspace={workspace} />
-				) : tile.kind === "preview" ? (
-					<PreviewTile workspace={workspace} tileId={tile.id} />
-				) : tile.kind === "compatibility" ? (
-					<CompatibilityTile workspace={workspace} />
-				) : tile.kind === "glyph-attributes" ? (
-					<GlyphInspector workspace={workspace} />
-				) : (
-					<SelectionDimensions workspace={workspace} />
-				)}
+				{(() => {
+					const registration = registry.byKind.get(tile.kind as Kind)
+					if (registration === undefined)
+						return (
+							<unavailable-tile role="status">
+								<strong>Tile unavailable</strong>
+								<span>
+									“{tile.kind}” is not registered in this application. Its place
+									in the saved layout is preserved.
+								</span>
+							</unavailable-tile>
+						)
+					if (registration.available?.(context) === false)
+						return (
+							<unavailable-tile role="status">
+								<strong>{registration.name} unavailable</strong>
+								<span>
+									This tile will return when its application context is
+									available.
+								</span>
+							</unavailable-tile>
+						)
+					return registration.render({
+						context,
+						tile: tile as TileInstance<Kind>,
+					})
+				})()}
 			</tile-content>
 		</workspace-tile>
 	)

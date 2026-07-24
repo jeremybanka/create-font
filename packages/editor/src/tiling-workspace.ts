@@ -2,32 +2,24 @@ export const COLUMN_IDS = [1, 2, 3, 4] as const
 
 export type TileColumnId = (typeof COLUMN_IDS)[number]
 export type TileColumnAlignment = "top" | "bottom"
-export type TileKind =
-	| "font-navigation"
-	| "canvas-toolbar"
-	| "kerning"
-	| "preview"
-	| "compatibility"
-	| "version-control"
-	| "glyph-attributes"
-	| "selection-dimensions"
+export type TileKind = string
 
-export interface TileInstance {
+export interface TileInstance<Kind extends string = string> {
 	readonly id: string
-	readonly kind: TileKind
+	readonly kind: Kind
 	readonly fill: boolean
 }
 
-export interface TileColumn {
+export interface TileColumn<Kind extends string = string> {
 	readonly id: TileColumnId
 	readonly alignment: TileColumnAlignment
 	readonly collapsed: boolean
-	readonly tiles: readonly TileInstance[]
+	readonly tiles: readonly TileInstance<Kind>[]
 }
 
-export interface TilingLayout {
+export interface TilingLayout<Kind extends string = string> {
 	readonly version: 3
-	readonly columns: readonly TileColumn[]
+	readonly columns: readonly TileColumn<Kind>[]
 }
 
 export interface ColumnSlotAllocation {
@@ -66,76 +58,22 @@ export interface TilingHistory {
 	readonly future: readonly TilingLayout[]
 }
 
-export const TILING_SAVED_STORAGE_KEY = "create-font:tiling-workspace:saved:v1"
-export const TILING_DRAFT_STORAGE_KEY = "create-font:tiling-workspace:draft:v1"
-
-const TILE_KINDS = new Set<TileKind>([
-	"font-navigation",
-	"canvas-toolbar",
-	"kerning",
-	"preview",
-	"compatibility",
-	"version-control",
-	"glyph-attributes",
-	"selection-dimensions",
-])
-
 let nextTileId = 0
 
-function tileId(kind: TileKind): string {
+function tileId(kind: string): string {
 	nextTileId += 1
 	return `${kind}:${Date.now().toString(36)}:${nextTileId.toString(36)}`
 }
 
-export function createDefaultTilingLayout(): TilingLayout {
+export function createEmptyTilingLayout(): TilingLayout {
 	return {
 		version: 3,
-		columns: [
-			{
-				id: 1,
-				alignment: "top",
-				collapsed: false,
-				tiles: [
-					{
-						id: "font-navigation:default",
-						kind: "font-navigation",
-						fill: true,
-					},
-				],
-			},
-			{
-				id: 2,
-				alignment: "top",
-				collapsed: false,
-				tiles: [
-					{
-						id: "version-control:default",
-						kind: "version-control",
-						fill: true,
-					},
-				],
-			},
-			{
-				id: 3,
-				alignment: "top",
-				collapsed: false,
-				tiles: [
-					{ id: "canvas-toolbar:default", kind: "canvas-toolbar", fill: false },
-				],
-			},
-			{
-				id: 4,
-				alignment: "top",
-				collapsed: false,
-				tiles: [
-					{
-						id: "glyph-attributes:default",
-						kind: "glyph-attributes",
-						fill: false,
-					},
-				],
-			},
-		],
+		columns: COLUMN_IDS.map((id) => ({
+			id,
+			alignment: "top",
+			collapsed: false,
+			tiles: [],
+		})),
 	}
 }
 
@@ -254,13 +192,14 @@ export function normalizeTilingLayout(value: unknown): TilingLayout | null {
 			if (
 				typeof tile.id !== "string" ||
 				seenTiles.has(tile.id) ||
-				!TILE_KINDS.has(tile.kind as TileKind) ||
+				typeof tile.kind !== "string" ||
+				tile.kind.length === 0 ||
 				typeof tile.fill !== "boolean"
 			) {
 				return null
 			}
 			seenTiles.add(tile.id)
-			tiles.push({ id: tile.id, kind: tile.kind as TileKind, fill: tile.fill })
+			tiles.push({ id: tile.id, kind: tile.kind, fill: tile.fill })
 		}
 		return {
 			id,
@@ -270,53 +209,7 @@ export function normalizeTilingLayout(value: unknown): TilingLayout | null {
 		}
 	})
 	if (columns.some((column) => column === null)) return null
-	const normalized = columns as TileColumn[]
-	if (
-		candidate.version === 1 &&
-		!normalized.some((column) =>
-			column.tiles.some((tile) => tile.kind === "canvas-toolbar"),
-		)
-	) {
-		const column = normalized.find((item) => item.id === 3)
-		if (column === undefined) return null
-		const index = normalized.indexOf(column)
-		normalized[index] = {
-			...column,
-			alignment: "top",
-			collapsed: false,
-			tiles: [
-				...column.tiles,
-				{
-					id: "canvas-toolbar:default",
-					kind: "canvas-toolbar",
-					fill: false,
-				},
-			],
-		}
-	}
-	if (
-		candidate.version < 3 &&
-		!normalized.some((column) =>
-			column.tiles.some((tile) => tile.kind === "version-control"),
-		)
-	) {
-		const column = normalized.find((item) => item.id === 2)
-		if (column === undefined) return null
-		const index = normalized.indexOf(column)
-		normalized[index] = {
-			...column,
-			collapsed: false,
-			tiles: [
-				{
-					id: "version-control:default",
-					kind: "version-control",
-					fill: true,
-				},
-				...column.tiles,
-			],
-		}
-	}
-	return { version: 3, columns: normalized }
+	return { version: 3, columns: columns as TileColumn[] }
 }
 
 export function createTilingHistory(layout: TilingLayout): TilingHistory {
@@ -390,12 +283,13 @@ export function toggleColumnCollapsed(
 
 export function addTile(
 	layout: TilingLayout,
-	kind: TileKind,
+	kind: string,
 	columnId: TileColumnId,
 	beforeTileId?: string,
+	fill = false,
 ): { readonly layout: TilingLayout; readonly tileId: string } {
 	const id = tileId(kind)
-	const tile: TileInstance = { id, kind, fill: kind === "preview" }
+	const tile: TileInstance = { id, kind, fill }
 	return {
 		tileId: id,
 		layout: updateColumn(layout, columnId, (column) => {

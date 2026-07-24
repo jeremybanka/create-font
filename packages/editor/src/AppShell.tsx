@@ -28,6 +28,14 @@ import {
 } from "./editor-tools-and-hotkeys.ts"
 import css from "./AppShell.module.css"
 import { FontInfo } from "./FontInfo.tsx"
+import {
+	DEFAULT_FONT_TILING_LAYOUT,
+	FONT_TILE_REGISTRY,
+	FONT_TILING_STORAGE_KEY,
+	parseFontTilingLayout,
+	type FontTileContext,
+	type FontTileKind,
+} from "./font-tile-registry.ts"
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
@@ -41,8 +49,10 @@ import {
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,
+	type TileCommandRequest,
 	type TilingWorkspaceStatus,
 } from "./TilingWorkspace.tsx"
+import { tileRegistryCommands } from "./tile-registry.ts"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
 
@@ -76,6 +86,9 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		dirty: false,
 		management: false,
 	})
+	const [tileCommandRequest, setTileCommandRequest] =
+		useState<TileCommandRequest<FontTileKind> | null>(null)
+	const tileCommandSequence = useRef(0)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
@@ -115,6 +128,19 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		editingTextIndex,
 		history,
 		selection,
+		workspace,
+	}
+	const fontTileContext: FontTileContext = {
+		diffView,
+		onDiffViewChange: setDiffView,
+		onReviewGlyph: (glyphId) => {
+			workspace.actions.reviewGlyph(glyphId)
+			setDiffView(true)
+			requestAnimationFrame(() =>
+				document.querySelector<HTMLElement>("glyph-canvas")?.focus(),
+			)
+		},
+		...(versionControl === undefined ? {} : { versionControl }),
 		workspace,
 	}
 	useEditorDocumentMetadata(faviconPreview, routeName, previewText)
@@ -223,6 +249,19 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		...visualDebugPaletteCommands(visualDebug, (id) =>
 			workspace.actions.toggleVisualDebug(id),
 		),
+		...tileRegistryCommands(FONT_TILE_REGISTRY, fontTileContext).map(
+			(command): PaletteCommand => ({
+				...command,
+				icon: command.icon as PaletteCommand["icon"],
+				do: () => {
+					tileCommandSequence.current += 1
+					setTileCommandRequest({
+						id: tileCommandSequence.current,
+						kind: command.kind,
+					})
+				},
+			}),
+		),
 	]
 
 	const familyName = names.typographicFamily ?? names.family ?? "Untitled font"
@@ -315,19 +354,14 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 							onSlotsChange={setHotbarSlots}
 						/>
 						<TilingWorkspace
-							workspace={workspace}
-							diffView={diffView}
+							context={fontTileContext}
+							registry={FONT_TILE_REGISTRY}
+							defaultLayout={DEFAULT_FONT_TILING_LAYOUT}
+							storageKey={FONT_TILING_STORAGE_KEY}
+							parseLayout={parseFontTilingLayout}
+							commandRequest={tileCommandRequest}
 							enabled={!commandPaletteOpen}
-							onDiffViewChange={setDiffView}
 							onStatusChange={updateTilingStatus}
-							{...(versionControl === undefined ? {} : { versionControl })}
-							onReviewGlyph={(glyphId) => {
-								workspace.actions.reviewGlyph(glyphId)
-								setDiffView(true)
-								requestAnimationFrame(() =>
-									document.querySelector<HTMLElement>("glyph-canvas")?.focus(),
-								)
-							}}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (

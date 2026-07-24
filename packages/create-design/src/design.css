@@ -16,6 +16,7 @@
 	--ink-muted: #aaa79f;
 	--ink-faint: #75746d;
 	--accent: #e17352;
+	--canvas-surface: #111210;
 	--surface-header: #20211e;
 	--shadow-subtle: rgb(0 0 0 / 32%);
 	color-scheme: dark;
@@ -206,6 +207,7 @@ design-application {
 }
 
 .workspace {
+	position: relative;
 	display: grid;
 	grid-template-columns:
 		42px minmax(0, 1fr) minmax(0, 1fr) minmax(420px, 3.4fr)
@@ -234,6 +236,73 @@ design-application {
 		grid-template-columns:
 			42px minmax(0, 1.15fr) minmax(430px, 3.5fr)
 			minmax(210px, 1fr);
+	}
+}
+
+design-objects-tile,
+design-swatches-tile,
+design-canvas-tile,
+design-export-tile {
+	display: grid;
+	align-content: start;
+	gap: 6px;
+	min-height: 0;
+	padding: 8px;
+	overflow: auto;
+	font-size: 9px;
+
+	> strong {
+		color: var(--ink-muted);
+	}
+
+	> span {
+		line-height: 1.45;
+		color: var(--ink-faint);
+	}
+
+	> button {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+		padding: 7px;
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		background: var(--paper);
+		text-align: left;
+		font-size: 9px;
+		cursor: pointer;
+
+		&:hover,
+		&[aria-pressed="true"] {
+			border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+			background: var(--selected);
+		}
+
+		> small {
+			font-size: 8px;
+			color: var(--ink-faint);
+		}
+	}
+}
+
+design-canvas-tile,
+design-export-tile {
+	> button {
+		display: block;
+		text-align: center;
+	}
+}
+
+design-swatches-tile > button {
+	grid-template-columns: 14px minmax(0, 1fr) auto;
+
+	> i {
+		width: 12px;
+		height: 12px;
+		border: 1px solid rgb(127 127 127 / 45%);
+		border-radius: 3px;
 	}
 }
 

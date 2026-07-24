@@ -360,6 +360,19 @@ tiling-workspace.class {
 			> tile-content {
 				display: block;
 				min-height: 0;
+
+				> unavailable-tile {
+					display: grid;
+					gap: 6px;
+					padding: 12px;
+					font-size: 9px;
+					line-height: 1.45;
+					color: var(--ink-faint);
+
+					> strong {
+						color: var(--ink-muted);
+					}
+				}
 			}
 
 			&:has(preview-tile) {
