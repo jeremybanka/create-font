@@ -192,6 +192,7 @@ export type VectorGestureCommitIntent =
 			readonly handles: Readonly<
 				Partial<Record<VectorHandleKind, VectorPoint>>
 			> | null
+			readonly distancePixels: number
 	  }>
 
 export interface VectorGestureTransition {
@@ -341,8 +342,9 @@ function penPreview(
 const transformAnchor = (
 	bounds: VectorBounds,
 	handle: VectorTransformHandle,
+	centered: boolean,
 ): VectorPoint => {
-	if (handle === "move" || handle === "rotation")
+	if (handle === "move" || handle === "rotation" || centered)
 		return {
 			x: (bounds.minX + bounds.maxX) / 2,
 			y: (bounds.minY + bounds.maxY) / 2,
@@ -357,7 +359,11 @@ function transformPreview(
 	state: Extract<VectorGestureState, { readonly tool: "transform" }>,
 	policy: VectorGesturePolicy,
 ): Extract<VectorGesturePreview, { readonly kind: "transform" }> {
-	const anchor = transformAnchor(state.bounds, state.handle)
+	const anchor = transformAnchor(
+		state.bounds,
+		state.handle,
+		state.modifiers.altKey,
+	)
 	const delta = {
 		x: state.currentWorld.x - state.startWorld.x,
 		y: state.currentWorld.y - state.startWorld.y,
@@ -477,6 +483,7 @@ function commitIntent(
 			point: preview.point,
 			mode: preview.mode,
 			handles: preview.handles,
+			distancePixels: preview.distancePixels,
 		}
 	if (preview.kind === "shape" && !preview.valid) return null
 	if (

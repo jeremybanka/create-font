@@ -13,7 +13,9 @@ import { EditorStateContext } from "../src/state-hooks.ts"
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../preact-konva/package.json`,
 )
-await import(requireFromRenderer.resolve("konva/lib/Core"))
+const { default: Konva } = await import(
+	requireFromRenderer.resolve("konva/lib/Core")
+)
 
 const hosts: HTMLElement[] = []
 
@@ -89,7 +91,9 @@ function mountSelectedNodes() {
 	const root = host.querySelector('[role="application"]')
 	if (!(root instanceof HTMLElement))
 		throw new Error("GlyphCanvas did not mount.")
-	return { host, nodes, root, selection, workspace }
+	const stage = Konva.stages.at(-1)
+	if (stage === undefined) throw new Error("GlyphCanvas did not mount.")
+	return { host, nodes, root, selection, stage, workspace }
 }
 
 describe("GlyphCanvas batch node-mode keyboard action", () => {
@@ -148,5 +152,27 @@ describe("GlyphCanvas batch node-mode keyboard action", () => {
 		)
 		expect(toggle).not.toHaveBeenCalled()
 		expect(host.contains(root)).toBe(true)
+	})
+
+	it("routes shared vector-node interaction to the font node-mode adapter", () => {
+		const { nodes, stage, workspace } = mountSelectedNodes()
+		const toggle = vi.spyOn(workspace.font.actions, "setNodeMode")
+		const sharedNode = stage.findOne(`#${nodes[0]!.pointId}`)
+		if (sharedNode === undefined)
+			throw new Error("Shared vector node was not rendered.")
+
+		act(() => {
+			sharedNode.fire("dblclick", {
+				evt: new MouseEvent("dblclick"),
+			})
+		})
+
+		expect(toggle).toHaveBeenCalledOnce()
+		expect(toggle).toHaveBeenCalledWith({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			pointId: nodes[0]!.pointId,
+			mode: "hard",
+		})
 	})
 })

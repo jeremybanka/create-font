@@ -46,7 +46,6 @@ import {
 } from "./animation-frame-publisher.ts"
 import { transformHandleCursor, type TransformHandle } from "./canvas-cursor.ts"
 import {
-	circularHitRegion,
 	CONTROL_HIT_RADIUS_PX,
 	editorControlHitCandidates,
 	editorControlHitRadii,
@@ -132,7 +131,6 @@ import {
 	penPointerAction,
 	resolvePenEndpoint,
 	resolvePenEndpointSide,
-	resolvePenGesture,
 	type PenEndpointResolution,
 	type PenEndpointSide,
 	type PenGestureResolution,
@@ -140,19 +138,10 @@ import {
 	type PenPoint,
 } from "./pen-gesture.ts"
 import {
-	resolveShapeGesture,
 	shapeGeometry,
 	shapeLayerCoordinates,
-	shapeSnapsForDisplay,
-	type ShapeDragDirection,
-	type ShapeGestureResolution,
 	type ShapeToolKind,
 } from "./shape-gesture.ts"
-import {
-	resolveTransformResize,
-	resolveTransformRotation,
-	TRANSFORM_ROTATION_SNAP_DEGREES,
-} from "./transform-gesture.ts"
 import {
 	reduceVectorGesture,
 	type VectorGestureModifiers,
@@ -328,7 +317,6 @@ interface ShapeDragSession {
 	snappedCandidate: PenPoint
 	snaps: readonly ActiveSnap[]
 	currentScreen: PenPoint
-	direction: ShapeDragDirection
 	shiftKey: boolean
 	altKey: boolean
 }
@@ -405,6 +393,7 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 	ArrowUp: [0, 1],
 	ArrowDown: [0, -1],
 }
+const TRANSFORM_ROTATION_SNAP_DEGREES = 15
 
 export function GlyphCanvas({
 	workspace,
@@ -930,20 +919,12 @@ export function GlyphCanvas({
 		Math.hypot(width, height) / Math.max(worldScale, 1e-6) +
 		Math.max(advanceWidth, metrics.ascender - metrics.descender) * 2
 	const activeRotation =
-		transformDrag?.handle === "rotation"
-			? resolveTransformRotation({
-					bounds: transformDrag.bounds,
-					startX: transformDrag.startX,
-					startY: transformDrag.startY,
-					targetX: transformDrag.targetX,
-					targetY: transformDrag.targetY,
-					shiftKey: transformDrag.shiftKey,
-				})
+		sharedGesturePreview?.kind === "transform" &&
+		sharedGesturePreview.handle === "rotation"
+			? sharedGesturePreview
 			: null
 	const rotationAngleDegrees =
-		activeRotation === null
-			? null
-			: Math.round((activeRotation.angleRadians * 180) / Math.PI)
+		activeRotation === null ? null : Math.round(activeRotation.rotationDegrees)
 	const rotationHandlePosition =
 		transformBounds === null
 			? null
@@ -1121,15 +1102,27 @@ export function GlyphCanvas({
 			worldScale,
 			projectionCandidates,
 		})
-	const penGestureResolution =
-		penGesture === null
+	const sharedPenPreview =
+		sharedGesturePreview?.kind === "pen" ? sharedGesturePreview : null
+	const penGestureResolution: PenGestureResolution | null =
+		sharedPenPreview === null
 			? null
-			: resolvePenGesture({
-					downScreen: penGesture.downScreen,
-					currentScreen: penGesture.currentScreen,
-					worldScale,
-					shiftKey: penGesture.shiftKey,
-				})
+			: sharedPenPreview.handles === null
+				? {
+						kind: "click",
+						mode: "hard",
+						handles: null,
+						distancePixels: sharedPenPreview.distancePixels,
+					}
+				: {
+						kind: "curve",
+						mode: "soft",
+						handles: {
+							incoming: sharedPenPreview.handles.incoming!,
+							outgoing: sharedPenPreview.handles.outgoing!,
+						},
+						distancePixels: sharedPenPreview.distancePixels,
+					}
 	const penEndpointResolution: PenEndpointResolution | null =
 		penGesture?.endpoint === null ||
 		penGesture?.endpoint === undefined ||
@@ -1238,42 +1231,13 @@ export function GlyphCanvas({
 	}
 	const activeShapeKind: ShapeToolKind | null =
 		activeTool === "rect" || activeTool === "ellipse" ? activeTool : null
-	const resolveLiveShape = (
-		gesture: ShapeDragSession,
-	): ShapeGestureResolution =>
-		resolveShapeGesture({
-			anchor: gesture.anchor,
-			rawCandidate: gesture.rawCandidate,
-			snappedCandidate: gesture.snappedCandidate,
-			downScreen: gesture.downScreen,
-			currentScreen: gesture.currentScreen,
-			previousDirection: gesture.direction,
-			shiftKey: gesture.shiftKey,
-			altKey: gesture.altKey,
-		})
-	const shapeGestureResolution =
-		shapeGesture === null ? null : resolveLiveShape(shapeGesture)
-	const shapePreviewGeometry =
-		shapeGestureResolution === null
-			? []
-			: shapeGeometry(
-					shapeGesture?.kind ?? "rect",
-					shapeGestureResolution.bounds,
-				)
-	const shapePreviewPath = editorContourToPath(
-		shapePreviewGeometry.map((point, index) => ({
-			...point,
-			pointId: `point:shape-preview:${index}` as PointId,
-		})),
-		true,
-	)
 	const visibleSnaps =
 		activeTool === "pen"
 			? (penPlacement?.snaps ?? [])
 			: activeTool === "rule"
 				? (pendingRuleResolution?.snaps ?? initialRuleResolution?.snaps ?? [])
 				: activeShapeKind !== null
-					? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
+					? (shapeGesture?.snaps ?? shapeHoverSnaps)
 					: activeSnaps
 	const sharedVisibleSnapGuides: readonly VectorSnapGuide[] = visibleSnaps.map(
 		(snap) => ({
@@ -1640,28 +1604,23 @@ export function GlyphCanvas({
 				)
 				sharedGestureRef.current = transition.state
 				setSharedGesturePreview(transition.preview)
+				if (
+					transition.preview?.kind === "transform" &&
+					transformDragRef.current !== null
+				)
+					setTransformPreview(
+						transformControlsFromShared(
+							transformDragRef.current.controls,
+							transition.preview,
+						),
+					)
 			}
-			const shape = shapeGestureRef.current
-			if (shape !== null) {
-				shape.shiftKey = event.shiftKey
-				shape.altKey = event.altKey
-				shapePreviewPublisher.schedule({ ...shape })
+			if (
+				shapeGestureRef.current !== null ||
+				transformDragRef.current !== null ||
+				penGestureRef.current !== null
+			)
 				return
-			}
-			const transform = transformDragRef.current
-			if (transform !== null && transform.handle !== "inside") {
-				transform.shiftKey = event.shiftKey
-				transform.altKey = event.altKey
-				setTransformPreview(resolveTransformPreview(transform))
-				return
-			}
-			const gesture = penGestureRef.current
-			if (gesture !== null) {
-				gesture.shiftKey = event.shiftKey
-				gesture.altKey = event.altKey
-				schedulePenGesturePreview(gesture)
-				return
-			}
 			const hover = penHoverRef.current
 			if (hover !== null) {
 				hover.shiftKey = event.shiftKey
@@ -2506,37 +2465,31 @@ export function GlyphCanvas({
 				: null
 		const sharedIntent =
 			transition?.intent?.kind === "pen-node" ? transition.intent : null
-		const resolution: PenGestureResolution =
-			sharedIntent === null
-				? resolvePenGesture({
-						downScreen: latestGesture.downScreen,
-						currentScreen: latestGesture.currentScreen,
-						worldScale,
-						shiftKey: latestGesture.shiftKey,
-					})
-				: sharedIntent.handles === null
-					? {
-							kind: "click",
-							mode: "hard",
-							handles: null,
-							distancePixels: 0,
-						}
-					: {
-							kind: "curve",
-							mode: "soft",
-							handles: {
-								incoming: sharedIntent.handles.incoming!,
-								outgoing: sharedIntent.handles.outgoing!,
-							},
-							distancePixels: Math.hypot(
-								latestGesture.currentScreen.x - latestGesture.downScreen.x,
-								latestGesture.currentScreen.y - latestGesture.downScreen.y,
-							),
-						}
 		sharedGestureRef.current = null
 		setSharedGesturePreview(null)
 		penGestureRef.current = null
 		setPenGesture(null)
+		if (sharedIntent === null) {
+			releasePenCapture(gesture)
+			return
+		}
+		const resolution: PenGestureResolution =
+			sharedIntent.handles === null
+				? {
+						kind: "click",
+						mode: "hard",
+						handles: null,
+						distancePixels: sharedIntent.distancePixels,
+					}
+				: {
+						kind: "curve",
+						mode: "soft",
+						handles: {
+							incoming: sharedIntent.handles.incoming!,
+							outgoing: sharedIntent.handles.outgoing!,
+						},
+						distancePixels: sharedIntent.distancePixels,
+					}
 		if (latestGesture.endpoint !== null) {
 			commitPenEndpoint(
 				latestGesture.endpoint,
@@ -2544,7 +2497,7 @@ export function GlyphCanvas({
 				latestGesture.altKey,
 			)
 		} else if (latestGesture.closingPointId === null) {
-			commitPenPoint(latestGesture.point, resolution)
+			commitPenPoint(sharedIntent.point, resolution)
 		} else {
 			commitPenClosure(resolution)
 		}
@@ -2619,7 +2572,6 @@ export function GlyphCanvas({
 			snappedCandidate: anchor,
 			snaps: placement.snaps,
 			currentScreen: screen,
-			direction: { x: null, y: null },
 			shiftKey: event.evt.shiftKey,
 			altKey: event.evt.altKey,
 		}
@@ -2667,7 +2619,6 @@ export function GlyphCanvas({
 		gesture.currentScreen = pointerOnCanvas(event)
 		gesture.shiftKey = event.evt.shiftKey
 		gesture.altKey = event.evt.altKey
-		gesture.direction = resolveLiveShape(gesture).direction
 		const shared = sharedGestureRef.current
 		if (shared?.tool === "rect" || shared?.tool === "ellipse") {
 			const transition = reduceVectorGesture(
@@ -2713,18 +2664,6 @@ export function GlyphCanvas({
 				: null
 		const sharedIntent =
 			transition?.intent?.kind === "shape" ? transition.intent : null
-		const resolution =
-			sharedIntent === null
-				? resolveLiveShape(gesture)
-				: {
-						bounds: sharedIntent.bounds,
-						direction: gesture.direction,
-						distancePixels: Math.hypot(
-							gesture.currentScreen.x - gesture.downScreen.x,
-							gesture.currentScreen.y - gesture.downScreen.y,
-						),
-						valid: true,
-					}
 		sharedGestureRef.current = null
 		setSharedGesturePreview(null)
 		shapeGestureRef.current = null
@@ -2738,13 +2677,16 @@ export function GlyphCanvas({
 			).snaps,
 		)
 		releaseShapeCapture(liveGesture)
-		if (!resolution.valid || activeGlyphId === null) return
+		if (sharedIntent === null || activeGlyphId === null) return
 
-		const geometry = shapeGeometry(gesture.kind, resolution.bounds)
+		const geometry = shapeGeometry(sharedIntent.shape, sharedIntent.bounds)
 		if (geometry.length === 0) return
-		const contourId = nextShapeEntityId("contour", gesture.kind) as ContourId
+		const contourId = nextShapeEntityId(
+			"contour",
+			sharedIntent.shape,
+		) as ContourId
 		const pointIds = geometry.map(
-			() => nextShapeEntityId("point", gesture.kind) as PointId,
+			() => nextShapeEntityId("point", sharedIntent.shape) as PointId,
 		)
 		const layers = shapeLayerCoordinates(
 			geometry,
@@ -2995,6 +2937,23 @@ export function GlyphCanvas({
 			lastRawDelta: null,
 			joinCandidate: null,
 		}
+		const shared = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: "select",
+				pointerId: directDragPointerRef.current ?? -2,
+				pointer: {
+					world: { x: 0, y: 0 },
+					screen: { x: 0, y: 0 },
+					modifiers: sharedModifiers(event.evt),
+				},
+				targetId: activeGlyphId,
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = shared.state
+		setSharedGesturePreview(shared.preview)
 		return true
 	}
 	const updateSharedSelectGesture = (
@@ -3216,29 +3175,57 @@ export function GlyphCanvas({
 		)
 			return false
 		const shared = sharedGestureRef.current
-		if (shared?.tool === "select")
-			reduceVectorGesture(
-				shared,
-				{
-					type: "pointer-up",
-					pointerId: shared.pointerId,
-					pointer: {
-						world: shared.currentWorld,
-						rawWorld: shared.rawCurrentWorld,
-						screen: shared.currentScreen,
-						modifiers: shared.modifiers,
-						snaps: shared.snaps,
-					},
-				},
-				sharedGesturePolicy,
+		const transition =
+			shared?.tool === "select"
+				? reduceVectorGesture(
+						shared,
+						{
+							type: "pointer-up",
+							pointerId: shared.pointerId,
+							pointer: {
+								world: shared.currentWorld,
+								rawWorld: shared.rawCurrentWorld,
+								screen: shared.currentScreen,
+								modifiers: shared.modifiers,
+								snaps: shared.snaps,
+							},
+						},
+						sharedGesturePolicy,
+					)
+				: null
+		const intent =
+			transition?.intent?.kind === "select-move" ? transition.intent : null
+		if (intent === null) {
+			cancelGroupDrag()
+			return true
+		}
+		const controlled =
+			shared?.modifiers.altKey && currentGroupDrag.controllerPointId !== null
+				? planControlledSelectionDrag(
+						contours,
+						currentGroupDrag.selection,
+						currentGroupDrag.controllerPointId,
+						intent.delta,
+						currentGroupDrag.tangentDirections,
+					)?.result
+				: null
+		const finalPreview =
+			controlled ??
+			translateSelectionControls(
+				currentGroupDrag.controls,
+				intent.delta.x,
+				intent.delta.y,
 			)
-		const candidate = currentGroupDrag.joinCandidate
+		const candidate =
+			controlled === null
+				? resolveMovedEndpointJoin(contours, finalPreview.points, worldScale)
+				: null
 		let didCommit = false
 		try {
 			if (candidate === null) {
 				applyActiveFontVectorIntent({
 					kind: "transform-controls",
-					...resolved.preview,
+					...finalPreview,
 				})
 			} else {
 				applyActiveFontVectorIntent({
@@ -3249,7 +3236,7 @@ export function GlyphCanvas({
 					targetContourId: candidate.target.contourId,
 					targetPointId: candidate.target.pointId,
 					transform: {
-						...resolved.preview,
+						...finalPreview,
 					},
 				})
 				setSelection(
@@ -3315,6 +3302,21 @@ export function GlyphCanvas({
 			west: "w",
 			"north-west": "nw",
 		})[handle] as VectorTransformHandle
+	const fontTransformHandle = (
+		handle: VectorTransformHandle,
+	): TransformHandle =>
+		({
+			move: "inside",
+			rotation: "rotation",
+			n: "north",
+			ne: "north-east",
+			e: "east",
+			se: "south-east",
+			s: "south",
+			sw: "south-west",
+			w: "west",
+			nw: "north-west",
+		})[handle] as TransformHandle
 	const beginTransform = (
 		handle: TransformHandle,
 		initialTarget?: Readonly<{ x: number; y: number }>,
@@ -3323,9 +3325,23 @@ export function GlyphCanvas({
 		const bounds = boundsOfControls(controls)
 		if (bounds === null) return
 		const targetX =
-			initialTarget?.x ?? (handle.includes("west") ? bounds.minX : bounds.maxX)
+			initialTarget?.x ??
+			(handle === "inside"
+				? bounds.minX
+				: handle === "north" || handle === "south"
+					? (bounds.minX + bounds.maxX) / 2
+					: handle.includes("west")
+						? bounds.minX
+						: bounds.maxX)
 		const targetY =
-			initialTarget?.y ?? (handle.includes("south") ? bounds.minY : bounds.maxY)
+			initialTarget?.y ??
+			(handle === "inside"
+				? bounds.minY
+				: handle === "east" || handle === "west"
+					? (bounds.minY + bounds.maxY) / 2
+					: handle.includes("south")
+						? bounds.minY
+						: bounds.maxY)
 		const drag = {
 			handle,
 			controls,
@@ -3363,45 +3379,31 @@ export function GlyphCanvas({
 		sharedGestureRef.current = shared.state
 		setSharedGesturePreview(shared.preview)
 	}
-	const resolveTransformPreview = (
-		drag: TransformDrag,
+	const transformControlsFromShared = (
+		controls: readonly ResolvedSelectionControl[],
+		preview: Extract<VectorGesturePreview, { readonly kind: "transform" }>,
 	): SelectionTransformResult => {
-		if (drag.handle === "inside") {
+		if (preview.handle === "move") {
 			return roundedTransform(
-				translateSelectionControls(
-					drag.controls,
-					drag.targetX - drag.bounds.minX,
-					drag.targetY - drag.bounds.minY,
-				),
+				translateSelectionControls(controls, preview.delta.x, preview.delta.y),
 			)
 		}
-		if (drag.handle === "rotation") {
+		if (preview.handle === "rotation") {
 			return roundedTransform(
-				rotateSelectionControls(
-					drag.controls,
-					resolveTransformRotation({
-						bounds: drag.bounds,
-						startX: drag.startX,
-						startY: drag.startY,
-						targetX: drag.targetX,
-						targetY: drag.targetY,
-						shiftKey: drag.shiftKey,
-					}),
-				),
+				rotateSelectionControls(controls, {
+					pivotX: preview.anchor.x,
+					pivotY: preview.anchor.y,
+					angleRadians: (preview.rotationDegrees * Math.PI) / 180,
+				}),
 			)
 		}
 		return roundedTransform(
-			scaleSelectionControls(
-				drag.controls,
-				resolveTransformResize({
-					bounds: drag.bounds,
-					handle: drag.handle,
-					targetX: drag.targetX,
-					targetY: drag.targetY,
-					shiftKey: drag.shiftKey,
-					altKey: drag.altKey,
-				}),
-			),
+			scaleSelectionControls(controls, {
+				anchorX: preview.anchor.x,
+				anchorY: preview.anchor.y,
+				scaleX: preview.scale.x,
+				scaleY: preview.scale.y,
+			}),
 		)
 	}
 	const previewTransformDrag = (event: KonvaEventObject<DragEvent>): void => {
@@ -3433,8 +3435,11 @@ export function GlyphCanvas({
 			)
 			sharedGestureRef.current = transition.state
 			setSharedGesturePreview(transition.preview)
+			if (transition.preview?.kind === "transform")
+				setTransformPreview(
+					transformControlsFromShared(drag.controls, transition.preview),
+				)
 		}
-		setTransformPreview(resolveTransformPreview(drag))
 	}
 	const commitTransform = (event?: KonvaEventObject<DragEvent>): void => {
 		const drag = transformDragRef.current
@@ -3450,31 +3455,35 @@ export function GlyphCanvas({
 			drag.altKey = event.evt.altKey
 		}
 		const shared = sharedGestureRef.current
-		if (shared?.tool === "transform")
-			reduceVectorGesture(
-				shared,
-				{
-					type: "pointer-up",
-					pointerId: shared.pointerId,
-					pointer: {
-						world: { x: drag.targetX, y: drag.targetY },
-						rawWorld: { x: drag.targetX, y: drag.targetY },
-						screen: {
-							x: (drag.targetX - drag.startX) * worldScale,
-							y: -(drag.targetY - drag.startY) * worldScale,
+		const transition =
+			shared?.tool === "transform"
+				? reduceVectorGesture(
+						shared,
+						{
+							type: "pointer-up",
+							pointerId: shared.pointerId,
+							pointer: {
+								world: { x: drag.targetX, y: drag.targetY },
+								rawWorld: { x: drag.targetX, y: drag.targetY },
+								screen: {
+									x: (drag.targetX - drag.startX) * worldScale,
+									y: -(drag.targetY - drag.startY) * worldScale,
+								},
+								modifiers: {
+									shiftKey: drag.shiftKey,
+									altKey: drag.altKey,
+									additive: false,
+								},
+								snaps: [],
+							},
 						},
-						modifiers: {
-							shiftKey: drag.shiftKey,
-							altKey: drag.altKey,
-							additive: false,
-						},
-						snaps: [],
-					},
-				},
-				sharedGesturePolicy,
-			)
-		const finalPreview = resolveTransformPreview(drag)
-		if (activeGlyphId !== null) {
+						sharedGesturePolicy,
+					)
+				: null
+		const intent =
+			transition?.intent?.kind === "transform" ? transition.intent : null
+		if (activeGlyphId !== null && intent !== null) {
+			const finalPreview = transformControlsFromShared(drag.controls, intent)
 			applyActiveFontVectorIntent({
 				kind: "transform-controls",
 				...finalPreview,
@@ -5223,18 +5232,7 @@ export function GlyphCanvas({
 											inverseScale={inverseScale}
 											color={palette.accent}
 										/>
-									) : shapePreviewPath === "" ? null : (
-										<Path
-											name="shape-placement-preview-fallback"
-											data={shapePreviewPath}
-											fill={palette.accent}
-											opacity={0.12}
-											stroke={palette.accent}
-											strokeWidth={1.5 * inverseScale}
-											dash={[5 * inverseScale, 4 * inverseScale]}
-											listening={false}
-										/>
-									)}
+									) : null}
 									{sharedGesturePreview?.kind === "pen" ? (
 										<VectorPenPreview
 											preview={sharedGesturePreview}
@@ -5392,54 +5390,6 @@ export function GlyphCanvas({
 													((direction?.angle ?? 0) * Math.PI) / 180
 												return (
 													<Group key={`handles:${contourIndex}`}>
-														{contour.nodes.map((point) => (
-															<Group key={`controls:${point.pointId}`}>
-																{point.incoming === undefined ? null : (
-																	<Line
-																		key={`incoming-line:${point.pointId}`}
-																		points={[
-																			point.x,
-																			point.y,
-																			point.x + point.incoming.x,
-																			point.y + point.incoming.y,
-																		]}
-																		stroke={palette.handleLine}
-																		strokeWidth={inverseScale}
-																		opacity={
-																			replacedPenEndpointHandle?.pointId ===
-																				point.pointId &&
-																			replacedPenEndpointHandle.handle ===
-																				"incoming"
-																				? 0.42
-																				: 1
-																		}
-																		listening={false}
-																	/>
-																)}
-																{point.outgoing === undefined ? null : (
-																	<Line
-																		key={`outgoing-line:${point.pointId}`}
-																		points={[
-																			point.x,
-																			point.y,
-																			point.x + point.outgoing.x,
-																			point.y + point.outgoing.y,
-																		]}
-																		stroke={palette.handleLine}
-																		strokeWidth={inverseScale}
-																		opacity={
-																			replacedPenEndpointHandle?.pointId ===
-																				point.pointId &&
-																			replacedPenEndpointHandle.handle ===
-																				"outgoing"
-																				? 0.42
-																				: 1
-																		}
-																		listening={false}
-																	/>
-																)}
-															</Group>
-														))}
 														{contour.nodes.map((point, pointIndex) => {
 															const sourcePoint =
 																contours[contourIndex]?.nodes[pointIndex] ??
@@ -5760,6 +5710,80 @@ export function GlyphCanvas({
 																	}
 																},
 															}
+															const beginSharedHandleDrag = (
+																handle: EditorHandleKind,
+																event: KonvaEventObject<DragEvent>,
+															): void => {
+																const vector = point[handle]
+																if (vector === undefined) return
+																const startedGroup = beginGroupDrag(
+																	{
+																		kind: "handle",
+																		pointId: point.pointId,
+																		handle,
+																	},
+																	point.x + vector.x,
+																	point.y + vector.y,
+																	event.target,
+																)
+																if (!startedGroup)
+																	beginHandleDrag(handle, vector, event)
+															}
+															const moveSharedHandle = (
+																handle: EditorHandleKind,
+																event: KonvaEventObject<DragEvent>,
+															): void => {
+																if (previewGroupDrag(event)) return
+																const drag = handleDragRef.current
+																if (
+																	drag?.pointId !== point.pointId ||
+																	drag.handle !== handle
+																)
+																	return
+																applyHandleDrag(
+																	drag,
+																	rawHandleEndpoint(drag, event),
+																	event.evt.shiftKey,
+																)
+															}
+															const finishSharedHandle = (
+																handle: EditorHandleKind,
+																event: KonvaEventObject<DragEvent>,
+															): void => {
+																if (commitGroupDrag(event)) return
+																const drag = handleDragRef.current
+																if (
+																	drag?.pointId !== point.pointId ||
+																	drag.handle !== handle
+																)
+																	return
+																let committedSuccessfully = false
+																try {
+																	const committed = applyHandleDrag(
+																		drag,
+																		rawHandleEndpoint(drag, event),
+																		event.evt.shiftKey,
+																	)
+																	if (isCommittableHandle(committed))
+																		commitHandle(committed)
+																	committedSuccessfully =
+																		isCommittableHandle(committed)
+																} catch (error) {
+																	reportGeometryCommitError(error)
+																} finally {
+																	releaseDirectDragCapture(drag)
+																	handleDragRef.current = null
+																	directDragPointerRef.current = null
+																	directDragCaptureTargetRef.current = null
+																	setDraggedHandle(null)
+																	setHandleConstraintGuide(null)
+																	if (!committedSuccessfully)
+																		finishCancelledTarget(
+																			drag.target,
+																			drag.startEndpoint,
+																		)
+																}
+															}
 															return (
 																<Group key={`node:${point.pointId}`}>
 																	{metricAlignment?.kind === "line" ? (
@@ -5793,417 +5817,103 @@ export function GlyphCanvas({
 																			listening={false}
 																		/>
 																	) : null}
-																	{point.incoming === undefined ? null : (
-																		<Group
-																			key={`incoming-control:${point.pointId}`}
-																		>
-																			<Circle
-																				name="outline-control-helper"
-																				x={point.x + point.incoming.x}
-																				y={point.y + point.incoming.y}
-																				radius={controlHitRadius(
-																					{
-																						kind: "handle",
-																						pointId: point.pointId,
-																						handle: "incoming",
-																					},
-																					3.5,
-																				)}
-																				fill="rgb(0 0 0 / 0.001)"
-																				listening={activeTool === "select"}
-																			/>
-																			<Circle
-																				key={`incoming-handle:${point.pointId}`}
-																				name="bezier-handle"
-																				x={point.x + point.incoming.x}
-																				y={point.y + point.incoming.y}
-																				radius={3.5 * inverseScale}
-																				fill={
-																					replacedPenEndpointHandle?.pointId ===
-																						point.pointId &&
-																					replacedPenEndpointHandle.handle ===
-																						"incoming"
-																						? palette.handleLine
-																						: palette.accent
-																				}
-																				opacity={
-																					replacedPenEndpointHandle?.pointId ===
-																						point.pointId &&
-																					replacedPenEndpointHandle.handle ===
-																						"incoming"
-																						? 0.55
-																						: 1
-																				}
-																				stroke={palette.nodeStroke}
-																				strokeWidth={inverseScale}
-																				{...(activeTool === "select"
-																					? {}
-																					: {
-																							hitFunc: circularHitRegion(
-																								controlHitRadius(
-																									{
-																										kind: "handle",
-																										pointId: point.pointId,
-																										handle: "incoming",
-																									},
-																									3.5,
-																								),
-																							),
-																						})}
-																				draggable={activeTool === "select"}
-																				onPointerDown={(
-																					event: KonvaEventObject<PointerEvent>,
-																				) => {
-																					rememberDirectDragPointer(event)
-																					if (activeTool === "pen")
-																						selectHandle("incoming", event)
-																				}}
-																				onDblClick={(event) => {
-																					event.cancelBubble = true
-																					if (activeTool === "select")
-																						selectHandle("incoming", event)
-																				}}
-																				onDblTap={(event) => {
-																					event.cancelBubble = true
-																					if (activeTool === "select")
-																						selectHandle("incoming", event)
-																				}}
-																				onDragStart={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					const incoming = point.incoming
-																					if (incoming === undefined) return
-																					const startedGroup = beginGroupDrag(
-																						{
-																							kind: "handle",
-																							pointId: point.pointId,
-																							handle: "incoming",
-																						},
-																						point.x + incoming.x,
-																						point.y + incoming.y,
-																						event.target,
-																					)
-																					if (!startedGroup)
-																						beginHandleDrag(
-																							"incoming",
-																							incoming,
-																							event,
-																						)
-																				}}
-																				onDragMove={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					if (previewGroupDrag(event)) return
-																					const drag = handleDragRef.current
-																					if (
-																						drag?.pointId !== point.pointId ||
-																						drag.handle !== "incoming"
-																					)
-																						return
-																					applyHandleDrag(
-																						drag,
-																						rawHandleEndpoint(drag, event),
-																						event.evt.shiftKey,
-																					)
-																				}}
-																				onDragEnd={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					if (commitGroupDrag(event)) return
-																					const drag = handleDragRef.current
-																					if (
-																						drag?.pointId !== point.pointId ||
-																						drag.handle !== "incoming"
-																					)
-																						return
-																					let committedSuccessfully = false
-																					try {
-																						const committed = applyHandleDrag(
-																							drag,
-																							rawHandleEndpoint(drag, event),
-																							event.evt.shiftKey,
-																						)
-																						if (isCommittableHandle(committed))
-																							commitHandle(committed)
-																						committedSuccessfully =
-																							isCommittableHandle(committed)
-																					} catch (error) {
-																						reportGeometryCommitError(error)
-																					} finally {
-																						releaseDirectDragCapture(drag)
-																						handleDragRef.current = null
-																						directDragPointerRef.current = null
-																						directDragCaptureTargetRef.current =
-																							null
-																						setDraggedHandle(null)
-																						setHandleConstraintGuide(null)
-																						if (!committedSuccessfully) {
-																							finishCancelledTarget(
-																								drag.target,
-																								drag.startEndpoint,
-																							)
-																						}
+																	<VectorControlHandles
+																		node={{
+																			id: point.pointId,
+																			x: point.x,
+																			y: point.y,
+																			mode: point.mode,
+																			...(point.incoming === undefined
+																				? {}
+																				: { incoming: point.incoming }),
+																			...(point.outgoing === undefined
+																				? {}
+																				: { outgoing: point.outgoing }),
+																		}}
+																		inverseScale={inverseScale}
+																		color={palette.accent}
+																		fill={palette.nodeFill}
+																		stroke={palette.nodeStroke}
+																		handleColor={palette.accent}
+																		handleOpacity={
+																			replacedPenEndpointHandle?.pointId ===
+																			point.pointId
+																				? {
+																						[replacedPenEndpointHandle.handle]: 0.55,
 																					}
-																				}}
-																			/>
-																			{isSelected({
-																				kind: "handle",
-																				pointId: point.pointId,
-																				handle: "incoming",
-																			}) ? (
-																				<Circle
-																					x={point.x + point.incoming.x}
-																					y={point.y + point.incoming.y}
-																					radius={8 * inverseScale}
-																					stroke={palette.accent}
-																					strokeWidth={2 * inverseScale}
-																					listening={false}
-																				/>
-																			) : null}
-																		</Group>
-																	)}
-																	{point.outgoing === undefined ? null : (
-																		<Group
-																			key={`outgoing-control:${point.pointId}`}
-																		>
-																			<Circle
-																				name="outline-control-helper"
-																				x={point.x + point.outgoing.x}
-																				y={point.y + point.outgoing.y}
-																				radius={controlHitRadius(
-																					{
-																						kind: "handle",
-																						pointId: point.pointId,
-																						handle: "outgoing",
-																					},
-																					3.5,
-																				)}
-																				fill="rgb(0 0 0 / 0.001)"
-																				listening={activeTool === "select"}
-																			/>
-																			<Circle
-																				key={`outgoing-handle:${point.pointId}`}
-																				name="bezier-handle"
-																				x={point.x + point.outgoing.x}
-																				y={point.y + point.outgoing.y}
-																				radius={3.5 * inverseScale}
-																				fill={
-																					replacedPenEndpointHandle?.pointId ===
-																						point.pointId &&
-																					replacedPenEndpointHandle.handle ===
-																						"outgoing"
-																						? palette.handleLine
-																						: palette.accent
-																				}
-																				opacity={
-																					replacedPenEndpointHandle?.pointId ===
-																						point.pointId &&
-																					replacedPenEndpointHandle.handle ===
-																						"outgoing"
-																						? 0.55
-																						: 1
-																				}
-																				stroke={palette.nodeStroke}
-																				strokeWidth={inverseScale}
-																				{...(activeTool === "select"
-																					? {}
-																					: {
-																							hitFunc: circularHitRegion(
-																								controlHitRadius(
-																									{
-																										kind: "handle",
-																										pointId: point.pointId,
-																										handle: "outgoing",
-																									},
-																									3.5,
-																								),
-																							),
-																						})}
-																				draggable={activeTool === "select"}
-																				onPointerDown={(
-																					event: KonvaEventObject<PointerEvent>,
-																				) => {
-																					rememberDirectDragPointer(event)
-																					if (activeTool === "pen")
-																						selectHandle("outgoing", event)
-																				}}
-																				onDblClick={(event) => {
-																					event.cancelBubble = true
-																					if (activeTool === "select")
-																						selectHandle("outgoing", event)
-																				}}
-																				onDblTap={(event) => {
-																					event.cancelBubble = true
-																					if (activeTool === "select")
-																						selectHandle("outgoing", event)
-																				}}
-																				onDragStart={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					const outgoing = point.outgoing
-																					if (outgoing === undefined) return
-																					const startedGroup = beginGroupDrag(
-																						{
-																							kind: "handle",
-																							pointId: point.pointId,
-																							handle: "outgoing",
-																						},
-																						point.x + outgoing.x,
-																						point.y + outgoing.y,
-																						event.target,
-																					)
-																					if (!startedGroup)
-																						beginHandleDrag(
-																							"outgoing",
-																							outgoing,
-																							event,
-																						)
-																				}}
-																				onDragMove={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					if (previewGroupDrag(event)) return
-																					const drag = handleDragRef.current
-																					if (
-																						drag?.pointId !== point.pointId ||
-																						drag.handle !== "outgoing"
-																					)
-																						return
-																					applyHandleDrag(
-																						drag,
-																						rawHandleEndpoint(drag, event),
-																						event.evt.shiftKey,
-																					)
-																				}}
-																				onDragEnd={(
-																					event: KonvaEventObject<DragEvent>,
-																				) => {
-																					if (commitGroupDrag(event)) return
-																					const drag = handleDragRef.current
-																					if (
-																						drag?.pointId !== point.pointId ||
-																						drag.handle !== "outgoing"
-																					)
-																						return
-																					let committedSuccessfully = false
-																					try {
-																						const committed = applyHandleDrag(
-																							drag,
-																							rawHandleEndpoint(drag, event),
-																							event.evt.shiftKey,
-																						)
-																						if (isCommittableHandle(committed))
-																							commitHandle(committed)
-																						committedSuccessfully =
-																							isCommittableHandle(committed)
-																					} catch (error) {
-																						reportGeometryCommitError(error)
-																					} finally {
-																						releaseDirectDragCapture(drag)
-																						handleDragRef.current = null
-																						directDragPointerRef.current = null
-																						directDragCaptureTargetRef.current =
-																							null
-																						setDraggedHandle(null)
-																						setHandleConstraintGuide(null)
-																						if (!committedSuccessfully) {
-																							finishCancelledTarget(
-																								drag.target,
-																								drag.startEndpoint,
-																							)
-																						}
-																					}
-																				}}
-																			/>
-																			{isSelected({
-																				kind: "handle",
-																				pointId: point.pointId,
-																				handle: "outgoing",
-																			}) ? (
-																				<Circle
-																					x={point.x + point.outgoing.x}
-																					y={point.y + point.outgoing.y}
-																					radius={8 * inverseScale}
-																					stroke={palette.accent}
-																					strokeWidth={2 * inverseScale}
-																					listening={false}
-																				/>
-																			) : null}
-																		</Group>
-																	)}
-																	{isSelected(nodeTarget) ? (
-																		<Circle
-																			key={`selection:${point.pointId}`}
-																			x={point.x}
-																			y={point.y}
-																			radius={10 * inverseScale}
-																			stroke={palette.accent}
-																			strokeWidth={2 * inverseScale}
-																			listening={false}
-																		/>
-																	) : null}
-																	<Circle
-																		name="outline-control-helper"
-																		x={point.x}
-																		y={point.y}
-																		radius={controlHitRadius(nodeTarget, 6.5)}
-																		fill="rgb(0 0 0 / 0.001)"
-																		listening={activeTool === "select"}
-																	/>
-																	{endpointNormal !== null ? (
-																		<Line
-																			key={`point:${point.pointId}`}
-																			{...nodeProps}
-																			points={[
-																				-endpointNormal.x * 6 * inverseScale,
-																				-endpointNormal.y * 6 * inverseScale,
-																				endpointNormal.x * 6 * inverseScale,
-																				endpointNormal.y * 6 * inverseScale,
-																			]}
-																			strokeWidth={2 * inverseScale}
-																			{...(activeTool === "select"
+																				: {}
+																		}
+																		nodeHitRadius={controlHitRadius(
+																			nodeTarget,
+																			6.5,
+																		)}
+																		handleHitRadius={{
+																			...(point.incoming === undefined
 																				? {}
 																				: {
-																						hitFunc: circularHitRegion(
-																							controlHitRadius(nodeTarget, 6),
-																						),
-																					})}
-																			lineCap="round"
-																		/>
-																	) : point.mode === "soft" ? (
-																		<Circle
-																			key={`point:${point.pointId}`}
-																			{...nodeProps}
-																			radius={5 * inverseScale}
-																			{...(activeTool === "select"
-																				? {}
-																				: {
-																						hitFunc: circularHitRegion(
-																							controlHitRadius(nodeTarget, 5),
-																						),
-																					})}
-																		/>
-																	) : (
-																		<Rect
-																			key={`point:${point.pointId}`}
-																			{...nodeProps}
-																			width={9 * inverseScale}
-																			height={9 * inverseScale}
-																			offsetX={4.5 * inverseScale}
-																			offsetY={4.5 * inverseScale}
-																			{...(activeTool === "select"
-																				? {}
-																				: {
-																						hitFunc: circularHitRegion(
-																							controlHitRadius(nodeTarget, 6.5),
+																						incoming: controlHitRadius(
 																							{
-																								x: 4.5 * inverseScale,
-																								y: 4.5 * inverseScale,
+																								kind: "handle",
+																								pointId: point.pointId,
+																								handle: "incoming",
 																							},
+																							3.5,
 																						),
-																					})}
-																		/>
-																	)}
+																					}),
+																			...(point.outgoing === undefined
+																				? {}
+																				: {
+																						outgoing: controlHitRadius(
+																							{
+																								kind: "handle",
+																								pointId: point.pointId,
+																								handle: "outgoing",
+																							},
+																							3.5,
+																						),
+																					}),
+																		}}
+																		selected={isSelected(nodeTarget)}
+																		selectedHandles={(
+																			["incoming", "outgoing"] as const
+																		).filter((handle) =>
+																			isSelected({
+																				kind: "handle",
+																				pointId: point.pointId,
+																				handle,
+																			}),
+																		)}
+																		listening
+																		draggable={activeTool === "select"}
+																		nodeShape={
+																			endpointNormal !== null
+																				? "endpoint"
+																				: point.mode === "soft"
+																					? "circle"
+																					: "square"
+																		}
+																		{...(endpointNormal === null
+																			? {}
+																			: { endpointNormal })}
+																		onNodePointerDown={nodeProps.onPointerDown}
+																		onNodeDoubleClick={togglePointMode}
+																		onNodeDragStart={nodeProps.onDragStart}
+																		onNodeDragMove={nodeProps.onDragMove}
+																		onNodeDragEnd={nodeProps.onDragEnd}
+																		onHandlePointerDown={(handle, event) => {
+																			rememberDirectDragPointer(event)
+																			if (activeTool === "pen")
+																				selectHandle(handle, event)
+																		}}
+																		onHandleDoubleClick={(handle, event) => {
+																			event.cancelBubble = true
+																			if (activeTool === "select")
+																				selectHandle(handle, event)
+																		}}
+																		onHandleDragStart={beginSharedHandleDrag}
+																		onHandleDragMove={moveSharedHandle}
+																		onHandleDragEnd={finishSharedHandle}
+																	/>
 																	{pointIndex === 0 && direction !== null ? (
 																		<Line
 																			key={`direction:${point.pointId}`}
@@ -6244,175 +5954,63 @@ export function GlyphCanvas({
 										: null}
 									{activeTool !== "transform" ||
 									transformBounds === null ? null : (
-										<Group>
+										<>
 											<VectorSelectionBounds
 												bounds={transformBounds}
 												inverseScale={inverseScale}
 												color={palette.accent}
-												handles={[]}
-												listening={false}
-											/>
-											<Rect
-												name="transform-selection-box"
-												x={transformBounds.minX}
-												y={transformBounds.minY}
-												width={Math.max(
-													transformBounds.maxX - transformBounds.minX,
-													2 * inverseScale,
-												)}
-												height={Math.max(
-													transformBounds.maxY - transformBounds.minY,
-													2 * inverseScale,
-												)}
-												fill="rgb(0 0 0 / 0.001)"
-												strokeWidth={0}
+												handles={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
+												rotation={hasRotationAffordance}
+												yAxis="up"
 												draggable
-												onDragStart={() => beginTransform("inside")}
-												onDragMove={previewTransformDrag}
-												onDragEnd={(event) => commitTransform(event)}
+												onHandleDragStart={(handle, event) => {
+													const fontHandle = fontTransformHandle(handle)
+													setTransformCursor(
+														handle === "rotation"
+															? "grabbing"
+															: transformHandleCursor(fontHandle),
+													)
+													beginTransform(
+														fontHandle,
+														handle === "rotation"
+															? event.target.position()
+															: undefined,
+													)
+												}}
+												onHandleDragMove={(_handle, event) =>
+													previewTransformDrag(event)
+												}
+												onHandleDragEnd={(_handle, event) => {
+													commitTransform(event)
+													setTransformCursor(null)
+												}}
+												onHandlePointerEnter={(handle) =>
+													setTransformCursor(
+														handle === "rotation"
+															? "grab"
+															: transformHandleCursor(
+																	fontTransformHandle(handle),
+																),
+													)
+												}
+												onHandlePointerLeave={() => {
+													if (transformDrag === null) setTransformCursor(null)
+												}}
 											/>
-											{!hasRotationAffordance ||
+											{rotationAngleDegrees === null ||
 											rotationHandlePosition === null ? null : (
-												<>
-													<Line
-														name="transform-rotation-stem"
-														points={[
-															(transformBounds.minX + transformBounds.maxX) / 2,
-															transformBounds.maxY,
-															rotationHandlePosition.x,
-															rotationHandlePosition.y,
-														]}
-														stroke={palette.accent}
-														strokeWidth={1.5 * inverseScale}
-														listening={false}
-													/>
-													<Circle
-														name="transform-rotation"
-														x={rotationHandlePosition.x}
-														y={rotationHandlePosition.y}
-														radius={8 * inverseScale}
-														fill={palette.surface}
-														stroke={palette.accent}
-														strokeWidth={1.5 * inverseScale}
-														hitStrokeWidth={12 * inverseScale}
-														draggable
-														onDragStart={(event) => {
-															setTransformCursor("grabbing")
-															beginTransform(
-																"rotation",
-																event.target.position(),
-															)
-														}}
-														onDragMove={previewTransformDrag}
-														onDragEnd={(event) => {
-															commitTransform(event)
-															setTransformCursor(null)
-														}}
-														onMouseEnter={() => setTransformCursor("grab")}
-														onMouseLeave={() => {
-															if (transformDrag === null)
-																setTransformCursor(null)
-														}}
-													/>
-													<Text
-														name="transform-rotation-icon"
-														x={rotationHandlePosition.x}
-														y={rotationHandlePosition.y}
-														text="↻"
-														fontSize={12 * inverseScale}
-														fill={palette.accent}
-														offsetX={6 * inverseScale}
-														offsetY={6 * inverseScale}
-														scaleY={-1}
-														listening={false}
-													/>
-													{rotationAngleDegrees === null ? null : (
-														<Text
-															name="transform-rotation-angle"
-															x={rotationHandlePosition.x + 12 * inverseScale}
-															y={rotationHandlePosition.y + 6 * inverseScale}
-															text={`${rotationAngleDegrees}°${transformDrag?.shiftKey ? " · snapped" : ""}`}
-															fontSize={11 * inverseScale}
-															fill={palette.accent}
-															scaleY={-1}
-															listening={false}
-														/>
-													)}
-												</>
-											)}
-											{(
-												[
-													[
-														"north-west",
-														transformBounds.minX,
-														transformBounds.maxY,
-													],
-													[
-														"north",
-														(transformBounds.minX + transformBounds.maxX) / 2,
-														transformBounds.maxY,
-													],
-													[
-														"north-east",
-														transformBounds.maxX,
-														transformBounds.maxY,
-													],
-													[
-														"east",
-														transformBounds.maxX,
-														(transformBounds.minY + transformBounds.maxY) / 2,
-													],
-													[
-														"south-east",
-														transformBounds.maxX,
-														transformBounds.minY,
-													],
-													[
-														"south",
-														(transformBounds.minX + transformBounds.maxX) / 2,
-														transformBounds.minY,
-													],
-													[
-														"south-west",
-														transformBounds.minX,
-														transformBounds.minY,
-													],
-													[
-														"west",
-														transformBounds.minX,
-														(transformBounds.minY + transformBounds.maxY) / 2,
-													],
-												] as const
-											).map(([handle, x, y]) => (
-												<Circle
-													key={`transform:${handle}`}
-													name={`transform-${handle}`}
-													x={x}
-													y={y}
-													radius={5.5 * inverseScale}
-													fill={palette.surface}
-													stroke={palette.accent}
-													strokeWidth={1.5 * inverseScale}
-													hitStrokeWidth={12 * inverseScale}
-													draggable
-													onDragStart={() => {
-														setTransformCursor(transformHandleCursor(handle))
-														beginTransform(handle)
-													}}
-													onDragMove={previewTransformDrag}
-													onDragEnd={(event) => {
-														commitTransform(event)
-														setTransformCursor(null)
-													}}
-													onMouseEnter={() =>
-														setTransformCursor(transformHandleCursor(handle))
-													}
-													onMouseLeave={() => {
-														if (transformDrag === null) setTransformCursor(null)
-													}}
+												<Text
+													name="transform-rotation-angle"
+													x={rotationHandlePosition.x + 12 * inverseScale}
+													y={rotationHandlePosition.y + 6 * inverseScale}
+													text={`${rotationAngleDegrees}°${sharedGestureRef.current?.modifiers.shiftKey ? " · snapped" : ""}`}
+													fontSize={11 * inverseScale}
+													fill={palette.accent}
+													scaleY={-1}
+													listening={false}
 												/>
-											))}
-										</Group>
+											)}
+										</>
 									)}
 									{visualDebug["hit-targets"] && activeTool === "select" ? (
 										<Group name="visual-debug-hit-targets" listening={false}>
@@ -6557,8 +6155,8 @@ export function GlyphCanvas({
 										? `Release to join endpoint ${joinTarget.pointId}.`
 										: activeTool === "pen" && penPlacement !== null
 											? `Pen ${penGestureResolution?.kind === "curve" ? "curve " : ""}preview at ${penPlacement.x}, ${penPlacement.y}.`
-											: shapeGestureResolution !== null && shapeGesture !== null
-												? `${shapeGesture.kind === "rect" ? "Rect" : "Ellipse"} preview from ${shapeGestureResolution.bounds.minX}, ${shapeGestureResolution.bounds.minY} to ${shapeGestureResolution.bounds.maxX}, ${shapeGestureResolution.bounds.maxY}.`
+											: sharedGesturePreview?.kind === "shape"
+												? `${sharedGesturePreview.shape === "rect" ? "Rect" : "Ellipse"} preview from ${sharedGesturePreview.bounds.minX}, ${sharedGesturePreview.bounds.minY} to ${sharedGesturePreview.bounds.maxX}, ${sharedGesturePreview.bounds.maxY}.`
 												: rotationAngleDegrees !== null
 													? `Rotation preview ${rotationAngleDegrees} degrees${transformDrag?.shiftKey ? `, snapped to ${TRANSFORM_ROTATION_SNAP_DEGREES} degree increments` : ""}.`
 													: selection.length === 0

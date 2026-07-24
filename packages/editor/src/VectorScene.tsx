@@ -56,14 +56,97 @@ export function VectorControlHandles({
 	inverseScale,
 	color,
 	selected = false,
+	selectedHandles = [],
+	listening = false,
+	draggable = false,
+	nodeShape = "circle",
+	endpointNormal,
+	fill = "#fff",
+	stroke = color,
+	handleColor = color,
+	handleOpacity = {},
+	nodeHitRadius,
+	handleHitRadius,
+	onNodePointerDown,
+	onNodeDoubleClick,
+	onNodeDragStart,
+	onNodeDragMove,
+	onNodeDragEnd,
+	onHandlePointerDown,
+	onHandleDoubleClick,
+	onHandleDragStart,
+	onHandleDragMove,
+	onHandleDragEnd,
 }: {
 	readonly node: VectorNode
 	readonly inverseScale: number
 	readonly color: string
 	readonly selected?: boolean
+	readonly selectedHandles?: readonly ("incoming" | "outgoing")[]
+	readonly listening?: boolean
+	readonly draggable?: boolean
+	readonly nodeShape?: "circle" | "square" | "endpoint"
+	readonly endpointNormal?: VectorPoint
+	readonly fill?: string
+	readonly stroke?: string
+	readonly handleColor?: string
+	readonly handleOpacity?: Readonly<
+		Partial<Record<"incoming" | "outgoing", number>>
+	>
+	readonly nodeHitRadius?: number
+	readonly handleHitRadius?: Readonly<
+		Partial<Record<"incoming" | "outgoing", number>>
+	>
+	readonly onNodePointerDown?: (event: KonvaEventObject<PointerEvent>) => void
+	readonly onNodeDoubleClick?: (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	) => void
+	readonly onNodeDragStart?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onNodeDragMove?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onNodeDragEnd?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onHandlePointerDown?: (
+		handle: "incoming" | "outgoing",
+		event: KonvaEventObject<PointerEvent>,
+	) => void
+	readonly onHandleDoubleClick?: (
+		handle: "incoming" | "outgoing",
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	) => void
+	readonly onHandleDragStart?: (
+		handle: "incoming" | "outgoing",
+		event: KonvaEventObject<DragEvent>,
+	) => void
+	readonly onHandleDragMove?: (
+		handle: "incoming" | "outgoing",
+		event: KonvaEventObject<DragEvent>,
+	) => void
+	readonly onHandleDragEnd?: (
+		handle: "incoming" | "outgoing",
+		event: KonvaEventObject<DragEvent>,
+	) => void
 }) {
+	const nodeProps = {
+		id: node.id,
+		name: "vector-node outline-point",
+		x: node.x,
+		y: node.y,
+		fill,
+		stroke,
+		strokeWidth: (selected ? 2 : 1.5) * inverseScale,
+		draggable,
+		onPointerDown: (event: KonvaEventObject<PointerEvent>) =>
+			onNodePointerDown?.(event),
+		onDblClick: (event: KonvaEventObject<MouseEvent>) =>
+			onNodeDoubleClick?.(event),
+		onDblTap: (event: KonvaEventObject<MouseEvent | TouchEvent>) =>
+			onNodeDoubleClick?.(event),
+		onDragStart: (event: KonvaEventObject<DragEvent>) =>
+			onNodeDragStart?.(event),
+		onDragMove: (event: KonvaEventObject<DragEvent>) => onNodeDragMove?.(event),
+		onDragEnd: (event: KonvaEventObject<DragEvent>) => onNodeDragEnd?.(event),
+	}
 	return (
-		<Group name="vector-controls" listening={false}>
+		<Group name="vector-controls" listening={listening}>
 			{(["incoming", "outgoing"] as const).map((handle) => {
 				const vector = node[handle]
 				if (vector === undefined) return null
@@ -75,28 +158,92 @@ export function VectorControlHandles({
 							points={[node.x, node.y, endpoint.x, endpoint.y]}
 							stroke={color}
 							strokeWidth={inverseScale}
+							opacity={handleOpacity[handle] ?? 1}
+							listening={false}
 						/>
+						{handleHitRadius?.[handle] === undefined ? null : (
+							<Circle
+								name="outline-control-helper"
+								x={endpoint.x}
+								y={endpoint.y}
+								radius={handleHitRadius[handle]}
+								fill="rgb(0 0 0 / 0.001)"
+							/>
+						)}
 						<Circle
-							name={`vector-handle vector-handle-${handle}`}
+							name={`vector-handle vector-handle-${handle} bezier-handle`}
 							x={endpoint.x}
 							y={endpoint.y}
 							radius={3.5 * inverseScale}
-							fill={color}
-							stroke="#fff"
+							fill={handleColor}
+							stroke={stroke}
 							strokeWidth={inverseScale}
+							opacity={handleOpacity[handle] ?? 1}
+							draggable={draggable}
+							onPointerDown={(event) => onHandlePointerDown?.(handle, event)}
+							onDblClick={(event) => onHandleDoubleClick?.(handle, event)}
+							onDblTap={(event) => onHandleDoubleClick?.(handle, event)}
+							onDragStart={(event) => onHandleDragStart?.(handle, event)}
+							onDragMove={(event) => onHandleDragMove?.(handle, event)}
+							onDragEnd={(event) => onHandleDragEnd?.(handle, event)}
 						/>
+						{selectedHandles.includes(handle) ? (
+							<Circle
+								name={`vector-handle-selection vector-handle-selection-${handle}`}
+								x={endpoint.x}
+								y={endpoint.y}
+								radius={8 * inverseScale}
+								stroke={color}
+								strokeWidth={2 * inverseScale}
+								listening={false}
+							/>
+						) : null}
 					</Group>
 				)
 			})}
-			<Circle
-				name="vector-node"
-				x={node.x}
-				y={node.y}
-				radius={(selected ? 6 : 4) * inverseScale}
-				fill="#fff"
-				stroke={color}
-				strokeWidth={(selected ? 2 : 1.5) * inverseScale}
-			/>
+			{selected ? (
+				<Circle
+					name="vector-node-selection"
+					x={node.x}
+					y={node.y}
+					radius={10 * inverseScale}
+					stroke={color}
+					strokeWidth={2 * inverseScale}
+					listening={false}
+				/>
+			) : null}
+			{nodeHitRadius === undefined ? null : (
+				<Circle
+					name="outline-control-helper"
+					x={node.x}
+					y={node.y}
+					radius={nodeHitRadius}
+					fill="rgb(0 0 0 / 0.001)"
+				/>
+			)}
+			{nodeShape === "endpoint" && endpointNormal !== undefined ? (
+				<Line
+					{...nodeProps}
+					points={[
+						-endpointNormal.x * 6 * inverseScale,
+						-endpointNormal.y * 6 * inverseScale,
+						endpointNormal.x * 6 * inverseScale,
+						endpointNormal.y * 6 * inverseScale,
+					]}
+					strokeWidth={2 * inverseScale}
+					lineCap="round"
+				/>
+			) : nodeShape === "square" ? (
+				<Rect
+					{...nodeProps}
+					width={9 * inverseScale}
+					height={9 * inverseScale}
+					offsetX={4.5 * inverseScale}
+					offsetY={4.5 * inverseScale}
+				/>
+			) : (
+				<Circle {...nodeProps} radius={5 * inverseScale} />
+			)}
 		</Group>
 	)
 }
@@ -236,7 +383,14 @@ export function VectorSelectionBounds({
 	handles = ["nw", "ne", "se", "sw"],
 	rotation = false,
 	listening = true,
+	yAxis = "down",
+	draggable = false,
 	onHandlePointerDown,
+	onHandleDragStart,
+	onHandleDragMove,
+	onHandleDragEnd,
+	onHandlePointerEnter,
+	onHandlePointerLeave,
 }: {
 	readonly bounds: VectorBounds
 	readonly inverseScale: number
@@ -247,14 +401,42 @@ export function VectorSelectionBounds({
 	>[]
 	readonly rotation?: boolean
 	readonly listening?: boolean
+	readonly yAxis?: "up" | "down"
+	readonly draggable?: boolean
 	readonly onHandlePointerDown?: (
 		handle: VectorTransformHandle,
 		event: KonvaEventObject<PointerEvent>,
 	) => void
+	readonly onHandleDragStart?: (
+		handle: VectorTransformHandle,
+		event: KonvaEventObject<DragEvent>,
+	) => void
+	readonly onHandleDragMove?: (
+		handle: VectorTransformHandle,
+		event: KonvaEventObject<DragEvent>,
+	) => void
+	readonly onHandleDragEnd?: (
+		handle: VectorTransformHandle,
+		event: KonvaEventObject<DragEvent>,
+	) => void
+	readonly onHandlePointerEnter?: (handle: VectorTransformHandle) => void
+	readonly onHandlePointerLeave?: (handle: VectorTransformHandle) => void
 }) {
+	const orientedBounds =
+		yAxis === "down"
+			? bounds
+			: {
+					minX: bounds.minX,
+					maxX: bounds.maxX,
+					minY: bounds.maxY,
+					maxY: bounds.minY,
+				}
 	const rotationPoint = {
 		x: (bounds.minX + bounds.maxX) / 2,
-		y: bounds.minY - 28 * inverseScale,
+		y:
+			yAxis === "down"
+				? bounds.minY - 28 * inverseScale
+				: bounds.maxY + 28 * inverseScale,
 	}
 	return (
 		<Group name="vector-selection-bounds" listening={listening}>
@@ -268,22 +450,36 @@ export function VectorSelectionBounds({
 				opacity={0.06}
 				stroke={color}
 				strokeWidth={1.5 * inverseScale}
+				draggable={draggable}
 				onPointerDown={(event) => onHandlePointerDown?.("move", event)}
+				onDragStart={(event) => onHandleDragStart?.("move", event)}
+				onDragMove={(event) => onHandleDragMove?.("move", event)}
+				onDragEnd={(event) => onHandleDragEnd?.("move", event)}
+				onMouseEnter={() => onHandlePointerEnter?.("move")}
+				onMouseLeave={() => onHandlePointerLeave?.("move")}
 			/>
 			{handles.map((handle) => {
-				const point = handlePoint(bounds, handle)
+				const point = handlePoint(orientedBounds, handle)
 				return (
 					<Rect
 						key={handle}
 						name={`transform-handle transform-handle-${handle}`}
-						x={point.x - 5 * inverseScale}
-						y={point.y - 5 * inverseScale}
+						x={point.x}
+						y={point.y}
 						width={10 * inverseScale}
 						height={10 * inverseScale}
+						offsetX={5 * inverseScale}
+						offsetY={5 * inverseScale}
 						fill="#fff"
 						stroke={color}
 						strokeWidth={1.5 * inverseScale}
+						draggable={draggable}
 						onPointerDown={(event) => onHandlePointerDown?.(handle, event)}
+						onDragStart={(event) => onHandleDragStart?.(handle, event)}
+						onDragMove={(event) => onHandleDragMove?.(handle, event)}
+						onDragEnd={(event) => onHandleDragEnd?.(handle, event)}
+						onMouseEnter={() => onHandlePointerEnter?.(handle)}
+						onMouseLeave={() => onHandlePointerLeave?.(handle)}
 					/>
 				)
 			})}
@@ -293,7 +489,7 @@ export function VectorSelectionBounds({
 						name="transform-rotation-stem"
 						points={[
 							(bounds.minX + bounds.maxX) / 2,
-							bounds.minY,
+							yAxis === "down" ? bounds.minY : bounds.maxY,
 							rotationPoint.x,
 							rotationPoint.y,
 						]}
@@ -309,7 +505,13 @@ export function VectorSelectionBounds({
 						fill="#fff"
 						stroke={color}
 						strokeWidth={1.5 * inverseScale}
+						draggable={draggable}
 						onPointerDown={(event) => onHandlePointerDown?.("rotation", event)}
+						onDragStart={(event) => onHandleDragStart?.("rotation", event)}
+						onDragMove={(event) => onHandleDragMove?.("rotation", event)}
+						onDragEnd={(event) => onHandleDragEnd?.("rotation", event)}
+						onMouseEnter={() => onHandlePointerEnter?.("rotation")}
+						onMouseLeave={() => onHandlePointerLeave?.("rotation")}
 					/>
 				</>
 			) : null}

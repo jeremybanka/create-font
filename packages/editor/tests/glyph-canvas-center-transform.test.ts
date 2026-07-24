@@ -180,7 +180,7 @@ describe("GlyphCanvas center transform", () => {
 		expect(stage.findOne(".transform-selection-box")).toBeDefined()
 		expect(stage.findOne(".vector-selection-bounds")).toBeDefined()
 		expect(stage.findOne(".vector-contour-path")).toBeDefined()
-		expect(stage.findOne(".transform-east")).toBeDefined()
+		expect(stage.findOne(".transform-handle-e")).toBeDefined()
 		expect(stage.findOne(".transform-rotation")).toBeDefined()
 	})
 
@@ -230,7 +230,7 @@ describe("GlyphCanvas center transform", () => {
 
 	it("previews and commits an Alt resize through the mounted handle path", () => {
 		const { stage, transform } = mountTransformSelection()
-		const handle = stage.findOne(".transform-east")
+		const handle = stage.findOne(".transform-handle-e")
 		if (handle === undefined)
 			throw new Error("East transform handle was not rendered.")
 		const centerX = stage.findOne(".transform-selection-box")?.x()
@@ -253,6 +253,24 @@ describe("GlyphCanvas center transform", () => {
 		)
 		expect(transform.mock.calls[0]?.[0].points.length).toBeGreaterThan(0)
 		expect(centerX).toBeTypeOf("number")
+	})
+
+	it("does not bypass a null shared commit intent for a sub-threshold resize", () => {
+		const { stage, transform } = mountTransformSelection()
+		const handle = stage.findOne(".transform-handle-e")
+		if (handle === undefined)
+			throw new Error("Shared east transform handle was not rendered.")
+		const originalX = handle.x()
+		handle.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		handle.x(originalX + 0.001)
+		handle.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		const liveHandle = stage.findOne(".transform-handle-e")
+		if (liveHandle === undefined)
+			throw new Error("Shared east transform handle disappeared.")
+		liveHandle.fire("dragend", {
+			evt: { altKey: false, shiftKey: false },
+		})
+		expect(transform).not.toHaveBeenCalled()
 	})
 
 	it("previews snapped rotation and commits exactly one atomic transform", () => {

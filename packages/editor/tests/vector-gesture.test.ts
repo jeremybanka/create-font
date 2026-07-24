@@ -195,6 +195,29 @@ describe("shared vector gesture reducer parity", () => {
 		})
 	})
 
+	it("makes Alt resize intent explicitly center-anchored", () => {
+		const started = down({
+			tool: "transform",
+			targetId: "object:a",
+			bounds: { minX: 0, minY: 0, maxX: 100, maxY: 80 },
+			handle: "e",
+		})
+		const committed = transition(
+			started.state,
+			{
+				type: "pointer-up",
+				pointerId: 7,
+				pointer: pointer(130, 40, { altKey: true }),
+			},
+			fontPolicy,
+		)
+		expect(committed.intent).toMatchObject({
+			kind: "transform",
+			handle: "e",
+			anchor: { x: 50, y: 40 },
+		})
+	})
+
 	it("cancels atomically and ignores unrelated pointer transitions", () => {
 		const started = down({ tool: "pen" })
 		const unrelated = transition(started.state, {
