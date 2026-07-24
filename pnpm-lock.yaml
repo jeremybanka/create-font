@@ -237,6 +237,9 @@ importers:
 
   packages/source:
     dependencies:
+      '@create-font/fea-wasm':
+        specifier: workspace:*
+        version: link:../fea-wasm
       '@create-font/states':
         specifier: workspace:*
         version: link:../states

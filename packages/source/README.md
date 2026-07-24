@@ -70,6 +70,26 @@ schema implementation. The workspace server validates every unit before the
 browser receives it; the browser codec verifies index relationships and runs
 the whole-editor-source validator after assembly.
 
+Adobe feature source is parsed by the shared Rust/WebAssembly implementation
+from `@create-font/fea-wasm`. `parseFeaSyntax(source)` returns its complete
+lossless syntax tree, including trivia and UTF-8 byte ranges. `parseFea(source)`
+projects the substitution forms currently consumed by create-font into the
+existing source-located IR, whose ranges use JavaScript UTF-16 offsets. Node
+imports initialize the Wasm module synchronously; browser consumers initialize
+it once before parsing:
+
+```ts
+import {
+	initializeFeaParser,
+	parseFea,
+	parseFeaSyntax,
+} from "@create-font/source/browser"
+
+await initializeFeaParser()
+const syntax = parseFeaSyntax("feature liga { sub f i by f_i; } liga;")
+const substitutions = parseFea("feature liga { sub f i by f_i; } liga;")
+```
+
 ```ts
 import {
 	assembleEditorFontSource,
