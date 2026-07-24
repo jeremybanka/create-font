@@ -331,7 +331,10 @@ function penPreview(
 		point: roundPoint(state.startWorld, policy),
 		mode: "soft",
 		handles: {
-			incoming: { x: -outgoing.x, y: -outgoing.y },
+			incoming: {
+				x: canonicalZero(-outgoing.x),
+				y: canonicalZero(-outgoing.y),
+			},
 			outgoing,
 		},
 		distancePixels,

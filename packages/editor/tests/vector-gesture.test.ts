@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	reduceVectorGesture,
+	shouldCloseVectorPen,
 	type VectorGestureDown,
 	type VectorGestureDownInput,
 	type VectorGestureEvent,
@@ -131,6 +132,56 @@ describe("shared vector gesture reducer parity", () => {
 			mode: "soft",
 			handles: { outgoing: { x: 20, y: 12 } },
 		})
+	})
+
+	it("keeps Pen clicks hard, switches to symmetric handles at four pixels, and closes near the start", () => {
+		const click = down({ tool: "pen" })
+		const hard = transition(click.state, {
+			type: "pointer-up",
+			pointerId: 7,
+			pointer: pointer(13, 20, { screenX: 13, screenY: 20 }),
+		})
+		expect(hard.intent).toMatchObject({
+			kind: "pen-node",
+			mode: "hard",
+			handles: null,
+		})
+
+		const drag = down({ tool: "pen" })
+		const soft = transition(drag.state, {
+			type: "pointer-up",
+			pointerId: 7,
+			pointer: pointer(14, 20, { screenX: 14, screenY: 20 }),
+		})
+		expect(soft.intent).toMatchObject({
+			kind: "pen-node",
+			mode: "soft",
+			handles: {
+				incoming: { x: -4, y: 0 },
+				outgoing: { x: 4, y: 0 },
+			},
+		})
+		expect(
+			shouldCloseVectorPen(
+				[
+					{ x: 10, y: 20 },
+					{ x: 40, y: 20 },
+					{ x: 40, y: 50 },
+				],
+				{ x: 14, y: 20 },
+				2,
+			),
+		).toBe(true)
+		expect(
+			shouldCloseVectorPen(
+				[
+					{ x: 10, y: 20 },
+					{ x: 40, y: 20 },
+				],
+				{ x: 10, y: 20 },
+				2,
+			),
+		).toBe(false)
 	})
 
 	it.each(["rect", "ellipse"] as const)(

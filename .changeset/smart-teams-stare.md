@@ -4,4 +4,4 @@
 "@create-font/preact-konva": patch
 ---
 
-Add shared authoritative vector gesture state machines and interactive scene components for font and design editing.
+Add shared authoritative vector gesture state machines and interactive scene components for font and design editing, including complete Pen drafts, Bézier handles, cancellation, shape placement, selection, and transforms. Keep create-design persistence and history in its document adapter while deferring its Rule tool.

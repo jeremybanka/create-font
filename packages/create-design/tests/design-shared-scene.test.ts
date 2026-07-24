@@ -153,4 +153,82 @@ describe("create-design shared vector scene", () => {
 		if (saved === null) throw new Error("Design document was not persisted.")
 		expect(JSON.parse(saved).objects).toHaveLength(2)
 	})
+
+	it("commits a shared Pen draft with cubic handles and discards canceled drafts synchronously", async () => {
+		const stage = mountDesign()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (pen === null || canvas === null)
+			throw new Error("Pen controls were not found.")
+		act(() => pen.click())
+		const fire = (type: string, x: number, y: number, pointerId = 7): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", 360, 280)
+			fire("pointerup", 360, 280)
+			fire("pointerdown", 460, 340)
+			fire("pointermove", 485, 360)
+			await Promise.resolve()
+		})
+		expect(stage.find(".vector-handle").length).toBeGreaterThanOrEqual(2)
+		await act(async () => {
+			fire("pointerup", 485, 360)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
+			await Promise.resolve()
+		})
+		let saved = localStorage.getItem("create-design:document:v1")
+		if (saved === null) throw new Error("Design document was not persisted.")
+		let parsed = JSON.parse(saved)
+		expect(parsed.objects).toHaveLength(3)
+		const contour = parsed.objects.at(-1).contours[0]
+		expect(contour.closed).toBe(false)
+		expect(contour.points).toHaveLength(2)
+		expect("incoming" in contour.points[0]).toBe(false)
+		expect("outgoing" in contour.points[0]).toBe(false)
+		expect(contour.points[1]).toMatchObject({
+			incoming: expect.any(Object),
+			outgoing: expect.any(Object),
+		})
+		expect(
+			document.querySelector(".layer-list button.selected")?.textContent,
+		).toContain("Pen path")
+
+		await act(async () => {
+			fire("pointerdown", 520, 420, 8)
+			fire("pointermove", 550, 450, 8)
+			fire("pointercancel", 550, 450, 8)
+			fire("pointerup", 550, 450, 8)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
+			await Promise.resolve()
+		})
+		saved = localStorage.getItem("create-design:document:v1")
+		if (saved === null) throw new Error("Design document was not persisted.")
+		parsed = JSON.parse(saved)
+		expect(parsed.objects).toHaveLength(3)
+	})
 })
