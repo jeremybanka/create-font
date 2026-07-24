@@ -310,15 +310,11 @@ export function VectorPenPreview({
 					listening={false}
 				/>
 			)}
-			{nodes.map((candidate) => (
-				<VectorControlHandles
-					key={candidate.id}
-					node={candidate}
-					inverseScale={inverseScale}
-					color={color}
-					selected={candidate === node}
-				/>
-			))}
+			<VectorControlHandles
+				node={node}
+				inverseScale={inverseScale}
+				color={color}
+			/>
 		</Group>
 	)
 }

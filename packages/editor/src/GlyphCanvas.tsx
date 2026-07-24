@@ -2148,58 +2148,26 @@ export function GlyphCanvas({
 		})
 		const pointId = nextPenEntityId("point") as PointId
 		const coordinates = penCoordinates(point, gesture, draggedHandle)
-		const node = {
-			id: pointId,
-			mode: gesture.mode,
-			x: point.x,
-			y: point.y,
-			...(gesture.handles === null
-				? {}
-				: {
-						incoming: gesture.handles.incoming,
-						outgoing: gesture.handles.outgoing,
-					}),
-		} as const
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
-			if (
-				!applyActiveFontVectorIntent({
-					kind: "create-contour",
-					objectId: activeGlyphId,
-					contour: { id: contourId, closed: false, nodes: [node] },
-					variants: coordinates.map((coordinate) => ({
-						variantId: coordinate.masterId,
-						nodes: [
-							{
-								id: pointId,
-								mode: gesture.mode,
-								variantId: coordinate.masterId,
-								...coordinate,
-							},
-						],
-					})),
-				})
-			)
-				return
+			workspace.font.actions.createContour({
+				masterId: activeMasterId,
+				glyphId: activeGlyphId,
+				contourId,
+				point: { id: pointId, mode: gesture.mode },
+				coordinates,
+			})
 			penContourResumeRef.current = contourId
 			setPenContourId(contourId)
 		} else {
-			if (
-				!applyActiveFontVectorIntent({
-					kind: "insert-node",
-					objectId: activeGlyphId,
-					contourId: penContourId,
-					node,
-					...(penDirection === "prepend" ? { at: 0 } : {}),
-					variants: coordinates.map((coordinate) => ({
-						id: pointId,
-						mode: gesture.mode,
-						variantId: coordinate.masterId,
-						...coordinate,
-					})),
-				})
-			)
-				return
+			workspace.font.actions.insertPoint({
+				masterId: activeMasterId,
+				glyphId: activeGlyphId,
+				contourId: penContourId,
+				...(penDirection === "prepend" ? { at: 0 } : {}),
+				point: { id: pointId, mode: gesture.mode },
+				coordinates,
+			})
 			penContourResumeRef.current = penContourId
 		}
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
@@ -2225,24 +2193,21 @@ export function GlyphCanvas({
 			side: target.side,
 		})
 		if (!(target.mode === "hard" && gesture.kind === "click")) {
-			if (
-				!applyActiveFontVectorIntent({
-					kind: "author-endpoint",
-					objectId: activeGlyphId,
-					contourId: target.contourId,
-					pointId: target.pointId,
-					forwardHandle,
-					mode: resolution.mode,
-					variants: penCoordinates(target, gesture, forwardHandle).map(
-						(coordinate) => ({
-							variantId: coordinate.masterId,
-							forward:
-								gesture.kind === "click" ? null : coordinate[forwardHandle]!,
-						}),
-					),
-				})
-			)
-				return
+			workspace.font.actions.authorPenEndpoint({
+				masterId: activeMasterId,
+				glyphId: activeGlyphId,
+				contourId: target.contourId,
+				pointId: target.pointId,
+				forwardHandle,
+				mode: resolution.mode,
+				coordinates: penCoordinates(target, gesture, forwardHandle).map(
+					(coordinate) => ({
+						masterId: coordinate.masterId,
+						forward:
+							gesture.kind === "click" ? null : coordinate[forwardHandle]!,
+					}),
+				),
+			})
 		}
 		penContourResumeRef.current = target.contourId
 		setPenContourId(target.contourId)
@@ -2269,32 +2234,28 @@ export function GlyphCanvas({
 			direction: penDirection,
 		})
 		penContourResumeRef.current = penContourId
-		if (
-			!applyActiveFontVectorIntent({
-				kind: "close-contour",
-				objectId: activeGlyphId,
-				contourId: penContourId,
-				...(gesture.handles === null
-					? {}
-					: {
-							endpoint: {
-								side: penDirection === "prepend" ? "last" : "first",
-								pointId: closurePoint.pointId,
-								mode: "soft" as const,
-								variants: penCoordinates(
-									closurePoint,
-									gesture,
-									draggedHandle,
-								).map(({ masterId, incoming, outgoing }) => ({
-									variantId: masterId,
-									incoming: incoming!,
-									outgoing: outgoing!,
-								})),
-							},
-						}),
-			})
-		)
-			return
+		workspace.font.actions.closeContour({
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+			contourId: penContourId,
+			...(gesture.handles === null
+				? {}
+				: {
+						[penDirection === "prepend" ? "lastPoint" : "firstPoint"]: {
+							pointId: closurePoint.pointId,
+							mode: "soft" as const,
+							coordinates: penCoordinates(
+								closurePoint,
+								gesture,
+								draggedHandle,
+							).map(({ masterId, incoming, outgoing }) => ({
+								masterId,
+								incoming: incoming!,
+								outgoing: outgoing!,
+							})),
+						},
+					}),
+		})
 		setPenContourId(null)
 		setPenDirection("append")
 		setPenPointer(null)
@@ -5267,7 +5228,6 @@ export function GlyphCanvas({
 												}}
 												inverseScale={inverseScale}
 												color={palette.accent}
-												selected
 											/>
 										</Group>
 									)}

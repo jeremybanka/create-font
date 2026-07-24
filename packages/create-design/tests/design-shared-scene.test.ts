@@ -195,6 +195,9 @@ describe("create-design shared vector scene", () => {
 			fire("pointermove", 485, 360)
 			await Promise.resolve()
 		})
+		const penPreview = stage.findOne(".vector-pen-preview")
+		expect(penPreview).toBeDefined()
+		expect(penPreview.find(".vector-node-selection")).toHaveLength(0)
 		expect(stage.find(".vector-handle").length).toBeGreaterThanOrEqual(2)
 		await act(async () => {
 			fire("pointerup", 485, 360)
