@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	ellipseContour,
 	normalizedBounds,
+	objectBounds,
 	objectSvgPath,
 	rectangleContour,
 	scaleObject,
@@ -37,5 +38,29 @@ describe("design geometry", () => {
 		expect(
 			normalizedBounds({ x: 50, y: 50 }, { x: 80, y: 70 }, true, true),
 		).toEqual({ minX: 20, minY: 20, maxX: 80, maxY: 80 })
+	})
+
+	it("includes Pen handle endpoints in transform bounds", () => {
+		expect(
+			objectBounds({
+				id: "pen",
+				name: "Pen",
+				fillId: "swatch:coral",
+				contours: [
+					{
+						closed: false,
+						points: [
+							{
+								x: 50,
+								y: 60,
+								incoming: { x: -30, y: -40 },
+								outgoing: { x: 80, y: 90 },
+							},
+							{ x: 200, y: 180 },
+						],
+					},
+				],
+			}),
+		).toEqual({ minX: 20, minY: 20, maxX: 200, maxY: 180 })
 	})
 })

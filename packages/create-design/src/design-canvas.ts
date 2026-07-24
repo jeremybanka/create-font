@@ -270,7 +270,7 @@ const anchors = (bounds: Bounds, axis: "x" | "y") =>
 
 export function snapDesignObject(
 	object: DesignObject,
-	document: Pick<DesignDocument, "guides" | "page">,
+	document: Pick<DesignDocument, "page">,
 	worldScale: number,
 	thresholdPixels = 7,
 ): DesignSnapResult {
@@ -281,17 +281,11 @@ export function snapDesignObject(
 		{ id: "page:left", value: 0 },
 		{ id: "page:center-x", value: document.page.width / 2 },
 		{ id: "page:right", value: document.page.width },
-		...document.guides
-			.filter((guide) => guide.axis === "x")
-			.map((guide) => ({ id: guide.id, value: guide.value })),
 	]
 	const yTargets = [
 		{ id: "page:top", value: 0 },
 		{ id: "page:center-y", value: document.page.height / 2 },
 		{ id: "page:bottom", value: document.page.height },
-		...document.guides
-			.filter((guide) => guide.axis === "y")
-			.map((guide) => ({ id: guide.id, value: guide.value })),
 	]
 	const xSnap = rankAxisCandidate(
 		0,

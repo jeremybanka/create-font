@@ -30,4 +30,31 @@ describe("PDF export", () => {
 		expect(pdf).toContain("xref")
 		expect(pdf.endsWith("%%EOF\n")).toBe(true)
 	})
+
+	it("exports curved Pen contours with fill-only cubic geometry", () => {
+		const document = createInitialDocument()
+		const content = pdfContentStream({
+			...document,
+			objects: [
+				{
+					id: "object:pen",
+					name: "Pen",
+					fillId: "swatch:coral",
+					contours: [
+						{
+							closed: false,
+							points: [
+								{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
+								{ x: 160, y: 120, incoming: { x: -30, y: -20 } },
+								{ x: 80, y: 200 },
+							],
+						},
+					],
+				},
+			],
+		})
+		expect(content).toContain("70 722 130 692 160 672 c")
+		expect(content).toContain("f*")
+		expect(content).not.toMatch(/(^|\n)S($|\n)/)
+	})
 })
