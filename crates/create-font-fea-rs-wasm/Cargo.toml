@@ -1,11 +1,11 @@
 [package]
-name = "create-font-fea-parser"
+name = "create-font-fea-rs-wasm"
 version = "0.1.0"
 edition.workspace = true
 publish = false
 repository.workspace = true
 rust-version.workspace = true
-description = "Browser and Node interface for create-font Adobe feature parsing"
+description = "WebAssembly bindings for fea-rs and create-font Adobe feature formatting"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

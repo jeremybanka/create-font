@@ -169,7 +169,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "create-font-fea-parser"
+name = "create-font-fea-rs-wasm"
 version = "0.1.0"
 dependencies = [
  "create-font-fea",

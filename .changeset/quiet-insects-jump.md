@@ -3,4 +3,4 @@
 "create-font": patch
 ---
 
-Replace the transitional TypeScript Adobe feature parser with the shared Rust and WebAssembly parser in Node and browser consumers.
+Replace the transitional TypeScript Adobe feature parser with upstream fea-rs through shared WebAssembly bindings in Node and browser consumers.

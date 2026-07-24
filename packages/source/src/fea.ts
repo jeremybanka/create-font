@@ -1,4 +1,4 @@
-import { parseFea as parseFeaWithBinding } from "@create-font/fea-parser/node"
+import { parseFea as parseFeaWithBinding } from "@create-font/fea-rs-wasm/node"
 
 import { createFeaApi } from "./fea-core.ts"
 
@@ -21,8 +21,8 @@ export {
 
 const api = createFeaApi(parseFeaWithBinding)
 
-/** Parses Adobe feature syntax through the shared Rust parser. */
+/** Projects Adobe feature syntax from the shared `fea-rs` binding. */
 export const parseFea = api.parseFea
 
-/** Returns the complete lossless Rust syntax document. */
+/** Returns the complete lossless concrete syntax document from `fea-rs`. */
 export const parseFeaSyntax = api.parseFeaSyntax

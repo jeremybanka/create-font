@@ -1,5 +1,5 @@
 ---
-"@create-font/fea-parser": patch
+"@create-font/fea-rs-wasm": patch
 ---
 
-Add the Rust-powered Adobe Feature File parser, lossless syntax tree, and formatter for Node and browsers.
+Add WebAssembly bindings for the upstream fea-rs concrete syntax tree and the create-font Adobe Feature File formatter for Node and browsers.

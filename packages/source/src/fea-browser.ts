@@ -1,7 +1,7 @@
 import initializeParserModule, {
 	parseFea as parseFeaWithBinding,
 	type InitInput,
-} from "@create-font/fea-parser/web"
+} from "@create-font/fea-rs-wasm/web"
 
 import { createFeaApi, type FeaParserBinding } from "./fea-core.ts"
 
@@ -25,7 +25,7 @@ export {
 let initialized = false
 let initialization: Promise<void> | undefined
 
-/** Initializes the browser WebAssembly parser once. */
+/** Initializes the browser WebAssembly bindings once. */
 export function initializeFeaParser(input?: InitInput): Promise<void> {
 	initialization ??= initializeParserModule(input)
 		.then(() => {
@@ -41,14 +41,14 @@ export function initializeFeaParser(input?: InitInput): Promise<void> {
 const guardedParse: FeaParserBinding = (source) => {
 	if (!initialized)
 		throw new Error(
-			"Adobe feature parser is not initialized. Call initializeFeaParser() first.",
+			"Adobe feature bindings are not initialized. Call initializeFeaParser() first.",
 		)
 	return parseFeaWithBinding(source)
 }
 const api = createFeaApi(guardedParse)
 
-/** Parses Adobe feature syntax through the initialized Rust parser. */
+/** Projects Adobe feature syntax from the initialized `fea-rs` binding. */
 export const parseFea = api.parseFea
 
-/** Returns the complete lossless Rust syntax document. */
+/** Returns the complete lossless concrete syntax document from `fea-rs`. */
 export const parseFeaSyntax = api.parseFeaSyntax

@@ -11,9 +11,9 @@ const targetDirectory = join(
 	"wasm32-unknown-unknown",
 	"release",
 )
-const packageDirectory = join(workspaceRoot, "packages", "fea-parser")
+const packageDirectory = join(workspaceRoot, "packages", "fea-rs-wasm")
 const distributionDirectory = join(packageDirectory, "dist")
-const bindingsName = "create_font_fea_parser"
+const bindingsName = "create_font_fea_rs_wasm"
 const packageManifest = JSON.parse(
 	readFileSync(join(packageDirectory, "package.json"), "utf8"),
 ) as { name: string; version: string }
@@ -32,7 +32,7 @@ runMise("cargo", [
 	"--target",
 	"wasm32-unknown-unknown",
 	"-p",
-	"create-font-fea-parser",
+	"create-font-fea-rs-wasm",
 ])
 
 const bindingsInput = join(targetDirectory, `${bindingsName}.wasm`)
@@ -70,7 +70,7 @@ const runtimeTargets = Object.fromEntries(
 	}),
 )
 writeFileSync(
-	join(distributionDirectory, "create-font-fea-parser.json"),
+	join(distributionDirectory, "create-font-fea-rs-wasm.json"),
 	`${JSON.stringify(
 		{
 			schemaVersion: 1,

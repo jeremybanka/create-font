@@ -1,7 +1,7 @@
 [workspace]
 members = [
 	"crates/create-font-fea",
-	"crates/create-font-fea-parser",
+	"crates/create-font-fea-rs-wasm",
 	"crates/dprint-plugin-fea",
 ]
 resolver = "3"

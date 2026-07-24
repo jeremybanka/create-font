@@ -1,4 +1,4 @@
-//! JavaScript boundary for create-font Adobe Feature File parsing and formatting.
+//! WebAssembly bindings for `fea-rs` parsing and create-font formatting.
 
 use create_font_fea::{ABI_VERSION, FormatConfig};
 use wasm_bindgen::prelude::*;
@@ -10,7 +10,7 @@ pub fn abi_version() -> u32 {
     ABI_VERSION
 }
 
-/// Parses one feature source into the versioned lossless syntax payload.
+/// Runs `fea-rs` and serializes its concrete syntax tree into the versioned ABI.
 ///
 /// # Errors
 ///

@@ -60,13 +60,13 @@ pub struct Diagnostic {
     pub range: SourceRange,
 }
 
-/// A recursively lossless syntax node or token.
+/// A serializable node or token projected from the lossless `fea-rs` tree.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum SyntaxElement {
-    /// A typed node produced by `fea-rs`.
+    /// A concrete syntax node produced by `fea-rs`.
     Node {
-        /// Stable node kind name.
+        /// Node kind name from the pinned `fea-rs` release.
         kind: String,
         /// Source byte range.
         range: SourceRange,
@@ -135,7 +135,7 @@ impl SyntaxElement {
     }
 }
 
-/// Complete result of parsing one `.fea` source.
+/// Serializable projection of one `fea-rs` parse result.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParseOutput {

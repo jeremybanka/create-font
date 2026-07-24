@@ -12,7 +12,7 @@ describe("Adobe feature browser parser adapter", () => {
 	test("initializes once and drives syntax plus semantic projection", async () => {
 		const bytes = await readFile(
 			new URL(
-				"../../fea-parser/dist/web/create_font_fea_parser_bg.wasm",
+				"../../fea-rs-wasm/dist/web/create_font_fea_rs_wasm_bg.wasm",
 				import.meta.url,
 			),
 		)

@@ -6,7 +6,7 @@ export interface FeaSourceRange {
 	readonly column: number
 }
 
-/** A half-open UTF-8 byte range returned by the Rust parser. */
+/** A half-open UTF-8 byte range returned by the `fea-rs` binding. */
 export interface FeaSyntaxRange {
 	readonly start: number
 	readonly end: number
@@ -305,9 +305,11 @@ export function createFeaApi(parseWithBinding: FeaParserBinding): {
 	const parseFeaSyntax = (source: string): FeaSyntaxDocument => {
 		const parsed: unknown = JSON.parse(parseWithBinding(source))
 		if (!isSyntaxDocument(parsed))
-			throw new Error("Unsupported Adobe feature parser ABI.")
+			throw new Error("Unsupported Adobe feature binding ABI.")
 		if (parsed.sourceLen !== new TextEncoder().encode(source).length)
-			throw new Error("Adobe feature parser returned an invalid source length.")
+			throw new Error(
+				"Adobe feature binding returned an invalid source length.",
+			)
 		return parsed
 	}
 	const parseFea = (source: string): FeaParseResult => {

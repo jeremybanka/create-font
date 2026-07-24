@@ -39,7 +39,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"@create-font/fea-parser": "workspace:*",
+		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"zod": "4.4.3"
 	},

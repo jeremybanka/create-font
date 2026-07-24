@@ -203,7 +203,7 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/fea-parser:
+  packages/fea-rs-wasm:
     devDependencies:
       vitest:
         specifier: 4.1.10
@@ -246,9 +246,9 @@ importers:
 
   packages/source:
     dependencies:
-      '@create-font/fea-parser':
+      '@create-font/fea-rs-wasm':
         specifier: workspace:*
-        version: link:../fea-parser
+        version: link:../fea-rs-wasm
       '@create-font/states':
         specifier: workspace:*
         version: link:../states
