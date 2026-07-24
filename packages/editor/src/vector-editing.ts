@@ -185,6 +185,40 @@ export type VectorEditIntent =
 			readonly handle: VectorHandleKind
 			readonly vector: VectorPoint
 	  }>
+	| Readonly<{
+			readonly kind: "slide-node"
+			readonly objectId: string
+			readonly pointId: string
+			readonly x: number
+			readonly y: number
+			readonly handles: readonly Readonly<{
+				readonly handle: VectorHandleKind
+				readonly x: number
+				readonly y: number
+			}>[]
+			readonly unboundedDirection?: VectorPoint
+	  }>
+	| Readonly<{
+			readonly kind: "join-contours"
+			readonly objectId: string
+			readonly draggedContourId: string
+			readonly draggedPointId: string
+			readonly targetContourId: string
+			readonly targetPointId: string
+			readonly transform?: Readonly<{
+				readonly points: readonly Readonly<{
+					readonly pointId: string
+					readonly x: number
+					readonly y: number
+				}>[]
+				readonly handles: readonly Readonly<{
+					readonly pointId: string
+					readonly handle: VectorHandleKind
+					readonly x: number
+					readonly y: number
+				}>[]
+			}>
+	  }>
 
 export type VectorEditResult<Document, Selection> =
 	| Readonly<{

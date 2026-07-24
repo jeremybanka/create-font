@@ -503,6 +503,57 @@ function applyFontVectorIntent(
 			})
 			return { ok: true }
 		}
+		if (intent.kind === "slide-node") {
+			if (intent.objectId !== context.glyphId)
+				return {
+					ok: false,
+					error: `The node does not belong to glyph ${context.glyphId}.`,
+				}
+			workspace.font.actions.slideSoftNode({
+				masterId: context.masterId,
+				glyphId: context.glyphId,
+				pointId: intent.pointId as PointId,
+				x: intent.x,
+				y: intent.y,
+				handles: intent.handles,
+				...(intent.unboundedDirection === undefined
+					? {}
+					: { unboundedDirection: intent.unboundedDirection }),
+			})
+			return { ok: true }
+		}
+		if (intent.kind === "join-contours") {
+			if (intent.objectId !== context.glyphId)
+				return {
+					ok: false,
+					error: `The contours do not belong to glyph ${context.glyphId}.`,
+				}
+			workspace.font.actions.joinOpenContours({
+				masterId: context.masterId,
+				glyphId: context.glyphId,
+				draggedContourId: intent.draggedContourId as ContourId,
+				draggedPointId: intent.draggedPointId as PointId,
+				targetContourId: intent.targetContourId as ContourId,
+				targetPointId: intent.targetPointId as PointId,
+				...(intent.transform === undefined
+					? {}
+					: {
+							transform: {
+								masterId: context.masterId,
+								glyphId: context.glyphId,
+								points: intent.transform.points.map((point) => ({
+									...point,
+									pointId: point.pointId as PointId,
+								})),
+								handles: intent.transform.handles.map((handle) => ({
+									...handle,
+									pointId: handle.pointId as PointId,
+								})),
+							},
+						}),
+			})
+			return { ok: true }
+		}
 		if (intent.kind === "delete" && intent.controls !== undefined) {
 			workspace.font.actions.deleteSelection({
 				glyphId: context.glyphId,

@@ -55,3 +55,36 @@ export {
 	type VectorStyle,
 	type VectorVariantNode,
 } from "./vector-editing.ts"
+export {
+	reduceVectorGesture,
+	shouldCloseVectorPen,
+	VECTOR_PEN_CLOSE_RADIUS_PIXELS,
+	type VectorGestureCommitIntent,
+	type VectorGestureDown,
+	type VectorGestureDownInput,
+	type VectorGestureEvent,
+	type VectorGestureModifiers,
+	type VectorGesturePolicy,
+	type VectorGesturePreview,
+	type VectorGestureState,
+	type VectorGestureTool,
+	type VectorGestureTransition,
+	type VectorSnapGuide,
+	type VectorTransformHandle,
+} from "./vector-gesture.ts"
+export {
+	rotateVectorObject,
+	scaleVectorObject,
+	translateVectorObject,
+	vectorObjectPath,
+	vectorShapeNodes,
+	type VectorBounds,
+} from "./vector-scene.ts"
+export {
+	VectorContourPath,
+	VectorControlHandles,
+	VectorPenPreview,
+	VectorSelectionBounds,
+	VectorShapePreview,
+	VectorSnapGuides,
+} from "./VectorScene.tsx"

@@ -154,6 +154,22 @@ import {
 	TRANSFORM_ROTATION_SNAP_DEGREES,
 } from "./transform-gesture.ts"
 import {
+	reduceVectorGesture,
+	type VectorGestureModifiers,
+	type VectorGesturePreview,
+	type VectorGestureState,
+	type VectorSnapGuide,
+	type VectorTransformHandle,
+} from "./vector-gesture.ts"
+import {
+	VectorContourPath,
+	VectorControlHandles,
+	VectorPenPreview,
+	VectorSelectionBounds,
+	VectorShapePreview,
+	VectorSnapGuides,
+} from "./VectorScene.tsx"
+import {
 	createFontVectorAdapter,
 	createFontVectorDocumentAdapter,
 	fontOutlineClipboardFromVector,
@@ -473,6 +489,16 @@ export function GlyphCanvas({
 	const [momentaryPreview, setMomentaryPreview] = useState(false)
 	const [transformPreview, setTransformPreview] =
 		useState<SelectionTransformResult | null>(null)
+	const [sharedGesturePreview, setSharedGesturePreview] =
+		useState<VectorGesturePreview | null>(null)
+	const sharedGestureRef = useRef<VectorGestureState | null>(null)
+	const sharedGesturePolicy = useMemo(
+		() => ({
+			yAxis: "up" as const,
+			rotationSnapDegrees: TRANSFORM_ROTATION_SNAP_DEGREES,
+		}),
+		[],
+	)
 	const groupDragRef = useRef<GroupDrag | null>(null)
 	const [penContourId, setPenContourId] = useState<ContourId | null>(null)
 	const [penDirection, setPenDirection] = useState<"append" | "prepend">(
@@ -787,6 +813,32 @@ export function GlyphCanvas({
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
 	const contourPaintPaths = editorContourPaintPaths(visibleContours)
+	const fontVectorSnapshot =
+		activeGlyphId === null || layer === null
+			? null
+			: createFontVectorDocumentAdapter(workspace, {
+					masterId: activeMasterId,
+					glyphId: activeGlyphId,
+				}).project(layer, selection)
+	const fontVectorObject = fontVectorSnapshot?.objects[0] ?? null
+	const closedFontVectorObject =
+		fontVectorObject === null
+			? null
+			: {
+					...fontVectorObject,
+					contours: fontVectorObject.contours.filter(
+						(contour) => contour.closed,
+					),
+				}
+	const openFontVectorObject =
+		fontVectorObject === null
+			? null
+			: {
+					...fontVectorObject,
+					contours: fontVectorObject.contours.filter(
+						(contour) => !contour.closed,
+					),
+				}
 	const metricGuides = useMemo(
 		() => resolveVerticalMetricGuides(metrics),
 		[metrics],
@@ -1006,6 +1058,38 @@ export function GlyphCanvas({
 			x: event.evt.offsetX,
 			y: event.evt.offsetY,
 		}
+	const sharedModifiers = (
+		event: Pick<MouseEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
+	): VectorGestureModifiers => ({
+		shiftKey: event.shiftKey,
+		altKey: event.altKey,
+		additive: event.shiftKey || event.metaKey || event.ctrlKey,
+	})
+	const sharedPointer = (
+		event: KonvaEventObject<PointerEvent>,
+		world: PenPoint,
+		rawWorld: PenPoint = world,
+		snaps: readonly VectorSnapGuide[] = [],
+	) => ({
+		world,
+		rawWorld,
+		screen: pointerOnCanvas(event),
+		modifiers: sharedModifiers(event.evt),
+		snaps,
+	})
+	const sharedMousePointer = (
+		event: KonvaEventObject<MouseEvent>,
+		world: PenPoint,
+	) => ({
+		world,
+		rawWorld: world,
+		screen: event.target.getStage()?.getPointerPosition() ?? {
+			x: event.evt.offsetX,
+			y: event.evt.offsetY,
+		},
+		modifiers: sharedModifiers(event.evt),
+		snaps: [],
+	})
 	const currentPenContour =
 		(penGesture?.endpoint?.contourId ?? penContourId) === null
 			? undefined
@@ -1191,6 +1275,29 @@ export function GlyphCanvas({
 				: activeShapeKind !== null
 					? shapeSnapsForDisplay(shapeGesture, shapeHoverSnaps)
 					: activeSnaps
+	const sharedVisibleSnapGuides: readonly VectorSnapGuide[] = visibleSnaps.map(
+		(snap) => ({
+			id: `${snap.axis}:${snap.kind}:${snap.id}`,
+			axis: snap.axis === "projection" ? "line" : snap.axis,
+			points:
+				snap.axis === "projection"
+					? projectionGuidePoints(snap, activeSnapGuideExtent)
+					: snap.axis === "x"
+						? [
+								snap.value,
+								-activeSnapGuideExtent,
+								snap.value,
+								activeSnapGuideExtent,
+							]
+						: [
+								-activeSnapGuideExtent,
+								snap.value,
+								activeSnapGuideExtent,
+								snap.value,
+							],
+			label: snap.label,
+		}),
+	)
 	const rememberTangentDirection = (
 		constraint: TangentSlideConstraint,
 	): void => {
@@ -1516,6 +1623,24 @@ export function GlyphCanvas({
 	useEffect(() => {
 		const updateModifier = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
+			const shared = sharedGestureRef.current
+			if (shared !== null) {
+				const transition = reduceVectorGesture(
+					shared,
+					{
+						type: "modifiers",
+						pointerId: shared.pointerId,
+						modifiers: {
+							shiftKey: event.shiftKey,
+							altKey: event.altKey,
+							additive: event.shiftKey || event.metaKey || event.ctrlKey,
+						},
+					},
+					sharedGesturePolicy,
+				)
+				sharedGestureRef.current = transition.state
+				setSharedGesturePreview(transition.preview)
+			}
 			const shape = shapeGestureRef.current
 			if (shape !== null) {
 				shape.shiftKey = event.shiftKey
@@ -1754,6 +1879,24 @@ export function GlyphCanvas({
 		) {
 			applyHandleDrag(handleDrag, handleDrag.lastRawEndpoint, shiftHeld)
 		}
+		const shared = sharedGestureRef.current
+		if (shared !== null) {
+			const transition = reduceVectorGesture(
+				shared,
+				{
+					type: "modifiers",
+					pointerId: shared.pointerId,
+					modifiers: {
+						shiftKey: shiftHeld,
+						altKey: altHeld,
+						additive: shiftHeld,
+					},
+				},
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = transition.state
+			setSharedGesturePreview(transition.preview)
+		}
 	}, [altHeld, shiftHeld])
 
 	const applyActiveFontVectorIntent = (intent: VectorEditIntent): boolean => {
@@ -1771,9 +1914,9 @@ export function GlyphCanvas({
 		if (activeGlyphId === null) return
 		const point = resolution.points[0]
 		if (point === undefined) return
-		workspace.font.actions.slideSoftNode({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
+		applyActiveFontVectorIntent({
+			kind: "slide-node",
+			objectId: activeGlyphId,
 			pointId: point.pointId,
 			x: point.x,
 			y: point.y,
@@ -1803,9 +1946,9 @@ export function GlyphCanvas({
 			})
 			return
 		}
-		workspace.font.actions.joinOpenContours({
-			masterId: drag.masterId,
-			glyphId: drag.glyphId,
+		applyActiveFontVectorIntent({
+			kind: "join-contours",
+			objectId: drag.glyphId,
 			draggedContourId: drag.contourId,
 			draggedPointId: drag.pointId,
 			targetContourId: drag.joinTarget.contourId,
@@ -2223,6 +2366,16 @@ export function GlyphCanvas({
 		penPreviewPublisher.cancel()
 		penHoverRef.current = null
 		const gesture = penGestureRef.current
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "pen") {
+			reduceVectorGesture(
+				shared,
+				{ type: "pointer-cancel", pointerId: shared.pointerId },
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = null
+			setSharedGesturePreview(null)
+		}
 		penGestureRef.current = null
 		setPenGesture(null)
 		setPenPointer(null)
@@ -2269,6 +2422,19 @@ export function GlyphCanvas({
 			shiftKey: event.evt.shiftKey,
 			altKey: event.evt.altKey,
 		}
+		const shared = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: "pen",
+				pointerId: event.evt.pointerId,
+				pointer: sharedPointer(event, gesture.point),
+				targetId: activeGlyphId,
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = shared.state
+		setSharedGesturePreview(shared.preview)
 		penGestureRef.current = gesture
 		nativeTarget?.addEventListener("pointercancel", captureCancelListener)
 		nativeTarget?.addEventListener("lostpointercapture", captureCancelListener)
@@ -2283,6 +2449,21 @@ export function GlyphCanvas({
 			gesture.currentScreen = pointerOnCanvas(event)
 			gesture.shiftKey = event.evt.shiftKey
 			gesture.altKey = event.evt.altKey
+			const shared = sharedGestureRef.current
+			const world = pointerInEditingGlyph(event) ?? gesture.point
+			if (shared?.tool === "pen") {
+				const transition = reduceVectorGesture(
+					shared,
+					{
+						type: "pointer-move",
+						pointerId: event.evt.pointerId,
+						pointer: sharedPointer(event, world),
+					},
+					sharedGesturePolicy,
+				)
+				sharedGestureRef.current = transition.state
+				setSharedGesturePreview(transition.preview)
+			}
 			schedulePenGesturePreview(gesture)
 			return
 		}
@@ -2309,12 +2490,51 @@ export function GlyphCanvas({
 		const pending = penPreviewPublisher.consume()
 		const latestGesture =
 			pending?.kind === "gesture" ? pending.gesture : { ...gesture }
-		const resolution = resolvePenGesture({
-			downScreen: latestGesture.downScreen,
-			currentScreen: latestGesture.currentScreen,
-			worldScale,
-			shiftKey: latestGesture.shiftKey,
-		})
+		const shared = sharedGestureRef.current
+		const world = pointerInEditingGlyph(event) ?? latestGesture.point
+		const transition =
+			shared?.tool === "pen"
+				? reduceVectorGesture(
+						shared,
+						{
+							type: "pointer-up",
+							pointerId: event.evt.pointerId,
+							pointer: sharedPointer(event, world),
+						},
+						sharedGesturePolicy,
+					)
+				: null
+		const sharedIntent =
+			transition?.intent?.kind === "pen-node" ? transition.intent : null
+		const resolution: PenGestureResolution =
+			sharedIntent === null
+				? resolvePenGesture({
+						downScreen: latestGesture.downScreen,
+						currentScreen: latestGesture.currentScreen,
+						worldScale,
+						shiftKey: latestGesture.shiftKey,
+					})
+				: sharedIntent.handles === null
+					? {
+							kind: "click",
+							mode: "hard",
+							handles: null,
+							distancePixels: 0,
+						}
+					: {
+							kind: "curve",
+							mode: "soft",
+							handles: {
+								incoming: sharedIntent.handles.incoming!,
+								outgoing: sharedIntent.handles.outgoing!,
+							},
+							distancePixels: Math.hypot(
+								latestGesture.currentScreen.x - latestGesture.downScreen.x,
+								latestGesture.currentScreen.y - latestGesture.downScreen.y,
+							),
+						}
+		sharedGestureRef.current = null
+		setSharedGesturePreview(null)
 		penGestureRef.current = null
 		setPenGesture(null)
 		if (latestGesture.endpoint !== null) {
@@ -2351,6 +2571,16 @@ export function GlyphCanvas({
 	const cancelShapeGesture = (): void => {
 		shapePreviewPublisher.cancel()
 		const gesture = shapeGestureRef.current
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "rect" || shared?.tool === "ellipse") {
+			reduceVectorGesture(
+				shared,
+				{ type: "pointer-cancel", pointerId: shared.pointerId },
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = null
+			setSharedGesturePreview(null)
+		}
 		shapeGestureRef.current = null
 		setShapeGesture(null)
 		setShapeHoverSnaps([])
@@ -2393,6 +2623,18 @@ export function GlyphCanvas({
 			shiftKey: event.evt.shiftKey,
 			altKey: event.evt.altKey,
 		}
+		const shared = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: activeShapeKind,
+				pointerId: event.evt.pointerId,
+				pointer: sharedPointer(event, anchor),
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = shared.state
+		setSharedGesturePreview(shared.preview)
 		shapeGestureRef.current = gesture
 		nativeTarget?.addEventListener("pointercancel", captureCancelListener)
 		nativeTarget?.addEventListener("lostpointercapture", captureCancelListener)
@@ -2426,6 +2668,24 @@ export function GlyphCanvas({
 		gesture.shiftKey = event.evt.shiftKey
 		gesture.altKey = event.evt.altKey
 		gesture.direction = resolveLiveShape(gesture).direction
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "rect" || shared?.tool === "ellipse") {
+			const transition = reduceVectorGesture(
+				shared,
+				{
+					type: "pointer-move",
+					pointerId: event.evt.pointerId,
+					pointer: sharedPointer(
+						event,
+						gesture.snappedCandidate,
+						gesture.rawCandidate,
+					),
+				},
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = transition.state
+			setSharedGesturePreview(transition.preview)
+		}
 		shapePreviewPublisher.schedule({ ...gesture })
 		return gesture
 	}
@@ -2434,7 +2694,39 @@ export function GlyphCanvas({
 		if (liveGesture === null) return
 		const pending = shapePreviewPublisher.consume()
 		const gesture = pending ?? { ...liveGesture }
-		const resolution = resolveLiveShape(gesture)
+		const shared = sharedGestureRef.current
+		const transition =
+			shared?.tool === "rect" || shared?.tool === "ellipse"
+				? reduceVectorGesture(
+						shared,
+						{
+							type: "pointer-up",
+							pointerId: event.evt.pointerId,
+							pointer: sharedPointer(
+								event,
+								gesture.snappedCandidate,
+								gesture.rawCandidate,
+							),
+						},
+						sharedGesturePolicy,
+					)
+				: null
+		const sharedIntent =
+			transition?.intent?.kind === "shape" ? transition.intent : null
+		const resolution =
+			sharedIntent === null
+				? resolveLiveShape(gesture)
+				: {
+						bounds: sharedIntent.bounds,
+						direction: gesture.direction,
+						distancePixels: Math.hypot(
+							gesture.currentScreen.x - gesture.downScreen.x,
+							gesture.currentScreen.y - gesture.downScreen.y,
+						),
+						valid: true,
+					}
+		sharedGestureRef.current = null
+		setSharedGesturePreview(null)
 		shapeGestureRef.current = null
 		setShapeGesture(null)
 		shapeHoverPublisher.schedule(
@@ -2552,6 +2844,16 @@ export function GlyphCanvas({
 		setDraggedHandle(null)
 		setJoinTarget(null)
 		setActiveSnaps([])
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "select") {
+			reduceVectorGesture(
+				shared,
+				{ type: "pointer-cancel", pointerId: shared.pointerId },
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = null
+			setSharedGesturePreview(null)
+		}
 		return true
 	}
 	const groupDragCapture = (): Pick<
@@ -2635,6 +2937,27 @@ export function GlyphCanvas({
 			joinCandidate: null,
 		}
 		groupDragRef.current = nextGroupDrag
+		const shared = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: "select",
+				pointerId: nextGroupDrag.pointerId ?? -2,
+				pointer: {
+					world: { x: targetX, y: targetY },
+					screen: { x: 0, y: 0 },
+					modifiers: {
+						shiftKey: shiftHeld,
+						altKey: altHeld,
+						additive: false,
+					},
+				},
+				targetId: activeGlyphId,
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = shared.state
+		setSharedGesturePreview(shared.preview)
 		return true
 	}
 	const beginSegmentGroupDrag = (
@@ -2674,6 +2997,40 @@ export function GlyphCanvas({
 		}
 		return true
 	}
+	const updateSharedSelectGesture = (
+		delta: Readonly<{ x: number; y: number }>,
+		shiftKey: boolean,
+		altKey: boolean,
+	): void => {
+		const shared = sharedGestureRef.current
+		if (shared?.tool !== "select") return
+		const transition = reduceVectorGesture(
+			shared,
+			{
+				type: "pointer-move",
+				pointerId: shared.pointerId,
+				pointer: {
+					world: {
+						x: shared.startWorld.x + delta.x,
+						y: shared.startWorld.y + delta.y,
+					},
+					rawWorld: {
+						x: shared.startWorld.x + delta.x,
+						y: shared.startWorld.y + delta.y,
+					},
+					screen: {
+						x: shared.startScreen.x + delta.x * worldScale,
+						y: shared.startScreen.y - delta.y * worldScale,
+					},
+					modifiers: { shiftKey, altKey, additive: false },
+					snaps: [],
+				},
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = transition.state
+		setSharedGesturePreview(transition.preview)
+	}
 	const applyGroupDrag = (
 		currentGroupDrag: GroupDrag,
 		rawDelta: Readonly<{ x: number; y: number }>,
@@ -2710,6 +3067,7 @@ export function GlyphCanvas({
 				x: currentGroupDrag.targetX + delta.x,
 				y: currentGroupDrag.targetY + delta.y,
 			})
+			updateSharedSelectGesture(delta, shiftKey, altKey)
 			return { preview, snaps: [] }
 		}
 		const deltaConstraint = orthogonalConstraint(
@@ -2763,6 +3121,7 @@ export function GlyphCanvas({
 			x: currentGroupDrag.targetX + deltaX,
 			y: currentGroupDrag.targetY + deltaY,
 		})
+		updateSharedSelectGesture({ x: deltaX, y: deltaY }, shiftKey, altKey)
 		return {
 			preview,
 			snaps: snapped.snaps,
@@ -2856,6 +3215,23 @@ export function GlyphCanvas({
 			activeGlyphId === null
 		)
 			return false
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "select")
+			reduceVectorGesture(
+				shared,
+				{
+					type: "pointer-up",
+					pointerId: shared.pointerId,
+					pointer: {
+						world: shared.currentWorld,
+						rawWorld: shared.rawCurrentWorld,
+						screen: shared.currentScreen,
+						modifiers: shared.modifiers,
+						snaps: shared.snaps,
+					},
+				},
+				sharedGesturePolicy,
+			)
 		const candidate = currentGroupDrag.joinCandidate
 		let didCommit = false
 		try {
@@ -2865,16 +3241,14 @@ export function GlyphCanvas({
 					...resolved.preview,
 				})
 			} else {
-				workspace.font.actions.joinOpenContours({
-					masterId: currentGroupDrag.masterId,
-					glyphId: currentGroupDrag.glyphId,
+				applyActiveFontVectorIntent({
+					kind: "join-contours",
+					objectId: currentGroupDrag.glyphId,
 					draggedContourId: candidate.sourceContourId,
 					draggedPointId: candidate.sourcePointId,
 					targetContourId: candidate.target.contourId,
 					targetPointId: candidate.target.pointId,
 					transform: {
-						masterId: currentGroupDrag.masterId,
-						glyphId: currentGroupDrag.glyphId,
 						...resolved.preview,
 					},
 				})
@@ -2903,17 +3277,44 @@ export function GlyphCanvas({
 			setJoinTarget(null)
 			setActiveSnaps([])
 			cancelledGroupDrag.current = null
+			sharedGestureRef.current = null
+			setSharedGesturePreview(null)
 		}
 		return true
 	}
 	const cancelTransform = (): boolean => {
 		if (transformDragRef.current === null) return false
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "transform") {
+			reduceVectorGesture(
+				shared,
+				{ type: "pointer-cancel", pointerId: shared.pointerId },
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = null
+			setSharedGesturePreview(null)
+		}
 		transformDragRef.current = null
 		setTransformDrag(null)
 		setTransformPreview(null)
 		setTransformCursor(null)
 		return true
 	}
+	const sharedTransformHandle = (
+		handle: TransformHandle,
+	): VectorTransformHandle =>
+		({
+			inside: "move",
+			rotation: "rotation",
+			north: "n",
+			"north-east": "ne",
+			east: "e",
+			"south-east": "se",
+			south: "s",
+			"south-west": "sw",
+			west: "w",
+			"north-west": "nw",
+		})[handle] as VectorTransformHandle
 	const beginTransform = (
 		handle: TransformHandle,
 		initialTarget?: Readonly<{ x: number; y: number }>,
@@ -2938,6 +3339,29 @@ export function GlyphCanvas({
 		}
 		transformDragRef.current = drag
 		setTransformDrag(drag)
+		const shared = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: "transform",
+				pointerId: -3,
+				pointer: {
+					world: { x: targetX, y: targetY },
+					screen: { x: 0, y: 0 },
+					modifiers: {
+						shiftKey: false,
+						altKey: false,
+						additive: false,
+					},
+				},
+				targetId: activeGlyphId ?? "glyph:inactive",
+				bounds,
+				handle: sharedTransformHandle(handle),
+			},
+			sharedGesturePolicy,
+		)
+		sharedGestureRef.current = shared.state
+		setSharedGesturePreview(shared.preview)
 	}
 	const resolveTransformPreview = (
 		drag: TransformDrag,
@@ -2987,6 +3411,29 @@ export function GlyphCanvas({
 		drag.targetY = event.target.y()
 		drag.shiftKey = event.evt.shiftKey
 		drag.altKey = event.evt.altKey
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "transform") {
+			const transition = reduceVectorGesture(
+				shared,
+				{
+					type: "pointer-move",
+					pointerId: shared.pointerId,
+					pointer: {
+						world: { x: drag.targetX, y: drag.targetY },
+						rawWorld: { x: drag.targetX, y: drag.targetY },
+						screen: {
+							x: (drag.targetX - drag.startX) * worldScale,
+							y: -(drag.targetY - drag.startY) * worldScale,
+						},
+						modifiers: sharedModifiers(event.evt),
+						snaps: [],
+					},
+				},
+				sharedGesturePolicy,
+			)
+			sharedGestureRef.current = transition.state
+			setSharedGesturePreview(transition.preview)
+		}
 		setTransformPreview(resolveTransformPreview(drag))
 	}
 	const commitTransform = (event?: KonvaEventObject<DragEvent>): void => {
@@ -3002,6 +3449,30 @@ export function GlyphCanvas({
 			drag.shiftKey = event.evt.shiftKey
 			drag.altKey = event.evt.altKey
 		}
+		const shared = sharedGestureRef.current
+		if (shared?.tool === "transform")
+			reduceVectorGesture(
+				shared,
+				{
+					type: "pointer-up",
+					pointerId: shared.pointerId,
+					pointer: {
+						world: { x: drag.targetX, y: drag.targetY },
+						rawWorld: { x: drag.targetX, y: drag.targetY },
+						screen: {
+							x: (drag.targetX - drag.startX) * worldScale,
+							y: -(drag.targetY - drag.startY) * worldScale,
+						},
+						modifiers: {
+							shiftKey: drag.shiftKey,
+							altKey: drag.altKey,
+							additive: false,
+						},
+						snaps: [],
+					},
+				},
+				sharedGesturePolicy,
+			)
 		const finalPreview = resolveTransformPreview(drag)
 		if (activeGlyphId !== null) {
 			applyActiveFontVectorIntent({
@@ -3012,6 +3483,8 @@ export function GlyphCanvas({
 		setTransformPreview(null)
 		transformDragRef.current = null
 		setTransformDrag(null)
+		sharedGestureRef.current = null
+		setSharedGesturePreview(null)
 	}
 	const selectWholeContour = (
 		contour: (typeof visibleContours)[number],
@@ -3479,6 +3952,16 @@ export function GlyphCanvas({
 					setDraggedHandle(null)
 					setJoinTarget(null)
 					setActiveSnaps([])
+					const shared = sharedGestureRef.current
+					if (shared?.tool === "select") {
+						reduceVectorGesture(
+							shared,
+							{ type: "pointer-cancel", pointerId: shared.pointerId },
+							sharedGesturePolicy,
+						)
+						sharedGestureRef.current = null
+						setSharedGesturePreview(null)
+					}
 					return
 				}
 				if (event.key === "Escape" && cancelPointDrag()) {
@@ -3812,6 +4295,19 @@ export function GlyphCanvas({
 							if (!canStartBoxSelectionOn(event.target.name())) return
 							const point = pointerInEditingGlyph(event)
 							if (point === null) return
+							const transition = reduceVectorGesture(
+								null,
+								{
+									type: "pointer-down",
+									tool: "select",
+									pointerId: -1,
+									pointer: sharedMousePointer(event, point),
+									targetId: null,
+								},
+								sharedGesturePolicy,
+							)
+							sharedGestureRef.current = transition.state
+							setSharedGesturePreview(transition.preview)
 							setSelectionBox({
 								startX: point.x,
 								startY: point.y,
@@ -3842,6 +4338,20 @@ export function GlyphCanvas({
 						if (selectionBox === null) return
 						const point = pointerInEditingGlyph(event)
 						if (point === null) return
+						const shared = sharedGestureRef.current
+						if (shared?.tool === "select") {
+							const transition = reduceVectorGesture(
+								shared,
+								{
+									type: "pointer-move",
+									pointerId: -1,
+									pointer: sharedMousePointer(event, point),
+								},
+								sharedGesturePolicy,
+							)
+							sharedGestureRef.current = transition.state
+							setSharedGesturePreview(transition.preview)
+						}
 						setSelectionBox((current) =>
 							current === null
 								? null
@@ -3854,6 +4364,17 @@ export function GlyphCanvas({
 						if (activeShapeKind !== null && shapeGestureRef.current === null)
 							clearShapeHoverGuides()
 						if (activeTool === "rule") setRuleHoverPoint(null)
+						const shared = sharedGestureRef.current
+						if (selectionBox !== null && shared?.tool === "select") {
+							reduceVectorGesture(
+								shared,
+								{ type: "pointer-cancel", pointerId: -1 },
+								sharedGesturePolicy,
+							)
+							sharedGestureRef.current = null
+							setSharedGesturePreview(null)
+							setSelectionBox(null)
+						}
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
 						if (momentaryPreview) return
@@ -3888,11 +4409,38 @@ export function GlyphCanvas({
 					onMouseUp={() => {
 						if (momentaryPreview) return
 						if (selectionBox === null) return
+						const shared = sharedGestureRef.current
+						if (shared?.tool === "select") {
+							const transition = reduceVectorGesture(
+								shared,
+								{
+									type: "pointer-up",
+									pointerId: -1,
+									pointer: {
+										world: {
+											x: selectionBox.endX,
+											y: selectionBox.endY,
+										},
+										rawWorld: {
+											x: selectionBox.endX,
+											y: selectionBox.endY,
+										},
+										screen: shared.currentScreen,
+										modifiers: shared.modifiers,
+										snaps: [],
+									},
+								},
+								sharedGesturePolicy,
+							)
+							if (transition.intent?.kind !== "select-marquee") return
+						}
 						const boxed = targetsInside(selectionBox)
 						setSelection((current) =>
 							combineMarqueeSelection(current, boxed, selectionBox.mode),
 						)
 						setSelectionBox(null)
+						sharedGestureRef.current = null
+						setSharedGesturePreview(null)
 					}}
 					onTouchStart={(event: KonvaEventObject<TouchEvent>) => {
 						if (momentaryPreview) return
@@ -4413,6 +4961,11 @@ export function GlyphCanvas({
 											listening={false}
 										/>
 									)}
+									<VectorSnapGuides
+										guides={sharedVisibleSnapGuides}
+										inverseScale={inverseScale}
+										color={palette.accent}
+									/>
 									{visibleSnaps.map((snap) => {
 										const anchorLabel =
 											snap.axis === "projection" || snap.anchor === undefined
@@ -4433,34 +4986,8 @@ export function GlyphCanvas({
 										return (
 											<Group
 												key={`active-snap:${snap.axis}:${snap.kind}:${snap.id}`}
-												name={`active-snap active-snap-${snap.axis}`}
+												name={`active-snap-label active-snap-label-${snap.axis}`}
 											>
-												<Line
-													points={
-														snap.axis === "projection"
-															? projectionGuidePoints(
-																	snap,
-																	activeSnapGuideExtent,
-																)
-															: snap.axis === "x"
-																? [
-																		snap.value,
-																		metrics.descender - 100,
-																		snap.value,
-																		metrics.ascender + metrics.lineGap + 100,
-																	]
-																: [
-																		-200,
-																		snap.value,
-																		advanceWidth + 200,
-																		snap.value,
-																	]
-													}
-													stroke={palette.accent}
-													strokeWidth={1.5 * inverseScale}
-													dash={[7 * inverseScale, 4 * inverseScale]}
-													listening={false}
-												/>
 												<Text
 													x={
 														snap.axis === "projection"
@@ -4670,25 +5197,35 @@ export function GlyphCanvas({
 										opacity={0.1}
 										listening={false}
 									/>
-									<Path
-										name="closed-contour-outline"
-										data={contourPaintPaths.closedPath}
-										fillEnabled={false}
-										stroke={palette.outline}
-										strokeWidth={1.25 * inverseScale}
-										listening={false}
-									/>
-									<Path
-										name="open-contour-stroke"
-										data={contourPaintPaths.openPath}
-										fillEnabled={false}
-										stroke={palette.outline}
-										strokeWidth={1.25 * inverseScale}
-										listening={false}
-									/>
-									{shapePreviewPath === "" ? null : (
+									{closedFontVectorObject === null ? null : (
+										<VectorContourPath
+											name="closed-contour-outline"
+											object={closedFontVectorObject}
+											fillEnabled={false}
+											stroke={palette.outline}
+											strokeWidth={1.25 * inverseScale}
+											listening={false}
+										/>
+									)}
+									{openFontVectorObject === null ? null : (
+										<VectorContourPath
+											name="open-contour-stroke"
+											object={openFontVectorObject}
+											fillEnabled={false}
+											stroke={palette.outline}
+											strokeWidth={1.25 * inverseScale}
+											listening={false}
+										/>
+									)}
+									{sharedGesturePreview?.kind === "shape" ? (
+										<VectorShapePreview
+											preview={sharedGesturePreview}
+											inverseScale={inverseScale}
+											color={palette.accent}
+										/>
+									) : shapePreviewPath === "" ? null : (
 										<Path
-											name="shape-placement-preview"
+											name="shape-placement-preview-fallback"
 											data={shapePreviewPath}
 											fill={palette.accent}
 											opacity={0.12}
@@ -4698,7 +5235,14 @@ export function GlyphCanvas({
 											listening={false}
 										/>
 									)}
-									{penCandidateNode === null ? null : (
+									{sharedGesturePreview?.kind === "pen" ? (
+										<VectorPenPreview
+											preview={sharedGesturePreview}
+											preceding={penAnchor === null ? [] : [penAnchor]}
+											inverseScale={inverseScale}
+											color={palette.accent}
+										/>
+									) : penCandidateNode === null ? null : (
 										<Group listening={false}>
 											{penPendingPath === "" ? null : (
 												<Path
@@ -4710,48 +5254,22 @@ export function GlyphCanvas({
 													dash={[5 * inverseScale, 4 * inverseScale]}
 												/>
 											)}
-											{penHandles === null
-												? null
-												: (["incoming", "outgoing"] as const).map((handle) => {
-														const vector = penHandles[handle]
-														if (vector === undefined) return null
-														const endpoint = {
-															x: penCandidateNode.x + vector.x,
-															y: penCandidateNode.y + vector.y,
-														}
-														return (
-															<Group key={`pen-${handle}`}>
-																<Line
-																	name={`pen-${handle}-line`}
-																	points={[
-																		penCandidateNode.x,
-																		penCandidateNode.y,
-																		endpoint.x,
-																		endpoint.y,
-																	]}
-																	stroke={palette.handleLine}
-																	strokeWidth={inverseScale}
-																/>
-																<Circle
-																	name={`pen-${handle}-handle`}
-																	x={endpoint.x}
-																	y={endpoint.y}
-																	radius={3.5 * inverseScale}
-																	fill={palette.accent}
-																	stroke={palette.nodeStroke}
-																	strokeWidth={inverseScale}
-																/>
-															</Group>
-														)
-													})}
-											<Circle
-												name="pen-placement-preview"
-												x={penCandidateNode.x}
-												y={penCandidateNode.y}
-												radius={5 * inverseScale}
-												fill={palette.surface}
-												stroke={palette.accent}
-												strokeWidth={1.5 * inverseScale}
+											<VectorControlHandles
+												node={{
+													id: penCandidateNode.pointId,
+													x: penCandidateNode.x,
+													y: penCandidateNode.y,
+													mode: penCandidateNode.mode,
+													...(penHandles?.incoming === undefined
+														? {}
+														: { incoming: penHandles.incoming }),
+													...(penHandles?.outgoing === undefined
+														? {}
+														: { outgoing: penHandles.outgoing }),
+												}}
+												inverseScale={inverseScale}
+												color={palette.accent}
+												selected
 											/>
 										</Group>
 									)}
@@ -5727,6 +6245,13 @@ export function GlyphCanvas({
 									{activeTool !== "transform" ||
 									transformBounds === null ? null : (
 										<Group>
+											<VectorSelectionBounds
+												bounds={transformBounds}
+												inverseScale={inverseScale}
+												color={palette.accent}
+												handles={[]}
+												listening={false}
+											/>
 											<Rect
 												name="transform-selection-box"
 												x={transformBounds.minX}
@@ -5739,10 +6264,8 @@ export function GlyphCanvas({
 													transformBounds.maxY - transformBounds.minY,
 													2 * inverseScale,
 												)}
-												fill={palette.accent}
-												opacity={0.06}
-												stroke={palette.accent}
-												strokeWidth={1.5 * inverseScale}
+												fill="rgb(0 0 0 / 0.001)"
+												strokeWidth={0}
 												draggable
 												onDragStart={() => beginTransform("inside")}
 												onDragMove={previewTransformDrag}
@@ -5928,16 +6451,12 @@ export function GlyphCanvas({
 											)}
 										</Group>
 									) : null}
-									{selectionBox === null ? null : (
-										<Rect
-											x={Math.min(selectionBox.startX, selectionBox.endX)}
-											y={Math.min(selectionBox.startY, selectionBox.endY)}
-											width={Math.abs(selectionBox.endX - selectionBox.startX)}
-											height={Math.abs(selectionBox.endY - selectionBox.startY)}
-											fill={palette.accent}
-											opacity={0.14}
-											stroke={palette.accent}
-											strokeWidth={inverseScale}
+									{sharedGesturePreview?.kind !== "select-marquee" ? null : (
+										<VectorSelectionBounds
+											bounds={sharedGesturePreview.bounds}
+											inverseScale={inverseScale}
+											color={palette.accent}
+											handles={[]}
 											listening={false}
 										/>
 									)}

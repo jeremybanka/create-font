@@ -136,6 +136,20 @@ const designContours = (object: VectorObject): readonly DesignContour[] =>
 		})),
 	}))
 
+export function designObjectFromVector(
+	current: DesignObject,
+	object: VectorObject,
+): DesignObject {
+	return {
+		...current,
+		name: object.name,
+		contours: designContours(object),
+		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
+		...(object.locked === undefined ? {} : { locked: object.locked }),
+		...(object.style.kind === "fill" ? { fillId: object.style.swatchId } : {}),
+	}
+}
+
 function reject(error: string) {
 	return { ok: false, error } as const
 }

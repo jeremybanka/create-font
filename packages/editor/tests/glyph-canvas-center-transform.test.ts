@@ -178,6 +178,8 @@ describe("GlyphCanvas center transform", () => {
 				.sort(),
 		).toEqual(contourSelectionTargets(outer.nodes).map(selectionKey).sort())
 		expect(stage.findOne(".transform-selection-box")).toBeDefined()
+		expect(stage.findOne(".vector-selection-bounds")).toBeDefined()
+		expect(stage.findOne(".vector-contour-path")).toBeDefined()
 		expect(stage.findOne(".transform-east")).toBeDefined()
 		expect(stage.findOne(".transform-rotation")).toBeDefined()
 	})

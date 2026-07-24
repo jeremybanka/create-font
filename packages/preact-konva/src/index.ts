@@ -1,5 +1,4 @@
 import {
-	cloneElement,
 	createContext,
 	createElement,
 	Fragment,
@@ -100,15 +99,14 @@ export interface KonvaNodeComponent<
 type InternalNodeProps<Config, NodeType extends Node> = KonvaNodeProps<
 	Config,
 	NodeType
-> & {
-	readonly __konvaIndex?: number
-}
+>
 
 type NodeConstructor<NodeType extends Node, Config> = new (
 	config?: Config,
 ) => NodeType
 
 const ParentContext = createContext<Container | null>(null)
+const SiblingIndexContext = createContext(0)
 
 function orderedChildren(children: ComponentChildren): ComponentChild[] {
 	return toChildArray(children).map((child, index) => {
@@ -117,8 +115,10 @@ function orderedChildren(children: ComponentChildren): ComponentChild[] {
 				"Konva containers only accept Konva component children.",
 			)
 		}
-		return cloneElement(child as VNode<Record<string, unknown>>, {
-			__konvaIndex: index,
+		return createElement(SiblingIndexContext.Provider, {
+			children: child,
+			key: (child as VNode).key ?? index,
+			value: index,
 		})
 	})
 }
@@ -163,7 +163,8 @@ function createNodeComponent<NodeType extends Node, Config extends NodeConfig>(
 				)
 			}
 			const node = useMemo(() => new NodeClass(), [])
-			const { children, __konvaIndex = 0, ...nodeProps } = props
+			const siblingIndex = useContext(SiblingIndexContext)
+			const { children, ...nodeProps } = props
 			useNodeProps(node, nodeProps)
 
 			useLayoutEffect(() => {
@@ -171,8 +172,8 @@ function createNodeComponent<NodeType extends Node, Config extends NodeConfig>(
 				return () => node.destroy()
 			}, [node, parent])
 			useLayoutEffect(() => {
-				if (node.parent === parent) node.zIndex(__konvaIndex)
-			}, [__konvaIndex, node, parent])
+				if (node.parent === parent) node.zIndex(siblingIndex)
+			}, [node, parent, siblingIndex])
 			useLayoutEffect(() => {
 				assignRef(forwardedRef, node)
 				return () => assignRef(forwardedRef, null)
