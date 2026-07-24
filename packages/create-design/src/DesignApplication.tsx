@@ -58,12 +58,14 @@ import {
 	parseDesignDocument,
 } from "./document.ts"
 import {
+	captureDesignPointer,
 	clampToPage,
 	DESIGN_MAX_ZOOM,
 	DESIGN_MIN_ZOOM,
 	designBaseScale,
 	initialDesignCanvasView,
 	nearestDesignObject,
+	releaseDesignPointer,
 	snapDesignObject,
 } from "./design-canvas.ts"
 import {
@@ -591,6 +593,7 @@ export function DesignApplication() {
 			start: pagePoint(event),
 			original: object,
 		}
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
@@ -603,6 +606,7 @@ export function DesignApplication() {
 				start: pointer,
 				original: canvasView,
 			}
+			captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			return
 		}
 		const point = pagePoint(event)
@@ -618,6 +622,7 @@ export function DesignApplication() {
 			const bounds = normalizedBounds(point, point)
 			drawBoundsRef.current = bounds
 			setDrawBounds(bounds)
+			captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			return
 		}
 		if (tool === "pen") {
@@ -707,6 +712,7 @@ export function DesignApplication() {
 	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
 		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
+		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 		gestureRef.current = null
 		setActiveSnap(null)
 		if (gesture.kind === "pan") return
@@ -743,6 +749,18 @@ export function DesignApplication() {
 		}
 	}
 
+	const pointerCancel = (event: KonvaEventObject<PointerEvent>): void => {
+		const gesture = gestureRef.current
+		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
+		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+		gestureRef.current = null
+		previewObjectRef.current = null
+		drawBoundsRef.current = null
+		setPreviewObject(null)
+		setDrawBounds(null)
+		setActiveSnap(null)
+	}
+
 	const startScale = (
 		event: KonvaEventObject<PointerEvent>,
 		handle: "nw" | "ne" | "se" | "sw",
@@ -763,6 +781,7 @@ export function DesignApplication() {
 			anchor,
 			handle,
 		}
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
 
 	const setObjectProperty = (
@@ -945,7 +964,7 @@ export function DesignApplication() {
 							onPointerDown={pointerDown}
 							onPointerMove={pointerMove}
 							onPointerUp={pointerUp}
-							onPointerCancel={pointerUp}
+							onPointerCancel={pointerCancel}
 							onWheel={(event: KonvaEventObject<WheelEvent>) => {
 								event.evt.preventDefault()
 								const pointer =

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	captureDesignPointer,
 	clampToPage,
 	designBaseScale,
 	initialDesignCanvasView,
 	nearestDesignObject,
+	releaseDesignPointer,
 	snapDesignObject,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
@@ -47,6 +49,31 @@ describe("design canvas adapter", () => {
 		expect(
 			nearestDesignObject([bottom, top], { x: 50, y: 50 }, 1)?.object.id,
 		).toBe("top")
+	})
+
+	it("does not select transparent space inside a curved object's bounds", () => {
+		const document = createInitialDocument()
+		expect(
+			nearestDesignObject(document.objects, { x: 500, y: 290 }, 0.634, 12),
+		).toBeNull()
+		expect(
+			nearestDesignObject(document.objects, { x: 389, y: 419 }, 0.634, 12)
+				?.object.id,
+		).toBe("object:cyan")
+	})
+
+	it("keeps outside-stage pointer events captured through release or cancel", () => {
+		const captured = new Set<number>()
+		const target = {
+			hasPointerCapture: (pointerId: number) => captured.has(pointerId),
+			releasePointerCapture: (pointerId: number) => captured.delete(pointerId),
+			setPointerCapture: (pointerId: number) => captured.add(pointerId),
+		}
+		expect(captureDesignPointer(target, 7)).toBe(true)
+		expect(captured.has(7)).toBe(true)
+		expect(releaseDesignPointer(target, 7)).toBe(true)
+		expect(captured.has(7)).toBe(false)
+		expect(releaseDesignPointer(target, 7)).toBe(false)
 	})
 
 	it("snaps an object center to the page center at every zoom", () => {

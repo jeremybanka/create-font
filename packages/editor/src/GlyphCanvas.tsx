@@ -56,7 +56,7 @@ import {
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
 import { BASE_CANVAS_SCALE, initializeCanvasView } from "./canvas-view.ts"
-import { reduceCanvasWheel } from "./canvas-foundations.ts"
+import { canvasToolCursor, reduceCanvasWheel } from "./canvas-foundations.ts"
 import {
 	incidentStraightProjectionCandidates,
 	orthogonalConstraint,
@@ -3669,9 +3669,7 @@ export function GlyphCanvas({
 				ref={ref}
 				data-tool={activeTool}
 				data-editing={editingTextIndex === null ? "false" : "true"}
-				style={
-					transformCursor === null ? undefined : { cursor: transformCursor }
-				}
+				style={{ cursor: transformCursor ?? canvasToolCursor(activeTool) }}
 			>
 				<Stage
 					width={width}

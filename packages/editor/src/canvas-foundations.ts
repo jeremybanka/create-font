@@ -48,6 +48,7 @@ export type CanvasCursorTool =
 	| "pen"
 	| "rect"
 	| "ellipse"
+	| "knife"
 	| "rule"
 
 export type CanvasCursor =
