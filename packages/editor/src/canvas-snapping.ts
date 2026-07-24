@@ -1,5 +1,6 @@
 import type { PointId, VerticalMetricLine } from "@create-font/states"
 
+import { rankAxisCandidate } from "./canvas-foundations.ts"
 import type { SelectionBounds } from "./outline-selection.ts"
 
 export interface SnapNode {
@@ -86,6 +87,7 @@ interface Candidate {
 	readonly kind: "node" | "metric"
 	readonly id: string
 	readonly label: string
+	readonly priority: number
 	readonly value: number
 }
 
@@ -221,16 +223,7 @@ function nearest(
 	candidates: readonly Candidate[],
 	threshold: number,
 ): Candidate | null {
-	return (
-		candidates
-			.filter((candidate) => Math.abs(candidate.value - value) <= threshold)
-			.toSorted(
-				(left, right) =>
-					Math.abs(left.value - value) - Math.abs(right.value - value) ||
-					left.kind.localeCompare(right.kind) ||
-					left.id.localeCompare(right.id),
-			)[0] ?? null
-	)
+	return rankAxisCandidate(value, candidates, threshold)
 }
 
 function nearestGroupCandidate(
@@ -256,7 +249,7 @@ function nearestGroupCandidate(
 					Math.abs(left.adjustment) - Math.abs(right.adjustment) ||
 					["min", "center", "max"].indexOf(left.anchor) -
 						["min", "center", "max"].indexOf(right.anchor) ||
-					left.kind.localeCompare(right.kind) ||
+					left.priority - right.priority ||
 					left.id.localeCompare(right.id),
 			)[0] ?? null
 	)
@@ -313,6 +306,7 @@ export function snapDraggedPoint(
 			kind: "node",
 			id: node.pointId,
 			label: "Node x",
+			priority: 0,
 			value: node.x,
 		})),
 		threshold,
@@ -324,12 +318,14 @@ export function snapDraggedPoint(
 				kind: "node" as const,
 				id: node.pointId,
 				label: "Node y",
+				priority: 0,
 				value: node.y,
 			})),
 			...input.metrics.map((metric) => ({
 				kind: "metric" as const,
 				id: metric.id,
 				label: metric.label,
+				priority: 1,
 				value: metric.y,
 			})),
 		],
@@ -415,6 +411,7 @@ export function snapGroupTranslation(input: {
 						kind: "node",
 						id: node.pointId,
 						label: "Node x",
+						priority: 0,
 						value: node.x,
 					})),
 					threshold,
@@ -433,12 +430,14 @@ export function snapGroupTranslation(input: {
 							kind: "node" as const,
 							id: node.pointId,
 							label: "Node y",
+							priority: 0,
 							value: node.y,
 						})),
 						...input.metrics.map((metric) => ({
 							kind: "metric" as const,
 							id: metric.id,
 							label: metric.label,
+							priority: 1,
 							value: metric.y,
 						})),
 					],

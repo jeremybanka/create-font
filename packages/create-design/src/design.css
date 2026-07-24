@@ -449,90 +449,18 @@ design-application {
 }
 
 .artboard-wrap {
-	display: grid;
-	place-items: center;
+	position: relative;
 	min-width: 0;
 	min-height: 0;
-	padding: 24px;
-	overflow: auto;
+	overflow: hidden;
+	touch-action: none;
 }
 
 .artboard {
 	display: block;
-	width: auto;
-	height: min(100%, 900px);
-	max-width: 100%;
-	aspect-ratio: 612 / 792;
-	overflow: visible;
-	background: white;
-	box-shadow: 0 9px 34px rgb(0 0 0 / 36%);
+	width: 100%;
+	height: 100%;
 	touch-action: none;
-	cursor: crosshair;
-
-	> .paper {
-		fill: #fff;
-	}
-
-	> path {
-		stroke: transparent;
-		stroke-width: 2;
-		vector-effect: non-scaling-stroke;
-
-		&.selected {
-			stroke: var(--accent);
-		}
-	}
-}
-
-.guide {
-	stroke: #36a8e0;
-	stroke-width: 1;
-	stroke-dasharray: 5 4;
-	vector-effect: non-scaling-stroke;
-	pointer-events: none;
-}
-
-.shape-preview {
-	opacity: 0.66;
-	stroke: var(--accent) !important;
-	stroke-dasharray: 5 4;
-	pointer-events: none;
-}
-
-.pen-preview {
-	pointer-events: none;
-
-	> polyline {
-		fill: none;
-		stroke: var(--accent);
-		stroke-width: 2;
-		vector-effect: non-scaling-stroke;
-	}
-
-	> circle {
-		fill: white;
-		stroke: var(--accent);
-		stroke-width: 2;
-		vector-effect: non-scaling-stroke;
-	}
-}
-
-.transform-box {
-	> rect:first-child {
-		fill: none;
-		stroke: var(--accent);
-		stroke-width: 1;
-		vector-effect: non-scaling-stroke;
-		pointer-events: none;
-	}
-
-	> .transform-handle {
-		fill: white;
-		stroke: var(--accent);
-		stroke-width: 1.5;
-		vector-effect: non-scaling-stroke;
-		cursor: nwse-resize;
-	}
 }
 
 .panel-content,

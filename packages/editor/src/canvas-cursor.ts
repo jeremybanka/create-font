@@ -1,3 +1,5 @@
+export { canvasToolCursor } from "./canvas-foundations.ts"
+
 export type TransformHandle =
 	| "inside"
 	| "rotation"

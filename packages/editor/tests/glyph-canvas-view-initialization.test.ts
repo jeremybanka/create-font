@@ -70,6 +70,7 @@ describe("GlyphCanvas view initialization", () => {
 		)
 
 		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		const host = document.createElement("section")
 		document.body.append(host)
 		hosts.push(host)
@@ -82,6 +83,9 @@ describe("GlyphCanvas view initialization", () => {
 				host,
 			),
 		)
+		const surface = host.querySelector("canvas-surface")
+		expect(surface).toBeInstanceOf(HTMLElement)
+		expect((surface as HTMLElement).style.cursor).toBe("crosshair")
 		expect(workspace.font.silo.getState(workspace.ui.canvasView)).toEqual({
 			x: 72,
 			y: 72,

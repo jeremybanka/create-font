@@ -55,12 +55,8 @@ import {
 	selectionOwnsEditorSegment,
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
-import {
-	BASE_CANVAS_SCALE,
-	initializeCanvasView,
-	zoomCanvasView,
-} from "./canvas-view.ts"
-import { hasWheelZoomModifier } from "./canvas-wheel.ts"
+import { BASE_CANVAS_SCALE, initializeCanvasView } from "./canvas-view.ts"
+import { canvasToolCursor, reduceCanvasWheel } from "./canvas-foundations.ts"
 import {
 	incidentStraightProjectionCandidates,
 	orthogonalConstraint,
@@ -3118,15 +3114,6 @@ export function GlyphCanvas({
 		)
 		setShowNodes(true)
 	}
-	const zoomCanvas = (
-		nextZoom: number,
-		focalX = width / 2,
-		focalY = height / 2,
-	): void => {
-		setView((current) =>
-			zoomCanvasView(current, nextZoom, { x: focalX, y: focalY }),
-		)
-	}
 	return (
 		<glyph-canvas
 			ref={rootRef}
@@ -3682,9 +3669,7 @@ export function GlyphCanvas({
 				ref={ref}
 				data-tool={activeTool}
 				data-editing={editingTextIndex === null ? "false" : "true"}
-				style={
-					transformCursor === null ? undefined : { cursor: transformCursor }
-				}
+				style={{ cursor: transformCursor ?? canvasToolCursor(activeTool) }}
 			>
 				<Stage
 					width={width}
@@ -3704,26 +3689,14 @@ export function GlyphCanvas({
 					onWheel={(event: KonvaEventObject<WheelEvent>) => {
 						event.evt.preventDefault()
 						const pointer = event.target.getStage()?.getPointerPosition()
-						if (
-							pointer !== null &&
-							pointer !== undefined &&
-							hasWheelZoomModifier(event.evt)
-						) {
-							zoomCanvas(
-								view.zoom * Math.exp(-event.evt.deltaY * 0.002),
-								pointer.x,
-								pointer.y,
-							)
-							return
-						}
-						setView((current) => ({
-							...current,
-							x:
-								current.x -
-								(event.evt.deltaX ||
-									(event.evt.shiftKey ? event.evt.deltaY : 0)),
-							y: current.y - (event.evt.shiftKey ? 0 : event.evt.deltaY),
-						}))
+						if (pointer === null || pointer === undefined) return
+						setView((current) =>
+							reduceCanvasWheel(current, event.evt, pointer, {
+								baseScale: BASE_CANVAS_SCALE,
+								minZoom: 0.25,
+								maxZoom: 10,
+							}),
+						)
 					}}
 					onMouseDown={(event: KonvaEventObject<MouseEvent>) => {
 						if (momentaryPreview) return
