@@ -4,9 +4,11 @@ import {
 	CommandPalette,
 	columnSlotAllocation,
 	isCommandPaletteKeyboardEvent,
+	readVectorClipboard,
 	reduceCanvasWheel,
 	screenToDocument,
 	type PaletteCommand,
+	type VectorEditIntent,
 } from "@create-font/editor/shared"
 import {
 	Circle,
@@ -78,6 +80,13 @@ import {
 	translateObject,
 	type Bounds,
 } from "./geometry.ts"
+import {
+	applyDesignVectorIntent,
+	designVectorAdapter,
+	importDesignVectorClipboard,
+	importDesignObjects,
+	projectDesignVectorObject,
+} from "./design-vector-adapter.ts"
 import { downloadPdf } from "./pdf.ts"
 import type {
 	ColorDefinition,
@@ -223,18 +232,6 @@ function editableTarget(target: EventTarget | null): boolean {
 	)
 }
 
-function updateObject(
-	document: DesignDocument,
-	object: DesignObject,
-): DesignDocument {
-	return {
-		...document,
-		objects: document.objects.map((candidate) =>
-			candidate.id === object.id ? object : candidate,
-		),
-	}
-}
-
 function channelInput(
 	label: string,
 	value: number,
@@ -315,6 +312,19 @@ export function DesignApplication() {
 	const commit = useCallback((next: DesignDocument): void => {
 		dispatch({ type: "commit", document: next })
 	}, [])
+	const commitVectorIntent = useCallback(
+		(intent: VectorEditIntent): boolean => {
+			const result = applyDesignVectorIntent(document, selection, intent)
+			if (!result.ok) {
+				setStatus(result.error)
+				return false
+			}
+			commit(result.document)
+			setSelection(result.selection)
+			return true
+		},
+		[commit, document, selection],
+	)
 
 	const pagePoint = useCallback(
 		(event: KonvaEventObject<PointerEvent | MouseEvent>): DesignPoint => {
@@ -338,15 +348,14 @@ export function DesignApplication() {
 
 	const deleteSelection = useCallback((): void => {
 		if (selection.length === 0) return
-		commit({
-			...document,
-			objects: document.objects.filter(
-				(object) => !selection.includes(object.id),
-			),
-		})
-		setSelection([])
-		setStatus("Deleted selection.")
-	}, [commit, document, selection])
+		if (
+			commitVectorIntent({
+				kind: "delete",
+				objectIds: selection,
+			})
+		)
+			setStatus("Deleted selection.")
+	}, [commitVectorIntent, selection])
 
 	const finishPen = useCallback((): void => {
 		if (penPoints.length < 2) {
@@ -359,11 +368,16 @@ export function DesignApplication() {
 			fillId: currentSwatchId,
 			contours: [{ closed: penPoints.length >= 3, points: penPoints }],
 		}
-		commit({ ...document, objects: [...document.objects, object] })
-		setSelection([object.id])
+		if (
+			!commitVectorIntent({
+				kind: "create-object",
+				object: projectDesignVectorObject(document, object),
+			})
+		)
+			return
 		setPenPoints([])
 		setStatus(`Created ${object.name}.`)
-	}, [commit, currentSwatchId, document, nextId, penPoints])
+	}, [commitVectorIntent, currentSwatchId, document, nextId, penPoints])
 
 	const exportDocument = useCallback((): void => {
 		downloadPdf(document)
@@ -548,6 +562,7 @@ export function DesignApplication() {
 				event.clipboardData,
 				document,
 				selection,
+				designVectorAdapter.clipboard(document, selection),
 			)
 			if (count === 0) return
 			event.preventDefault()
@@ -555,19 +570,41 @@ export function DesignApplication() {
 		}
 		const paste = (event: ClipboardEvent): void => {
 			if (editableTarget(event.target) || event.clipboardData === null) return
+			const vector = readVectorClipboard(event.clipboardData)
+			if (vector !== null) {
+				const result = importDesignVectorClipboard(
+					document,
+					selection,
+					vector,
+					nextId,
+					currentSwatchId,
+				)
+				if (!result.ok) {
+					setStatus(result.error)
+					return
+				}
+				event.preventDefault()
+				commit(result.document)
+				setSelection(result.selection)
+				setStatus(
+					`Pasted ${result.selection.length} vector object${result.selection.length === 1 ? "" : "s"}.`,
+				)
+				return
+			}
 			const addition = readDesignClipboard(
 				event.clipboardData,
 				document,
 				nextId,
 			)
 			if (addition === null || addition.objects.length === 0) return
+			const result = importDesignObjects(document, selection, addition)
+			if (!result.ok) {
+				setStatus(result.error)
+				return
+			}
 			event.preventDefault()
-			commit({
-				...document,
-				swatches: [...document.swatches, ...addition.swatches],
-				objects: [...document.objects, ...addition.objects],
-			})
-			setSelection(addition.objects.map((object) => object.id))
+			commit(result.document)
+			setSelection(result.selection)
 			setStatus(
 				`Pasted ${addition.objects.length} vector object${addition.objects.length === 1 ? "" : "s"}.`,
 			)
@@ -578,7 +615,7 @@ export function DesignApplication() {
 			window.removeEventListener("copy", copy)
 			window.removeEventListener("paste", paste)
 		}
-	}, [commit, document, nextId, selection])
+	}, [commit, currentSwatchId, document, nextId, selection])
 
 	const startObjectGesture = (
 		event: KonvaEventObject<PointerEvent>,
@@ -736,19 +773,28 @@ export function DesignApplication() {
 						: ellipseContour(bounds),
 				],
 			}
-			commit({ ...document, objects: [...document.objects, object] })
-			setSelection([object.id])
+			if (
+				!commitVectorIntent({
+					kind: "create-object",
+					object: projectDesignVectorObject(document, object),
+				})
+			)
+				return
 			setStatus(`Created ${object.name}.`)
 			return
 		}
 		const committedPreview = previewObjectRef.current
 		previewObjectRef.current = null
 		if (committedPreview !== null) {
-			commit(updateObject(document, committedPreview))
-			setPreviewObject(null)
+			if (
+				commitVectorIntent({
+					kind: "replace-object",
+					object: projectDesignVectorObject(document, committedPreview),
+				})
+			)
+				setPreviewObject(null)
 		}
 	}
-
 	const pointerCancel = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
 		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
@@ -788,7 +834,28 @@ export function DesignApplication() {
 		object: DesignObject,
 		property: Partial<DesignObject>,
 	): void => {
-		commit(updateObject(document, { ...object, ...property }))
+		if (property.fillId !== undefined) {
+			const swatch = document.swatches.find(
+				(candidate) => candidate.id === property.fillId,
+			)
+			if (swatch !== undefined)
+				commitVectorIntent({
+					kind: "set-style",
+					objectId: object.id,
+					style: projectDesignVectorObject(document, {
+						...object,
+						fillId: swatch.id,
+					}).style,
+				})
+			return
+		}
+		commitVectorIntent({
+			kind: "set-object-properties",
+			objectId: object.id,
+			...(property.name === undefined ? {} : { name: property.name }),
+			...(property.hidden === undefined ? {} : { hidden: property.hidden }),
+			...(property.locked === undefined ? {} : { locked: property.locked }),
+		})
 	}
 
 	const updateSwatch = (swatch: DesignSwatch): void => {

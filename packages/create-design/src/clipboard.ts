@@ -1,3 +1,8 @@
+import {
+	writeVectorClipboard,
+	type VectorClipboardPayload,
+} from "@create-font/editor/shared"
+
 import { objectBounds, translateObject } from "./geometry.ts"
 import type {
 	DesignContour,
@@ -57,6 +62,7 @@ export function writeDesignClipboard(
 	clipboard: ClipboardWriter,
 	document: DesignDocument,
 	objectIds: readonly string[],
+	vectorPayload?: VectorClipboardPayload,
 ): number {
 	const selected = document.objects.filter((object) =>
 		objectIds.includes(object.id),
@@ -73,6 +79,8 @@ export function writeDesignClipboard(
 	clipboard.setData(DESIGN_VECTOR_MIME, JSON.stringify(payload))
 	clipboard.setData(FONT_OUTLINE_MIME, JSON.stringify(font))
 	clipboard.setData("text/plain", `${FONT_TEXT_PREFIX}${JSON.stringify(font)}`)
+	if (vectorPayload !== undefined)
+		writeVectorClipboard(clipboard, vectorPayload)
 	return selected.length
 }
 
