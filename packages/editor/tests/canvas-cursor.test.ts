@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { transformHandleCursor } from "../src/canvas-cursor.ts"
+import {
+	canvasToolCursor,
+	transformHandleCursor,
+} from "../src/canvas-cursor.ts"
 
 describe("transform handle cursors", () => {
 	it("maps visible handle directions to conventional resize cursors", () => {
@@ -13,5 +16,10 @@ describe("transform handle cursors", () => {
 		expect(transformHandleCursor("north-east")).toBe("nesw-resize")
 		expect(transformHandleCursor("south-west")).toBe("nesw-resize")
 		expect(transformHandleCursor("inside")).toBe("default")
+	})
+
+	it("re-exports the shared tool cursor through a transform-safe binding", () => {
+		expect(canvasToolCursor("pen")).toBe("crosshair")
+		expect(canvasToolCursor("select")).toBe("default")
 	})
 })
