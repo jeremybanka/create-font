@@ -1,12 +1,26 @@
 import type { EditorFontSource } from "@create-font/states"
 
-export { parseFea, lowerFeaSubstitutions } from "./fea.ts"
+export {
+	initializeFeaParser,
+	lowerFeaSubstitutions,
+	parseFea,
+	parseFeaSyntax,
+} from "./fea-browser.ts"
 export type {
 	FeaDiagnostic,
 	FeaDocumentAst,
+	FeaFeatureAst,
 	FeaParseResult,
+	FeaSourceRange,
+	FeaSubstitutionAst,
+	FeaSyntaxDiagnostic,
+	FeaSyntaxDocument,
+	FeaSyntaxElement,
+	FeaSyntaxNode,
+	FeaSyntaxRange,
+	FeaSyntaxToken,
 	FeatureSubstitutionIr,
-} from "./fea.ts"
+} from "./fea-browser.ts"
 
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
 import { failure, success } from "./result.ts"

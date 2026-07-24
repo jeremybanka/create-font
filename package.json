@@ -10,15 +10,16 @@
 		"check:eslint": "vp run -r check:eslint",
 		"check:lasertag": "vp run -r check:lasertag",
 		"check:peers": "pnpm peers check",
+		"check:rust": "mise exec -- cargo fmt --all -- --check && mise exec -- cargo clippy --workspace --all-targets -- -D warnings",
 		"check:vp": "vp check --no-fmt",
 		"dev": "pnpm --filter create-font dev",
 		"dev:design": "pnpm --filter create-design dev",
-		"fmt": "dprint fmt",
-		"fmt:check": "dprint check",
+		"fmt": "pnpm --filter dprint-plugin-fea build && dprint fmt",
+		"fmt:check": "pnpm --filter dprint-plugin-fea build && dprint check",
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --fail-if-no-match test"
+		"test": "mise exec -- cargo test --workspace && vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --filter @create-font/fea-rs-wasm --filter dprint-plugin-fea --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.1",
@@ -30,6 +31,7 @@
 		"@preact/preset-vite": "2.10.6",
 		"agents.yaml": "0.2.2",
 		"dprint": "0.55.2",
+		"dprint-plugin-fea": "workspace:*",
 		"dprint-plugin-malva": "0.16.0",
 		"dprint-plugin-markup": "0.27.3",
 		"dprint-plugin-yaml": "0.6.0",

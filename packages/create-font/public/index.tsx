@@ -14,6 +14,7 @@ import type {
 } from "@create-font/server"
 import {
 	assembleEditorFontSource,
+	initializeFeaParser,
 	lowerFeaSubstitutions,
 	parseFea,
 } from "@create-font/source/browser"
@@ -83,6 +84,7 @@ declare global {
 
 const startupTimeline = createStartupTimeline(`browser-main`)
 startupTimeline.mark(`module-evaluated`)
+const feaParserReady = initializeFeaParser()
 const editorBrowserUrl = `/editor/editor.js`
 const editorStyles = document.createElement(`link`)
 editorStyles.rel = `stylesheet`
@@ -562,6 +564,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 }
 
 async function drainSourceEvents(): Promise<void> {
+	await feaParserReady
 	if (sourceDirty || sourceState === null || bufferedSourceEvents.length === 0)
 		return
 	let changed = false
@@ -633,7 +636,8 @@ function connectSourceEvents(): void {
 
 renderBootstrap()
 connectSourceEvents()
-void refreshSource(true)
+void feaParserReady
+	.then(() => refreshSource(true))
 	.then(queueSourceEventDrain)
 	.catch((error: unknown) => {
 		showBootstrapError(

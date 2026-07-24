@@ -20,5 +20,6 @@ runs:
         --filter @create-font/target
         --filter @create-font/states
         --filter @create-font/source
+        --filter @create-font/fea-wasm
         --filter @create-font/preact-konva
         --filter @create-font/editor

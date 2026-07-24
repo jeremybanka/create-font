@@ -1,0 +1,18 @@
+[package]
+name = "create-font-fea"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+repository.workspace = true
+rust-version.workspace = true
+description = "fea-rs adaptation and Adobe Feature File formatting for create-font"
+
+[dependencies]
+dprint-core = { workspace = true, features = ["formatting"] }
+fea-rs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

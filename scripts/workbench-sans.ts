@@ -624,7 +624,7 @@ if (!featureIndex.ok) throw new Error(featureIndex.errors[0].message)
 await writeFile(resolve(projectRoot, featureIndexPath), featureIndex.value)
 await writeFile(
 	resolve(projectRoot, "features", "layout.fea"),
-	"feature liga { sub f i by f_i; } liga;\n",
+	"feature liga {\n  sub f i by f_i;\n} liga;\n",
 )
 await writeFile(
 	resolve(projectRoot, "README.md"),

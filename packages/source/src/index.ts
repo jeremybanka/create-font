@@ -1,4 +1,4 @@
-export { parseFea, lowerFeaSubstitutions } from "./fea.ts"
+export { lowerFeaSubstitutions, parseFea, parseFeaSyntax } from "./fea.ts"
 export type {
 	FeaDiagnostic,
 	FeaDocumentAst,
@@ -6,6 +6,12 @@ export type {
 	FeaParseResult,
 	FeaSourceRange,
 	FeaSubstitutionAst,
+	FeaSyntaxDiagnostic,
+	FeaSyntaxDocument,
+	FeaSyntaxElement,
+	FeaSyntaxNode,
+	FeaSyntaxRange,
+	FeaSyntaxToken,
 	FeatureSubstitutionIr,
 } from "./fea.ts"
 export {

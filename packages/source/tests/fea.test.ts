@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { lowerFeaSubstitutions, parseFea } from "../src/fea.ts"
+import {
+	lowerFeaSubstitutions,
+	parseFea,
+	parseFeaSyntax,
+	type FeaSyntaxElement,
+} from "../src/fea.ts"
 
 describe("Adobe feature source", () => {
 	test("parses source-located liga and calt substitutions and lowers names", () => {
@@ -40,14 +45,61 @@ describe("Adobe feature source", () => {
 		expect(lowered.errors[0]?.message).toContain("i, f_i")
 	})
 
+	test("exposes the complete lossless parser tree for valid Adobe syntax", () => {
+		const source = "include(layout.fea);\nfeature kern { pos A V -80; } kern;\n"
+		const parsed = parseFeaSyntax(source)
+		expect(parsed.diagnostics).toEqual([])
+		expect(parsed.root.children).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ kind: "IncludeNode" }),
+				expect.objectContaining({ kind: "FeatureNode" }),
+			]),
+		)
+		const sourceText = (element: FeaSyntaxElement): string =>
+			element.type === "token"
+				? element.text
+				: element.children.map(sourceText).join("")
+		expect(sourceText(parsed.root)).toBe(source)
+	})
+
 	test.each([
-		"feature liga { sub f $ i by f_i; } liga;",
-		"feature liga { sub f @ i by f_i; } liga;",
-		"include(layout.fea);",
-	])("rejects unsupported syntax instead of silently omitting it", (source) => {
+		[
+			"feature liga { sub f $ i by f_i; } liga;",
+			"expected ligature substitution",
+		],
+		[
+			"feature liga { sub f @ i by f_i; } liga;",
+			"Unsupported create-font Adobe feature semantics",
+		],
+		[
+			"include(layout.fea);",
+			"Unsupported create-font Adobe feature semantics in IncludeNode",
+		],
+		[
+			"feature kern { pos A V -80; } kern;",
+			"Unsupported create-font Adobe feature semantics in GposType2",
+		],
+	])(
+		"rejects unsupported create-font semantics without misclassifying parser syntax",
+		(source, message) => {
+			const parsed = parseFea(source)
+			expect(parsed.ok).toBe(false)
+			if (!parsed.ok) expect(parsed.errors[0]?.message).toContain(message)
+		},
+	)
+
+	test("converts Rust UTF-8 diagnostic bytes to TypeScript UTF-16 positions", () => {
+		const source = "# café\nfeature liga { sub f by ; } liga;"
 		const parsed = parseFea(source)
 		expect(parsed.ok).toBe(false)
-		if (!parsed.ok)
-			expect(parsed.errors[0]?.range.start).toBeGreaterThanOrEqual(0)
+		if (!parsed.ok) {
+			expect(parsed.errors[0]?.range.line).toBe(2)
+			expect(
+				source.slice(
+					parsed.errors[0]?.range.start,
+					parsed.errors[0]?.range.end,
+				),
+			).toBe(";")
+		}
 	})
 })

@@ -1,0 +1,32 @@
+# Representative Adobe Feature File syntax.
+languagesystem DFLT dflt;
+languagesystem latn dflt;
+
+@Uppercase = [A B C D E F G H I J K L M N O P Q R S T U V W X Y Z];
+@Figures = [zero one two three four five six seven eight nine];
+
+include(shared/classes.fea);
+
+lookup LatinKerning {
+  pos A V -80;
+  pos @Uppercase @Uppercase <0 0 -20 0>;
+} LatinKerning;
+
+feature liga {
+  sub f i by f_i;
+  sub f f i by f_f_i;
+} liga;
+
+feature calt {
+  ignore sub a' f;
+  sub a' by a.alt;
+} calt;
+
+feature kern {
+  lookup LatinKerning;
+  enum pos T [a e o] -40;
+} kern;
+
+table GDEF {
+  GlyphClassDef [A V], [f_i f_f_i], [acute grave], [space];
+} GDEF;
