@@ -10,6 +10,7 @@
 		"check:eslint": "vp run -r check:eslint",
 		"check:lasertag": "vp run -r check:lasertag",
 		"check:peers": "pnpm peers check",
+		"check:rust": "mise exec -- cargo fmt --all -- --check && mise exec -- cargo clippy --workspace --all-targets -- -D warnings",
 		"check:vp": "vp check --no-fmt",
 		"dev": "pnpm --filter create-font dev",
 		"dev:design": "pnpm --filter create-design dev",
@@ -18,7 +19,7 @@
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --fail-if-no-match test"
+		"test": "mise exec -- cargo test --workspace && vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --filter @create-font/fea-wasm --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.1",

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+target/
 artifacts/
 .mise/
 .pnpm-home/

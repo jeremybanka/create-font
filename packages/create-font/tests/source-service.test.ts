@@ -499,7 +499,7 @@ describe(`filesystem font source service`, () => {
 			`features/layout.fea`,
 		)
 		expect((await source.readUnit(`features/layout.fea`)).value).toBe(
-			`feature liga { sub f i by f_i; } liga;\n`,
+			`feature liga {\n  sub f i by f_i;\n} liga;\n`,
 		)
 		const snapshot = await source.readSnapshot()
 		const assembled = assembleEditorFontSource(
