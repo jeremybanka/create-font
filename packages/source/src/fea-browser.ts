@@ -1,9 +1,9 @@
-import initWasm, {
-	parseFea as wasmParseFea,
+import initializeParserModule, {
+	parseFea as parseFeaWithBinding,
 	type InitInput,
-} from "@create-font/fea-wasm/web"
+} from "@create-font/fea-parser/web"
 
-import { createFeaApi, type FeaWasmParse } from "./fea-core.ts"
+import { createFeaApi, type FeaParserBinding } from "./fea-core.ts"
 
 export {
 	lowerFeaSubstitutions,
@@ -27,7 +27,7 @@ let initialization: Promise<void> | undefined
 
 /** Initializes the browser WebAssembly parser once. */
 export function initializeFeaParser(input?: InitInput): Promise<void> {
-	initialization ??= initWasm(input)
+	initialization ??= initializeParserModule(input)
 		.then(() => {
 			initialized = true
 		})
@@ -38,17 +38,17 @@ export function initializeFeaParser(input?: InitInput): Promise<void> {
 	return initialization
 }
 
-const guardedWasmParse: FeaWasmParse = (source) => {
+const guardedParse: FeaParserBinding = (source) => {
 	if (!initialized)
 		throw new Error(
-			"Adobe feature Wasm is not initialized. Call initializeFeaParser() first.",
+			"Adobe feature parser is not initialized. Call initializeFeaParser() first.",
 		)
-	return wasmParseFea(source)
+	return parseFeaWithBinding(source)
 }
-const api = createFeaApi(guardedWasmParse)
+const api = createFeaApi(guardedParse)
 
-/** Parses Adobe feature syntax through the initialized Rust/Wasm parser. */
+/** Parses Adobe feature syntax through the initialized Rust parser. */
 export const parseFea = api.parseFea
 
-/** Returns the complete lossless Rust/Wasm syntax document. */
+/** Returns the complete lossless Rust syntax document. */
 export const parseFeaSyntax = api.parseFeaSyntax

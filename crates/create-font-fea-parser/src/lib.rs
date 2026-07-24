@@ -1,4 +1,4 @@
-//! WebAssembly boundary for create-font Adobe Feature File tooling.
+//! JavaScript boundary for create-font Adobe Feature File parsing and formatting.
 
 use create_font_fea::{ABI_VERSION, FormatConfig};
 use wasm_bindgen::prelude::*;

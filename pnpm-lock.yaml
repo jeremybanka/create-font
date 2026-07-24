@@ -37,6 +37,9 @@ importers:
       dprint:
         specifier: 0.55.2
         version: 0.55.2
+      dprint-plugin-fea:
+        specifier: workspace:*
+        version: link:packages/dprint-plugin-fea
       dprint-plugin-malva:
         specifier: 0.16.0
         version: 0.16.0
@@ -136,6 +139,12 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/dprint-plugin-fea:
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/editor:
     dependencies:
       '@create-font/states':
@@ -194,7 +203,7 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/fea-wasm:
+  packages/fea-parser:
     devDependencies:
       vitest:
         specifier: 4.1.10
@@ -237,9 +246,9 @@ importers:
 
   packages/source:
     dependencies:
-      '@create-font/fea-wasm':
+      '@create-font/fea-parser':
         specifier: workspace:*
-        version: link:../fea-wasm
+        version: link:../fea-parser
       '@create-font/states':
         specifier: workspace:*
         version: link:../states

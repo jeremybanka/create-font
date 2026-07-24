@@ -8,11 +8,11 @@ import {
 	parseFeaSyntax,
 } from "../src/fea-browser.ts"
 
-describe("Adobe feature browser Wasm adapter", () => {
+describe("Adobe feature browser parser adapter", () => {
 	test("initializes once and drives syntax plus semantic projection", async () => {
 		const bytes = await readFile(
 			new URL(
-				"../../fea-wasm/dist/web/create_font_fea_wasm_bg.wasm",
+				"../../fea-parser/dist/web/create_font_fea_parser_bg.wasm",
 				import.meta.url,
 			),
 		)

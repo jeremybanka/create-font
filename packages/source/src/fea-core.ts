@@ -81,7 +81,7 @@ export interface FeatureSubstitutionIr {
 	readonly range: FeaSourceRange
 }
 
-export type FeaWasmParse = (source: string) => string
+export type FeaParserBinding = (source: string) => string
 
 type PositionForRange = (range: FeaSyntaxRange) => FeaSourceRange
 
@@ -298,16 +298,16 @@ function isSyntaxDocument(value: unknown): value is FeaSyntaxDocument {
 	)
 }
 
-export function createFeaApi(wasmParse: FeaWasmParse): {
+export function createFeaApi(parseWithBinding: FeaParserBinding): {
 	readonly parseFea: (source: string) => FeaParseResult
 	readonly parseFeaSyntax: (source: string) => FeaSyntaxDocument
 } {
 	const parseFeaSyntax = (source: string): FeaSyntaxDocument => {
-		const parsed: unknown = JSON.parse(wasmParse(source))
+		const parsed: unknown = JSON.parse(parseWithBinding(source))
 		if (!isSyntaxDocument(parsed))
-			throw new Error("Unsupported Adobe feature Wasm ABI.")
+			throw new Error("Unsupported Adobe feature parser ABI.")
 		if (parsed.sourceLen !== new TextEncoder().encode(source).length)
-			throw new Error("Adobe feature Wasm returned an invalid source length.")
+			throw new Error("Adobe feature parser returned an invalid source length.")
 		return parsed
 	}
 	const parseFea = (source: string): FeaParseResult => {

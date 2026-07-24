@@ -10,10 +10,10 @@ type WasmApi = {
 
 const source = "# comment\nfeature liga{sub f i by f_i;}liga;"
 
-describe("Adobe feature Wasm API", () => {
+describe("Adobe feature parser API", () => {
 	test("loads and parses in Node", async () => {
 		const api =
-			(await import("../dist/node/create_font_fea_wasm.js")) as WasmApi
+			(await import("../dist/node/create_font_fea_parser.js")) as WasmApi
 		const parsed = JSON.parse(api.parseFea(source)) as {
 			abiVersion: number
 			root: { type: string }
@@ -31,11 +31,11 @@ describe("Adobe feature Wasm API", () => {
 
 	test("loads the web binding from raw Wasm bytes", async () => {
 		const web =
-			(await import("../dist/web/create_font_fea_wasm.js")) as WasmApi & {
+			(await import("../dist/web/create_font_fea_parser.js")) as WasmApi & {
 				default(input: BufferSource): Promise<unknown>
 			}
 		const bytes = await readFile(
-			new URL("../dist/web/create_font_fea_wasm_bg.wasm", import.meta.url),
+			new URL("../dist/web/create_font_fea_parser_bg.wasm", import.meta.url),
 		)
 		await web.default(bytes)
 		expect(web.abiVersion()).toBe(1)

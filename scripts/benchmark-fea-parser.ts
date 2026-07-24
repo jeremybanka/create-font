@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks"
 import { readFile, stat } from "node:fs/promises"
 
-type WasmApi = {
+type ParserApi = {
 	formatFea(source: string, configuration: string): string
 	parseFea(source: string): string
 }
@@ -11,16 +11,16 @@ const fixtureUrl = new URL(
 	import.meta.url,
 )
 const moduleUrl = new URL(
-	"../packages/fea-wasm/dist/node/create_font_fea_wasm.js",
+	"../packages/fea-parser/dist/node/create_font_fea_parser.js",
 	import.meta.url,
 )
 const wasmUrl = new URL(
-	"../packages/fea-wasm/dist/node/create_font_fea_wasm_bg.wasm",
+	"../packages/fea-parser/dist/node/create_font_fea_parser_bg.wasm",
 	import.meta.url,
 )
 
 const loadStarted = performance.now()
-const api = (await import(moduleUrl.href)) as WasmApi
+const api = (await import(moduleUrl.href)) as ParserApi
 const coldLoadMs = performance.now() - loadStarted
 const smallSource = await readFile(fixtureUrl, "utf8")
 const largeSource = smallSource.repeat(25)

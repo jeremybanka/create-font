@@ -86,15 +86,16 @@ impl SyncPluginHandler<FormatConfig> for FeaPluginHandler {
             name: env!("CARGO_PKG_NAME").to_owned(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
             config_key: "fea".to_owned(),
-            help_url: "https://github.com/jeremybanka/create-font/tree/main/packages/fea-wasm"
-                .to_owned(),
+            help_url:
+                "https://github.com/jeremybanka/create-font/tree/main/packages/dprint-plugin-fea"
+                    .to_owned(),
             config_schema_url: String::new(),
             update_url: None,
         }
     }
 
     fn license_text(&mut self) -> String {
-        "dprint-plugin-fea is distributed with create-font. fea-rs is MIT OR Apache-2.0; dprint-core is MIT.".to_owned()
+        "dprint-plugin-fea is distributed under MIT. fea-rs is MIT OR Apache-2.0; dprint-core is MIT.".to_owned()
     }
 
     fn check_config_updates(

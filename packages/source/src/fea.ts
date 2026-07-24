@@ -1,4 +1,4 @@
-import { parseFea as wasmParseFea } from "@create-font/fea-wasm/node"
+import { parseFea as parseFeaWithBinding } from "@create-font/fea-parser/node"
 
 import { createFeaApi } from "./fea-core.ts"
 
@@ -19,10 +19,10 @@ export {
 	type FeatureSubstitutionIr,
 } from "./fea-core.ts"
 
-const api = createFeaApi(wasmParseFea)
+const api = createFeaApi(parseFeaWithBinding)
 
-/** Parses Adobe feature syntax through the shared Rust/Wasm parser. */
+/** Parses Adobe feature syntax through the shared Rust parser. */
 export const parseFea = api.parseFea
 
-/** Returns the complete lossless Rust/Wasm syntax document. */
+/** Returns the complete lossless Rust syntax document. */
 export const parseFeaSyntax = api.parseFeaSyntax

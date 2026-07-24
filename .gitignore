@@ -9,6 +9,7 @@ artifacts/
 .mise.local.toml
 .env
 *.log
+*.wasm
 
 Lasertag.vsix
 .lasertag-vsix

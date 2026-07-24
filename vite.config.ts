@@ -5,6 +5,6 @@ export default defineConfig({
 		ignorePatterns: ["**/dist/**", "**/node_modules/**"],
 	},
 	staged: {
-		"*": ["dprint fmt --allow-no-files", "vp check --no-fmt --fix"],
+		"*": ["pnpm run fmt -- --allow-no-files", "vp check --no-fmt --fix"],
 	},
 })

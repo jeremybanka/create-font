@@ -45,7 +45,7 @@ describe("Adobe feature source", () => {
 		expect(lowered.errors[0]?.message).toContain("i, f_i")
 	})
 
-	test("exposes the complete lossless Wasm tree for valid Adobe syntax", () => {
+	test("exposes the complete lossless parser tree for valid Adobe syntax", () => {
 		const source = "include(layout.fea);\nfeature kern { pos A V -80; } kern;\n"
 		const parsed = parseFeaSyntax(source)
 		expect(parsed.diagnostics).toEqual([])
@@ -80,7 +80,7 @@ describe("Adobe feature source", () => {
 			"Unsupported create-font Adobe feature semantics in GposType2",
 		],
 	])(
-		"rejects unsupported create-font semantics without misclassifying Wasm syntax",
+		"rejects unsupported create-font semantics without misclassifying parser syntax",
 		(source, message) => {
 			const parsed = parseFea(source)
 			expect(parsed.ok).toBe(false)

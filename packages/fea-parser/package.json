@@ -1,0 +1,48 @@
+{
+	"name": "@create-font/fea-parser",
+	"version": "0.1.0",
+	"description": "Lossless Adobe Feature File parser and formatter for Node and browsers",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/fea-parser"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"browser": "./dist/web/create_font_fea_parser.js",
+			"node": "./dist/node/create_font_fea_parser.js",
+			"types": "./dist/web/create_font_fea_parser.d.ts",
+			"default": "./dist/web/create_font_fea_parser.js"
+		},
+		"./web": {
+			"types": "./dist/web/create_font_fea_parser.d.ts",
+			"default": "./dist/web/create_font_fea_parser.js"
+		},
+		"./node": {
+			"types": "./dist/node/create_font_fea_parser.d.ts",
+			"default": "./dist/node/create_font_fea_parser.js"
+		},
+		"./manifest.json": "./dist/create-font-fea-parser.json",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "node ../../scripts/build-fea-parser.ts",
+		"benchmark": "node ../../scripts/benchmark-fea-parser.ts",
+		"test": "vp test"
+	},
+	"devDependencies": {
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

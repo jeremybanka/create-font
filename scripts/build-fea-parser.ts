@@ -1,10 +1,4 @@
-import {
-	copyFileSync,
-	chmodSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
@@ -17,10 +11,12 @@ const targetDirectory = join(
 	"wasm32-unknown-unknown",
 	"release",
 )
-const packageDirectory = join(workspaceRoot, "packages", "fea-wasm")
+const packageDirectory = join(workspaceRoot, "packages", "fea-parser")
 const distributionDirectory = join(packageDirectory, "dist")
-const pluginDirectory = join(workspaceRoot, "plugins")
-const bindingsName = "create_font_fea_wasm"
+const bindingsName = "create_font_fea_parser"
+const packageManifest = JSON.parse(
+	readFileSync(join(packageDirectory, "package.json"), "utf8"),
+) as { name: string; version: string }
 
 function runMise(tool: string, arguments_: string[]): void {
 	execFileSync("mise", ["exec", "--", tool, ...arguments_], {
@@ -36,9 +32,7 @@ runMise("cargo", [
 	"--target",
 	"wasm32-unknown-unknown",
 	"-p",
-	"create-font-fea-wasm",
-	"-p",
-	"dprint-plugin-fea",
+	"create-font-fea-parser",
 ])
 
 const bindingsInput = join(targetDirectory, `${bindingsName}.wasm`)
@@ -76,43 +70,16 @@ const runtimeTargets = Object.fromEntries(
 	}),
 )
 writeFileSync(
-	join(distributionDirectory, "create-font-fea-wasm.json"),
+	join(distributionDirectory, "create-font-fea-parser.json"),
 	`${JSON.stringify(
 		{
 			schemaVersion: 1,
 			abiVersion: 1,
-			name: "create-font-fea-wasm",
-			version: "0.1.0",
+			name: packageManifest.name,
+			version: packageManifest.version,
 			targets: runtimeTargets,
 		},
 		null,
 		"\t",
 	)}\n`,
-)
-
-const pluginInput = join(targetDirectory, "dprint_plugin_fea.wasm")
-const pluginBytes = readFileSync(pluginInput)
-const pluginHash = createHash("sha256").update(pluginBytes).digest("hex")
-const pluginManifest = {
-	schemaVersion: 1,
-	name: "dprint-plugin-fea",
-	version: "0.1.0",
-	sha256: pluginHash,
-	size: pluginBytes.byteLength,
-}
-const pluginManifestText = `${JSON.stringify(pluginManifest, null, "\t")}\n`
-
-mkdirSync(pluginDirectory, { recursive: true })
-copyFileSync(pluginInput, join(pluginDirectory, "dprint-plugin-fea.wasm"))
-chmodSync(join(pluginDirectory, "dprint-plugin-fea.wasm"), 0o644)
-writeFileSync(
-	join(pluginDirectory, "dprint-plugin-fea.json"),
-	pluginManifestText,
-)
-chmodSync(join(pluginDirectory, "dprint-plugin-fea.json"), 0o644)
-copyFileSync(pluginInput, join(distributionDirectory, "dprint-plugin-fea.wasm"))
-chmodSync(join(distributionDirectory, "dprint-plugin-fea.wasm"), 0o644)
-writeFileSync(
-	join(distributionDirectory, "dprint-plugin-fea.json"),
-	pluginManifestText,
 )

@@ -46,6 +46,6 @@
 		"./node_modules/dprint-plugin-malva/plugin.wasm",
 		"./node_modules/@dprint/toml/plugin.wasm",
 		"./node_modules/dprint-plugin-yaml/plugin.wasm",
-		"./plugins/dprint-plugin-fea.wasm"
+		"./node_modules/dprint-plugin-fea/plugin.wasm"
 	]
 }
