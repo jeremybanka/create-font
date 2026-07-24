@@ -6,6 +6,8 @@ import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { DesignApplication } from "../src/DesignApplication.tsx"
+import { objectBounds } from "../src/geometry.ts"
+import type { DesignDocument } from "../src/types.ts"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../preact-konva/package.json`,
@@ -107,6 +109,90 @@ describe("create-design shared vector scene", () => {
 		expect(paper.zIndex()).toBeLessThan(contour.zIndex())
 		expect(contour.zIndex()).toBeLessThan(selection.zIndex())
 	})
+
+	it.each([
+		["nw", { x: -40, y: -30 }, { x: "maxX", y: "maxY" }],
+		["ne", { x: 40, y: -30 }, { x: "minX", y: "maxY" }],
+		["se", { x: 40, y: 30 }, { x: "minX", y: "minY" }],
+		["sw", { x: -40, y: 30 }, { x: "maxX", y: "minY" }],
+	] as const)(
+		"keeps the opposite design corner fixed when dragging %s",
+		async (handleName, delta, fixed) => {
+			const stage = mountDesign()
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"setPointerCapture",
+			).mockImplementation(() => undefined)
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"releasePointerCapture",
+			).mockImplementation(() => undefined)
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"hasPointerCapture",
+			).mockReturnValue(false)
+			const layer = [
+				...document.querySelectorAll<HTMLButtonElement>(".layer-list button"),
+			].find((button) => button.textContent?.includes("Coral rectangle"))
+			const transform = document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Transform"]',
+			)
+			if (layer === undefined || transform === null)
+				throw new Error("Design transform controls were not found.")
+			act(() => {
+				layer.click()
+				transform.click()
+			})
+			const handle = stage.findOne(`.transform-handle-${handleName}`)
+			const canvas = stage.container().querySelector("canvas")
+			if (handle === undefined || canvas === null)
+				throw new Error(`${handleName} design transform handle was not found.`)
+			let pointer = handle.getAbsolutePosition()
+			vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+			await act(async () => {
+				handle.fire("pointerdown", {
+					evt: {
+						altKey: false,
+						button: 0,
+						ctrlKey: false,
+						currentTarget: canvas,
+						metaKey: false,
+						pointerId: 7,
+						shiftKey: false,
+					},
+				})
+				pointer = {
+					x: pointer.x + delta.x,
+					y: pointer.y + delta.y,
+				}
+				for (const type of ["pointermove", "pointerup"]) {
+					canvas.dispatchEvent(
+						new PointerEvent(type, {
+							bubbles: true,
+							button: 0,
+							buttons: type === "pointerup" ? 0 : 1,
+							clientX: pointer.x,
+							clientY: pointer.y,
+							isPrimary: true,
+							pointerId: 7,
+							pointerType: "mouse",
+						}),
+					)
+				}
+				await Promise.resolve()
+			})
+			const saved = localStorage.getItem("create-design:document:v1")
+			if (saved === null) throw new Error("Design document was not persisted.")
+			const next = JSON.parse(saved) as DesignDocument
+			const bounds = objectBounds(
+				next.objects.find((object) => object.id === "object:coral")!,
+			)
+			if (bounds === null) throw new Error("Transformed object has no bounds.")
+			const original = { minX: 82, minY: 102, maxX: 362, maxY: 342 }
+			expect(bounds[fixed.x]).toBe(original[fixed.x])
+			expect(bounds[fixed.y]).toBe(original[fixed.y])
+		},
+	)
 
 	it("cancels a native pointer gesture before a later pointer-up", async () => {
 		const stage = mountDesign()

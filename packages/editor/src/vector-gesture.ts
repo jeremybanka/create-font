@@ -346,15 +346,28 @@ const transformAnchor = (
 	bounds: VectorBounds,
 	handle: VectorTransformHandle,
 	centered: boolean,
+	yAxis: VectorGesturePolicy["yAxis"],
 ): VectorPoint => {
-	if (handle === "move" || handle === "rotation" || centered)
-		return {
-			x: (bounds.minX + bounds.maxX) / 2,
-			y: (bounds.minY + bounds.maxY) / 2,
-		}
+	const center = {
+		x: (bounds.minX + bounds.maxX) / 2,
+		y: (bounds.minY + bounds.maxY) / 2,
+	}
+	if (handle === "move" || handle === "rotation" || centered) return center
 	return {
-		x: handle.includes("w") ? bounds.maxX : bounds.minX,
-		y: handle.includes("n") ? bounds.maxY : bounds.minY,
+		x: handle.includes("w")
+			? bounds.maxX
+			: handle.includes("e")
+				? bounds.minX
+				: center.x,
+		y: handle.includes("n")
+			? yAxis === "down"
+				? bounds.maxY
+				: bounds.minY
+			: handle.includes("s")
+				? yAxis === "down"
+					? bounds.minY
+					: bounds.maxY
+				: center.y,
 	}
 }
 
@@ -366,6 +379,7 @@ function transformPreview(
 		state.bounds,
 		state.handle,
 		state.modifiers.altKey,
+		policy.yAxis,
 	)
 	const delta = {
 		x: state.currentWorld.x - state.startWorld.x,

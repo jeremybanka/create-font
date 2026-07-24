@@ -8,6 +8,7 @@ import {
 	type VectorGestureEvent,
 	type VectorGesturePolicy,
 	type VectorGestureState,
+	type VectorTransformHandle,
 } from "../src/vector-gesture.ts"
 
 const fontPolicy = {
@@ -245,6 +246,71 @@ describe("shared vector gesture reducer parity", () => {
 			rotationDegrees: -90,
 		})
 	})
+
+	it.each([
+		["down", "nw", { x: 0, y: 0 }, { x: 100, y: 80 }],
+		["down", "n", { x: 50, y: 0 }, { x: 50, y: 80 }],
+		["down", "ne", { x: 100, y: 0 }, { x: 0, y: 80 }],
+		["down", "e", { x: 100, y: 40 }, { x: 0, y: 40 }],
+		["down", "se", { x: 100, y: 80 }, { x: 0, y: 0 }],
+		["down", "s", { x: 50, y: 80 }, { x: 50, y: 0 }],
+		["down", "sw", { x: 0, y: 80 }, { x: 100, y: 0 }],
+		["down", "w", { x: 0, y: 40 }, { x: 100, y: 40 }],
+		["up", "nw", { x: 0, y: 80 }, { x: 100, y: 0 }],
+		["up", "n", { x: 50, y: 80 }, { x: 50, y: 0 }],
+		["up", "ne", { x: 100, y: 80 }, { x: 0, y: 0 }],
+		["up", "e", { x: 100, y: 40 }, { x: 0, y: 40 }],
+		["up", "se", { x: 100, y: 0 }, { x: 0, y: 80 }],
+		["up", "s", { x: 50, y: 0 }, { x: 50, y: 80 }],
+		["up", "sw", { x: 0, y: 0 }, { x: 100, y: 80 }],
+		["up", "w", { x: 0, y: 40 }, { x: 100, y: 40 }],
+	] as const)(
+		"keeps the opposite %s-axis anchor fixed for the %s resize handle",
+		(yAxis, handle, start, anchor) => {
+			const policy = { yAxis } satisfies VectorGesturePolicy
+			const bounds = { minX: 0, minY: 0, maxX: 100, maxY: 80 }
+			const started = reduceVectorGesture(
+				null,
+				{
+					type: "pointer-down",
+					tool: "transform",
+					pointerId: 7,
+					pointer: pointer(start.x, start.y),
+					targetId: "object:a",
+					bounds,
+					handle: handle as VectorTransformHandle,
+				},
+				policy,
+			)
+			const target = { x: start.x + 20, y: start.y + 10 }
+			const moved = reduceVectorGesture(
+				started.state,
+				{
+					type: "pointer-move",
+					pointerId: 7,
+					pointer: pointer(target.x, target.y),
+				},
+				policy,
+			)
+			if (moved.preview?.kind !== "transform")
+				throw new Error("Expected a transform preview.")
+			expect(moved.preview.anchor).toEqual(anchor)
+			const transformedStart = {
+				x:
+					moved.preview.anchor.x +
+					(start.x - moved.preview.anchor.x) * moved.preview.scale.x,
+				y:
+					moved.preview.anchor.y +
+					(start.y - moved.preview.anchor.y) * moved.preview.scale.y,
+			}
+			expect(transformedStart.x).toBeCloseTo(
+				handle === "n" || handle === "s" ? start.x : target.x,
+			)
+			expect(transformedStart.y).toBeCloseTo(
+				handle === "e" || handle === "w" ? start.y : target.y,
+			)
+		},
+	)
 
 	it("makes Alt resize intent explicitly center-anchored", () => {
 		const started = down({

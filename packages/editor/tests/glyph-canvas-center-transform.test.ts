@@ -255,6 +255,45 @@ describe("GlyphCanvas center transform", () => {
 		expect(centerX).toBeTypeOf("number")
 	})
 
+	it.each([
+		["nw", { x: -40, y: 30 }, { minX: 460, minY: 400, maxX: 920, maxY: 850 }],
+		["ne", { x: 40, y: 30 }, { minX: 500, minY: 400, maxX: 960, maxY: 850 }],
+		["se", { x: 40, y: -30 }, { minX: 500, minY: 370, maxX: 960, maxY: 820 }],
+		["sw", { x: -40, y: -30 }, { minX: 460, minY: 370, maxX: 920, maxY: 820 }],
+	] as const)(
+		"keeps the opposite corner fixed when dragging the %s handle",
+		(handleName, delta, expectedBounds) => {
+			const { stage, transform } = mountTransformSelection()
+			const handle = stage.findOne(`.transform-handle-${handleName}`)
+			if (handle === undefined)
+				throw new Error(`${handleName} transform handle was not rendered.`)
+			const original = handle.position()
+			handle.fire("dragstart", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			handle.position({
+				x: original.x + delta.x,
+				y: original.y + delta.y,
+			})
+			handle.fire("dragmove", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			handle.fire("dragend", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			expect(transform).toHaveBeenCalledTimes(1)
+			const points = transform.mock.calls[0]?.[0].points
+			if (points === undefined || points.length === 0)
+				throw new Error("Transform did not commit selected points.")
+			expect({
+				minX: Math.min(...points.map((point) => point.x)),
+				minY: Math.min(...points.map((point) => point.y)),
+				maxX: Math.max(...points.map((point) => point.x)),
+				maxY: Math.max(...points.map((point) => point.y)),
+			}).toEqual(expectedBounds)
+		},
+	)
+
 	it("does not bypass a null shared commit intent for a sub-threshold resize", () => {
 		const { stage, transform } = mountTransformSelection()
 		const handle = stage.findOne(".transform-handle-e")
