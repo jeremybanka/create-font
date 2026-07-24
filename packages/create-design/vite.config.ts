@@ -11,6 +11,10 @@ export default defineConfig({
 				import.meta.dirname,
 				`../editor/src/shared.ts`,
 			),
+			"@create-font/preact-konva": resolve(
+				import.meta.dirname,
+				`../preact-konva/src/index.ts`,
+			),
 		},
 		conditions: [`development`],
 	},

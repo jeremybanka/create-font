@@ -1,3 +1,5 @@
+import { hasWheelZoomModifier as sharedHasWheelZoomModifier } from "./canvas-foundations.ts"
+
 export interface WheelZoomModifiers {
 	readonly altKey: boolean
 	readonly ctrlKey: boolean
@@ -5,5 +7,10 @@ export interface WheelZoomModifiers {
 }
 
 export function hasWheelZoomModifier(event: WheelZoomModifiers): boolean {
-	return event.altKey || event.ctrlKey || event.metaKey
+	return sharedHasWheelZoomModifier({
+		...event,
+		deltaX: 0,
+		deltaY: 0,
+		shiftKey: false,
+	})
 }

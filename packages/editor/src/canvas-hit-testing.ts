@@ -1,4 +1,5 @@
 import type { EditorCanvasContour } from "./editor-workspace.ts"
+import { rankPointCandidate } from "./canvas-foundations.ts"
 import { nearestEditorSegment } from "./geometry.ts"
 import {
 	selectionKey,
@@ -134,30 +135,24 @@ export function nearestEditorControlHit(
 	worldScale: number,
 	maxDistancePx = CONTROL_HIT_RADIUS_PX,
 ): EditorControlHit | null {
-	if (!(worldScale > 0) || !(maxDistancePx >= 0)) return null
-	const maximumSquared = (maxDistancePx / worldScale) ** 2
-	let nearest: EditorControlHitCandidate | null = null
-	let nearestSquared = Number.POSITIVE_INFINITY
-	let nearestKey = ""
-	for (const candidate of candidates) {
-		const distance = squaredDistance(candidate, pointer)
-		if (distance > maximumSquared) continue
-		const key = selectionKey(candidate.target)
-		if (
-			distance < nearestSquared ||
-			(distance === nearestSquared && (nearest === null || key < nearestKey))
-		) {
-			nearest = candidate
-			nearestSquared = distance
-			nearestKey = key
-		}
-	}
+	const nearest = rankPointCandidate(
+		pointer,
+		candidates.map((candidate) => ({
+			...candidate,
+			id: selectionKey(candidate.target),
+			priority: 0,
+		})),
+		worldScale,
+		maxDistancePx,
+	)
 	return nearest === null
 		? null
 		: {
 				kind: "control",
-				...nearest,
-				distancePx: Math.sqrt(nearestSquared) * worldScale,
+				target: nearest.target,
+				x: nearest.x,
+				y: nearest.y,
+				distancePx: nearest.distancePixels,
 			}
 }
 

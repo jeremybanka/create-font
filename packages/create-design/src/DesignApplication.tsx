@@ -1,9 +1,23 @@
 import {
+	canvasScale,
+	canvasToolCursor,
 	CommandPalette,
 	columnSlotAllocation,
 	isCommandPaletteKeyboardEvent,
+	reduceCanvasWheel,
+	screenToDocument,
 	type PaletteCommand,
 } from "@create-font/editor/shared"
+import {
+	Circle,
+	Group,
+	type KonvaEventObject,
+	Layer,
+	Line,
+	Path,
+	Rect,
+	Stage,
+} from "@create-font/preact-konva"
 import {
 	CircleIcon,
 	CursorArrowIcon,
@@ -18,10 +32,11 @@ import {
 	TransformIcon,
 	TrashIcon,
 } from "@radix-ui/react-icons"
-import type { ComponentChildren, JSX } from "preact"
+import type { ComponentChildren } from "preact"
 import {
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useReducer,
 	useRef,
@@ -42,6 +57,15 @@ import {
 	DESIGN_STORAGE_KEY,
 	parseDesignDocument,
 } from "./document.ts"
+import {
+	clampToPage,
+	DESIGN_MAX_ZOOM,
+	DESIGN_MIN_ZOOM,
+	designBaseScale,
+	initialDesignCanvasView,
+	nearestDesignObject,
+	snapDesignObject,
+} from "./design-canvas.ts"
 import {
 	ellipseContour,
 	normalizedBounds,
@@ -126,6 +150,12 @@ type CanvasGesture =
 			readonly pointerId: number
 			readonly start: DesignPoint
 			readonly original: DesignObject
+	  }
+	| {
+			readonly kind: "pan"
+			readonly pointerId: number
+			readonly start: DesignPoint
+			readonly original: Readonly<{ x: number; y: number; zoom: number }>
 	  }
 	| {
 			readonly kind: "draw"
@@ -245,7 +275,16 @@ export function DesignApplication() {
 	const [previewObject, setPreviewObject] = useState<DesignObject | null>(null)
 	const [drawBounds, setDrawBounds] = useState<Bounds | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPoint[]>([])
-	const svgRef = useRef<SVGSVGElement>(null)
+	const [canvasViewport, setCanvasViewport] = useState({
+		width: 0,
+		height: 0,
+	})
+	const [canvasView, setCanvasView] = useState({ x: 0, y: 0, zoom: 1 })
+	const [activeSnap, setActiveSnap] = useState<Readonly<{
+		x: number | null
+		y: number | null
+	}> | null>(null)
+	const artboardWrapRef = useRef<HTMLDivElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const previewObjectRef = useRef<DesignObject | null>(null)
 	const drawBoundsRef = useRef<Bounds | null>(null)
@@ -260,35 +299,33 @@ export function DesignApplication() {
 	const selectedSwatch =
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
+	const baseScale = designBaseScale(canvasViewport, document.page)
+	const viewOptions = useMemo(
+		() => ({
+			baseScale,
+			minZoom: DESIGN_MIN_ZOOM,
+			maxZoom: DESIGN_MAX_ZOOM,
+		}),
+		[baseScale],
+	)
+	const worldScale = canvasScale(canvasView, viewOptions)
 
 	const commit = useCallback((next: DesignDocument): void => {
 		dispatch({ type: "commit", document: next })
 	}, [])
 
 	const pagePoint = useCallback(
-		(event: Readonly<{ clientX: number; clientY: number }>): DesignPoint => {
-			const rect = svgRef.current?.getBoundingClientRect()
-			if (rect === undefined || rect.width === 0 || rect.height === 0) {
-				return { x: 0, y: 0 }
+		(event: KonvaEventObject<PointerEvent | MouseEvent>): DesignPoint => {
+			const pointer = event.target.getStage()?.getPointerPosition() ?? {
+				x: 0,
+				y: 0,
 			}
-			return {
-				x: Math.max(
-					0,
-					Math.min(
-						document.page.width,
-						((event.clientX - rect.left) / rect.width) * document.page.width,
-					),
-				),
-				y: Math.max(
-					0,
-					Math.min(
-						document.page.height,
-						((event.clientY - rect.top) / rect.height) * document.page.height,
-					),
-				),
-			}
+			return clampToPage(
+				screenToDocument(pointer, canvasView, viewOptions),
+				document.page,
+			)
 		},
-		[document.page.height, document.page.width],
+		[canvasView, document.page, viewOptions],
 	)
 
 	const selectTool = useCallback((nextTool: DesignTool): void => {
@@ -410,6 +447,29 @@ export function DesignApplication() {
 		return () => window.removeEventListener("resize", resize)
 	}, [])
 
+	useLayoutEffect(() => {
+		const element = artboardWrapRef.current
+		if (element === null) return
+		const observer = new ResizeObserver(([entry]) => {
+			if (entry === undefined) return
+			const width = Math.round(entry.contentRect.width)
+			const height = Math.round(entry.contentRect.height)
+			if (!(width > 0) || !(height > 0)) return
+			setCanvasViewport((current) =>
+				current.width === width && current.height === height
+					? current
+					: { width, height },
+			)
+		})
+		observer.observe(element)
+		return () => observer.disconnect()
+	}, [])
+
+	useEffect(() => {
+		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
+		setCanvasView(initialDesignCanvasView(canvasViewport, document.page))
+	}, [canvasViewport.height, canvasViewport.width, document.page])
+
 	useEffect(() => {
 		const keydown = (event: KeyboardEvent): void => {
 			if (
@@ -519,11 +579,11 @@ export function DesignApplication() {
 	}, [commit, document, nextId, selection])
 
 	const startObjectGesture = (
-		event: JSX.TargetedPointerEvent<SVGPathElement>,
+		event: KonvaEventObject<PointerEvent>,
 		object: DesignObject,
 	): void => {
 		if (object.locked || (tool !== "select" && tool !== "transform")) return
-		event.stopPropagation()
+		event.cancelBubble = true
 		setSelection([object.id])
 		gestureRef.current = {
 			kind: "move",
@@ -531,26 +591,33 @@ export function DesignApplication() {
 			start: pagePoint(event),
 			original: object,
 		}
-		svgRef.current?.setPointerCapture(event.pointerId)
 	}
 
-	const pointerDown = (
-		event: JSX.TargetedPointerEvent<SVGSVGElement>,
-	): void => {
+	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
+		if (event.evt.button === 1) {
+			const pointer = event.target.getStage()?.getPointerPosition()
+			if (pointer === null || pointer === undefined) return
+			gestureRef.current = {
+				kind: "pan",
+				pointerId: event.evt.pointerId,
+				start: pointer,
+				original: canvasView,
+			}
+			return
+		}
 		const point = pagePoint(event)
 		if (tool === "rect" || tool === "ellipse") {
 			gestureRef.current = {
 				kind: "draw",
-				pointerId: event.pointerId,
+				pointerId: event.evt.pointerId,
 				start: point,
 				tool,
-				shift: event.shiftKey,
-				alt: event.altKey,
+				shift: event.evt.shiftKey,
+				alt: event.evt.altKey,
 			}
 			const bounds = normalizedBounds(point, point)
 			drawBoundsRef.current = bounds
 			setDrawBounds(bounds)
-			event.currentTarget.setPointerCapture(event.pointerId)
 			return
 		}
 		if (tool === "pen") {
@@ -560,25 +627,40 @@ export function DesignApplication() {
 		if (tool === "rule") {
 			const guide = {
 				id: `guide:${nextId()}`,
-				axis: event.shiftKey ? ("y" as const) : ("x" as const),
-				value: event.shiftKey ? point.y : point.x,
+				axis: event.evt.shiftKey ? ("y" as const) : ("x" as const),
+				value: event.evt.shiftKey ? point.y : point.x,
 			}
 			commit({ ...document, guides: [...document.guides, guide] })
 			setStatus(`Added ${guide.axis === "x" ? "vertical" : "horizontal"} rule.`)
 			return
 		}
-		setSelection([])
+		const hit = nearestDesignObject(
+			previewObjects,
+			point,
+			worldScale,
+			tool === "select" || tool === "transform" ? 12 : 0,
+		)
+		if (hit === null) setSelection([])
+		else startObjectGesture(event, hit.object)
 	}
 
-	const pointerMove = (
-		event: JSX.TargetedPointerEvent<SVGSVGElement>,
-	): void => {
+	const pointerMove = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
-		if (gesture === null || gesture.pointerId !== event.pointerId) return
+		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
+		if (gesture.kind === "pan") {
+			const pointer = event.target.getStage()?.getPointerPosition()
+			if (pointer === null || pointer === undefined) return
+			setCanvasView({
+				...gesture.original,
+				x: gesture.original.x + pointer.x - gesture.start.x,
+				y: gesture.original.y + pointer.y - gesture.start.y,
+			})
+			return
+		}
 		const point = pagePoint(event)
 		if (gesture.kind === "draw") {
-			gesture.shift = event.shiftKey
-			gesture.alt = event.altKey
+			gesture.shift = event.evt.shiftKey
+			gesture.alt = event.evt.altKey
 			const bounds = normalizedBounds(
 				gesture.start,
 				point,
@@ -590,11 +672,14 @@ export function DesignApplication() {
 			return
 		}
 		if (gesture.kind === "move") {
-			const object = translateObject(
+			const rawObject = translateObject(
 				gesture.original,
 				point.x - gesture.start.x,
 				point.y - gesture.start.y,
 			)
+			const snapped = snapDesignObject(rawObject, document, worldScale)
+			const object = snapped.object
+			setActiveSnap({ x: snapped.x, y: snapped.y })
 			previewObjectRef.current = object
 			setPreviewObject(object)
 			return
@@ -619,10 +704,12 @@ export function DesignApplication() {
 		setPreviewObject(object)
 	}
 
-	const pointerUp = (event: JSX.TargetedPointerEvent<SVGSVGElement>): void => {
+	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
-		if (gesture === null || gesture.pointerId !== event.pointerId) return
+		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
 		gestureRef.current = null
+		setActiveSnap(null)
+		if (gesture.kind === "pan") return
 		if (gesture.kind === "draw") {
 			const bounds = drawBoundsRef.current
 			drawBoundsRef.current = null
@@ -657,26 +744,25 @@ export function DesignApplication() {
 	}
 
 	const startScale = (
-		event: JSX.TargetedPointerEvent<SVGRectElement>,
+		event: KonvaEventObject<PointerEvent>,
 		handle: "nw" | "ne" | "se" | "sw",
 	): void => {
 		if (selectedObject === null) return
 		const bounds = objectBounds(selectedObject)
 		if (bounds === null) return
-		event.stopPropagation()
+		event.cancelBubble = true
 		const anchor = {
 			x: handle === "ne" || handle === "se" ? bounds.minX : bounds.maxX,
 			y: handle === "sw" || handle === "se" ? bounds.minY : bounds.maxY,
 		}
 		gestureRef.current = {
 			kind: "scale",
-			pointerId: event.pointerId,
+			pointerId: event.evt.pointerId,
 			original: selectedObject,
 			bounds,
 			anchor,
 			handle,
 		}
-		svgRef.current?.setPointerCapture(event.pointerId)
 	}
 
 	const setObjectProperty = (
@@ -839,117 +925,247 @@ export function DesignApplication() {
 				<main class="canvas-stage">
 					<div class="canvas-meta">
 						<span>{tools[tool].label}</span>
-						<span>612 × 792 pt · 100%</span>
+						<span>612 × 792 pt · {Math.round(canvasView.zoom * 100)}%</span>
 					</div>
-					<div class="artboard-wrap">
-						<svg
-							ref={svgRef}
-							class="artboard"
-							viewBox={`0 0 ${document.page.width} ${document.page.height}`}
-							aria-label="Design artboard"
+					<div
+						ref={artboardWrapRef}
+						class="artboard-wrap"
+						role="application"
+						aria-label="Design artboard"
+					>
+						<Stage
+							width={canvasViewport.width}
+							height={canvasViewport.height}
+							className="artboard"
+							style={{
+								cursor: canvasToolCursor(tool, {
+									dragging: gestureRef.current?.kind === "pan",
+								}),
+							}}
 							onPointerDown={pointerDown}
 							onPointerMove={pointerMove}
 							onPointerUp={pointerUp}
 							onPointerCancel={pointerUp}
+							onWheel={(event: KonvaEventObject<WheelEvent>) => {
+								event.evt.preventDefault()
+								const pointer =
+									event.target.getStage()?.getPointerPosition() ?? null
+								if (pointer === null) return
+								setCanvasView((current) =>
+									reduceCanvasWheel(current, event.evt, pointer, viewOptions),
+								)
+							}}
 						>
-							<rect
-								class="paper"
-								width={document.page.width}
-								height={document.page.height}
-							/>
-							{document.guides.map((guide) =>
-								guide.axis === "x" ? (
-									<line
-										key={guide.id}
-										class="guide"
-										x1={guide.value}
-										x2={guide.value}
-										y1={0}
-										y2={document.page.height}
+							<Layer>
+								<Group
+									x={canvasView.x}
+									y={canvasView.y}
+									scaleX={worldScale}
+									scaleY={worldScale}
+									clipX={-30 / worldScale}
+									clipY={-30 / worldScale}
+									clipWidth={document.page.width + 60 / worldScale}
+									clipHeight={document.page.height + 60 / worldScale}
+								>
+									<Rect
+										name="design-paper"
+										width={document.page.width}
+										height={document.page.height}
+										fill="#fff"
+										shadowColor="#000"
+										shadowBlur={24 / worldScale}
+										shadowOpacity={0.36}
+										shadowOffsetY={9 / worldScale}
 									/>
-								) : (
-									<line
-										key={guide.id}
-										class="guide"
-										x1={0}
-										x2={document.page.width}
-										y1={guide.value}
-										y2={guide.value}
-									/>
-								),
-							)}
-							{previewObjects.map((object) => {
-								const swatch = document.swatches.find(
-									(candidate) => candidate.id === object.fillId,
-								)
-								return object.hidden || swatch === undefined ? null : (
-									<path
-										key={object.id}
-										class={selection.includes(object.id) ? "selected" : ""}
-										d={objectSvgPath(object)}
-										fill={swatchCss(swatch)}
-										fillRule="evenodd"
-										onPointerDown={(event) => startObjectGesture(event, object)}
-									/>
-								)
-							})}
-							{drawBounds === null || currentSwatch === undefined ? null : (
-								<path
-									class="shape-preview"
-									d={objectSvgPath({
-										id: "preview",
-										name: "Preview",
-										fillId: currentSwatch.id,
-										contours: [
-											tool === "ellipse"
-												? ellipseContour(drawBounds)
-												: rectangleContour(drawBounds),
-										],
-									})}
-									fill={swatchCss(currentSwatch)}
-								/>
-							)}
-							{penPoints.length === 0 ? null : (
-								<g class="pen-preview">
-									<polyline
-										points={penPoints
-											.map((point) => `${point.x},${point.y}`)
-											.join(" ")}
-									/>
-									{penPoints.map((point, index) => (
-										<circle key={index} cx={point.x} cy={point.y} r={4} />
-									))}
-								</g>
-							)}
-							{selectionBounds === null ? null : (
-								<g class="transform-box">
-									<rect
-										x={selectionBounds.minX}
-										y={selectionBounds.minY}
-										width={selectionBounds.maxX - selectionBounds.minX}
-										height={selectionBounds.maxY - selectionBounds.minY}
-									/>
-									{(
-										[
-											["nw", selectionBounds.minX, selectionBounds.minY],
-											["ne", selectionBounds.maxX, selectionBounds.minY],
-											["se", selectionBounds.maxX, selectionBounds.maxY],
-											["sw", selectionBounds.minX, selectionBounds.maxY],
-										] as const
-									).map(([handle, x, y]) => (
-										<rect
-											key={handle}
-											class="transform-handle"
-											x={x - 5}
-											y={y - 5}
-											width={10}
-											height={10}
-											onPointerDown={(event) => startScale(event, handle)}
+									{document.guides.map((guide) => (
+										<Line
+											key={guide.id}
+											name="design-guide"
+											points={
+												guide.axis === "x"
+													? [guide.value, 0, guide.value, document.page.height]
+													: [0, guide.value, document.page.width, guide.value]
+											}
+											stroke="#36a8e0"
+											strokeWidth={1 / worldScale}
+											dash={[5 / worldScale, 4 / worldScale]}
+											listening={false}
 										/>
 									))}
-								</g>
-							)}
-						</svg>
+									{previewObjects.map((object) => {
+										const swatch = document.swatches.find(
+											(candidate) => candidate.id === object.fillId,
+										)
+										return object.hidden || swatch === undefined ? null : (
+											<Path
+												key={object.id}
+												name={`design-object ${object.id}`}
+												data={objectSvgPath(object)}
+												fill={swatchCss(swatch)}
+												fillRule="evenodd"
+												{...(selection.includes(object.id)
+													? { stroke: "#e17352" }
+													: {})}
+												strokeWidth={2 / worldScale}
+												onPointerDown={(event) =>
+													startObjectGesture(event, object)
+												}
+												onPointerEnter={(event) => {
+													if (
+														object.locked ||
+														(tool !== "select" && tool !== "transform")
+													)
+														return
+													const container = event.target.getStage()?.container()
+													if (container !== undefined)
+														container.style.cursor = canvasToolCursor(tool, {
+															overObject: true,
+														})
+												}}
+												onPointerLeave={(event) => {
+													const container = event.target.getStage()?.container()
+													if (container !== undefined)
+														container.style.cursor = canvasToolCursor(tool)
+												}}
+											/>
+										)
+									})}
+									{drawBounds === null || currentSwatch === undefined ? null : (
+										<Path
+											name="shape-preview"
+											data={objectSvgPath({
+												id: "preview",
+												name: "Preview",
+												fillId: currentSwatch.id,
+												contours: [
+													tool === "ellipse"
+														? ellipseContour(drawBounds)
+														: rectangleContour(drawBounds),
+												],
+											})}
+											fill={swatchCss(currentSwatch)}
+											opacity={0.66}
+											stroke="#e17352"
+											strokeWidth={2 / worldScale}
+											dash={[5 / worldScale, 4 / worldScale]}
+											listening={false}
+										/>
+									)}
+									{penPoints.length === 0 ? null : (
+										<Group listening={false}>
+											<Line
+												name="pen-preview"
+												points={penPoints.flatMap((point) => [
+													point.x,
+													point.y,
+												])}
+												stroke="#e17352"
+												strokeWidth={2 / worldScale}
+											/>
+											{penPoints.map((point, index) => (
+												<Circle
+													key={index}
+													x={point.x}
+													y={point.y}
+													radius={4 / worldScale}
+													fill="#fff"
+													stroke="#e17352"
+													strokeWidth={2 / worldScale}
+												/>
+											))}
+										</Group>
+									)}
+									{activeSnap?.x === null ||
+									activeSnap?.x === undefined ? null : (
+										<Line
+											name="active-snap active-snap-x"
+											points={[
+												activeSnap.x,
+												0,
+												activeSnap.x,
+												document.page.height,
+											]}
+											stroke="#36a8e0"
+											strokeWidth={1 / worldScale}
+											dash={[4 / worldScale, 3 / worldScale]}
+											listening={false}
+										/>
+									)}
+									{activeSnap?.y === null ||
+									activeSnap?.y === undefined ? null : (
+										<Line
+											name="active-snap active-snap-y"
+											points={[
+												0,
+												activeSnap.y,
+												document.page.width,
+												activeSnap.y,
+											]}
+											stroke="#36a8e0"
+											strokeWidth={1 / worldScale}
+											dash={[4 / worldScale, 3 / worldScale]}
+											listening={false}
+										/>
+									)}
+									{selectionBounds === null ? null : (
+										<Group name="transform-box">
+											<Rect
+												x={selectionBounds.minX}
+												y={selectionBounds.minY}
+												width={selectionBounds.maxX - selectionBounds.minX}
+												height={selectionBounds.maxY - selectionBounds.minY}
+												stroke="#e17352"
+												strokeWidth={1 / worldScale}
+												listening={false}
+											/>
+											{(
+												[
+													["nw", selectionBounds.minX, selectionBounds.minY],
+													["ne", selectionBounds.maxX, selectionBounds.minY],
+													["se", selectionBounds.maxX, selectionBounds.maxY],
+													["sw", selectionBounds.minX, selectionBounds.maxY],
+												] as const
+											).map(([handle, x, y]) => (
+												<Rect
+													key={handle}
+													name={`transform-handle transform-handle-${handle}`}
+													x={x - 5 / worldScale}
+													y={y - 5 / worldScale}
+													width={10 / worldScale}
+													height={10 / worldScale}
+													fill="#fff"
+													stroke="#e17352"
+													strokeWidth={1.5 / worldScale}
+													onPointerDown={(event) => startScale(event, handle)}
+													onPointerEnter={(event) => {
+														const container = event.target
+															.getStage()
+															?.container()
+														if (container !== undefined)
+															container.style.cursor = canvasToolCursor(
+																"transform",
+																{
+																	resize:
+																		handle === "nw" || handle === "se"
+																			? "nwse-resize"
+																			: "nesw-resize",
+																},
+															)
+													}}
+													onPointerLeave={(event) => {
+														const container = event.target
+															.getStage()
+															?.container()
+														if (container !== undefined)
+															container.style.cursor = canvasToolCursor(tool)
+													}}
+												/>
+											))}
+										</Group>
+									)}
+								</Group>
+							</Layer>
+						</Stage>
 					</div>
 					<div class="canvas-hint">
 						{tool === "pen"
