@@ -1,5 +1,6 @@
 import type { ComponentChild } from "preact"
 
+import type { EditorIconName } from "./EditorIcon.tsx"
 import type {
 	TileColumnId,
 	TileInstance,
@@ -14,7 +15,7 @@ export interface TileDefaultPlacement {
 export interface TileCommandMetadata {
 	readonly category?: string
 	readonly description?: string
-	readonly icon?: string
+	readonly icon?: EditorIconName
 	readonly shortcut?: string
 }
 
@@ -101,7 +102,7 @@ export interface TileRegistryCommand<Kind extends string> {
 	readonly displayName: string
 	readonly category: string
 	readonly description: string
-	readonly icon: string
+	readonly icon: EditorIconName
 	readonly shortcut?: string
 	readonly kind: Kind
 }

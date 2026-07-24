@@ -11,6 +11,7 @@ import {
 	createRegistryDefaultLayout,
 	createTileRegistry,
 	tileRegistryCommands,
+	type TileCommandMetadata,
 	type TileRegistration,
 } from "../src/tile-registry.ts"
 
@@ -37,6 +38,15 @@ const registrations = [
 ] as const satisfies readonly TileRegistration<"alpha" | "beta", Context>[]
 
 describe("tile registry", () => {
+	it("restricts command metadata to icons the command palette can render", () => {
+		const valid: TileCommandMetadata = { icon: "SquareIcon" }
+		// @ts-expect-error Registry icons must be exported by EditorIcon.
+		const invalid: TileCommandMetadata = { icon: "TypoIcon" }
+
+		expect(valid.icon).toBe("SquareIcon")
+		expect(invalid.icon).toBe("TypoIcon")
+	})
+
 	it("builds defaults and command metadata from one typed registration source", () => {
 		const registry = createTileRegistry<"alpha" | "beta", Context>(
 			registrations,

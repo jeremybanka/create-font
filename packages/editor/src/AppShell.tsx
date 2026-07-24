@@ -252,7 +252,6 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		...tileRegistryCommands(FONT_TILE_REGISTRY, fontTileContext).map(
 			(command): PaletteCommand => ({
 				...command,
-				icon: command.icon as PaletteCommand["icon"],
 				do: () => {
 					tileCommandSequence.current += 1
 					setTileCommandRequest({

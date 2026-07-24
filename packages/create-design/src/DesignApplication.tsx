@@ -498,7 +498,6 @@ export function DesignApplication() {
 			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
 				(command): PaletteCommand => ({
 					...command,
-					icon: command.icon as PaletteCommand["icon"],
 					do: () => {
 						tileCommandSequence.current += 1
 						setTileCommandRequest({
