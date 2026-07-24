@@ -236,6 +236,10 @@ export const FONT_TOOL_ITINERARY = [
 						"inverts screen y while preserving preview and commit parity",
 					),
 					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"Pen — previews without a selection halo and commits click/curve history",
+					),
+					coveredBy(
 						"tools-itinerary.test.ts",
 						"Pen — preserves y-up click, curve, modifier, and cancellation semantics",
 					),
@@ -288,6 +292,10 @@ export const FONT_TOOL_ITINERARY = [
 						"Pen — routes an authored segment press through one split action",
 					),
 					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"Select — Alt-clicks a straight segment into line-equivalent handles",
+					),
+					coveredBy(
 						"pen-gesture.test.ts",
 						"preserves segment, closure, control, then background semantics",
 					),
@@ -306,6 +314,10 @@ export const FONT_TOOL_ITINERARY = [
 					coveredBy(
 						"vector-gesture.test.ts",
 						"cancels atomically and ignores unrelated pointer transitions",
+					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"%s — pointer cancellation clears preview and commits nothing",
 					),
 					coveredBy(
 						"topology-tools.test.ts",
@@ -354,6 +366,10 @@ export const FONT_TOOL_ITINERARY = [
 						"tools-itinerary.test.ts",
 						"Rectangle — preserves centered constrained geometry",
 					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"%s — reflects live Shift+Alt preview modifiers into one undoable contour",
+					),
 				],
 			},
 			{
@@ -369,6 +385,10 @@ export const FONT_TOOL_ITINERARY = [
 					coveredBy(
 						"shape-gesture.test.ts",
 						"keeps the active layer exact and projects absolute handle endpoints",
+					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"%s — reflects live Shift+Alt preview modifiers into one undoable contour",
 					),
 				],
 			},
@@ -397,6 +417,10 @@ export const FONT_TOOL_ITINERARY = [
 						"tools-itinerary.test.ts",
 						"Ellipse — preserves centered constrained cubic geometry",
 					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"%s — pointer cancellation clears preview and commits nothing",
+					),
 				],
 			},
 			{
@@ -412,6 +436,10 @@ export const FONT_TOOL_ITINERARY = [
 					coveredBy(
 						"shape-gesture.test.ts",
 						"returns no geometry for degenerate bounds",
+					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"%s — reflects live Shift+Alt preview modifiers into one undoable contour",
 					),
 				],
 			},
@@ -491,6 +519,10 @@ export const FONT_TOOL_ITINERARY = [
 						"glyph-canvas-rule.test.ts",
 						"snaps unconstrained rule points independently to node coordinates",
 					),
+					coveredBy(
+						"tools-itinerary.integration.test.ts",
+						"Rule — Escape cancels the pending first point without persistence",
+					),
 				],
 			},
 			{
@@ -568,7 +600,11 @@ export const FONT_TOOL_ITINERARY = [
 					),
 					coveredBy(
 						"glyph-canvas-center-transform.test.ts",
-						"keeps the opposite corner fixed when dragging the %s handle",
+						"keeps the opposite visual anchor fixed when dragging the %s handle",
+					),
+					coveredBy(
+						"glyph-canvas-center-transform.test.ts",
+						"translates the mounted selection box rigidly in font coordinates",
 					),
 					coveredBy(
 						"tools-itinerary.test.ts",

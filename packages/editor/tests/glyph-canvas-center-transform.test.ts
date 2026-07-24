@@ -257,11 +257,15 @@ describe("GlyphCanvas center transform", () => {
 
 	it.each([
 		["nw", { x: -40, y: 30 }, { minX: 460, minY: 400, maxX: 920, maxY: 850 }],
+		["n", { x: 0, y: 30 }, { minX: 500, minY: 400, maxX: 920, maxY: 850 }],
 		["ne", { x: 40, y: 30 }, { minX: 500, minY: 400, maxX: 960, maxY: 850 }],
+		["e", { x: 40, y: 0 }, { minX: 500, minY: 400, maxX: 960, maxY: 820 }],
 		["se", { x: 40, y: -30 }, { minX: 500, minY: 370, maxX: 960, maxY: 820 }],
+		["s", { x: 0, y: -30 }, { minX: 500, minY: 370, maxX: 920, maxY: 820 }],
 		["sw", { x: -40, y: -30 }, { minX: 460, minY: 370, maxX: 920, maxY: 820 }],
+		["w", { x: -40, y: 0 }, { minX: 460, minY: 400, maxX: 920, maxY: 820 }],
 	] as const)(
-		"keeps the opposite corner fixed when dragging the %s handle",
+		"keeps the opposite visual anchor fixed when dragging the %s handle",
 		(handleName, delta, expectedBounds) => {
 			const { stage, transform } = mountTransformSelection()
 			const handle = stage.findOne(`.transform-handle-${handleName}`)
@@ -293,6 +297,41 @@ describe("GlyphCanvas center transform", () => {
 			}).toEqual(expectedBounds)
 		},
 	)
+
+	it("translates the mounted selection box rigidly in font coordinates", () => {
+		const { stage, transform, workspace } = mountTransformSelection()
+		const selected = workspace.font.silo.getState(workspace.ui.selection)
+		const originalNodes = new Map(
+			(workspace.font.silo.getState(workspace.ui.activeLayer)?.contours ?? [])
+				.flatMap((contour) => contour.nodes)
+				.filter((node) =>
+					selected.some(
+						(target) =>
+							target.kind === "node" && target.pointId === node.pointId,
+					),
+				)
+				.map((node) => [node.pointId, { x: node.x, y: node.y }]),
+		)
+		const box = stage.findOne(".transform-selection-box")
+		if (box === undefined)
+			throw new Error("Transform selection box was not rendered.")
+		const original = box.position()
+		box.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		box.position({ x: original.x + 40, y: original.y - 30 })
+		box.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		box.fire("dragend", { evt: { altKey: false, shiftKey: false } })
+
+		expect(transform).toHaveBeenCalledOnce()
+		const points = transform.mock.calls[0]?.[0].points
+		expect(points).toHaveLength(originalNodes.size)
+		for (const point of points ?? []) {
+			const before = originalNodes.get(point.pointId)
+			if (before === undefined)
+				throw new Error(`Unexpected transformed point ${point.pointId}.`)
+			expect(point.x).toBe(before.x + 40)
+			expect(point.y).toBe(before.y - 30)
+		}
+	})
 
 	it("does not bypass a null shared commit intent for a sub-threshold resize", () => {
 		const { stage, transform } = mountTransformSelection()
