@@ -100,7 +100,27 @@ export function objectSvgPath(object: DesignObject): string {
 }
 
 export function objectBounds(object: DesignObject): Bounds | null {
-	const points = object.contours.flatMap((contour) => contour.points)
+	const points = object.contours.flatMap((contour) =>
+		contour.points.flatMap((point) => [
+			point,
+			...(point.incoming === undefined
+				? []
+				: [
+						{
+							x: point.x + point.incoming.x,
+							y: point.y + point.incoming.y,
+						},
+					]),
+			...(point.outgoing === undefined
+				? []
+				: [
+						{
+							x: point.x + point.outgoing.x,
+							y: point.y + point.outgoing.y,
+						},
+					]),
+		]),
+	)
 	if (points.length === 0) return null
 	return {
 		minX: Math.min(...points.map((point) => point.x)),

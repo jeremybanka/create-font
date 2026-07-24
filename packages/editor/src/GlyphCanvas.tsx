@@ -154,6 +154,16 @@ import {
 	TRANSFORM_ROTATION_SNAP_DEGREES,
 } from "./transform-gesture.ts"
 import {
+	createFontVectorAdapter,
+	createFontVectorDocumentAdapter,
+	fontOutlineClipboardFromVector,
+} from "./font-vector-adapter.ts"
+import {
+	readVectorClipboard,
+	writeVectorClipboard,
+	type VectorEditIntent,
+} from "./vector-editing.ts"
+import {
 	finalizePointDragPreview,
 	hasSelectedCoincidentEndpointPeer,
 	resolveMovedEndpointJoin,
@@ -1746,6 +1756,17 @@ export function GlyphCanvas({
 		}
 	}, [altHeld, shiftHeld])
 
+	const applyActiveFontVectorIntent = (intent: VectorEditIntent): boolean => {
+		if (activeGlyphId === null || layer === null) return false
+		const result = createFontVectorDocumentAdapter(workspace, {
+			masterId: activeMasterId,
+			glyphId: activeGlyphId,
+		}).apply(layer, selection, intent)
+		if (result.ok) return true
+		reportGeometryCommitError(new TypeError(result.error))
+		return false
+	}
+
 	const commitTangentSlide = (resolution: TangentSlideResolution): void => {
 		if (activeGlyphId === null) return
 		const point = resolution.points[0]
@@ -1775,10 +1796,10 @@ export function GlyphCanvas({
 		)
 			throw new TypeError("The point drag no longer belongs to this canvas.")
 		if (drag.joinTarget === null) {
-			workspace.font.actions.movePoints({
-				masterId: drag.masterId,
-				glyphId: drag.glyphId,
+			applyActiveFontVectorIntent({
+				kind: "transform-controls",
 				points: [{ pointId: point.pointId, x: point.x, y: point.y }],
+				handles: [],
 			})
 			return
 		}
@@ -1804,17 +1825,16 @@ export function GlyphCanvas({
 			activeTool !== "select"
 		)
 			throw new TypeError("The point drag no longer belongs to this canvas.")
-		workspace.font.actions.transformControls({
-			masterId: drag.masterId,
-			glyphId: drag.glyphId,
+		applyActiveFontVectorIntent({
+			kind: "transform-controls",
 			...resolution,
 		})
 	}
 	const commitHandle = (handle: DraggedHandle): void => {
 		if (activeGlyphId === null) return
-		workspace.font.actions.moveHandle({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
+		applyActiveFontVectorIntent({
+			kind: "move-handle",
+			objectId: activeGlyphId,
 			pointId: handle.pointId,
 			handle: handle.handle,
 			vector: handle.storageVector,
@@ -1874,19 +1894,16 @@ export function GlyphCanvas({
 			return
 		}
 		if (selection.length === 0 || activeGlyphId === null) return
-		workspace.font.actions.deleteSelection({
+		if (layer === null) return
+		const adapter = createFontVectorDocumentAdapter(workspace, {
 			masterId: activeMasterId,
 			glyphId: activeGlyphId,
-			pointIds: selection
-				.filter((target) => target.kind === "node")
-				.map((target) => target.pointId),
-			handles: selection
-				.filter((target) => target.kind === "handle")
-				.map((target) => ({
-					pointId: target.pointId,
-					handle: target.handle,
-				})),
-			breakPaths,
+		})
+		applyActiveFontVectorIntent({
+			kind: "delete",
+			objectIds: [],
+			controls: adapter.project(layer, selection).selection,
+			deletePolicy: breakPaths ? "break-paths" : "preserve-paths",
 		})
 		setSelection(Object.freeze([]))
 	}
@@ -2028,26 +2045,59 @@ export function GlyphCanvas({
 			direction: penDirection,
 		})
 		const pointId = nextPenEntityId("point") as PointId
+		const coordinates = penCoordinates(point, gesture, draggedHandle)
+		const node = {
+			id: pointId,
+			mode: gesture.mode,
+			x: point.x,
+			y: point.y,
+			...(gesture.handles === null
+				? {}
+				: {
+						incoming: gesture.handles.incoming,
+						outgoing: gesture.handles.outgoing,
+					}),
+		} as const
 		if (penContourId === null) {
 			const contourId = nextPenEntityId("contour") as ContourId
-			workspace.font.actions.createContour({
-				masterId: activeMasterId,
-				glyphId: activeGlyphId,
-				contourId,
-				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture, draggedHandle),
-			})
+			if (
+				!applyActiveFontVectorIntent({
+					kind: "create-contour",
+					objectId: activeGlyphId,
+					contour: { id: contourId, closed: false, nodes: [node] },
+					variants: coordinates.map((coordinate) => ({
+						variantId: coordinate.masterId,
+						nodes: [
+							{
+								id: pointId,
+								mode: gesture.mode,
+								variantId: coordinate.masterId,
+								...coordinate,
+							},
+						],
+					})),
+				})
+			)
+				return
 			penContourResumeRef.current = contourId
 			setPenContourId(contourId)
 		} else {
-			workspace.font.actions.insertPoint({
-				masterId: activeMasterId,
-				glyphId: activeGlyphId,
-				contourId: penContourId,
-				...(penDirection === "prepend" ? { at: 0 } : {}),
-				point: { id: pointId, mode: gesture.mode },
-				coordinates: penCoordinates(point, gesture, draggedHandle),
-			})
+			if (
+				!applyActiveFontVectorIntent({
+					kind: "insert-node",
+					objectId: activeGlyphId,
+					contourId: penContourId,
+					node,
+					...(penDirection === "prepend" ? { at: 0 } : {}),
+					variants: coordinates.map((coordinate) => ({
+						id: pointId,
+						mode: gesture.mode,
+						variantId: coordinate.masterId,
+						...coordinate,
+					})),
+				})
+			)
+				return
 			penContourResumeRef.current = penContourId
 		}
 		setSelection(Object.freeze([{ kind: "node", pointId }]))
@@ -2073,21 +2123,24 @@ export function GlyphCanvas({
 			side: target.side,
 		})
 		if (!(target.mode === "hard" && gesture.kind === "click")) {
-			workspace.font.actions.authorPenEndpoint({
-				masterId: activeMasterId,
-				glyphId: activeGlyphId,
-				contourId: target.contourId,
-				pointId: target.pointId,
-				forwardHandle,
-				mode: resolution.mode,
-				coordinates: penCoordinates(target, gesture, forwardHandle).map(
-					(coordinate) => ({
-						masterId: coordinate.masterId,
-						forward:
-							gesture.kind === "click" ? null : coordinate[forwardHandle]!,
-					}),
-				),
-			})
+			if (
+				!applyActiveFontVectorIntent({
+					kind: "author-endpoint",
+					objectId: activeGlyphId,
+					contourId: target.contourId,
+					pointId: target.pointId,
+					forwardHandle,
+					mode: resolution.mode,
+					variants: penCoordinates(target, gesture, forwardHandle).map(
+						(coordinate) => ({
+							variantId: coordinate.masterId,
+							forward:
+								gesture.kind === "click" ? null : coordinate[forwardHandle]!,
+						}),
+					),
+				})
+			)
+				return
 		}
 		penContourResumeRef.current = target.contourId
 		setPenContourId(target.contourId)
@@ -2114,28 +2167,32 @@ export function GlyphCanvas({
 			direction: penDirection,
 		})
 		penContourResumeRef.current = penContourId
-		workspace.font.actions.closeContour({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
-			contourId: penContourId,
-			...(gesture.handles === null
-				? {}
-				: {
-						[penDirection === "prepend" ? "lastPoint" : "firstPoint"]: {
-							pointId: closurePoint.pointId,
-							mode: "soft" as const,
-							coordinates: penCoordinates(
-								closurePoint,
-								gesture,
-								draggedHandle,
-							).map(({ masterId, incoming, outgoing }) => ({
-								masterId,
-								incoming: incoming!,
-								outgoing: outgoing!,
-							})),
-						},
-					}),
-		})
+		if (
+			!applyActiveFontVectorIntent({
+				kind: "close-contour",
+				objectId: activeGlyphId,
+				contourId: penContourId,
+				...(gesture.handles === null
+					? {}
+					: {
+							endpoint: {
+								side: penDirection === "prepend" ? "last" : "first",
+								pointId: closurePoint.pointId,
+								mode: "soft" as const,
+								variants: penCoordinates(
+									closurePoint,
+									gesture,
+									draggedHandle,
+								).map(({ masterId, incoming, outgoing }) => ({
+									variantId: masterId,
+									incoming: incoming!,
+									outgoing: outgoing!,
+								})),
+							},
+						}),
+			})
+		)
+			return
 		setPenContourId(null)
 		setPenDirection("append")
 		setPenPointer(null)
@@ -2397,23 +2454,50 @@ export function GlyphCanvas({
 		const pointIds = geometry.map(
 			() => nextShapeEntityId("point", gesture.kind) as PointId,
 		)
-		workspace.font.actions.createCompleteContour({
-			masterId: activeMasterId,
-			glyphId: activeGlyphId,
-			contour: {
-				id: contourId,
-				closed: true,
-				points: geometry.map((point, index) => ({
-					id: pointIds[index]!,
-					mode: point.mode,
+		const layers = shapeLayerCoordinates(
+			geometry,
+			pointIds,
+			authoringLayerTransforms,
+		)
+		if (
+			!applyActiveFontVectorIntent({
+				kind: "create-contour",
+				objectId: activeGlyphId,
+				contour: {
+					id: contourId,
+					closed: true,
+					nodes: geometry.map((point, index) => ({
+						id: pointIds[index]!,
+						mode: point.mode,
+						x: point.x,
+						y: point.y,
+						...(point.incoming === undefined
+							? {}
+							: { incoming: point.incoming }),
+						...(point.outgoing === undefined
+							? {}
+							: { outgoing: point.outgoing }),
+					})),
+				},
+				variants: layers.map((layer) => ({
+					variantId: layer.masterId,
+					nodes: layer.points.map((point, index) => ({
+						id: point.pointId,
+						mode: geometry[index]?.mode ?? "hard",
+						variantId: layer.masterId,
+						x: point.x,
+						y: point.y,
+						...(point.incoming === undefined
+							? {}
+							: { incoming: point.incoming }),
+						...(point.outgoing === undefined
+							? {}
+							: { outgoing: point.outgoing }),
+					})),
 				})),
-			},
-			layers: shapeLayerCoordinates(
-				geometry,
-				pointIds,
-				authoringLayerTransforms,
-			),
-		})
+			})
+		)
+			return
 		setSelection(
 			Object.freeze(
 				pointIds.map((pointId) => ({ kind: "node" as const, pointId })),
@@ -2776,9 +2860,8 @@ export function GlyphCanvas({
 		let didCommit = false
 		try {
 			if (candidate === null) {
-				workspace.font.actions.transformControls({
-					masterId: currentGroupDrag.masterId,
-					glyphId: currentGroupDrag.glyphId,
+				applyActiveFontVectorIntent({
+					kind: "transform-controls",
 					...resolved.preview,
 				})
 			} else {
@@ -2921,9 +3004,8 @@ export function GlyphCanvas({
 		}
 		const finalPreview = resolveTransformPreview(drag)
 		if (activeGlyphId !== null) {
-			workspace.font.actions.transformControls({
-				masterId: activeMasterId,
-				glyphId: activeGlyphId,
+			applyActiveFontVectorIntent({
+				kind: "transform-controls",
 				...finalPreview,
 			})
 		}
@@ -3177,6 +3259,15 @@ export function GlyphCanvas({
 					setClipboardStatus(written.error)
 					return
 				}
+				if (layer !== null) {
+					writeVectorClipboard(
+						clipboard,
+						createFontVectorAdapter(workspace, {
+							masterId: activeMasterId,
+							glyphId: activeGlyphId,
+						}).clipboard(layer, selection),
+					)
+				}
 				event.preventDefault()
 				const pointCount = copied.value.selectedPointIds.length
 				setClipboardStatus(
@@ -3240,13 +3331,26 @@ export function GlyphCanvas({
 					setClipboardStatus(written.error)
 					return
 				}
+				if (layer !== null) {
+					writeVectorClipboard(
+						clipboard,
+						createFontVectorAdapter(workspace, {
+							masterId: activeMasterId,
+							glyphId: activeGlyphId,
+						}).clipboard(layer, selection),
+					)
+				}
 				event.preventDefault()
-				workspace.font.actions.deleteSelection({
-					masterId: activeMasterId,
-					glyphId: activeGlyphId,
-					pointIds: copied.value.selectedPointIds,
-					handles: [],
-					breakPaths: false,
+				applyActiveFontVectorIntent({
+					kind: "delete",
+					objectIds: [],
+					controls: copied.value.selectedPointIds.map((pointId) => ({
+						kind: "node",
+						objectId: activeGlyphId,
+						contourId: "",
+						pointId,
+					})),
+					deletePolicy: "preserve-paths",
 				})
 				setSelection(Object.freeze([]))
 				const pointCount = copied.value.selectedPointIds.length
@@ -3273,17 +3377,18 @@ export function GlyphCanvas({
 					setClipboardStatus("The system clipboard is unavailable.")
 					return
 				}
+				const vector = readVectorClipboard(clipboard)
 				const serialized =
 					clipboard.getData(RULE_CLIPBOARD_MIME) ||
 					clipboard.getData(OUTLINE_CLIPBOARD_MIME) ||
 					clipboard.getData("text/plain")
-				if (serialized.length === 0) {
+				if (vector === null && serialized.length === 0) {
 					setClipboardStatus(
 						"The clipboard does not contain create-font outlines.",
 					)
 					return
 				}
-				if (serialized.includes('"create-font.rules"')) {
+				if (vector === null && serialized.includes('"create-font.rules"')) {
 					const parsedRules = parseRuleClipboard(serialized)
 					if (!parsedRules.ok) {
 						setClipboardStatus(parsedRules.error)
@@ -3302,7 +3407,13 @@ export function GlyphCanvas({
 					)
 					return
 				}
-				const parsed = parseOutlineClipboard(serialized)
+				const parsed =
+					vector === null
+						? parseOutlineClipboard(serialized)
+						: {
+								ok: true as const,
+								value: fontOutlineClipboardFromVector(vector, activeMasterId),
+							}
 				if (!parsed.ok) {
 					setClipboardStatus(parsed.error)
 					return
@@ -3319,14 +3430,12 @@ export function GlyphCanvas({
 					setClipboardStatus(paste.error)
 					return
 				}
-				try {
-					workspace.font.actions.pasteContours(paste.value)
-				} catch (error) {
-					setClipboardStatus(
-						error instanceof Error
-							? error.message
-							: "The outlines could not be pasted.",
-					)
+				const pasted = createFontVectorAdapter(workspace, {
+					masterId: activeMasterId,
+					glyphId: activeGlyphId,
+				}).paste(paste.value)
+				if (!pasted.ok) {
+					setClipboardStatus(pasted.error)
 					return
 				}
 				event.preventDefault()
@@ -3546,9 +3655,8 @@ export function GlyphCanvas({
 					)
 					if (fixedHandlePlan !== null) {
 						event.preventDefault()
-						workspace.font.actions.transformControls({
-							masterId: activeMasterId,
-							glyphId: activeGlyphId,
+						applyActiveFontVectorIntent({
+							kind: "transform-controls",
 							...fixedHandlePlan,
 						})
 						return
@@ -3571,9 +3679,8 @@ export function GlyphCanvas({
 				) {
 					setSelection(plan.selection)
 				}
-				workspace.font.actions.transformControls({
-					masterId: activeMasterId,
-					glyphId: activeGlyphId,
+				applyActiveFontVectorIntent({
+					kind: "transform-controls",
 					...plan.result,
 				})
 			}}

@@ -63,10 +63,4 @@ export interface DesignDocument {
 	readonly guides: readonly DesignGuide[]
 }
 
-export type DesignTool =
-	| "select"
-	| "transform"
-	| "pen"
-	| "rect"
-	| "ellipse"
-	| "rule"
+export type DesignTool = "select" | "transform" | "pen" | "rect" | "ellipse"

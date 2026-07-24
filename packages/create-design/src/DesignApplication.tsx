@@ -4,9 +4,11 @@ import {
 	CommandPalette,
 	columnSlotAllocation,
 	isCommandPaletteKeyboardEvent,
+	readVectorClipboard,
 	reduceCanvasWheel,
 	screenToDocument,
 	type PaletteCommand,
+	type VectorEditIntent,
 } from "@create-font/editor/shared"
 import {
 	Circle,
@@ -19,17 +21,11 @@ import {
 	Stage,
 } from "@create-font/preact-konva"
 import {
-	CircleIcon,
-	CursorArrowIcon,
 	DownloadIcon,
 	EyeClosedIcon,
 	EyeOpenIcon,
 	LockClosedIcon,
 	LockOpen1Icon,
-	Pencil1Icon,
-	RulerSquareIcon,
-	SquareIcon,
-	TransformIcon,
 	TrashIcon,
 } from "@radix-ui/react-icons"
 import type { ComponentChildren } from "preact"
@@ -69,6 +65,20 @@ import {
 	snapDesignObject,
 } from "./design-canvas.ts"
 import {
+	createDesignHistory,
+	reduceDesignHistory,
+	type DesignHistory,
+} from "./design-history.ts"
+import {
+	cancelDesignPen,
+	createDesignPenObject,
+	resolveDesignPenPoint,
+	shouldCloseDesignPen,
+	type DesignPenGesture,
+} from "./design-pen.ts"
+import { DESIGN_TOOLS } from "./design-tools.ts"
+import {
+	contourSvgPath,
 	ellipseContour,
 	normalizedBounds,
 	objectBounds,
@@ -78,6 +88,13 @@ import {
 	translateObject,
 	type Bounds,
 } from "./geometry.ts"
+import {
+	applyDesignVectorIntent,
+	designVectorAdapter,
+	importDesignVectorClipboard,
+	importDesignObjects,
+	projectDesignVectorObject,
+} from "./design-vector-adapter.ts"
 import { downloadPdf } from "./pdf.ts"
 import type {
 	ColorDefinition,
@@ -87,64 +104,6 @@ import type {
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
-
-const tools = {
-	select: {
-		label: "Select",
-		key: "V",
-		icon: CursorArrowIcon,
-		paletteIcon: "CursorArrowIcon",
-	},
-	transform: {
-		label: "Transform",
-		key: "F",
-		icon: TransformIcon,
-		paletteIcon: "TransformIcon",
-	},
-	pen: {
-		label: "Pen",
-		key: "Q",
-		icon: Pencil1Icon,
-		paletteIcon: "Pencil1Icon",
-	},
-	rect: {
-		label: "Rectangle",
-		key: "R",
-		icon: SquareIcon,
-		paletteIcon: "SquareIcon",
-	},
-	ellipse: {
-		label: "Ellipse",
-		key: "O",
-		icon: CircleIcon,
-		paletteIcon: "CircleIcon",
-	},
-	rule: {
-		label: "Rule",
-		key: "L",
-		icon: RulerSquareIcon,
-		paletteIcon: "AlignCenterVerticallyIcon",
-	},
-} as const satisfies Record<
-	DesignTool,
-	{
-		readonly label: string
-		readonly key: string
-		readonly icon: typeof CursorArrowIcon
-		readonly paletteIcon: PaletteCommand["icon"]
-	}
->
-
-interface History {
-	readonly past: readonly DesignDocument[]
-	readonly present: DesignDocument
-	readonly future: readonly DesignDocument[]
-}
-
-type HistoryAction =
-	| { readonly type: "commit"; readonly document: DesignDocument }
-	| { readonly type: "undo" }
-	| { readonly type: "redo" }
 
 type CanvasGesture =
 	| {
@@ -168,6 +127,14 @@ type CanvasGesture =
 			alt: boolean
 	  }
 	| {
+			readonly kind: "pen"
+			readonly pointerId: number
+			readonly gesture: DesignPenGesture
+			current: DesignPoint
+			currentScreen: DesignPoint
+			shift: boolean
+	  }
+	| {
 			readonly kind: "scale"
 			readonly pointerId: number
 			readonly original: DesignObject
@@ -176,42 +143,13 @@ type CanvasGesture =
 			readonly handle: "nw" | "ne" | "se" | "sw"
 	  }
 
-const historyReducer = (history: History, action: HistoryAction): History => {
-	if (action.type === "undo") {
-		const previous = history.past.at(-1)
-		return previous === undefined
-			? history
-			: {
-					past: history.past.slice(0, -1),
-					present: previous,
-					future: [history.present, ...history.future],
-				}
-	}
-	if (action.type === "redo") {
-		const next = history.future[0]
-		return next === undefined
-			? history
-			: {
-					past: [...history.past, history.present],
-					present: next,
-					future: history.future.slice(1),
-				}
-	}
-	if (action.document === history.present) return history
-	return {
-		past: [...history.past.slice(-99), history.present],
-		present: action.document,
-		future: [],
-	}
-}
-
-function initialHistory(): History {
+function initialHistory(): DesignHistory {
 	let document = createInitialDocument()
 	if (typeof localStorage !== "undefined") {
 		document =
 			parseDesignDocument(localStorage.getItem(DESIGN_STORAGE_KEY)) ?? document
 	}
-	return { past: [], present: document, future: [] }
+	return createDesignHistory(document)
 }
 
 function editableTarget(target: EventTarget | null): boolean {
@@ -221,18 +159,6 @@ function editableTarget(target: EventTarget | null): boolean {
 		target instanceof HTMLSelectElement ||
 		(target instanceof HTMLElement && target.isContentEditable)
 	)
-}
-
-function updateObject(
-	document: DesignDocument,
-	object: DesignObject,
-): DesignDocument {
-	return {
-		...document,
-		objects: document.objects.map((candidate) =>
-			candidate.id === object.id ? object : candidate,
-		),
-	}
 }
 
 function channelInput(
@@ -258,7 +184,7 @@ function channelInput(
 
 export function DesignApplication() {
 	const [history, dispatch] = useReducer(
-		historyReducer,
+		reduceDesignHistory,
 		undefined,
 		initialHistory,
 	)
@@ -277,6 +203,9 @@ export function DesignApplication() {
 	const [previewObject, setPreviewObject] = useState<DesignObject | null>(null)
 	const [drawBounds, setDrawBounds] = useState<Bounds | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPoint[]>([])
+	const [penPreviewPoint, setPenPreviewPoint] = useState<DesignPoint | null>(
+		null,
+	)
 	const [canvasViewport, setCanvasViewport] = useState({
 		width: 0,
 		height: 0,
@@ -288,6 +217,7 @@ export function DesignApplication() {
 	}> | null>(null)
 	const artboardWrapRef = useRef<HTMLDivElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
+	const penPointsRef = useRef<readonly DesignPoint[]>([])
 	const previewObjectRef = useRef<DesignObject | null>(null)
 	const drawBoundsRef = useRef<Bounds | null>(null)
 	const sequence = useRef(0)
@@ -311,10 +241,35 @@ export function DesignApplication() {
 		[baseScale],
 	)
 	const worldScale = canvasScale(canvasView, viewOptions)
+	const cancelCanvasGesture = useCallback((): void => {
+		const cancelled = cancelDesignPen()
+		gestureRef.current = null
+		previewObjectRef.current = null
+		drawBoundsRef.current = null
+		penPointsRef.current = cancelled
+		setPreviewObject(null)
+		setDrawBounds(null)
+		setPenPreviewPoint(null)
+		setPenPoints(cancelled)
+		setActiveSnap(null)
+	}, [])
 
 	const commit = useCallback((next: DesignDocument): void => {
 		dispatch({ type: "commit", document: next })
 	}, [])
+	const commitVectorIntent = useCallback(
+		(intent: VectorEditIntent): boolean => {
+			const result = applyDesignVectorIntent(document, selection, intent)
+			if (!result.ok) {
+				setStatus(result.error)
+				return false
+			}
+			commit(result.document)
+			setSelection(result.selection)
+			return true
+		},
+		[commit, document, selection],
+	)
 
 	const pagePoint = useCallback(
 		(event: KonvaEventObject<PointerEvent | MouseEvent>): DesignPoint => {
@@ -329,41 +284,67 @@ export function DesignApplication() {
 		},
 		[canvasView, document.page, viewOptions],
 	)
+	const screenPoint = (
+		event: KonvaEventObject<PointerEvent | MouseEvent>,
+	): DesignPoint =>
+		event.target.getStage()?.getPointerPosition() ?? { x: 0, y: 0 }
 
-	const selectTool = useCallback((nextTool: DesignTool): void => {
-		setTool(nextTool)
-		setPenPoints([])
-		setStatus(`${tools[nextTool].label} tool`)
-	}, [])
+	const selectTool = useCallback(
+		(nextTool: DesignTool): void => {
+			cancelCanvasGesture()
+			setTool(nextTool)
+			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
+		},
+		[cancelCanvasGesture],
+	)
 
 	const deleteSelection = useCallback((): void => {
 		if (selection.length === 0) return
-		commit({
-			...document,
-			objects: document.objects.filter(
-				(object) => !selection.includes(object.id),
-			),
-		})
-		setSelection([])
-		setStatus("Deleted selection.")
-	}, [commit, document, selection])
+		if (
+			commitVectorIntent({
+				kind: "delete",
+				objectIds: selection,
+			})
+		)
+			setStatus("Deleted selection.")
+	}, [commitVectorIntent, selection])
 
-	const finishPen = useCallback((): void => {
-		if (penPoints.length < 2) {
-			setPenPoints([])
-			return
-		}
-		const object: DesignObject = {
-			id: `object:${nextId()}`,
-			name: `Pen path ${document.objects.length + 1}`,
-			fillId: currentSwatchId,
-			contours: [{ closed: penPoints.length >= 3, points: penPoints }],
-		}
-		commit({ ...document, objects: [...document.objects, object] })
-		setSelection([object.id])
-		setPenPoints([])
-		setStatus(`Created ${object.name}.`)
-	}, [commit, currentSwatchId, document, nextId, penPoints])
+	const finishPen = useCallback(
+		(closed = false): void => {
+			const points = penPointsRef.current
+			const object = createDesignPenObject({
+				id: `object:${nextId()}`,
+				name: `Pen path ${document.objects.length + 1}`,
+				fillId: currentSwatchId,
+				points,
+				closed,
+			})
+			if (object === null) {
+				const cancelled = cancelDesignPen()
+				setPenPreviewPoint(null)
+				gestureRef.current = null
+				penPointsRef.current = cancelled
+				setPenPoints(cancelled)
+				return
+			}
+			if (
+				!commitVectorIntent({
+					kind: "create-object",
+					object: projectDesignVectorObject(document, object),
+				})
+			)
+				return
+			const cancelled = cancelDesignPen()
+			setPenPreviewPoint(null)
+			gestureRef.current = null
+			penPointsRef.current = cancelled
+			setPenPoints(cancelled)
+			setStatus(
+				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
+			)
+		},
+		[commitVectorIntent, currentSwatchId, document, nextId],
+	)
 
 	const exportDocument = useCallback((): void => {
 		downloadPdf(document)
@@ -375,9 +356,9 @@ export function DesignApplication() {
 	const commands = useMemo<readonly PaletteCommand[]>(
 		() => [
 			...(
-				Object.entries(tools) as readonly [
+				Object.entries(DESIGN_TOOLS) as readonly [
 					DesignTool,
-					(typeof tools)[DesignTool],
+					(typeof DESIGN_TOOLS)[DesignTool],
 				][]
 			).map(([id, definition]) => ({
 				id: `tool-${id}`,
@@ -449,6 +430,17 @@ export function DesignApplication() {
 		return () => window.removeEventListener("resize", resize)
 	}, [])
 
+	useEffect(() => {
+		const cancel = (event: PointerEvent): void => {
+			const gesture = gestureRef.current
+			if (gesture === null || gesture.pointerId !== event.pointerId) return
+			cancelCanvasGesture()
+		}
+		window.addEventListener("pointercancel", cancel, { capture: true })
+		return () =>
+			window.removeEventListener("pointercancel", cancel, { capture: true })
+	}, [cancelCanvasGesture])
+
 	useLayoutEffect(() => {
 		const element = artboardWrapRef.current
 		if (element === null) return
@@ -502,25 +494,22 @@ export function DesignApplication() {
 				return
 			}
 			if (event.key === "Escape") {
-				setPenPoints([])
-				setDrawBounds(null)
-				setPreviewObject(null)
-				drawBoundsRef.current = null
-				previewObjectRef.current = null
-				gestureRef.current = null
+				cancelCanvasGesture()
 				return
 			}
 			if (event.key === "Backspace" || event.key === "Delete") {
 				if (tool === "pen" && penPoints.length > 0) {
 					event.preventDefault()
-					setPenPoints((points) => points.slice(0, -1))
+					const points = penPointsRef.current.slice(0, -1)
+					penPointsRef.current = points
+					setPenPoints(points)
 				} else {
 					event.preventDefault()
 					deleteSelection()
 				}
 				return
 			}
-			const entry = Object.entries(tools).find(
+			const entry = Object.entries(DESIGN_TOOLS).find(
 				([, definition]) =>
 					definition.key.toLowerCase() === event.key.toLowerCase(),
 			)
@@ -533,6 +522,7 @@ export function DesignApplication() {
 		return () => window.removeEventListener("keydown", keydown)
 	}, [
 		deleteSelection,
+		cancelCanvasGesture,
 		exportDocument,
 		finishPen,
 		paletteOpen,
@@ -548,6 +538,7 @@ export function DesignApplication() {
 				event.clipboardData,
 				document,
 				selection,
+				designVectorAdapter.clipboard(document, selection),
 			)
 			if (count === 0) return
 			event.preventDefault()
@@ -555,19 +546,41 @@ export function DesignApplication() {
 		}
 		const paste = (event: ClipboardEvent): void => {
 			if (editableTarget(event.target) || event.clipboardData === null) return
+			const vector = readVectorClipboard(event.clipboardData)
+			if (vector !== null) {
+				const result = importDesignVectorClipboard(
+					document,
+					selection,
+					vector,
+					nextId,
+					currentSwatchId,
+				)
+				if (!result.ok) {
+					setStatus(result.error)
+					return
+				}
+				event.preventDefault()
+				commit(result.document)
+				setSelection(result.selection)
+				setStatus(
+					`Pasted ${result.selection.length} vector object${result.selection.length === 1 ? "" : "s"}.`,
+				)
+				return
+			}
 			const addition = readDesignClipboard(
 				event.clipboardData,
 				document,
 				nextId,
 			)
 			if (addition === null || addition.objects.length === 0) return
+			const result = importDesignObjects(document, selection, addition)
+			if (!result.ok) {
+				setStatus(result.error)
+				return
+			}
 			event.preventDefault()
-			commit({
-				...document,
-				swatches: [...document.swatches, ...addition.swatches],
-				objects: [...document.objects, ...addition.objects],
-			})
-			setSelection(addition.objects.map((object) => object.id))
+			commit(result.document)
+			setSelection(result.selection)
 			setStatus(
 				`Pasted ${addition.objects.length} vector object${addition.objects.length === 1 ? "" : "s"}.`,
 			)
@@ -578,7 +591,7 @@ export function DesignApplication() {
 			window.removeEventListener("copy", copy)
 			window.removeEventListener("paste", paste)
 		}
-	}, [commit, document, nextId, selection])
+	}, [commit, currentSwatchId, document, nextId, selection])
 
 	const startObjectGesture = (
 		event: KonvaEventObject<PointerEvent>,
@@ -589,7 +602,7 @@ export function DesignApplication() {
 		setSelection([object.id])
 		gestureRef.current = {
 			kind: "move",
-			pointerId: event.pointerId,
+			pointerId: event.evt.pointerId,
 			start: pagePoint(event),
 			original: object,
 		}
@@ -626,17 +639,22 @@ export function DesignApplication() {
 			return
 		}
 		if (tool === "pen") {
-			setPenPoints((points) => [...points, point])
-			return
-		}
-		if (tool === "rule") {
-			const guide = {
-				id: `guide:${nextId()}`,
-				axis: event.evt.shiftKey ? ("y" as const) : ("x" as const),
-				value: event.evt.shiftKey ? point.y : point.x,
+			if (shouldCloseDesignPen(penPointsRef.current, point, worldScale)) {
+				finishPen(true)
+				return
 			}
-			commit({ ...document, guides: [...document.guides, guide] })
-			setStatus(`Added ${guide.axis === "x" ? "vertical" : "horizontal"} rule.`)
+			const downScreen = screenPoint(event)
+			const gesture: DesignPenGesture = { anchor: point, downScreen }
+			gestureRef.current = {
+				kind: "pen",
+				pointerId: event.evt.pointerId,
+				gesture,
+				current: point,
+				currentScreen: downScreen,
+				shift: event.evt.shiftKey,
+			}
+			setPenPreviewPoint(point)
+			captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			return
 		}
 		const hit = nearestDesignObject(
@@ -674,6 +692,20 @@ export function DesignApplication() {
 			)
 			drawBoundsRef.current = bounds
 			setDrawBounds(bounds)
+			return
+		}
+		if (gesture.kind === "pen") {
+			gesture.current = point
+			gesture.currentScreen = screenPoint(event)
+			gesture.shift = event.evt.shiftKey
+			setPenPreviewPoint(
+				resolveDesignPenPoint({
+					gesture: gesture.gesture,
+					current: gesture.current,
+					currentScreen: gesture.currentScreen,
+					shiftKey: gesture.shift,
+				}),
+			)
 			return
 		}
 		if (gesture.kind === "move") {
@@ -716,6 +748,24 @@ export function DesignApplication() {
 		gestureRef.current = null
 		setActiveSnap(null)
 		if (gesture.kind === "pan") return
+		if (gesture.kind === "pen") {
+			const point = resolveDesignPenPoint({
+				gesture: gesture.gesture,
+				current: pagePoint(event),
+				currentScreen: screenPoint(event),
+				shiftKey: event.evt.shiftKey,
+			})
+			const points = [...penPointsRef.current, point]
+			penPointsRef.current = points
+			setPenPoints(points)
+			setPenPreviewPoint(null)
+			setStatus(
+				point.incoming === undefined
+					? "Added a hard Pen node."
+					: "Added a smooth Pen node.",
+			)
+			return
+		}
 		if (gesture.kind === "draw") {
 			const bounds = drawBoundsRef.current
 			drawBoundsRef.current = null
@@ -736,29 +786,33 @@ export function DesignApplication() {
 						: ellipseContour(bounds),
 				],
 			}
-			commit({ ...document, objects: [...document.objects, object] })
-			setSelection([object.id])
+			if (
+				!commitVectorIntent({
+					kind: "create-object",
+					object: projectDesignVectorObject(document, object),
+				})
+			)
+				return
 			setStatus(`Created ${object.name}.`)
 			return
 		}
 		const committedPreview = previewObjectRef.current
 		previewObjectRef.current = null
 		if (committedPreview !== null) {
-			commit(updateObject(document, committedPreview))
-			setPreviewObject(null)
+			if (
+				commitVectorIntent({
+					kind: "replace-object",
+					object: projectDesignVectorObject(document, committedPreview),
+				})
+			)
+				setPreviewObject(null)
 		}
 	}
-
 	const pointerCancel = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
 		if (gesture === null || gesture.pointerId !== event.evt.pointerId) return
 		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
-		gestureRef.current = null
-		previewObjectRef.current = null
-		drawBoundsRef.current = null
-		setPreviewObject(null)
-		setDrawBounds(null)
-		setActiveSnap(null)
+		cancelCanvasGesture()
 	}
 
 	const startScale = (
@@ -788,7 +842,28 @@ export function DesignApplication() {
 		object: DesignObject,
 		property: Partial<DesignObject>,
 	): void => {
-		commit(updateObject(document, { ...object, ...property }))
+		if (property.fillId !== undefined) {
+			const swatch = document.swatches.find(
+				(candidate) => candidate.id === property.fillId,
+			)
+			if (swatch !== undefined)
+				commitVectorIntent({
+					kind: "set-style",
+					objectId: object.id,
+					style: projectDesignVectorObject(document, {
+						...object,
+						fillId: swatch.id,
+					}).style,
+				})
+			return
+		}
+		commitVectorIntent({
+			kind: "set-object-properties",
+			objectId: object.id,
+			...(property.name === undefined ? {} : { name: property.name }),
+			...(property.hidden === undefined ? {} : { hidden: property.hidden }),
+			...(property.locked === undefined ? {} : { locked: property.locked }),
+		})
 	}
 
 	const updateSwatch = (swatch: DesignSwatch): void => {
@@ -866,9 +941,9 @@ export function DesignApplication() {
 			>
 				<nav class="tool-rail" aria-label="Tools">
 					{(
-						Object.entries(tools) as readonly [
+						Object.entries(DESIGN_TOOLS) as readonly [
 							DesignTool,
-							(typeof tools)[DesignTool],
+							(typeof DESIGN_TOOLS)[DesignTool],
 						][]
 					).map(([id, definition]) => {
 						const Icon = definition.icon
@@ -943,7 +1018,7 @@ export function DesignApplication() {
 
 				<main class="canvas-stage">
 					<div class="canvas-meta">
-						<span>{tools[tool].label}</span>
+						<span>{DESIGN_TOOLS[tool].label}</span>
 						<span>612 × 792 pt · {Math.round(canvasView.zoom * 100)}%</span>
 					</div>
 					<div
@@ -996,21 +1071,6 @@ export function DesignApplication() {
 										shadowOpacity={0.36}
 										shadowOffsetY={9 / worldScale}
 									/>
-									{document.guides.map((guide) => (
-										<Line
-											key={guide.id}
-											name="design-guide"
-											points={
-												guide.axis === "x"
-													? [guide.value, 0, guide.value, document.page.height]
-													: [0, guide.value, document.page.width, guide.value]
-											}
-											stroke="#36a8e0"
-											strokeWidth={1 / worldScale}
-											dash={[5 / worldScale, 4 / worldScale]}
-											listening={false}
-										/>
-									))}
 									{previewObjects.map((object) => {
 										const swatch = document.swatches.find(
 											(candidate) => candidate.id === object.fillId,
@@ -1070,28 +1130,49 @@ export function DesignApplication() {
 											listening={false}
 										/>
 									)}
-									{penPoints.length === 0 ? null : (
+									{penPoints.length === 0 && penPreviewPoint === null ? null : (
 										<Group listening={false}>
-											<Line
+											<Path
 												name="pen-preview"
-												points={penPoints.flatMap((point) => [
-													point.x,
-													point.y,
-												])}
+												data={contourSvgPath({
+													closed: false,
+													points:
+														penPreviewPoint === null
+															? penPoints
+															: [...penPoints, penPreviewPoint],
+												})}
 												stroke="#e17352"
 												strokeWidth={2 / worldScale}
+												lineCap="round"
+												lineJoin="round"
 											/>
-											{penPoints.map((point, index) => (
-												<Circle
+											{[
+												...penPoints,
+												...(penPreviewPoint === null ? [] : [penPreviewPoint]),
+											].map((point, index) => (
+												<DesignPointControls
 													key={index}
-													x={point.x}
-													y={point.y}
-													radius={4 / worldScale}
-													fill="#fff"
-													stroke="#e17352"
-													strokeWidth={2 / worldScale}
+													point={point}
+													worldScale={worldScale}
+													prefix={`pen-preview-${index}`}
 												/>
 											))}
+										</Group>
+									)}
+									{selectedObject === null ||
+									(tool !== "select" && tool !== "transform") ? null : (
+										<Group name="selected-vector-controls" listening={false}>
+											{(previewObject ?? selectedObject).contours.flatMap(
+												(contour, contourIndex) =>
+													contour.points.map((point, pointIndex) => (
+														<DesignPointControls
+															key={`${contourIndex}:${pointIndex}`}
+															point={point}
+															worldScale={worldScale}
+															prefix={`selected-${contourIndex}-${pointIndex}`}
+														/>
+													)),
+											)}
 										</Group>
 									)}
 									{activeSnap?.x === null ||
@@ -1188,12 +1269,10 @@ export function DesignApplication() {
 					</div>
 					<div class="canvas-hint">
 						{tool === "pen"
-							? "Click points · Enter closes · Esc cancels"
-							: tool === "rule"
-								? "Click for vertical rule · Shift-click for horizontal"
-								: tool === "rect" || tool === "ellipse"
-									? "Drag to draw · Shift constrains · Alt draws from center"
-									: "Drag objects to move · F shows transform handles"}
+							? "Click for corners · Drag for curves · Click start to close · Enter finishes open · Esc cancels"
+							: tool === "rect" || tool === "ellipse"
+								? "Drag to draw · Shift constrains · Alt draws from center"
+								: "Drag objects to move · F shows transform handles"}
 					</div>
 				</main>
 
@@ -1346,6 +1425,58 @@ function TileHeader({
 
 function EmptyPanel({ children }: { readonly children: ComponentChildren }) {
 	return <div class="empty-panel">{children}</div>
+}
+
+function DesignPointControls({
+	point,
+	worldScale,
+	prefix,
+}: {
+	readonly point: DesignPoint
+	readonly worldScale: number
+	readonly prefix: string
+}) {
+	const handles = (
+		[
+			["incoming", point.incoming],
+			["outgoing", point.outgoing],
+		] as const
+	).filter(
+		(entry): entry is readonly ["incoming" | "outgoing", DesignPoint] =>
+			entry[1] !== undefined,
+	)
+	return (
+		<Group name={`${prefix}-controls`}>
+			{handles.map(([kind, handle]) => (
+				<Group key={kind}>
+					<Line
+						name={`${prefix}-${kind}-line`}
+						points={[point.x, point.y, point.x + handle.x, point.y + handle.y]}
+						stroke="#e17352"
+						strokeWidth={1 / worldScale}
+					/>
+					<Circle
+						name={`${prefix}-${kind}-handle`}
+						x={point.x + handle.x}
+						y={point.y + handle.y}
+						radius={3.5 / worldScale}
+						fill="#fff"
+						stroke="#e17352"
+						strokeWidth={1.5 / worldScale}
+					/>
+				</Group>
+			))}
+			<Circle
+				name={`${prefix}-node`}
+				x={point.x}
+				y={point.y}
+				radius={4 / worldScale}
+				fill="#fff"
+				stroke="#e17352"
+				strokeWidth={2 / worldScale}
+			/>
+		</Group>
+	)
 }
 
 function SwatchEditor({
