@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/preact-konva",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Small, native Preact bindings for the Konva scene graph",
 	"repository": {
 		"type": "git",

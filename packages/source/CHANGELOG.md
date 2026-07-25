@@ -1,5 +1,16 @@
 # @create-font/source
 
+## 0.2.6
+
+### Patch Changes
+
+- aa926b7: Add shared Adobe feature analysis, checking CLI, language server, and bundled VS Code extension
+- 1856b23: Replace the transitional TypeScript Adobe feature parser with upstream fea-rs through shared WebAssembly bindings in Node and browser consumers.
+- Updated dependencies [1856b23]
+- Updated dependencies [13eda7d]
+  - @create-font/fea-rs-wasm@0.1.1
+  - @create-font/states@0.6.6
+
 ## 0.2.5
 
 ### Patch Changes
