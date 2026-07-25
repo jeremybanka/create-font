@@ -33,7 +33,7 @@
 		"@typescript-eslint/utils": "8.65.0",
 		"@types/node": "25.9.5",
 		"atom.io": "0.50.1",
-		"eslint": "10.7.0",
+		"eslint": "10.8.0",
 		"happy-dom": "20.11.1",
 		"jiti": "2.7.0",
 		"lasertag": "0.6.7",
