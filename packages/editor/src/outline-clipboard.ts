@@ -525,11 +525,29 @@ export function prepareOutlinePaste(
 	}
 }
 
-/** Replaces any prior mixed selection with the freshly allocated paste nodes. */
+/** Fully selects freshly pasted nodes and every authored active-layer handle. */
 export function outlinePasteSelectionTargets(
 	selectedPointIds: readonly PointId[],
+	layerPoints: readonly Pick<
+		AuthoringLayerPointInput,
+		"pointId" | "incoming" | "outgoing"
+	>[],
 ): readonly EditorSelectionTarget[] {
+	const layerPointById = new Map(
+		layerPoints.map((point) => [point.pointId, point] as const),
+	)
 	return Object.freeze(
-		selectedPointIds.map((pointId) => ({ kind: "node" as const, pointId })),
+		selectedPointIds.flatMap((pointId): readonly EditorSelectionTarget[] => {
+			const point = layerPointById.get(pointId)
+			return [
+				{ kind: "node", pointId },
+				...(point?.incoming === undefined
+					? []
+					: [{ kind: "handle", pointId, handle: "incoming" } as const]),
+				...(point?.outgoing === undefined
+					? []
+					: [{ kind: "handle", pointId, handle: "outgoing" } as const]),
+			]
+		}),
 	)
 }

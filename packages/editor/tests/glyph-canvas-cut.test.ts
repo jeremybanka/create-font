@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { PointId } from "@create-font/states"
 import { createRequire } from "node:module"
 import { h, render } from "preact"
 import { act } from "preact/test-utils"
@@ -9,7 +10,10 @@ import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { OUTLINE_CLIPBOARD_MIME } from "../src/outline-clipboard.ts"
-import type { EditorSelectionTarget } from "../src/outline-selection.ts"
+import {
+	selectionKey,
+	type EditorSelectionTarget,
+} from "../src/outline-selection.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const requireFromRenderer = createRequire(
@@ -97,6 +101,26 @@ function pointCount(
 	)
 }
 
+function fullySelectedPointKeys(
+	workspace: ReturnType<typeof createEditorWorkspace>,
+	pointIds: readonly PointId[],
+): readonly string[] {
+	const points = new Map(
+		(workspace.font.silo.getState(workspace.ui.activeLayer)?.contours ?? [])
+			.flatMap((contour) => contour.nodes)
+			.map((node) => [node.pointId, node] as const),
+	)
+	return pointIds.flatMap((pointId) => {
+		const node = points.get(pointId)
+		if (node === undefined) throw new Error(`Missing pasted point ${pointId}.`)
+		return [
+			`node/${pointId}`,
+			...(node.incoming === undefined ? [] : [`handle/${pointId}/incoming`]),
+			...(node.outgoing === undefined ? [] : [`handle/${pointId}/outgoing`]),
+		]
+	})
+}
+
 async function setSelection(
 	workspace: ReturnType<typeof createEditorWorkspace>,
 	selection: readonly EditorSelectionTarget[],
@@ -144,7 +168,7 @@ describe("GlyphCanvas cut", () => {
 		expect(pointCount(workspace)).toBe(before - 2)
 	})
 
-	it("pastes the fragment produced by Cut with fresh selected point IDs", async () => {
+	it("pastes the Cut fragment with fresh, fully selected points and handles", async () => {
 		const { nodes, root, workspace } = mountCanvas()
 		const [first, second] = nodes
 		if (first === undefined || second === undefined)
@@ -168,12 +192,16 @@ describe("GlyphCanvas cut", () => {
 
 		expect(pointCount(workspace)).toBe(before)
 		const pasted = workspace.font.silo.getState(workspace.ui.selection)
-		expect(pasted).toHaveLength(2)
-		expect(pasted.every((target) => target.kind === "node")).toBe(true)
+		const pastedPointIds = pasted.flatMap((target) =>
+			target.kind === "node" ? [target.pointId] : [],
+		)
+		expect(pastedPointIds).toHaveLength(2)
+		expect(pasted.map(selectionKey)).toEqual(
+			fullySelectedPointKeys(workspace, pastedPointIds),
+		)
 		expect(
-			pasted.some(
-				(target) =>
-					target.pointId === first.pointId || target.pointId === second.pointId,
+			pastedPointIds.some(
+				(pointId) => pointId === first.pointId || pointId === second.pointId,
 			),
 		).toBe(false)
 	})
@@ -222,11 +250,16 @@ describe("GlyphCanvas cut", () => {
 			(destinationBefore?.contours.length ?? 0) + 1,
 		)
 		const pastedSelection = workspace.font.silo.getState(workspace.ui.selection)
-		expect(pastedSelection).toHaveLength(nodes.length)
-		expect(pastedSelection.every((target) => target.kind === "node")).toBe(true)
+		const pastedPointIds = pastedSelection.flatMap((target) =>
+			target.kind === "node" ? [target.pointId] : [],
+		)
+		expect(pastedPointIds).toHaveLength(nodes.length)
+		expect(pastedSelection.map(selectionKey)).toEqual(
+			fullySelectedPointKeys(workspace, pastedPointIds),
+		)
 		expect(
-			pastedSelection.some((target) =>
-				nodes.some(({ pointId }) => pointId === target.pointId),
+			pastedPointIds.some((pointId) =>
+				nodes.some((node) => node.pointId === pointId),
 			),
 		).toBe(false)
 		expect(

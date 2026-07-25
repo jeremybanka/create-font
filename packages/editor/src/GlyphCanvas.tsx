@@ -3882,7 +3882,15 @@ export function GlyphCanvas({
 					return
 				}
 				event.preventDefault()
-				setSelection(outlinePasteSelectionTargets(paste.value.selectedPointIds))
+				const activePasteLayer = paste.value.layers.find(
+					(layer) => layer.masterId === activeMasterId,
+				)
+				setSelection(
+					outlinePasteSelectionTargets(
+						paste.value.selectedPointIds,
+						activePasteLayer?.points ?? [],
+					),
+				)
 				setShowNodes(true)
 				setClipboardStatus(
 					`Pasted ${paste.value.selectedPointIds.length} outline node${paste.value.selectedPointIds.length === 1 ? "" : "s"}.`,

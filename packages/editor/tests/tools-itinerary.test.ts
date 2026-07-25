@@ -197,12 +197,20 @@ export const FONT_TOOL_ITINERARY = [
 			{
 				id: "clipboard-round-trip",
 				expectation:
-					"Copy, cut, and paste preserve selected topology and handles, use fresh IDs, remain mode-aware, and are atomic.",
+					"Copy, cut, and paste preserve topology and handles, use fresh IDs, fully select pasted contours, remain mode-aware, and are atomic.",
 				issues: [58, 99, 166, 174],
 				coveredBy: [
 					coveredBy(
 						"outline-clipboard.test.ts",
 						"copies a whole curved contour from the active master",
+					),
+					coveredBy(
+						"outline-clipboard.test.ts",
+						"fully selects pasted nodes and each existing active-layer handle",
+					),
+					coveredBy(
+						"glyph-canvas-cut.test.ts",
+						"pastes the Cut fragment with fresh, fully selected points and handles",
 					),
 					coveredBy(
 						"glyph-canvas-cut.test.ts",
