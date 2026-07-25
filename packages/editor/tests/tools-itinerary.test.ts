@@ -126,6 +126,10 @@ export const FONT_TOOL_ITINERARY = [
 				coveredBy: [
 					coveredBy(
 						"glyph-canvas-group-cancel.test.ts",
+						"moves a fully selected contour with the pointer despite controlled-node rerenders",
+					),
+					coveredBy(
+						"glyph-canvas-group-cancel.test.ts",
 						"previews, commits, and undoes a multi-soft-node controlled drag atomically",
 					),
 					coveredBy(

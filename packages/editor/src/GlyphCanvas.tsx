@@ -364,6 +364,7 @@ interface GroupDrag {
 	readonly masterId: MasterId
 	readonly targetX: number
 	readonly targetY: number
+	readonly startPointer: Readonly<{ x: number; y: number }> | null
 	readonly node: LiveGroupDragTarget["node"]
 	readonly controls: readonly ResolvedSelectionControl[]
 	readonly selection: readonly EditorSelectionTarget[]
@@ -560,6 +561,10 @@ export function GlyphCanvas({
 	const pointDragRef = useRef<PointDrag | null>(null)
 	const handleDragRef = useRef<HandleDrag | null>(null)
 	const directDragPointerRef = useRef<number | null>(null)
+	const directDragStartPointerRef = useRef<Readonly<{
+		x: number
+		y: number
+	}> | null>(null)
 	const directDragCaptureTargetRef = useRef<HTMLCanvasElement | null>(null)
 	const tangentDirectionRef = useRef<TangentDirectionMemory | null>(null)
 	const cancelledGroupDrag = useRef<CancelledGroupDrag<
@@ -1465,6 +1470,7 @@ export function GlyphCanvas({
 		releaseDirectDragCapture(drag)
 		handleDragRef.current = null
 		directDragPointerRef.current = null
+		directDragStartPointerRef.current = null
 		directDragCaptureTargetRef.current = null
 		setDraggedHandle(null)
 		setHandleConstraintGuide(null)
@@ -1489,6 +1495,10 @@ export function GlyphCanvas({
 			event.evt.isPrimary
 		) {
 			directDragPointerRef.current = event.evt.pointerId
+			directDragStartPointerRef.current =
+				"offsetX" in event.evt && "offsetY" in event.evt
+					? pointerInEditingGlyph(event)
+					: null
 			directDragCaptureTargetRef.current =
 				event.evt.target instanceof HTMLCanvasElement ? event.evt.target : null
 		}
@@ -1527,6 +1537,7 @@ export function GlyphCanvas({
 		finalizePointDragPreview(drag, false)
 		pointDragRef.current = null
 		directDragPointerRef.current = null
+		directDragStartPointerRef.current = null
 		directDragCaptureTargetRef.current = null
 		setDraggedPoint(null)
 		setTransformPreview(null)
@@ -2741,6 +2752,7 @@ export function GlyphCanvas({
 		drag.node.getLayer()?.batchDraw()
 		groupDragRef.current = null
 		directDragPointerRef.current = null
+		directDragStartPointerRef.current = null
 		directDragCaptureTargetRef.current = null
 		setTransformPreview(null)
 		setDraggedPoint(null)
@@ -2816,6 +2828,7 @@ export function GlyphCanvas({
 			masterId: activeMasterId,
 			targetX,
 			targetY,
+			startPointer: directDragStartPointerRef.current,
 			node,
 			controls,
 			selection: rigidSelection,
@@ -2887,6 +2900,7 @@ export function GlyphCanvas({
 			masterId: activeMasterId,
 			targetX: 0,
 			targetY: 0,
+			startPointer: directDragStartPointerRef.current,
 			node: event.target,
 			controls,
 			selection: rigidSelection,
@@ -3052,16 +3066,27 @@ export function GlyphCanvas({
 	): ReturnType<typeof applyGroupDrag> | null => {
 		const currentGroupDrag = groupDragRef.current
 		if (currentGroupDrag === null) return null
-		const rawDelta = {
-			x: event.target.x() - currentGroupDrag.targetX,
-			y: event.target.y() - currentGroupDrag.targetY,
-		}
+		const pointer =
+			currentGroupDrag.startPointer === null
+				? null
+				: pointerInEditingGlyph(event)
+		const nativeEvent = event.evt as DragEvent | undefined
+		const rawDelta =
+			currentGroupDrag.startPointer === null || pointer === null
+				? {
+						x: event.target.x() - currentGroupDrag.targetX,
+						y: event.target.y() - currentGroupDrag.targetY,
+					}
+				: {
+						x: pointer.x - currentGroupDrag.startPointer.x,
+						y: pointer.y - currentGroupDrag.startPointer.y,
+					}
 		currentGroupDrag.lastRawDelta = rawDelta
 		return applyGroupDrag(
 			currentGroupDrag,
 			rawDelta,
-			event.evt.shiftKey,
-			event.evt.altKey,
+			nativeEvent?.shiftKey ?? shiftHeld,
+			nativeEvent?.altKey ?? altHeld,
 		)
 	}
 	useEffect(() => {
@@ -3117,6 +3142,7 @@ export function GlyphCanvas({
 		) {
 			releaseGroupDragCapture(currentGroupDrag)
 			directDragPointerRef.current = null
+			directDragStartPointerRef.current = null
 			directDragCaptureTargetRef.current = null
 			currentGroupDrag.node.position({
 				x: currentGroupDrag.targetX,
@@ -3210,6 +3236,7 @@ export function GlyphCanvas({
 		} finally {
 			releaseGroupDragCapture(currentGroupDrag)
 			directDragPointerRef.current = null
+			directDragStartPointerRef.current = null
 			directDragCaptureTargetRef.current = null
 			if (currentGroupDrag.restoreTargetAfterCommit || !didCommit) {
 				currentGroupDrag.node.position({
@@ -3922,6 +3949,7 @@ export function GlyphCanvas({
 					)
 					releaseGroupDragCapture(currentGroupDrag)
 					directDragPointerRef.current = null
+					directDragStartPointerRef.current = null
 					directDragCaptureTargetRef.current = null
 					currentGroupDrag.node.getLayer()?.batchDraw()
 					groupDragRef.current = null
@@ -5742,6 +5770,7 @@ export function GlyphCanvas({
 																	releaseDirectDragCapture(drag)
 																	handleDragRef.current = null
 																	directDragPointerRef.current = null
+																	directDragStartPointerRef.current = null
 																	directDragCaptureTargetRef.current = null
 																	setDraggedHandle(null)
 																	setHandleConstraintGuide(null)
@@ -5786,6 +5815,7 @@ export function GlyphCanvas({
 																		/>
 																	) : null}
 																	<VectorControlHandles
+																		key={`controls:${point.pointId}`}
 																		node={{
 																			id: point.pointId,
 																			x: point.x,

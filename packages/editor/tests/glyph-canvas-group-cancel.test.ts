@@ -10,6 +10,7 @@ import type { ContourId, PointId } from "@create-font/states"
 
 import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
+import { contourSelectionTargets } from "../src/outline-selection.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const requireFromRenderer = createRequire(
@@ -36,6 +37,7 @@ function mountSelectedContour({
 	withOpenContour = false,
 	zoom = 1,
 	editing = true,
+	selectWholeContour = false,
 } = {}) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
@@ -98,7 +100,12 @@ function mountSelectedContour({
 	const selectedPointIds = contour.nodes.slice(0, 2).map((node) => node.pointId)
 	workspace.font.silo.setState(
 		workspace.ui.selection,
-		selectedPointIds.map((pointId) => ({ kind: "node" as const, pointId })),
+		selectWholeContour
+			? contourSelectionTargets(contour.nodes)
+			: selectedPointIds.map((pointId) => ({
+					kind: "node" as const,
+					pointId,
+				})),
 	)
 	const transform = vi.spyOn(workspace.font.actions, "transformControls")
 	const join = vi.spyOn(workspace.font.actions, "joinOpenContours")
@@ -132,11 +139,18 @@ function mountSelectedContour({
 	}
 }
 
-function pointerDown(target: MountedNode, canvas: HTMLCanvasElement): void {
+function pointerDown(
+	target: MountedNode,
+	canvas: HTMLCanvasElement,
+	pointer?: Readonly<{ x: number; y: number }>,
+): void {
 	target.fire("pointerdown", {
 		evt: {
 			button: 0,
 			isPrimary: true,
+			...(pointer === undefined
+				? {}
+				: { offsetX: pointer.x, offsetY: pointer.y }),
 			pointerId: 7,
 			target: canvas,
 		},
@@ -179,6 +193,70 @@ function expectCancelledSession(
 }
 
 describe("GlyphCanvas group drag cancellation", () => {
+	it("moves a fully selected contour with the pointer despite controlled-node rerenders", () => {
+		const { canvas, contour, stage, transform } = mountSelectedContour({
+			selectWholeContour: true,
+		})
+		const controller = stage.findOne(`#${contour.nodes[0]?.pointId}`)
+		if (controller === undefined)
+			throw new Error("The selected contour controller was not rendered.")
+		const origin = controller.position()
+		const pointerStart = controller.getAbsolutePosition()
+		stage.setPointersPositions({
+			clientX: pointerStart.x,
+			clientY: pointerStart.y,
+		} as PointerEvent)
+		pointerDown(controller, canvas, pointerStart)
+		controller.fire("dragstart", dragEvent("mousedown"))
+
+		stage.setPointersPositions({
+			clientX: pointerStart.x + 36,
+			clientY: pointerStart.y + 27,
+		} as PointerEvent)
+		act(() => {
+			controller.position({ x: origin.x - 400, y: origin.y + 400 })
+			controller.fire("dragmove", dragEvent("mousemove"))
+		})
+		expect(stage.findOne(`#${contour.nodes[0]?.pointId}`)).toBe(controller)
+		controller.position({ x: origin.x - 400, y: origin.y + 400 })
+		controller.fire("dragend", dragEvent("mouseup"))
+
+		expect(transform).toHaveBeenCalledOnce()
+		const result = transform.mock.calls[0]?.[0]
+		const firstBefore = contour.nodes[0]
+		const firstAfter = result?.points.find(
+			(point) => point.pointId === firstBefore?.pointId,
+		)
+		if (firstBefore === undefined || firstAfter === undefined)
+			throw new Error("The selected contour did not commit its controller.")
+		const delta = {
+			x: firstAfter.x - firstBefore.x,
+			y: firstAfter.y - firstBefore.y,
+		}
+		expect(delta.x).toBeGreaterThan(0)
+		expect(delta.y).toBeLessThan(0)
+		for (const point of result?.points ?? []) {
+			const before = contour.nodes.find(
+				(node) => node.pointId === point.pointId,
+			)
+			if (before === undefined)
+				throw new Error(`Unexpected transformed point ${point.pointId}.`)
+			expect(point.x - before.x).toBe(delta.x)
+			expect(point.y - before.y).toBe(delta.y)
+		}
+		expect(result?.handles.length).toBeGreaterThan(0)
+		for (const handle of result?.handles ?? []) {
+			const owner = contour.nodes.find(
+				(node) => node.pointId === handle.pointId,
+			)
+			const vector = owner?.[handle.handle]
+			if (owner === undefined || vector === undefined)
+				throw new Error(`Unexpected transformed handle ${handle.pointId}.`)
+			expect(handle.x - (owner.x + vector.x)).toBe(delta.x)
+			expect(handle.y - (owner.y + vector.y)).toBe(delta.y)
+		}
+	})
+
 	it("previews, commits, and undoes a multi-soft-node controlled drag atomically", () => {
 		const { canvas, contour, selectedPointIds, stage, transform, workspace } =
 			mountSelectedContour()
@@ -347,9 +425,16 @@ describe("GlyphCanvas group drag cancellation", () => {
 			clientX: (firstPosition.x + secondPosition.x) / 2,
 			clientY: (firstPosition.y + secondPosition.y) / 2,
 		} as PointerEvent)
+		const pointerStart = stage.getPointerPosition()
+		if (pointerStart === null)
+			throw new Error("The path drag start pointer was not registered.")
 		const origin = path.position()
-		pointerDown(path, canvas)
+		pointerDown(path, canvas, pointerStart)
 		path.fire("dragstart", dragEvent("touchmove"))
+		stage.setPointersPositions({
+			clientX: pointerStart.x + 20,
+			clientY: pointerStart.y + 20,
+		} as PointerEvent)
 		expectCancelledSession(path, origin, transform, join)
 	})
 })
