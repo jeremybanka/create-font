@@ -1,5 +1,24 @@
 # create-font
 
+## 0.3.13
+
+### Patch Changes
+
+- aa926b7: Add shared Adobe feature analysis, checking CLI, language server, and bundled VS Code extension
+- 1856b23: Replace the transitional TypeScript Adobe feature parser with upstream fea-rs through shared WebAssembly bindings in Node and browser consumers.
+- 13eda7d: Add shared authoritative vector gesture state machines and interactive scene components for font and design editing, including complete Pen drafts, Bézier handles, cancellation, shape placement, selection, and coordinate-correct transforms in both y-up and y-down canvases. Keep create-design persistence and history in its document adapter while deferring its Rule tool, and preserve create-font's responsive native Pen transactions and unselected preview marker. Add an issue-linked create-font tool itinerary, mounted interaction-lifecycle regressions, and CI-enforced Vitest coverage floors for the font-tool surface. Keep Pen commits responsive by using shallow revision dependencies for mounted font projections, compiling live fonts only while a Preview tile is present, coalescing whole-source persistence after an edit burst, and moving post-save full-font validation into an incremental source worker so edits do not block the renderer. Restore Shift-marquee selection inversion so every covered node or handle toggles its prior selection state, fully select pasted contours including their authored handles, and keep selected-contour fills, outlines, nodes, and screen-constant selection rings aligned with the pointer while controlled Konva nodes rerender. Let the full-width invisible edge hit target initiate the same selected-contour drag as the visible stroke.
+- Updated dependencies [aa926b7]
+- Updated dependencies [38e7d82]
+- Updated dependencies [1856b23]
+- Updated dependencies [1856b23]
+- Updated dependencies [e354211]
+- Updated dependencies [13eda7d]
+- Updated dependencies [216946d]
+  - @create-font/source@0.2.6
+  - @create-font/editor@0.7.9
+  - @create-font/fea-rs-wasm@0.1.1
+  - @create-font/states@0.6.6
+
 ## 0.3.12
 
 ### Patch Changes

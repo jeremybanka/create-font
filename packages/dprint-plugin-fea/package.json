@@ -1,6 +1,6 @@
 {
 	"name": "dprint-plugin-fea",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "dprint formatter plugin for Adobe Feature Files",
 	"repository": {
 		"type": "git",
