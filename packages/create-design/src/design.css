@@ -307,6 +307,7 @@ design-swatches-tile > button {
 }
 
 .tool-rail {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -314,6 +315,7 @@ design-swatches-tile > button {
 	padding: 7px 5px;
 	border-right: 1px solid var(--line);
 	background: var(--surface-header);
+	z-index: 5;
 
 	> button {
 		position: relative;
