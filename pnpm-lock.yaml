@@ -80,6 +80,27 @@ importers:
       '@types/node':
         specifier: 25.9.5
         version: 25.9.5
+      '@typescript-eslint/parser':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
+      '@typescript-eslint/utils':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+      atom.io:
+        specifier: 0.50.1
+        version: 0.50.1(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+      eslint:
+        specifier: 10.7.0
+        version: 10.7.0(jiti@2.7.0)(supports-color@7.2.0)
+      happy-dom:
+        specifier: 20.11.1
+        version: 20.11.1
+      jiti:
+        specifier: 2.7.0
+        version: 2.7.0
+      lasertag:
+        specifier: 0.6.7
+        version: 0.6.7(@typescript-eslint/parser@8.65.0(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.7.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)(preact@10.29.7)(supports-color@7.2.0)
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(preact@10.29.7)'
@@ -5084,7 +5105,7 @@ snapshots:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
       '@vitest/browser': 4.1.10(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.10)
-      vitest: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+      vitest: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10(@vitest/browser@4.1.10(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.10))(vitest@4.1.10))(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -5100,7 +5121,7 @@ snapshots:
       pngjs: 7.0.0
       sirv: 3.0.2
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+      vitest: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10(@vitest/browser@4.1.10(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(vitest@4.1.10))(vitest@4.1.10))(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil

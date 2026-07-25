@@ -15,6 +15,8 @@
 	],
 	"scripts": {
 		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
+		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
+		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
 		"dev": "vp dev ./public --config=./vite.config.ts --host=127.0.0.1 --port=3010",
 		"test": "vp test --config=./vitest.config.ts"
 	},
@@ -27,7 +29,14 @@
 	},
 	"devDependencies": {
 		"@preact/preset-vite": "2.10.6",
+		"@typescript-eslint/parser": "8.65.0",
+		"@typescript-eslint/utils": "8.65.0",
 		"@types/node": "25.9.5",
+		"atom.io": "0.50.1",
+		"eslint": "10.7.0",
+		"happy-dom": "20.11.1",
+		"jiti": "2.7.0",
+		"lasertag": "0.6.7",
 		"react": "npm:@preact/compat@18.3.2",
 		"react-dom": "npm:@preact/compat@18.3.2",
 		"vite": "8.1.5",

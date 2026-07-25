@@ -1,0 +1,374 @@
+design-tile-content.class {
+	display: grid;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+
+	> design-pages-tile,
+	> design-layers-tile,
+	> design-canvas-tile,
+	> design-tools-tile,
+	> design-export-tile,
+	> design-object-tile,
+	> design-color-tile {
+		display: grid;
+		align-content: start;
+		gap: 7px;
+		min-width: 0;
+		min-height: 0;
+		padding: 9px;
+		overflow: auto;
+		font-size: 9px;
+	}
+
+	> design-pages-tile > button,
+	> design-layers-tile > button,
+	> design-canvas-tile > button,
+	> design-tools-tile > button,
+	> design-export-tile > button,
+	> design-color-tile > swatch-list > button {
+		border: 1px solid var(--line);
+		border-radius: 5px;
+		background: var(--paper);
+		color: var(--ink);
+		cursor: pointer;
+
+		&:hover,
+		&[aria-pressed="true"] {
+			border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+			background: var(--selected);
+		}
+	}
+
+	> design-pages-tile > button {
+		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
+		align-items: center;
+		gap: 8px;
+		padding: 7px;
+		text-align: left;
+
+		> page-thumbnail {
+			display: block;
+			width: 35px;
+			aspect-ratio: 612 / 792;
+			border: 1px solid var(--line-strong);
+			background: #fff;
+			box-shadow: 0 2px 5px var(--shadow-subtle);
+		}
+
+		> span {
+			display: grid;
+			gap: 4px;
+
+			> small {
+				color: var(--ink-faint);
+			}
+		}
+	}
+
+	> design-layers-tile {
+		grid-auto-rows: min-content;
+
+		> strong {
+			color: var(--ink-muted);
+		}
+
+		> button {
+			display: grid;
+			grid-template-columns: 14px minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 6px;
+			padding: 7px;
+			text-align: left;
+
+			> i[data-layer-color] {
+				width: 12px;
+				height: 12px;
+				border: 1px solid rgb(127 127 127 / 45%);
+				border-radius: 3px;
+			}
+
+			> layer-icons {
+				display: flex;
+				gap: 3px;
+				color: var(--ink-faint);
+
+				> svg {
+					width: 10px;
+					height: 10px;
+				}
+			}
+		}
+	}
+
+	> design-canvas-tile,
+	> design-export-tile {
+		> strong {
+			color: var(--ink-muted);
+		}
+
+		> span {
+			line-height: 1.45;
+			color: var(--ink-faint);
+		}
+
+		> button {
+			padding: 7px;
+		}
+	}
+
+	> design-tools-tile {
+		grid-template-columns: 1fr 1fr;
+		grid-auto-rows: min-content;
+
+		> button {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr) auto;
+			align-items: center;
+			gap: 6px;
+			padding: 7px;
+			text-align: left;
+
+			> svg {
+				width: 14px;
+				height: 14px;
+				color: var(--accent);
+			}
+
+			> kbd {
+				color: var(--ink-faint);
+			}
+		}
+	}
+
+	> design-object-tile {
+		> p {
+			margin: 0;
+			padding: 9px;
+			text-align: center;
+			line-height: 1.5;
+			color: var(--ink-faint);
+		}
+
+		> design-object-actions {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 4px;
+
+			> button {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 4px;
+				padding: 6px 4px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--paper);
+				font-size: 8px;
+				color: var(--ink);
+				cursor: pointer;
+
+				> svg {
+					width: 11px;
+					height: 11px;
+				}
+			}
+		}
+
+		> button[data-danger] {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 5px;
+			padding: 7px;
+			border: 1px solid color-mix(in srgb, #c45b4f 45%, var(--line));
+			border-radius: 4px;
+			background: transparent;
+			font-size: 8px;
+			color: #d5786d;
+			cursor: pointer;
+
+			> svg {
+				width: 11px;
+				height: 11px;
+			}
+		}
+	}
+
+	> design-object-tile > label[data-field],
+	> design-color-tile > swatch-editor > label[data-field] {
+		display: grid;
+		gap: 5px;
+
+		> span {
+			font-size: 8px;
+			font-weight: 620;
+			color: var(--ink-muted);
+		}
+
+		> input {
+			width: 100%;
+			min-width: 0;
+			padding: 6px 7px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--paper);
+			font-size: 9px;
+			color: var(--ink);
+		}
+	}
+
+	> design-color-tile {
+		grid-template-rows: minmax(110px, auto) minmax(0, 1fr);
+		padding: 0;
+		overflow: hidden;
+
+		> swatch-list {
+			display: grid;
+			align-content: start;
+			gap: 4px;
+			min-height: 0;
+			max-height: 220px;
+			padding: 7px;
+			overflow: auto;
+			border-bottom: 1px solid var(--line);
+
+			> button {
+				display: grid;
+				grid-template-columns: 24px minmax(0, 1fr);
+				align-items: center;
+				gap: 7px;
+				padding: 5px;
+				text-align: left;
+
+				> i[data-swatch-chip] {
+					width: 22px;
+					height: 22px;
+					border: 1px solid rgb(127 127 127 / 50%);
+					border-radius: 4px;
+					box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+				}
+
+				> span {
+					display: grid;
+					gap: 2px;
+
+					> strong {
+						overflow: hidden;
+						text-overflow: ellipsis;
+						white-space: nowrap;
+					}
+
+					> small {
+						font-size: 7px;
+						color: var(--ink-faint);
+					}
+				}
+
+				&[data-add-swatch] {
+					display: block;
+					margin-top: 3px;
+					padding: 7px;
+					border-style: dashed;
+					text-align: center;
+					color: var(--ink-muted);
+				}
+			}
+		}
+
+		> swatch-editor {
+			display: grid;
+			align-content: start;
+			gap: 7px;
+			min-height: 0;
+			padding: 8px;
+			overflow: auto;
+
+			> color-space-tabs {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+
+				> button {
+					padding: 5px;
+					border: 1px solid var(--line);
+					background: var(--paper);
+					font-size: 8px;
+					color: var(--ink);
+					cursor: pointer;
+
+					&:first-child {
+						border-radius: 4px 0 0 4px;
+					}
+
+					&:last-child {
+						border-radius: 0 4px 4px 0;
+					}
+
+					&[aria-pressed="true"] {
+						border-color: var(--accent);
+						background: var(--selected);
+						color: var(--accent);
+					}
+				}
+			}
+
+			> label[data-manual-toggle] {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 8px;
+				color: var(--ink-muted);
+			}
+
+			> p {
+				margin: 0;
+				padding: 6px;
+				border-radius: 4px;
+				background: var(--paper);
+				font-size: 7px;
+				line-height: 1.4;
+				color: var(--ink-faint);
+			}
+
+			> alternate-color {
+				display: block;
+				padding: 7px;
+				border: 1px solid var(--line);
+				border-radius: 5px;
+				background: var(--paper);
+			}
+		}
+	}
+
+	> design-color-tile > swatch-editor > color-channels,
+	> design-color-tile > swatch-editor > alternate-color > color-channels {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 4px;
+
+		> channel-input > label {
+			display: grid;
+			gap: 3px;
+
+			> span {
+				font-size: 7px;
+				font-weight: 650;
+				color: var(--ink-faint);
+				text-align: center;
+			}
+
+			> input {
+				width: 100%;
+				min-width: 0;
+				padding: 5px 2px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--paper);
+				font-size: 8px;
+				color: var(--ink);
+				text-align: center;
+			}
+		}
+	}
+}

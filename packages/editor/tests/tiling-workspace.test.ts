@@ -5,7 +5,6 @@ import {
 	columnHitSurface,
 	columnOverflowState,
 	columnSlotAllocation,
-	createDefaultTilingLayout,
 	createTilingHistory,
 	duplicateTile,
 	editTilingHistory,
@@ -26,6 +25,9 @@ import {
 	undoTilingHistory,
 	visibleColumnIds,
 } from "../src/tiling-workspace.ts"
+import { DEFAULT_FONT_TILING_LAYOUT } from "../src/font-tile-registry.ts"
+
+const createDefaultTilingLayout = () => DEFAULT_FONT_TILING_LAYOUT
 
 describe("tiling workspace", () => {
 	it("allocates an odd slot to the right at every responsive threshold", () => {
@@ -207,8 +209,14 @@ describe("tiling workspace", () => {
 		})
 	})
 
-	it("adds preview tiles with vertical fill affinity by default", () => {
-		const added = addTile(createDefaultTilingLayout(), "preview", 2)
+	it("accepts application-provided fill affinity when adding a tile", () => {
+		const added = addTile(
+			createDefaultTilingLayout(),
+			"preview",
+			2,
+			undefined,
+			true,
+		)
 		expect(findTile(added.layout, added.tileId)?.tile).toMatchObject({
 			kind: "preview",
 			fill: true,
@@ -285,7 +293,19 @@ describe("tiling workspace", () => {
 		expect(normalizeTilingLayout(invalid)).toBeNull()
 	})
 
-	it("migrates saved version-one layouts by adding current default tiles", () => {
+	it("round-trips unknown kinds so another app or newer version can recover them", () => {
+		const layout = createDefaultTilingLayout()
+		const withFutureTile = addTile(layout, "future-inspector", 4)
+		const restored = parseTilingLayout(
+			serializeTilingLayout(withFutureTile.layout),
+		)
+
+		expect(findTile(restored!, withFutureTile.tileId)?.tile.kind).toBe(
+			"future-inspector",
+		)
+	})
+
+	it("keeps legacy layout data application-neutral during normalization", () => {
 		const current = createDefaultTilingLayout()
 		const legacy = JSON.parse(serializeTilingLayout(current)) as {
 			version: number
@@ -311,13 +331,13 @@ describe("tiling workspace", () => {
 		const migrated = normalizeTilingLayout(legacy)
 		expect(migrated?.version).toBe(3)
 		expect(migrated?.columns[2]).toMatchObject({
-			collapsed: false,
+			collapsed: true,
 			alignment: "top",
-			tiles: [{ kind: "canvas-toolbar" }],
+			tiles: [],
 		})
 		expect(migrated?.columns[1]).toMatchObject({
-			collapsed: false,
-			tiles: [expect.objectContaining({ kind: "version-control" })],
+			collapsed: true,
+			tiles: [],
 		})
 	})
 })

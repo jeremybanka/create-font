@@ -8,7 +8,15 @@ export {
 } from "./command-palette.ts"
 export {
 	columnSlotAllocation,
+	createEmptyTilingLayout,
+	normalizeTilingLayout,
+	parseTilingLayout,
+	serializeTilingLayout,
 	type ColumnSlotAllocation,
+	type TileColumn,
+	type TileColumnId,
+	type TileInstance,
+	type TilingLayout,
 } from "./tiling-workspace.ts"
 export {
 	canvasScale,
@@ -88,3 +96,20 @@ export {
 	VectorShapePreview,
 	VectorSnapGuides,
 } from "./VectorScene.tsx"
+export {
+	availableTileRegistrations,
+	createRegistryDefaultLayout,
+	createTileRegistry,
+	tileRegistryCommands,
+	type TileCommandMetadata,
+	type TileDefaultPlacement,
+	type TileRegistration,
+	type TileRegistry,
+	type TileRegistryCommand,
+} from "./tile-registry.ts"
+export {
+	TilingWorkspace,
+	type TileCommandRequest,
+	type TilingWorkspaceProps,
+	type TilingWorkspaceStatus,
+} from "./TilingWorkspace.tsx"
