@@ -32,9 +32,9 @@ import {
 	applySourceSyncDelta,
 	assembleSourceSyncState,
 	sourceSyncStateFromSnapshot,
-	sourceUnitWrites,
 	type SourceSyncState,
 } from "./source-sync.ts"
+import { createSourceSyncWorkerClient } from "./source-sync-worker-client.ts"
 import {
 	createStartupTimeline,
 	startupResourceTimings,
@@ -158,6 +158,7 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
+const sourceSyncWorker = createSourceSyncWorkerClient()
 let sourceState: SourceSyncState | null = null
 let saveQueue = Promise.resolve()
 let renderedSource = false
@@ -504,7 +505,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 			if (base === null) {
 				throw new Error(`The source session has not loaded yet.`)
 			}
-			const writes = sourceUnitWrites(base, source)
+			const writes = await sourceSyncWorker.writes(base, source)
 			if (writes.length === 0) {
 				currentValidation = compileValidation(source)
 			} else {

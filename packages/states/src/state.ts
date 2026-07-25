@@ -4039,12 +4039,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	const editorSourceSelector = silo.selector<EditorFontSource | null>({
 		key: "editorSource",
 		get: ({ get }) => {
-			if (!get(editorStructureSelector).ok) return null
-			const metadata = get(metadataAtom)
-			const names = get(namesAtom)
-			const metrics = get(metricsAtom)
-			const style = get(styleAtom)
-			const defaultMasterId = get(defaultMasterIdAtom)
+			// Source persistence is revision-driven. Keep its subscribed dependency
+			// shallow so projecting a settled edit does not recursively retrace every
+			// point and handle edge in the document.
+			get(documentRevisionAtom)
+			if (!silo.getState(editorStructureSelector).ok) return null
+			const metadata = silo.getState(metadataAtom)
+			const names = silo.getState(namesAtom)
+			const metrics = silo.getState(metricsAtom)
+			const style = silo.getState(styleAtom)
+			const defaultMasterId = silo.getState(defaultMasterIdAtom)
 			if (
 				metadata === null ||
 				names === null ||
@@ -4054,21 +4058,21 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			)
 				return null
 
-			const axes = get(editorAxesSourceSelector)
-			const masters = get(editorMastersSourceSelector)
-			const instances = get(editorInstancesSourceSelector)
+			const axes = silo.getState(editorAxesSourceSelector)
+			const masters = silo.getState(editorMastersSourceSelector)
+			const instances = silo.getState(editorInstancesSourceSelector)
 			if (axes === null || masters === null || instances === null) return null
 
 			const glyphs: EditorGlyphSource[] = []
-			for (const glyphId of get(glyphIdsAtom)) {
-				const glyph = get(editorGlyphSourceSelectors, glyphId)
+			for (const glyphId of silo.getState(glyphIdsAtom)) {
+				const glyph = silo.getState(editorGlyphSourceSelectors, glyphId)
 				if (glyph === null) return null
 				glyphs.push(glyph)
 			}
 
 			const cmap: EditorCmapEntrySource[] = []
-			for (const codePoint of get(cmapCodePointsAtom)) {
-				const glyphId = get(cmapGlyphAtoms, codePoint)
+			for (const codePoint of silo.getState(cmapCodePointsAtom)) {
+				const glyphId = silo.getState(cmapGlyphAtoms, codePoint)
 				if (glyphId === null) return null
 				cmap.push({ codePoint, glyphId })
 			}
@@ -4085,7 +4089,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				instances,
 				glyphs,
 				cmap,
-				...(get(kerningAtom).length === 0 ? {} : { kerning: get(kerningAtom) }),
+				...(silo.getState(kerningAtom).length === 0
+					? {}
+					: { kerning: silo.getState(kerningAtom) }),
 			})
 		},
 	})

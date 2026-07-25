@@ -49,6 +49,8 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 		lineHeight,
 	})
 
+	useEffect(() => workspace.liveFont.retain(), [workspace])
+
 	useEffect(() => {
 		const timeout = window.setTimeout(
 			() => setRenderedNoiseSeed(noiseSeed),
