@@ -135,7 +135,7 @@ async function marquee(
 }
 
 describe("GlyphCanvas marquee completion", () => {
-	it("uses Shift-first subtraction while preserving add and replace gestures", async () => {
+	it("uses Shift-first inversion while preserving add and replace gestures", async () => {
 		const { background, nodes, stage, workspace } = mountMarqueeCanvas()
 		const [first, second, third] = nodes
 		if (first === undefined || second === undefined || third === undefined)
@@ -154,10 +154,19 @@ describe("GlyphCanvas marquee completion", () => {
 			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
 		).toEqual([`node/${third.pointId}`])
 
-		await marquee(stage, background, first.pointId, { ctrlKey: true })
+		await marquee(stage, background, first.pointId, { shiftKey: true })
 		expect(
 			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
 		).toEqual([`node/${third.pointId}`, `node/${first.pointId}`])
+
+		await marquee(stage, background, second.pointId, { ctrlKey: true })
+		expect(
+			workspace.font.silo.getState(workspace.ui.selection).map(selectionKey),
+		).toEqual([
+			`node/${third.pointId}`,
+			`node/${first.pointId}`,
+			`node/${second.pointId}`,
+		])
 
 		await marquee(stage, background, second.pointId, {})
 		expect(

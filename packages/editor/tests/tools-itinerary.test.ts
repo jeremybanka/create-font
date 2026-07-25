@@ -89,16 +89,16 @@ export const FONT_TOOL_ITINERARY = [
 			{
 				id: "marquee-modes",
 				expectation:
-					"Marquee replaces by default, adds with Mod, subtracts with Shift, and treats Shift as the combined-modifier winner.",
+					"Marquee replaces by default, adds with Mod, inverts every covered target with Shift, and treats Shift as the combined-modifier winner.",
 				issues: [165, 198],
 				coveredBy: [
 					coveredBy(
 						"glyph-canvas-marquee.test.ts",
-						"uses Shift-first subtraction while preserving add and replace gestures",
+						"uses Shift-first inversion while preserving add and replace gestures",
 					),
 					coveredBy(
 						"tools-itinerary.test.ts",
-						"Select — preserves subtractive marquee precedence and snap/commit parity",
+						"Select — preserves toggle marquee precedence and snap/commit parity",
 					),
 				],
 			},
@@ -768,7 +768,7 @@ describe("create-font canvas-tool itinerary", () => {
 		}
 	})
 
-	it("Select — preserves subtractive marquee precedence and snap/commit parity", () => {
+	it("Select — preserves toggle marquee precedence and snap/commit parity", () => {
 		const a = {
 			kind: "node",
 			pointId: "point:a" as PointId,
@@ -786,8 +786,8 @@ describe("create-font canvas-tool itinerary", () => {
 			metaKey: true,
 			ctrlKey: true,
 		})
-		expect(mode).toBe("subtract")
-		expect(combineMarqueeSelection([a, b], [b, c], mode)).toEqual([a])
+		expect(mode).toBe("toggle")
+		expect(combineMarqueeSelection([a, b], [b, c], mode)).toEqual([a, c])
 
 		const input = {
 			pointId: "point:dragged" as PointId,
