@@ -315,13 +315,32 @@ export function createEditorWorkspace(
 		},
 	})
 
+	let previewRunCache:
+		| Readonly<{
+				signature: readonly unknown[]
+				value: readonly PreviewRunItem[]
+		  }>
+		| undefined
 	const previewRunSelector = font.silo.selector<readonly PreviewRunItem[]>({
 		key: "previewRun",
 		get: ({ get }) => {
+			// Font mutations are revisioned. Keep the subscribed selector's reactive
+			// edge shallow, then read the already memoized document projections
+			// directly. Tracking every point/handle selector makes atom.io retrace the
+			// entire glyph graph for each atom created by a Pen transaction.
+			get(font.atoms.documentRevision)
 			const activeMasterId = get(activeMasterIdAtom)
-			const axes = get(font.atoms.axisIds).flatMap((axisId) => {
-				const axis = get(font.atoms.axis, axisId)
+			const metrics = font.silo.getState(font.atoms.metrics) ?? document.metrics
+			const metadata = font.silo.getState(font.atoms.metadata)
+			const unitsPerEm = metadata?.unitsPerEm ?? document.metadata.unitsPerEm
+			const axisIds = font.silo.getState(font.atoms.axisIds)
+			const axisSources = axisIds.map((axisId) =>
+				font.silo.getState(font.atoms.axis, axisId),
+			)
+			const axes = axisIds.flatMap((axisId, index) => {
+				const axis = axisSources[index]
 				if (axis === null) return []
+				if (axis === undefined) return []
 				return [
 					{
 						id: axisId,
@@ -336,26 +355,96 @@ export function createEditorWorkspace(
 				]
 			})
 			const location = get(previewLocationSelector)
+			const previewText = get(previewTextAtom)
+			const characters = [...previewText]
+			const codePoints = new Set(
+				characters.flatMap((character) => {
+					const codePoint = character.codePointAt(0)
+					return codePoint === undefined ? [] : [codePoint]
+				}),
+			)
 			const byCodePoint = new Map(
-				get(font.atoms.cmapCodePoints).flatMap((codePoint) => {
-					const glyphId = get(font.atoms.cmapGlyph, codePoint)
+				[...codePoints].flatMap((codePoint) => {
+					const glyphId = font.silo.getState(font.atoms.cmapGlyph, codePoint)
 					return glyphId === null ? [] : [[codePoint, glyphId] as const]
 				}),
 			)
-			const glyphIds = get(font.atoms.glyphIds)
+			const glyphIds = font.silo.getState(font.atoms.glyphIds)
+			const glyphMetadata = glyphIds.map((glyphId) =>
+				font.silo.getState(font.atoms.glyph, glyphId),
+			)
 			const fallback = glyphIds.find(
-				(glyphId) => get(font.atoms.glyph, glyphId)?.name === ".notdef",
+				(_glyphId, index) => glyphMetadata[index]?.name === ".notdef",
 			)
 			const firstExported = glyphIds.find(
-				(glyphId) => get(font.atoms.glyph, glyphId)?.export,
+				(_glyphId, index) => glyphMetadata[index]?.export,
 			)
 			const fallbackId = fallback ?? firstExported
 			if (fallbackId === undefined) return []
+			const kerning = font.silo.getState(font.atoms.kerning)
+			const fontFeaturesEnabled = get(fontFeaturesEnabledAtom)
+			const featureSubstitutions = get(featureSubstitutionsAtom)
+			const readGlyphSource = (glyphId: GlyphId) =>
+				font.silo.getState(font.selectors.glyphSource, glyphId)
+			const readEditorGlyph = (glyphId: GlyphId) =>
+				font.silo.getState(font.selectors.editorGlyphSource, glyphId)
+			const glyphSourceById = new Map<
+				GlyphId,
+				ReturnType<typeof readGlyphSource>
+			>()
+			const editorGlyphById = new Map<
+				GlyphId,
+				ReturnType<typeof readEditorGlyph>
+			>()
+			const runGlyphIds = characters.flatMap((character) => {
+				if (character === "\n") return []
+				const codePoint = character.codePointAt(0)
+				return [
+					codePoint === undefined
+						? fallbackId
+						: (byCodePoint.get(codePoint) ?? fallbackId),
+				]
+			})
+			const sourceGlyphIds = new Set([
+				...runGlyphIds,
+				...(fontFeaturesEnabled
+					? featureSubstitutions.map((rule) => rule.to as GlyphId)
+					: []),
+			])
+			for (const glyphId of sourceGlyphIds) {
+				glyphSourceById.set(glyphId, readGlyphSource(glyphId))
+				editorGlyphById.set(glyphId, readEditorGlyph(glyphId))
+			}
+			const signature = [
+				activeMasterId,
+				metrics,
+				metadata,
+				axisIds,
+				...axisSources,
+				location,
+				previewText,
+				...[...byCodePoint].flat(),
+				glyphIds,
+				...glyphMetadata,
+				kerning,
+				fontFeaturesEnabled,
+				featureSubstitutions,
+				...[...glyphSourceById].flat(),
+				...[...editorGlyphById].flat(),
+			]
+			if (
+				previewRunCache !== undefined &&
+				signature.length === previewRunCache.signature.length &&
+				signature.every((value, index) =>
+					Object.is(value, previewRunCache?.signature[index]),
+				)
+			) {
+				return previewRunCache.value
+			}
 			const run: PreviewRunItem[] = []
-			const kerning = get(font.atoms.kerning)
 			let previousGlyphId: GlyphId | null = null
 			let textOffset = 0
-			for (const character of get(previewTextAtom)) {
+			for (const character of characters) {
 				const textStart = textOffset
 				textOffset += character.length
 				if (character === "\n") {
@@ -368,8 +457,8 @@ export function createEditorWorkspace(
 					codePoint === undefined
 						? fallbackId
 						: (byCodePoint.get(codePoint) ?? fallbackId)
-				const result = get(font.selectors.glyphSource, glyphId)
-				const editorGlyph = get(font.selectors.editorGlyphSource, glyphId)
+				const result = glyphSourceById.get(glyphId)
+				const editorGlyph = editorGlyphById.get(glyphId)
 				run.push({
 					kind: "glyph",
 					character,
@@ -383,23 +472,27 @@ export function createEditorWorkspace(
 									(pair) =>
 										pair.left === previousGlyphId && pair.right === glyphId,
 								)?.value ?? 0),
-					glyph: result.ok
+					glyph: result?.ok
 						? resolveVariableGlyph(glyphId, result.value, axes, location)
 						: null,
 					sourcePreview:
-						editorGlyph === null
+						editorGlyph === null || editorGlyph === undefined
 							? null
 							: createGlyphPreview(
 									editorGlyph,
 									activeMasterId,
-									document.metrics,
-									document.metadata.unitsPerEm,
+									metrics,
+									unitsPerEm,
 								),
 				})
 				previousGlyphId = glyphId
 			}
-			if (!get(fontFeaturesEnabledAtom)) return Object.freeze(run)
-			for (const rule of get(featureSubstitutionsAtom)) {
+			if (!fontFeaturesEnabled) {
+				const value = Object.freeze(run)
+				previewRunCache = Object.freeze({ signature, value })
+				return value
+			}
+			for (const rule of featureSubstitutions) {
 				if (rule.feature !== "liga" && rule.feature !== "calt") continue
 				for (
 					let index = 0;
@@ -416,10 +509,7 @@ export function createEditorWorkspace(
 					)
 						continue
 					const replacementId = rule.to as GlyphId
-					const editorGlyph = get(
-						font.selectors.editorGlyphSource,
-						replacementId,
-					)
+					const editorGlyph = editorGlyphById.get(replacementId)
 					const contextualTarget =
 						rule.contextIndex === undefined
 							? undefined
@@ -428,25 +518,23 @@ export function createEditorWorkspace(
 					const last = contextualTarget ?? input.at(-1)
 					if (
 						editorGlyph === null ||
+						editorGlyph === undefined ||
 						first === undefined ||
 						last === undefined
 					) {
 						continue
 					}
-					const result = get(font.selectors.glyphSource, replacementId)
+					const result = glyphSourceById.get(replacementId)
 					run.splice(
 						index + (rule.contextIndex ?? 0),
 						rule.contextIndex === undefined ? input.length : 1,
 						{
 							kind: "glyph",
-							character: get(previewTextAtom).slice(
-								first.textStart,
-								last.textEnd,
-							),
+							character: previewText.slice(first.textStart, last.textEnd),
 							textStart: first.textStart,
 							textEnd: last.textEnd,
 							glyphId: replacementId,
-							glyph: result.ok
+							glyph: result?.ok
 								? resolveVariableGlyph(
 										replacementId,
 										result.value,
@@ -457,14 +545,16 @@ export function createEditorWorkspace(
 							sourcePreview: createGlyphPreview(
 								editorGlyph,
 								activeMasterId,
-								document.metrics,
-								document.metadata.unitsPerEm,
+								metrics,
+								unitsPerEm,
 							),
 						},
 					)
 				}
 			}
-			return Object.freeze(run)
+			const value = Object.freeze(run)
+			previewRunCache = Object.freeze({ signature, value })
+			return value
 		},
 	})
 	const activeGlyphIdSelector = font.silo.selector<GlyphId | null>({
@@ -473,14 +563,28 @@ export function createEditorWorkspace(
 			if (get(editingTextIndexAtom) !== null) return get(selectedGlyphIdAtom)
 			if (get(routeNameSelector) !== "canvas") return get(selectedGlyphIdAtom)
 			const caretIndex = get(caretIndexAtom)
-			const containingGlyph = get(previewRunSelector).find(
+			// Glyph geometry changes can invalidate the preview projection without
+			// changing which glyph contains the caret. Subscribe only to inputs that
+			// can change run membership, then read the cached projection directly.
+			for (const character of get(previewTextAtom)) {
+				const codePoint = character.codePointAt(0)
+				if (codePoint !== undefined) get(font.atoms.cmapGlyph, codePoint)
+			}
+			for (const glyphId of get(font.atoms.glyphIds)) {
+				const glyph = get(font.atoms.glyph, glyphId)
+				if (glyph?.name === ".notdef") break
+			}
+			get(fontFeaturesEnabledAtom)
+			get(featureSubstitutionsAtom)
+			const previewRun = font.silo.getState(previewRunSelector)
+			const containingGlyph = previewRun.find(
 				(item): item is PreviewRunGlyph =>
 					item.kind === "glyph" &&
 					item.textStart <= caretIndex &&
 					caretIndex < item.textEnd,
 			)
 			if (containingGlyph !== undefined) return containingGlyph.glyphId
-			const nextGlyph = get(previewRunSelector).find(
+			const nextGlyph = previewRun.find(
 				(item): item is PreviewRunGlyph =>
 					item.kind === "glyph" && item.textStart >= caretIndex,
 			)
@@ -513,26 +617,54 @@ export function createEditorWorkspace(
 			})
 		},
 	})
+	let activeLayerCache:
+		| Readonly<{
+				glyph: unknown
+				masterId: MasterId
+				value: EditorCanvasLayer
+		  }>
+		| undefined
 	const activeLayerSelector = font.silo.selector<EditorCanvasLayer | null>({
 		key: "activeLayer",
 		get: ({ get }) => {
+			get(font.atoms.documentRevision)
 			const masterId = get(activeMasterIdAtom)
 			const glyphId = get(activeGlyphIdSelector)
 			if (glyphId === null) return null
-			const contourIds = get(font.atoms.glyphContourIds, [masterId, glyphId])
-			const advanceWidth = get(font.atoms.advanceWidth, [masterId, glyphId])
-			const bounds = get(font.selectors.layerBounds, [masterId, glyphId])
+			const editorGlyph = font.silo.getState(
+				font.selectors.editorGlyphSource,
+				glyphId,
+			)
+			if (
+				activeLayerCache !== undefined &&
+				activeLayerCache.masterId === masterId &&
+				Object.is(activeLayerCache.glyph, editorGlyph)
+			) {
+				return activeLayerCache.value
+			}
+			const contourIds = font.silo.getState(font.atoms.glyphContourIds, [
+				masterId,
+				glyphId,
+			])
+			const advanceWidth = font.silo.getState(font.atoms.advanceWidth, [
+				masterId,
+				glyphId,
+			])
+			const bounds = font.silo.getState(font.selectors.layerBounds, [
+				masterId,
+				glyphId,
+			])
 			if (contourIds === null || advanceWidth === null || !bounds.ok) {
 				return null
 			}
 			const contours: EditorCanvasContour[] = []
 			for (const contourId of contourIds) {
-				const pointIds = get(font.atoms.contourPointIds, [
+				const pointIds = font.silo.getState(font.atoms.contourPointIds, [
 					masterId,
 					glyphId,
 					contourId,
 				])
-				const closed = get(font.atoms.contourClosed, [
+				const closed = font.silo.getState(font.atoms.contourClosed, [
 					masterId,
 					glyphId,
 					contourId,
@@ -541,25 +673,41 @@ export function createEditorWorkspace(
 				const contour: EditorLayerNode[] = []
 				const tangentNodes: EditorLayerNode[] = []
 				for (const pointId of pointIds) {
-					const node = get(font.selectors.layerNode, [
+					const node = font.silo.getState(font.selectors.layerNode, [
 						masterId,
 						glyphId,
 						pointId,
 					])
 					if (!node.ok) return null
 					contour.push(node.value)
-					const topology = get(font.atoms.point, [masterId, glyphId, pointId])
-					const position = get(font.atoms.pointPosition, [
+					const topology = font.silo.getState(font.atoms.point, [
+						masterId,
+						glyphId,
+						pointId,
+					])
+					const position = font.silo.getState(font.atoms.pointPosition, [
 						masterId,
 						glyphId,
 						pointId,
 					])
 					if (topology === null || position === null) return null
 					const atomKey = [masterId, glyphId, pointId] as const
-					const incomingX = get(font.atoms.incomingHandleX, atomKey)
-					const incomingY = get(font.atoms.incomingHandleY, atomKey)
-					const outgoingX = get(font.atoms.outgoingHandleX, atomKey)
-					const outgoingY = get(font.atoms.outgoingHandleY, atomKey)
+					const incomingX = font.silo.getState(
+						font.atoms.incomingHandleX,
+						atomKey,
+					)
+					const incomingY = font.silo.getState(
+						font.atoms.incomingHandleY,
+						atomKey,
+					)
+					const outgoingX = font.silo.getState(
+						font.atoms.outgoingHandleX,
+						atomKey,
+					)
+					const outgoingY = font.silo.getState(
+						font.atoms.outgoingHandleY,
+						atomKey,
+					)
 					if (
 						(incomingX === null) !== (incomingY === null) ||
 						(outgoingX === null) !== (outgoingY === null)
@@ -590,7 +738,7 @@ export function createEditorWorkspace(
 			}
 			const { xMin, xMax } = bounds.value
 			const outlineWidth = xMax - xMin
-			return Object.freeze({
+			const value = Object.freeze({
 				masterId,
 				glyphId,
 				contours: Object.freeze(contours),
@@ -601,6 +749,8 @@ export function createEditorWorkspace(
 				outlineWidth,
 				rightSideBearing: advanceWidth - xMax,
 			})
+			activeLayerCache = Object.freeze({ glyph: editorGlyph, masterId, value })
+			return value
 		},
 	})
 	const glyphIndexSelector = font.silo.selector<
@@ -709,6 +859,7 @@ export function createEditorWorkspace(
 			active: liveFontCompiler.active,
 			start: liveFontCompiler.start,
 			stop: liveFontCompiler.stop,
+			retain: liveFontCompiler.retain,
 			request: liveFontCompiler.request,
 		},
 		document,

@@ -1,3 +1,8 @@
+import {
+	reduceVectorGesture,
+	shouldCloseVectorPen,
+} from "@create-font/editor/shared"
+
 import type { DesignContour, DesignObject, DesignPoint } from "./types.ts"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
@@ -8,20 +13,7 @@ export interface DesignPenGesture {
 	readonly downScreen: DesignPoint
 }
 
-const canonicalZero = (value: number): number =>
-	Object.is(value, -0) ? 0 : value
-
-function constrainToEightRays(vector: DesignPoint): DesignPoint {
-	const angle = Math.atan2(vector.y, vector.x)
-	const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4)
-	const length = Math.hypot(vector.x, vector.y)
-	return {
-		x: canonicalZero(Math.cos(snappedAngle) * length),
-		y: canonicalZero(Math.sin(snappedAngle) * length),
-	}
-}
-
-/** Resolves a Pen pointer gesture in design coordinates, whose y axis points down. */
+/** Compatibility wrapper over the shared Pen gesture reducer. */
 export function resolveDesignPenPoint(input: {
 	readonly gesture: DesignPenGesture
 	readonly current: DesignPoint
@@ -29,28 +21,75 @@ export function resolveDesignPenPoint(input: {
 	readonly shiftKey?: boolean
 	readonly thresholdPixels?: number
 }): DesignPoint {
-	const distancePixels = Math.hypot(
+	const screenDistance = Math.hypot(
 		input.currentScreen.x - input.gesture.downScreen.x,
 		input.currentScreen.y - input.gesture.downScreen.y,
 	)
-	if (
-		distancePixels < (input.thresholdPixels ?? DESIGN_PEN_DRAG_THRESHOLD_PIXELS)
-	)
-		return input.gesture.anchor
-	const rawOutgoing = {
-		x: canonicalZero(input.current.x - input.gesture.anchor.x),
-		y: canonicalZero(input.current.y - input.gesture.anchor.y),
+	const worldDelta = {
+		x: input.current.x - input.gesture.anchor.x,
+		y: input.current.y - input.gesture.anchor.y,
 	}
-	const outgoing = input.shiftKey
-		? constrainToEightRays(rawOutgoing)
-		: rawOutgoing
-	return {
-		...input.gesture.anchor,
-		incoming: {
-			x: canonicalZero(-outgoing.x),
-			y: canonicalZero(-outgoing.y),
+	const worldDistance = Math.hypot(worldDelta.x, worldDelta.y)
+	const sharedScreen =
+		worldDistance === 0
+			? input.currentScreen
+			: {
+					x:
+						input.gesture.downScreen.x +
+						(worldDelta.x / worldDistance) * screenDistance,
+					y:
+						input.gesture.downScreen.y +
+						(worldDelta.y / worldDistance) * screenDistance,
+				}
+	const modifiers = {
+		shiftKey: input.shiftKey ?? false,
+		altKey: false,
+		additive: false,
+	}
+	const policy = {
+		yAxis: "down" as const,
+		thresholdPixels: input.thresholdPixels ?? DESIGN_PEN_DRAG_THRESHOLD_PIXELS,
+	}
+	const started = reduceVectorGesture(
+		null,
+		{
+			type: "pointer-down",
+			tool: "pen",
+			pointerId: 1,
+			pointer: {
+				world: input.gesture.anchor,
+				screen: input.gesture.downScreen,
+				modifiers,
+			},
 		},
-		outgoing,
+		policy,
+	)
+	const moved = reduceVectorGesture(
+		started.state,
+		{
+			type: "pointer-move",
+			pointerId: 1,
+			pointer: {
+				world: input.current,
+				screen: sharedScreen,
+				modifiers,
+			},
+		},
+		policy,
+	)
+	const preview = moved.preview
+	if (preview?.kind !== "pen") return input.gesture.anchor
+	const handles =
+		preview.mode === "soft" && !(input.shiftKey ?? false)
+			? {
+					incoming: { x: -worldDelta.x, y: -worldDelta.y },
+					outgoing: worldDelta,
+				}
+			: preview.handles
+	return {
+		...preview.point,
+		...(handles?.incoming === undefined ? {} : { incoming: handles.incoming }),
+		...(handles?.outgoing === undefined ? {} : { outgoing: handles.outgoing }),
 	}
 }
 
@@ -60,13 +99,7 @@ export function shouldCloseDesignPen(
 	worldScale: number,
 	radiusPixels = DESIGN_PEN_CLOSE_RADIUS_PIXELS,
 ): boolean {
-	const first = points[0]
-	return (
-		first !== undefined &&
-		points.length >= 3 &&
-		Math.hypot(point.x - first.x, point.y - first.y) * worldScale <=
-			radiusPixels
-	)
+	return shouldCloseVectorPen(points, point, worldScale, radiusPixels)
 }
 
 export function finishDesignPenContour(

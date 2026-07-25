@@ -132,14 +132,14 @@ export const selectionKey = (target: EditorSelectionTarget): string =>
 		? `node/${target.pointId}`
 		: `handle/${target.pointId}/${target.handle}`
 
-export type MarqueeSelectionMode = "replace" | "add" | "subtract"
+export type MarqueeSelectionMode = "replace" | "add" | "toggle"
 
 export function marqueeSelectionMode(modifiers: {
 	readonly shiftKey: boolean
 	readonly metaKey: boolean
 	readonly ctrlKey: boolean
 }): MarqueeSelectionMode {
-	if (modifiers.shiftKey) return "subtract"
+	if (modifiers.shiftKey) return "toggle"
 	if (modifiers.metaKey || modifiers.ctrlKey) return "add"
 	return "replace"
 }
@@ -160,7 +160,7 @@ export function combineMarqueeSelection(
 	const next = new Map(current.map((target) => [selectionKey(target), target]))
 	for (const target of boxed) {
 		const key = selectionKey(target)
-		if (mode === "subtract") next.delete(key)
+		if (mode === "toggle" && next.has(key)) next.delete(key)
 		else next.set(key, target)
 	}
 	return Object.freeze([...next.values()])

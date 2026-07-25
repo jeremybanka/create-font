@@ -84,7 +84,7 @@ export interface LiveFontCompilerOptions {
  * Keep live compilation out of the input event turn and collapse a burst of
  * key-driven edits before doing the synchronous projection work.
  */
-export const LIVE_FONT_EDIT_DEBOUNCE_MS = 16
+export const LIVE_FONT_EDIT_DEBOUNCE_MS = 250
 
 export function createLiveFontCompiler(
 	owner: LiveFontStateOwner,
@@ -111,6 +111,7 @@ export function createLiveFontCompiler(
 	let generation = 0
 	let unsubscribe: (() => void) | null = null
 	let running = false
+	let retainCount = 0
 
 	const lastGood = (): LiveFontArtifact | null => {
 		const current = owner.silo.getState(compilationAtom)
@@ -232,22 +233,35 @@ export function createLiveFontCompiler(
 		)
 		schedule(() => compile(currentGeneration, revision, requestedAt))
 	}
+	const start = (): void => {
+		if (running) return
+		running = true
+		unsubscribe = owner.silo.subscribe(owner.documentRevision, request)
+		request()
+	}
+	const stop = (): void => {
+		if (!running) return
+		running = false
+		generation++
+		unsubscribe?.()
+		unsubscribe = null
+	}
 
 	return {
 		state: compilationAtom,
 		active: activeFontAtom,
-		start(): void {
-			if (running) return
-			running = true
-			unsubscribe = owner.silo.subscribe(owner.documentRevision, request)
-			request()
-		},
-		stop(): void {
-			if (!running) return
-			running = false
-			generation++
-			unsubscribe?.()
-			unsubscribe = null
+		start,
+		stop,
+		retain(): () => void {
+			retainCount++
+			if (retainCount === 1) start()
+			let released = false
+			return () => {
+				if (released) return
+				released = true
+				retainCount--
+				if (retainCount === 0) stop()
+			}
 		},
 		request,
 	}

@@ -163,7 +163,10 @@ describe("GlyphCanvas group nudging", () => {
 			expect(previewHandles).toContainEqual({ x, y })
 		}
 
-		act(() => target.fire("dragend", dragEvent))
+		const liveTarget = stage.findOne(`#${before.pointId}`)
+		if (liveTarget === undefined)
+			throw new Error("The shared hard node disappeared during drag preview.")
+		act(() => liveTarget.fire("dragend", dragEvent))
 		expect(transform).toHaveBeenCalledOnce()
 		const committed = workspace.font.silo
 			.getState(workspace.ui.activeLayer)

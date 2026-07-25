@@ -2,10 +2,7 @@ import type {
 	EditorBrowserOptions,
 	MountedEditor,
 } from "@create-font/editor/browser"
-import {
-	createFontEditorState,
-	type EditorFontSource,
-} from "@create-font/states"
+import type { EditorFontSource } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type {
 	SourceChangedEvent,
@@ -32,9 +29,10 @@ import {
 	applySourceSyncDelta,
 	assembleSourceSyncState,
 	sourceSyncStateFromSnapshot,
-	sourceUnitWrites,
 	type SourceSyncState,
 } from "./source-sync.ts"
+import { createSourceSyncWorkerClient } from "./source-sync-worker-client.ts"
+import type { FontValidationStatus } from "./source-validation.ts"
 import {
 	createStartupTimeline,
 	startupResourceTimings,
@@ -47,10 +45,6 @@ import {
 
 type StartupProfileStatus = `loading` | `error` | `editor-usable`
 type EditorBrowserModule = typeof import("@create-font/editor/browser")
-type FontValidationStatus = Readonly<{
-	ok: boolean
-	issueCount: number
-}>
 
 declare const __CREATE_FONT_DEVELOPMENT__: boolean
 
@@ -158,6 +152,7 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
+const sourceSyncWorker = createSourceSyncWorkerClient()
 let sourceState: SourceSyncState | null = null
 let saveQueue = Promise.resolve()
 let renderedSource = false
@@ -412,29 +407,14 @@ async function showSource(
 	}
 }
 
-const validationState = createFontEditorState({
-	key: `create-font/source-validation`,
-	isProduction: true,
-})
-
-function compileValidation(source: EditorFontSource): FontValidationStatus {
-	validationState.actions.load(source)
-	const compilation = validationState.read.compilation()
-	const issueCount = compilation.ok
-		? compilation.projectionWarnings.length +
-			compilation.ingestionWarnings.length
-		: compilation.stage === `projection-failed`
-			? compilation.projectionErrors.length +
-				compilation.projectionWarnings.length
-			: compilation.projectionWarnings.length +
-				compilation.ingestionErrors.length +
-				compilation.ingestionWarnings.length
-	return { ok: compilation.ok, issueCount }
-}
-
 async function showSourceState(state: SourceSyncState): Promise<void> {
 	const assembled = assembleSourceSyncState(state)
-	await showSource(assembled.source, compileValidation(assembled.source), {
+	const processing = sourceSyncWorker.process(state, assembled.source)
+	const [, validation] = await Promise.all([
+		processing.writes,
+		processing.validation,
+	])
+	await showSource(assembled.source, validation, {
 		entries: assembled.featureEntries,
 		sources: assembled.featureSources,
 	})
@@ -504,10 +484,13 @@ function saveSource(source: EditorFontSource): Promise<void> {
 			if (base === null) {
 				throw new Error(`The source session has not loaded yet.`)
 			}
-			const writes = sourceUnitWrites(base, source)
-			if (writes.length === 0) {
-				currentValidation = compileValidation(source)
-			} else {
+			const processing = sourceSyncWorker.process(base, source)
+			const validationPromise = processing.validation.then(
+				(validation) => ({ ok: true as const, validation }),
+				(error: unknown) => ({ error, ok: false as const }),
+			)
+			const writes = await processing.writes
+			if (writes.length !== 0) {
 				const operationId = crypto.randomUUID()
 				const result = writeResultFromResponse(
 					await rpcClient.api.source.units.put({
@@ -537,8 +520,10 @@ function saveSource(source: EditorFontSource): Promise<void> {
 					await refreshSource(false)
 					renderCanonical = true
 				}
-				currentValidation = compileValidation(source)
 			}
+			const validationResult = await validationPromise
+			if (!validationResult.ok) throw validationResult.error
+			currentValidation = validationResult.validation
 			if (dirtySequence !== saveSequence) return
 			sourceDirty = false
 			const hadBufferedSourceEvents = bufferedSourceEvents.length > 0

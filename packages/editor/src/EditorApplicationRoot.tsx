@@ -9,8 +9,7 @@ import "./globals.css"
 import { EditorStateContext } from "./state-hooks.ts"
 import type { EditorVersionControl } from "./version-control.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
-
-const SOURCE_SAVE_DEBOUNCE_MS = 40
+import { createSourcePersistenceScheduler } from "./source-persistence.ts"
 
 export type EditorApplicationRootProps = Readonly<{
 	featureSubstitutions?: readonly EditorFeatureSubstitution[]
@@ -40,7 +39,6 @@ export function EditorApplicationRoot({
 	const currentSource = useRef(source)
 
 	useEffect(() => {
-		workspace.liveFont.start()
 		const stopBrowserFont = startBrowserLiveFont(
 			workspace.font.silo,
 			workspace.liveFont.compilation,
@@ -49,7 +47,6 @@ export function EditorApplicationRoot({
 		)
 		return () => {
 			stopBrowserFont()
-			workspace.liveFont.stop()
 		}
 	}, [workspace])
 
@@ -72,9 +69,7 @@ export function EditorApplicationRoot({
 
 	useEffect(() => {
 		if (onSourceChange === undefined) return
-		let timeout: ReturnType<typeof setTimeout> | null = null
 		const flush = (): void => {
-			timeout = null
 			if (applyingSource.current) return
 			const nextSource = workspace.font.read.editorSource()
 			if (nextSource !== null) {
@@ -86,20 +81,21 @@ export function EditorApplicationRoot({
 				void onSourceChange(nextSource)
 			}
 		}
+		const persistence = createSourcePersistenceScheduler(flush)
 		const unsubscribe = workspace.font.silo.subscribe(
 			workspace.font.atoms.documentRevision,
 			() => {
 				if (applyingSource.current) return
 				onSourceDirty?.()
-				if (timeout !== null) clearTimeout(timeout)
-				// Persist a settled edit burst after the latency-sensitive live font has
-				// compiled, without deferring cross-window delivery to browser idle time.
-				timeout = setTimeout(flush, SOURCE_SAVE_DEBOUNCE_MS)
+				// Projecting the complete source is synchronous and can take longer than
+				// one frame. Wait for an actual editing pause so a Pen gesture does not
+				// pay that cost after every point.
+				persistence.request()
 			},
 		)
 		return () => {
 			unsubscribe()
-			if (timeout !== null) clearTimeout(timeout)
+			persistence.cancel()
 		}
 	}, [onSourceChange, onSourceDirty, workspace])
 

@@ -30,6 +30,35 @@ async function settle(): Promise<void> {
 }
 
 describe("live font compilation", () => {
+	it("runs only while at least one preview consumer retains it", () => {
+		const silo = new Silo({
+			name: "live-font-retain-test",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const revision = silo.atom({ key: "revision", default: 0 })
+		const scheduled: (() => void)[] = []
+		const compiler = createLiveFontCompiler(
+			{ silo, documentRevision: revision, compilation: successfulCompilation },
+			{
+				schedule: (work) => scheduled.push(work),
+				serialize: () => new Uint8Array([1]),
+			},
+		)
+
+		silo.setState(revision, 1)
+		expect(scheduled).toHaveLength(0)
+		const releaseFirst = compiler.retain()
+		const releaseSecond = compiler.retain()
+		expect(scheduled).toHaveLength(1)
+		releaseFirst()
+		silo.setState(revision, 2)
+		expect(scheduled).toHaveLength(2)
+		releaseSecond()
+		silo.setState(revision, 3)
+		expect(scheduled).toHaveLength(2)
+	})
+
 	it("defers compilation beyond the input turn and coalesces an edit burst", async () => {
 		vi.useFakeTimers()
 		try {

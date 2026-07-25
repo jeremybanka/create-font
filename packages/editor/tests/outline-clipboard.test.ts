@@ -1,3 +1,4 @@
+import type { PointId } from "@create-font/states"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -178,12 +179,32 @@ describe("outline clipboard", () => {
 			prepared.value.contours[0]?.points.map((point) => point.id),
 		).not.toEqual(contour.points.map((point) => point.id))
 		expect(
-			outlinePasteSelectionTargets(prepared.value.selectedPointIds),
+			outlinePasteSelectionTargets(
+				prepared.value.selectedPointIds,
+				prepared.value.layers[0]?.points ?? [],
+			),
 		).toEqual(
-			prepared.value.selectedPointIds.map((pointId) => ({
-				kind: "node",
-				pointId,
-			})),
+			prepared.value.layers[0]?.points.flatMap((point) => [
+				{ kind: "node", pointId: point.pointId },
+				...(point.incoming === undefined
+					? []
+					: [
+							{
+								kind: "handle",
+								pointId: point.pointId,
+								handle: "incoming",
+							},
+						]),
+				...(point.outgoing === undefined
+					? []
+					: [
+							{
+								kind: "handle",
+								pointId: point.pointId,
+								handle: "outgoing",
+							},
+						]),
+			]),
 		)
 
 		expect(parseOutlineClipboard("{not-json")).toEqual(
@@ -203,6 +224,39 @@ describe("outline clipboard", () => {
 				error: expect.stringContaining("different set of font masters"),
 			}),
 		)
+	})
+
+	it("fully selects pasted nodes and each existing active-layer handle", () => {
+		const first = "point:pasted:first" as PointId
+		const second = "point:pasted:second" as PointId
+		const ignored = "point:not-pasted" as PointId
+
+		expect(
+			outlinePasteSelectionTargets(
+				[first, second],
+				[
+					{
+						pointId: first,
+						incoming: { x: -10, y: 0 },
+						outgoing: { x: 10, y: 0 },
+					},
+					{
+						pointId: second,
+						outgoing: { x: 5, y: 5 },
+					},
+					{
+						pointId: ignored,
+						incoming: { x: -5, y: 0 },
+					},
+				],
+			),
+		).toEqual([
+			{ kind: "node", pointId: first },
+			{ kind: "handle", pointId: first, handle: "incoming" },
+			{ kind: "handle", pointId: first, handle: "outgoing" },
+			{ kind: "node", pointId: second },
+			{ kind: "handle", pointId: second, handle: "outgoing" },
+		])
 	})
 
 	it("remaps one same-glyph source layer to the active master atomically", () => {

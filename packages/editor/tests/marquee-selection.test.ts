@@ -17,7 +17,7 @@ const handle = (
 ): EditorSelectionTarget => ({ kind: "handle", pointId, handle: side })
 
 describe("marquee selection", () => {
-	it("resolves replace, add, and Shift-first subtract modes", () => {
+	it("resolves replace, add, and Shift-first toggle modes", () => {
 		expect(
 			marqueeSelectionMode({
 				shiftKey: false,
@@ -45,7 +45,7 @@ describe("marquee selection", () => {
 				metaKey: true,
 				ctrlKey: true,
 			}),
-		).toBe("subtract")
+		).toBe("toggle")
 	})
 
 	it("replaces or adds independently keyed nodes and handles", () => {
@@ -64,7 +64,7 @@ describe("marquee selection", () => {
 		).toEqual([first, incoming, outgoing])
 	})
 
-	it("subtracts only enclosed existing targets and otherwise is a no-op", () => {
+	it("inverts every enclosed target without changing uncovered targets", () => {
 		const first = node("point:first")
 		const second = node("point:second")
 		const incoming = handle("point:first", "incoming")
@@ -73,10 +73,10 @@ describe("marquee selection", () => {
 			combineMarqueeSelection(
 				[first, incoming, outgoing, second],
 				[incoming, node("point:unselected")],
-				"subtract",
+				"toggle",
 			),
-		).toEqual([first, outgoing, second])
-		expect(combineMarqueeSelection([first, incoming], [], "subtract")).toEqual([
+		).toEqual([first, outgoing, second, node("point:unselected")])
+		expect(combineMarqueeSelection([first, incoming], [], "toggle")).toEqual([
 			first,
 			incoming,
 		])
@@ -84,8 +84,22 @@ describe("marquee selection", () => {
 			combineMarqueeSelection(
 				[first, incoming],
 				[node("point:unselected")],
-				"subtract",
+				"toggle",
 			),
-		).toEqual([first, incoming])
+		).toEqual([first, incoming, node("point:unselected")])
+	})
+
+	it("swaps selected and unselected nodes covered by the same Shift marquee", () => {
+		const selectedInside = node("point:selected-inside")
+		const selectedOutside = node("point:selected-outside")
+		const unselectedInside = node("point:unselected-inside")
+
+		expect(
+			combineMarqueeSelection(
+				[selectedInside, selectedOutside],
+				[selectedInside, unselectedInside],
+				"toggle",
+			),
+		).toEqual([selectedOutside, unselectedInside])
 	})
 })

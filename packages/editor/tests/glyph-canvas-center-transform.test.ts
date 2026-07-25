@@ -178,7 +178,9 @@ describe("GlyphCanvas center transform", () => {
 				.sort(),
 		).toEqual(contourSelectionTargets(outer.nodes).map(selectionKey).sort())
 		expect(stage.findOne(".transform-selection-box")).toBeDefined()
-		expect(stage.findOne(".transform-east")).toBeDefined()
+		expect(stage.findOne(".vector-selection-bounds")).toBeDefined()
+		expect(stage.findOne(".vector-contour-path")).toBeDefined()
+		expect(stage.findOne(".transform-handle-e")).toBeDefined()
 		expect(stage.findOne(".transform-rotation")).toBeDefined()
 	})
 
@@ -228,7 +230,7 @@ describe("GlyphCanvas center transform", () => {
 
 	it("previews and commits an Alt resize through the mounted handle path", () => {
 		const { stage, transform } = mountTransformSelection()
-		const handle = stage.findOne(".transform-east")
+		const handle = stage.findOne(".transform-handle-e")
 		if (handle === undefined)
 			throw new Error("East transform handle was not rendered.")
 		const centerX = stage.findOne(".transform-selection-box")?.x()
@@ -251,6 +253,102 @@ describe("GlyphCanvas center transform", () => {
 		)
 		expect(transform.mock.calls[0]?.[0].points.length).toBeGreaterThan(0)
 		expect(centerX).toBeTypeOf("number")
+	})
+
+	it.each([
+		["nw", { x: -40, y: 30 }, { minX: 460, minY: 400, maxX: 920, maxY: 850 }],
+		["n", { x: 0, y: 30 }, { minX: 500, minY: 400, maxX: 920, maxY: 850 }],
+		["ne", { x: 40, y: 30 }, { minX: 500, minY: 400, maxX: 960, maxY: 850 }],
+		["e", { x: 40, y: 0 }, { minX: 500, minY: 400, maxX: 960, maxY: 820 }],
+		["se", { x: 40, y: -30 }, { minX: 500, minY: 370, maxX: 960, maxY: 820 }],
+		["s", { x: 0, y: -30 }, { minX: 500, minY: 370, maxX: 920, maxY: 820 }],
+		["sw", { x: -40, y: -30 }, { minX: 460, minY: 370, maxX: 920, maxY: 820 }],
+		["w", { x: -40, y: 0 }, { minX: 460, minY: 400, maxX: 920, maxY: 820 }],
+	] as const)(
+		"keeps the opposite visual anchor fixed when dragging the %s handle",
+		(handleName, delta, expectedBounds) => {
+			const { stage, transform } = mountTransformSelection()
+			const handle = stage.findOne(`.transform-handle-${handleName}`)
+			if (handle === undefined)
+				throw new Error(`${handleName} transform handle was not rendered.`)
+			const original = handle.position()
+			handle.fire("dragstart", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			handle.position({
+				x: original.x + delta.x,
+				y: original.y + delta.y,
+			})
+			handle.fire("dragmove", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			handle.fire("dragend", {
+				evt: { altKey: false, shiftKey: false },
+			})
+			expect(transform).toHaveBeenCalledTimes(1)
+			const points = transform.mock.calls[0]?.[0].points
+			if (points === undefined || points.length === 0)
+				throw new Error("Transform did not commit selected points.")
+			expect({
+				minX: Math.min(...points.map((point) => point.x)),
+				minY: Math.min(...points.map((point) => point.y)),
+				maxX: Math.max(...points.map((point) => point.x)),
+				maxY: Math.max(...points.map((point) => point.y)),
+			}).toEqual(expectedBounds)
+		},
+	)
+
+	it("translates the mounted selection box rigidly in font coordinates", () => {
+		const { stage, transform, workspace } = mountTransformSelection()
+		const selected = workspace.font.silo.getState(workspace.ui.selection)
+		const originalNodes = new Map(
+			(workspace.font.silo.getState(workspace.ui.activeLayer)?.contours ?? [])
+				.flatMap((contour) => contour.nodes)
+				.filter((node) =>
+					selected.some(
+						(target) =>
+							target.kind === "node" && target.pointId === node.pointId,
+					),
+				)
+				.map((node) => [node.pointId, { x: node.x, y: node.y }]),
+		)
+		const box = stage.findOne(".transform-selection-box")
+		if (box === undefined)
+			throw new Error("Transform selection box was not rendered.")
+		const original = box.position()
+		box.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		box.position({ x: original.x + 40, y: original.y - 30 })
+		box.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		box.fire("dragend", { evt: { altKey: false, shiftKey: false } })
+
+		expect(transform).toHaveBeenCalledOnce()
+		const points = transform.mock.calls[0]?.[0].points
+		expect(points).toHaveLength(originalNodes.size)
+		for (const point of points ?? []) {
+			const before = originalNodes.get(point.pointId)
+			if (before === undefined)
+				throw new Error(`Unexpected transformed point ${point.pointId}.`)
+			expect(point.x).toBe(before.x + 40)
+			expect(point.y).toBe(before.y - 30)
+		}
+	})
+
+	it("does not bypass a null shared commit intent for a sub-threshold resize", () => {
+		const { stage, transform } = mountTransformSelection()
+		const handle = stage.findOne(".transform-handle-e")
+		if (handle === undefined)
+			throw new Error("Shared east transform handle was not rendered.")
+		const originalX = handle.x()
+		handle.fire("dragstart", { evt: { altKey: false, shiftKey: false } })
+		handle.x(originalX + 0.001)
+		handle.fire("dragmove", { evt: { altKey: false, shiftKey: false } })
+		const liveHandle = stage.findOne(".transform-handle-e")
+		if (liveHandle === undefined)
+			throw new Error("Shared east transform handle disappeared.")
+		liveHandle.fire("dragend", {
+			evt: { altKey: false, shiftKey: false },
+		})
+		expect(transform).not.toHaveBeenCalled()
 	})
 
 	it("previews snapped rotation and commits exactly one atomic transform", () => {
