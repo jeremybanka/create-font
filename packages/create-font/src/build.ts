@@ -1,25 +1,12 @@
 import { randomUUID } from "node:crypto"
-import {
-	mkdir,
-	readFile,
-	readdir,
-	rename,
-	rm,
-	stat,
-	writeFile,
-} from "node:fs/promises"
-import { basename, dirname, join, relative, resolve } from "node:path"
+import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, resolve } from "node:path"
 
 import {
 	SourceValidationError,
 	type BuildDiagnostic,
 	type BuildResult,
 } from "@create-font/server"
-import {
-	lowerFeaSubstitutions,
-	parseFea,
-	type FeatureSubstitutionIr,
-} from "@create-font/source"
 import {
 	createFontEditorState,
 	type FontCompilation,
@@ -30,26 +17,9 @@ import {
 } from "@create-font/target"
 
 import { loadEditorFontSourceDirectory } from "./source-service.ts"
+import { analyzeFontProjectFeatures } from "./fea-project.ts"
 
 export type { BuildDiagnostic, BuildResult } from "@create-font/server"
-
-async function collectFeatureFiles(
-	root: string,
-	directory = root,
-): Promise<readonly string[]> {
-	const paths: string[] = []
-	for (const entry of await readdir(directory, { withFileTypes: true }).catch(
-		() => [],
-	)) {
-		const absolute = join(directory, entry.name)
-		if (entry.isDirectory()) {
-			paths.push(...(await collectFeatureFiles(root, absolute)))
-		} else if (entry.isFile() && entry.name.endsWith(".fea")) {
-			paths.push(relative(root, absolute))
-		}
-	}
-	return paths.toSorted()
-}
 
 function failure(
 	root: string,
@@ -161,32 +131,18 @@ export async function buildProject(
 
 	let bytes: Uint8Array
 	try {
-		const featureDirectory = join(root, "features")
-		const featureFiles = await collectFeatureFiles(featureDirectory)
-		const substitutions: FeatureSubstitutionIr[] = []
-		const glyphs = new Map(
-			compilation.font.glyphs.map((glyph, index) => [
-				String(glyph.name),
-				index,
-			]),
-		)
-		for (const path of featureFiles) {
-			const parsed = parseFea(
-				await readFile(join(featureDirectory, path), "utf8"),
+		const analysis = await analyzeFontProjectFeatures(root, source)
+		if (!analysis.ok)
+			throw new Error(
+				analysis.diagnostics
+					.map(
+						(diagnostic) =>
+							`${diagnostic.path}:${diagnostic.range.line}:${diagnostic.range.column}: ${diagnostic.message}`,
+					)
+					.join(`\n`),
 			)
-			if (!parsed.ok)
-				throw new Error(
-					`${path}:${parsed.errors[0]?.range.line ?? 1}:${parsed.errors[0]?.range.column ?? 1}: ${parsed.errors[0]?.message ?? "Invalid feature source."}`,
-				)
-			const lowered = lowerFeaSubstitutions(parsed.value, glyphs)
-			if (lowered.errors.length > 0)
-				throw new Error(
-					`${path}:${lowered.errors[0]?.range.line ?? 1}:${lowered.errors[0]?.range.column ?? 1}: ${lowered.errors[0]?.message}`,
-				)
-			substitutions.push(...lowered.ir)
-		}
 		bytes = serializeVariableFont(
-			withVariableFontSubstitutions(compilation.font, substitutions),
+			withVariableFontSubstitutions(compilation.font, analysis.ir),
 		)
 	} catch (error) {
 		return failure(root, [

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest"
 import {
+	analyzeFeaProject,
 	lowerFeaSubstitutions,
 	parseFea,
 	parseFeaSyntax,
 	type FeaSyntaxElement,
 } from "../src/fea.ts"
+import { FeaLineIndex } from "../src/fea-analysis.ts"
 
 describe("Adobe feature source", () => {
 	test("parses source-located liga and calt substitutions and lowers names", () => {
@@ -101,5 +103,73 @@ describe("Adobe feature source", () => {
 				),
 			).toBe(";")
 		}
+	})
+})
+
+describe("Adobe feature project analysis", () => {
+	test("resolves includes through one project-aware semantic operation", () => {
+		const analysis = analyzeFeaProject({
+			entries: ["features/layout.fea"],
+			glyphs: [
+				{ id: 0, name: "f" },
+				{ id: 1, name: "i" },
+				{ id: 2, name: "f_i" },
+			],
+			sources: new Map([
+				["features/layout.fea", "include(parts/ligatures.fea);"],
+				[
+					"features/parts/ligatures.fea",
+					"feature liga { sub f i by f_i; } liga;",
+				],
+			]),
+		})
+
+		expect(analysis.ok).toBe(true)
+		expect(analysis.documents.map((document) => document.path)).toEqual([
+			"features/layout.fea",
+			"features/parts/ligatures.fea",
+		])
+		expect(analysis.ir).toMatchObject([
+			{ feature: "liga", from: [0, 1], to: 2 },
+		])
+	})
+
+	test("diagnoses include cycles, escapes, unsupported syntax, and glyph context", () => {
+		const analysis = analyzeFeaProject({
+			entries: [
+				"features/cycle.fea",
+				"features/escape.fea",
+				"features/unsupported.fea",
+				"features/unexported.fea",
+			],
+			glyphs: [
+				{ id: 0, name: "A" },
+				{ export: false, id: 1, name: "A.alt" },
+			],
+			sources: new Map([
+				["features/cycle.fea", "include(cycle.fea);"],
+				["features/escape.fea", "include(../../outside.fea);"],
+				["features/unsupported.fea", "feature kern { pos A 10; } kern;"],
+				["features/unexported.fea", "feature salt { sub A by A.alt; } salt;"],
+			]),
+		})
+
+		expect(analysis.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+			"fea.include_cycle",
+			"fea.include_escape",
+			"fea.unexported_glyph",
+			"fea.unsupported",
+		])
+	})
+
+	test("maps UTF-8 bytes and UTF-16 positions across Unicode and CRLF", () => {
+		const source = "# 😀 e\u0301\r\nfeature liga {} liga;"
+		const index = new FeaLineIndex(source)
+		const byteStart = new TextEncoder().encode("# 😀 e\u0301\r\n").length
+		const range = index.fromBytes({ end: byteStart + 7, start: byteStart })
+
+		expect(range).toMatchObject({ column: 1, line: 2 })
+		expect(index.position(range.start)).toEqual({ character: 0, line: 1 })
+		expect(index.offset(1, 7)).toBe(range.start + 7)
 	})
 })

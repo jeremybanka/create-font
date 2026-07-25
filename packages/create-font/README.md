@@ -1,7 +1,7 @@
 # create-font
 
 `create-font` is the application package for the create-font font toolchain. It
-ships two Node- and Bun-compatible executables with separate roles. Create a new
+ships three Node-compatible executables with separate roles. Create a new
 workspace with the initializer:
 
 ```sh
@@ -67,6 +67,56 @@ Run `npm exec -- font dev workbench-sans --port=4173` with Node, or invoke the
 same local executable with Bun.
 
 `font serve` remains an alias for `font dev`.
+
+## Adobe feature tooling
+
+`font check [name]` validates every indexed `.fea` source and its transitive
+includes without compiling a font or writing any files. The default `stylish`
+format prints source frames to stderr. `--format=json` writes the complete,
+deterministically ordered diagnostic array to stdout for CI. Errors, file
+failures, and Wasm initialization failures exit nonzero; warnings are reported
+but do not affect the exit code. `NO_COLOR` disables terminal color and
+`FORCE_COLOR=1` enables it.
+
+All feature consumers use the same project-aware operation from
+`@create-font/source`. The operation calls the Rust/`fea-rs` parser through its
+versioned Wasm ABI, resolves includes in the project host, converts UTF-8 parser
+ranges to UTF-16, checks exported glyph names, and lowers only the semantic
+subset the target supports. Adobe syntax accepted by `fea-rs` is not
+necessarily compilable by create-font: unsupported positioning, lookup, class,
+table, and other constructs produce `fea.unsupported` diagnostics rather than
+being ignored. dprint formatting likewise establishes syntactic validity, not
+create-font semantic support.
+
+`create-font-fea-lsp --stdio` starts the standalone language server. It supports
+incremental document synchronization, multiple workspace folders, open-buffer
+overrides, watched feature/index/glyph inputs, stale-result suppression,
+project glyph and keyword completion, document symbols, and glyph hover.
+Operational JSON logs go only to stderr and are controlled by
+`CREATE_FONT_FEA_LOG_LEVEL=off|error|info|debug`; stdout remains LSP protocol
+traffic.
+
+Build the platform-independent VS Code extension with:
+
+```sh
+font vsix --build-only
+```
+
+The resulting `artifacts/CreateFontFeatures.vsix` bundles the language client,
+server, parser JavaScript, and parser Wasm. Omit `--build-only` to install it
+with `code`, or select a compatible editor with
+`font vsix --target=code-insiders`. The extension recognizes `.fea`, includes
+basic highlighting, and provides **Create Font: Restart Feature Language
+Server**. Settings:
+
+- `createFont.features.executablePath`: alternate LSP executable;
+- `createFont.features.modulePath`: alternate server module;
+- `createFont.features.logLevel`: operational logging;
+- `createFont.features.trace.server`: protocol tracing, independently.
+
+If the server reports a Wasm ABI or initialization failure, rebuild/reinstall
+the VSIX and ensure an alternate server path is not mixing create-font
+versions. No Rust toolchain or native parser executable is used at runtime.
 
 Reads carry content-hash revisions. Single- and multi-unit writes use
 optimistic concurrency, idempotency keys, whole-project validation, and a

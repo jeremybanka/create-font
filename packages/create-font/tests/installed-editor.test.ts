@@ -102,7 +102,7 @@ describe(`installed create-font editor boundary`, () => {
 		const runnerPath = resolve(fixtureRoot, `verify-install.ts`)
 		await writeFile(
 			runnerPath,
-			`import { readdir, readFile } from "node:fs/promises"
+			`import { readdir, readFile, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { createFontServerApp } from "create-font"
@@ -128,7 +128,7 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 	const editorJavaScript = await editorJavaScriptResponse.text()
 	const editorStylesResponse = await request("/editor/editor.css")
 	const editorStyles = await editorStylesResponse.text()
-	process.stdout.write("RESULT " + JSON.stringify({
+	await writeFile("result.json", JSON.stringify({
 		dependency: createFontPackage.dependencies["@create-font/editor"],
 		editorContentType: editorJavaScriptResponse.headers.get("content-type"),
 		editorHasImplementation: editorJavaScript.includes("editor-application-root"),
@@ -138,20 +138,16 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 		mountType: typeof editorModule.mountEditor,
 		stylesContentType: editorStylesResponse.headers.get("content-type"),
 		stylesHaveEditorRoot: editorStyles.includes("editor-application-root"),
-	}) + "\\n")
+	}))
+	await app.stop()
 	process.exit(0)
 `,
 		)
 
-		const { stdout } = await run(
-			[process.execPath, basename(runnerPath)],
-			fixtureRoot,
-		)
-		const resultLine = stdout
-			.split(`\n`)
-			.find((line) => line.startsWith(`RESULT `))
-		expect(resultLine).toBeDefined()
-		const result = JSON.parse(resultLine?.slice(`RESULT `.length) ?? `{}`) as {
+		await run([process.execPath, basename(runnerPath)], fixtureRoot)
+		const result = JSON.parse(
+			await readFile(resolve(fixtureRoot, `result.json`), `utf8`),
+		) as {
 			dependency?: string
 			editorContentType?: string
 			editorHasImplementation?: boolean

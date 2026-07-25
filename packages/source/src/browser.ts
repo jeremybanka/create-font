@@ -1,11 +1,20 @@
 import type { EditorFontSource } from "@create-font/states"
 
 export {
+	analyzeFeaProject,
 	initializeFeaParser,
 	lowerFeaSubstitutions,
 	parseFea,
 	parseFeaSyntax,
 } from "./fea-browser.ts"
+export { FeaLineIndex, feaSyntaxTokensAtOffset } from "./fea-analysis.ts"
+export type {
+	AnalyzeFeaProjectInput,
+	FeaAnalysisDiagnostic,
+	FeaAnalysisDocument,
+	FeaProjectAnalysis,
+	FeaProjectGlyph,
+} from "./fea-analysis.ts"
 export type {
 	FeaDiagnostic,
 	FeaDocumentAst,

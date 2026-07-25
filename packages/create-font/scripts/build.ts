@@ -21,6 +21,7 @@ await Promise.all([
 			lib: {
 				entry: {
 					"create-font-cli": resolve(packageRoot, `src/create-font-cli.ts`),
+					"fea-lsp": resolve(packageRoot, `src/fea-lsp.ts`),
 					"font-cli": resolve(packageRoot, `src/font-cli.ts`),
 					rpc: resolve(packageRoot, `src/rpc.ts`),
 					server: resolve(packageRoot, `src/server.ts`),

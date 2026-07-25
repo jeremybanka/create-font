@@ -12,11 +12,13 @@ import {
 import { z } from "zod/v4"
 
 import { buildProject } from "./build.ts"
+import { checkFontProject, formatStylishCheck } from "./check.ts"
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { startCreateFontServer } from "./server.ts"
 import { createFileSystemSourceService } from "./source-service.ts"
 import { isMainModule } from "./runtime.ts"
 import { selectFontProject } from "./workspace.ts"
+import { buildFeaVsix, installFeaVsix } from "./vsix.ts"
 
 const helpSchema = { help: z.boolean().optional() }
 const helpConfig = {
@@ -34,6 +36,32 @@ const buildOptions = options(
 	z.object({ ...helpSchema, root: z.string().optional() }),
 	{
 		...helpConfig,
+		root: {
+			description: `Font workspace root.`,
+			example: `--root=.`,
+			flag: `r`,
+			parse: parseStringOption,
+			required: false,
+		},
+	},
+)
+
+const checkOptions = options(
+	`Check a font project's Adobe feature sources without writing artifacts.`,
+	z.object({
+		...helpSchema,
+		format: z.string().optional(),
+		root: z.string().optional(),
+	}),
+	{
+		...helpConfig,
+		format: {
+			description: `Diagnostic output format: stylish or json.`,
+			example: `--format=json`,
+			flag: `f`,
+			parse: parseStringOption,
+			required: false,
+		},
 		root: {
 			description: `Font workspace root.`,
 			example: `--root=.`,
@@ -77,22 +105,60 @@ const devOptions = options(
 	},
 )
 
+const vsixOptions = options(
+	`Build and optionally install the Create Font Features VS Code extension.`,
+	z.object({
+		...helpSchema,
+		"build-only": z.boolean().optional(),
+		out: z.string().optional(),
+		target: z.string().optional(),
+	}),
+	{
+		...helpConfig,
+		"build-only": {
+			description: `Build the universal VSIX without installing it.`,
+			example: `--build-only`,
+			parse: parseBooleanOption,
+			required: false,
+		},
+		out: {
+			description: `Directory for the VSIX.`,
+			example: `--out=artifacts`,
+			flag: `o`,
+			parse: parseStringOption,
+			required: false,
+		},
+		target: {
+			description: `VS Code-compatible editor command used for installation.`,
+			example: `--target=code-insiders`,
+			flag: `t`,
+			parse: parseStringOption,
+			required: false,
+		},
+	},
+)
+
 export const fontCli = cli({
 	cliName: `font`,
 	cliDescription: `Build and interactively edit fonts in a create-font workspace.`,
 	routes: optional({
 		build: optional({ $font: null }),
+		check: optional({ $font: null }),
 		dev: optional({ $font: null }),
 		serve: optional({ $font: null }),
+		vsix: null,
 	}),
 	routeOptions: {
 		"": options(`Show font help.`, z.object(helpSchema), helpConfig),
 		build: buildOptions,
 		"build/$font": buildOptions,
+		check: checkOptions,
+		"check/$font": checkOptions,
 		dev: devOptions,
 		"dev/$font": devOptions,
 		serve: devOptions,
 		"serve/$font": devOptions,
+		vsix: vsixOptions,
 	},
 })
 
@@ -106,7 +172,36 @@ export async function runFontCli(
 			writeLine(io.stdout, help(fontCli.definition))
 			return 0
 		}
+		if (inputs.case === `vsix`) {
+			const result = await buildFeaVsix({
+				outdir: inputs.opts.out ?? `artifacts`,
+			})
+			writeLine(io.stdout, result.vsixPath)
+			if (!inputs.opts[`build-only`])
+				await installFeaVsix(
+					result.vsixPath,
+					inputs.opts.target ?? `code`,
+					process.cwd(),
+				)
+			return 0
+		}
 		const project = await selectFontProject(inputs.opts.root, inputs.path[1])
+		if (inputs.case === `check` || inputs.case === `check/$font`) {
+			if (
+				inputs.opts.format !== undefined &&
+				inputs.opts.format !== `stylish` &&
+				inputs.opts.format !== `json`
+			)
+				throw new Error(`Format must be stylish or json.`)
+			const result = await checkFontProject(project.root)
+			writeLine(
+				inputs.opts.format === `json` ? io.stdout : io.stderr,
+				inputs.opts.format === `json`
+					? JSON.stringify(result.diagnostics, null, 2)
+					: await formatStylishCheck(result),
+			)
+			return result.ok ? 0 : 1
+		}
 		if (inputs.case === `build` || inputs.case === `build/$font`) {
 			const result = await buildProject(project.root)
 			if (result.ok) {

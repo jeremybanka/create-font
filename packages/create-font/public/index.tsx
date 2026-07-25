@@ -13,10 +13,9 @@ import type {
 	WriteSourceUnitsResult,
 } from "@create-font/server"
 import {
+	analyzeFeaProject,
 	assembleEditorFontSource,
 	initializeFeaParser,
-	lowerFeaSubstitutions,
-	parseFea,
 } from "@create-font/source/browser"
 import { render } from "preact"
 
@@ -349,31 +348,39 @@ async function commitSourceUnits(
 async function showSource(
 	source: EditorFontSource,
 	validation: FontValidationStatus,
-	featureSources?: readonly string[],
+	features?: Readonly<{
+		entries: readonly string[]
+		sources: ReadonlyMap<string, string>
+	}>,
 ): Promise<void> {
 	const editorModule = await editorModulePromise
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
 	currentValidation = validation
-	const glyphIndices = new Map(
-		source.glyphs.map((glyph, index) => [glyph.name, index]),
-	)
-	if (featureSources !== undefined)
-		currentFeatureSubstitutions = featureSources.flatMap((featureSource) => {
-			const parsed = parseFea(featureSource)
-			if (!parsed.ok) throw new Error(parsed.errors[0]?.message)
-			const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
-			if (lowered.errors.length > 0) throw new Error(lowered.errors[0]?.message)
-			return lowered.ir.map((rule) => ({
-				feature: rule.feature,
-				from: rule.from.map((index) => source.glyphs[index]?.id ?? ""),
-				to: source.glyphs[rule.to]?.id ?? "",
-				...(rule.contextIndex === undefined
-					? {}
-					: { contextIndex: rule.contextIndex }),
-			}))
+	if (features !== undefined) {
+		const analysis = analyzeFeaProject({
+			entries: features.entries,
+			glyphs: source.glyphs.map((glyph, id) => ({
+				export: glyph.export,
+				id,
+				name: glyph.name,
+			})),
+			sources: features.sources,
 		})
+		if (!analysis.ok)
+			throw new Error(
+				analysis.diagnostics[0]?.message ?? `Feature analysis failed.`,
+			)
+		currentFeatureSubstitutions = analysis.ir.map((rule) => ({
+			feature: rule.feature,
+			from: rule.from.map((index) => source.glyphs[index]?.id ?? ""),
+			to: source.glyphs[rule.to]?.id ?? "",
+			...(rule.contextIndex === undefined
+				? {}
+				: { contextIndex: rule.contextIndex }),
+		}))
+	}
 	const finish = initialRender
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
@@ -427,11 +434,10 @@ function compileValidation(source: EditorFontSource): FontValidationStatus {
 
 async function showSourceState(state: SourceSyncState): Promise<void> {
 	const assembled = assembleSourceSyncState(state)
-	await showSource(
-		assembled.source,
-		compileValidation(assembled.source),
-		assembled.featureSources,
-	)
+	await showSource(assembled.source, compileValidation(assembled.source), {
+		entries: assembled.featureEntries,
+		sources: assembled.featureSources,
+	})
 }
 
 const refreshController = createSourceSnapshotRefreshController({
