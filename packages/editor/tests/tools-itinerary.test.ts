@@ -126,7 +126,7 @@ export const FONT_TOOL_ITINERARY = [
 				coveredBy: [
 					coveredBy(
 						"glyph-canvas-group-cancel.test.ts",
-						"moves a fully selected contour with the pointer despite controlled-node rerenders",
+						"keeps a selected multi-contour glyph visually aligned with a pointer drag",
 					),
 					coveredBy(
 						"glyph-canvas-group-cancel.test.ts",

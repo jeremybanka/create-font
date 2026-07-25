@@ -38,6 +38,7 @@ function mountSelectedContour({
 	zoom = 1,
 	editing = true,
 	selectWholeContour = false,
+	selectAllContours = false,
 } = {}) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
@@ -100,12 +101,16 @@ function mountSelectedContour({
 	const selectedPointIds = contour.nodes.slice(0, 2).map((node) => node.pointId)
 	workspace.font.silo.setState(
 		workspace.ui.selection,
-		selectWholeContour
-			? contourSelectionTargets(contour.nodes)
-			: selectedPointIds.map((pointId) => ({
-					kind: "node" as const,
-					pointId,
-				})),
+		selectAllContours
+			? (layer?.contours.flatMap((candidate) =>
+					contourSelectionTargets(candidate.nodes),
+				) ?? [])
+			: selectWholeContour
+				? contourSelectionTargets(contour.nodes)
+				: selectedPointIds.map((pointId) => ({
+						kind: "node" as const,
+						pointId,
+					})),
 	)
 	const transform = vi.spyOn(workspace.font.actions, "transformControls")
 	const join = vi.spyOn(workspace.font.actions, "joinOpenContours")
@@ -132,6 +137,7 @@ function mountSelectedContour({
 		contour,
 		host,
 		join,
+		layer,
 		selectedPointIds,
 		stage,
 		transform,
@@ -193,10 +199,13 @@ function expectCancelledSession(
 }
 
 describe("GlyphCanvas group drag cancellation", () => {
-	it("moves a fully selected contour with the pointer despite controlled-node rerenders", () => {
-		const { canvas, contour, stage, transform } = mountSelectedContour({
-			selectWholeContour: true,
+	it("keeps a selected multi-contour glyph visually aligned with a pointer drag", () => {
+		const { canvas, contour, layer, stage, transform } = mountSelectedContour({
+			selectAllContours: true,
+			zoom: 3.55,
 		})
+		if (layer === null) throw new Error("The demo glyph layer was not loaded.")
+		const beforePoints = layer.contours.flatMap((candidate) => candidate.nodes)
 		const controller = stage.findOne(`#${contour.nodes[0]?.pointId}`)
 		if (controller === undefined)
 			throw new Error("The selected contour controller was not rendered.")
@@ -218,6 +227,18 @@ describe("GlyphCanvas group drag cancellation", () => {
 			controller.fire("dragmove", dragEvent("mousemove"))
 		})
 		expect(stage.findOne(`#${contour.nodes[0]?.pointId}`)).toBe(controller)
+		const fill = stage.findOne(".glyph-fill-preview")
+		const outline = stage.findOne(".closed-contour-outline")
+		expect(fill?.data()).toBe(outline?.data())
+		for (const ring of stage.find(".vector-node-selection")) {
+			const node = ring.getParent().findOne(".outline-point")
+			expect(node?.getAbsolutePosition()).toEqual(ring.getAbsolutePosition())
+			const ringBounds = ring.getClientRect()
+			expect(ringBounds.width).toBeGreaterThanOrEqual(18)
+			expect(ringBounds.width).toBeLessThanOrEqual(26)
+			expect(ringBounds.height).toBeGreaterThanOrEqual(18)
+			expect(ringBounds.height).toBeLessThanOrEqual(26)
+		}
 		controller.position({ x: origin.x - 400, y: origin.y + 400 })
 		controller.fire("dragend", dragEvent("mouseup"))
 
@@ -236,9 +257,7 @@ describe("GlyphCanvas group drag cancellation", () => {
 		expect(delta.x).toBeGreaterThan(0)
 		expect(delta.y).toBeLessThan(0)
 		for (const point of result?.points ?? []) {
-			const before = contour.nodes.find(
-				(node) => node.pointId === point.pointId,
-			)
+			const before = beforePoints.find((node) => node.pointId === point.pointId)
 			if (before === undefined)
 				throw new Error(`Unexpected transformed point ${point.pointId}.`)
 			expect(point.x - before.x).toBe(delta.x)
@@ -246,9 +265,7 @@ describe("GlyphCanvas group drag cancellation", () => {
 		}
 		expect(result?.handles.length).toBeGreaterThan(0)
 		for (const handle of result?.handles ?? []) {
-			const owner = contour.nodes.find(
-				(node) => node.pointId === handle.pointId,
-			)
+			const owner = beforePoints.find((node) => node.pointId === handle.pointId)
 			const vector = owner?.[handle.handle]
 			if (owner === undefined || vector === undefined)
 				throw new Error(`Unexpected transformed handle ${handle.pointId}.`)

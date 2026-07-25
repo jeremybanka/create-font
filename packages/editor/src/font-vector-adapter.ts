@@ -207,7 +207,7 @@ function projectFontLayerVectorObject(layer: EditorCanvasLayer): VectorObject {
 	return projectFontContoursVectorObject(layer.glyphId, layer.contours)
 }
 
-function projectFontContoursVectorObject(
+export function projectFontContoursVectorObject(
 	glyphId: string,
 	contours: readonly EditorCanvasContour[],
 ): VectorObject {

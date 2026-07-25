@@ -162,6 +162,7 @@ import {
 	createFontVectorAdapter,
 	createFontVectorDocumentAdapter,
 	fontOutlineClipboardFromVector,
+	projectFontContoursVectorObject,
 } from "./font-vector-adapter.ts"
 import {
 	readVectorClipboard,
@@ -807,29 +808,25 @@ export function GlyphCanvas({
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
 	const contourPaintPaths = editorContourPaintPaths(visibleContours)
-	const fontVectorSnapshot =
-		activeGlyphId === null || layer === null
+	const liveFontVectorObject =
+		activeGlyphId === null
 			? null
-			: createFontVectorDocumentAdapter(workspace, {
-					masterId: activeMasterId,
-					glyphId: activeGlyphId,
-				}).project(layer, selection)
-	const fontVectorObject = fontVectorSnapshot?.objects[0] ?? null
+			: projectFontContoursVectorObject(activeGlyphId, visibleContours)
 	const closedFontVectorObject =
-		fontVectorObject === null
+		liveFontVectorObject === null
 			? null
 			: {
-					...fontVectorObject,
-					contours: fontVectorObject.contours.filter(
+					...liveFontVectorObject,
+					contours: liveFontVectorObject.contours.filter(
 						(contour) => contour.closed,
 					),
 				}
 	const openFontVectorObject =
-		fontVectorObject === null
+		liveFontVectorObject === null
 			? null
 			: {
-					...fontVectorObject,
-					contours: fontVectorObject.contours.filter(
+					...liveFontVectorObject,
+					contours: liveFontVectorObject.contours.filter(
 						(contour) => !contour.closed,
 					),
 				}
@@ -5198,6 +5195,7 @@ export function GlyphCanvas({
 										</Group>
 									)}
 									<Path
+										name="glyph-fill-preview"
 										data={combinedPreview.path}
 										fill={palette.previewInk}
 										opacity={0.1}
