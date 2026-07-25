@@ -425,6 +425,53 @@ describe("GlyphCanvas group drag cancellation", () => {
 		expectCancelledSession(node, origin, transform, join, true)
 	})
 
+	it("drags an owned segment from the wide edge hit target", () => {
+		const { canvas, selectedPointIds, stage, transform } =
+			mountSelectedContour()
+		const [firstId, secondId] = selectedPointIds
+		const first =
+			firstId === undefined ? undefined : stage.findOne(`#${firstId}`)
+		const second =
+			secondId === undefined ? undefined : stage.findOne(`#${secondId}`)
+		const helper = stage.find(".outline-segment-helper")[0]
+		const direct = stage.find(".outline-segment")[0]
+		if (
+			first === undefined ||
+			second === undefined ||
+			helper === undefined ||
+			direct === undefined
+		)
+			throw new Error("The selected segment hit targets were not rendered.")
+		expect(helper.draggable()).toBe(true)
+		expect(helper.hitStrokeWidth()).toBeGreaterThan(direct.hitStrokeWidth())
+		const firstOrigin = first.position()
+		const firstPosition = first.getAbsolutePosition()
+		const secondPosition = second.getAbsolutePosition()
+		const pointerStart = {
+			x: (firstPosition.x + secondPosition.x) / 2,
+			y: (firstPosition.y + secondPosition.y) / 2 + 8,
+		}
+		stage.setPointersPositions({
+			clientX: pointerStart.x,
+			clientY: pointerStart.y,
+		} as PointerEvent)
+		pointerDown(helper, canvas, pointerStart)
+		helper.fire("dragstart", dragEvent("mousedown"))
+		stage.setPointersPositions({
+			clientX: pointerStart.x + 30,
+			clientY: pointerStart.y + 20,
+		} as PointerEvent)
+		act(() => helper.fire("dragmove", dragEvent("mousemove")))
+		helper.fire("dragend", dragEvent("mouseup"))
+		expect(transform).toHaveBeenCalledOnce()
+		const committed = transform.mock.calls[0]?.[0]
+		const movedFirst = committed?.points.find(
+			(point) => point.pointId === firstId,
+		)
+		expect(movedFirst?.x).toBeGreaterThan(firstOrigin.x)
+		expect(movedFirst?.y).toBeLessThan(firstOrigin.y)
+	})
+
 	it("restores a path group drag when Konva forwards touchcancel as dragend", () => {
 		const { canvas, join, selectedPointIds, stage, transform } =
 			mountSelectedContour()
@@ -433,7 +480,7 @@ describe("GlyphCanvas group drag cancellation", () => {
 			firstId === undefined ? undefined : stage.findOne(`#${firstId}`)
 		const second =
 			secondId === undefined ? undefined : stage.findOne(`#${secondId}`)
-		const path = stage.find(".outline-segment")[0]
+		const path = stage.find(".outline-segment-helper")[0]
 		if (first === undefined || second === undefined || path === undefined)
 			throw new Error("The selected segment was not rendered.")
 		const firstPosition = first.getAbsolutePosition()

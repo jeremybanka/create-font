@@ -5265,106 +5265,99 @@ export function GlyphCanvas({
 											/>
 										</Group>
 									)}
-									{visibleContours.map((contour) => (
-										<Path
-											key={`segment-hit:${contour.id}`}
-											name="outline-segment-helper"
-											data={editorContourToPath(contour.nodes, contour.closed)}
-											fillEnabled={false}
-											stroke="rgb(0 0 0 / 0.001)"
-											strokeWidth={inverseScale}
-											hitStrokeWidth={SEGMENT_HIT_RADIUS_PX * 2 * inverseScale}
-											listening={
-												activeTool === "select" ||
-												activeTool === "pen" ||
-												activeTool === "knife"
+									{visibleContours.flatMap((contour) => {
+										const path = editorContourToPath(
+											contour.nodes,
+											contour.closed,
+										)
+										const listening =
+											activeTool === "select" ||
+											activeTool === "pen" ||
+											activeTool === "knife"
+										const onPointerDown = (
+											event: KonvaEventObject<PointerEvent>,
+										): void => {
+											rememberDirectDragPointer(event)
+											if (activeTool !== "pen") return
+											event.cancelBubble = true
+											if (penPointerAction("segment") === "split")
+												splitContourSegment(contour, event)
+										}
+										const onClick = (
+											event: KonvaEventObject<MouseEvent>,
+										): void => {
+											if (activeTool !== "knife") return
+											event.cancelBubble = true
+											cutContourSegment(contour, event)
+										}
+										const onTap = (
+											event: KonvaEventObject<MouseEvent | TouchEvent>,
+										): void => {
+											if (activeTool !== "knife") return
+											event.cancelBubble = true
+											cutContourSegment(contour, event)
+										}
+										const onMouseDown = (
+											event: KonvaEventObject<MouseEvent>,
+										): void => {
+											if (activeTool !== "select") return
+											const action = segmentPointerAction(activeTool, event.evt)
+											if (action === "add-handles")
+												addHandlesToSegment(contour, event)
+										}
+										const onDragStart = (
+											event: KonvaEventObject<DragEvent>,
+										): void => {
+											if (
+												activeTool !== "select" ||
+												!beginSegmentGroupDrag(contour, event)
+											) {
+												event.target.stopDrag()
+												event.target.position({ x: 0, y: 0 })
 											}
-											onPointerDown={(event) => {
-												if (activeTool !== "pen") return
-												event.cancelBubble = true
-												if (penPointerAction("segment") === "split")
-													splitContourSegment(contour, event)
-											}}
-											onClick={(event) => {
-												if (activeTool !== "knife") return
-												event.cancelBubble = true
-												cutContourSegment(contour, event)
-											}}
-											onTap={(event) => {
-												if (activeTool !== "knife") return
-												event.cancelBubble = true
-												cutContourSegment(contour, event)
-											}}
-											onMouseDown={(event) => {
-												if (activeTool !== "select") return
-												const action = segmentPointerAction(
-													activeTool,
-													event.evt,
-												)
-												if (action === "add-handles") {
-													addHandlesToSegment(contour, event)
+										}
+										const onDragMove = (
+											event: KonvaEventObject<DragEvent>,
+										): void => {
+											previewGroupDrag(event)
+										}
+										const onDragEnd = (
+											event: KonvaEventObject<DragEvent>,
+										): void => {
+											commitGroupDrag(event)
+										}
+										const shared = {
+											data: path,
+											fillEnabled: false,
+											stroke: "rgb(0 0 0 / 0.001)",
+											strokeWidth: inverseScale,
+											listening,
+											draggable: activeTool === "select",
+											onPointerDown,
+											onClick,
+											onTap,
+											onMouseDown,
+											onDragStart,
+											onDragMove,
+											onDragEnd,
+										}
+										return [
+											<Path
+												key={`segment-hit:${contour.id}`}
+												{...shared}
+												name="outline-segment-helper"
+												hitStrokeWidth={
+													SEGMENT_HIT_RADIUS_PX * 2 * inverseScale
 												}
-											}}
-										/>
-									))}
-									{visibleContours.map((contour) => (
-										<Path
-											key={`segment-direct:${contour.id}`}
-											name="outline-segment"
-											data={editorContourToPath(contour.nodes, contour.closed)}
-											fillEnabled={false}
-											stroke="rgb(0 0 0 / 0.001)"
-											strokeWidth={inverseScale}
-											hitStrokeWidth={2.5 * inverseScale}
-											listening={
-												activeTool === "select" ||
-												activeTool === "pen" ||
-												activeTool === "knife"
-											}
-											draggable={activeTool === "select"}
-											onPointerDown={(event) => {
-												rememberDirectDragPointer(event)
-												if (activeTool !== "pen") return
-												event.cancelBubble = true
-												if (penPointerAction("segment") === "split")
-													splitContourSegment(contour, event)
-											}}
-											onClick={(event) => {
-												if (activeTool !== "knife") return
-												event.cancelBubble = true
-												cutContourSegment(contour, event)
-											}}
-											onTap={(event) => {
-												if (activeTool !== "knife") return
-												event.cancelBubble = true
-												cutContourSegment(contour, event)
-											}}
-											onMouseDown={(event) => {
-												if (activeTool !== "select") return
-												const action = segmentPointerAction(
-													activeTool,
-													event.evt,
-												)
-												if (action === "add-handles")
-													addHandlesToSegment(contour, event)
-											}}
-											onDragStart={(event) => {
-												if (
-													activeTool !== "select" ||
-													!beginSegmentGroupDrag(contour, event)
-												) {
-													event.target.stopDrag()
-													event.target.position({ x: 0, y: 0 })
-												}
-											}}
-											onDragMove={(event) => {
-												previewGroupDrag(event)
-											}}
-											onDragEnd={(event) => {
-												commitGroupDrag(event)
-											}}
-										/>
-									))}
+											/>,
+											<Path
+												key={`segment-direct:${contour.id}`}
+												{...shared}
+												name="outline-segment"
+												hitStrokeWidth={2.5 * inverseScale}
+											/>,
+										]
+									})}
 									{joinTarget === null ? null : (
 										<Circle
 											name="endpoint-join-candidate"
