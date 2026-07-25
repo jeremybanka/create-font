@@ -3,7 +3,6 @@ import {
 	canvasToolCursor,
 	CommandPalette,
 	TilingWorkspace,
-	columnSlotAllocation,
 	isCommandPaletteKeyboardEvent,
 	readVectorClipboard,
 	reduceVectorGesture,
@@ -38,15 +37,7 @@ import {
 	Rect,
 	Stage,
 } from "@create-font/preact-konva"
-import {
-	DownloadIcon,
-	EyeClosedIcon,
-	EyeOpenIcon,
-	LockClosedIcon,
-	LockOpen1Icon,
-	TrashIcon,
-} from "@radix-ui/react-icons"
-import type { ComponentChildren } from "preact"
+import { DownloadIcon } from "@radix-ui/react-icons"
 import {
 	useCallback,
 	useEffect,
@@ -58,14 +49,7 @@ import {
 } from "preact/hooks"
 
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
-import {
-	cmykToRgb,
-	oppositeColorSpace,
-	resolvedCmyk,
-	resolvedRgb,
-	rgbToCmyk,
-	swatchCss,
-} from "./color.ts"
+import { swatchCss } from "./color.ts"
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
@@ -89,6 +73,7 @@ import {
 } from "./design-history.ts"
 import { createDesignPenObject } from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
+import css from "./DesignApplication.module.css"
 import { objectBounds } from "./geometry.ts"
 import {
 	applyDesignVectorIntent,
@@ -105,15 +90,21 @@ import {
 	DESIGN_TILING_STORAGE_KEY,
 	type DesignTileContext,
 	type DesignTileKind,
-} from "./design-tile-registry.tsx"
+} from "./design-tile-registry.ts"
 import type {
-	ColorDefinition,
 	DesignDocument,
 	DesignObject,
 	DesignPoint,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
+
+const svg = {
+	DownloadIcon,
+}
+const div = {
+	Stage,
+}
 
 type CanvasGesture =
 	| {
@@ -228,27 +219,6 @@ function editableTarget(target: EventTarget | null): boolean {
 	)
 }
 
-function channelInput(
-	label: string,
-	value: number,
-	maximum: number,
-	onChange: (value: number) => void,
-) {
-	return (
-		<label class="channel-input">
-			<span>{label}</span>
-			<input
-				type="number"
-				min={0}
-				max={maximum}
-				step={1}
-				value={value}
-				onInput={(event) => onChange(Number(event.currentTarget.value))}
-			/>
-		</label>
-	)
-}
-
 export function DesignApplication() {
 	const [history, dispatch] = useReducer(
 		reduceDesignHistory,
@@ -266,9 +236,6 @@ export function DesignApplication() {
 	const [status, setStatus] = useState(
 		"Ready — draw a shape or press ⇧⌘P for commands.",
 	)
-	const [viewportWidth, setViewportWidth] = useState(() =>
-		typeof window === "undefined" ? 1_440 : window.innerWidth,
-	)
 	const [previewObject, setPreviewObject] = useState<DesignObject | null>(null)
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
@@ -281,7 +248,7 @@ export function DesignApplication() {
 	const [activeSnapGuides, setActiveSnapGuides] = useState<
 		readonly VectorSnapGuide[]
 	>([])
-	const artboardWrapRef = useRef<HTMLDivElement>(null)
+	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const penPointsRef = useRef<readonly DesignPoint[]>([])
 	const previewObjectRef = useRef<DesignObject | null>(null)
@@ -291,7 +258,6 @@ export function DesignApplication() {
 		sequence.current += 1
 		return `${Date.now().toString(36)}:${sequence.current.toString(36)}`
 	}, [])
-	const allocation = columnSlotAllocation(viewportWidth)
 	const selectedObject =
 		document.objects.find((object) => selection.includes(object.id)) ?? null
 	const selectedSwatch =
@@ -428,7 +394,57 @@ export function DesignApplication() {
 		)
 	}, [document])
 
+	const setObjectProperty = (
+		object: DesignObject,
+		property: Partial<DesignObject>,
+	): void => {
+		if (property.fillId !== undefined) {
+			const swatch = document.swatches.find(
+				(candidate) => candidate.id === property.fillId,
+			)
+			if (swatch !== undefined)
+				commitVectorIntent({
+					kind: "set-style",
+					objectId: object.id,
+					style: projectDesignVectorObject(document, {
+						...object,
+						fillId: swatch.id,
+					}).style,
+				})
+			return
+		}
+		commitVectorIntent({
+			kind: "set-object-properties",
+			objectId: object.id,
+			...(property.name === undefined ? {} : { name: property.name }),
+			...(property.hidden === undefined ? {} : { hidden: property.hidden }),
+			...(property.locked === undefined ? {} : { locked: property.locked }),
+		})
+	}
+
+	const updateSwatch = (swatch: DesignSwatch): void => {
+		commit({
+			...document,
+			swatches: document.swatches.map((candidate) =>
+				candidate.id === swatch.id ? swatch : candidate,
+			),
+		})
+	}
+
+	const addSwatch = (): void => {
+		const swatch: DesignSwatch = {
+			id: `swatch:${nextId()}`,
+			name: `Color ${document.swatches.length + 1}`,
+			source: { space: "rgb", r: 128, g: 128, b: 128 },
+		}
+		commit({ ...document, swatches: [...document.swatches, swatch] })
+		setSelectedSwatchId(swatch.id)
+		setCurrentSwatchId(swatch.id)
+	}
+
 	const designTileContext: DesignTileContext = {
+		addSwatch,
+		deleteSelection,
 		document,
 		exportDocument,
 		focusCanvas: () => artboardWrapRef.current?.focus(),
@@ -436,9 +452,17 @@ export function DesignApplication() {
 		selectSwatch: (swatch) => {
 			setSelectedSwatchId(swatch.id)
 			setCurrentSwatchId(swatch.id)
+			if (selectedObject !== null)
+				setObjectProperty(selectedObject, { fillId: swatch.id })
 		},
-		selectedObjectId: selectedObject?.id ?? null,
+		selectTool,
+		selectedObject,
+		selectedSwatch,
 		selectedSwatchId,
+		setObjectProperty,
+		tool,
+		updateSwatch,
+		zoom: canvasView.zoom,
 	}
 
 	const commands = useMemo<readonly PaletteCommand[]>(
@@ -526,12 +550,6 @@ export function DesignApplication() {
 		localStorage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(document))
 		window.document.title = `${history.present.title} — create-design`
 	}, [document, history.present.title])
-
-	useEffect(() => {
-		const resize = (): void => setViewportWidth(window.innerWidth)
-		window.addEventListener("resize", resize)
-		return () => window.removeEventListener("resize", resize)
-	}, [])
 
 	useLayoutEffect(() => {
 		const element = artboardWrapRef.current
@@ -1023,54 +1041,6 @@ export function DesignApplication() {
 		)
 	}
 
-	const setObjectProperty = (
-		object: DesignObject,
-		property: Partial<DesignObject>,
-	): void => {
-		if (property.fillId !== undefined) {
-			const swatch = document.swatches.find(
-				(candidate) => candidate.id === property.fillId,
-			)
-			if (swatch !== undefined)
-				commitVectorIntent({
-					kind: "set-style",
-					objectId: object.id,
-					style: projectDesignVectorObject(document, {
-						...object,
-						fillId: swatch.id,
-					}).style,
-				})
-			return
-		}
-		commitVectorIntent({
-			kind: "set-object-properties",
-			objectId: object.id,
-			...(property.name === undefined ? {} : { name: property.name }),
-			...(property.hidden === undefined ? {} : { hidden: property.hidden }),
-			...(property.locked === undefined ? {} : { locked: property.locked }),
-		})
-	}
-
-	const updateSwatch = (swatch: DesignSwatch): void => {
-		commit({
-			...document,
-			swatches: document.swatches.map((candidate) =>
-				candidate.id === swatch.id ? swatch : candidate,
-			),
-		})
-	}
-
-	const addSwatch = (): void => {
-		const swatch: DesignSwatch = {
-			id: `swatch:${nextId()}`,
-			name: `Color ${document.swatches.length + 1}`,
-			source: { space: "rgb", r: 128, g: 128, b: 128 },
-		}
-		commit({ ...document, swatches: [...document.swatches, swatch] })
-		setSelectedSwatchId(swatch.id)
-		setCurrentSwatchId(swatch.id)
-	}
-
 	const previewObjects =
 		previewObject === null
 			? document.objects
@@ -1086,18 +1056,18 @@ export function DesignApplication() {
 			: null
 
 	return (
-		<design-application>
-			<header class="app-header">
-				<div class="brand">
+		<design-application className={css.class}>
+			<header>
+				<brand-lockup>
 					<svg viewBox="0 0 28 28" aria-hidden="true">
 						<path d="M4 4h20v20H4z" />
 						<circle cx="18" cy="10" r="5" />
 					</svg>
 					<strong>create-design</strong>
 					<span>PDF proof of concept</span>
-				</div>
-				<label class="document-title">
-					<span class="sr-only">Document title</span>
+				</brand-lockup>
+				<label>
+					<span data-screen-reader>Document title</span>
 					<input
 						value={document.title}
 						onInput={(event) =>
@@ -1105,118 +1075,35 @@ export function DesignApplication() {
 						}
 					/>
 				</label>
-				<div class="header-actions">
+				<header-actions>
 					<button
 						type="button"
-						class="command-trigger"
+						data-command-trigger
 						onClick={() => setPaletteOpen(true)}
 					>
 						Commands <kbd>⇧⌘P</kbd>
 					</button>
-					<button type="button" class="export-button" onClick={exportDocument}>
-						<DownloadIcon aria-hidden="true" /> Export PDF
+					<button type="button" data-export onClick={exportDocument}>
+						<svg.DownloadIcon aria-hidden="true" /> Export PDF
 					</button>
-				</div>
+				</header-actions>
 			</header>
 
-			<div
-				class="workspace"
-				data-left={allocation.left}
-				data-right={allocation.right}
-			>
-				<nav class="tool-rail" aria-label="Tools">
-					{(
-						Object.entries(DESIGN_TOOLS) as readonly [
-							DesignTool,
-							(typeof DESIGN_TOOLS)[DesignTool],
-						][]
-					).map(([id, definition]) => {
-						const Icon = definition.icon
-						return (
-							<button
-								key={id}
-								type="button"
-								class={tool === id ? "active" : ""}
-								title={`${definition.label} (${definition.key})`}
-								aria-label={definition.label}
-								aria-pressed={tool === id}
-								onClick={() => selectTool(id)}
-							>
-								<Icon aria-hidden="true" />
-								<kbd>{definition.key}</kbd>
-							</button>
-						)
-					})}
-				</nav>
-
-				{allocation.left === 2 ? (
-					<aside class="tile pages-tile">
-						<TileHeader title="Pages" detail="1 artboard" />
-						<div class="page-list">
-							<button type="button" class="selected">
-								<span class="page-thumbnail" />
-								<span>
-									<strong>Page 1</strong>
-									<small>US Letter · 612 × 792 pt</small>
-								</span>
-							</button>
-						</div>
-					</aside>
-				) : null}
-
-				{allocation.left > 0 ? (
-					<aside class="tile layers-tile">
-						<TileHeader title="Layers" detail={`${document.objects.length}`} />
-						<div class="layer-list">
-							{[...document.objects].reverse().map((object) => (
-								<button
-									key={object.id}
-									type="button"
-									class={selection.includes(object.id) ? "selected" : ""}
-									onClick={() => setSelection([object.id])}
-								>
-									<span
-										class="layer-color"
-										style={{
-											background:
-												document.swatches.find(
-													(swatch) => swatch.id === object.fillId,
-												) === undefined
-													? "transparent"
-													: swatchCss(
-															document.swatches.find(
-																(swatch) => swatch.id === object.fillId,
-															) as DesignSwatch,
-														),
-										}}
-									/>
-									<span>{object.name}</span>
-									<span class="layer-icons">
-										{object.hidden ? <EyeClosedIcon /> : <EyeOpenIcon />}
-										{object.locked ? <LockClosedIcon /> : null}
-									</span>
-								</button>
-							))}
-						</div>
-					</aside>
-				) : null}
-
-				<main class="canvas-stage">
-					<div class="canvas-meta">
+			<main>
+				<design-canvas>
+					<canvas-meta>
 						<span>{DESIGN_TOOLS[tool].label}</span>
 						<span>612 × 792 pt · {Math.round(canvasView.zoom * 100)}%</span>
-					</div>
-					<div
+					</canvas-meta>
+					<artboard-wrap
 						ref={artboardWrapRef}
-						class="artboard-wrap"
 						role="application"
 						aria-label="Design artboard"
 						tabIndex={-1}
 					>
-						<Stage
+						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
-							className="artboard"
 							style={{
 								cursor: canvasToolCursor(tool, {
 									dragging: gestureRef.current?.kind === "pan",
@@ -1374,122 +1261,16 @@ export function DesignApplication() {
 									)}
 								</Group>
 							</Layer>
-						</Stage>
-					</div>
-					<div class="canvas-hint">
+						</div.Stage>
+					</artboard-wrap>
+					<canvas-hint>
 						{tool === "pen"
 							? "Click for corners · Drag for curves · Click start to close · Enter finishes open · Esc cancels"
 							: tool === "rect" || tool === "ellipse"
 								? "Drag to draw · Shift constrains · Alt draws from center"
 								: "Drag objects to move · F shows transform handles"}
-					</div>
-				</main>
-
-				{allocation.right === 2 ? (
-					<aside class="tile properties-tile">
-						<TileHeader
-							title="Object"
-							detail={selectedObject?.name ?? "None"}
-						/>
-						{selectedObject === null ? (
-							<EmptyPanel>Select an object to inspect it.</EmptyPanel>
-						) : (
-							<div class="panel-content">
-								<label class="field">
-									<span>Name</span>
-									<input
-										value={selectedObject.name}
-										onChange={(event) =>
-											setObjectProperty(selectedObject, {
-												name: event.currentTarget.value,
-											})
-										}
-									/>
-								</label>
-								<div class="object-actions">
-									<button
-										type="button"
-										onClick={() =>
-											setObjectProperty(selectedObject, {
-												hidden: !selectedObject.hidden,
-											})
-										}
-									>
-										{selectedObject.hidden ? (
-											<EyeClosedIcon />
-										) : (
-											<EyeOpenIcon />
-										)}
-										{selectedObject.hidden ? "Hidden" : "Visible"}
-									</button>
-									<button
-										type="button"
-										onClick={() =>
-											setObjectProperty(selectedObject, {
-												locked: !selectedObject.locked,
-											})
-										}
-									>
-										{selectedObject.locked ? (
-											<LockClosedIcon />
-										) : (
-											<LockOpen1Icon />
-										)}
-										{selectedObject.locked ? "Locked" : "Unlocked"}
-									</button>
-								</div>
-								<button
-									type="button"
-									class="danger-button"
-									onClick={deleteSelection}
-								>
-									<TrashIcon /> Delete object
-								</button>
-							</div>
-						)}
-					</aside>
-				) : null}
-
-				<aside class="tile color-tile">
-					<TileHeader
-						title="Color"
-						detail={selectedSwatch?.source.space.toUpperCase() ?? ""}
-					/>
-					<div class="swatch-list">
-						{document.swatches.map((swatch) => (
-							<button
-								key={swatch.id}
-								type="button"
-								class={selectedSwatchId === swatch.id ? "selected" : ""}
-								onClick={() => {
-									setSelectedSwatchId(swatch.id)
-									setCurrentSwatchId(swatch.id)
-									if (selectedObject !== null) {
-										setObjectProperty(selectedObject, { fillId: swatch.id })
-									}
-								}}
-							>
-								<span
-									class="swatch-chip"
-									style={{ background: swatchCss(swatch) }}
-								/>
-								<span>
-									<strong>{swatch.name}</strong>
-									<small>
-										{swatch.source.space.toUpperCase()}
-										{swatch.alternate === undefined ? " · auto" : " · manual"}
-									</small>
-								</span>
-							</button>
-						))}
-						<button type="button" class="add-swatch" onClick={addSwatch}>
-							+ New swatch
-						</button>
-					</div>
-					{selectedSwatch === undefined ? null : (
-						<SwatchEditor swatch={selectedSwatch} onChange={updateSwatch} />
-					)}
-				</aside>
+					</canvas-hint>
+				</design-canvas>
 				<TilingWorkspace
 					context={designTileContext}
 					registry={DESIGN_TILE_REGISTRY}
@@ -1498,9 +1279,9 @@ export function DesignApplication() {
 					commandRequest={tileCommandRequest}
 					enabled={!paletteOpen}
 				/>
-			</div>
+			</main>
 
-			<footer class="status-bar">
+			<footer>
 				<span>{status}</span>
 				<span>
 					{document.objects.length} objects · {document.swatches.length}{" "}
@@ -1522,157 +1303,5 @@ export function DesignApplication() {
 				/>
 			) : null}
 		</design-application>
-	)
-}
-
-function TileHeader({
-	title,
-	detail,
-}: {
-	readonly title: string
-	readonly detail: string
-}) {
-	return (
-		<header class="tile-header">
-			<strong>{title}</strong>
-			<span>{detail}</span>
-		</header>
-	)
-}
-
-function EmptyPanel({ children }: { readonly children: ComponentChildren }) {
-	return <div class="empty-panel">{children}</div>
-}
-
-function SwatchEditor({
-	swatch,
-	onChange,
-}: {
-	readonly swatch: DesignSwatch
-	readonly onChange: (swatch: DesignSwatch) => void
-}) {
-	const source = swatch.source
-	const automatic =
-		source.space === "rgb" ? rgbToCmyk(source) : cmykToRgb(source)
-	const alternate = swatch.alternate ?? automatic
-	const updateSource = (next: ColorDefinition): void =>
-		onChange({ ...swatch, source: next })
-	const updateAlternate = (next: ColorDefinition): void =>
-		onChange({ ...swatch, alternate: next })
-	return (
-		<div class="swatch-editor">
-			<label class="field">
-				<span>Swatch name</span>
-				<input
-					value={swatch.name}
-					onChange={(event) =>
-						onChange({ ...swatch, name: event.currentTarget.value })
-					}
-				/>
-			</label>
-			<div class="segmented" role="group" aria-label="Source color space">
-				{(["rgb", "cmyk"] as const).map((space) => (
-					<button
-						type="button"
-						class={source.space === space ? "selected" : ""}
-						onClick={() => {
-							if (source.space === space) return
-							onChange({
-								...swatch,
-								source:
-									space === "rgb" ? resolvedRgb(swatch) : resolvedCmyk(swatch),
-								alternate: undefined,
-							})
-						}}
-					>
-						{space.toUpperCase()}
-					</button>
-				))}
-			</div>
-			<div class="channels">
-				{source.space === "rgb" ? (
-					<>
-						{channelInput("R", source.r, 255, (r) =>
-							updateSource({ ...source, r }),
-						)}
-						{channelInput("G", source.g, 255, (g) =>
-							updateSource({ ...source, g }),
-						)}
-						{channelInput("B", source.b, 255, (b) =>
-							updateSource({ ...source, b }),
-						)}
-					</>
-				) : (
-					<>
-						{channelInput("C", source.c, 100, (c) =>
-							updateSource({ ...source, c }),
-						)}
-						{channelInput("M", source.m, 100, (m) =>
-							updateSource({ ...source, m }),
-						)}
-						{channelInput("Y", source.y, 100, (y) =>
-							updateSource({ ...source, y }),
-						)}
-						{channelInput("K", source.k, 100, (k) =>
-							updateSource({ ...source, k }),
-						)}
-					</>
-				)}
-			</div>
-			<label class="manual-toggle">
-				<input
-					type="checkbox"
-					checked={swatch.alternate !== undefined}
-					onChange={(event) =>
-						onChange({
-							...swatch,
-							alternate: event.currentTarget.checked ? automatic : undefined,
-						})
-					}
-				/>
-				<span>
-					Manual {oppositeColorSpace(source).toUpperCase()} equivalent
-				</span>
-			</label>
-			{swatch.alternate === undefined ? (
-				<p class="conversion-note">
-					Automatic {oppositeColorSpace(source).toUpperCase()}:{" "}
-					{alternate.space === "rgb"
-						? `${alternate.r}, ${alternate.g}, ${alternate.b}`
-						: `${alternate.c}, ${alternate.m}, ${alternate.y}, ${alternate.k}`}
-				</p>
-			) : (
-				<div class="channels alternate">
-					{alternate.space === "rgb" ? (
-						<>
-							{channelInput("R", alternate.r, 255, (r) =>
-								updateAlternate({ ...alternate, r }),
-							)}
-							{channelInput("G", alternate.g, 255, (g) =>
-								updateAlternate({ ...alternate, g }),
-							)}
-							{channelInput("B", alternate.b, 255, (b) =>
-								updateAlternate({ ...alternate, b }),
-							)}
-						</>
-					) : (
-						<>
-							{channelInput("C", alternate.c, 100, (c) =>
-								updateAlternate({ ...alternate, c }),
-							)}
-							{channelInput("M", alternate.m, 100, (m) =>
-								updateAlternate({ ...alternate, m }),
-							)}
-							{channelInput("Y", alternate.y, 100, (y) =>
-								updateAlternate({ ...alternate, y }),
-							)}
-							{channelInput("K", alternate.k, 100, (k) =>
-								updateAlternate({ ...alternate, k }),
-							)}
-						</>
-					)}
-				</div>
-			)}
-		</div>
 	)
 }

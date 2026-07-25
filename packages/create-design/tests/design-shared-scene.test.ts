@@ -87,12 +87,23 @@ function mountDesign() {
 }
 
 describe("create-design shared vector scene", () => {
+	it("hosts every design control in registry tiles without fixed navigation or asides", () => {
+		mountDesign()
+		expect(document.querySelector("nav")).toBeNull()
+		expect(document.querySelector("aside")).toBeNull()
+		expect(document.querySelector("design-pages-tile")).not.toBeNull()
+		expect(document.querySelector("design-layers-tile")).not.toBeNull()
+		expect(document.querySelector("design-tools-tile")).not.toBeNull()
+		expect(document.querySelector("design-object-tile")).not.toBeNull()
+		expect(document.querySelector("design-color-tile")).not.toBeNull()
+	})
+
 	it("renders authored geometry through the shared contour component", () => {
 		const stage = mountDesign()
 		expect(stage.find(".vector-contour-path").length).toBeGreaterThan(1)
 		expect(stage.findOne(".design-object")).toBeDefined()
 		const layer = document.querySelector<HTMLButtonElement>(
-			".layer-list button:last-child",
+			"design-layers-tile > button:last-child",
 		)
 		const transform = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Transform"]',
@@ -132,7 +143,9 @@ describe("create-design shared vector scene", () => {
 				"hasPointerCapture",
 			).mockReturnValue(false)
 			const layer = [
-				...document.querySelectorAll<HTMLButtonElement>(".layer-list button"),
+				...document.querySelectorAll<HTMLButtonElement>(
+					"design-layers-tile > button",
+				),
 			].find((button) => button.textContent?.includes("Coral rectangle"))
 			const transform = document.querySelector<HTMLButtonElement>(
 				'button[aria-label="Transform"]',
@@ -304,7 +317,8 @@ describe("create-design shared vector scene", () => {
 			outgoing: expect.any(Object),
 		})
 		expect(
-			document.querySelector(".layer-list button.selected")?.textContent,
+			document.querySelector('design-layers-tile > button[aria-pressed="true"]')
+				?.textContent,
 		).toContain("Pen path")
 
 		await act(async () => {
