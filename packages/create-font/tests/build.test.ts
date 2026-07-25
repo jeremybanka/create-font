@@ -59,6 +59,12 @@ describe(`buildProject`, () => {
 			resolve(root, `features`, `nested`, `layout.fea`),
 			`feature calt { sub A' O by O; } calt;\n`,
 		)
+		const featurePath = resolve(root, `features`, `layout.fea`)
+		const featureSource = await readFile(featurePath, `utf8`)
+		await writeFile(
+			featurePath,
+			`include(nested/layout.fea);\n${featureSource}`,
+		)
 		const featureIndexPath = resolve(root, `features`, `index.json`)
 		const featureIndex = JSON.parse(
 			await readFile(featureIndexPath, `utf8`),

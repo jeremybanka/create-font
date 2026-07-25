@@ -10,6 +10,7 @@
 	"type": "module",
 	"bin": {
 		"create-font": "./dist/create-font-cli.js",
+		"create-font-fea-lsp": "./dist/fea-lsp.js",
 		"font": "./dist/font-cli.js"
 	},
 	"files": [
@@ -48,20 +49,26 @@
 	},
 	"dependencies": {
 		"@create-font/editor": "workspace:*",
+		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
+		"@vscode/vsce": "3.9.2",
 		"@elysia/node": "1.4.6",
 		"@elysia/static": "1.4.11",
 		"comline": "0.5.1",
 		"elysia": "1.4.29",
 		"preact": "10.29.7",
+		"rolldown": "1.2.0",
+		"vscode-languageclient": "10.1.0",
+		"vscode-languageserver": "10.1.0",
+		"vscode-languageserver-textdocument": "1.0.12",
+		"vite": "8.1.5",
 		"zod": "4.4.3"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.5",
-		"vite": "8.1.5",
 		"vitest": "4.1.10"
 	},
 	"engines": {

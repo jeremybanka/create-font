@@ -91,6 +91,20 @@ const syntax = parseFeaSyntax("feature liga { sub f i by f_i; } liga;")
 const substitutions = parseFea("feature liga { sub f i by f_i; } liga;")
 ```
 
+`analyzeFeaProject({ entries, sources, glyphs })` is the reusable,
+filesystem-independent project analysis boundary used by build, live source
+validation, `font check`, and the feature language server. `entries` contains
+indexed project-relative paths, `sources` includes entry and include-only
+source text, and `glyphs` supplies stable IDs, names, and export state. Its
+deterministic result separates source-located diagnostics, analyzed documents,
+and validated compiler IR. `FeaLineIndex` converts the Rust ABI's UTF-8 byte
+ranges to JavaScript/LSP UTF-16 offsets and positions.
+
+Includes are preserved by the Wasm syntax tree and resolved only by this host
+analysis layer. Missing files, cycles, and project escapes are errors. Syntax
+recognized by `fea-rs` but not representable by create-font remains an
+actionable `fea.unsupported` semantic diagnostic and is never silently lowered.
+
 ```ts
 import {
 	assembleEditorFontSource,

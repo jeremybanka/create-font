@@ -1,4 +1,18 @@
-export { lowerFeaSubstitutions, parseFea, parseFeaSyntax } from "./fea.ts"
+export {
+	analyzeFeaProject,
+	lowerFeaSubstitutions,
+	parseFea,
+	parseFeaSyntax,
+} from "./fea.ts"
+export { FeaLineIndex, feaSyntaxTokensAtOffset } from "./fea-analysis.ts"
+export type {
+	AnalyzeFeaProjectInput,
+	FeaAnalysisDiagnostic,
+	FeaAnalysisDocument,
+	FeaAnalysisParser,
+	FeaProjectAnalysis,
+	FeaProjectGlyph,
+} from "./fea-analysis.ts"
 export type {
 	FeaDiagnostic,
 	FeaDocumentAst,

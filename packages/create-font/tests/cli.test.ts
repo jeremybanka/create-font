@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -161,5 +161,53 @@ describe(`font CLI`, () => {
 		expect(captured.stdout.join(``)).toContain(
 			`artifacts/workbench-sans/WorkbenchSans-Text.ttf`,
 		)
+	})
+
+	it(`checks feature sources as deterministic JSON without writing artifacts`, async () => {
+		const cwd = await temporaryRoot()
+		const created = await createFontWorkspace({
+			cwd,
+			install: false,
+			name: `check-font`,
+		})
+		await mkdir(join(created.fontRoot, `features`), { recursive: true })
+		await writeFile(
+			join(created.fontRoot, `features`, `layout.fea`),
+			`feature liga { sub missing by .notdef; } liga;\n`,
+		)
+		await writeFile(
+			join(created.fontRoot, `features`, `index.json`),
+			`${JSON.stringify([{ path: `features/layout.fea` }], null, `\t`)}\n`,
+		)
+		const before = await readFile(
+			join(created.fontRoot, `features`, `layout.fea`),
+			`utf8`,
+		)
+		const captured = captureIo()
+		const exitCode = await runFontCli(
+			[
+				`node`,
+				`font`,
+				`check`,
+				`check-font`,
+				`--root`,
+				created.workspaceRoot,
+				`--format=json`,
+			],
+			captured.io,
+		)
+
+		expect(exitCode).toBe(1)
+		expect(captured.stderr).toEqual([])
+		expect(JSON.parse(captured.stdout.join(``))).toMatchObject([
+			{
+				code: `fea.unknown_glyph`,
+				path: `features/layout.fea`,
+				severity: `error`,
+			},
+		])
+		expect(
+			await readFile(join(created.fontRoot, `features`, `layout.fea`), `utf8`),
+		).toBe(before)
 	})
 })

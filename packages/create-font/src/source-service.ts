@@ -31,13 +31,12 @@ import {
 	formatSourceUnit,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
-	parseFea,
-	lowerFeaSubstitutions,
 	type FontSourceDirectoryFiles,
 	type SourceDiagnostic,
 } from "@create-font/source"
 import type { EditorFontSource } from "@create-font/states"
 
+import { analyzeFontSourceFeatures } from "./fea-project.ts"
 import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
 import { createSourceVersionControl } from "./source-version-control.ts"
 
@@ -127,26 +126,19 @@ function validateFeatureReferences(
 	values: FontSourceDirectoryFiles,
 	source: EditorFontSource,
 ): void {
-	const glyphIndices = new Map(
-		source.glyphs.map((glyph, index) => [glyph.name, index]),
+	const analysis = analyzeFontSourceFeatures(values, source)
+	if (analysis.ok) return
+	throw validationError(
+		analysis.diagnostics
+			.filter((diagnostic) => diagnostic.severity === `error`)
+			.map((diagnostic) => ({
+				severity: `error`,
+				code: diagnostic.code,
+				unitPath: diagnostic.path,
+				path: `$:${diagnostic.range.line}:${diagnostic.range.column}`,
+				message: diagnostic.message,
+			})) as [SourceDiagnostic, ...SourceDiagnostic[]],
 	)
-	for (const [path, value] of Object.entries(values)) {
-		if (!path.startsWith(`features/`) || !path.endsWith(`.fea`)) continue
-		const parsed = parseFea(value as string)
-		if (!parsed.ok) continue
-		const lowered = lowerFeaSubstitutions(parsed.value, glyphIndices)
-		if (lowered.errors.length > 0) {
-			throw validationError(
-				lowered.errors.map((error) => ({
-					severity: `error`,
-					code: `source.reference`,
-					unitPath: path,
-					path: `$:${error.range.line}:${error.range.column}`,
-					message: error.message,
-				})) as [SourceDiagnostic, ...SourceDiagnostic[]],
-			)
-		}
-	}
 }
 
 function normalizeUnitPath(path: string): string {
@@ -283,18 +275,6 @@ async function loadProjectDirectory(
 	for (const path of paths) {
 		if (path.startsWith(`features/`) && path.endsWith(`.fea`)) {
 			const text = await readFile(resolveInside(projectRoot, path), `utf8`)
-			const parsed = parseFea(text)
-			if (!parsed.ok) {
-				throw validationError(
-					parsed.errors.map((error) => ({
-						severity: `error`,
-						code: `source.schema`,
-						unitPath: path,
-						path: `$:${error.range.line}:${error.range.column}`,
-						message: error.message,
-					})) as [SourceDiagnostic, ...SourceDiagnostic[]],
-				)
-			}
 			values[path] = text
 			texts.set(path, text)
 			revisions.set(path, revisionForText(text))

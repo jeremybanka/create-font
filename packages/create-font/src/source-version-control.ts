@@ -15,12 +15,12 @@ import {
 } from "@create-font/server"
 import {
 	assembleEditorFontSource,
-	parseFea,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
 	type SourceDiagnostic,
 } from "@create-font/source"
 
+import { analyzeFontSourceFeatures } from "./fea-project.ts"
 import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
 
 const MAX_SNAPSHOT_UNITS = 2_000
@@ -251,22 +251,12 @@ async function snapshotAtCommit(
 		}
 		const text = new TextDecoder().decode(blob.stdout)
 		const parsed = isFeature
-			? parseFea(text)
+			? undefined
 			: parseSourceUnitText(kind!, text, path)
-		if (!parsed.ok) {
-			if (isFeature) {
-				throw new SourceValidationError(
-					parsed.errors.map((error) => ({
-						code: `source.schema`,
-						message: error.message,
-						path: `$:${error.range.line}:${error.range.column}`,
-						unitPath: path,
-					})),
-				)
-			}
+		if (parsed !== undefined && !parsed.ok) {
 			throw new SourceValidationError(validationIssues(parsed.errors))
 		}
-		const value = isFeature ? text : parsed.value
+		const value = isFeature ? text : parsed!.value
 		values[path] = value
 		units.push({
 			path,
@@ -277,6 +267,18 @@ async function snapshotAtCommit(
 	const assembled = assembleEditorFontSource(values)
 	if (!assembled.ok)
 		throw new SourceValidationError(validationIssues(assembled.errors))
+	const featureAnalysis = analyzeFontSourceFeatures(values, assembled.value)
+	if (!featureAnalysis.ok)
+		throw new SourceValidationError(
+			featureAnalysis.diagnostics
+				.filter((diagnostic) => diagnostic.severity === `error`)
+				.map((diagnostic) => ({
+					code: diagnostic.code,
+					message: diagnostic.message,
+					path: `$:${diagnostic.range.line}:${diagnostic.range.column}`,
+					unitPath: diagnostic.path,
+				})),
+		)
 	return { revision: commit, units }
 }
 

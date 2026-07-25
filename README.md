@@ -8,7 +8,8 @@ with the project.
 During development, create-font has three cooperating surfaces:
 
 - the terminal, where `create-font` creates workspaces and font projects while
-  `font build` produces fonts and `font dev` starts the workspace server;
+  `font build` produces fonts, `font check` validates Adobe feature sources,
+  and `font dev` starts the workspace server;
 - the programmer's ordinary editor, where programmable font behavior can be
   written as code; and
 - the browser, where create-font provides spatial editing, proofs, samples, visual

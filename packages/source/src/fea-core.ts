@@ -65,8 +65,10 @@ export interface FeaDocumentAst {
 }
 
 export interface FeaDiagnostic {
+	readonly code?: string
 	readonly message: string
 	readonly range: FeaSourceRange
+	readonly severity?: "error" | "warning" | "info"
 }
 
 export type FeaParseResult =
@@ -300,6 +302,7 @@ function isSyntaxDocument(value: unknown): value is FeaSyntaxDocument {
 
 export function createFeaApi(parseWithBinding: FeaParserBinding): {
 	readonly parseFea: (source: string) => FeaParseResult
+	readonly parseFeaAnalysis: (source: string) => FeaParseResult
 	readonly parseFeaSyntax: (source: string) => FeaSyntaxDocument
 } {
 	const parseFeaSyntax = (source: string): FeaSyntaxDocument => {
@@ -312,7 +315,10 @@ export function createFeaApi(parseWithBinding: FeaParserBinding): {
 			)
 		return parsed
 	}
-	const parseFea = (source: string): FeaParseResult => {
+	const parseDocument = (
+		source: string,
+		allowIncludes: boolean,
+	): FeaParseResult => {
 		const position = createPositioner(source)
 		let parsed: FeaSyntaxDocument
 		try {
@@ -339,6 +345,7 @@ export function createFeaApi(parseWithBinding: FeaParserBinding): {
 		const features: FeaFeatureAst[] = []
 		const errors: FeaDiagnostic[] = []
 		for (const child of directNodes(parsed.root)) {
+			if (allowIncludes && child.kind === "IncludeNode") continue
 			if (child.kind !== "FeatureNode") {
 				errors.push(unsupportedDiagnostic(child, position))
 				continue
@@ -357,7 +364,9 @@ export function createFeaApi(parseWithBinding: FeaParserBinding): {
 			},
 		}
 	}
-	return { parseFea, parseFeaSyntax }
+	const parseFea = (source: string) => parseDocument(source, false)
+	const parseFeaAnalysis = (source: string) => parseDocument(source, true)
+	return { parseFea, parseFeaAnalysis, parseFeaSyntax }
 }
 
 /** Resolves glyph names only after parsing, producing stable compiler-facing glyph IDs. */
@@ -388,7 +397,7 @@ export function lowerFeaSubstitutions(
 			ir.push({
 				feature: feature.tag,
 				from: from as number[],
-				to,
+				to: to!,
 				...(statement.markedIndex === undefined
 					? {}
 					: { contextIndex: statement.markedIndex }),

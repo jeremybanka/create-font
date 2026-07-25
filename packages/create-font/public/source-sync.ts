@@ -16,6 +16,7 @@ import {
 	type AxisIndexFile,
 	type CmapIndexFile,
 	type FontSourceDirectoryFiles,
+	type FeatureIndexFile,
 	type GlyphIndexFile,
 	type InstanceIndexFile,
 	type MasterIndexFile,
@@ -34,7 +35,8 @@ export type SourceSyncDeltaResult =
 	| Readonly<{ status: `gap`; state: SourceSyncState }>
 
 export type AssembledSourceSyncState = Readonly<{
-	featureSources: readonly string[]
+	featureEntries: readonly string[]
+	featureSources: ReadonlyMap<string, string>
 	source: EditorFontSource
 }>
 
@@ -112,15 +114,20 @@ export function assembleSourceSyncState(
 	const files = filesForState(state)
 	const assembled = assembleEditorFontSource(files)
 	if (!assembled.ok) throw new Error(assembled.errors[0].message)
+	const featureEntries = (files[`features/index.json`] as FeatureIndexFile).map(
+		(entry) => entry.path,
+	)
 	return Object.freeze({
-		featureSources: [...state.units.values()]
-			.filter(
-				(unit) =>
-					unit.path.startsWith(`features/`) &&
-					unit.path.endsWith(`.fea`) &&
-					typeof unit.value === `string`,
-			)
-			.map((unit) => unit.value as string),
+		featureEntries,
+		featureSources: new Map(
+			[...state.units.values()].flatMap((unit) =>
+				unit.path.startsWith(`features/`) &&
+				unit.path.endsWith(`.fea`) &&
+				typeof unit.value === `string`
+					? [[unit.path, unit.value] as const]
+					: [],
+			),
+		),
 		source: assembled.value,
 	})
 }
