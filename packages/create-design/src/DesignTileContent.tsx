@@ -5,6 +5,7 @@ import {
 	LockOpen1Icon,
 	TrashIcon,
 } from "@radix-ui/react-icons"
+import { useState } from "preact/hooks"
 import {
 	cmykToRgb,
 	oppositeColorSpace,
@@ -19,6 +20,7 @@ import type {
 	DesignTileKind,
 } from "./design-tile-registry.ts"
 import css from "./DesignTileContent.module.css"
+import { PdfPreview } from "./PdfPreview.tsx"
 import type { ColorDefinition, DesignSwatch, DesignTool } from "./types.ts"
 
 const svg = {
@@ -136,6 +138,7 @@ function DesignExportTile({
 }: {
 	readonly context: DesignTileContext
 }) {
+	const [previewEnabled, setPreviewEnabled] = useState(false)
 	return (
 		<design-export-tile>
 			<strong>Portable Document Format</strong>
@@ -143,6 +146,15 @@ function DesignExportTile({
 			<button type="button" onClick={context.exportDocument}>
 				Export PDF
 			</button>
+			<label data-live-preview>
+				<input
+					type="checkbox"
+					checked={previewEnabled}
+					onChange={(event) => setPreviewEnabled(event.currentTarget.checked)}
+				/>
+				<span>Live PDF proof</span>
+			</label>
+			{previewEnabled ? <PdfPreview document={context.document} /> : null}
 		</design-export-tile>
 	)
 }

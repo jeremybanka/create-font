@@ -18,6 +18,7 @@
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
 		"dev": "vp dev ./public --config=./vite.config.ts --host=127.0.0.1 --port=3010",
+		"profile:pdf": "node ./scripts/profile-pdf-compilation.ts",
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {

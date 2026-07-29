@@ -13,60 +13,52 @@ import {
 	type PdfInfoDictionary,
 	type PdfPageDictionary,
 	type PdfPagesDictionary,
+	type PdfStream,
 } from "mondrian.pdf"
 
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
 import type {
 	DesignContour,
 	DesignDocument,
+	DesignObject,
 	DesignPoint,
 	DesignSwatch,
 } from "./types.ts"
 
 const number = (value: number): string => Number(value.toFixed(4)).toString()
 
-function pdfPoint(
-	point: Readonly<{ x: number; y: number }>,
-	pageHeight: number,
-): string {
-	return `${number(point.x)} ${number(pageHeight - point.y)}`
+function pdfPoint(point: Readonly<{ x: number; y: number }>): string {
+	return `${number(point.x)} ${number(point.y)}`
 }
 
-function segment(
-	from: DesignPoint,
-	to: DesignPoint,
-	pageHeight: number,
-): string {
+function segment(from: DesignPoint, to: DesignPoint): string {
 	if (from.outgoing === undefined && to.incoming === undefined) {
-		return `${pdfPoint(to, pageHeight)} l`
+		return `${pdfPoint(to)} l`
 	}
 	const first = from.outgoing ?? { x: 0, y: 0 }
 	const second = to.incoming ?? { x: 0, y: 0 }
 	return [
-		pdfPoint({ x: from.x + first.x, y: from.y + first.y }, pageHeight),
-		pdfPoint({ x: to.x + second.x, y: to.y + second.y }, pageHeight),
-		pdfPoint(to, pageHeight),
+		pdfPoint({ x: from.x + first.x, y: from.y + first.y }),
+		pdfPoint({ x: to.x + second.x, y: to.y + second.y }),
+		pdfPoint(to),
 		"c",
 	].join(" ")
 }
 
-function contourCommands(
-	contour: DesignContour,
-	pageHeight: number,
-): readonly string[] {
+function contourCommands(contour: DesignContour): readonly string[] {
 	const first = contour.points[0]
 	if (first === undefined) return []
-	const commands = [`${pdfPoint(first, pageHeight)} m`]
+	const commands = [`${pdfPoint(first)} m`]
 	for (let index = 1; index < contour.points.length; index += 1) {
 		const previous = contour.points[index - 1]
 		const point = contour.points[index]
 		if (previous !== undefined && point !== undefined) {
-			commands.push(segment(previous, point, pageHeight))
+			commands.push(segment(previous, point))
 		}
 	}
 	if (contour.closed && contour.points.length > 1) {
 		const last = contour.points.at(-1)
-		if (last !== undefined) commands.push(segment(last, first, pageHeight))
+		if (last !== undefined) commands.push(segment(last, first))
 		commands.push("h")
 	}
 	return commands
@@ -81,71 +73,249 @@ function fillOperator(swatch: DesignSwatch): string {
 	return `${number(r / 255)} ${number(g / 255)} ${number(b / 255)} rg`
 }
 
+function colorSignature(swatch: DesignSwatch): string {
+	const source = swatch.source
+	return source.space === "rgb"
+		? `rgb:${source.r}:${source.g}:${source.b}`
+		: `cmyk:${source.c}:${source.m}:${source.y}:${source.k}`
+}
+
+export function pdfObjectContentStream(
+	object: DesignObject,
+	swatch: DesignSwatch,
+): string {
+	const commands = [fillOperator(swatch)]
+	for (const contour of object.contours) {
+		commands.push(...contourCommands(contour))
+	}
+	commands.push("f*")
+	return commands.join("\n")
+}
+
+export interface PdfObjectProjection {
+	readonly id: string
+	readonly stream: PdfStream
+	readonly visible: boolean
+}
+
+export interface PdfPageProjection {
+	readonly height: number
+	readonly objectProjections: readonly PdfObjectProjection[]
+	readonly prefix: PdfStream
+	readonly suffix: PdfStream
+	readonly width: number
+}
+
+export interface PdfDocumentProjection {
+	readonly document: PdfDocument
+	readonly page: PdfPageProjection
+}
+
+export interface PdfProjectionGraph {
+	project(document: DesignDocument): PdfDocumentProjection
+}
+
+type ObjectCacheEntry = Readonly<{
+	contours: DesignObject["contours"]
+	fillId: string
+	hidden: boolean
+	projection: PdfObjectProjection
+	swatchSignature: string
+}>
+
+function sameOrderedProjections(
+	left: readonly PdfObjectProjection[],
+	right: readonly PdfObjectProjection[],
+): boolean {
+	return (
+		left.length === right.length &&
+		left.every((projection, index) => projection === right[index])
+	)
+}
+
+/**
+ * Owns create-design's semantic PDF invalidation boundaries. Cached streams
+ * are ordinary immutable mondrian.pdf values and can be inserted into each
+ * freshly composed, fully validated document graph.
+ */
+export function createPdfProjectionGraph(): PdfProjectionGraph {
+	const objects = new Map<string, ObjectCacheEntry>()
+	let pageCache: PdfPageProjection | null = null
+	let documentCache: Readonly<{
+		projection: PdfDocumentProjection
+		title: string
+	}> | null = null
+
+	const projectObject = (
+		object: DesignObject,
+		swatches: ReadonlyMap<string, DesignSwatch>,
+	): PdfObjectProjection => {
+		const hidden = object.hidden === true
+		const swatch = swatches.get(object.fillId)
+		if (!hidden && swatch === undefined) {
+			throw new Error(
+				`Object ${object.name || object.id} references missing swatch ${object.fillId}.`,
+			)
+		}
+		const swatchSignature =
+			swatch === undefined ? "missing" : colorSignature(swatch)
+		const cached = objects.get(object.id)
+		if (
+			cached !== undefined &&
+			cached.contours === object.contours &&
+			cached.fillId === object.fillId &&
+			cached.hidden === hidden &&
+			cached.swatchSignature === swatchSignature
+		) {
+			return cached.projection
+		}
+		const projection = Object.freeze({
+			id: object.id,
+			stream: stream(
+				{},
+				ascii(
+					hidden || swatch === undefined
+						? ""
+						: pdfObjectContentStream(object, swatch),
+				),
+			),
+			visible: !hidden,
+		}) satisfies PdfObjectProjection
+		objects.set(
+			object.id,
+			Object.freeze({
+				contours: object.contours,
+				fillId: object.fillId,
+				hidden,
+				projection,
+				swatchSignature,
+			}),
+		)
+		return projection
+	}
+
+	const projectPage = (
+		document: DesignDocument,
+		objectProjections: readonly PdfObjectProjection[],
+	): PdfPageProjection => {
+		const cached = pageCache
+		if (
+			cached !== null &&
+			cached.width === document.page.width &&
+			cached.height === document.page.height &&
+			sameOrderedProjections(cached.objectProjections, objectProjections)
+		) {
+			return cached
+		}
+		pageCache = Object.freeze({
+			height: document.page.height,
+			objectProjections: Object.freeze(objectProjections),
+			prefix: stream(
+				{},
+				ascii(`q\n1 0 0 -1 0 ${number(document.page.height)} cm`),
+			),
+			suffix: stream({}, ascii("Q")),
+			width: document.page.width,
+		})
+		return pageCache
+	}
+
+	const projectDocument = (
+		title: string,
+		page: PdfPageProjection,
+	): PdfDocumentProjection => {
+		if (
+			documentCache !== null &&
+			documentCache.title === title &&
+			documentCache.projection.page === page
+		) {
+			return documentCache.projection
+		}
+		const builder = createPdfObjectBuilder()
+		const pages = builder.reserve<PdfPagesDictionary>()
+		const contents = [
+			builder.add(page.prefix),
+			...page.objectProjections
+				.filter(({ visible }) => visible)
+				.map(({ stream: objectStream }) => builder.add(objectStream)),
+			builder.add(page.suffix),
+		]
+		const pageReference = builder.add(
+			dictionary({
+				Type: name("Page"),
+				Parent: pages.ref,
+				MediaBox: array(0, 0, page.width, page.height),
+				Resources: dictionary({}),
+				Contents: array(...contents),
+			}) satisfies PdfPageDictionary,
+		)
+		pages.set(
+			dictionary({
+				Type: name("Pages"),
+				Kids: array(pageReference),
+				Count: 1,
+			}) satisfies PdfPagesDictionary,
+		)
+		const root = builder.add(
+			dictionary({
+				Type: name("Catalog"),
+				Pages: pages.ref,
+			}) satisfies PdfCatalogDictionary,
+		)
+		const info = builder.add(
+			dictionary({
+				Title: textString(title),
+				Creator: asciiTextString("create-design"),
+				Producer: asciiTextString("mondrian.pdf"),
+			}) satisfies PdfInfoDictionary,
+		)
+		const projection = Object.freeze({
+			document: builder.build({ version: "1.7", root, info }),
+			page,
+		}) satisfies PdfDocumentProjection
+		documentCache = Object.freeze({ projection, title })
+		return projection
+	}
+
+	return {
+		project(document) {
+			const swatches = new Map(
+				document.swatches.map((swatch) => [swatch.id, swatch]),
+			)
+			const activeIds = new Set(document.objects.map(({ id }) => id))
+			for (const id of objects.keys()) {
+				if (!activeIds.has(id)) objects.delete(id)
+			}
+			const objectProjections = document.objects.map((object) =>
+				projectObject(object, swatches),
+			)
+			return projectDocument(
+				document.title,
+				projectPage(document, objectProjections),
+			)
+		},
+	}
+}
+
 export function pdfContentStream(document: DesignDocument): string {
 	const swatches = new Map(
 		document.swatches.map((swatch) => [swatch.id, swatch]),
 	)
-	const commands = ["q"]
+	const commands = [`q`, `1 0 0 -1 0 ${number(document.page.height)} cm`]
 	for (const object of document.objects) {
 		if (object.hidden) continue
 		const swatch = swatches.get(object.fillId)
 		if (swatch === undefined) continue
-		commands.push(fillOperator(swatch))
-		for (const contour of object.contours) {
-			commands.push(...contourCommands(contour, document.page.height))
-		}
-		commands.push("f*")
+		commands.push(pdfObjectContentStream(object, swatch))
 	}
 	commands.push("Q")
 	return commands.join("\n")
 }
 
-/**
- * Lowers a design document into mondrian.pdf's validated object IR. The
- * content stream remains low-level so cubic curves, even-odd fills, and native
- * DeviceCMYK colors are retained.
- */
 export function createPdfIr(document: DesignDocument): PdfDocument {
-	const content = pdfContentStream(document)
-	const objects = createPdfObjectBuilder()
-	const pages = objects.reserve<PdfPagesDictionary>()
-	const contents = objects.add(stream({}, ascii(content)))
-	const page = objects.add(
-		dictionary({
-			Type: name("Page"),
-			Parent: pages.ref,
-			MediaBox: array(0, 0, document.page.width, document.page.height),
-			Resources: dictionary({}),
-			Contents: contents,
-		}) satisfies PdfPageDictionary,
-	)
-	pages.set(
-		dictionary({
-			Type: name("Pages"),
-			Kids: array(page),
-			Count: 1,
-		}) satisfies PdfPagesDictionary,
-	)
-	const root = objects.add(
-		dictionary({
-			Type: name("Catalog"),
-			Pages: pages.ref,
-		}) satisfies PdfCatalogDictionary,
-	)
-	const info = objects.add(
-		dictionary({
-			Title: textString(document.title),
-			Creator: asciiTextString("create-design"),
-			Producer: asciiTextString("mondrian.pdf"),
-		}) satisfies PdfInfoDictionary,
-	)
-	return objects.build({ version: "1.7", root, info })
+	return createPdfProjectionGraph().project(document).document
 }
 
-/**
- * Serializes the validated mondrian.pdf IR. Each fill remains in its authored
- * RGB or CMYK space instead of being rasterized.
- */
 export function exportPdf(document: DesignDocument): Uint8Array {
 	return serializePdf(createPdfIr(document))
 }
