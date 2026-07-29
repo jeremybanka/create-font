@@ -1,6 +1,6 @@
 {
 	"name": "create-design",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Browser-based vector design editor with native RGB and CMYK PDF export",
 	"repository": {
 		"type": "git",

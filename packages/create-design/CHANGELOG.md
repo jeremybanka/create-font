@@ -1,5 +1,11 @@
 # create-design
 
+## 0.1.2
+
+### Patch Changes
+
+- f8badaf: Compile PDFs incrementally and add an opt-in live PDF proof with stale-result protection.
+
 ## 0.1.1
 
 ### Patch Changes
