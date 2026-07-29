@@ -118,6 +118,22 @@ design-tile-content.class {
 		}
 	}
 
+	> design-export-tile {
+		grid-template-rows:
+			min-content min-content min-content min-content minmax(
+				0,
+				1fr
+			);
+
+		> label[data-live-preview] {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			color: var(--ink-muted);
+			cursor: pointer;
+		}
+	}
+
 	> design-tools-tile {
 		grid-template-columns: 1fr 1fr;
 		grid-auto-rows: min-content;
