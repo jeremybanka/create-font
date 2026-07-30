@@ -4152,9 +4152,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						set(contourPointIdsAtoms, [masterId, glyphId, contourId], null)
 						set(contourClosedAtoms, [masterId, glyphId, contourId], null)
 					}
-					set(advanceWidthSelectors, [masterId, glyphId], null)
+					set(
+						layerGeometryAtoms,
+						[masterId, glyphId],
+						deepFreeze({ advanceWidth: null, pointPositions: {} }),
+					)
 					for (const pointId of pointIds) {
-						set(pointPositionSelectors, [masterId, glyphId, pointId], null)
 						set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleYAtoms, [masterId, glyphId, pointId], null)
 						set(outgoingHandleXAtoms, [masterId, glyphId, pointId], null)
@@ -4303,24 +4306,26 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							deepFreeze(contour.points.map((point) => point.id)),
 						)
 					}
+					const points = layer.contours.flatMap((contour) => contour.points)
+					// Layer geometry is one atom. Install its complete value once so
+					// repeated point-selector writes in this transaction cannot rebuild
+					// from the same pre-transaction map and lose a restored point.
 					set(
-						advanceWidthSelectors,
+						layerGeometryAtoms,
 						[layer.masterId, glyph.id],
-						layer.advanceWidth,
+						deepFreeze({
+							advanceWidth: layer.advanceWidth,
+							pointPositions: Object.fromEntries(
+								points.map((point) => [point.id, { x: point.x, y: point.y }]),
+							),
+						}),
 					)
-					for (const point of layer.contours.flatMap(
-						(contour) => contour.points,
-					)) {
+					for (const point of points) {
 						const pointId = point.id
 						set(
 							pointAtoms,
 							[layer.masterId, glyph.id, pointId],
 							deepFreeze({ mode: point.mode }),
-						)
-						set(
-							pointPositionSelectors,
-							[layer.masterId, glyph.id, pointId],
-							deepFreeze({ x: point.x, y: point.y }),
 						)
 						set(
 							incomingHandleXAtoms,
