@@ -96,22 +96,23 @@ function assemble(state: SourceSyncState): DesignDocument {
 	return result.value
 }
 
-async function eventually(
-	assertion: () => void | Promise<void>,
+async function withDeadline<Value>(
+	phase: string,
+	promise: Promise<Value>,
 	timeout = 5_000,
-): Promise<void> {
-	const started = performance.now()
-	let failure: unknown
-	while (performance.now() - started < timeout) {
-		try {
-			await assertion()
-			return
-		} catch (error) {
-			failure = error
-			await new Promise((resolve) => setTimeout(resolve, 25))
-		}
+): Promise<Value> {
+	let timer: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<never>((_, reject) => {
+		timer = setTimeout(
+			() => reject(new Error(`${phase} did not complete within ${timeout}ms.`)),
+			timeout,
+		)
+	})
+	try {
+		return await Promise.race([promise, deadline])
+	} finally {
+		if (timer !== undefined) clearTimeout(timer)
 	}
-	throw failure
 }
 
 describe(`create-design filesystem observability`, () => {
@@ -129,13 +130,12 @@ describe(`create-design filesystem observability`, () => {
 			(update: DesignExternalSourceUpdate) => void
 		>()
 		const localOperations = new Set<string>()
-		let asynchronousFailure: unknown
+		let pendingSave: PromiseWithResolvers<void> | undefined
+		let pendingExternalUpdate: PromiseWithResolvers<void> | undefined
 		let tail: Promise<void> = Promise.resolve()
 		const enqueue = (operation: () => Promise<void>): Promise<void> => {
 			const result = tail.then(operation, operation)
-			tail = result.catch((error: unknown) => {
-				asynchronousFailure = error
-			})
+			tail = result.catch(() => undefined)
 			return result
 		}
 		const stop = source.subscribe?.((event) => {
@@ -145,6 +145,8 @@ describe(`create-design filesystem observability`, () => {
 			) {
 				return
 			}
+			const completion = pendingExternalUpdate
+			pendingExternalUpdate = undefined
 			void enqueue(async () => {
 				const applied = applySourceSyncDelta(state, event)
 				state =
@@ -156,7 +158,7 @@ describe(`create-design filesystem observability`, () => {
 					for (const listener of documentListeners)
 						listener({ ok: true, document, revision: state.revision })
 				})
-			})
+			}).then(completion?.resolve, completion?.reject)
 		})
 		if (stop === undefined)
 			throw new Error(`Source subscription is unavailable.`)
@@ -174,31 +176,39 @@ describe(`create-design filesystem observability`, () => {
 				}
 			},
 			async save(document: DesignDocument) {
-				await enqueue(async () => {
-					const transaction = designSourceTransaction(state, document)
-					if (transaction.writes.length + transaction.removals.length === 0) {
-						return
-					}
-					const idempotencyKey = crypto.randomUUID()
-					localOperations.add(idempotencyKey)
-					const result = await source.writeUnits({
-						idempotencyKey,
-						...transaction,
+				const completion = pendingSave
+				pendingSave = undefined
+				try {
+					await enqueue(async () => {
+						const transaction = designSourceTransaction(state, document)
+						if (transaction.writes.length + transaction.removals.length === 0) {
+							return
+						}
+						const idempotencyKey = crypto.randomUUID()
+						localOperations.add(idempotencyKey)
+						const result = await source.writeUnits({
+							idempotencyKey,
+							...transaction,
+						})
+						const applied = applySourceSyncDelta(state, {
+							type: `source.changed`,
+							operationId: idempotencyKey,
+							previousRevision: result.previousRevision,
+							removedPaths: result.removedPaths,
+							revision: result.revision,
+							units: result.units,
+						})
+						if (applied.kind === `gap`) {
+							state = sourceSyncStateFromSnapshot(await source.readSnapshot())
+						} else {
+							state = applied.state
+						}
 					})
-					const applied = applySourceSyncDelta(state, {
-						type: `source.changed`,
-						operationId: idempotencyKey,
-						previousRevision: result.previousRevision,
-						removedPaths: result.removedPaths,
-						revision: result.revision,
-						units: result.units,
-					})
-					if (applied.kind === `gap`) {
-						state = sourceSyncStateFromSnapshot(await source.readSnapshot())
-					} else {
-						state = applied.state
-					}
-				})
+					completion?.resolve()
+				} catch (error) {
+					completion?.reject(error)
+					throw error
+				}
 				return { revision: state.revision }
 			},
 			subscribeDocument(
@@ -231,22 +241,22 @@ describe(`create-design filesystem observability`, () => {
 
 		for (let cycle = 1; cycle <= 3; cycle += 1) {
 			const editedTitle = `Observed design ${cycle} ${crypto.randomUUID()}`
+			const saved = Promise.withResolvers<void>()
+			pendingSave = saved
 			act(() => {
 				titleInput.value = editedTitle
 				titleInput.dispatchEvent(new Event(`input`, { bubbles: true }))
 			})
-			await eventually(async () => {
-				if (asynchronousFailure !== undefined) throw asynchronousFailure
-				expect(await readFile(documentPath, `utf8`)).toContain(editedTitle)
-				expect(titleInput.value).toBe(editedTitle)
-			})
+			await withDeadline(`cycle ${cycle} source save`, saved.promise)
+			expect(await readFile(documentPath, `utf8`)).toContain(editedTitle)
+			expect(titleInput.value).toBe(editedTitle)
 
+			const restored = Promise.withResolvers<void>()
+			pendingExternalUpdate = restored
 			await writeFile(documentPath, originalText)
-			await eventually(() => {
-				if (asynchronousFailure !== undefined) throw asynchronousFailure
-				expect(titleInput.value).toBe(originalTitle)
-				expect(document.title).toBe(`${originalTitle} — create-design`)
-			})
+			await withDeadline(`cycle ${cycle} external restore`, restored.promise)
+			expect(titleInput.value).toBe(originalTitle)
+			expect(document.title).toBe(`${originalTitle} — create-design`)
 		}
-	})
+	}, 20_000)
 })
