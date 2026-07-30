@@ -12,7 +12,7 @@
 		"noUncheckedIndexedAccess": true,
 		"paths": {
 			"@create-font/preact-konva": ["./packages/preact-konva/src/index.ts"],
-			"@create-font/source": ["./packages/source/src/index.ts"],
+			"@create-font/source": ["./packages/font-source/src/index.ts"],
 			"@create-font/states": ["./packages/states/src/index.ts"],
 			"@create-font/target": ["./packages/target/src/index.ts"]
 		},

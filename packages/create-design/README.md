@@ -9,6 +9,15 @@ The first output target is PDF through `mondrian.pdf`'s validated object IR.
 RGB-authored fills are emitted with PDF RGB operators and CMYK-authored fills
 with native PDF CMYK operators.
 
+The versioned repository source boundary lives in
+[`@create-design/source`](../design-source/README.md). Its first directory
+format splits document metadata, palette, artboard, layer ordering, and each
+design object into independently validated units. Object IDs, display names,
+source paths, and stacking order remain independent so ordinary edits produce
+narrow Git diffs. Group, asset, and font inventories reserve future source
+boundaries without duplicating facts the current document model cannot yet
+represent.
+
 The Export tile offers an opt-in live PDF proof rendered by the browser's PDF
 viewer. PDF lowering is memoized at object, page, and document boundaries, so
 ordinary geometry edits reuse unrelated object streams. The last successfully

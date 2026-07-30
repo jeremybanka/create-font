@@ -16,6 +16,7 @@ runs:
         --filter create-font-workspace
         --filter create-font
         --filter create-design
+        --filter @create-design/source
         --filter @create-font/server
         --filter @create-font/target
         --filter @create-font/states

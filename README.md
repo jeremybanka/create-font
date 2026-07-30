@@ -44,7 +44,7 @@ the complete toolchain.
   compilation target.
 - [`@create-font/states`](packages/states/README.md) is the atom.io editor model
   that incrementally projects into that IR and hydrates remote source units.
-- [`@create-font/source`](packages/source/README.md) defines the versioned JSON
+- [`@create-font/source`](packages/font-source/README.md) defines the versioned JSON
   directory contract, per-file Zod schemas, and deterministic codecs.
 - [`@create-font/editor`](packages/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
