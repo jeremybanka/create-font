@@ -18,6 +18,10 @@ narrow Git diffs. Group, asset, and font inventories reserve future source
 boundaries without duplicating facts the current document model cannot yet
 represent.
 
+The repository's [`designs/workbench-poster`](../../designs/workbench-poster)
+project is a complete source-format example and the default development
+workspace.
+
 The Export tile offers an opt-in live PDF proof rendered by the browser's PDF
 viewer. PDF lowering is memoized at object, page, and document boundaries, so
 ordinary geometry edits reuse unrelated object streams. The last successfully

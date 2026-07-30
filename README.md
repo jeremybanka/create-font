@@ -29,6 +29,10 @@ editor state remain separate. Programmable behavior such as OpenType Layout
 rules may live in ordinary code files referenced by the project and compile to
 a sandboxed module format such as WebAssembly.
 
+Canonical design data follows the same source-oriented model below
+`designs/<project>/`. The checked-in `designs/workbench-poster` project is the
+geometric poster served by create-design during development.
+
 See [the architecture](docs/architecture.md) for the durable system boundaries
 and [the roadmap](docs/roadmap.md) for the path from the current libraries to
 the complete toolchain.
