@@ -2,9 +2,13 @@ import type {
 	JsonValue,
 	SourceChangedEvent,
 	SourceProjectSnapshot,
-	SourceUnitSnapshot,
 	SourceUnitWrite,
 } from "@create-font/server"
+import {
+	applySourceSyncDelta as applySharedSourceSyncDelta,
+	sourceSyncStateFromSnapshot as sharedSourceSyncStateFromSnapshot,
+	type SourceSyncState,
+} from "@create-art/source-rpc"
 import {
 	assembleEditorFontSource,
 	defaultAxisUnitPath,
@@ -24,10 +28,7 @@ import {
 } from "@create-font/source/browser"
 import type { EditorFontSource } from "@create-font/states"
 
-export type SourceSyncState = Readonly<{
-	revision: string
-	units: ReadonlyMap<string, SourceUnitSnapshot>
-}>
+export type { SourceSyncState }
 
 export type SourceSyncDeltaResult =
 	| Readonly<{ status: `applied`; state: SourceSyncState }>
@@ -83,28 +84,17 @@ function pathOptions(files: FontSourceDirectoryFiles): SplitFontSourceOptions {
 export function sourceSyncStateFromSnapshot(
 	snapshot: SourceProjectSnapshot,
 ): SourceSyncState {
-	return Object.freeze({
-		revision: snapshot.revision,
-		units: new Map(snapshot.units.map((unit) => [unit.path, unit])),
-	})
+	return sharedSourceSyncStateFromSnapshot(snapshot)
 }
 
 export function applySourceSyncDelta(
 	state: SourceSyncState,
 	event: SourceChangedEvent,
 ): SourceSyncDeltaResult {
-	if (event.revision === state.revision) {
-		return { status: `duplicate`, state }
-	}
-	if (event.previousRevision !== state.revision) {
-		return { status: `gap`, state }
-	}
-	const units = new Map(state.units)
-	for (const path of event.removedPaths) units.delete(path)
-	for (const unit of event.units) units.set(unit.path, unit)
+	const result = applySharedSourceSyncDelta(state, event)
 	return {
-		status: `applied`,
-		state: Object.freeze({ revision: event.revision, units }),
+		status: result.kind,
+		state: result.state,
 	}
 }
 

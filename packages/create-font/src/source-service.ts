@@ -119,7 +119,10 @@ function asValidationIssues(
 function validationError(
 	errors: readonly [SourceDiagnostic, ...SourceDiagnostic[]],
 ): SourceValidationError {
-	return new SourceValidationError(asValidationIssues(errors))
+	return new SourceValidationError(
+		asValidationIssues(errors),
+		`The proposed font source is not valid.`,
+	)
 }
 
 function validateFeatureReferences(
@@ -450,7 +453,14 @@ export async function createFileSystemSourceService(
 	const writeUnitsUnlocked = async (
 		input: WriteSourceUnitsInput,
 	): Promise<WriteSourceUnitsResult> => {
-		const fingerprint = JSON.stringify(input.writes)
+		const removals = input.removals ?? []
+		if (input.writes.length + removals.length === 0) {
+			throw new Error(`A source transaction cannot be empty.`)
+		}
+		const fingerprint = JSON.stringify({
+			removals,
+			writes: input.writes,
+		})
 		const previous = idempotentWrites.get(input.idempotencyKey)
 		if (previous !== undefined) {
 			if (previous.fingerprint !== fingerprint) {
@@ -486,6 +496,24 @@ export async function createFileSystemSourceService(
 			candidate[path] = write.value
 			formatted.set(path, result.value)
 		}
+		for (const removal of removals) {
+			const path = normalizeUnitPath(removal.path)
+			if (paths.has(path)) {
+				throw new Error(
+					`Source unit ${path} appears more than once in the transaction.`,
+				)
+			}
+			paths.add(path)
+			const actualRevision = project.revisions.get(path) ?? null
+			if (removal.expectedRevision !== actualRevision) {
+				throw new SourceUnitConflictError(
+					path,
+					removal.expectedRevision,
+					actualRevision,
+				)
+			}
+			delete candidate[path]
+		}
 		const assembled = assembleEditorFontSource(candidate)
 		if (!assembled.ok) throw validationError(assembled.errors)
 		validateFeatureReferences(
@@ -510,7 +538,14 @@ export async function createFileSystemSourceService(
 				path,
 			})
 		}
+		for (const removal of removals) {
+			entries.push({
+				existed: true,
+				path: normalizeUnitPath(removal.path),
+			})
+		}
 		const journal: TransactionJournal = { entries }
+		await mkdir(transactionRoot, { recursive: true })
 		await writeFile(
 			join(transactionRoot, `transaction.json`),
 			`${JSON.stringify(journal, null, "\t")}\n`,
@@ -525,8 +560,10 @@ export async function createFileSystemSourceService(
 					await mkdir(dirname(backup), { recursive: true })
 					await rename(target, backup)
 				}
-				await mkdir(dirname(target), { recursive: true })
-				await rename(staged, target)
+				if (await pathExists(staged)) {
+					await mkdir(dirname(target), { recursive: true })
+					await rename(staged, target)
+				}
 			}
 			await rm(transactionRoot, { force: true, recursive: true })
 		} catch (error) {
@@ -539,6 +576,11 @@ export async function createFileSystemSourceService(
 		for (const [path, text] of formatted) {
 			revisions.set(path, revisionForText(text))
 			texts.set(path, text)
+		}
+		for (const removal of removals) {
+			const path = normalizeUnitPath(removal.path)
+			revisions.delete(path)
+			texts.delete(path)
 		}
 		const descriptors = Object.keys(candidate)
 			.toSorted()
@@ -558,9 +600,10 @@ export async function createFileSystemSourceService(
 		}
 		const units = input.writes.map((write) =>
 			snapshot(updated, normalizeUnitPath(write.path)),
-		) as unknown as readonly [SourceUnitSnapshot, ...SourceUnitSnapshot[]]
+		)
 		const result = {
 			previousRevision: project.manifest.revision,
+			removedPaths: removals.map((removal) => normalizeUnitPath(removal.path)),
 			revision: updated.manifest.revision,
 			units,
 		}

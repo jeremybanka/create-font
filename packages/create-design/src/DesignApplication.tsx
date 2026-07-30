@@ -47,6 +47,7 @@ import {
 	useRef,
 	useState,
 } from "preact/hooks"
+import type { ComponentChildren } from "preact"
 
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
@@ -201,8 +202,9 @@ function designSnapGuides(
 	]
 }
 
-function initialHistory(): DesignHistory {
-	let document = createInitialDocument()
+function initialHistory(initialDocument?: DesignDocument): DesignHistory {
+	let document = initialDocument ?? createInitialDocument()
+	if (initialDocument !== undefined) return createDesignHistory(initialDocument)
 	if (typeof localStorage !== "undefined") {
 		document =
 			parseDesignDocument(localStorage.getItem(DESIGN_STORAGE_KEY)) ?? document
@@ -219,10 +221,26 @@ function editableTarget(target: EventTarget | null): boolean {
 	)
 }
 
-export function DesignApplication() {
+export type DesignApplicationProps = Readonly<{
+	children?: ComponentChildren
+	initialDocument?: DesignDocument
+	onDocumentChange?: (document: DesignDocument) => void
+	subscribeDocument?: (
+		listener: (document: DesignDocument) => void,
+	) => () => void
+	subscribeSourceStatus?: (listener: (status: string) => void) => () => void
+}>
+
+export function DesignApplication(props: DesignApplicationProps) {
+	const {
+		initialDocument,
+		onDocumentChange,
+		subscribeDocument,
+		subscribeSourceStatus,
+	} = props
 	const [history, dispatch] = useReducer(
 		reduceDesignHistory,
-		undefined,
+		initialDocument,
 		initialHistory,
 	)
 	const document = history.present
@@ -547,9 +565,32 @@ export function DesignApplication() {
 	)
 
 	useEffect(() => {
-		localStorage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(document))
+		if (onDocumentChange === undefined)
+			localStorage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(document))
+		else void onDocumentChange(document)
 		window.document.title = `${history.present.title} — create-design`
-	}, [document, history.present.title])
+	}, [document, history.present.title, onDocumentChange])
+
+	useEffect(
+		() =>
+			subscribeDocument?.((next) => {
+				dispatch({ type: "reset", document: next })
+				setSelection([])
+			}),
+		[subscribeDocument],
+	)
+
+	useEffect(
+		() =>
+			subscribeSourceStatus?.((sourceStatus) => {
+				setStatus(
+					sourceStatus === `conflict`
+						? `Source changed on disk; your local design is preserved.`
+						: `Source ${sourceStatus}.`,
+				)
+			}),
+		[subscribeSourceStatus],
+	)
 
 	useLayoutEffect(() => {
 		const element = artboardWrapRef.current

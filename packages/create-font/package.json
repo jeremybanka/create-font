@@ -48,6 +48,7 @@
 		"test:node-server": "node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {
+		"@create-art/source-rpc": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/server": "workspace:*",

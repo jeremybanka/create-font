@@ -8,11 +8,27 @@
 		"directory": "packages/create-design"
 	},
 	"type": "module",
+	"bin": {
+		"create-design": "./src/cli.ts"
+	},
 	"files": [
 		"dist",
 		"src",
 		"README.md"
 	],
+	"exports": {
+		".": {
+			"development": "./src/server.ts",
+			"types": "./src/server.ts",
+			"import": "./src/server.ts"
+		},
+		"./source": {
+			"development": "./src/source-service.ts",
+			"types": "./src/source-service.ts",
+			"import": "./src/source-service.ts"
+		},
+		"./package.json": "./package.json"
+	},
 	"scripts": {
 		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
@@ -22,10 +38,14 @@
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {
+		"@create-art/source-rpc": "workspace:*",
 		"@create-design/source": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/preact-konva": "workspace:*",
 		"@radix-ui/react-icons": "^1.3.2",
+		"@elysia/node": "1.4.6",
+		"@elysia/static": "1.4.11",
+		"elysia": "1.4.29",
 		"mondrian.pdf": "0.0.0",
 		"preact": "10.29.7"
 	},
