@@ -1,174 +1,70 @@
 {
-	"id": "glyph:j",
-	"name": "j",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:j",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 112,
 			"contours": [
 				{
+					"closed": true,
 					"id": "contour:glyph:j:0",
-					"closed": true,
 					"points": [
-						{
-							"id": "point:glyph:j:0:0",
-							"mode": "hard",
-							"x": 144,
-							"y": 382
-						},
-						{
-							"id": "point:glyph:j:0:1",
-							"mode": "hard",
-							"x": 554,
-							"y": 382
-						},
-						{
-							"id": "point:glyph:j:0:2",
-							"mode": "hard",
-							"x": 554,
-							"y": 318
-						},
-						{
-							"id": "point:glyph:j:0:3",
-							"mode": "hard",
-							"x": 144,
-							"y": 318
-						}
+						{ "id": "point:glyph:j:0:0", "mode": "hard", "x": 144, "y": 382 },
+						{ "id": "point:glyph:j:0:1", "mode": "hard", "x": 554, "y": 382 },
+						{ "id": "point:glyph:j:0:2", "mode": "hard", "x": 554, "y": 318 },
+						{ "id": "point:glyph:j:0:3", "mode": "hard", "x": 144, "y": 318 }
 					]
 				},
 				{
+					"closed": true,
 					"id": "contour:glyph:j:1",
-					"closed": true,
 					"points": [
-						{
-							"id": "point:glyph:j:1:0",
-							"mode": "hard",
-							"x": 586,
-							"y": 350
-						},
-						{
-							"id": "point:glyph:j:1:1",
-							"mode": "hard",
-							"x": 586,
-							"y": 100
-						},
-						{
-							"id": "point:glyph:j:1:2",
-							"mode": "hard",
-							"x": 522,
-							"y": 100
-						},
-						{
-							"id": "point:glyph:j:1:3",
-							"mode": "hard",
-							"x": 522,
-							"y": 350
-						}
+						{ "id": "point:glyph:j:1:0", "mode": "hard", "x": 586, "y": 350 },
+						{ "id": "point:glyph:j:1:1", "mode": "hard", "x": 586, "y": 100 },
+						{ "id": "point:glyph:j:1:2", "mode": "hard", "x": 522, "y": 100 },
+						{ "id": "point:glyph:j:1:3", "mode": "hard", "x": 522, "y": 350 }
 					]
 				},
 				{
+					"closed": true,
 					"id": "contour:glyph:j:2",
-					"closed": true,
 					"points": [
-						{
-							"id": "point:glyph:j:2:0",
-							"mode": "hard",
-							"x": 586,
-							"y": 100
-						},
-						{
-							"id": "point:glyph:j:2:1",
-							"mode": "hard",
-							"x": 586,
-							"y": -150
-						},
-						{
-							"id": "point:glyph:j:2:2",
-							"mode": "hard",
-							"x": 522,
-							"y": -150
-						},
-						{
-							"id": "point:glyph:j:2:3",
-							"mode": "hard",
-							"x": 522,
-							"y": 100
-						}
+						{ "id": "point:glyph:j:2:0", "mode": "hard", "x": 586, "y": 100 },
+						{ "id": "point:glyph:j:2:1", "mode": "hard", "x": 586, "y": -150 },
+						{ "id": "point:glyph:j:2:2", "mode": "hard", "x": 522, "y": -150 },
+						{ "id": "point:glyph:j:2:3", "mode": "hard", "x": 522, "y": 100 }
 					]
 				},
 				{
+					"closed": true,
 					"id": "contour:glyph:j:3",
-					"closed": true,
 					"points": [
-						{
-							"id": "point:glyph:j:3:0",
-							"mode": "hard",
-							"x": 144,
-							"y": -118
-						},
-						{
-							"id": "point:glyph:j:3:1",
-							"mode": "hard",
-							"x": 554,
-							"y": -118
-						},
-						{
-							"id": "point:glyph:j:3:2",
-							"mode": "hard",
-							"x": 554,
-							"y": -182
-						},
-						{
-							"id": "point:glyph:j:3:3",
-							"mode": "hard",
-							"x": 144,
-							"y": -182
-						}
+						{ "id": "point:glyph:j:3:0", "mode": "hard", "x": 144, "y": -118 },
+						{ "id": "point:glyph:j:3:1", "mode": "hard", "x": 554, "y": -118 },
+						{ "id": "point:glyph:j:3:2", "mode": "hard", "x": 554, "y": -182 },
+						{ "id": "point:glyph:j:3:3", "mode": "hard", "x": 144, "y": -182 }
 					]
 				},
 				{
-					"id": "contour:glyph:j:4",
 					"closed": true,
+					"id": "contour:glyph:j:4",
 					"points": [
-						{
-							"id": "point:glyph:j:4:0",
-							"mode": "hard",
-							"x": 176,
-							"y": 100
-						},
-						{
-							"id": "point:glyph:j:4:1",
-							"mode": "hard",
-							"x": 176,
-							"y": -150
-						},
-						{
-							"id": "point:glyph:j:4:2",
-							"mode": "hard",
-							"x": 112,
-							"y": -150
-						},
-						{
-							"id": "point:glyph:j:4:3",
-							"mode": "hard",
-							"x": 112,
-							"y": 100
-						}
+						{ "id": "point:glyph:j:4:0", "mode": "hard", "x": 176, "y": 100 },
+						{ "id": "point:glyph:j:4:1", "mode": "hard", "x": 176, "y": -150 },
+						{ "id": "point:glyph:j:4:2", "mode": "hard", "x": 112, "y": -150 },
+						{ "id": "point:glyph:j:4:3", "mode": "hard", "x": 112, "y": 100 }
 					]
 				}
-			]
+			],
+			"leftSideBearing": 112,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 69,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:j:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:j:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:j:0:0",
@@ -197,8 +93,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:j:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:j:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:j:1:0",
@@ -227,8 +123,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:j:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:j:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:j:2:0",
@@ -257,8 +153,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:j:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:j:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:j:3:0",
@@ -287,8 +183,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:j:4",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:j:4",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:j:4:0",
@@ -316,7 +212,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 69,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "j",
+	"overlap": true
 }

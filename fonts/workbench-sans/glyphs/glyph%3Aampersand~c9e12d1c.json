@@ -1,17 +1,13 @@
 {
-	"id": "glyph:ampersand",
-	"name": "ampersand",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:ampersand",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 74,
 			"contours": [
 				{
-					"id": "contour:glyph:ampersand:0",
 					"closed": true,
+					"id": "contour:glyph:ampersand:0",
 					"points": [
 						{
 							"id": "point:glyph:ampersand:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:ampersand:1",
 					"closed": true,
+					"id": "contour:glyph:ampersand:1",
 					"points": [
 						{
 							"id": "point:glyph:ampersand:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:ampersand:2",
 					"closed": true,
+					"id": "contour:glyph:ampersand:2",
 					"points": [
 						{
 							"id": "point:glyph:ampersand:2:0",
@@ -100,8 +96,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:ampersand:3",
 					"closed": true,
+					"id": "contour:glyph:ampersand:3",
 					"points": [
 						{
 							"id": "point:glyph:ampersand:3:0",
@@ -129,16 +125,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 74,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 39,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:ampersand:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:ampersand:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:ampersand:0:0",
@@ -167,8 +163,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:ampersand:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:ampersand:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:ampersand:1:0",
@@ -197,8 +193,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:ampersand:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:ampersand:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:ampersand:2:0",
@@ -227,8 +223,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:ampersand:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:ampersand:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:ampersand:3:0",
@@ -256,7 +252,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 39,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "ampersand",
+	"overlap": true
 }

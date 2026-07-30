@@ -1,16 +1,13 @@
 {
-	"id": "glyph:underscore",
-	"name": "underscore",
 	"export": true,
+	"id": "glyph:underscore",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 80,
 			"contours": [
 				{
-					"id": "contour:glyph:underscore:0",
 					"closed": true,
+					"id": "contour:glyph:underscore:0",
 					"points": [
 						{
 							"id": "point:glyph:underscore:0:0",
@@ -38,16 +35,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 80,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 80,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:underscore:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:underscore:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:underscore:0:0",
@@ -75,7 +72,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 80,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "underscore"
 }

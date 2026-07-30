@@ -1,16 +1,13 @@
 {
-	"id": "glyph:grave",
-	"name": "grave",
 	"export": true,
+	"id": "glyph:grave",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 460,
-			"leftSideBearing": 255,
 			"contours": [
 				{
-					"id": "contour:glyph:grave:0",
 					"closed": true,
+					"id": "contour:glyph:grave:0",
 					"points": [
 						{
 							"id": "point:glyph:grave:0:0",
@@ -38,16 +35,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 255,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 460,
-			"leftSideBearing": 221,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:grave:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:grave:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:grave:0:0",
@@ -75,7 +72,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 221,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "grave"
 }

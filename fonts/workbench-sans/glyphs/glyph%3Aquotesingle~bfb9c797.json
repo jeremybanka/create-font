@@ -1,16 +1,13 @@
 {
-	"id": "glyph:quotesingle",
-	"name": "quotesingle",
 	"export": true,
+	"id": "glyph:quotesingle",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 460,
-			"leftSideBearing": 318,
 			"contours": [
 				{
-					"id": "contour:glyph:quotesingle:0",
 					"closed": true,
+					"id": "contour:glyph:quotesingle:0",
 					"points": [
 						{
 							"id": "point:glyph:quotesingle:0:0",
@@ -38,16 +35,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 318,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 460,
-			"leftSideBearing": 275,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:quotesingle:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:quotesingle:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:quotesingle:0:0",
@@ -75,7 +72,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 275,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "quotesingle"
 }

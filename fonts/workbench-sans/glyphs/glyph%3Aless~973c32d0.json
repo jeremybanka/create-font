@@ -1,17 +1,13 @@
 {
-	"id": "glyph:less",
-	"name": "less",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:less",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 142,
 			"contours": [
 				{
-					"id": "contour:glyph:less:0",
 					"closed": true,
+					"id": "contour:glyph:less:0",
 					"points": [
 						{
 							"id": "point:glyph:less:0:0",
@@ -31,17 +27,12 @@
 							"x": 142,
 							"y": 377
 						},
-						{
-							"id": "point:glyph:less:0:3",
-							"mode": "hard",
-							"x": 542,
-							"y": 647
-						}
+						{ "id": "point:glyph:less:0:3", "mode": "hard", "x": 542, "y": 647 }
 					]
 				},
 				{
-					"id": "contour:glyph:less:1",
 					"closed": true,
+					"id": "contour:glyph:less:1",
 					"points": [
 						{
 							"id": "point:glyph:less:1:0",
@@ -55,30 +46,20 @@
 							"x": 578,
 							"y": 107
 						},
-						{
-							"id": "point:glyph:less:1:2",
-							"mode": "hard",
-							"x": 542,
-							"y": 53
-						},
-						{
-							"id": "point:glyph:less:1:3",
-							"mode": "hard",
-							"x": 142,
-							"y": 323
-						}
+						{ "id": "point:glyph:less:1:2", "mode": "hard", "x": 542, "y": 53 },
+						{ "id": "point:glyph:less:1:3", "mode": "hard", "x": 142, "y": 323 }
 					]
 				}
-			]
+			],
+			"leftSideBearing": 142,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 118,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:less:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:less:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:less:0:0",
@@ -107,8 +88,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:less:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:less:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:less:1:0",
@@ -136,7 +117,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 118,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "less",
+	"overlap": true
 }

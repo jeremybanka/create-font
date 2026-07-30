@@ -1,17 +1,13 @@
 {
-	"id": "glyph:dollar",
-	"name": "dollar",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:dollar",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 68,
 			"contours": [
 				{
-					"id": "contour:glyph:dollar:0",
 					"closed": true,
+					"id": "contour:glyph:dollar:0",
 					"points": [
 						{
 							"id": "point:glyph:dollar:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:dollar:1",
 					"closed": true,
+					"id": "contour:glyph:dollar:1",
 					"points": [
 						{
 							"id": "point:glyph:dollar:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:dollar:2",
 					"closed": true,
+					"id": "contour:glyph:dollar:2",
 					"points": [
 						{
 							"id": "point:glyph:dollar:2:0",
@@ -100,8 +96,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:dollar:3",
 					"closed": true,
+					"id": "contour:glyph:dollar:3",
 					"points": [
 						{
 							"id": "point:glyph:dollar:3:0",
@@ -130,8 +126,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:dollar:4",
 					"closed": true,
+					"id": "contour:glyph:dollar:4",
 					"points": [
 						{
 							"id": "point:glyph:dollar:4:0",
@@ -160,8 +156,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:dollar:5",
 					"closed": true,
+					"id": "contour:glyph:dollar:5",
 					"points": [
 						{
 							"id": "point:glyph:dollar:5:0",
@@ -189,16 +185,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 68,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 25,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:dollar:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:0:0",
@@ -227,8 +223,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:dollar:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:1:0",
@@ -257,8 +253,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:dollar:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:2:0",
@@ -287,8 +283,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:dollar:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:3:0",
@@ -317,8 +313,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:dollar:4",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:4",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:4:0",
@@ -347,8 +343,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:dollar:5",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:dollar:5",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:dollar:5:0",
@@ -376,7 +372,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 25,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "dollar",
+	"overlap": true
 }

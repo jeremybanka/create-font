@@ -10,6 +10,12 @@ export const sourceFormatConfiguration = Object.freeze({
 	useTabs: true,
 } as const)
 
+export const sourceFormatJsonConfiguration = Object.freeze({
+	...sourceFormatConfiguration,
+	"array.preferSingleLine": true,
+	"object.preferSingleLine": true,
+} as const)
+
 export const sourceFormatFeaConfiguration = Object.freeze({
 	...sourceFormatConfiguration,
 	useTabs: false,

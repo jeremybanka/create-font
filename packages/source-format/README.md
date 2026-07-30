@@ -24,14 +24,38 @@ does not rewrite unaffected units.
 
 ## Project tooling
 
-Install the contract and the exact host explicitly so incompatibility is
-visible in the project lockfile:
+Install the contract:
 
 ```sh
-pnpm add --save-dev @create-art/source-format dprint@0.55.2
+pnpm add --save-dev @create-art/source-format
 ```
 
-Extend the published configuration without copying it:
+Use its canonical source command for manual formatting, pre-commit hooks, and
+CI:
+
+```sh
+pnpm exec create-source-format fmt fonts designs
+pnpm exec create-source-format check fonts designs
+```
+
+The command recursively finds application-owned `.json` and `.fea` files,
+ignoring application control directories, Git metadata, and `node_modules`.
+For JSON it parses the semantic value, recursively sorts object names through
+the same serialization seed used by application writes, and then invokes the
+pinned Wasm formatter. Consequently compact, hand-multiline, and CRLF input
+with the same value converge on the exact bytes written by the application.
+`check` reports noncanonical paths without modifying them.
+
+Configure an editor's external format-on-save command to run
+`pnpm exec create-source-format fmt` with the current file path. A generic
+editor task can use:
+
+```sh
+pnpm exec create-source-format fmt "${file}"
+```
+
+Projects that also install `dprint@0.55.2` may extend the published lexical
+configuration without copying it:
 
 ```json
 {
@@ -40,23 +64,15 @@ Extend the published configuration without copying it:
 }
 ```
 
-The package configuration resolves its pinned JSON and feature plugins from
-its own dependencies. Do not add another JSON or FEA plugin or override their
-settings. `SOURCE_FORMAT_*_VERSION` exports let integrations assert the
-contract at runtime.
-
-Use the ordinary dprint workflows:
-
-```sh
-pnpm exec dprint fmt
-pnpm exec dprint check
-pnpm exec dprint check fonts/my-font designs/my-design
-```
-
-Run `pnpm exec dprint check` in CI and from a pre-commit hook. VS Code's dprint
-extension automatically consumes the project `dprint.json`; other editors can
-run `pnpm exec dprint lsp`. A version mismatch should be corrected in the
-package manifest and lockfile instead of accepted as a formatting change.
+The configuration pins indentation, line width, line endings, and
+input-layout-independent single-line preferences. The dprint JSON plugin
+cannot recursively sort object names, so bare `dprint fmt`, editor extensions
+that invoke only dprint, and `dprint lsp` are not canonical source workflows.
+They are safe as supplementary syntax formatters after the canonical command.
+Do not add another JSON or FEA plugin or override the published settings.
+`SOURCE_FORMAT_*_VERSION` exports let integrations assert the contract at
+runtime. A version mismatch should be corrected in the package manifest and
+lockfile instead of accepted as a formatting change.
 
 Node adapters call `formatSourceJson()` and `formatSourceFea()` directly.
 Formatting is deliberately unsupported in browsers and workers: synchronous

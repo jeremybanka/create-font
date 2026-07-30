@@ -1,17 +1,13 @@
 {
-	"id": "glyph:bracketright",
-	"name": "bracketright",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:bracketright",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:glyph:bracketright:0",
 					"closed": true,
+					"id": "contour:glyph:bracketright:0",
 					"points": [
 						{
 							"id": "point:glyph:bracketright:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:bracketright:1",
 					"closed": true,
+					"id": "contour:glyph:bracketright:1",
 					"points": [
 						{
 							"id": "point:glyph:bracketright:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:bracketright:2",
 					"closed": true,
+					"id": "contour:glyph:bracketright:2",
 					"points": [
 						{
 							"id": "point:glyph:bracketright:2:0",
@@ -100,8 +96,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:bracketright:3",
 					"closed": true,
+					"id": "contour:glyph:bracketright:3",
 					"points": [
 						{
 							"id": "point:glyph:bracketright:3:0",
@@ -129,16 +125,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:bracketright:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:bracketright:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:bracketright:0:0",
@@ -167,8 +163,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:bracketright:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:bracketright:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:bracketright:1:0",
@@ -197,8 +193,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:bracketright:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:bracketright:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:bracketright:2:0",
@@ -227,8 +223,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:bracketright:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:bracketright:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:bracketright:3:0",
@@ -256,7 +252,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "bracketright",
+	"overlap": true
 }

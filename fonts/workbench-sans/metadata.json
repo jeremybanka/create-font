@@ -1,6 +1,1 @@
-{
-	"unitsPerEm": 1000,
-	"fontRevision": 1.1,
-	"vendorId": "CRFT",
-	"lowestPpem": 8
-}
+{ "fontRevision": 1.1, "lowestPpem": 8, "unitsPerEm": 1000, "vendorId": "CRFT" }

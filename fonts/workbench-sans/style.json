@@ -1,8 +1,8 @@
 {
-	"weightClass": 350,
-	"widthClass": 5,
-	"italic": false,
 	"bold": false,
+	"italic": false,
+	"italicAngle": 0,
 	"oblique": false,
-	"italicAngle": 0
+	"weightClass": 350,
+	"widthClass": 5
 }

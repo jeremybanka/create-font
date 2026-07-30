@@ -1,17 +1,13 @@
 {
-	"id": "glyph:seven",
-	"name": "seven",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:seven",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:glyph:seven:0",
 					"closed": true,
+					"id": "contour:glyph:seven:0",
 					"points": [
 						{
 							"id": "point:glyph:seven:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:seven:1",
 					"closed": true,
+					"id": "contour:glyph:seven:1",
 					"points": [
 						{
 							"id": "point:glyph:seven:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:seven:2",
 					"closed": true,
+					"id": "contour:glyph:seven:2",
 					"points": [
 						{
 							"id": "point:glyph:seven:2:0",
@@ -79,18 +75,8 @@
 							"x": 632,
 							"y": 350
 						},
-						{
-							"id": "point:glyph:seven:2:1",
-							"mode": "hard",
-							"x": 632,
-							"y": 0
-						},
-						{
-							"id": "point:glyph:seven:2:2",
-							"mode": "hard",
-							"x": 568,
-							"y": 0
-						},
+						{ "id": "point:glyph:seven:2:1", "mode": "hard", "x": 632, "y": 0 },
+						{ "id": "point:glyph:seven:2:2", "mode": "hard", "x": 568, "y": 0 },
 						{
 							"id": "point:glyph:seven:2:3",
 							"mode": "hard",
@@ -99,16 +85,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:seven:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:seven:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:seven:0:0",
@@ -137,8 +123,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:seven:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:seven:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:seven:1:0",
@@ -167,8 +153,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:seven:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:seven:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:seven:2:0",
@@ -196,7 +182,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "seven",
+	"overlap": true
 }

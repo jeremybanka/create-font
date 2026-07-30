@@ -6,6 +6,7 @@ import { getPath as getJsonPluginPath } from "@dprint/json"
 import {
 	sourceFormatFeaConfiguration,
 	sourceFormatConfiguration,
+	sourceFormatJsonConfiguration,
 	stringifySourceJson,
 	type SourceJsonValue,
 } from "./shared.ts"
@@ -17,12 +18,13 @@ export {
 	SOURCE_FORMAT_JSON_PLUGIN_VERSION,
 	sourceFormatFeaConfiguration,
 	sourceFormatConfiguration,
+	sourceFormatJsonConfiguration,
 	stringifySourceJson,
 	type SourceJsonValue,
 } from "./shared.ts"
 
 const context = createContext(sourceFormatConfiguration)
-context.addPlugin(readFileSync(getJsonPluginPath()), sourceFormatConfiguration)
+context.addPlugin(readFileSync(getJsonPluginPath()), sourceFormatJsonConfiguration)
 context.addPlugin(
 	readFileSync(new URL(import.meta.resolve("dprint-plugin-fea/plugin.wasm"))),
 	sourceFormatFeaConfiguration,

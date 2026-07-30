@@ -1,17 +1,13 @@
 {
-	"id": "glyph:asciitilde",
-	"name": "asciitilde",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:asciitilde",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 99,
 			"contours": [
 				{
-					"id": "contour:glyph:asciitilde:0",
 					"closed": true,
+					"id": "contour:glyph:asciitilde:0",
 					"points": [
 						{
 							"id": "point:glyph:asciitilde:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:asciitilde:1",
 					"closed": true,
+					"id": "contour:glyph:asciitilde:1",
 					"points": [
 						{
 							"id": "point:glyph:asciitilde:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:asciitilde:2",
 					"closed": true,
+					"id": "contour:glyph:asciitilde:2",
 					"points": [
 						{
 							"id": "point:glyph:asciitilde:2:0",
@@ -99,16 +95,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 99,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 71,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:asciitilde:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:asciitilde:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:asciitilde:0:0",
@@ -137,8 +133,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:asciitilde:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:asciitilde:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:asciitilde:1:0",
@@ -167,8 +163,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:asciitilde:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:asciitilde:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:asciitilde:2:0",
@@ -196,7 +192,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 71,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "asciitilde",
+	"overlap": true
 }

@@ -15,7 +15,9 @@
 		"lineWidth": 80,
 		"useTabs": true,
 		"indentWidth": 2,
-		"newLineKind": "lf"
+		"newLineKind": "lf",
+		"array.preferSingleLine": true,
+		"object.preferSingleLine": true
 	},
 	"fea": {
 		"associations": ["**/*.fea"],
@@ -24,8 +26,5 @@
 		"useTabs": false,
 		"newLineKind": "lf"
 	},
-	"plugins": [
-		"npm:@dprint/json",
-		"npm:dprint-plugin-fea"
-	]
+	"plugins": ["npm:@dprint/json", "npm:dprint-plugin-fea"]
 }

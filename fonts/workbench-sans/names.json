@@ -1,10 +1,10 @@
 {
 	"family": "Workbench Sans",
-	"subfamily": "Text",
-	"uniqueId": "CRFT:Workbench Sans:1.100",
 	"fullName": "Workbench Sans Text",
-	"version": "Version 1.100",
 	"postScriptName": "WorkbenchSans-Text",
+	"subfamily": "Text",
 	"typographicFamily": "Workbench Sans",
-	"typographicSubfamily": "Text"
+	"typographicSubfamily": "Text",
+	"uniqueId": "CRFT:Workbench Sans:1.100",
+	"version": "Version 1.100"
 }

@@ -1,5 +1,1 @@
-{
-	"id": "master:text",
-	"kind": "default",
-	"name": "Text"
-}
+{ "id": "master:text", "kind": "default", "name": "Text" }

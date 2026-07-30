@@ -1,6 +1,6 @@
 {
-	"format": "create-font.source",
-	"sourceVersion": 1,
 	"editorFormat": "create-font.editor",
-	"editorVersion": 5
+	"editorVersion": 5,
+	"format": "create-font.source",
+	"sourceVersion": 1
 }

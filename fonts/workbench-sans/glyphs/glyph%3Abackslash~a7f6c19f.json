@@ -1,16 +1,13 @@
 {
-	"id": "glyph:backslash",
-	"name": "backslash",
 	"export": true,
+	"id": "glyph:backslash",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 74,
 			"contours": [
 				{
-					"id": "contour:glyph:backslash:0",
 					"closed": true,
+					"id": "contour:glyph:backslash:0",
 					"points": [
 						{
 							"id": "point:glyph:backslash:0:0",
@@ -38,16 +35,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 74,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 39,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:backslash:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:backslash:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:backslash:0:0",
@@ -75,7 +72,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 39,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "backslash"
 }

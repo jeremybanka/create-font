@@ -5,6 +5,7 @@ export {
 	SOURCE_FORMAT_JSON_PLUGIN_VERSION,
 	sourceFormatFeaConfiguration,
 	sourceFormatConfiguration,
+	sourceFormatJsonConfiguration,
 	stringifySourceJson,
 	type SourceJsonValue,
 } from "./shared.ts"

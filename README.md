@@ -51,7 +51,8 @@ the complete toolchain.
 - [`@create-font/source`](packages/font-source/README.md) defines the versioned JSON
   directory contract, per-file Zod schemas, and deterministic codecs.
 - [`@create-art/source-format`](packages/source-format/README.md) publishes the
-  pinned dprint policy shared by generators, application writes, editors, and CI.
+  pinned canonical formatter and dprint policy shared by generators,
+  application writes, editor commands, and CI.
 - [`@create-font/editor`](packages/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
 

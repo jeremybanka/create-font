@@ -1,84 +1,40 @@
 {
-	"id": "glyph:X",
-	"name": "X",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:X",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 74,
 			"contours": [
 				{
-					"id": "contour:glyph:X:0",
 					"closed": true,
+					"id": "contour:glyph:X:0",
 					"points": [
-						{
-							"id": "point:glyph:X:0:0",
-							"mode": "hard",
-							"x": 126,
-							"y": 719
-						},
-						{
-							"id": "point:glyph:X:0:1",
-							"mode": "hard",
-							"x": 626,
-							"y": 19
-						},
-						{
-							"id": "point:glyph:X:0:2",
-							"mode": "hard",
-							"x": 574,
-							"y": -19
-						},
-						{
-							"id": "point:glyph:X:0:3",
-							"mode": "hard",
-							"x": 74,
-							"y": 681
-						}
+						{ "id": "point:glyph:X:0:0", "mode": "hard", "x": 126, "y": 719 },
+						{ "id": "point:glyph:X:0:1", "mode": "hard", "x": 626, "y": 19 },
+						{ "id": "point:glyph:X:0:2", "mode": "hard", "x": 574, "y": -19 },
+						{ "id": "point:glyph:X:0:3", "mode": "hard", "x": 74, "y": 681 }
 					]
 				},
 				{
-					"id": "contour:glyph:X:1",
 					"closed": true,
+					"id": "contour:glyph:X:1",
 					"points": [
-						{
-							"id": "point:glyph:X:1:0",
-							"mode": "hard",
-							"x": 74,
-							"y": 19
-						},
-						{
-							"id": "point:glyph:X:1:1",
-							"mode": "hard",
-							"x": 574,
-							"y": 719
-						},
-						{
-							"id": "point:glyph:X:1:2",
-							"mode": "hard",
-							"x": 626,
-							"y": 681
-						},
-						{
-							"id": "point:glyph:X:1:3",
-							"mode": "hard",
-							"x": 126,
-							"y": -19
-						}
+						{ "id": "point:glyph:X:1:0", "mode": "hard", "x": 74, "y": 19 },
+						{ "id": "point:glyph:X:1:1", "mode": "hard", "x": 574, "y": 719 },
+						{ "id": "point:glyph:X:1:2", "mode": "hard", "x": 626, "y": 681 },
+						{ "id": "point:glyph:X:1:3", "mode": "hard", "x": 126, "y": -19 }
 					]
 				}
-			]
+			],
+			"leftSideBearing": 74,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 39,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:X:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:X:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:X:0:0",
@@ -107,8 +63,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:X:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:X:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:X:1:0",
@@ -136,7 +92,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 39,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "X",
+	"overlap": true
 }

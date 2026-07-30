@@ -1,382 +1,97 @@
 [
-	{
-		"codePoint": 32,
-		"path": "cmap/0020.json"
-	},
-	{
-		"codePoint": 33,
-		"path": "cmap/0021.json"
-	},
-	{
-		"codePoint": 34,
-		"path": "cmap/0022.json"
-	},
-	{
-		"codePoint": 35,
-		"path": "cmap/0023.json"
-	},
-	{
-		"codePoint": 36,
-		"path": "cmap/0024.json"
-	},
-	{
-		"codePoint": 37,
-		"path": "cmap/0025.json"
-	},
-	{
-		"codePoint": 38,
-		"path": "cmap/0026.json"
-	},
-	{
-		"codePoint": 39,
-		"path": "cmap/0027.json"
-	},
-	{
-		"codePoint": 40,
-		"path": "cmap/0028.json"
-	},
-	{
-		"codePoint": 41,
-		"path": "cmap/0029.json"
-	},
-	{
-		"codePoint": 42,
-		"path": "cmap/002A.json"
-	},
-	{
-		"codePoint": 43,
-		"path": "cmap/002B.json"
-	},
-	{
-		"codePoint": 44,
-		"path": "cmap/002C.json"
-	},
-	{
-		"codePoint": 45,
-		"path": "cmap/002D.json"
-	},
-	{
-		"codePoint": 46,
-		"path": "cmap/002E.json"
-	},
-	{
-		"codePoint": 47,
-		"path": "cmap/002F.json"
-	},
-	{
-		"codePoint": 48,
-		"path": "cmap/0030.json"
-	},
-	{
-		"codePoint": 49,
-		"path": "cmap/0031.json"
-	},
-	{
-		"codePoint": 50,
-		"path": "cmap/0032.json"
-	},
-	{
-		"codePoint": 51,
-		"path": "cmap/0033.json"
-	},
-	{
-		"codePoint": 52,
-		"path": "cmap/0034.json"
-	},
-	{
-		"codePoint": 53,
-		"path": "cmap/0035.json"
-	},
-	{
-		"codePoint": 54,
-		"path": "cmap/0036.json"
-	},
-	{
-		"codePoint": 55,
-		"path": "cmap/0037.json"
-	},
-	{
-		"codePoint": 56,
-		"path": "cmap/0038.json"
-	},
-	{
-		"codePoint": 57,
-		"path": "cmap/0039.json"
-	},
-	{
-		"codePoint": 58,
-		"path": "cmap/003A.json"
-	},
-	{
-		"codePoint": 59,
-		"path": "cmap/003B.json"
-	},
-	{
-		"codePoint": 60,
-		"path": "cmap/003C.json"
-	},
-	{
-		"codePoint": 61,
-		"path": "cmap/003D.json"
-	},
-	{
-		"codePoint": 62,
-		"path": "cmap/003E.json"
-	},
-	{
-		"codePoint": 63,
-		"path": "cmap/003F.json"
-	},
-	{
-		"codePoint": 64,
-		"path": "cmap/0040.json"
-	},
-	{
-		"codePoint": 65,
-		"path": "cmap/0041.json"
-	},
-	{
-		"codePoint": 66,
-		"path": "cmap/0042.json"
-	},
-	{
-		"codePoint": 67,
-		"path": "cmap/0043.json"
-	},
-	{
-		"codePoint": 68,
-		"path": "cmap/0044.json"
-	},
-	{
-		"codePoint": 69,
-		"path": "cmap/0045.json"
-	},
-	{
-		"codePoint": 70,
-		"path": "cmap/0046.json"
-	},
-	{
-		"codePoint": 71,
-		"path": "cmap/0047.json"
-	},
-	{
-		"codePoint": 72,
-		"path": "cmap/0048.json"
-	},
-	{
-		"codePoint": 73,
-		"path": "cmap/0049.json"
-	},
-	{
-		"codePoint": 74,
-		"path": "cmap/004A.json"
-	},
-	{
-		"codePoint": 75,
-		"path": "cmap/004B.json"
-	},
-	{
-		"codePoint": 76,
-		"path": "cmap/004C.json"
-	},
-	{
-		"codePoint": 77,
-		"path": "cmap/004D.json"
-	},
-	{
-		"codePoint": 78,
-		"path": "cmap/004E.json"
-	},
-	{
-		"codePoint": 79,
-		"path": "cmap/004F.json"
-	},
-	{
-		"codePoint": 80,
-		"path": "cmap/0050.json"
-	},
-	{
-		"codePoint": 81,
-		"path": "cmap/0051.json"
-	},
-	{
-		"codePoint": 82,
-		"path": "cmap/0052.json"
-	},
-	{
-		"codePoint": 83,
-		"path": "cmap/0053.json"
-	},
-	{
-		"codePoint": 84,
-		"path": "cmap/0054.json"
-	},
-	{
-		"codePoint": 85,
-		"path": "cmap/0055.json"
-	},
-	{
-		"codePoint": 86,
-		"path": "cmap/0056.json"
-	},
-	{
-		"codePoint": 87,
-		"path": "cmap/0057.json"
-	},
-	{
-		"codePoint": 88,
-		"path": "cmap/0058.json"
-	},
-	{
-		"codePoint": 89,
-		"path": "cmap/0059.json"
-	},
-	{
-		"codePoint": 90,
-		"path": "cmap/005A.json"
-	},
-	{
-		"codePoint": 91,
-		"path": "cmap/005B.json"
-	},
-	{
-		"codePoint": 92,
-		"path": "cmap/005C.json"
-	},
-	{
-		"codePoint": 93,
-		"path": "cmap/005D.json"
-	},
-	{
-		"codePoint": 94,
-		"path": "cmap/005E.json"
-	},
-	{
-		"codePoint": 95,
-		"path": "cmap/005F.json"
-	},
-	{
-		"codePoint": 96,
-		"path": "cmap/0060.json"
-	},
-	{
-		"codePoint": 97,
-		"path": "cmap/0061.json"
-	},
-	{
-		"codePoint": 98,
-		"path": "cmap/0062.json"
-	},
-	{
-		"codePoint": 99,
-		"path": "cmap/0063.json"
-	},
-	{
-		"codePoint": 100,
-		"path": "cmap/0064.json"
-	},
-	{
-		"codePoint": 101,
-		"path": "cmap/0065.json"
-	},
-	{
-		"codePoint": 102,
-		"path": "cmap/0066.json"
-	},
-	{
-		"codePoint": 103,
-		"path": "cmap/0067.json"
-	},
-	{
-		"codePoint": 104,
-		"path": "cmap/0068.json"
-	},
-	{
-		"codePoint": 105,
-		"path": "cmap/0069.json"
-	},
-	{
-		"codePoint": 106,
-		"path": "cmap/006A.json"
-	},
-	{
-		"codePoint": 107,
-		"path": "cmap/006B.json"
-	},
-	{
-		"codePoint": 108,
-		"path": "cmap/006C.json"
-	},
-	{
-		"codePoint": 109,
-		"path": "cmap/006D.json"
-	},
-	{
-		"codePoint": 110,
-		"path": "cmap/006E.json"
-	},
-	{
-		"codePoint": 111,
-		"path": "cmap/006F.json"
-	},
-	{
-		"codePoint": 112,
-		"path": "cmap/0070.json"
-	},
-	{
-		"codePoint": 113,
-		"path": "cmap/0071.json"
-	},
-	{
-		"codePoint": 114,
-		"path": "cmap/0072.json"
-	},
-	{
-		"codePoint": 115,
-		"path": "cmap/0073.json"
-	},
-	{
-		"codePoint": 116,
-		"path": "cmap/0074.json"
-	},
-	{
-		"codePoint": 117,
-		"path": "cmap/0075.json"
-	},
-	{
-		"codePoint": 118,
-		"path": "cmap/0076.json"
-	},
-	{
-		"codePoint": 119,
-		"path": "cmap/0077.json"
-	},
-	{
-		"codePoint": 120,
-		"path": "cmap/0078.json"
-	},
-	{
-		"codePoint": 121,
-		"path": "cmap/0079.json"
-	},
-	{
-		"codePoint": 122,
-		"path": "cmap/007A.json"
-	},
-	{
-		"codePoint": 123,
-		"path": "cmap/007B.json"
-	},
-	{
-		"codePoint": 124,
-		"path": "cmap/007C.json"
-	},
-	{
-		"codePoint": 125,
-		"path": "cmap/007D.json"
-	},
-	{
-		"codePoint": 126,
-		"path": "cmap/007E.json"
-	}
+	{ "codePoint": 32, "path": "cmap/0020.json" },
+	{ "codePoint": 33, "path": "cmap/0021.json" },
+	{ "codePoint": 34, "path": "cmap/0022.json" },
+	{ "codePoint": 35, "path": "cmap/0023.json" },
+	{ "codePoint": 36, "path": "cmap/0024.json" },
+	{ "codePoint": 37, "path": "cmap/0025.json" },
+	{ "codePoint": 38, "path": "cmap/0026.json" },
+	{ "codePoint": 39, "path": "cmap/0027.json" },
+	{ "codePoint": 40, "path": "cmap/0028.json" },
+	{ "codePoint": 41, "path": "cmap/0029.json" },
+	{ "codePoint": 42, "path": "cmap/002A.json" },
+	{ "codePoint": 43, "path": "cmap/002B.json" },
+	{ "codePoint": 44, "path": "cmap/002C.json" },
+	{ "codePoint": 45, "path": "cmap/002D.json" },
+	{ "codePoint": 46, "path": "cmap/002E.json" },
+	{ "codePoint": 47, "path": "cmap/002F.json" },
+	{ "codePoint": 48, "path": "cmap/0030.json" },
+	{ "codePoint": 49, "path": "cmap/0031.json" },
+	{ "codePoint": 50, "path": "cmap/0032.json" },
+	{ "codePoint": 51, "path": "cmap/0033.json" },
+	{ "codePoint": 52, "path": "cmap/0034.json" },
+	{ "codePoint": 53, "path": "cmap/0035.json" },
+	{ "codePoint": 54, "path": "cmap/0036.json" },
+	{ "codePoint": 55, "path": "cmap/0037.json" },
+	{ "codePoint": 56, "path": "cmap/0038.json" },
+	{ "codePoint": 57, "path": "cmap/0039.json" },
+	{ "codePoint": 58, "path": "cmap/003A.json" },
+	{ "codePoint": 59, "path": "cmap/003B.json" },
+	{ "codePoint": 60, "path": "cmap/003C.json" },
+	{ "codePoint": 61, "path": "cmap/003D.json" },
+	{ "codePoint": 62, "path": "cmap/003E.json" },
+	{ "codePoint": 63, "path": "cmap/003F.json" },
+	{ "codePoint": 64, "path": "cmap/0040.json" },
+	{ "codePoint": 65, "path": "cmap/0041.json" },
+	{ "codePoint": 66, "path": "cmap/0042.json" },
+	{ "codePoint": 67, "path": "cmap/0043.json" },
+	{ "codePoint": 68, "path": "cmap/0044.json" },
+	{ "codePoint": 69, "path": "cmap/0045.json" },
+	{ "codePoint": 70, "path": "cmap/0046.json" },
+	{ "codePoint": 71, "path": "cmap/0047.json" },
+	{ "codePoint": 72, "path": "cmap/0048.json" },
+	{ "codePoint": 73, "path": "cmap/0049.json" },
+	{ "codePoint": 74, "path": "cmap/004A.json" },
+	{ "codePoint": 75, "path": "cmap/004B.json" },
+	{ "codePoint": 76, "path": "cmap/004C.json" },
+	{ "codePoint": 77, "path": "cmap/004D.json" },
+	{ "codePoint": 78, "path": "cmap/004E.json" },
+	{ "codePoint": 79, "path": "cmap/004F.json" },
+	{ "codePoint": 80, "path": "cmap/0050.json" },
+	{ "codePoint": 81, "path": "cmap/0051.json" },
+	{ "codePoint": 82, "path": "cmap/0052.json" },
+	{ "codePoint": 83, "path": "cmap/0053.json" },
+	{ "codePoint": 84, "path": "cmap/0054.json" },
+	{ "codePoint": 85, "path": "cmap/0055.json" },
+	{ "codePoint": 86, "path": "cmap/0056.json" },
+	{ "codePoint": 87, "path": "cmap/0057.json" },
+	{ "codePoint": 88, "path": "cmap/0058.json" },
+	{ "codePoint": 89, "path": "cmap/0059.json" },
+	{ "codePoint": 90, "path": "cmap/005A.json" },
+	{ "codePoint": 91, "path": "cmap/005B.json" },
+	{ "codePoint": 92, "path": "cmap/005C.json" },
+	{ "codePoint": 93, "path": "cmap/005D.json" },
+	{ "codePoint": 94, "path": "cmap/005E.json" },
+	{ "codePoint": 95, "path": "cmap/005F.json" },
+	{ "codePoint": 96, "path": "cmap/0060.json" },
+	{ "codePoint": 97, "path": "cmap/0061.json" },
+	{ "codePoint": 98, "path": "cmap/0062.json" },
+	{ "codePoint": 99, "path": "cmap/0063.json" },
+	{ "codePoint": 100, "path": "cmap/0064.json" },
+	{ "codePoint": 101, "path": "cmap/0065.json" },
+	{ "codePoint": 102, "path": "cmap/0066.json" },
+	{ "codePoint": 103, "path": "cmap/0067.json" },
+	{ "codePoint": 104, "path": "cmap/0068.json" },
+	{ "codePoint": 105, "path": "cmap/0069.json" },
+	{ "codePoint": 106, "path": "cmap/006A.json" },
+	{ "codePoint": 107, "path": "cmap/006B.json" },
+	{ "codePoint": 108, "path": "cmap/006C.json" },
+	{ "codePoint": 109, "path": "cmap/006D.json" },
+	{ "codePoint": 110, "path": "cmap/006E.json" },
+	{ "codePoint": 111, "path": "cmap/006F.json" },
+	{ "codePoint": 112, "path": "cmap/0070.json" },
+	{ "codePoint": 113, "path": "cmap/0071.json" },
+	{ "codePoint": 114, "path": "cmap/0072.json" },
+	{ "codePoint": 115, "path": "cmap/0073.json" },
+	{ "codePoint": 116, "path": "cmap/0074.json" },
+	{ "codePoint": 117, "path": "cmap/0075.json" },
+	{ "codePoint": 118, "path": "cmap/0076.json" },
+	{ "codePoint": 119, "path": "cmap/0077.json" },
+	{ "codePoint": 120, "path": "cmap/0078.json" },
+	{ "codePoint": 121, "path": "cmap/0079.json" },
+	{ "codePoint": 122, "path": "cmap/007A.json" },
+	{ "codePoint": 123, "path": "cmap/007B.json" },
+	{ "codePoint": 124, "path": "cmap/007C.json" },
+	{ "codePoint": 125, "path": "cmap/007D.json" },
+	{ "codePoint": 126, "path": "cmap/007E.json" }
 ]

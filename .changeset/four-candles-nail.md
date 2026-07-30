@@ -6,4 +6,6 @@
 "@create-art/source-format": patch
 ---
 
-Format canonical create-font and create-design source with the pinned, published dprint contract before hashing and persistence.
+Format canonical create-font and create-design source with the pinned,
+published dprint contract before hashing and persistence, and expose matching
+`create-source-format` fmt/check workflows for users, editors, and CI.
