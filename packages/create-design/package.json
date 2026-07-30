@@ -22,6 +22,7 @@
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {
+		"@create-font/design-source": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/preact-konva": "workspace:*",
 		"@radix-ui/react-icons": "^1.3.2",

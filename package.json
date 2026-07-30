@@ -19,7 +19,7 @@
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "mise exec -- cargo test --workspace && vp run --filter create-font --filter create-design --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --filter @create-font/fea-rs-wasm --filter dprint-plugin-fea --fail-if-no-match test"
+		"test": "mise exec -- cargo test --workspace && vp run --filter create-font --filter create-design --filter @create-font/design-source --filter @create-font/server --filter @create-font/target --filter @create-font/states --filter @create-font/source --filter @create-font/preact-konva --filter @create-font/editor --filter @create-font/fea-rs-wasm --filter dprint-plugin-fea --fail-if-no-match test"
 	},
 	"devDependencies": {
 		"@changesets/cli": "2.31.1",
