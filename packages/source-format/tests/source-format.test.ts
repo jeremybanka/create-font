@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest"
 import {
 	formatSourceFea,
 	formatSourceJson,
-	formatPortableSourceJson,
 	SOURCE_FORMAT_DPRINT_VERSION,
 	SOURCE_FORMAT_FEA_PLUGIN_VERSION,
 	SOURCE_FORMAT_JSON_PLUGIN_VERSION,
@@ -38,8 +37,6 @@ describe("create-art source formatting contract", () => {
 			a: { second: true, first: null },
 		}
 		const formatted = formatSourceJson(value)
-		expect(formatted).toBe(formatPortableSourceJson(value))
-		expect(formatBrowserJson(value)).toBe(formatted)
 		expect(formatted).toMatchInlineSnapshot(`
 			"{
 				"a": { "first": null, "second": true },
@@ -81,17 +78,7 @@ describe("create-art source formatting contract", () => {
 		expect(stringifySourceJson(value).indexOf('"a"')).toBeLessThan(
 			stringifySourceJson(value).indexOf('"z"'),
 		)
-		for (const candidate of [
-			{ short: [1, 2, 3], object: { a: true, b: false } },
-			{
-				values: Array.from({ length: 3 }, (_, index) => ({
-					index,
-					label: "value".repeat(index),
-				})),
-			},
-		]) {
-			expect(formatBrowserJson(candidate)).toBe(formatSourceJson(candidate))
-		}
+		expect(() => formatBrowserJson()).toThrow(/trusted Node adapter/u)
 	})
 
 	it("formats Adobe feature text idempotently with LF", () => {

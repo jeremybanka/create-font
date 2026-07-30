@@ -58,7 +58,11 @@ extension automatically consumes the project `dprint.json`; other editors can
 run `pnpm exec dprint lsp`. A version mismatch should be corrected in the
 package manifest and lockfile instead of accepted as a formatting change.
 
-Node adapters may call `formatSourceJson()` and `formatSourceFea()` directly.
-Browser and worker consumers import `@create-art/source-format/browser` for
-the portable JSON policy and serialization seed; formatter plugin loading
-remains at the trusted application adapter boundary.
+Node adapters call `formatSourceJson()` and `formatSourceFea()` directly.
+Formatting is deliberately unsupported in browsers and workers: synchronous
+browser formatting cannot load the pinned Wasm plugin without either an
+untrusted runtime fetch or a second formatter implementation. Those consumers
+may import `@create-art/source-format/browser` for contract metadata and the
+semantic serialization seed, but formatting calls fail closed. Source
+validation and parsing remain portable; the trusted application adapter owns
+the only canonical formatting path.

@@ -15,7 +15,6 @@ export {
 	SOURCE_FORMAT_DPRINT_VERSION,
 	SOURCE_FORMAT_FEA_PLUGIN_VERSION,
 	SOURCE_FORMAT_JSON_PLUGIN_VERSION,
-	formatPortableSourceJson,
 	sourceFormatFeaConfiguration,
 	sourceFormatConfiguration,
 	stringifySourceJson,

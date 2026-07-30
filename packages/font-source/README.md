@@ -138,8 +138,10 @@ Every application-owned JSON unit is serialized through the versioned
 [`@create-art/source-format`](../source-format/README.md) dprint contract after
 validation and semantic normalization. Adobe feature writes use the same
 contract's FEA plugin. Revisions identify the final formatted bytes written to
-disk; noncanonical external source remains untouched until that logical unit
-is next written.
+disk. Formatting is a trusted Node source-service responsibility; browser
+consumers parse, assemble, validate, and submit semantic values without
+formatting them. Noncanonical external source remains untouched until that
+logical unit is next written.
 
 ## Complete-document codec
 

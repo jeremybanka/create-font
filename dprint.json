@@ -18,7 +18,8 @@
 		"trailingCommas": "all"
 	},
 	"json": {
-		"associations": ["**/*.{json,jsonc}"]
+		"associations": ["**/*.{json,jsonc}"],
+		"newLineKind": "lf"
 	},
 	"markdown": {
 		"associations": ["**/*.{md,mdx}"]

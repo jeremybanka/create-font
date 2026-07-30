@@ -208,6 +208,54 @@ describe("create-design directory source", () => {
 		}
 	})
 
+	it("formats a varied valid metadata corpus idempotently at nested width boundaries", () => {
+		const documents = Array.from(
+			{ length: 25 },
+			(_, guideCount): DocumentFile => ({
+				format: "create-design.metadata",
+				version: 1,
+				title: `Width boundary ${guideCount}`,
+				guides: Array.from({ length: guideCount }, (_, index) => ({
+					axis: index % 2 === 0 ? "y" : "x",
+					id: `guide:${index}_${"x".repeat(10 + (index % 9))}`,
+					value: index * 11.339506169749999,
+				})),
+			}),
+		)
+
+		for (const document of documents) {
+			const formatted = formatSourceUnit("document", document)
+			expect(formatted.ok).toBe(true)
+			if (!formatted.ok) continue
+			const parsed = parseSourceUnitText("document", formatted.value)
+			expect(parsed.ok).toBe(true)
+			if (!parsed.ok) continue
+			expect(formatSourceUnit("document", parsed.value)).toEqual(formatted)
+		}
+
+		const elevenGuides = documents[11]
+		if (elevenGuides === undefined)
+			throw new Error("Missing regression fixture.")
+		const regression = formatSourceUnit("document", {
+			...elevenGuides,
+			guides: elevenGuides.guides.map((guide, index) =>
+				index === 4
+					? {
+							axis: "y",
+							id: "guide:4_xxxxxxxxxxxxxx",
+							value: 45.358024678999996,
+						}
+					: guide,
+			),
+		})
+		expect(regression.ok).toBe(true)
+		if (regression.ok) {
+			expect(regression.value).toContain(
+				'\t\t{\n\t\t\t"axis": "y",\n\t\t\t"id": "guide:4_xxxxxxxxxxxxxx",\n\t\t\t"value": 45.358024678999996\n\t\t},',
+			)
+		}
+	})
+
 	it("classifies singleton, inventory, collection, and unknown paths", () => {
 		expect(sourceUnitKindForPath("create-design.json")).toBe("project")
 		expect(sourceUnitKindForPath("scene/objects/index.json")).toBe(

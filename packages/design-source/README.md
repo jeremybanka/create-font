@@ -76,6 +76,8 @@ a JSONPath-like field location.
 `formatSourceUnit()` uses the versioned
 [`@create-art/source-format`](../source-format/README.md) dprint contract. It
 emits readable, recursively key-sorted JSON with author array order, negative
-zero, and exactly one trailing newline preserved. Derived canvas state,
+zero, and exactly one trailing newline preserved. Call it only from the
+trusted Node source-service boundary; browser code parses, validates, and
+submits semantic unit values without formatting them. Derived canvas state,
 selection, bounds, blend steps, shaped glyphs, PDF data, previews, and export
 artifacts do not belong in canonical source.
