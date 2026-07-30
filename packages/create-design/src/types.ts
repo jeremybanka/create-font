@@ -8,6 +8,6 @@ export type {
 	DesignPoint,
 	DesignSwatch,
 	RgbColor,
-} from "@create-font/design-source"
+} from "@create-design/source"
 
 export type DesignTool = "select" | "transform" | "pen" | "rect" | "ellipse"

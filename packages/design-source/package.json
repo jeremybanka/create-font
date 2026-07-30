@@ -1,5 +1,5 @@
 {
-	"name": "@create-font/design-source",
+	"name": "@create-design/source",
 	"version": "0.1.0",
 	"description": "Deterministic source formats for create-design documents",
 	"repository": {

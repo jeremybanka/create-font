@@ -1,6 +1,6 @@
-# @create-font/design-source
+# @create-design/source
 
-`@create-font/design-source` owns the deterministic source boundary for
+`@create-design/source` owns the deterministic source boundary for
 `create-design`. It exposes the current complete `DesignDocument` model and a
 repository-native directory codec that splits independently editable facts
 into validated JSON units.
@@ -58,7 +58,7 @@ without inventing a competing storage boundary.
 import {
 	assembleDesignDocument,
 	splitDesignDocument,
-} from "@create-font/design-source"
+} from "@create-design/source"
 
 const split = splitDesignDocument(document)
 if (!split.ok) throw new Error(split.errors[0].message)

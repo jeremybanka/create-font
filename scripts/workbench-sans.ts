@@ -11,7 +11,7 @@ import {
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitEditorFontSource,
-} from "../packages/source/src/index.ts"
+} from "../packages/font-source/src/index.ts"
 
 type Coordinate = Readonly<{ x: number; y: number }>
 type Stroke = readonly [Coordinate, Coordinate]

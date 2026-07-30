@@ -58,7 +58,7 @@ importers:
 
   packages/create-design:
     dependencies:
-      '@create-font/design-source':
+      '@create-design/source':
         specifier: workspace:*
         version: link:../design-source
       '@create-font/editor':
@@ -133,7 +133,7 @@ importers:
         version: link:../server
       '@create-font/source':
         specifier: workspace:*
-        version: link:../source
+        version: link:../font-source
       '@create-font/states':
         specifier: workspace:*
         version: link:../states
@@ -267,6 +267,22 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/font-source:
+    dependencies:
+      '@create-font/fea-rs-wasm':
+        specifier: workspace:*
+        version: link:../fea-rs-wasm
+      '@create-font/states':
+        specifier: workspace:*
+        version: link:../states
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/preact-konva:
     dependencies:
       konva:
@@ -301,22 +317,6 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
-
-  packages/source:
-    dependencies:
-      '@create-font/fea-rs-wasm':
-        specifier: workspace:*
-        version: link:../fea-rs-wasm
-      '@create-font/states':
-        specifier: workspace:*
-        version: link:../states
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/states:
     dependencies:

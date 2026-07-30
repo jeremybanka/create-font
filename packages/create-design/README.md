@@ -10,7 +10,7 @@ RGB-authored fills are emitted with PDF RGB operators and CMYK-authored fills
 with native PDF CMYK operators.
 
 The versioned repository source boundary lives in
-[`@create-font/design-source`](../design-source/README.md). Its first directory
+[`@create-design/source`](../design-source/README.md). Its first directory
 format splits document metadata, palette, artboard, layer ordering, and each
 design object into independently validated units. Object IDs, display names,
 source paths, and stacking order remain independent so ordinary edits produce
