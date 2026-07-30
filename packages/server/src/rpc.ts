@@ -2,13 +2,20 @@ import { resolve } from "node:path"
 
 import { Elysia, status, t } from "elysia"
 import type { ElysiaAdapter } from "elysia/adapter"
-import { sourceErrorResponse as sharedSourceErrorResponse } from "@create-art/source-rpc/server"
 
-import { SourceVersionControlError } from "./contracts.ts"
+import {
+	SourceUnitConflictError,
+	SourceUnitNotFoundError,
+	SourceValidationError,
+	SourceVersionControlError,
+} from "./contracts.ts"
 import type {
 	BuildResult,
 	SourceInvalidRequest,
+	SourceUnitConflict,
+	SourceUnitNotFound,
 	SourceServiceUnavailable,
+	SourceValidationFailure,
 	CreateFontSourceService,
 	CommitSourceUnitsInput,
 	WriteSourceUnitInput,
@@ -40,7 +47,33 @@ function sourceErrorResponse(error: unknown) {
 			{ code: error.code, message: error.message },
 		)
 	}
-	return sharedSourceErrorResponse(error)
+	if (error instanceof SourceUnitNotFoundError) {
+		const body: SourceUnitNotFound = {
+			code: `source.unit_not_found`,
+			message: error.message,
+			path: error.path,
+		}
+		return status(404, body)
+	}
+	if (error instanceof SourceUnitConflictError) {
+		const body: SourceUnitConflict = {
+			actualRevision: error.actualRevision,
+			code: `source.revision_conflict`,
+			expectedRevision: error.expectedRevision,
+			message: error.message,
+			path: error.path,
+		}
+		return status(409, body)
+	}
+	if (error instanceof SourceValidationError) {
+		const body: SourceValidationFailure = {
+			code: `source.validation_failed`,
+			issues: error.issues,
+			message: error.message,
+		}
+		return status(422, body)
+	}
+	throw error
 }
 
 export function createFontRpc(options: CreateFontRpcOptions) {
