@@ -38,7 +38,7 @@
 		"lineWidth": 80,
 		"indentWidth": 2,
 		"useTabs": false,
-		"newLineKind": "auto"
+		"newLineKind": "lf"
 	},
 	"plugins": [
 		"./node_modules/@dprint/oxc/plugin.wasm",
