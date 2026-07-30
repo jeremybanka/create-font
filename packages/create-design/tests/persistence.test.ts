@@ -5,6 +5,7 @@ import {
 	clearDesignRecoveryDraft,
 	createDesignPersistenceState,
 	DESIGN_RECOVERY_STORAGE_KEY,
+	isDesignRecoveryDraftNewer,
 	persistenceNeedsUnloadWarning,
 	readDesignRecoveryDraft,
 	reduceDesignPersistence,
@@ -216,6 +217,41 @@ describe("create-design persistence state machine", () => {
 })
 
 describe("create-design recovery storage", () => {
+	it("suppresses stale durable copies but offers divergent drafts from older revisions", () => {
+		const durable = createInitialDocument()
+		const reordered = {
+			guides: durable.guides,
+			objects: durable.objects,
+			swatches: durable.swatches,
+			page: durable.page,
+			title: durable.title,
+			version: durable.version,
+			format: durable.format,
+		}
+		expect(
+			isDesignRecoveryDraftNewer(
+				{
+					version: 1,
+					baseRevision: "source:current",
+					document: reordered,
+					updatedAt: 42,
+				},
+				durable,
+			),
+		).toBe(false)
+		expect(
+			isDesignRecoveryDraftNewer(
+				{
+					version: 1,
+					baseRevision: "source:older",
+					document: { ...durable, title: "Unsaved divergent draft" },
+					updatedAt: 43,
+				},
+				durable,
+			),
+		).toBe(true)
+	})
+
 	it("round-trips a separate recovery draft and rejects malformed data", () => {
 		const values = new Map<string, string>()
 		const storage = {

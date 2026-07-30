@@ -59,6 +59,7 @@ import {
 import {
 	clearDesignRecoveryDraft,
 	createDesignPersistenceState,
+	isDesignRecoveryDraftNewer,
 	persistenceNeedsUnloadWarning,
 	readDesignRecoveryDraft,
 	reduceDesignPersistence,
@@ -286,9 +287,13 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const storage = browserLocalStorage()
 			if (storage === null) return state
 			const draft = readDesignRecoveryDraft(storage)
-			return draft === null
-				? state
-				: reduceDesignPersistence(state, { type: "recovery-found", draft })
+			if (draft === null) return state
+			const durableDocument = initialDocument ?? createInitialDocument()
+			if (!isDesignRecoveryDraftNewer(draft, durableDocument)) {
+				clearDesignRecoveryDraft(storage)
+				return state
+			}
+			return reduceDesignPersistence(state, { type: "recovery-found", draft })
 		},
 	)
 	const [tool, setTool] = useState<DesignTool>("select")

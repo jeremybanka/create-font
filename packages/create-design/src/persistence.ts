@@ -21,6 +21,38 @@ export type DesignRecoveryDraft = Readonly<{
 	updatedAt: number
 }>
 
+function canonicalJson(value: unknown): string {
+	if (
+		value === null ||
+		typeof value === "boolean" ||
+		typeof value === "number" ||
+		typeof value === "string"
+	)
+		return JSON.stringify(value)
+	if (Array.isArray(value))
+		return `[${value.map((item) => canonicalJson(item ?? null)).join(",")}]`
+	if (typeof value !== "object") return "null"
+	const record = value as Readonly<Record<string, unknown>>
+	return `{${Object.keys(record)
+		.filter((key) => record[key] !== undefined)
+		.toSorted()
+		.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+		.join(",")}}`
+}
+
+/**
+ * Recovery storage is written only for unsaved work, so a divergent document
+ * remains recoverable even if its base revision is older than current source.
+ * An identical document is a stale crash-window remnant of an already durable
+ * write and must not be presented as newer work.
+ */
+export function isDesignRecoveryDraftNewer(
+	draft: DesignRecoveryDraft,
+	durableDocument: DesignDocument,
+): boolean {
+	return canonicalJson(draft.document) !== canonicalJson(durableDocument)
+}
+
 export type DesignPersistenceState = Readonly<{
 	status: DesignPersistenceStatus
 	durableRevision: string | null

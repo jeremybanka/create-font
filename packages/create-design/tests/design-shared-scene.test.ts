@@ -161,6 +161,31 @@ describe("create-design shared vector scene", () => {
 		})
 	})
 
+	it("clears an identical stale recovery draft without prompting or warning", () => {
+		const storage = new Map<string, string>()
+		const session = sourceSession()
+		const draft: DesignRecoveryDraft = {
+			version: 1,
+			baseRevision: "source:one",
+			document: session.initialDocument,
+			updatedAt: 42,
+		}
+		storage.set(DESIGN_RECOVERY_STORAGE_KEY, JSON.stringify(draft))
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		expect(document.querySelector("persistence-alert")).toBeNull()
+		expect(document.querySelector('[role="status"]')?.textContent).toContain(
+			"source:one",
+		)
+		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
+		expect(session.save).not.toHaveBeenCalled()
+		const event = new Event("beforeunload", { cancelable: true })
+		window.dispatchEvent(event)
+		expect(event.defaultPrevented).toBe(false)
+	})
+
 	it("discards only the recovery draft and reloads newer durable source", async () => {
 		const storage = new Map<string, string>()
 		const draft: DesignRecoveryDraft = {
