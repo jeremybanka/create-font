@@ -572,8 +572,8 @@ describe("@create-font/source", () => {
 		expect(canonicalized).toEqual(encoded)
 		if (!encoded.ok) return
 		expect(encoded.value.endsWith("\n")).toBe(true)
-		expect(encoded.value.startsWith('{"axes":')).toBe(true)
-		expect(encoded.value).not.toContain("\n\t")
+		expect(encoded.value.startsWith('{\n\t"axes":')).toBe(true)
+		expect(encoded.value).toContain("\n\t")
 		expect(encodeEditorFontSource(source)).toEqual(encoded)
 	})
 
@@ -694,7 +694,7 @@ describe("@create-font/source", () => {
 		}
 		const encoded = encodeEditorFontSource(modified)
 		if (!encoded.ok) throw new Error("negative zero did not encode")
-		expect(encoded.value).toContain('"x":-0')
+		expect(encoded.value).toContain('"x": -0')
 		const decoded = decodeEditorFontSource(encoded.value)
 		if (!decoded.ok) throw new Error("negative zero did not decode")
 		expect(

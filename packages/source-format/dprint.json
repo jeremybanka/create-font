@@ -1,0 +1,30 @@
+{
+	"$schema": "https://dprint.dev/schemas/v0.json",
+	"lineWidth": 80,
+	"useTabs": true,
+	"indentWidth": 2,
+	"newLineKind": "lf",
+	"includes": ["**/*.json", "**/*.fea"],
+	"excludes": [
+		"**/.create-design/**",
+		"**/.create-font/**",
+		"**/node_modules/**"
+	],
+	"json": {
+		"associations": ["**/*.json"],
+		"lineWidth": 80,
+		"useTabs": true,
+		"indentWidth": 2,
+		"newLineKind": "lf",
+		"array.preferSingleLine": true,
+		"object.preferSingleLine": true
+	},
+	"fea": {
+		"associations": ["**/*.fea"],
+		"lineWidth": 80,
+		"indentWidth": 2,
+		"useTabs": false,
+		"newLineKind": "lf"
+	},
+	"plugins": ["npm:@dprint/json", "npm:dprint-plugin-fea"]
+}

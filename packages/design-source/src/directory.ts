@@ -1,3 +1,7 @@
+import {
+	formatSourceJson,
+	type SourceJsonValue,
+} from "@create-art/source-format"
 import { z } from "zod/v4"
 
 import { diagnostic, failure, success } from "./result.ts"
@@ -489,41 +493,13 @@ export function parseSourceUnitText(
 	return validateSourceUnit(kind, value, unitPath)
 }
 
-type JsonValue =
-	| null
-	| boolean
-	| number
-	| string
-	| readonly JsonValue[]
-	| { readonly [key: string]: JsonValue }
-
-function stringifyCanonicalJson(value: JsonValue): string {
-	if (value === null) return "null"
-	if (typeof value === "boolean") return value ? "true" : "false"
-	if (typeof value === "number")
-		return Object.is(value, -0) ? "-0" : JSON.stringify(value)
-	if (typeof value === "string") return JSON.stringify(value)
-	if (Array.isArray(value))
-		return `[${value.map((item) => stringifyCanonicalJson(item)).join(",")}]`
-	const record = value as { readonly [key: string]: JsonValue }
-	return `{${Object.keys(record)
-		.sort()
-		.map(
-			(key) =>
-				`${JSON.stringify(key)}:${stringifyCanonicalJson(record[key] ?? null)}`,
-		)
-		.join(",")}}`
-}
-
 export function formatSourceUnit(
 	kind: DesignSourceUnitKind,
 	value: unknown,
 ): DesignSourceResult<string> {
 	const validated = validateSourceUnit(kind, value)
 	return validated.ok
-		? success(
-				`${stringifyCanonicalJson(validated.value as unknown as JsonValue)}\n`,
-			)
+		? success(formatSourceJson(validated.value as unknown as SourceJsonValue))
 		: failure(validated.errors)
 }
 

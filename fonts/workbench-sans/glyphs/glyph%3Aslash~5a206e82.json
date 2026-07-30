@@ -1,23 +1,15 @@
 {
-	"id": "glyph:slash",
-	"name": "slash",
 	"export": true,
+	"id": "glyph:slash",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 74,
 			"contours": [
 				{
-					"id": "contour:glyph:slash:0",
 					"closed": true,
+					"id": "contour:glyph:slash:0",
 					"points": [
-						{
-							"id": "point:glyph:slash:0:0",
-							"mode": "hard",
-							"x": 74,
-							"y": 19
-						},
+						{ "id": "point:glyph:slash:0:0", "mode": "hard", "x": 74, "y": 19 },
 						{
 							"id": "point:glyph:slash:0:1",
 							"mode": "hard",
@@ -38,16 +30,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 74,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 39,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:slash:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:slash:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:slash:0:0",
@@ -75,7 +67,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 39,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "slash"
 }

@@ -1,1 +1,50 @@
-{"entries":[{"id":"object:aqua-counter","path":"scene/objects/composition/aqua-counter.json"},{"id":"object:background-paper","path":"scene/objects/background/paper.json"},{"id":"object:cobalt-column","path":"scene/objects/composition/cobalt-column.json"},{"id":"object:coral-block","path":"scene/objects/composition/coral-block.json"},{"id":"object:coral-sun","path":"scene/objects/composition/coral-sun.json"},{"id":"object:ink-diagonal","path":"scene/objects/composition/ink-diagonal.json"},{"id":"object:ink-pivot","path":"scene/objects/composition/ink-pivot.json"},{"id":"object:letter-f","path":"scene/objects/lettering/f.json"},{"id":"object:letter-m","path":"scene/objects/lettering/m.json"},{"id":"object:letter-o","path":"scene/objects/lettering/o.json"},{"id":"object:letter-r","path":"scene/objects/lettering/r.json"},{"id":"object:paper-counter","path":"scene/objects/composition/paper-counter.json"},{"id":"object:sun-dot","path":"scene/objects/composition/sun-dot.json"},{"id":"object:yellow-beam","path":"scene/objects/composition/yellow-beam.json"}],"format":"create-design.object-index","version":1}
+{
+	"entries": [
+		{
+			"id": "object:aqua-counter",
+			"path": "scene/objects/composition/aqua-counter.json"
+		},
+		{
+			"id": "object:background-paper",
+			"path": "scene/objects/background/paper.json"
+		},
+		{
+			"id": "object:cobalt-column",
+			"path": "scene/objects/composition/cobalt-column.json"
+		},
+		{
+			"id": "object:coral-block",
+			"path": "scene/objects/composition/coral-block.json"
+		},
+		{
+			"id": "object:coral-sun",
+			"path": "scene/objects/composition/coral-sun.json"
+		},
+		{
+			"id": "object:ink-diagonal",
+			"path": "scene/objects/composition/ink-diagonal.json"
+		},
+		{
+			"id": "object:ink-pivot",
+			"path": "scene/objects/composition/ink-pivot.json"
+		},
+		{ "id": "object:letter-f", "path": "scene/objects/lettering/f.json" },
+		{ "id": "object:letter-m", "path": "scene/objects/lettering/m.json" },
+		{ "id": "object:letter-o", "path": "scene/objects/lettering/o.json" },
+		{ "id": "object:letter-r", "path": "scene/objects/lettering/r.json" },
+		{
+			"id": "object:paper-counter",
+			"path": "scene/objects/composition/paper-counter.json"
+		},
+		{
+			"id": "object:sun-dot",
+			"path": "scene/objects/composition/sun-dot.json"
+		},
+		{
+			"id": "object:yellow-beam",
+			"path": "scene/objects/composition/yellow-beam.json"
+		}
+	],
+	"format": "create-design.object-index",
+	"version": 1
+}

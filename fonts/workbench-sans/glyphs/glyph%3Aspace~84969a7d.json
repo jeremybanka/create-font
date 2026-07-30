@@ -1,19 +1,19 @@
 {
-	"id": "glyph:space",
-	"name": "space",
 	"export": true,
+	"id": "glyph:space",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 360,
+			"contours": [],
 			"leftSideBearing": 0,
-			"contours": []
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 360,
+			"contours": [],
 			"leftSideBearing": 0,
-			"contours": []
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "space"
 }

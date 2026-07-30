@@ -26,6 +26,7 @@ import {
 	type WriteSourceUnitsInput,
 	type WriteSourceUnitsResult,
 } from "@create-font/server"
+import { formatSourceFea } from "@create-art/source-format"
 import {
 	assembleEditorFontSource,
 	formatSourceUnit,
@@ -488,6 +489,15 @@ export async function createFileSystemSourceService(
 					write.expectedRevision,
 					actualRevision,
 				)
+			}
+			if (path.startsWith(`features/`) && path.endsWith(`.fea`)) {
+				if (typeof write.value !== `string`) {
+					throw new Error(`Adobe feature source ${path} must be text.`)
+				}
+				const text = formatSourceFea(write.value, path)
+				candidate[path] = text
+				formatted.set(path, text)
+				continue
 			}
 			const kind = sourceUnitKindForPath(path)
 			if (kind === null) throw new SourceUnitNotFoundError(path)

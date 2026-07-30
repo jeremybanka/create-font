@@ -1,17 +1,13 @@
 {
-	"id": "glyph:question",
-	"name": "question",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:question",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:glyph:question:0",
 					"closed": true,
+					"id": "contour:glyph:question:0",
 					"points": [
 						{
 							"id": "point:glyph:question:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:question:1",
 					"closed": true,
+					"id": "contour:glyph:question:1",
 					"points": [
 						{
 							"id": "point:glyph:question:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:question:2",
 					"closed": true,
+					"id": "contour:glyph:question:2",
 					"points": [
 						{
 							"id": "point:glyph:question:2:0",
@@ -100,8 +96,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:question:3",
 					"closed": true,
+					"id": "contour:glyph:question:3",
 					"points": [
 						{
 							"id": "point:glyph:question:3:0",
@@ -130,8 +126,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:question:4",
 					"closed": true,
+					"id": "contour:glyph:question:4",
 					"points": [
 						{
 							"id": "point:glyph:question:4:0",
@@ -159,16 +155,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 100,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:question:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:question:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:question:0:0",
@@ -197,8 +193,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:question:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:question:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:question:1:0",
@@ -227,8 +223,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:question:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:question:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:question:2:0",
@@ -257,8 +253,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:question:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:question:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:question:3:0",
@@ -287,8 +283,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:question:4",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:question:4",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:question:4:0",
@@ -316,7 +312,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 100,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "question",
+	"overlap": true
 }

@@ -1,16 +1,13 @@
 {
-	"id": "glyph:period",
-	"name": "period",
 	"export": true,
+	"id": "glyph:period",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 460,
-			"leftSideBearing": 315,
 			"contours": [
 				{
-					"id": "contour:glyph:period:0",
 					"closed": true,
+					"id": "contour:glyph:period:0",
 					"points": [
 						{
 							"id": "point:glyph:period:0:0",
@@ -38,16 +35,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 315,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 460,
-			"leftSideBearing": 315,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:period:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:period:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:period:0:0",
@@ -75,7 +72,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 315,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "period"
 }

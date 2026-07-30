@@ -1,53 +1,30 @@
 {
-	"id": "glyph:bar",
-	"name": "bar",
 	"export": true,
+	"id": "glyph:bar",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 460,
-			"leftSideBearing": 318,
 			"contours": [
 				{
-					"id": "contour:glyph:bar:0",
 					"closed": true,
+					"id": "contour:glyph:bar:0",
 					"points": [
-						{
-							"id": "point:glyph:bar:0:0",
-							"mode": "hard",
-							"x": 382,
-							"y": 700
-						},
-						{
-							"id": "point:glyph:bar:0:1",
-							"mode": "hard",
-							"x": 382,
-							"y": 0
-						},
-						{
-							"id": "point:glyph:bar:0:2",
-							"mode": "hard",
-							"x": 318,
-							"y": 0
-						},
-						{
-							"id": "point:glyph:bar:0:3",
-							"mode": "hard",
-							"x": 318,
-							"y": 700
-						}
+						{ "id": "point:glyph:bar:0:0", "mode": "hard", "x": 382, "y": 700 },
+						{ "id": "point:glyph:bar:0:1", "mode": "hard", "x": 382, "y": 0 },
+						{ "id": "point:glyph:bar:0:2", "mode": "hard", "x": 318, "y": 0 },
+						{ "id": "point:glyph:bar:0:3", "mode": "hard", "x": 318, "y": 700 }
 					]
 				}
-			]
+			],
+			"leftSideBearing": 318,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 460,
-			"leftSideBearing": 275,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:bar:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:bar:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:bar:0:0",
@@ -75,7 +52,10 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 275,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "bar"
 }

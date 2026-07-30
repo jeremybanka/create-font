@@ -1,17 +1,13 @@
 {
-	"id": "glyph:percent",
-	"name": "percent",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:percent",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 74,
 			"contours": [
 				{
-					"id": "contour:glyph:percent:0",
 					"closed": true,
+					"id": "contour:glyph:percent:0",
 					"points": [
 						{
 							"id": "point:glyph:percent:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:percent:1",
 					"closed": true,
+					"id": "contour:glyph:percent:1",
 					"points": [
 						{
 							"id": "point:glyph:percent:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:percent:2",
 					"closed": true,
+					"id": "contour:glyph:percent:2",
 					"points": [
 						{
 							"id": "point:glyph:percent:2:0",
@@ -99,16 +95,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 74,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 39,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:percent:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:percent:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:percent:0:0",
@@ -137,8 +133,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:percent:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:percent:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:percent:1:0",
@@ -167,8 +163,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:percent:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:percent:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:percent:2:0",
@@ -196,7 +192,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 39,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "percent",
+	"overlap": true
 }

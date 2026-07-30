@@ -134,6 +134,9 @@ importers:
 
   packages/create-font:
     dependencies:
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:../source-format
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../source-rpc
@@ -201,6 +204,9 @@ importers:
 
   packages/design-source:
     dependencies:
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:../source-format
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -284,6 +290,9 @@ importers:
 
   packages/font-source:
     dependencies:
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:../source-format
       '@create-font/fea-rs-wasm':
         specifier: workspace:*
         version: link:../fea-rs-wasm
@@ -335,6 +344,28 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+
+  packages/source-format:
+    dependencies:
+      '@dprint/formatter':
+        specifier: 0.5.1
+        version: 0.5.1
+      '@dprint/json':
+        specifier: 0.23.0
+        version: 0.23.0
+      dprint:
+        specifier: 0.55.2
+        version: 0.55.2
+      dprint-plugin-fea:
+        specifier: workspace:*
+        version: link:../dprint-plugin-fea
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.1.5(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/source-rpc:
     dependencies:
@@ -627,6 +658,9 @@ packages:
     resolution: {integrity: sha512-7XSF9XERvimg3XakXNlJRpJM9an5HKibWWShwCJr7Dz1Xp7P3pomjx9AtYV5EeD49GXu9FKdFfDiTC4BJtAVjA==}
     cpu: [x64]
     os: [darwin]
+
+  '@dprint/formatter@0.5.1':
+    resolution: {integrity: sha512-cdZUrm0iv/FnnY3CKE2dEcVhNEzrC551aE2h2mTFwQCRBrqyARLDnb7D+3PlXTUVp3s34ftlnGOVCmhLT9DeKA==}
 
   '@dprint/json@0.23.0':
     resolution: {integrity: sha512-FYFbZyrBr343JzCNkwa87+Lk2YnElpv0gzl+i5CXfMjixXzWWAKK2vEuzKoeCsJys4B3bfxmi0ByJ/xW2CY2jw==}
@@ -4450,6 +4484,8 @@ snapshots:
 
   '@dprint/darwin-x64@0.55.2':
     optional: true
+
+  '@dprint/formatter@0.5.1': {}
 
   '@dprint/json@0.23.0': {}
 

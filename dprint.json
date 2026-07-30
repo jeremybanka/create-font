@@ -10,8 +10,7 @@
 		"**/pnpm-lock.yaml",
 		"**/coverage/**",
 		"**/dist/**",
-		"**/node_modules/**",
-		"designs/**/*.json"
+		"**/node_modules/**"
 	],
 	"oxc": {
 		"associations": ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],
@@ -19,7 +18,8 @@
 		"trailingCommas": "all"
 	},
 	"json": {
-		"associations": ["**/*.{json,jsonc}"]
+		"associations": ["**/*.{json,jsonc}"],
+		"newLineKind": "lf"
 	},
 	"markdown": {
 		"associations": ["**/*.{md,mdx}"]
@@ -38,7 +38,7 @@
 		"lineWidth": 80,
 		"indentWidth": 2,
 		"useTabs": false,
-		"newLineKind": "auto"
+		"newLineKind": "lf"
 	},
 	"plugins": [
 		"./node_modules/@dprint/oxc/plugin.wasm",

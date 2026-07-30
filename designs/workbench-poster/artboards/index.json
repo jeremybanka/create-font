@@ -1,1 +1,5 @@
-{"entries":[{"id":"artboard:page","path":"artboards/page.json"}],"format":"create-design.artboard-index","version":1}
+{
+	"entries": [{ "id": "artboard:page", "path": "artboards/page.json" }],
+	"format": "create-design.artboard-index",
+	"version": 1
+}

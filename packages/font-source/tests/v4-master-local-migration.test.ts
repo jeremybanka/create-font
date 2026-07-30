@@ -75,7 +75,7 @@ describe("v4 shared-topology migration", () => {
 		const encoded = encodeEditorFontSource(first.value)
 		expect(encoded.ok).toBe(true)
 		if (encoded.ok) {
-			expect(encoded.value).toContain('"editorVersion":5')
+			expect(encoded.value).toContain('"editorVersion": 5')
 			expect(encoded.value).not.toContain('"pointId"')
 		}
 	})

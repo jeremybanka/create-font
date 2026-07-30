@@ -1,17 +1,13 @@
 {
-	"id": "glyph:asciicircum",
-	"name": "asciicircum",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:asciicircum",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 133,
 			"contours": [
 				{
-					"id": "contour:glyph:asciicircum:0",
 					"closed": true,
+					"id": "contour:glyph:asciicircum:0",
 					"points": [
 						{
 							"id": "point:glyph:asciicircum:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:asciicircum:1",
 					"closed": true,
+					"id": "contour:glyph:asciicircum:1",
 					"points": [
 						{
 							"id": "point:glyph:asciicircum:1:0",
@@ -69,16 +65,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 133,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 97,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:asciicircum:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:asciicircum:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:asciicircum:0:0",
@@ -107,8 +103,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:asciicircum:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:asciicircum:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:asciicircum:1:0",
@@ -136,7 +132,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 97,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": "asciicircum",
+	"overlap": true
 }

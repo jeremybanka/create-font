@@ -1,17 +1,13 @@
 {
-	"id": "glyph:.notdef",
-	"name": ".notdef",
 	"export": true,
-	"overlap": true,
+	"id": "glyph:.notdef",
 	"layers": [
 		{
-			"masterId": "master:text",
 			"advanceWidth": 700,
-			"leftSideBearing": 48,
 			"contours": [
 				{
-					"id": "contour:glyph:.notdef:0",
 					"closed": true,
+					"id": "contour:glyph:.notdef:0",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:0:0",
@@ -40,8 +36,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:.notdef:1",
 					"closed": true,
+					"id": "contour:glyph:.notdef:1",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:1:0",
@@ -70,8 +66,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:.notdef:2",
 					"closed": true,
+					"id": "contour:glyph:.notdef:2",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:2:0",
@@ -100,8 +96,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:.notdef:3",
 					"closed": true,
+					"id": "contour:glyph:.notdef:3",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:3:0",
@@ -130,8 +126,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:.notdef:4",
 					"closed": true,
+					"id": "contour:glyph:.notdef:4",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:4:0",
@@ -160,8 +156,8 @@
 					]
 				},
 				{
-					"id": "contour:glyph:.notdef:5",
 					"closed": true,
+					"id": "contour:glyph:.notdef:5",
 					"points": [
 						{
 							"id": "point:glyph:.notdef:5:0",
@@ -189,16 +185,16 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 48,
+			"masterId": "master:text"
 		},
 		{
-			"masterId": "master:heavy",
 			"advanceWidth": 700,
-			"leftSideBearing": 5,
 			"contours": [
 				{
-					"id": "contour:master:heavy:glyph:.notdef:0",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:0",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:0:0",
@@ -227,8 +223,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:.notdef:1",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:1",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:1:0",
@@ -257,8 +253,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:.notdef:2",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:2",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:2:0",
@@ -287,8 +283,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:.notdef:3",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:3",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:3:0",
@@ -317,8 +313,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:.notdef:4",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:4",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:4:0",
@@ -347,8 +343,8 @@
 					]
 				},
 				{
-					"id": "contour:master:heavy:glyph:.notdef:5",
 					"closed": true,
+					"id": "contour:master:heavy:glyph:.notdef:5",
 					"points": [
 						{
 							"id": "point:master:heavy:glyph:.notdef:5:0",
@@ -376,7 +372,11 @@
 						}
 					]
 				}
-			]
+			],
+			"leftSideBearing": 5,
+			"masterId": "master:heavy"
 		}
-	]
+	],
+	"name": ".notdef",
+	"overlap": true
 }
