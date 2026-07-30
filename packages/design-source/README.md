@@ -73,7 +73,9 @@ indexed/contained identity mismatches, missing swatches, and objects without
 exactly one structural parent. Diagnostics retain both a source-unit path and
 a JSONPath-like field location.
 
-`formatSourceUnit()` emits recursively key-sorted JSON with author array order,
-negative zero, and one trailing newline preserved. Derived canvas state,
+`formatSourceUnit()` uses the versioned
+[`@create-art/source-format`](../source-format/README.md) dprint contract. It
+emits readable, recursively key-sorted JSON with author array order, negative
+zero, and exactly one trailing newline preserved. Derived canvas state,
 selection, bounds, blend steps, shaped glyphs, PDF data, previews, and export
 artifacts do not belong in canonical source.

@@ -1,4 +1,8 @@
 import type { EditorFontSource } from "@create-font/states"
+import {
+	formatSourceJson,
+	type SourceJsonValue,
+} from "@create-art/source-format"
 import { z } from "zod/v4"
 
 import { fromEditorFontFile, toEditorFontFile } from "./codec.ts"
@@ -691,7 +695,7 @@ export function formatSourceUnit(
 ): SourceResult<string> {
 	const validated = validateSourceUnit(kind, value, unitPath)
 	return validated.ok
-		? success(`${JSON.stringify(validated.value, null, "\t")}\n`)
+		? success(formatSourceJson(validated.value as unknown as SourceJsonValue))
 		: failure(validated.errors)
 }
 

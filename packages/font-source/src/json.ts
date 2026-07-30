@@ -228,32 +228,3 @@ export function inspectJsonObjectKeys(
 	}
 	return diagnostics
 }
-
-export type JsonValue =
-	| null
-	| boolean
-	| number
-	| string
-	| readonly JsonValue[]
-	| { readonly [key: string]: JsonValue }
-
-/** Stable key ordering and no insignificant whitespace; arrays retain order. */
-export function stringifyCanonicalJson(value: JsonValue): string {
-	if (value === null) return "null"
-	if (typeof value === "boolean") return value ? "true" : "false"
-	if (typeof value === "number") {
-		return Object.is(value, -0) ? "-0" : JSON.stringify(value)
-	}
-	if (typeof value === "string") return JSON.stringify(value)
-	if (Array.isArray(value)) {
-		return `[${value.map((item) => stringifyCanonicalJson(item)).join(",")}]`
-	}
-	const record = value as { readonly [key: string]: JsonValue }
-	return `{${Object.keys(record)
-		.sort()
-		.map(
-			(key) =>
-				`${JSON.stringify(key)}:${stringifyCanonicalJson(record[key] ?? null)}`,
-		)
-		.join(",")}}`
-}

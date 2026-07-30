@@ -1,1 +1,19 @@
-{"contours":[{"closed":true,"points":[{"x":0,"y":0},{"x":612,"y":0},{"x":612,"y":792},{"x":0,"y":792}]}],"fillId":"swatch:paper","format":"create-design.object","id":"object:background-paper","locked":true,"name":"Paper","version":1}
+{
+	"contours": [
+		{
+			"closed": true,
+			"points": [
+				{ "x": 0, "y": 0 },
+				{ "x": 612, "y": 0 },
+				{ "x": 612, "y": 792 },
+				{ "x": 0, "y": 792 }
+			]
+		}
+	],
+	"fillId": "swatch:paper",
+	"format": "create-design.object",
+	"id": "object:background-paper",
+	"locked": true,
+	"name": "Paper",
+	"version": 1
+}

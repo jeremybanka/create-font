@@ -34,6 +34,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
+		"@create-art/source-format": "workspace:*",
 		"zod": "4.4.3"
 	},
 	"devDependencies": {

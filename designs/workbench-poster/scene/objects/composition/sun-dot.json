@@ -1,1 +1,38 @@
-{"contours":[{"closed":true,"points":[{"incoming":{"x":-25.405098492216492,"y":0},"outgoing":{"x":25.405098492216492,"y":0},"x":118,"y":434},{"incoming":{"x":0,"y":-25.405098492216492},"outgoing":{"x":0,"y":25.405098492216492},"x":164,"y":480},{"incoming":{"x":25.405098492216492,"y":0},"outgoing":{"x":-25.405098492216492,"y":0},"x":118,"y":526},{"incoming":{"x":0,"y":25.405098492216492},"outgoing":{"x":0,"y":-25.405098492216492},"x":72,"y":480}]}],"fillId":"swatch:sun","format":"create-design.object","id":"object:sun-dot","name":"Sun dot","version":1}
+{
+	"contours": [
+		{
+			"closed": true,
+			"points": [
+				{
+					"incoming": { "x": -25.405098492216492, "y": 0 },
+					"outgoing": { "x": 25.405098492216492, "y": 0 },
+					"x": 118,
+					"y": 434
+				},
+				{
+					"incoming": { "x": 0, "y": -25.405098492216492 },
+					"outgoing": { "x": 0, "y": 25.405098492216492 },
+					"x": 164,
+					"y": 480
+				},
+				{
+					"incoming": { "x": 25.405098492216492, "y": 0 },
+					"outgoing": { "x": -25.405098492216492, "y": 0 },
+					"x": 118,
+					"y": 526
+				},
+				{
+					"incoming": { "x": 0, "y": 25.405098492216492 },
+					"outgoing": { "x": 0, "y": -25.405098492216492 },
+					"x": 72,
+					"y": 480
+				}
+			]
+		}
+	],
+	"fillId": "swatch:sun",
+	"format": "create-design.object",
+	"id": "object:sun-dot",
+	"name": "Sun dot",
+	"version": 1
+}

@@ -1,10 +1,10 @@
 import type { EditorFontSource } from "@create-font/states"
-
 import {
-	inspectJsonObjectKeys,
-	stringifyCanonicalJson,
-	type JsonValue,
-} from "./json.ts"
+	formatSourceJson,
+	type SourceJsonValue,
+} from "@create-art/source-format"
+
+import { inspectJsonObjectKeys } from "./json.ts"
 import { failure, success } from "./result.ts"
 import type { EditorFontFile, SourceDiagnostic, SourceResult } from "./types.ts"
 import { validateSourceValue } from "./validation.ts"
@@ -54,9 +54,7 @@ export function encodeEditorFontSource(
 ): SourceResult<string> {
 	const file = toEditorFontFile(source)
 	if (!file.ok) return failure(file.errors)
-	return success(
-		`${stringifyCanonicalJson(file.value as unknown as JsonValue)}\n`,
-	)
+	return success(formatSourceJson(file.value as unknown as SourceJsonValue))
 }
 
 /** Parse strict JSON, reject ambiguous keys, and return frozen editor state. */

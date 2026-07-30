@@ -324,6 +324,59 @@ describe(`filesystem font source service`, () => {
 		expect(
 			await readFile(resolve(projectRoot, `names.json`), `utf8`),
 		).toContain(`"family": "Workbench Sans Test"`)
+		const finalText = await readFile(resolve(projectRoot, `names.json`), `utf8`)
+		expect(updated.revision).toBe(revisionForText(finalText))
+	})
+
+	it(`formats Adobe feature writes before hashing and persistence`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot)
+		const feature = await source.readUnit(`features/layout.fea`)
+		const updated = await source.writeUnit({
+			expectedRevision: feature.revision,
+			idempotencyKey: `format-feature`,
+			path: feature.path,
+			value: `feature liga { sub f i by f_i; } liga;\r\n`,
+		})
+		const finalText = await readFile(
+			resolve(projectRoot, `features/layout.fea`),
+			`utf8`,
+		)
+		expect(finalText).toBe(`feature liga {\n  sub f i by f_i;\n} liga;\n`)
+		expect(updated.value).toBe(finalText)
+		expect(updated.revision).toBe(revisionForText(finalText))
+	})
+
+	it(`aborts a complete transaction when feature formatting fails`, async () => {
+		const { projectRoot } = await copyDevelopmentFont()
+		const source = await createFileSystemSourceService(projectRoot)
+		const names = await source.readUnit(`names.json`)
+		const feature = await source.readUnit(`features/layout.fea`)
+		const namesText = await readFile(resolve(projectRoot, names.path), `utf8`)
+
+		await expect(
+			source.writeUnits({
+				idempotencyKey: `invalid-feature-transaction`,
+				writes: [
+					{
+						expectedRevision: names.revision,
+						path: names.path,
+						value: {
+							...(names.value as Record<string, string>),
+							family: `Must Not Persist`,
+						},
+					},
+					{
+						expectedRevision: feature.revision,
+						path: feature.path,
+						value: `feature liga { sub f by ; } liga;`,
+					},
+				],
+			}),
+		).rejects.toThrow()
+		expect(await readFile(resolve(projectRoot, names.path), `utf8`)).toBe(
+			namesText,
+		)
 	})
 
 	it(`rejects stale revisions and invalid whole-project updates`, async () => {

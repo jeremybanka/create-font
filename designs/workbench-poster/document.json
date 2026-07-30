@@ -1,1 +1,14 @@
-{"format":"create-design.metadata","guides":[{"axis":"x","id":"guide:left","value":48},{"axis":"x","id":"guide:center","value":306},{"axis":"x","id":"guide:right","value":564},{"axis":"y","id":"guide:top","value":52},{"axis":"y","id":"guide:composition-bottom","value":582},{"axis":"y","id":"guide:type-top","value":632},{"axis":"y","id":"guide:baseline","value":744}],"title":"Counterform No. 1","version":1}
+{
+	"format": "create-design.metadata",
+	"guides": [
+		{ "axis": "x", "id": "guide:left", "value": 48 },
+		{ "axis": "x", "id": "guide:center", "value": 306 },
+		{ "axis": "x", "id": "guide:right", "value": 564 },
+		{ "axis": "y", "id": "guide:top", "value": 52 },
+		{ "axis": "y", "id": "guide:composition-bottom", "value": 582 },
+		{ "axis": "y", "id": "guide:type-top", "value": 632 },
+		{ "axis": "y", "id": "guide:baseline", "value": 744 }
+	],
+	"title": "Counterform No. 1",
+	"version": 1
+}

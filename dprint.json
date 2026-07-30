@@ -10,8 +10,7 @@
 		"**/pnpm-lock.yaml",
 		"**/coverage/**",
 		"**/dist/**",
-		"**/node_modules/**",
-		"designs/**/*.json"
+		"**/node_modules/**"
 	],
 	"oxc": {
 		"associations": ["**/*.{ts,tsx,js,jsx,mjs,cjs}"],

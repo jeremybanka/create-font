@@ -194,7 +194,7 @@ describe("create-design directory source", () => {
 		expect(result).toEqual({
 			ok: true,
 			value:
-				'{"format":"create-design.metadata","guides":[{"axis":"x","id":"guide:zero","value":-0}],"title":"Canonical","version":1}\n',
+				'{\n\t"format": "create-design.metadata",\n\t"guides": [{ "axis": "x", "id": "guide:zero", "value": -0 }],\n\t"title": "Canonical",\n\t"version": 1\n}\n',
 		})
 		const parsed = parseSourceUnitText(
 			"document",

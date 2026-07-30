@@ -134,6 +134,13 @@ through the existing whole-document structural and relational validation.
 The server owns filesystem discovery, atomic persistence, revisions, and
 watching. This package owns the directory's portable data contract.
 
+Every application-owned JSON unit is serialized through the versioned
+[`@create-art/source-format`](../source-format/README.md) dprint contract after
+validation and semantic normalization. Adobe feature writes use the same
+contract's FEA plugin. Revisions identify the final formatted bytes written to
+disk; noncanonical external source remains untouched until that logical unit
+is next written.
+
 ## Complete-document codec
 
 One JSON document can still represent one complete `EditorFontSource`
