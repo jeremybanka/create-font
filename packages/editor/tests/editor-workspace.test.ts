@@ -308,6 +308,44 @@ describe("editor workspace", () => {
 		)
 	})
 
+	it("restores an externally replaced glyph while it is being edited", () => {
+		const workspace = createEditorWorkspace()
+		const originalSource = workspace.font.read.editorSource()
+		if (originalSource === null) throw new Error("Fixture source is missing.")
+		const restoredSource = structuredClone(originalSource)
+		workspace.actions.enterGlyphEdit(0, oGlyphId)
+		const originalLayer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		const deletedContour = originalLayer?.contours[0]
+		if (originalLayer === null || originalLayer === undefined) {
+			throw new Error("Fixture layer is missing.")
+		}
+		if (deletedContour === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+
+		workspace.font.actions.deleteSelection({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			pointIds: deletedContour.nodes.map((node) => node.pointId),
+			handles: [],
+		})
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeLayer)?.contours,
+		).toHaveLength(originalLayer.contours.length - 1)
+
+		workspace.actions.replaceSource(restoredSource)
+
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
+			oGlyphId,
+		)
+		expect(
+			workspace.font.silo.getState(workspace.ui.activeLayer)?.contours,
+		).toEqual(originalLayer.contours)
+		expect(previewGlyph(workspace, 0)?.contours).toHaveLength(
+			originalLayer.contours.length,
+		)
+	})
+
 	it("leaves editor state untouched when cycling a one-master font", () => {
 		const workspace = createEditorWorkspace(makeOneMasterFont())
 		workspace.actions.enterGlyphEdit(0, oGlyphId)

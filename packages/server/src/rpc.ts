@@ -17,9 +17,9 @@ import type {
 	SourceServiceUnavailable,
 	SourceValidationFailure,
 	CreateFontSourceService,
+	CommitSourceUnitsInput,
 	WriteSourceUnitInput,
 	WriteSourceUnitsInput,
-	CommitSourceUnitsInput,
 } from "./contracts.ts"
 
 export const CREATE_FONT_RPC_VERSION = 6 as const
@@ -79,7 +79,6 @@ function sourceErrorResponse(error: unknown) {
 export function createFontRpc(options: CreateFontRpcOptions) {
 	const root = resolve(options.root ?? process.cwd())
 	const sourceConnections = new WeakMap<object, () => void>()
-
 	return new Elysia({
 		name: `create-font-rpc`,
 		prefix: `/api`,
@@ -99,10 +98,10 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 					ws.close()
 					return
 				}
-				const unsubscribe = options.source.subscribe((event) => {
-					ws.send(event)
-				})
-				sourceConnections.set(ws.raw, unsubscribe)
+				sourceConnections.set(
+					ws.raw,
+					options.source.subscribe((event) => ws.send(event)),
+				)
 			},
 			close(ws) {
 				sourceConnections.get(ws.raw)?.()
@@ -124,9 +123,8 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			}),
 		})
 		.get(`/source`, async () => {
-			if (options.source === undefined) {
+			if (options.source === undefined)
 				return status(501, sourceServiceUnavailable)
-			}
 			try {
 				return await options.source.readManifest()
 			} catch (error) {
@@ -134,9 +132,8 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			}
 		})
 		.get(`/source/snapshot`, async () => {
-			if (options.source === undefined) {
+			if (options.source === undefined)
 				return status(501, sourceServiceUnavailable)
-			}
 			try {
 				return await options.source.readSnapshot()
 			} catch (error) {
@@ -201,20 +198,15 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 		.get(
 			`/source/unit`,
 			async ({ query }) => {
-				if (options.source === undefined) {
+				if (options.source === undefined)
 					return status(501, sourceServiceUnavailable)
-				}
 				try {
 					return await options.source.readUnit(query.path)
 				} catch (error) {
 					return sourceErrorResponse(error)
 				}
 			},
-			{
-				query: t.Object({
-					path: t.String({ minLength: 1 }),
-				}),
-			},
+			{ query: t.Object({ path: t.String({ minLength: 1 }) }) },
 		)
 		.put(
 			`/source/unit`,
@@ -223,15 +215,14 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 					body.expectedRevision !== null &&
 					typeof body.expectedRevision !== `string`
 				) {
-					const invalidRequest: SourceInvalidRequest = {
+					const invalid: SourceInvalidRequest = {
 						code: `source.invalid_request`,
 						message: `expectedRevision must be a string or null.`,
 					}
-					return status(422, invalidRequest)
+					return status(422, invalid)
 				}
-				if (options.source === undefined) {
+				if (options.source === undefined)
 					return status(501, sourceServiceUnavailable)
-				}
 				try {
 					return await options.source.writeUnit(body as WriteSourceUnitInput)
 				} catch (error) {
@@ -240,9 +231,6 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			},
 			{
 				body: t.Object({
-					// Elysia's Node-side exact-mirror validator cannot compile a
-					// string|null union without TypeCompiler. The service contract
-					// remains exact and directory handlers validate this field.
 					expectedRevision: t.Any(),
 					idempotencyKey: t.String({ minLength: 1 }),
 					path: t.String({ minLength: 1 }),
@@ -253,24 +241,28 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 		.put(
 			`/source/units`,
 			async ({ body }) => {
+				const removals = body.removals ?? []
 				if (
+					body.writes.length + removals.length === 0 ||
 					body.writes.some(
 						(write) =>
 							write.expectedRevision !== null &&
 							typeof write.expectedRevision !== `string`,
 					)
 				) {
-					const invalidRequest: SourceInvalidRequest = {
+					const invalid: SourceInvalidRequest = {
 						code: `source.invalid_request`,
-						message: `Every expectedRevision must be a string or null.`,
+						message: `A transaction needs at least one valid write or removal.`,
 					}
-					return status(422, invalidRequest)
+					return status(422, invalid)
 				}
-				if (options.source === undefined) {
+				if (options.source === undefined)
 					return status(501, sourceServiceUnavailable)
-				}
 				try {
-					return await options.source.writeUnits(body as WriteSourceUnitsInput)
+					return await options.source.writeUnits({
+						...body,
+						removals,
+					} as WriteSourceUnitsInput)
 				} catch (error) {
 					return sourceErrorResponse(error)
 				}
@@ -278,13 +270,20 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			{
 				body: t.Object({
 					idempotencyKey: t.String({ minLength: 1 }),
+					removals: t.Optional(
+						t.Array(
+							t.Object({
+								expectedRevision: t.String({ minLength: 1 }),
+								path: t.String({ minLength: 1 }),
+							}),
+						),
+					),
 					writes: t.Array(
 						t.Object({
 							expectedRevision: t.Any(),
 							path: t.String({ minLength: 1 }),
 							value: t.Any(),
 						}),
-						{ minItems: 1 },
 					),
 				}),
 			},

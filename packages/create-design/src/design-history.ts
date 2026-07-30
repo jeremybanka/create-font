@@ -8,6 +8,7 @@ export interface DesignHistory {
 
 export type DesignHistoryAction =
 	| { readonly type: "commit"; readonly document: DesignDocument }
+	| { readonly type: "reset"; readonly document: DesignDocument }
 	| { readonly type: "undo" }
 	| { readonly type: "redo" }
 
@@ -19,6 +20,7 @@ export function reduceDesignHistory(
 	history: DesignHistory,
 	action: DesignHistoryAction,
 ): DesignHistory {
+	if (action.type === "reset") return createDesignHistory(action.document)
 	if (action.type === "undo") {
 		const previous = history.past.at(-1)
 		return previous === undefined

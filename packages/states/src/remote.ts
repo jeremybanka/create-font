@@ -86,7 +86,10 @@ export function createEdenFontSourceClient(
 		},
 		async writeUnits(input) {
 			const result = await client.api.source.units.put({
-				...input,
+				idempotencyKey: input.idempotencyKey,
+				...(input.removals === undefined
+					? {}
+					: { removals: [...input.removals] }),
 				writes: [...input.writes],
 			})
 			if (result.error !== null || result.data === null) {

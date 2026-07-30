@@ -1,12 +1,25 @@
 import { spawn } from "node:child_process"
 import { resolve } from "node:path"
 
+import { DEFAULT_DEV_PORT, resolveDevPort } from "../../../scripts/dev-ports.ts"
+import { superviseDevProcesses } from "../../../scripts/dev-processes.ts"
+
+await import("./build-development.ts")
+
 const packageRoot = resolve(import.meta.dirname, `..`)
 const workspaceRoot = resolve(packageRoot, `../..`)
-const backendPort = 3001
+const frontendPort = resolveDevPort({
+	argv: process.argv.slice(2),
+	defaultPort: DEFAULT_DEV_PORT,
+	...(process.env.CREATE_FONT_DEV_PORT === undefined
+		? {}
+		: { environmentValue: process.env.CREATE_FONT_DEV_PORT }),
+	portCount: 2,
+})
+const backendPort = frontendPort + 1
 const vpEntrypoint = resolve(workspaceRoot, `node_modules/vite-plus/bin/vp`)
 
-const subprocesses = [
+await superviseDevProcesses([
 	spawn(
 		process.execPath,
 		[
@@ -32,7 +45,7 @@ const subprocesses = [
 			`./public`,
 			`--config=./vite.config.ts`,
 			`--host=127.0.0.1`,
-			`--port=3000`,
+			`--port=${frontendPort}`,
 			`--strictPort`,
 		],
 		{
@@ -44,32 +57,4 @@ const subprocesses = [
 			stdio: `inherit`,
 		},
 	),
-]
-
-let stopping = false
-function stop(): void {
-	if (stopping) return
-	stopping = true
-	for (const subprocess of subprocesses) subprocess.kill()
-}
-
-process.on(`SIGINT`, stop)
-process.on(`SIGTERM`, stop)
-
-function exited(subprocess: (typeof subprocesses)[number]): Promise<number> {
-	return new Promise((resolveExit, reject) => {
-		subprocess.once(`error`, reject)
-		subprocess.once(`exit`, (code, signal) => {
-			resolveExit(code ?? (signal === `SIGTERM` ? 143 : 1))
-		})
-	})
-}
-
-const exits = subprocesses.map(exited)
-const exitCode = await Promise.race(exits)
-stop()
-await Promise.all(exits)
-
-if (exitCode !== 0 && exitCode !== 143) {
-	process.exitCode = exitCode
-}
+])
