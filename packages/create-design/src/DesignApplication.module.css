@@ -184,6 +184,58 @@ design-application.class {
 		min-height: 0;
 		overflow: hidden;
 
+		> persistence-alert {
+			position: absolute;
+			top: 12px;
+			left: 50%;
+			z-index: 20;
+			display: grid;
+			gap: 8px;
+			width: min(620px, calc(100% - 24px));
+			max-height: min(360px, calc(100% - 24px));
+			padding: 12px;
+			overflow: auto;
+			border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--line));
+			border-radius: 7px;
+			background: var(--surface-header);
+			box-shadow: 0 8px 28px rgb(0 0 0 / 42%);
+			transform: translateX(-50%);
+			font-size: 11px;
+
+			> ul {
+				display: grid;
+				gap: 5px;
+				margin: 0;
+				padding-left: 20px;
+				color: var(--ink-muted);
+
+				& code {
+					color: var(--ink);
+				}
+			}
+
+			> alert-actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 7px;
+
+				> button {
+					padding: 6px 10px;
+					border: 1px solid var(--line-strong);
+					border-radius: 5px;
+					background: var(--panel);
+					color: var(--ink);
+					cursor: pointer;
+
+					&:hover,
+					&:focus-visible {
+						border-color: var(--accent);
+						background: var(--hover);
+					}
+				}
+			}
+		}
+
 		> design-canvas {
 			position: relative;
 			display: grid;
