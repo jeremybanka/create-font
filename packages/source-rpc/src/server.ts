@@ -1,4 +1,5 @@
 import { Elysia, status, t } from "elysia"
+import type { ElysiaAdapter } from "elysia/adapter"
 
 import {
 	SourceUnitConflictError,
@@ -14,6 +15,7 @@ import {
 } from "./contracts.ts"
 
 export type SourceRpcOptions = Readonly<{
+	adapter?: ElysiaAdapter
 	source?: SourceService
 	unavailableMessage?: string
 }>
@@ -56,7 +58,10 @@ export function createSourceRpc(options: SourceRpcOptions) {
 			options.unavailableMessage ??
 			`The source workspace service has not been configured yet.`,
 	}
-	return new Elysia({ name: `create-art-source-rpc` })
+	return new Elysia({
+		...(options.adapter === undefined ? {} : { adapter: options.adapter }),
+		name: `create-art-source-rpc`,
+	})
 		.ws(`/source/events`, {
 			open(ws) {
 				if (options.source?.subscribe === undefined) {

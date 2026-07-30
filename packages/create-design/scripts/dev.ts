@@ -4,16 +4,14 @@ import { resolve } from "node:path"
 import { DEFAULT_DEV_PORT, resolveDevPort } from "../../../scripts/dev-ports.ts"
 import { superviseDevProcesses } from "../../../scripts/dev-processes.ts"
 
-await import("./build-development.ts")
-
 const packageRoot = resolve(import.meta.dirname, `..`)
 const workspaceRoot = resolve(packageRoot, `../..`)
 const frontendPort = resolveDevPort({
 	argv: process.argv.slice(2),
-	defaultPort: DEFAULT_DEV_PORT,
-	...(process.env.CREATE_FONT_DEV_PORT === undefined
+	defaultPort: DEFAULT_DEV_PORT + 2,
+	...(process.env.CREATE_DESIGN_DEV_PORT === undefined
 		? {}
-		: { environmentValue: process.env.CREATE_FONT_DEV_PORT }),
+		: { environmentValue: process.env.CREATE_DESIGN_DEV_PORT }),
 	portCount: 2,
 })
 const backendPort = frontendPort + 1
@@ -23,13 +21,10 @@ await superviseDevProcesses([
 	spawn(
 		process.execPath,
 		[
-			// A hard restart keeps workspace dependencies and generated source in
-			// one revision after an in-place pull. Hot reload can retain old exports.
 			`--watch`,
 			`--conditions=development`,
-			`./src/font-cli.ts`,
-			`dev`,
-			`--root=../..`,
+			`./scripts/dev-server.ts`,
+			`--root=./dist/dev/source`,
 			`--port=${backendPort}`,
 		],
 		{
@@ -52,7 +47,7 @@ await superviseDevProcesses([
 			cwd: packageRoot,
 			env: {
 				...process.env,
-				CREATE_FONT_BACKEND_PORT: String(backendPort),
+				CREATE_DESIGN_BACKEND_PORT: String(backendPort),
 			},
 			stdio: `inherit`,
 		},

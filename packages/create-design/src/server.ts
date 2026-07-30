@@ -21,8 +21,9 @@ export async function createDesignServerApp(
 ) {
 	const root = resolve(options.root)
 	const source = await createDesignSourceService(root)
+	const adapter = options.adapter ?? runtimeElysiaAdapter
 	const app = new Elysia({
-		adapter: options.adapter ?? runtimeElysiaAdapter,
+		adapter,
 		name: `create-design-server`,
 	}).group(`/api`, (api) =>
 		api
@@ -31,7 +32,7 @@ export async function createDesignServerApp(
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
 			.get(`/workspace`, () => ({ root }))
-			.use(createSourceRpc({ source })),
+			.use(createSourceRpc({ adapter, source })),
 	)
 	if (options.assets === undefined) return app
 	return app.use(

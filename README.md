@@ -63,11 +63,32 @@ pnpm install
 pnpm dev
 ```
 
-The development command enables the packages' `development` export condition,
-so both processes load workspace TypeScript entrypoints directly. Node runs the
-workspace API in watch mode on port 3001; Vite serves the browser on port 3000
-with Preact and CSS HMR and proxies HTTP and WebSocket API traffic to Node. Each
-tab keeps local editor state, persists changed source units directly to the
-server, and consumes ordered unit deltas from the server's source event stream.
+The development command enables the packages' `development` export condition
+and starts four consecutive servers. The default base port is 16384—the maximum
+OpenType `unitsPerEm`—with create-font on 16384–16385 and create-design on
+16386–16387:
+
+|  Port | Server                |
+| ----: | --------------------- |
+| 16384 | create-font browser   |
+| 16385 | create-font API       |
+| 16386 | create-design browser |
+| 16387 | create-design API     |
+
+Shift the entire block for a parallel checkout with either form:
+
+```sh
+pnpm dev -- --port=20000
+CREATE_ART_DEV_PORT=20000 pnpm dev
+```
+
+`pnpm dev:font` and `pnpm dev:design` run one application's two-server pair;
+they accept the same `--port` option and the `CREATE_FONT_DEV_PORT` or
+`CREATE_DESIGN_DEV_PORT` environment variable.
+
+Node runs each workspace API in watch mode while Vite provides Preact and CSS
+HMR and proxies HTTP and WebSocket API traffic to its paired backend. Each tab
+keeps local editor state, persists changed source units directly to the server,
+and consumes ordered unit deltas from the server's source event stream.
 Development does not build or watch workspace package outputs. Production and
 published consumers continue to resolve the compiled `dist` entrypoints.
