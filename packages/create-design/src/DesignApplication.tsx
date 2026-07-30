@@ -57,6 +57,15 @@ import {
 	parseDesignDocument,
 } from "./document.ts"
 import {
+	clearDesignRecoveryDraft,
+	createDesignPersistenceState,
+	persistenceNeedsUnloadWarning,
+	readDesignRecoveryDraft,
+	reduceDesignPersistence,
+	writeDesignRecoveryDraft,
+	type DesignPersistenceState,
+} from "./persistence.ts"
+import {
 	captureDesignPointer,
 	clampToPage,
 	DESIGN_MAX_ZOOM,
@@ -85,6 +94,10 @@ import {
 	projectDesignVectorObject,
 } from "./design-vector-adapter.ts"
 import { downloadPdf } from "./pdf.ts"
+import type {
+	DesignExternalSourceUpdate,
+	DesignSourceSession,
+} from "./source-sync.ts"
 import {
 	DEFAULT_DESIGN_TILING_LAYOUT,
 	DESIGN_TILE_REGISTRY,
@@ -205,11 +218,19 @@ function designSnapGuides(
 function initialHistory(initialDocument?: DesignDocument): DesignHistory {
 	let document = initialDocument ?? createInitialDocument()
 	if (initialDocument !== undefined) return createDesignHistory(initialDocument)
-	if (typeof localStorage !== "undefined") {
+	const storage = browserLocalStorage()
+	if (storage !== null)
 		document =
-			parseDesignDocument(localStorage.getItem(DESIGN_STORAGE_KEY)) ?? document
-	}
+			parseDesignDocument(storage.getItem(DESIGN_STORAGE_KEY)) ?? document
 	return createDesignHistory(document)
+}
+
+function browserLocalStorage(): Storage | null {
+	try {
+		return typeof localStorage === "undefined" ? null : localStorage
+	} catch {
+		return null
+	}
 }
 
 function editableTarget(target: EventTarget | null): boolean {
@@ -221,29 +242,55 @@ function editableTarget(target: EventTarget | null): boolean {
 	)
 }
 
+function persistenceLabel(state: DesignPersistenceState): string {
+	switch (state.status) {
+		case "saved":
+			return state.durableRevision === null
+				? "Saved locally."
+				: `Saved at source revision ${state.durableRevision}.`
+		case "dirty":
+			return "Unsaved changes."
+		case "queued":
+			return "Changes queued to save."
+		case "saving":
+			return "Saving changes."
+		case "conflicted":
+			return state.message ?? "Save conflict. Your local design is preserved."
+		case "invalid-external-source":
+			return "External source is invalid. The last valid design remains open."
+		case "recoverable-draft":
+			return "A recovery draft is available. It has not been saved."
+	}
+}
+
 export type DesignApplicationProps = Readonly<{
 	children?: ComponentChildren
 	initialDocument?: DesignDocument
-	onDocumentChange?: (document: DesignDocument) => void
-	subscribeDocument?: (
-		listener: (document: DesignDocument) => void,
-	) => () => void
-	subscribeSourceStatus?: (listener: (status: string) => void) => () => void
+	sourceSession?: DesignSourceSession
 }>
 
 export function DesignApplication(props: DesignApplicationProps) {
-	const {
-		initialDocument,
-		onDocumentChange,
-		subscribeDocument,
-		subscribeSourceStatus,
-	} = props
+	const { initialDocument, sourceSession } = props
 	const [history, dispatch] = useReducer(
 		reduceDesignHistory,
 		initialDocument,
 		initialHistory,
 	)
 	const document = history.present
+	const [persistence, dispatchPersistence] = useReducer(
+		reduceDesignPersistence,
+		sourceSession?.initialRevision ?? null,
+		(durableRevision) => {
+			const state = createDesignPersistenceState(durableRevision)
+			if (sourceSession === undefined) return state
+			const storage = browserLocalStorage()
+			if (storage === null) return state
+			const draft = readDesignRecoveryDraft(storage)
+			return draft === null
+				? state
+				: reduceDesignPersistence(state, { type: "recovery-found", draft })
+		},
+	)
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
 	const [currentSwatchId, setCurrentSwatchId] = useState("swatch:coral")
@@ -270,12 +317,18 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const penPointsRef = useRef<readonly DesignPoint[]>([])
 	const previewObjectRef = useRef<DesignObject | null>(null)
+	const documentRef = useRef(document)
+	const persistenceRef = useRef(persistence)
+	const serializedDocumentRef = useRef(JSON.stringify(document))
+	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
 	const nextId = useCallback(() => {
 		sequence.current += 1
 		return `${Date.now().toString(36)}:${sequence.current.toString(36)}`
 	}, [])
+	documentRef.current = document
+	persistenceRef.current = persistence
 	const selectedObject =
 		document.objects.find((object) => selection.includes(object.id)) ?? null
 	const selectedSwatch =
@@ -565,32 +618,155 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 
 	useEffect(() => {
-		if (onDocumentChange === undefined)
-			localStorage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(document))
-		else void onDocumentChange(document)
+		const serialized = JSON.stringify(document)
+		if (serialized === serializedDocumentRef.current) {
+			if (sourceSession === undefined)
+				browserLocalStorage()?.setItem(DESIGN_STORAGE_KEY, serialized)
+			window.document.title = `${history.present.title} — create-design`
+			return
+		}
+		serializedDocumentRef.current = serialized
+		if (sourceSession === undefined) {
+			browserLocalStorage()?.setItem(
+				DESIGN_STORAGE_KEY,
+				JSON.stringify(document),
+			)
+		} else {
+			const revision = persistenceRef.current.localRevision + 1
+			saveDocumentsRef.current.set(revision, document)
+			const recoveryDraft = {
+				version: 1 as const,
+				baseRevision: persistenceRef.current.durableRevision,
+				document,
+				updatedAt: Date.now(),
+			}
+			dispatchPersistence({ type: "edit", recoveryDraft })
+			const storage = browserLocalStorage()
+			if (storage !== null) writeDesignRecoveryDraft(storage, recoveryDraft)
+		}
 		window.document.title = `${history.present.title} — create-design`
-	}, [document, history.present.title, onDocumentChange])
+	}, [document, history.present.title, sourceSession])
 
-	useEffect(
-		() =>
-			subscribeDocument?.((next) => {
-				dispatch({ type: "reset", document: next })
-				setSelection([])
-			}),
-		[subscribeDocument],
-	)
+	useEffect(() => {
+		if (sourceSession === undefined || persistence.status !== "dirty") return
+		dispatchPersistence({ type: "queue" })
+	}, [persistence.status, sourceSession])
 
-	useEffect(
-		() =>
-			subscribeSourceStatus?.((sourceStatus) => {
-				setStatus(
-					sourceStatus === `conflict`
-						? `Source changed on disk; your local design is preserved.`
-						: `Source ${sourceStatus}.`,
-				)
-			}),
-		[subscribeSourceStatus],
-	)
+	useEffect(() => {
+		if (
+			sourceSession === undefined ||
+			persistence.status !== "queued" ||
+			persistence.queuedRevision === null
+		)
+			return
+		const revision = persistence.queuedRevision
+		const pendingDocument =
+			saveDocumentsRef.current.get(revision) ?? documentRef.current
+		dispatchPersistence({ type: "save-started", revision })
+		void sourceSession.save(pendingDocument).then(
+			(result) => {
+				dispatchPersistence({
+					type: "save-succeeded",
+					revision,
+					durableRevision: result.revision,
+				})
+				saveDocumentsRef.current.delete(revision)
+			},
+			(error: unknown) => {
+				dispatchPersistence({
+					type: "save-failed",
+					revision,
+					message:
+						error instanceof Error ? error.message : "The source write failed.",
+				})
+			},
+		)
+	}, [persistence.queuedRevision, persistence.status, sourceSession])
+
+	useEffect(() => {
+		if (sourceSession === undefined) return
+		const storage = browserLocalStorage()
+		if (storage === null) return
+		if (persistence.status === "saved") {
+			clearDesignRecoveryDraft(storage)
+			return
+		}
+		if (!persistenceNeedsUnloadWarning(persistence)) return
+		writeDesignRecoveryDraft(storage, {
+			version: 1,
+			baseRevision: persistence.durableRevision,
+			document: documentRef.current,
+			updatedAt: Date.now(),
+		})
+	}, [
+		persistence.durableRevision,
+		persistence.localRevision,
+		persistence.status,
+		sourceSession,
+	])
+
+	useEffect(() => {
+		if (sourceSession === undefined) return
+		const applyExternalUpdate = (
+			update: DesignExternalSourceUpdate,
+			force = false,
+		): void => {
+			if (!update.ok) {
+				dispatchPersistence({
+					type: "external-invalid",
+					diagnostics: update.diagnostics,
+				})
+				return
+			}
+			if (!force && persistenceNeedsUnloadWarning(persistenceRef.current)) {
+				dispatchPersistence({
+					type: "external-conflict",
+					message: "Source changed on disk while local work was pending.",
+				})
+				return
+			}
+			serializedDocumentRef.current = JSON.stringify(update.document)
+			dispatch({ type: "reset", document: update.document })
+			setSelection([])
+			const storage = browserLocalStorage()
+			if (storage !== null) clearDesignRecoveryDraft(storage)
+			dispatchPersistence({
+				type: "external-loaded",
+				durableRevision: update.revision,
+			})
+		}
+		return sourceSession.subscribeDocument((update) =>
+			applyExternalUpdate(update),
+		)
+	}, [sourceSession])
+
+	useEffect(() => {
+		if (
+			sourceSession === undefined ||
+			!persistenceNeedsUnloadWarning(persistence)
+		)
+			return
+		const beforeUnload = (event: BeforeUnloadEvent): void => {
+			event.preventDefault()
+			event.returnValue = ""
+		}
+		const pageHide = (): void => {
+			const storage = browserLocalStorage()
+			if (storage === null) return
+			writeDesignRecoveryDraft(storage, {
+				version: 1,
+				baseRevision: persistenceRef.current.durableRevision,
+				document: documentRef.current,
+				updatedAt: Date.now(),
+			})
+		}
+		window.addEventListener("beforeunload", beforeUnload)
+		window.addEventListener("pagehide", pageHide)
+		return () => {
+			window.removeEventListener("beforeunload", beforeUnload)
+			window.removeEventListener("pagehide", pageHide)
+		}
+	}, [persistence, sourceSession])
 
 	useLayoutEffect(() => {
 		const element = artboardWrapRef.current
@@ -1096,6 +1272,66 @@ export function DesignApplication(props: DesignApplicationProps) {
 			? objectBounds(previewObject ?? selectedObject)
 			: null
 
+	const recoverDraft = (): void => {
+		const draft = persistence.recoveryDraft
+		if (draft === null) return
+		const revision = persistence.localRevision + 1
+		serializedDocumentRef.current = JSON.stringify(draft.document)
+		saveDocumentsRef.current.set(revision, draft.document)
+		dispatch({ type: "reset", document: draft.document })
+		setSelection([])
+		dispatchPersistence({ type: "recover-draft" })
+	}
+	const discardDraft = (): void => {
+		const storage = browserLocalStorage()
+		if (storage !== null) clearDesignRecoveryDraft(storage)
+		if (sourceSession === undefined)
+			dispatchPersistence({ type: "discard-draft" })
+		else void reloadExternal()
+	}
+	const reloadExternal = async (): Promise<void> => {
+		if (sourceSession === undefined) return
+		try {
+			const update = await sourceSession.reload()
+			if (!update.ok) {
+				dispatchPersistence({
+					type: "external-invalid",
+					diagnostics: update.diagnostics,
+				})
+				return
+			}
+			serializedDocumentRef.current = JSON.stringify(update.document)
+			dispatch({ type: "reset", document: update.document })
+			setSelection([])
+			const storage = browserLocalStorage()
+			if (storage !== null) clearDesignRecoveryDraft(storage)
+			dispatchPersistence({
+				type: "external-loaded",
+				durableRevision: update.revision,
+			})
+		} catch (error) {
+			dispatchPersistence({
+				type: "external-conflict",
+				message:
+					error instanceof Error
+						? error.message
+						: "Could not reload external source.",
+			})
+		}
+	}
+	const saveLocalCopy = (): void => {
+		const url = URL.createObjectURL(
+			new Blob([JSON.stringify(document, null, 2)], {
+				type: "application/json",
+			}),
+		)
+		const link = window.document.createElement("a")
+		link.href = url
+		link.download = `${document.title.replaceAll(/[^a-z0-9]+/gi, "-").replaceAll(/^-|-$/g, "") || "untitled"}-conflicted-copy.json`
+		link.click()
+		URL.revokeObjectURL(url)
+	}
+
 	return (
 		<design-application className={css.class}>
 			<header>
@@ -1131,6 +1367,58 @@ export function DesignApplication(props: DesignApplicationProps) {
 			</header>
 
 			<main>
+				{sourceSession === undefined ||
+				(persistence.status !== "recoverable-draft" &&
+					persistence.status !== "conflicted" &&
+					persistence.status !== "invalid-external-source") ? null : (
+					<persistence-alert role="region" aria-label="Document recovery">
+						<strong>{persistenceLabel(persistence)}</strong>
+						{persistence.status !== "invalid-external-source" ? null : (
+							<ul>
+								{persistence.diagnostics.map((diagnostic) => (
+									<li key={`${diagnostic.unitPath}:${diagnostic.path}`}>
+										<code>
+											{diagnostic.unitPath ?? "source"} {diagnostic.path}
+										</code>
+										: {diagnostic.message}
+									</li>
+								))}
+							</ul>
+						)}
+						<alert-actions>
+							{persistence.status !== "recoverable-draft" ? null : (
+								<>
+									<button type="button" onClick={recoverDraft}>
+										Recover draft
+									</button>
+									<button type="button" onClick={discardDraft}>
+										Discard draft
+									</button>
+								</>
+							)}
+							{persistence.status !== "conflicted" ? null : (
+								<button
+									type="button"
+									onClick={() => dispatchPersistence({ type: "retry" })}
+								>
+									Retry save
+								</button>
+							)}
+							{persistence.status === "recoverable-draft" ? null : (
+								<>
+									<button type="button" onClick={() => void reloadExternal()}>
+										Reload external source
+									</button>
+									<button type="button" onClick={saveLocalCopy}>
+										{persistence.status === "conflicted"
+											? "Save conflicted copy"
+											: "Save local copy"}
+									</button>
+								</>
+							)}
+						</alert-actions>
+					</persistence-alert>
+				)}
 				<design-canvas>
 					<canvas-meta>
 						<span>{DESIGN_TOOLS[tool].label}</span>
@@ -1324,6 +1612,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 			<footer>
 				<span>{status}</span>
+				<span role="status" aria-live="polite" aria-atomic="true">
+					{persistenceLabel(persistence)}
+				</span>
 				<span>
 					{document.objects.length} objects · {document.swatches.length}{" "}
 					swatches

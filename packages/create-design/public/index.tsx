@@ -14,11 +14,7 @@ render(
 	) : (
 		<DesignApplication
 			initialDocument={session.initialDocument}
-			onDocumentChange={(document) => {
-				void session.save(document).catch(() => undefined)
-			}}
-			subscribeDocument={(listener) => session.subscribeDocument(listener)}
-			subscribeSourceStatus={(listener) => session.subscribeStatus(listener)}
+			sourceSession={session}
 		/>
 	),
 	mount,

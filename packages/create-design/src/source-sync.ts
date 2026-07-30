@@ -14,6 +14,7 @@ import {
 	sourceUnitKindForPath,
 	splitDesignDocument,
 	type DesignDocument,
+	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
 export type DesignSourceStatus =
@@ -23,23 +24,43 @@ export type DesignSourceStatus =
 	| `recovering`
 	| `conflict`
 
+export type DesignExternalSourceUpdate =
+	| Readonly<{
+			ok: true
+			document: DesignDocument
+			revision: string
+	  }>
+	| Readonly<{
+			ok: false
+			diagnostics: readonly DesignSourceDiagnostic[]
+			revision: string
+	  }>
+
 export interface DesignSourceSession {
 	readonly initialDocument: DesignDocument
-	save(document: DesignDocument): Promise<void>
-	subscribeDocument(listener: (document: DesignDocument) => void): () => void
+	readonly initialRevision: string
+	reload(): Promise<DesignExternalSourceUpdate>
+	save(document: DesignDocument): Promise<Readonly<{ revision: string }>>
+	subscribeDocument(
+		listener: (update: DesignExternalSourceUpdate) => void,
+	): () => void
 	subscribeStatus(listener: (status: DesignSourceStatus) => void): () => void
 }
 
-function assemble(state: SourceSyncState): DesignDocument {
+function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
 	const result = assembleDesignDocument(
 		Object.fromEntries(
 			[...state.units].map(([path, unit]) => [path, unit.value]),
 		),
 	)
 	if (!result.ok) {
-		throw new Error(result.errors.map(({ message }) => message).join(`\n`))
+		return {
+			ok: false,
+			diagnostics: result.errors,
+			revision: state.revision,
+		}
 	}
-	return result.value
+	return { ok: true, document: result.value, revision: state.revision }
 }
 
 function objectPaths(state: SourceSyncState): ReadonlyMap<string, string> {
@@ -126,23 +147,38 @@ function websocketUrl(): string {
 export async function connectDesignSourceSession(): Promise<DesignSourceSession> {
 	const client = createSourceRpcClient()
 	let state = sourceSyncStateFromSnapshot(await client.readSnapshot())
-	const documentListeners = new Set<(document: DesignDocument) => void>()
+	const initial = assemble(state)
+	if (!initial.ok)
+		throw new Error(
+			initial.diagnostics
+				.map(
+					({ message, path, unitPath }) =>
+						`${unitPath ?? `source`} ${path}: ${message}`,
+				)
+				.join(`\n`),
+		)
+	const documentListeners = new Set<
+		(update: DesignExternalSourceUpdate) => void
+	>()
 	const statusListeners = new Set<(status: DesignSourceStatus) => void>()
 	const localOperations = new Set<string>()
 	let externalConflict = false
 	let pendingSaves = 0
-	let tail: Promise<void> = Promise.resolve()
+	let tail: Promise<unknown> = Promise.resolve()
 	const status = (value: DesignSourceStatus): void => {
 		for (const listener of statusListeners) listener(value)
 	}
-	const recover = async (notify: boolean): Promise<void> => {
+	const recover = async (
+		notify: boolean,
+	): Promise<DesignExternalSourceUpdate> => {
 		status(`recovering`)
 		state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const update = assemble(state)
 		if (notify) {
-			const document = assemble(state)
-			for (const listener of documentListeners) listener(document)
+			for (const listener of documentListeners) listener(update)
 		}
 		status(`connected`)
+		return update
 	}
 	const socket = new WebSocket(websocketUrl())
 	socket.addEventListener(`message`, (message) => {
@@ -165,8 +201,8 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 				return
 			}
 			if (result.kind === `applied` && !isLocal && pendingSaves === 0) {
-				const document = assemble(state)
-				for (const listener of documentListeners) listener(document)
+				const update = assemble(state)
+				for (const listener of documentListeners) listener(update)
 			}
 		})().catch(() => status(`conflict`))
 	})
@@ -174,10 +210,15 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	socket.addEventListener(`close`, () => status(`recovering`))
 
 	return {
-		initialDocument: assemble(state),
+		initialDocument: initial.document,
+		initialRevision: initial.revision,
+		async reload() {
+			externalConflict = false
+			return recover(false)
+		},
 		save(document) {
 			pendingSaves += 1
-			const operation = async (): Promise<void> => {
+			const operation = async (): Promise<Readonly<{ revision: string }>> => {
 				try {
 					if (externalConflict) {
 						status(`conflict`)
@@ -185,7 +226,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 					}
 					const transaction = designSourceTransaction(state, document)
 					if (transaction.writes.length + transaction.removals.length === 0)
-						return
+						return { revision: state.revision }
 					const idempotencyKey = crypto.randomUUID()
 					localOperations.add(idempotencyKey)
 					status(`saving`)
@@ -205,9 +246,18 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 						if (applied.kind === `gap`) await recover(false)
 						else state = applied.state
 						status(`saved`)
+						return { revision: state.revision }
 					} catch (error) {
 						localOperations.delete(idempotencyKey)
-						externalConflict = true
+						try {
+							const latest = sourceSyncStateFromSnapshot(
+								await client.readSnapshot(),
+							)
+							externalConflict = latest.revision !== state.revision
+							if (externalConflict) state = latest
+						} catch {
+							// A transport failure is retryable against the same durable revision.
+						}
 						status(`conflict`)
 						throw error
 					}

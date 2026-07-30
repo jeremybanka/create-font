@@ -5,8 +5,20 @@ import { h, render } from "preact"
 import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { DesignApplication } from "../src/DesignApplication.tsx"
+import {
+	DesignApplication,
+	type DesignApplicationProps,
+} from "../src/DesignApplication.tsx"
+import { createInitialDocument } from "../src/document.ts"
 import { objectBounds } from "../src/geometry.ts"
+import {
+	DESIGN_RECOVERY_STORAGE_KEY,
+	type DesignRecoveryDraft,
+} from "../src/persistence.ts"
+import type {
+	DesignExternalSourceUpdate,
+	DesignSourceSession,
+} from "../src/source-sync.ts"
 import type { DesignDocument } from "../src/types.ts"
 
 const requireFromRenderer = createRequire(
@@ -28,8 +40,10 @@ afterEach(() => {
 	vi.unstubAllGlobals()
 })
 
-function mountDesign() {
-	const storage = new Map<string, string>()
+function mountDesign(
+	props: DesignApplicationProps = {},
+	storage = new Map<string, string>(),
+) {
 	vi.stubGlobal("localStorage", {
 		getItem: (key: string) => storage.get(key) ?? null,
 		setItem: (key: string, value: string) => storage.set(key, value),
@@ -80,13 +94,207 @@ function mountDesign() {
 	const host = document.createElement("section")
 	document.body.append(host)
 	hosts.push(host)
-	act(() => render(h(DesignApplication, {}), host))
+	act(() => render(h(DesignApplication, props), host))
 	const stage = Konva.stages.at(-1)
 	if (stage === undefined) throw new Error("Design stage did not mount.")
 	return stage
 }
 
 describe("create-design shared vector scene", () => {
+	function sourceSession(
+		overrides: Partial<DesignSourceSession> = {},
+	): DesignSourceSession {
+		const initialDocument = createInitialDocument()
+		return {
+			initialDocument,
+			initialRevision: "source:one",
+			reload: vi.fn(async () => ({
+				ok: true as const,
+				document: initialDocument,
+				revision: "source:one",
+			})),
+			save: vi.fn(async () => ({ revision: "source:two" })),
+			subscribeDocument: vi.fn(() => () => undefined),
+			subscribeStatus: vi.fn(() => () => undefined),
+			...overrides,
+		}
+	}
+
+	it("offers a recovery draft without labeling it saved, then saves an explicit recovery", async () => {
+		const storage = new Map<string, string>()
+		const recovered = { ...createInitialDocument(), title: "Recovered design" }
+		const draft: DesignRecoveryDraft = {
+			version: 1,
+			baseRevision: "source:one",
+			document: recovered,
+			updatedAt: 42,
+		}
+		storage.set(DESIGN_RECOVERY_STORAGE_KEY, JSON.stringify(draft))
+		const session = sourceSession()
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		expect(document.querySelector('[role="status"]')?.textContent).toContain(
+			"has not been saved",
+		)
+		const recover = [...document.querySelectorAll("button")].find(
+			(button) => button.textContent?.trim() === "Recover draft",
+		)
+		if (recover === undefined)
+			throw new Error("Recover draft action was not found.")
+		await act(async () => {
+			recover.click()
+			await Promise.resolve()
+			await Promise.resolve()
+			await new Promise((resolve) => setTimeout(resolve, 0))
+		})
+		expect(session.save).toHaveBeenCalledWith(recovered)
+		expect(
+			document.querySelector<HTMLInputElement>("header input")?.value,
+		).toBe("Recovered design")
+		await vi.waitFor(() => {
+			expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
+			expect(document.querySelector('[role="status"]')?.textContent).toContain(
+				"source:two",
+			)
+		})
+	})
+
+	it("discards only the recovery draft and reloads newer durable source", async () => {
+		const storage = new Map<string, string>()
+		const draft: DesignRecoveryDraft = {
+			version: 1,
+			baseRevision: "source:old",
+			document: { ...createInitialDocument(), title: "Old draft" },
+			updatedAt: 42,
+		}
+		storage.set(DESIGN_RECOVERY_STORAGE_KEY, JSON.stringify(draft))
+		const session = sourceSession()
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		const discard = [...document.querySelectorAll("button")].find(
+			(button) => button.textContent?.trim() === "Discard draft",
+		)
+		if (discard === undefined)
+			throw new Error("Discard draft action was not found.")
+		await act(async () => {
+			discard.click()
+			await Promise.resolve()
+		})
+		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
+		expect(session.save).not.toHaveBeenCalled()
+		expect(session.reload).toHaveBeenCalledOnce()
+		expect(
+			document.querySelector<HTMLInputElement>("header input")?.value,
+		).toBe("Untitled design")
+	})
+
+	it("keeps the last valid canvas and locates invalid external source errors", () => {
+		let listener: ((update: DesignExternalSourceUpdate) => void) | undefined
+		const session = sourceSession({
+			subscribeDocument: (next) => {
+				listener = next
+				return () => undefined
+			},
+		})
+		const stage = mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+		})
+		act(() =>
+			listener?.({
+				ok: false,
+				revision: "source:invalid",
+				diagnostics: [
+					{
+						severity: "error",
+						code: "source.schema",
+						unitPath: "document.json",
+						path: "$.title",
+						message: "Expected string.",
+					},
+				],
+			}),
+		)
+		expect(document.querySelector("persistence-alert")?.textContent).toContain(
+			"document.json $.title",
+		)
+		expect(stage.find(".vector-contour-path").length).toBeGreaterThan(1)
+		for (const label of ["Reload external source", "Save local copy"])
+			expect(
+				[...document.querySelectorAll("button")].some(
+					(button) => button.textContent?.trim() === label,
+				),
+			).toBe(true)
+	})
+
+	it("warns before navigation and persists a recovery draft while a save is pending", () => {
+		const storage = new Map<string, string>()
+		const session = sourceSession({
+			save: vi.fn(
+				() => new Promise<Readonly<{ revision: string }>>(() => undefined),
+			),
+		})
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		const title = document.querySelector<HTMLInputElement>("header input")
+		if (title === null) throw new Error("Document title was not found.")
+		act(() => {
+			title.value = "Pending title"
+			title.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		const event = new Event("beforeunload", { cancelable: true })
+		window.dispatchEvent(event)
+		expect(event.defaultPrevented).toBe(true)
+		expect(
+			JSON.parse(storage.get(DESIGN_RECOVERY_STORAGE_KEY) ?? "{}").document
+				.title,
+		).toBe("Pending title")
+	})
+
+	it("retains failed work and retries only after a keyboard-reachable action", async () => {
+		const save = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Source write failed."))
+			.mockResolvedValueOnce({ revision: "source:two" })
+		const session = sourceSession({ save })
+		mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+		})
+		const title = document.querySelector<HTMLInputElement>("header input")
+		if (title === null) throw new Error("Document title was not found.")
+		act(() => {
+			title.value = "Retained title"
+			title.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		await vi.waitFor(() =>
+			expect(
+				document.querySelector("persistence-alert")?.textContent,
+			).toContain("Source write failed."),
+		)
+		const retry = [...document.querySelectorAll("button")].find(
+			(button) => button.textContent?.trim() === "Retry save",
+		)
+		if (retry === undefined) throw new Error("Retry save action was not found.")
+		expect(retry.tabIndex).toBeGreaterThanOrEqual(0)
+		act(() => retry.click())
+		await vi.waitFor(() =>
+			expect(document.querySelector('[role="status"]')?.textContent).toContain(
+				"source:two",
+			),
+		)
+		expect(save).toHaveBeenCalledTimes(2)
+		expect(save).toHaveBeenLastCalledWith(
+			expect.objectContaining({ title: "Retained title" }),
+		)
+	})
+
 	it("hosts every design control in registry tiles without fixed navigation or asides", () => {
 		mountDesign()
 		expect(document.querySelector("nav")).toBeNull()

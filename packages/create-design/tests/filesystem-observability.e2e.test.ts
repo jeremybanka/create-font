@@ -18,6 +18,7 @@ import { DesignApplication } from "../src/DesignApplication.tsx"
 import { createDesignSourceService } from "../src/source-service.ts"
 import {
 	designSourceTransaction,
+	type DesignExternalSourceUpdate,
 	type DesignSourceSession,
 } from "../src/source-sync.ts"
 import type { DesignDocument } from "../src/types.ts"
@@ -124,7 +125,9 @@ describe(`create-design filesystem observability`, () => {
 		const originalTitle = initialDocument.title
 		const documentPath = join(root, `document.json`)
 		const originalText = await readFile(documentPath, `utf8`)
-		const documentListeners = new Set<(document: DesignDocument) => void>()
+		const documentListeners = new Set<
+			(update: DesignExternalSourceUpdate) => void
+		>()
 		const localOperations = new Set<string>()
 		let asynchronousFailure: unknown
 		let tail: Promise<void> = Promise.resolve()
@@ -150,7 +153,8 @@ describe(`create-design filesystem observability`, () => {
 						: applied.state
 				const document = assemble(state)
 				await act(async () => {
-					for (const listener of documentListeners) listener(document)
+					for (const listener of documentListeners)
+						listener({ ok: true, document, revision: state.revision })
 				})
 			})
 		})
@@ -160,8 +164,17 @@ describe(`create-design filesystem observability`, () => {
 
 		const session = {
 			initialDocument,
-			onDocumentChange(document: DesignDocument) {
-				return enqueue(async () => {
+			initialRevision: state.revision,
+			async reload() {
+				state = sourceSyncStateFromSnapshot(await source.readSnapshot())
+				return {
+					ok: true as const,
+					document: assemble(state),
+					revision: state.revision,
+				}
+			},
+			async save(document: DesignDocument) {
+				await enqueue(async () => {
 					const transaction = designSourceTransaction(state, document)
 					if (transaction.writes.length + transaction.removals.length === 0) {
 						return
@@ -186,17 +199,20 @@ describe(`create-design filesystem observability`, () => {
 						state = applied.state
 					}
 				})
+				return { revision: state.revision }
 			},
-			subscribeDocument(listener: (document: DesignDocument) => void) {
+			subscribeDocument(
+				listener: (update: DesignExternalSourceUpdate) => void,
+			) {
 				documentListeners.add(listener)
-				return () => documentListeners.delete(listener)
+				return () => {
+					documentListeners.delete(listener)
+				}
 			},
-		} satisfies Pick<
-			DesignSourceSession,
-			"initialDocument" | "subscribeDocument"
-		> & {
-			onDocumentChange(document: DesignDocument): Promise<void>
-		}
+			subscribeStatus() {
+				return () => undefined
+			},
+		} satisfies DesignSourceSession
 
 		const host = document.createElement(`section`)
 		document.body.append(host)
@@ -205,8 +221,7 @@ describe(`create-design filesystem observability`, () => {
 			render(
 				h(DesignApplication, {
 					initialDocument: session.initialDocument,
-					onDocumentChange: session.onDocumentChange,
-					subscribeDocument: session.subscribeDocument,
+					sourceSession: session,
 				}),
 				host,
 			),
