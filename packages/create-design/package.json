@@ -61,7 +61,7 @@
 		"lasertag": "0.6.7",
 		"react": "npm:@preact/compat@18.3.2",
 		"react-dom": "npm:@preact/compat@18.3.2",
-		"vite": "8.1.5",
+		"vite": "8.2.0",
 		"vite-plus": "0.2.5",
 		"vitest": "4.1.10"
 	},
