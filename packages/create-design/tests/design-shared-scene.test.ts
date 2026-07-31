@@ -16,6 +16,7 @@ import {
 	DESIGN_RECOVERY_STORAGE_KEY,
 	type DesignRecoveryDraft,
 } from "../src/persistence.ts"
+import { expandDesignShape } from "../src/shape-expansion.ts"
 import type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
@@ -734,6 +735,195 @@ describe("create-design shared vector scene", () => {
 		const selection = stage.findOne(".vector-selection-bounds")
 		expect(paper.zIndex()).toBeLessThan(contour.zIndex())
 		expect(contour.zIndex()).toBeLessThan(selection.zIndex())
+	})
+
+	it("keeps Select All and Escape mode-aware without stealing native text selection", async () => {
+		const initial = createInitialDocument()
+		mountDesign({
+			initialDocument: {
+				...initial,
+				objects: [
+					initial.objects[0]!,
+					{ ...initial.objects[1]!, locked: true },
+					{ ...initial.objects[0]!, id: "object:hidden", hidden: true },
+				],
+			},
+		})
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "a",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		const selected = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile > button[aria-pressed="true"]',
+			),
+		]
+		expect(selected).toHaveLength(1)
+		expect(selected[0]?.textContent).toContain("Coral rectangle")
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toContain("1 object selected")
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelectorAll(
+				'design-layers-tile > button[aria-pressed="true"]',
+			),
+		).toHaveLength(0)
+		const title = document.querySelector<HTMLInputElement>("header input")
+		if (title === null) throw new Error("Document title field was not found.")
+		title.focus()
+		title.setSelectionRange(0, title.value.length)
+		await act(async () => {
+			title.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "a",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(title.selectionStart).toBe(0)
+		expect(title.selectionEnd).toBe(title.value.length)
+		expect(
+			document.querySelectorAll(
+				'design-layers-tile > button[aria-pressed="true"]',
+			),
+		).toHaveLength(0)
+	})
+
+	it("synchronizes direct node selection across canvas, inspector, and accessibility state", async () => {
+		const initial = createInitialDocument()
+		const storage = new Map<string, string>()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		const stage = mountDesign(
+			{ initialDocument: { ...initial, objects: [expanded] } },
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			"design-layers-tile > button",
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(".vector-node")
+		if (node === undefined) throw new Error("Direct node was not rendered.")
+		const event = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 72,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(event)
+			node.fire("pointerdown", { evt: event }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 72,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".vector-node-selection")).toHaveLength(1)
+		expect(document.querySelector("design-object-tile")?.textContent).toContain(
+			"Direct selection: 1 node",
+		)
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toBe("1 node")
+		if (expanded.geometry.kind !== "path") throw new Error("Expected a path.")
+		const originalPoints = expanded.geometry.contours[0]?.points
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (saved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Expected saved path geometry.")
+		expect(saved.objects[0].geometry.contours[0]?.points[0]?.x).toBe(
+			(originalPoints?.[0]?.x ?? 0) + 1,
+		)
+		expect(saved.objects[0].geometry.contours[0]?.points.slice(1)).toEqual(
+			originalPoints?.slice(1),
+		)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (saved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Expected restored path geometry.")
+		expect(saved.objects[0].geometry.contours[0]?.points).toEqual(
+			originalPoints,
+		)
+	})
+
+	it("nudges a multi-object selection as one atomic undo entry", async () => {
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const layers = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		]
+		if (layers.length !== 2) throw new Error("Expected two design layers.")
+		await act(async () => {
+			layers[0]!.click()
+			layers[1]!.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map((object) => object.transform.e)).toEqual([1, 1])
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map((object) => object.transform.e)).toEqual([0, 0])
 	})
 
 	it("edits exact live parameters and expands a selected shape in one undo step", async () => {

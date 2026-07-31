@@ -201,7 +201,14 @@ function DesignObjectTile({
 	const visibleBounds = object === null ? null : visibleObjectBounds(object)
 	return (
 		<design-object-tile>
-			{object === null ? (
+			{context.tool === "direct" && context.selectedObjectCount > 0 ? (
+				<p role="status">Direct selection: {context.directSelectionSummary}</p>
+			) : context.selectedObjectCount > 1 ? (
+				<p role="status">
+					{context.selectedObjectCount} objects selected. Appearance and
+					transforms apply to the complete selection.
+				</p>
+			) : object === null ? (
 				<p>Select an object to inspect it.</p>
 			) : (
 				<>

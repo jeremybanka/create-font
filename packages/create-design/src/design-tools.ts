@@ -15,6 +15,12 @@ export const DESIGN_TOOLS = {
 		icon: CursorArrowIcon,
 		paletteIcon: "CursorArrowIcon",
 	},
+	direct: {
+		label: "Direct Selection",
+		key: "A",
+		icon: CursorArrowIcon,
+		paletteIcon: "CursorArrowIcon",
+	},
 	transform: {
 		label: "Transform",
 		key: "F",

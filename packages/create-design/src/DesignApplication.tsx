@@ -86,6 +86,19 @@ import {
 } from "./design-canvas.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
+import {
+	directSelectionDescription,
+	directSelectionKey,
+	marqueeDirectSelection,
+	marqueeObjectIds,
+	nearestDirectSelectionTarget,
+	selectableObjectIds,
+	selectionBounds as combinedSelectionBounds,
+	toggleDirectSelection,
+	toggleObjectSelection,
+	translateDirectSelection,
+	type DesignDirectSelectionTarget,
+} from "./design-selection.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import {
 	type DesignSourceReviewChange,
@@ -98,7 +111,6 @@ import {
 	scaleObject,
 	translateObject,
 } from "./geometry.ts"
-import { visibleObjectBounds } from "./painted-geometry.ts"
 import {
 	expandDesignShape,
 	shapeExpansionEligibility,
@@ -142,7 +154,7 @@ const div = {
 type CanvasGesture =
 	| {
 			readonly kind: "move"
-			readonly original: DesignObject
+			readonly originals: readonly DesignObject[]
 			readonly state: VectorGestureState
 	  }
 	| {
@@ -157,8 +169,15 @@ type CanvasGesture =
 	  }
 	| {
 			readonly kind: "transform"
-			readonly original: DesignObject
+			readonly originals: readonly DesignObject[]
 			readonly state: VectorGestureState
+	  }
+	| {
+			readonly kind: "direct"
+			readonly pointerId: number
+			readonly start: CanvasPoint
+			readonly original: DesignDocument
+			readonly selection: readonly DesignDirectSelectionTarget[]
 	  }
 
 type DesignObjectGesture = Extract<
@@ -167,7 +186,7 @@ type DesignObjectGesture = Extract<
 >
 
 interface DesignGestureObjectPreview {
-	readonly object: DesignObject
+	readonly objects: readonly DesignObject[]
 	readonly snap: {
 		readonly x: number | null
 		readonly y: number | null
@@ -175,38 +194,37 @@ interface DesignGestureObjectPreview {
 }
 
 function resolveDesignGestureObject(
-	document: DesignDocument,
 	artboard: DesignDocument["artboards"][number],
 	gesture: DesignObjectGesture,
 	preview: VectorGesturePreview | null,
 	worldScale: number,
 ): DesignGestureObjectPreview | null {
 	if (gesture.kind === "move" && preview?.kind === "select-move") {
-		const rawObject = translateObject(
-			gesture.original,
-			preview.delta.x,
-			preview.delta.y,
+		const rawObjects = gesture.originals.map((object) =>
+			translateObject(object, preview.delta.x, preview.delta.y),
 		)
-		const snapped = snapDesignObject(rawObject, artboard, worldScale)
+		const snapped =
+			rawObjects.length === 1
+				? snapDesignObject(rawObjects[0]!, artboard, worldScale)
+				: null
 		return {
-			object: snapped.object,
-			snap: { x: snapped.x, y: snapped.y },
+			objects: snapped === null ? rawObjects : [snapped.object],
+			snap:
+				snapped === null
+					? { x: null, y: null }
+					: { x: snapped.x, y: snapped.y },
 		}
 	}
 	if (gesture.kind !== "transform" || preview?.kind !== "transform") return null
-	const transformed =
+	const transformed = gesture.originals.map((object) =>
 		preview.handle === "rotation"
-			? rotateObject(gesture.original, preview.anchor, preview.rotationDegrees)
+			? rotateObject(object, preview.anchor, preview.rotationDegrees)
 			: preview.handle === "move"
-				? translateObject(gesture.original, preview.delta.x, preview.delta.y)
-				: scaleObject(
-						gesture.original,
-						preview.anchor,
-						preview.scale.x,
-						preview.scale.y,
-					)
+				? translateObject(object, preview.delta.x, preview.delta.y)
+				: scaleObject(object, preview.anchor, preview.scale.x, preview.scale.y),
+	)
 	return {
-		object: transformed,
+		objects: transformed,
 		snap: { x: null, y: null },
 	}
 }
@@ -347,6 +365,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [activeArtboardId, setActiveArtboardId] = useState(
 		() => activeDesignArtboard(initialLoad.document).id,
 	)
+	const [directSelection, setDirectSelection] = useState<
+		readonly DesignDirectSelectionTarget[]
+	>([])
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -363,7 +384,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [status, setStatus] = useState(
 		"Ready — draw a shape or press ⇧⌘P for commands.",
 	)
-	const [previewObject, setPreviewObject] = useState<DesignObject | null>(null)
+	const [previewObjects, setPreviewObjects] = useState<readonly DesignObject[]>(
+		[],
+	)
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
@@ -378,7 +401,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
-	const previewObjectRef = useRef<DesignObject | null>(null)
+	const previewObjectsRef = useRef<readonly DesignObject[]>([])
 	const documentRef = useRef(document)
 	const persistenceRef = useRef(persistence)
 	const serializedDocumentRef = useRef(JSON.stringify(document))
@@ -487,7 +510,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	const cancelCanvasGesture = useCallback((): void => {
 		const gesture = gestureRef.current
-		if (gesture !== null && gesture.kind !== "pan")
+		if (gesture !== null && gesture.kind !== "pan" && gesture.kind !== "direct")
 			reduceVectorGesture(
 				gesture.state,
 				{
@@ -497,9 +520,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 				gesturePolicy,
 			)
 		gestureRef.current = null
-		previewObjectRef.current = null
+		previewObjectsRef.current = []
 		penPointsRef.current = []
-		setPreviewObject(null)
+		setPreviewObjects([])
 		setGesturePreview(null)
 		setPenPoints([])
 		setActiveSnapGuides([])
@@ -508,6 +531,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
 			cancelCanvasGesture()
+			if (nextTool !== "direct") setDirectSelection([])
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
 		},
@@ -580,13 +604,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 		object: DesignObject,
 		property: Partial<DesignObject>,
 	): void => {
-		commitVectorIntent({
+		const committed = commitVectorIntent({
 			kind: "set-object-properties",
 			objectId: object.id,
 			...(property.name === undefined ? {} : { name: property.name }),
 			...(property.hidden === undefined ? {} : { hidden: property.hidden }),
 			...(property.locked === undefined ? {} : { locked: property.locked }),
 		})
+		if (committed && (property.hidden === true || property.locked === true))
+			setDirectSelection((current) =>
+				current.filter((target) => target.objectId !== object.id),
+			)
 	}
 
 	const setObjectGeometry = (
@@ -822,19 +850,18 @@ export function DesignApplication(props: DesignApplicationProps) {
 		focusCanvas: focusActiveArtboard,
 		activeArtboard,
 		reviewSourceChange,
-		selectObject: (object, additive = false) =>
+		selectObject: (object, additive = false) => {
 			setSelection((current) =>
-				additive
-					? current.includes(object.id)
-						? current.filter((id) => id !== object.id)
-						: [...current, object.id]
-					: [object.id],
-			),
+				toggleObjectSelection(current, object.id, additive),
+			)
+			setDirectSelection([])
+		},
 		selectSwatch: (swatch) => setSelectedSwatchId(swatch.id),
 		selectTool,
 		selectedObject,
 		selectedObjectCount: selectedObjects.length,
 		selectedObjectIds: selection,
+		directSelectionSummary: directSelectionDescription(directSelection),
 		selectedSwatch,
 		selectedSwatchId,
 		setObjectProperty,
@@ -890,6 +917,33 @@ export function DesignApplication(props: DesignApplicationProps) {
 					? {}
 					: { disabledReason: expansionEligibility.reason }),
 				do: expandSelection,
+			},
+			{
+				id: "select-all",
+				displayName: "Select All",
+				category: "Edit",
+				description: "Select every visible unlocked object.",
+				icon: "CursorArrowIcon",
+				shortcut: "⌘ A",
+				disabled: selectableObjectIds(document.objects).length === 0,
+				do: () => {
+					const objectIds = selectableObjectIds(document.objects)
+					setSelection(objectIds)
+					setDirectSelection(
+						tool === "direct"
+							? document.objects.flatMap((object) =>
+									objectIds.includes(object.id) &&
+									object.geometry.kind === "path"
+										? object.geometry.contours.map((contour) => ({
+												kind: "contour" as const,
+												objectId: object.id,
+												contourId: contour.id,
+											}))
+										: [],
+								)
+							: [],
+					)
+				},
 			},
 			{
 				id: "delete-selection",
@@ -1127,7 +1181,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 		const updateGestureModifiers = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
 			const gesture = gestureRef.current
-			if (gesture === null || gesture.kind === "pan") return
+			if (
+				gesture === null ||
+				gesture.kind === "pan" ||
+				gesture.kind === "direct"
+			)
+				return
 			const transition = reduceVectorGesture(
 				gesture.state,
 				{
@@ -1146,15 +1205,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setGesturePreview(transition.preview)
 			if (gesture.kind === "move" || gesture.kind === "transform") {
 				const resolved = resolveDesignGestureObject(
-					document,
 					activeArtboard,
 					gesture,
 					transition.preview,
 					worldScale,
 				)
 				if (resolved !== null) {
-					previewObjectRef.current = resolved.object
-					setPreviewObject(resolved.object)
+					previewObjectsRef.current = resolved.objects
+					setPreviewObjects(resolved.objects)
 					setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
 				}
 			}
@@ -1173,6 +1231,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 			}
 			if (paletteOpen || editableTarget(event.target)) return
 			const mod = event.metaKey || event.ctrlKey
+			if (mod && event.key.toLowerCase() === "a") {
+				event.preventDefault()
+				const objectIds = selectableObjectIds(document.objects)
+				setSelection(objectIds)
+				if (tool === "direct")
+					setDirectSelection(
+						document.objects.flatMap((object) =>
+							objectIds.includes(object.id) && object.geometry.kind === "path"
+								? object.geometry.contours.map((contour) => ({
+										kind: "contour" as const,
+										objectId: object.id,
+										contourId: contour.id,
+									}))
+								: [],
+						),
+					)
+				setStatus(`Selected ${objectIds.length} visible unlocked objects.`)
+				return
+			}
 			if (mod && event.key.toLowerCase() === "e") {
 				event.preventDefault()
 				exportDocument()
@@ -1190,6 +1267,50 @@ export function DesignApplication(props: DesignApplicationProps) {
 			}
 			if (event.key === "Escape") {
 				cancelCanvasGesture()
+				setSelection([])
+				setDirectSelection([])
+				setStatus("Selection cleared.")
+				return
+			}
+			if (
+				["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+			) {
+				const amount = event.shiftKey ? 10 : 1
+				const delta = {
+					x:
+						event.key === "ArrowLeft"
+							? -amount
+							: event.key === "ArrowRight"
+								? amount
+								: 0,
+					y:
+						event.key === "ArrowUp"
+							? -amount
+							: event.key === "ArrowDown"
+								? amount
+								: 0,
+				}
+				const next =
+					tool === "direct"
+						? translateDirectSelection(document, directSelection, delta)
+						: {
+								...document,
+								objects: document.objects.map((object) =>
+									selection.includes(object.id) &&
+									!object.locked &&
+									!object.hidden
+										? translateObject(object, delta.x, delta.y)
+										: object,
+								),
+							}
+				if (
+					next !== document &&
+					(selection.length > 0 || directSelection.length > 0)
+				) {
+					event.preventDefault()
+					commit(next)
+					setStatus("Nudged selection.")
+				}
 				return
 			}
 			if (event.key === "Backspace" || event.key === "Delete") {
@@ -1221,7 +1342,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 	}, [
 		deleteSelection,
+		commit,
 		cancelCanvasGesture,
+		directSelection,
 		document,
 		exportDocument,
 		finishPen,
@@ -1229,6 +1352,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		paletteOpen,
 		penPoints.length,
 		selectTool,
+		selection,
 		tool,
 		worldScale,
 	])
@@ -1348,7 +1472,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const beginVectorGesture = (
 		event: KonvaEventObject<PointerEvent>,
 		down: VectorGestureDownInput,
-		original?: DesignObject,
+		originals?: readonly DesignObject[],
 	): void => {
 		const transition = reduceVectorGesture(
 			null,
@@ -1362,11 +1486,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 		)
 		if (transition.state === null) return
 		gestureRef.current =
-			original === undefined
+			originals === undefined
 				? { kind: "vector", state: transition.state }
 				: down.tool === "transform"
-					? { kind: "transform", original, state: transition.state }
-					: { kind: "move", original, state: transition.state }
+					? { kind: "transform", originals, state: transition.state }
+					: { kind: "move", originals, state: transition.state }
 		setGesturePreview(transition.preview)
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
@@ -1377,8 +1501,50 @@ export function DesignApplication(props: DesignApplicationProps) {
 	): void => {
 		if (object.locked || (tool !== "select" && tool !== "transform")) return
 		event.cancelBubble = true
-		setSelection([object.id])
-		beginVectorGesture(event, { tool: "select", targetId: object.id }, object)
+		const additive = gestureModifiers(event.evt).additive
+		const nextSelection = toggleObjectSelection(selection, object.id, additive)
+		setSelection(nextSelection)
+		setDirectSelection([])
+		if (additive) return
+		const movingIds = selection.includes(object.id) ? selection : [object.id]
+		const originals = document.objects.filter(
+			(candidate) =>
+				movingIds.includes(candidate.id) &&
+				!candidate.locked &&
+				!candidate.hidden,
+		)
+		beginVectorGesture(
+			event,
+			{ tool: "select", targetId: object.id },
+			originals,
+		)
+	}
+
+	const startDirectGesture = (
+		event: KonvaEventObject<PointerEvent>,
+		target: DesignDirectSelectionTarget,
+	): void => {
+		event.cancelBubble = true
+		const additive = gestureModifiers(event.evt).additive
+		const alreadySelected = directSelection.some(
+			(candidate) =>
+				directSelectionKey(candidate) === directSelectionKey(target),
+		)
+		const next =
+			!additive && alreadySelected
+				? directSelection
+				: toggleDirectSelection(directSelection, target, additive)
+		setDirectSelection(next)
+		setSelection([...new Set(next.map((candidate) => candidate.objectId))])
+		if (additive || next.length === 0) return
+		gestureRef.current = {
+			kind: "direct",
+			pointerId: event.evt.pointerId,
+			start: pagePoint(event),
+			original: document,
+			selection: next,
+		}
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
@@ -1407,8 +1573,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 			beginVectorGesture(event, { tool: "pen" })
 			return
 		}
+		if (tool === "direct") {
+			const target = nearestDirectSelectionTarget(
+				document,
+				displayedObjects,
+				point,
+				worldScale,
+				{ contour: event.evt.altKey },
+			)
+			if (target === null) {
+				if (!gestureModifiers(event.evt).additive) {
+					setSelection([])
+					setDirectSelection([])
+				}
+				beginVectorGesture(event, { tool: "select", targetId: null })
+			} else startDirectGesture(event, target)
+			return
+		}
 		const hit = nearestDesignObject(
-			previewObjects,
+			displayedObjects,
 			point,
 			worldScale,
 			tool === "select" || tool === "transform" ? 12 : 0,
@@ -1432,6 +1615,24 @@ export function DesignApplication(props: DesignApplicationProps) {
 			})
 			return
 		}
+		if (gesture.kind === "direct") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			const current = pagePoint(event)
+			const preview = translateDirectSelection(
+				gesture.original,
+				gesture.selection,
+				{
+					x: current.x - gesture.start.x,
+					y: current.y - gesture.start.y,
+				},
+			)
+			const changed = preview.objects.filter(
+				(object, index) => object !== gesture.original.objects[index],
+			)
+			previewObjectsRef.current = changed
+			setPreviewObjects(changed)
+			return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -1447,15 +1648,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setGesturePreview(transition.preview)
 		if (gesture.kind !== "move" && gesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
-			document,
 			activeArtboard,
 			gesture,
 			transition.preview,
 			worldScale,
 		)
 		if (resolved === null) return
-		previewObjectRef.current = resolved.object
-		setPreviewObject(resolved.object)
+		previewObjectsRef.current = resolved.objects
+		setPreviewObjects(resolved.objects)
 		setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
 	}
 
@@ -1466,6 +1666,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			gestureRef.current = null
+			return
+		}
+		if (gesture.kind === "direct") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			gestureRef.current = null
+			const changed = previewObjectsRef.current
+			previewObjectsRef.current = []
+			setPreviewObjects([])
+			if (changed.length > 0) {
+				const byId = new Map(changed.map((object) => [object.id, object]))
+				commit({
+					...document,
+					objects: document.objects.map(
+						(object) => byId.get(object.id) ?? object,
+					),
+				})
+				setStatus(`Edited ${directSelectionDescription(gesture.selection)}.`)
+			}
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
@@ -1527,32 +1746,44 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 		if (transition.intent?.kind === "select-marquee") {
 			const intent = transition.intent
-			const ids = document.objects.flatMap((object) => {
-				if (object.hidden || object.locked) return []
-				const bounds = visibleObjectBounds(object)
-				if (bounds === null) return []
-				const intersects =
-					bounds.maxX >= intent.bounds.minX &&
-					bounds.minX <= intent.bounds.maxX &&
-					bounds.maxY >= intent.bounds.minY &&
-					bounds.minY <= intent.bounds.maxY
-				return intersects ? [object.id] : []
-			})
+			if (tool === "direct") {
+				const targets = marqueeDirectSelection(document, intent.bounds)
+				setDirectSelection((current) => {
+					const next = intent.additive
+						? [
+								...new Map(
+									[...current, ...targets].map((target) => [
+										directSelectionKey(target),
+										target,
+									]),
+								).values(),
+							]
+						: targets
+					setSelection([...new Set(next.map((target) => target.objectId))])
+					return next
+				})
+				return
+			}
+			const ids = marqueeObjectIds(document.objects, intent.bounds)
 			setSelection((current) =>
 				intent.additive ? [...new Set([...current, ...ids])] : ids,
 			)
+			setDirectSelection([])
 			return
 		}
-		const committedPreview = previewObjectRef.current
-		previewObjectRef.current = null
-		if (committedPreview !== null) {
+		const committedPreviews = previewObjectsRef.current
+		previewObjectsRef.current = []
+		if (committedPreviews.length > 0) {
+			const byId = new Map(
+				committedPreviews.map((object) => [object.id, object]),
+			)
 			commit({
 				...document,
-				objects: document.objects.map((object) =>
-					object.id === committedPreview.id ? committedPreview : object,
+				objects: document.objects.map(
+					(object) => byId.get(object.id) ?? object,
 				),
 			})
-			setPreviewObject(null)
+			setPreviewObjects([])
 		}
 	}
 	const cancelPointer = useCallback(
@@ -1560,9 +1791,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const gesture = gestureRef.current
 			if (gesture === null) return
 			const activePointerId =
-				gesture.kind === "pan" ? gesture.pointerId : gesture.state.pointerId
+				gesture.kind === "pan" || gesture.kind === "direct"
+					? gesture.pointerId
+					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
-			if (gesture.kind !== "pan")
+			if (gesture.kind !== "pan" && gesture.kind !== "direct")
 				reduceVectorGesture(
 					gesture.state,
 					{ type: "pointer-cancel", pointerId },
@@ -1570,8 +1803,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 				)
 			releaseDesignPointer(captureTarget, pointerId)
 			gestureRef.current = null
-			previewObjectRef.current = null
-			setPreviewObject(null)
+			previewObjectsRef.current = []
+			setPreviewObjects([])
 			setGesturePreview(null)
 			setActiveSnapGuides([])
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
@@ -1604,28 +1837,32 @@ export function DesignApplication(props: DesignApplicationProps) {
 		handle: VectorTransformHandle,
 		event: KonvaEventObject<PointerEvent>,
 	): void => {
-		if (selectedObject === null) return
-		const bounds = visibleObjectBounds(selectedObject)
+		if (
+			selectedObjects.length === 0 ||
+			selectedObjects.some((object) => object.locked || object.hidden)
+		)
+			return
+		const bounds = combinedSelectionBounds(selectedObjects)
 		if (bounds === null) return
 		event.cancelBubble = true
 		beginVectorGesture(
 			event,
 			{
 				tool: "transform",
-				targetId: selectedObject.id,
+				targetId: selectedObjects[0]!.id,
 				bounds,
 				handle,
 			},
-			selectedObject,
+			selectedObjects,
 		)
 	}
 
-	const previewObjects =
-		previewObject === null
-			? document.objects
-			: document.objects.map((object) =>
-					object.id === previewObject.id ? previewObject : object,
-				)
+	const previewById = new Map(
+		previewObjects.map((object) => [object.id, object]),
+	)
+	const displayedObjects = document.objects.map(
+		(object) => previewById.get(object.id) ?? object,
+	)
 	const previewSwatch = document.swatches.find(
 		(swatch) =>
 			swatch.id ===
@@ -1633,8 +1870,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 				authoredAppearance.stroke?.swatchId),
 	)
 	const selectionBounds =
-		tool === "transform" && selectedObject !== null
-			? visibleObjectBounds(previewObject ?? selectedObject)
+		(tool === "select" || tool === "transform") && selectedObjects.length > 0
+			? combinedSelectionBounds(
+					selectedObjects.map((object) => previewById.get(object.id) ?? object),
+				)
 			: null
 
 	const recoverDraft = (): void => {
@@ -1796,13 +2035,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 						ref={artboardWrapRef}
 						role="application"
 						aria-label="Design artboard"
+						aria-describedby="design-selection-status"
 						tabIndex={-1}
 					>
+						<span
+							id="design-selection-status"
+							data-screen-reader
+							aria-live="polite"
+						>
+							{tool === "direct"
+								? directSelectionDescription(directSelection)
+								: selection.length === 0
+									? "No objects selected."
+									: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`}
+						</span>
 						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
 							style={{
-								cursor: canvasToolCursor(tool, {
+								cursor: canvasToolCursor(tool === "direct" ? "select" : tool, {
 									dragging: gestureRef.current?.kind === "pan",
 								}),
 							}}
@@ -1843,7 +2094,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 											shadowOffsetY={9 / worldScale}
 										/>
 									))}
-									{previewObjects.map((object) => {
+									{displayedObjects.map((object) => {
 										const fill = document.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.fill?.swatchId,
@@ -1881,45 +2132,113 @@ export function DesignApplication(props: DesignApplicationProps) {
 															dashOffset: strokeStyle.dashOffset,
 														})}
 												fillRule="evenodd"
+												selected={selection.includes(object.id)}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
 												}
 												onPointerEnter={(event) => {
 													if (
 														object.locked ||
-														(tool !== "select" && tool !== "transform")
+														(tool !== "select" &&
+															tool !== "direct" &&
+															tool !== "transform")
 													)
 														return
 													const container = event.target.getStage()?.container()
 													if (container !== undefined)
-														container.style.cursor = canvasToolCursor(tool, {
-															overObject: true,
-														})
+														container.style.cursor = canvasToolCursor(
+															tool === "direct" ? "select" : tool,
+															{
+																overObject: true,
+															},
+														)
 												}}
 												onPointerLeave={(event) => {
 													const container = event.target.getStage()?.container()
 													if (container !== undefined)
-														container.style.cursor = canvasToolCursor(tool)
+														container.style.cursor = canvasToolCursor(
+															tool === "direct" ? "select" : tool,
+														)
 												}}
 											/>
 										)
 									})}
-									{selectedObject === null ||
-									(tool !== "select" && tool !== "transform")
+									{tool !== "direct"
 										? null
-										: projectDesignVectorObject(
-												document,
-												previewObject ?? selectedObject,
-											).contours.flatMap((contour) =>
-												contour.nodes.map((node) => (
-													<VectorControlHandles
-														key={node.id}
-														node={node}
-														inverseScale={1 / worldScale}
-														color="#e17352"
-													/>
-												)),
-											)}
+										: selectedObjects.flatMap((selected) => {
+												const object = previewById.get(selected.id) ?? selected
+												if (
+													object.hidden ||
+													object.locked ||
+													object.geometry.kind !== "path"
+												)
+													return []
+												return projectDesignVectorObject(
+													document,
+													object,
+												).contours.flatMap((contour) =>
+													contour.nodes.map((node, nodeIndex) => {
+														const nodeTarget = {
+															kind: "node" as const,
+															objectId: object.id,
+															contourId: contour.id,
+															pointId: node.id,
+														}
+														const selectedHandles = (
+															["incoming", "outgoing"] as const
+														).filter((handle) =>
+															directSelection.some(
+																(target) =>
+																	target.kind === "handle" &&
+																	target.objectId === object.id &&
+																	target.contourId === contour.id &&
+																	target.pointId === node.id &&
+																	target.handle === handle,
+															),
+														)
+														return (
+															<VectorControlHandles
+																key={`${object.id}:${node.id}`}
+																node={node}
+																inverseScale={1 / worldScale}
+																color="#e17352"
+																listening
+																nodeHitRadius={9 / worldScale}
+																handleHitRadius={{
+																	incoming: 9 / worldScale,
+																	outgoing: 9 / worldScale,
+																}}
+																selected={directSelection.some(
+																	(target) =>
+																		target.objectId === object.id &&
+																		target.contourId === contour.id &&
+																		(target.kind === "contour" ||
+																			(target.kind === "node" &&
+																				target.pointId === node.id) ||
+																			(target.kind === "segment" &&
+																				(target.segmentIndex === nodeIndex ||
+																					(target.segmentIndex + 1) %
+																						contour.nodes.length ===
+																						nodeIndex))),
+																)}
+																selectedHandles={selectedHandles}
+																onNodePointerDown={(event) =>
+																	startDirectGesture(event, nodeTarget)
+																}
+																onHandlePointerDown={(handle, event) =>
+																	startDirectGesture(event, {
+																		kind: "handle",
+																		objectId: object.id,
+																		contourId: contour.id,
+																		pointId: node.id,
+																		handle,
+																	})
+																}
+															/>
+														)
+													}),
+												)
+											})}
 									{gesturePreview?.kind !== "shape" ? null : (
 										<VectorShapePreview
 											preview={gesturePreview}
@@ -1982,7 +2301,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 											inverseScale={1 / worldScale}
 											color="#e17352"
 											rotation={tool === "transform"}
-											onHandlePointerDown={startScale}
+											{...(tool === "transform"
+												? { onHandlePointerDown: startScale }
+												: { handles: [], listening: false })}
 										/>
 									)}
 								</Group>

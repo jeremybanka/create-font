@@ -32,6 +32,7 @@ describe("PDF preview tile", () => {
 			applyAppearancePaint: vi.fn(),
 			applyStrokeProperties: vi.fn(),
 			deleteSelection: vi.fn(),
+			directSelectionSummary: "No direct controls selected.",
 			document,
 			expandSelection: vi.fn(),
 			expansionDisabledReason: "Select a live rectangle or ellipse.",
