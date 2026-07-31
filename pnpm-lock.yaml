@@ -382,6 +382,9 @@ importers:
 
   packages/states:
     dependencies:
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../vector-geometry
       '@create-font/server':
         specifier: workspace:*
         version: link:../server
