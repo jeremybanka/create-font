@@ -140,8 +140,8 @@ describe("design document storage", () => {
 		expect(loaded).toMatchObject({
 			status: "loaded",
 			migrated: true,
-				document: {
-					version: 4,
+			document: {
+				version: 4,
 				objects: [
 					{
 						geometry: {
@@ -181,8 +181,8 @@ describe("design document storage", () => {
 		expect(loaded).toMatchObject({
 			status: "loaded",
 			migrated: true,
-				document: {
-					version: 4,
+			document: {
+				version: 4,
 				objects: [
 					{
 						appearance: {
