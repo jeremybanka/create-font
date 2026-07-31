@@ -1,0 +1,16 @@
+{
+	"$schema": "https://dprint.dev/schemas/v0.json",
+	"lineWidth": 80,
+	"useTabs": true,
+	"indentWidth": 2,
+	"includes": ["packages/*/package.json"],
+	"json": {
+		"newLineKind": "lf",
+		"overrides": {
+			"files": "packages/source-format/package.json",
+			"array.preferSingleLine": true,
+			"object.preferSingleLine": true
+		}
+	},
+	"plugins": ["npm:@dprint/json"]
+}
