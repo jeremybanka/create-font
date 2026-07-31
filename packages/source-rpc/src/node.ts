@@ -45,6 +45,16 @@ import {
 	type WriteSourceUnitsResult,
 } from "./contracts.ts"
 
+export {
+	createSourceVersionControl,
+	nodeSourceVersionControlRuntime,
+	type SourceUnitChange,
+	type SourceVersionControlAdapter,
+	type SourceVersionControlCommandOptions,
+	type SourceVersionControlCommandResult,
+	type SourceVersionControlRuntime,
+} from "./version-control.ts"
+
 type CodecResult<Value> =
 	| Readonly<{ ok: true; value: Value }>
 	| Readonly<{

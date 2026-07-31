@@ -14,7 +14,7 @@ describe(`create-design workspace RPC`, () => {
 		const app = await createDesignServerApp({ assets, root })
 		const health = await app.handle(new Request(`http://localhost/api/health`))
 		expect(health.status).toBe(200)
-		expect(await health.json()).toEqual({ ok: true, rpcVersion: 1 })
+		expect(await health.json()).toEqual({ ok: true, rpcVersion: 2 })
 
 		const response = await app.handle(
 			new Request(`http://localhost/api/source/snapshot`),

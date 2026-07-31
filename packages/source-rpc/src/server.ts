@@ -24,15 +24,20 @@ import {
 	type SourceUnitConflict,
 	type SourceUnitNotFound,
 	type SourceValidationFailure,
+	type SourceVersionControlService,
 	type WriteSourceUnitInput,
 	type WriteSourceUnitsInput,
 } from "./contracts.ts"
+import { createSourceVersionControlRpc } from "./version-control-server.ts"
+
+export { createSourceVersionControlRpc } from "./version-control-server.ts"
 
 export type SourceRpcOptions = Readonly<{
 	adapter?: ElysiaAdapter
 	assets?: SourceAssetService
 	source?: SourceService
 	unavailableMessage?: string
+	versionControl?: SourceVersionControlService
 }>
 
 export function sourceErrorResponse(error: unknown) {
@@ -294,6 +299,14 @@ export function createSourceRpc(options: SourceRpcOptions) {
 				return sourceErrorResponse(error)
 			}
 		})
+		.use(
+			createSourceVersionControlRpc({
+				...(options.adapter === undefined ? {} : { adapter: options.adapter }),
+				...(options.versionControl === undefined
+					? {}
+					: { service: options.versionControl }),
+			}),
+		)
 		.get(
 			`/source/unit`,
 			async ({ query }) => {

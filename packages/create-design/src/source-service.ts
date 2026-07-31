@@ -134,3 +134,9 @@ export async function createDesignSourceService(
 		controlDirectory: `.create-design`,
 	})
 }
+
+export {
+	coordinateDesignSourceVersionControl,
+	createDesignSourceVersionControl,
+	designSourceVersionControlAdapter,
+} from "./version-control.ts"

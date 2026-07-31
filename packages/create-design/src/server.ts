@@ -7,8 +7,9 @@ import type { ElysiaAdapter } from "elysia/adapter"
 
 import { runtimeElysiaAdapter } from "./elysia-adapter.ts"
 import { createDesignSourceService } from "./source-service.ts"
+import { coordinateDesignSourceVersionControl } from "./version-control.ts"
 
-export const CREATE_DESIGN_RPC_VERSION = 1 as const
+export const CREATE_DESIGN_RPC_VERSION = 2 as const
 
 export type CreateDesignServerOptions = Readonly<{
 	adapter?: ElysiaAdapter
@@ -20,7 +21,11 @@ export async function createDesignServerApp(
 	options: CreateDesignServerOptions,
 ) {
 	const root = resolve(options.root)
-	const source = await createDesignSourceService(root)
+	const storedSource = await createDesignSourceService(root)
+	const { source, versionControl } = coordinateDesignSourceVersionControl(
+		root,
+		storedSource,
+	)
 	const adapter = options.adapter ?? runtimeElysiaAdapter
 	const app = new Elysia({
 		adapter,
@@ -32,7 +37,7 @@ export async function createDesignServerApp(
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
 			.get(`/workspace`, () => ({ root }))
-			.use(createSourceRpc({ adapter, assets: source, source })),
+			.use(createSourceRpc({ adapter, assets: source, source, versionControl })),
 	)
 	if (options.assets === undefined) return app
 	return app.use(

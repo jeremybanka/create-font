@@ -7,6 +7,10 @@ import type {
 	WriteSourceAssetsResult,
 } from "./assets.ts"
 import type {
+	CommitSourceUnitsInput,
+	CommitSourceUnitsResult,
+	ReadSourceComparisonInput,
+	SourceComparison,
 	SourceProjectSnapshot,
 	WriteSourceUnitsInput,
 	WriteSourceUnitsResult,
@@ -28,6 +32,12 @@ async function responseJson<Value>(response: Response): Promise<Value> {
 export function createSourceRpcClient(origin = ``) {
 	const base = origin.replace(/\/$/, ``)
 	return {
+		commitUnits: (input: CommitSourceUnitsInput) =>
+			fetch(`${base}/api/source/commit`, {
+				body: JSON.stringify(input),
+				headers: { "content-type": `application/json` },
+				method: `POST`,
+			}).then((response) => responseJson<CommitSourceUnitsResult>(response)),
 		discardAssetStage: (stagingToken: string) =>
 			fetch(
 				`${base}/api/source/asset/stage?${new URLSearchParams({
@@ -69,6 +79,13 @@ export function createSourceRpcClient(origin = ``) {
 					path,
 				},
 			}
+		},
+		readComparison: (input: ReadSourceComparisonInput) => {
+			const query = new URLSearchParams({ baseRef: input.baseRef })
+			if (input.targetRef !== undefined) query.set(`targetRef`, input.targetRef)
+			return fetch(`${base}/api/source/comparison?${query}`).then((response) =>
+				responseJson<SourceComparison>(response),
+			)
 		},
 		readSnapshot: () =>
 			fetch(`${base}/api/source/snapshot`).then((response) =>

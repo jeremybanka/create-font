@@ -5,6 +5,21 @@ import type {
 } from "./contracts.ts"
 import type { SourceAssetDescriptor } from "./assets.ts"
 
+export type VersionControlSelection = Readonly<{
+	baseRef: string
+	targetRef?: string
+}>
+
+/** Live source changes only affect comparisons whose target is the workspace. */
+export function refreshWorkingComparison(
+	selection: VersionControlSelection,
+	load: (baseRef: string, targetRef?: string) => Promise<void>,
+): Promise<void> {
+	return selection.targetRef === undefined
+		? load(selection.baseRef)
+		: Promise.resolve()
+}
+
 export type SourceSyncState = Readonly<{
 	assets?: ReadonlyMap<string, SourceAssetDescriptor>
 	revision: string

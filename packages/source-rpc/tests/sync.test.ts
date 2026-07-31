@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 
 import {
 	applySourceSyncDelta,
+	refreshWorkingComparison,
 	sourceSyncStateFromSnapshot,
 } from "../src/index.ts"
 
@@ -56,5 +57,15 @@ describe(`source synchronization`, () => {
 			units: [],
 		})
 		expect(removed.state.assets?.size).toBe(0)
+	})
+
+	test(`refreshes only comparisons against live source after a source event`, async () => {
+		const load = vi.fn(async () => undefined)
+		await refreshWorkingComparison({ baseRef: `HEAD` }, load)
+		await refreshWorkingComparison(
+			{ baseRef: `main`, targetRef: `release` },
+			load,
+		)
+		expect(load).toHaveBeenCalledExactlyOnceWith(`HEAD`)
 	})
 })
