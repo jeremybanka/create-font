@@ -28,6 +28,22 @@ describe(`create-design workspace RPC`, () => {
 		expect(
 			snapshot.units.some(({ path }) => path === `create-design.json`),
 		).toBe(true)
+		const missingAsset = await app.handle(
+			new Request(
+				`http://localhost/api/source/asset?path=assets%2Fmissing.bin`,
+			),
+		)
+		expect(missingAsset.status).toBe(404)
+		expect(await missingAsset.json()).toMatchObject({
+			code: `source.asset_not_found`,
+		})
+		const unavailableComparison = await app.handle(
+			new Request(`http://localhost/api/source/comparison?baseRef=HEAD`),
+		)
+		expect(unavailableComparison.status).toBe(503)
+		expect(await unavailableComparison.json()).toMatchObject({
+			code: `source.git_unavailable`,
+		})
 		const application = await app.handle(new Request(`http://localhost/`))
 		expect(application.status).toBe(200)
 		expect(await application.text()).toContain(`create-design`)

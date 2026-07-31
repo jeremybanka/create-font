@@ -22,10 +22,11 @@ export async function createDesignServerApp(
 ) {
 	const root = resolve(options.root)
 	const storedSource = await createDesignSourceService(root)
-	const { source, versionControl } = coordinateDesignSourceVersionControl(
-		root,
-		storedSource,
-	)
+	const {
+		assets: sourceAssets,
+		source,
+		versionControl,
+	} = coordinateDesignSourceVersionControl(root, storedSource)
 	const adapter = options.adapter ?? runtimeElysiaAdapter
 	const app = new Elysia({
 		adapter,
@@ -37,7 +38,14 @@ export async function createDesignServerApp(
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
 			.get(`/workspace`, () => ({ root }))
-			.use(createSourceRpc({ adapter, assets: source, source, versionControl })),
+			.use(
+				createSourceRpc({
+					adapter,
+					assets: sourceAssets,
+					source,
+					versionControl,
+				}),
+			),
 	)
 	if (options.assets === undefined) return app
 	return app.use(

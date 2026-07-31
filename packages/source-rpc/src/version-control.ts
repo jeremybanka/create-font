@@ -16,6 +16,7 @@ import {
 	type SourceUnitSnapshot,
 	type SourceVersionControlService,
 } from "./contracts.ts"
+import type { SourceAssetDescriptor } from "./assets.ts"
 
 const MAX_SNAPSHOT_UNITS = 2_000
 const MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024
@@ -23,17 +24,32 @@ const GIT_TIMEOUT_MS = 15_000
 
 export type SourceUnitChange = Readonly<{
 	after?: SourceUnitSnapshot
+	assetAfter?: SourceAssetDescriptor
+	assetBefore?: SourceAssetDescriptor
 	before?: SourceUnitSnapshot
 	change: SourceChangeKind
 	path: string
 }>
 
 export interface SourceVersionControlAdapter {
+	assets?: Readonly<{
+		descriptors(
+			values: Readonly<Record<string, JsonValue>>,
+		):
+			| readonly SourceAssetDescriptor[]
+			| Promise<readonly SourceAssetDescriptor[]>
+		isPath(path: string): boolean
+	}>
 	groupChanges(
 		changes: readonly SourceUnitChange[],
 	): readonly SourceChangeGroup[]
 	includesPath(path: string): boolean
 	parseUnit(path: string, text: string): JsonValue | Promise<JsonValue>
+	validateComparison?(
+		base: SourceProjectSnapshot,
+		target: SourceProjectSnapshot,
+		changes: readonly SourceUnitChange[],
+	): void | Promise<void>
 	validateSnapshot(
 		values: Readonly<Record<string, JsonValue>>,
 	): void | Promise<void>
@@ -117,6 +133,10 @@ export const nodeSourceVersionControlRuntime: SourceVersionControlRuntime = {
 
 function textRevision(text: string): string {
 	return `sha256:${createHash(`sha256`).update(text).digest(`hex`)}`
+}
+
+function byteRevision(bytes: Uint8Array): `sha256:${string}` {
+	return `sha256:${createHash(`sha256`).update(bytes).digest(`hex`)}`
 }
 
 function comparisonIdentity(base: string, target: string): string {
@@ -273,14 +293,17 @@ async function snapshotAtCommit(
 		runtime,
 	)
 	const prefix = context.projectPrefix === `` ? `` : `${context.projectPrefix}/`
-	const paths = new TextDecoder()
+	const treePaths = new TextDecoder()
 		.decode(listed.stdout)
 		.split(`\0`)
 		.filter(Boolean)
 		.filter((path) => path.startsWith(prefix))
 		.map((path) => validUnitPath(path.slice(prefix.length)))
-		.filter((path) => adapter.includesPath(path))
 		.toSorted()
+	const paths = treePaths.filter(
+		(path) =>
+			adapter.includesPath(path) || adapter.assets?.isPath(path) === true,
+	)
 	if (paths.length === 0) {
 		throw new SourceVersionControlError(
 			`source.repository_state`,
@@ -293,29 +316,122 @@ async function snapshotAtCommit(
 			`The selected source snapshot has more than ${MAX_SNAPSHOT_UNITS} units.`,
 		)
 	}
+	const byteLengths = new Map<string, number>()
 	let totalBytes = 0
-	const units: SourceUnitSnapshot[] = []
-	const values: Record<string, JsonValue> = {}
 	for (const path of paths) {
-		const blob = await runGit(
-			context,
-			[`show`, `--no-textconv`, `${commit}:${repositoryPath(context, path)}`],
-			runtime,
-		)
-		totalBytes += blob.stdout.byteLength
+		const sizeText = new TextDecoder()
+			.decode(
+				(
+					await runGit(
+						context,
+						[`cat-file`, `-s`, `${commit}:${repositoryPath(context, path)}`],
+						runtime,
+					)
+				).stdout,
+			)
+			.trim()
+		const byteLength = Number(sizeText)
+		if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`Git returned an invalid byte length for source path ${JSON.stringify(path)}.`,
+			)
+		}
+		byteLengths.set(path, byteLength)
+		totalBytes += byteLength
 		if (totalBytes > MAX_SNAPSHOT_BYTES) {
 			throw new SourceVersionControlError(
 				`source.snapshot_too_large`,
 				`The selected source snapshot exceeds the ${MAX_SNAPSHOT_BYTES / 1024 / 1024} MiB review limit.`,
 			)
 		}
+	}
+	const units: SourceUnitSnapshot[] = []
+	const values: Record<string, JsonValue> = {}
+	for (const path of paths.filter((path) => adapter.includesPath(path))) {
+		if (adapter.assets?.isPath(path) === true) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`Source path ${JSON.stringify(path)} is ambiguously classified as JSON and binary.`,
+			)
+		}
+		const blob = await runGit(
+			context,
+			[`show`, `--no-textconv`, `${commit}:${repositoryPath(context, path)}`],
+			runtime,
+		)
+		if (blob.stdout.byteLength !== byteLengths.get(path)) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`Git returned inconsistent bytes for source path ${JSON.stringify(path)}.`,
+			)
+		}
 		const text = new TextDecoder().decode(blob.stdout)
 		const value = await adapter.parseUnit(path, text)
 		values[path] = value
-		units.push({ path, revision: textRevision(text), value })
+		units.push({ path, revision: byteRevision(blob.stdout), value })
 	}
 	await adapter.validateSnapshot(values)
-	return { revision: commit, units }
+	if (adapter.assets === undefined) return { revision: commit, units }
+	const declared = await adapter.assets.descriptors(values)
+	const descriptors = new Map<string, SourceAssetDescriptor>()
+	const ids = new Set<string>()
+	for (const descriptor of declared) {
+		const path = validUnitPath(descriptor.path)
+		if (
+			descriptor.id.length === 0 ||
+			descriptor.id.includes(`\0`) ||
+			descriptor.mediaType.length === 0 ||
+			!Number.isSafeInteger(descriptor.byteLength) ||
+			descriptor.byteLength < 0 ||
+			!/^sha256:[0-9a-f]{64}$/u.test(descriptor.digest) ||
+			!adapter.assets.isPath(path) ||
+			descriptors.has(path) ||
+			ids.has(descriptor.id)
+		) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`The selected ref declares an invalid source asset inventory.`,
+			)
+		}
+		descriptors.set(path, { ...descriptor, path })
+		ids.add(descriptor.id)
+	}
+	const assetPaths = paths.filter(
+		(path) => adapter.assets?.isPath(path) === true,
+	)
+	if (
+		JSON.stringify(assetPaths) !==
+		JSON.stringify([...descriptors.keys()].toSorted())
+	) {
+		throw new SourceVersionControlError(
+			`source.repository_state`,
+			`The selected ref's binary assets do not match its declared asset inventory.`,
+		)
+	}
+	const assets: SourceAssetDescriptor[] = []
+	for (const path of assetPaths) {
+		const expected = descriptors.get(path)!
+		const blob = await runGit(
+			context,
+			[`show`, `--no-textconv`, `${commit}:${repositoryPath(context, path)}`],
+			runtime,
+		)
+		const byteLength = byteLengths.get(path)
+		const digest = byteRevision(blob.stdout)
+		if (
+			blob.stdout.byteLength !== byteLength ||
+			expected.byteLength !== byteLength ||
+			expected.digest !== digest
+		) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`Binary source asset ${JSON.stringify(path)} does not match its declared digest and length.`,
+			)
+		}
+		assets.push(expected)
+	}
+	return { assets, revision: commit, units }
 }
 
 function sourceUnitChanges(
@@ -324,7 +440,9 @@ function sourceUnitChanges(
 ): readonly SourceUnitChange[] {
 	const baseByPath = new Map(base.units.map((unit) => [unit.path, unit]))
 	const targetByPath = new Map(target.units.map((unit) => [unit.path, unit]))
-	return [...new Set([...baseByPath.keys(), ...targetByPath.keys()])]
+	const unitChanges = [
+		...new Set([...baseByPath.keys(), ...targetByPath.keys()]),
+	]
 		.toSorted()
 		.flatMap((path): readonly SourceUnitChange[] => {
 			const before = baseByPath.get(path)
@@ -349,6 +467,44 @@ function sourceUnitChanges(
 				},
 			]
 		})
+	const baseAssets = new Map(
+		(base.assets ?? []).map((asset) => [asset.path, asset]),
+	)
+	const targetAssets = new Map(
+		(target.assets ?? []).map((asset) => [asset.path, asset]),
+	)
+	const assetChanges = [
+		...new Set([...baseAssets.keys(), ...targetAssets.keys()]),
+	]
+		.toSorted()
+		.flatMap((path): readonly SourceUnitChange[] => {
+			const assetBefore = baseAssets.get(path)
+			const assetAfter = targetAssets.get(path)
+			if (
+				assetBefore !== undefined &&
+				assetAfter !== undefined &&
+				assetBefore.byteLength === assetAfter.byteLength &&
+				assetBefore.digest === assetAfter.digest
+			) {
+				return []
+			}
+			return [
+				{
+					...(assetAfter === undefined ? {} : { assetAfter }),
+					...(assetBefore === undefined ? {} : { assetBefore }),
+					change:
+						assetBefore === undefined
+							? `added`
+							: assetAfter === undefined
+								? `deleted`
+								: `modified`,
+					path,
+				},
+			]
+		})
+	return [...unitChanges, ...assetChanges].toSorted((a, b) =>
+		a.path.localeCompare(b.path),
+	)
 }
 
 function checkedGroups(
@@ -426,6 +582,8 @@ export function createSourceVersionControl(
 			targetCommit === undefined
 				? await readWorkingSnapshot()
 				: await immutableSnapshot(git, targetCommit)
+		const changes = sourceUnitChanges(baseSnapshot, targetSnapshot)
+		await adapter.validateComparison?.(baseSnapshot, targetSnapshot, changes)
 		return {
 			base: {
 				identity: baseCommit,
@@ -434,10 +592,7 @@ export function createSourceVersionControl(
 				ref: input.baseRef,
 				snapshot: baseSnapshot,
 			},
-			changes: checkedGroups(
-				sourceUnitChanges(baseSnapshot, targetSnapshot),
-				adapter,
-			),
+			changes: checkedGroups(changes, adapter),
 			identity: comparisonIdentity(
 				baseCommit,
 				targetCommit ?? targetSnapshot.revision,

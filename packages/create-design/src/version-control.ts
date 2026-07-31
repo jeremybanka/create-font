@@ -1,8 +1,11 @@
 import {
 	SourceValidationError,
+	SourceVersionControlError,
 	type JsonValue,
+	type SourceAssetService,
 	type SourceChangeGroup,
 	type SourceChangeKind,
+	type SourceProjectSnapshot,
 	type SourceService,
 	type SourceVersionControlService,
 } from "@create-art/source-rpc"
@@ -13,9 +16,12 @@ import {
 } from "@create-art/source-rpc/node"
 import {
 	assembleDesignDocument,
+	assetUnitPathSchema,
 	designSourcePaths,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
+	validateSourceUnit,
+	type AssetIndexFile,
 	type DesignSourceDiagnostic,
 	type DesignSourceDirectoryFiles,
 } from "@create-design/source"
@@ -141,10 +147,131 @@ function paletteDependentObjectPaths(
 	)
 }
 
+function assetDescriptors(snapshot: SourceProjectSnapshot): ReadonlyMap<
+	string,
+	Readonly<{
+		byteLength: number
+		digest: `sha256:${string}`
+		id: string
+		mediaType: string
+		path: string
+	}>
+> {
+	const path = designSourcePaths.assetIndex
+	const value = snapshot.units.find((unit) => unit.path === path)?.value
+	const validated = validateSourceUnit(`asset-index`, value, path)
+	if (!validated.ok) throw new SourceValidationError(issues(validated.errors))
+	return new Map(
+		(validated.value as AssetIndexFile).entries.map((entry) => [
+			entry.path,
+			{
+				byteLength: entry.byteLength,
+				digest: `sha256:${entry.sha256}` as const,
+				id: entry.id,
+				mediaType: entry.mediaType,
+				path: entry.path,
+			},
+		]),
+	)
+}
+
+function validateAssetComparison(
+	base: SourceProjectSnapshot,
+	target: SourceProjectSnapshot,
+	changes: readonly SourceUnitChange[],
+): void {
+	const before = assetDescriptors(base)
+	const after = assetDescriptors(target)
+	for (const [label, inventory, assets] of [
+		[`base`, before, base.assets ?? []],
+		[`target`, after, target.assets ?? []],
+	] as const) {
+		const actual = new Map(assets.map((asset) => [asset.path, asset]))
+		if (actual.size !== inventory.size) {
+			throw new SourceVersionControlError(
+				`source.repository_state`,
+				`The ${label} design asset inventory does not match its binary assets.`,
+			)
+		}
+		for (const [path, expected] of inventory) {
+			const descriptor = actual.get(path)
+			if (
+				descriptor === undefined ||
+				descriptor.id !== expected.id ||
+				descriptor.mediaType !== expected.mediaType ||
+				descriptor.byteLength !== expected.byteLength ||
+				descriptor.digest !== expected.digest
+			) {
+				throw new SourceVersionControlError(
+					`source.repository_state`,
+					`The ${label} design asset metadata does not match ${JSON.stringify(path)}.`,
+				)
+			}
+		}
+	}
+	const expectedChangedPaths = new Set(
+		[...new Set([...before.keys(), ...after.keys()])].filter((path) => {
+			const previous = before.get(path)
+			const next = after.get(path)
+			return (
+				previous === undefined ||
+				next === undefined ||
+				previous.byteLength !== next.byteLength ||
+				previous.digest !== next.digest
+			)
+		}),
+	)
+	const actualChangedPaths = new Set(
+		changes
+			.filter(
+				(change) =>
+					change.assetBefore !== undefined || change.assetAfter !== undefined,
+			)
+			.map(({ path }) => path),
+	)
+	if (
+		JSON.stringify([...actualChangedPaths].toSorted()) !==
+		JSON.stringify([...expectedChangedPaths].toSorted())
+	) {
+		throw new SourceVersionControlError(
+			`source.repository_state`,
+			`The design asset index and reviewed binary changes are not coherent.`,
+		)
+	}
+}
+
 export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
+	assets: {
+		descriptors(values) {
+			const path = designSourcePaths.assetIndex
+			const validated = validateSourceUnit(`asset-index`, values[path], path)
+			if (!validated.ok)
+				throw new SourceValidationError(issues(validated.errors))
+			return (validated.value as AssetIndexFile).entries.map((entry) => ({
+				byteLength: entry.byteLength,
+				digest: `sha256:${entry.sha256}` as const,
+				id: entry.id,
+				mediaType: entry.mediaType,
+				path: entry.path,
+			}))
+		},
+		isPath(path) {
+			return assetUnitPathSchema.safeParse(path).success
+		},
+	},
 	groupChanges(changes) {
+		const assetChanges = changes.filter(
+			(change) =>
+				change.path === designSourcePaths.assetIndex ||
+				change.assetBefore !== undefined ||
+				change.assetAfter !== undefined,
+		)
+		const assetPaths = new Set(assetChanges.map(({ path }) => path))
 		const structuralPaths = new Set(
-			changes.filter(isStructural).map(({ path }) => path),
+			changes
+				.filter((change) => !assetPaths.has(change.path))
+				.filter(isStructural)
+				.map(({ path }) => path),
 		)
 		if (structuralPaths.size > 0) {
 			for (const change of changes) {
@@ -155,11 +282,29 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 		}
 		const palettePaths = paletteDependentObjectPaths(changes)
 		if (palettePaths.size > 0) palettePaths.add(designSourcePaths.palette)
-		const coordinatedPaths = new Set([...structuralPaths, ...palettePaths])
-		const coordinatedChanges = changes.filter(({ path }) =>
-			coordinatedPaths.has(path),
+		const coordinatedPaths = new Set([
+			...assetPaths,
+			...structuralPaths,
+			...palettePaths,
+		])
+		const coordinatedChanges = changes.filter(
+			({ path }) => structuralPaths.has(path) || palettePaths.has(path),
 		)
 		return [
+			...(assetChanges.length === 0
+				? []
+				: [
+						{
+							change: aggregateChange(assetChanges),
+							id: `design:assets`,
+							kind: `asset`,
+							label: `Assets`,
+							paths: assetChanges.map(({ path }) => path).toSorted() as [
+								string,
+								...string[],
+							],
+						},
+					]),
 			...(coordinatedChanges.length === 0
 				? []
 				: [
@@ -198,6 +343,7 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 		if (!parsed.ok) throw new SourceValidationError(issues(parsed.errors))
 		return parsed.value as JsonValue
 	},
+	validateComparison: validateAssetComparison,
 	validateSnapshot(values) {
 		const assembled = assembleDesignDocument(
 			values as DesignSourceDirectoryFiles,
@@ -223,8 +369,9 @@ export function createDesignSourceVersionControl(
  */
 export function coordinateDesignSourceVersionControl(
 	root: string,
-	storedSource: SourceService,
+	storedSource: SourceService & SourceAssetService,
 ): Readonly<{
+	assets: SourceAssetService
 	source: SourceService
 	versionControl: SourceVersionControlService
 }> {
@@ -239,6 +386,14 @@ export function coordinateDesignSourceVersionControl(
 	}
 	const engine = createDesignSourceVersionControl(root, storedSource)
 	return {
+		assets: {
+			collectExpiredAssetStages: () => storedSource.collectExpiredAssetStages(),
+			discardAssetStage: (stagingToken) =>
+				storedSource.discardAssetStage(stagingToken),
+			readAsset: (path) => storedSource.readAsset(path),
+			stageAsset: (input) => storedSource.stageAsset(input),
+			writeAssets: (input) => withLock(() => storedSource.writeAssets(input)),
+		},
 		source: {
 			readManifest: () => withLock(() => storedSource.readManifest()),
 			readSnapshot: () => withLock(() => storedSource.readSnapshot()),
