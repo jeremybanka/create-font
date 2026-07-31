@@ -6,6 +6,7 @@ describe("create-design tool registration", () => {
 	it("does not expose the deferred Rule tool or its shortcut", () => {
 		expect(Object.keys(DESIGN_TOOLS)).toEqual([
 			"select",
+			"direct",
 			"transform",
 			"pen",
 			"rect",

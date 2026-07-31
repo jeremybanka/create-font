@@ -50,6 +50,7 @@ export interface DesignTileContext {
 	) => void
 	readonly canReviewSourceChange?: (change: DesignSourceReviewChange) => boolean
 	readonly deleteSelection: () => void
+	readonly directSelectionSummary: string
 	readonly document: DesignDocument
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null

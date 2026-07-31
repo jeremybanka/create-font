@@ -30,6 +30,13 @@ explicit document-space contour projection. Node-level vector replacement is
 the deliberate bake boundary: it converts the projected result to path
 geometry and resets the transform to identity.
 
+Select (`V`) supports replacement, modifier-toggle, marquee, Select All, and
+Escape across visible unlocked objects. A multi-object move or transform is a
+single history entry. Direct Selection (`A`) targets ordinary path nodes,
+handles, segments, or whole contours; modifier clicks and marquee extend the
+control selection, arrow keys nudge it, and each gesture commits atomically.
+Native selection inside text fields remains owned by the browser.
+
 The canonical document plane is global, point-based, and Y-down. Ordered named
 artboards are positioned rectangles in that plane, not parents of ordinary
 objects. Artwork can cross several artboards or sit outside all of them. The

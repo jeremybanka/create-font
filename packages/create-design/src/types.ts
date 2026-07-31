@@ -17,4 +17,10 @@ export type {
 	RgbColor,
 } from "@create-design/source"
 
-export type DesignTool = "select" | "transform" | "pen" | "rect" | "ellipse"
+export type DesignTool =
+	| "select"
+	| "direct"
+	| "transform"
+	| "pen"
+	| "rect"
+	| "ellipse"
