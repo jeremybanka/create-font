@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	DEFAULT_LAYER_ID,
 	assembleDesignDocument,
+	decodeDesignDocument,
 	defaultObjectUnitPath,
 	designSourcePaths,
 	formatSourceUnit,
@@ -18,7 +19,7 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 1,
+	version: 2,
 	title: "Directory proof",
 	page: { width: 612, height: 792 },
 	swatches: [
@@ -135,8 +136,9 @@ function changedPaths(
 describe("create-design directory source", () => {
 	it("normalizes legacy path-and-fill objects deterministically", () => {
 		const document = fixture()
-		const result = validateDesignDocument({
+		const result = decodeDesignDocument({
 			...document,
+			version: 1,
 			objects: [
 				{
 					id: "object:legacy",

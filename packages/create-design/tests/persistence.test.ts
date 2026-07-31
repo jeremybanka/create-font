@@ -274,6 +274,50 @@ describe("create-design recovery storage", () => {
 		expect(readDesignRecoveryDraft(storage)).toBeNull()
 	})
 
+	it("migrates a legacy complete document embedded in a recovery draft", () => {
+		const legacy = {
+			version: 1,
+			baseRevision: "source:legacy",
+			updatedAt: 42,
+			document: {
+				format: "create-design.document",
+				version: 1,
+				title: "Recovered legacy design",
+				page: { width: 100, height: 100 },
+				swatches: [
+					{
+						id: "swatch:ink",
+						name: "Ink",
+						source: { space: "rgb", r: 0, g: 0, b: 0 },
+					},
+				],
+				objects: [
+					{
+						id: "object:legacy",
+						name: "Legacy",
+						contours: [{ closed: false, points: [{ x: 1, y: 2 }] }],
+						fillId: "swatch:ink",
+					},
+				],
+				guides: [],
+			},
+		}
+		const storage = {
+			getItem: () => JSON.stringify(legacy),
+		}
+		expect(readDesignRecoveryDraft(storage)).toMatchObject({
+			document: {
+				version: 2,
+				objects: [
+					{
+						geometry: { kind: "path" },
+						appearance: { fill: { swatchId: "swatch:ink" } },
+					},
+				],
+			},
+		})
+	})
+
 	it("treats unavailable browser storage as best-effort", () => {
 		const unavailable = {
 			getItem(): string | null {

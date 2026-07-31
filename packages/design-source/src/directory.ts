@@ -4,6 +4,21 @@ import {
 } from "@create-art/source-format"
 import { z } from "zod/v4"
 
+import {
+	appearanceSchema,
+	contourSchema,
+	CREATE_DESIGN_DOCUMENT_FORMAT,
+	CREATE_DESIGN_DOCUMENT_VERSION,
+	designObjectIdSchema,
+	geometrySchema,
+	guideSchema,
+	positiveNumberSchema,
+	LEGACY_DESIGN_DOCUMENT_VERSION,
+	swatchIdSchema,
+	swatchSchema,
+	transformSchema,
+	validateDesignDocument,
+} from "./document.ts"
 import { diagnostic, failure, success } from "./result.ts"
 import type {
 	DesignDocument,
@@ -14,16 +29,9 @@ import type {
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
 export const CREATE_DESIGN_SOURCE_VERSION = 1 as const
-export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 1 as const
 export const DEFAULT_ARTBOARD_ID = "artboard:page" as const
 export const DEFAULT_LAYER_ID = "layer:artwork" as const
 
-const finiteNumberSchema = z.number().finite()
-const positiveNumberSchema = finiteNumberSchema.positive()
-const designObjectIdSchema = z.string().regex(/^object:.+/u)
-const swatchIdSchema = z.string().regex(/^swatch:.+/u)
-const guideIdSchema = z.string().regex(/^guide:.+/u)
 const artboardIdSchema = z.string().regex(/^artboard:.+/u)
 const layerIdSchema = z.string().regex(/^layer:.+/u)
 const groupIdSchema = z.string().regex(/^group:.+/u)
@@ -33,170 +41,15 @@ const mediaTypeSchema = z
 	.string()
 	.regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u)
 
-const rgbColorSchema = z
-	.object({
-		space: z.literal("rgb"),
-		r: finiteNumberSchema.min(0).max(255),
-		g: finiteNumberSchema.min(0).max(255),
-		b: finiteNumberSchema.min(0).max(255),
-	})
-	.strict()
-const cmykColorSchema = z
-	.object({
-		space: z.literal("cmyk"),
-		c: finiteNumberSchema.min(0).max(100),
-		m: finiteNumberSchema.min(0).max(100),
-		y: finiteNumberSchema.min(0).max(100),
-		k: finiteNumberSchema.min(0).max(100),
-	})
-	.strict()
-const colorDefinitionSchema = z.discriminatedUnion("space", [
-	rgbColorSchema,
-	cmykColorSchema,
-])
-const swatchSchema = z
-	.object({
-		id: swatchIdSchema,
-		name: z.string(),
-		source: colorDefinitionSchema,
-		alternate: colorDefinitionSchema.optional(),
-	})
-	.strict()
-const vectorSchema = z
-	.object({ x: finiteNumberSchema, y: finiteNumberSchema })
-	.strict()
-const pointSchema = z
-	.object({
-		id: z.string().min(1).optional(),
-		x: finiteNumberSchema,
-		y: finiteNumberSchema,
-		incoming: vectorSchema.optional(),
-		outgoing: vectorSchema.optional(),
-	})
-	.strict()
-const contourSchema = z
-	.object({
-		id: z.string().min(1).optional(),
-		closed: z.boolean(),
-		points: z.array(pointSchema),
-	})
-	.strict()
-const pathGeometrySchema = z
-	.object({
-		kind: z.literal("path"),
-		contours: z.array(contourSchema),
-	})
-	.strict()
-const rectangleGeometrySchema = z
-	.object({
-		kind: z.literal("rectangle"),
-		x: finiteNumberSchema,
-		y: finiteNumberSchema,
-		width: finiteNumberSchema,
-		height: finiteNumberSchema,
-	})
-	.strict()
-const ellipseGeometrySchema = z
-	.object({
-		kind: z.literal("ellipse"),
-		centerX: finiteNumberSchema,
-		centerY: finiteNumberSchema,
-		radiusX: finiteNumberSchema.nonnegative(),
-		radiusY: finiteNumberSchema.nonnegative(),
-	})
-	.strict()
-const geometrySchema = z.discriminatedUnion("kind", [
-	pathGeometrySchema,
-	rectangleGeometrySchema,
-	ellipseGeometrySchema,
-])
-const transformSchema = z
-	.object({
-		a: finiteNumberSchema,
-		b: finiteNumberSchema,
-		c: finiteNumberSchema,
-		d: finiteNumberSchema,
-		e: finiteNumberSchema,
-		f: finiteNumberSchema,
-	})
-	.strict()
-const appearanceSchema = z
-	.object({
-		fill: z.object({ swatchId: swatchIdSchema }).strict().optional(),
-		stroke: z
-			.object({
-				swatchId: swatchIdSchema,
-				width: finiteNumberSchema.nonnegative(),
-			})
-			.strict()
-			.optional(),
-	})
-	.strict()
-const canonicalDesignObjectSchema = z
-	.object({
-		id: designObjectIdSchema,
-		name: z.string(),
-		geometry: geometrySchema,
-		transform: transformSchema,
-		appearance: appearanceSchema,
-		hidden: z.boolean().optional(),
-		locked: z.boolean().optional(),
-	})
-	.strict()
-const legacyDesignObjectSchema = z
-	.object({
-		id: designObjectIdSchema,
-		name: z.string(),
-		contours: z.array(contourSchema),
-		fillId: swatchIdSchema,
-		hidden: z.boolean().optional(),
-		locked: z.boolean().optional(),
-	})
-	.strict()
-	.transform((object) => ({
-		id: object.id,
-		name: object.name,
-		geometry: { kind: "path" as const, contours: object.contours },
-		transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
-		appearance: { fill: { swatchId: object.fillId } },
-		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
-		...(object.locked === undefined ? {} : { locked: object.locked }),
-	}))
-const designObjectSchema = z.union([
-	canonicalDesignObjectSchema,
-	legacyDesignObjectSchema,
-])
-const guideSchema = z
-	.object({
-		id: guideIdSchema,
-		axis: z.enum(["x", "y"]),
-		value: finiteNumberSchema,
-	})
-	.strict()
-
-export const designDocumentSchema = z
-	.object({
-		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
-		version: z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
-		title: z.string(),
-		page: z
-			.object({
-				width: positiveNumberSchema,
-				height: positiveNumberSchema,
-			})
-			.strict(),
-		swatches: z.array(swatchSchema),
-		objects: z.array(designObjectSchema),
-		guides: z.array(guideSchema),
-	})
-	.strict()
-
 export const projectFileSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_SOURCE_FORMAT),
 		sourceVersion: z.literal(CREATE_DESIGN_SOURCE_VERSION),
 		documentFormat: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
-		documentVersion: z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
+		documentVersion: z.union([
+			z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
+			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
+		]),
 	})
 	.strict()
 export const documentFileSchema = z
@@ -610,66 +463,6 @@ export function formatSourceUnit(
 	return validated.ok
 		? success(formatSourceJson(validated.value as unknown as SourceJsonValue))
 		: failure(validated.errors)
-}
-
-export function validateDesignDocument(
-	value: unknown,
-): DesignSourceResult<DesignDocument> {
-	const parsed = designDocumentSchema.safeParse(value)
-	if (!parsed.success) return failure(zodDiagnostics(parsed.error))
-	const errors: DesignSourceDiagnostic[] = []
-	const seenSwatches = new Set<string>()
-	for (const [index, swatch] of parsed.data.swatches.entries()) {
-		if (seenSwatches.has(swatch.id))
-			errors.push(
-				diagnostic(
-					"directory.duplicate_id",
-					`$.swatches[${index}].id`,
-					`Duplicate swatch ID ${swatch.id}.`,
-				),
-			)
-		seenSwatches.add(swatch.id)
-	}
-	const seenObjects = new Set<string>()
-	for (const [index, object] of parsed.data.objects.entries()) {
-		if (seenObjects.has(object.id))
-			errors.push(
-				diagnostic(
-					"directory.duplicate_id",
-					`$.objects[${index}].id`,
-					`Duplicate object ID ${object.id}.`,
-				),
-			)
-		seenObjects.add(object.id)
-		for (const [kind, paint] of [
-			["fill", object.appearance.fill],
-			["stroke", object.appearance.stroke],
-		] as const) {
-			if (paint !== undefined && !seenSwatches.has(paint.swatchId))
-				errors.push(
-					diagnostic(
-						"directory.reference",
-						`$.objects[${index}].appearance.${kind}.swatchId`,
-						`Object ${object.id} references missing swatch ${paint.swatchId}.`,
-					),
-				)
-		}
-	}
-	const seenGuides = new Set<string>()
-	for (const [index, guide] of parsed.data.guides.entries()) {
-		if (seenGuides.has(guide.id))
-			errors.push(
-				diagnostic(
-					"directory.duplicate_id",
-					`$.guides[${index}].id`,
-					`Duplicate guide ID ${guide.id}.`,
-				),
-			)
-		seenGuides.add(guide.id)
-	}
-	return errors.length === 0
-		? success(parsed.data as DesignDocument)
-		: failure(errors)
 }
 
 export interface SplitDesignDocumentOptions {

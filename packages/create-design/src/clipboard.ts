@@ -2,7 +2,10 @@ import {
 	writeVectorClipboard,
 	type VectorClipboardPayload,
 } from "@create-font/editor/shared"
-import { validateDesignDocument } from "@create-design/source"
+import {
+	decodeDesignDocument,
+	validateDesignDocument,
+} from "@create-design/source"
 
 import {
 	IDENTITY_DESIGN_TRANSFORM,
@@ -265,19 +268,30 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 			return null
 		const normalized = validateDesignDocument({
 			format: "create-design.document",
-			version: 1,
+			version: 2,
 			title: "Clipboard",
 			page: { width: 1, height: 1 },
 			objects: parsed.objects,
 			swatches: parsed.swatches,
 			guides: [],
 		})
-		return normalized.ok
+		const compatible = normalized.ok
+			? normalized
+			: decodeDesignDocument({
+					format: "create-design.document",
+					version: 1,
+					title: "Clipboard",
+					page: { width: 1, height: 1 },
+					objects: parsed.objects,
+					swatches: parsed.swatches,
+					guides: [],
+				})
+		return compatible.ok
 			? {
 					format: "create-design.vector",
 					version: 1,
-					objects: normalized.value.objects,
-					swatches: normalized.value.swatches,
+					objects: compatible.value.objects,
+					swatches: compatible.value.swatches,
 				}
 			: null
 	} catch {
