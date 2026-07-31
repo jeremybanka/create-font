@@ -116,21 +116,36 @@ export interface DesignGuide {
 	readonly value: number
 }
 
+export interface DesignArtboardInsets {
+	readonly top: number
+	readonly right: number
+	readonly bottom: number
+	readonly left: number
+}
+
+/**
+ * One named export rectangle in the global document coordinate plane.
+ *
+ * Artboards never own artwork. Their order is the order of the containing
+ * `DesignDocument.artboards` array.
+ */
+export interface DesignArtboard {
+	readonly id: string
+	readonly name: string
+	readonly x: number
+	readonly y: number
+	readonly width: number
+	readonly height: number
+	readonly bleed?: DesignArtboardInsets
+	readonly safeArea?: DesignArtboardInsets
+}
+
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 4
+	readonly version: 5
 	readonly title: string
-	/**
-	 * The current page rectangle in the global document coordinate plane.
-	 * Objects are not children of this rectangle and retain their coordinates
-	 * when it moves or resizes.
-	 */
-	readonly page: Readonly<{
-		readonly x: number
-		readonly y: number
-		readonly width: number
-		readonly height: number
-	}>
+	/** Ordered export rectangles, independent from the global scene hierarchy. */
+	readonly artboards: readonly DesignArtboard[]
 	readonly swatches: readonly DesignSwatch[]
 	readonly objects: readonly DesignObject[]
 	readonly guides: readonly DesignGuide[]

@@ -12,8 +12,8 @@ import { describe, expect, test } from "vitest"
 import { createInitialDocument } from "../src/document.ts"
 import { designSourceTransaction } from "../src/source-sync.ts"
 
-function initialState() {
-	const split = splitDesignDocument(createInitialDocument())
+function initialState(document = createInitialDocument()) {
+	const split = splitDesignDocument(document)
 	if (!split.ok) throw new Error(`Could not split fixture.`)
 	return sourceSyncStateFromSnapshot({
 		revision: `project`,
@@ -61,6 +61,43 @@ describe(`create-design source synchronization`, () => {
 		expect(transaction.writes.map(({ path }) => path)).toEqual([
 			`scene/layers/artwork.json`,
 			`scene/objects/index.json`,
+		])
+	})
+
+	test(`persists artboard edits and order without rewriting object units`, () => {
+		const document = createInitialDocument()
+		const first = document.artboards[0]!
+		const withTwo = {
+			...document,
+			artboards: [
+				first,
+				{
+					id: `artboard:social`,
+					name: `Social square`,
+					x: 700,
+					y: 20,
+					width: 500,
+					height: 500,
+				},
+			],
+		}
+		const state = initialState(withTwo)
+		const renamed = designSourceTransaction(state, {
+			...withTwo,
+			artboards: [first, { ...withTwo.artboards[1]!, name: `Feed square` }],
+		})
+		expect(renamed.removals).toEqual([])
+		expect(renamed.writes.map(({ path }) => path)).toEqual([
+			expect.stringMatching(/^artboards\/(?!index\.json)/u),
+		])
+
+		const reordered = designSourceTransaction(state, {
+			...withTwo,
+			artboards: withTwo.artboards.toReversed(),
+		})
+		expect(reordered.removals).toEqual([])
+		expect(reordered.writes.map(({ path }) => path)).toEqual([
+			`artboards/index.json`,
 		])
 	})
 })

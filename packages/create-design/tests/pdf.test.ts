@@ -37,6 +37,35 @@ describe("PDF export", () => {
 		expect(pdf.endsWith("%%EOF\n")).toBe(true)
 	})
 
+	it("projects one explicitly selected artboard without changing global artwork", () => {
+		const document = createInitialDocument()
+		const objectSnapshot = structuredClone(document.objects)
+		const social = {
+			id: "artboard:social",
+			name: "Social",
+			x: 800,
+			y: -200,
+			width: 500,
+			height: 500,
+		}
+		const withArtboards = {
+			...document,
+			artboards: [...document.artboards, social],
+		}
+		const projection = createPdfProjectionGraph().project(withArtboards, social)
+		expect(projection.page).toMatchObject({
+			artboardId: social.id,
+			x: social.x,
+			y: social.y,
+			width: social.width,
+			height: social.height,
+		})
+		expect(pdfContentStream(withArtboards, social)).toContain(
+			"1 0 0 -1 -800 300 cm",
+		)
+		expect(withArtboards.objects).toEqual(objectSnapshot)
+	})
+
 	it("exports curved Pen contours with fill-only cubic geometry", () => {
 		const document = createInitialDocument()
 		const content = pdfContentStream({
@@ -252,9 +281,10 @@ describe("PDF export", () => {
 		)
 	})
 
-	it("reuses object streams across stacking and page-transform changes", () => {
+	it("reuses object streams across stacking and artboard-transform changes", () => {
 		const graph = createPdfProjectionGraph()
 		const document = createInitialDocument()
+		const artboard = document.artboards[0]!
 		const before = graph.project(document)
 		const reordered = graph.project({
 			...document,
@@ -264,23 +294,21 @@ describe("PDF export", () => {
 		expect(reordered.page.objectProjections).toEqual(
 			before.page.objectProjections.toReversed(),
 		)
-		const resized = graph.project({
-			...document,
-			page: { ...document.page, height: document.page.height + 10 },
+		const resized = graph.project(document, {
+			...artboard,
+			height: artboard.height + 10,
 		})
 		expect(resized.page).not.toBe(reordered.page)
 		expect(resized.page.objectProjections).toEqual(
 			before.page.objectProjections,
 		)
-		const movedDocument = {
-			...document,
-			page: { ...document.page, x: 120, y: -40 },
-		}
-		const moved = graph.project(movedDocument)
+		const movedArtboard = { ...artboard, x: 120, y: -40 }
+		const moved = graph.project(document, movedArtboard)
 		expect(moved.page).not.toBe(resized.page)
 		expect(moved.page.objectProjections).toEqual(before.page.objectProjections)
-		expect(pdfContentStream(movedDocument)).toContain("1 0 0 -1 -120 752 cm")
-		expect(movedDocument.objects).toBe(document.objects)
+		expect(pdfContentStream(document, movedArtboard)).toContain(
+			"1 0 0 -1 -120 752 cm",
+		)
 	})
 
 	it("keeps page and document projections for non-export state", () => {

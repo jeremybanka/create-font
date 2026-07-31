@@ -140,7 +140,15 @@ describe("design object vector adapter", () => {
 		const movedPage = designVectorAdapter.clipboard(
 			{
 				...document,
-				page: { x: 900, y: -700, width: 200, height: 3_000 },
+				artboards: [
+					{
+						...document.artboards[0]!,
+						x: 900,
+						y: -700,
+						width: 200,
+						height: 3_000,
+					},
+				],
 			},
 			["object:coral"],
 		)

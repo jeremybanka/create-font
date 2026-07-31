@@ -55,6 +55,7 @@ import {
 	validDesignAppearance,
 	type AppearancePaintTarget,
 } from "./appearance.ts"
+import { activeDesignArtboard } from "./artboards.ts"
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
 import { canvasToDocumentPoint } from "./coordinates.ts"
@@ -75,7 +76,6 @@ import {
 } from "./persistence.ts"
 import {
 	captureDesignPointer,
-	clampToPage,
 	DESIGN_MAX_ZOOM,
 	DESIGN_MIN_ZOOM,
 	designBaseScale,
@@ -176,6 +176,7 @@ interface DesignGestureObjectPreview {
 
 function resolveDesignGestureObject(
 	document: DesignDocument,
+	artboard: DesignDocument["artboards"][number],
 	gesture: DesignObjectGesture,
 	preview: VectorGesturePreview | null,
 	worldScale: number,
@@ -186,7 +187,7 @@ function resolveDesignGestureObject(
 			preview.delta.x,
 			preview.delta.y,
 		)
-		const snapped = snapDesignObject(rawObject, document, worldScale)
+		const snapped = snapDesignObject(rawObject, artboard, worldScale)
 		return {
 			object: snapped.object,
 			snap: { x: snapped.x, y: snapped.y },
@@ -212,7 +213,7 @@ function resolveDesignGestureObject(
 
 function designSnapGuides(
 	snap: Readonly<{ x: number | null; y: number | null }>,
-	page: Readonly<{ x: number; y: number; width: number; height: number }>,
+	artboard: Readonly<{ x: number; y: number; width: number; height: number }>,
 ): readonly VectorSnapGuide[] {
 	return [
 		...(snap.x === null
@@ -221,7 +222,12 @@ function designSnapGuides(
 					{
 						id: `design-snap-x:${snap.x}`,
 						axis: "x" as const,
-						points: [snap.x, page.y, snap.x, page.y + page.height] as const,
+						points: [
+							snap.x,
+							artboard.y,
+							snap.x,
+							artboard.y + artboard.height,
+						] as const,
 					},
 				]),
 		...(snap.y === null
@@ -230,7 +236,12 @@ function designSnapGuides(
 					{
 						id: `design-snap-y:${snap.y}`,
 						axis: "y" as const,
-						points: [page.x, snap.y, page.x + page.width, snap.y] as const,
+						points: [
+							artboard.x,
+							snap.y,
+							artboard.x + artboard.width,
+							snap.y,
+						] as const,
 					},
 				]),
 	]
@@ -333,6 +344,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
+	const [activeArtboardId, setActiveArtboardId] = useState(
+		() => activeDesignArtboard(initialLoad.document).id,
+	)
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -382,6 +396,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}, [])
 	documentRef.current = document
 	persistenceRef.current = persistence
+	const activeArtboard = activeDesignArtboard(document, activeArtboardId)
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
@@ -420,7 +435,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
 	const expansionEligibility = shapeExpansionEligibility(document, selection)
-	const baseScale = designBaseScale(canvasViewport, document.page)
+	const baseScale = designBaseScale(canvasViewport, activeArtboard)
 	const viewOptions = useMemo(
 		() => ({
 			baseScale,
@@ -430,6 +445,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[baseScale],
 	)
 	const worldScale = canvasScale(canvasView, viewOptions)
+	const focusActiveArtboard = useCallback((): void => {
+		artboardWrapRef.current?.focus()
+		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
+		setCanvasView(initialDesignCanvasView(canvasViewport, activeArtboard))
+	}, [activeArtboard, canvasViewport])
 	const gesturePolicy = useMemo(
 		() => ({ yAxis: "down" as const, rotationSnapDegrees: 15 }),
 		[],
@@ -458,14 +478,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 				x: 0,
 				y: 0,
 			}
-			return clampToPage(
-				canvasToDocumentPoint(
-					screenToDocument(pointer, canvasView, viewOptions),
-				),
-				document.page,
+			return canvasToDocumentPoint(
+				screenToDocument(pointer, canvasView, viewOptions),
 			)
 		},
-		[canvasView, document.page, viewOptions],
+		[canvasView, viewOptions],
 	)
 
 	const cancelCanvasGesture = useCallback((): void => {
@@ -553,11 +570,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 
 	const exportDocument = useCallback((): void => {
-		downloadPdf(document)
+		downloadPdf(document, activeArtboard)
 		setStatus(
 			`Exported ${document.title}.pdf with ${document.objects.length} vector objects.`,
 		)
-	}, [document])
+	}, [activeArtboard, document])
 
 	const setObjectProperty = (
 		object: DesignObject,
@@ -741,6 +758,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 					document.objects.some((object) => object.id === change.id)
 				)
 			case "artboard":
+				return (
+					change.change !== "deleted" &&
+					document.artboards.some((artboard) => artboard.id === change.id)
+				)
 			case "document":
 			case "palette":
 			case "structure":
@@ -773,8 +794,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 				setStatus("Reviewing coordinated layer and object structure.")
 				return
 			case "artboard":
+				setActiveArtboardId(change.id)
 				openTile("pages")
-				setStatus("Reviewing the active artboard.")
+				setStatus(`Reviewing ${change.label}.`)
 				return
 			case "document":
 				openTile("canvas")
@@ -797,7 +819,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 			? null
 			: expansionEligibility.reason,
 		exportDocument,
-		focusCanvas: () => artboardWrapRef.current?.focus(),
+		focusCanvas: focusActiveArtboard,
+		activeArtboard,
 		reviewSourceChange,
 		selectObject: (object, additive = false) =>
 			setSelection((current) =>
@@ -1092,8 +1115,13 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	useEffect(() => {
 		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
-		setCanvasView(initialDesignCanvasView(canvasViewport, document.page))
-	}, [canvasViewport.height, canvasViewport.width, document.page])
+		setCanvasView(initialDesignCanvasView(canvasViewport, activeArtboard))
+	}, [activeArtboard, canvasViewport.height, canvasViewport.width])
+
+	useEffect(() => {
+		if (document.artboards.some(({ id }) => id === activeArtboardId)) return
+		setActiveArtboardId(activeDesignArtboard(document).id)
+	}, [activeArtboardId, document])
 
 	useEffect(() => {
 		const updateGestureModifiers = (event: KeyboardEvent): void => {
@@ -1119,6 +1147,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			if (gesture.kind === "move" || gesture.kind === "transform") {
 				const resolved = resolveDesignGestureObject(
 					document,
+					activeArtboard,
 					gesture,
 					transition.preview,
 					worldScale,
@@ -1126,7 +1155,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				if (resolved !== null) {
 					previewObjectRef.current = resolved.object
 					setPreviewObject(resolved.object)
-					setActiveSnapGuides(designSnapGuides(resolved.snap, document.page))
+					setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
 				}
 			}
 		}
@@ -1223,7 +1252,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				event.clipboardData,
 				document,
 				nextId,
-				{ nativeOnly: true },
+				{ activeArtboard, nativeOnly: true },
 			)
 			if (nativeAddition !== null && nativeAddition.objects.length > 0) {
 				const result = importDesignObjects(document, selection, nativeAddition)
@@ -1268,6 +1297,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				event.clipboardData,
 				document,
 				nextId,
+				{ activeArtboard },
 			)
 			if (fallbackAddition === null || fallbackAddition.objects.length === 0)
 				return
@@ -1289,7 +1319,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			window.removeEventListener("copy", copy)
 			window.removeEventListener("paste", paste)
 		}
-	}, [commit, document, fallbackSwatchId, nextId, selection])
+	}, [activeArtboard, commit, document, fallbackSwatchId, nextId, selection])
 
 	const gestureModifiers = (
 		event: Pick<PointerEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
@@ -1418,6 +1448,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (gesture.kind !== "move" && gesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
 			document,
+			activeArtboard,
 			gesture,
 			transition.preview,
 			worldScale,
@@ -1425,7 +1456,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (resolved === null) return
 		previewObjectRef.current = resolved.object
 		setPreviewObject(resolved.object)
-		setActiveSnapGuides(designSnapGuides(resolved.snap, document.page))
+		setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
 	}
 
 	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
@@ -1756,7 +1787,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 				<design-canvas>
 					<canvas-meta>
 						<span>{DESIGN_TOOLS[tool].label}</span>
-						<span>612 × 792 pt · {Math.round(canvasView.zoom * 100)}%</span>
+						<span>
+							{activeArtboard.width} × {activeArtboard.height} pt ·{" "}
+							{Math.round(canvasView.zoom * 100)}%
+						</span>
 					</canvas-meta>
 					<artboard-wrap
 						ref={artboardWrapRef}
@@ -1793,23 +1827,22 @@ export function DesignApplication(props: DesignApplicationProps) {
 									y={canvasView.y}
 									scaleX={worldScale}
 									scaleY={worldScale}
-									clipX={document.page.x - 30 / worldScale}
-									clipY={document.page.y - 30 / worldScale}
-									clipWidth={document.page.width + 60 / worldScale}
-									clipHeight={document.page.height + 60 / worldScale}
 								>
-									<Rect
-										name="design-paper"
-										x={document.page.x}
-										y={document.page.y}
-										width={document.page.width}
-										height={document.page.height}
-										fill="#fff"
-										shadowColor="#000"
-										shadowBlur={24 / worldScale}
-										shadowOpacity={0.36}
-										shadowOffsetY={9 / worldScale}
-									/>
+									{document.artboards.map((artboard) => (
+										<Rect
+											key={artboard.id}
+											name={`design-paper ${artboard.id}`}
+											x={artboard.x}
+											y={artboard.y}
+											width={artboard.width}
+											height={artboard.height}
+											fill="#fff"
+											shadowColor="#000"
+											shadowBlur={24 / worldScale}
+											shadowOpacity={0.36}
+											shadowOffsetY={9 / worldScale}
+										/>
+									))}
 									{previewObjects.map((object) => {
 										const fill = document.swatches.find(
 											(candidate) =>

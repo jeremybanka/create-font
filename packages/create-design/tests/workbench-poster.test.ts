@@ -35,7 +35,14 @@ describe("Workbench Poster", () => {
 
 		expect(assembled.value).toMatchObject({
 			title: "Counterform No. 1",
-			page: { width: 612, height: 792 },
+			artboards: [
+				{
+					id: "artboard:page",
+					name: "Artboard 1",
+					width: 612,
+					height: 792,
+				},
+			],
 		})
 		expect(assembled.value.swatches).toHaveLength(6)
 		expect(assembled.value.objects).toHaveLength(14)

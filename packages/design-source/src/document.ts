@@ -4,14 +4,16 @@ import { diagnostic, failure, success } from "./result.ts"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
+	DesignArtboard,
 	DesignObject,
 	DesignSourceDiagnostic,
 	DesignSourceResult,
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 4 as const
-export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 3 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 5 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 4 as const
+export const VERSION_THREE_DESIGN_DOCUMENT_VERSION = 3 as const
 export const VERSION_TWO_DESIGN_DOCUMENT_VERSION = 2 as const
 export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
 
@@ -20,6 +22,7 @@ export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
+export const artboardIdSchema = z.string().regex(/^artboard:.+/u)
 export const contourIdSchema = z.string().min(1)
 export const pointIdSchema = z.string().min(1)
 
@@ -217,14 +220,32 @@ export const guideSchema = z
 	})
 	.strict()
 
-const pageSchema = z
+export const artboardInsetsSchema = z
 	.object({
+		top: finiteNumberSchema.nonnegative(),
+		right: finiteNumberSchema.nonnegative(),
+		bottom: finiteNumberSchema.nonnegative(),
+		left: finiteNumberSchema.nonnegative(),
+	})
+	.strict()
+export const artboardSchema = z
+	.object({
+		id: artboardIdSchema,
+		name: z.string(),
 		x: finiteNumberSchema,
 		y: finiteNumberSchema,
 		width: positiveNumberSchema,
 		height: positiveNumberSchema,
+		bleed: artboardInsetsSchema.optional(),
+		safeArea: artboardInsetsSchema.optional(),
 	})
 	.strict()
+const pageSchema = artboardSchema.omit({
+	id: true,
+	name: true,
+	bleed: true,
+	safeArea: true,
+})
 export const previousPageSchema = z
 	.object({
 		width: positiveNumberSchema,
@@ -237,7 +258,7 @@ export const designDocumentSchema = z
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		version: z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
-		page: pageSchema,
+		artboards: z.array(artboardSchema).min(1),
 		swatches: z.array(swatchSchema),
 		objects: z.array(designObjectSchema),
 		guides: z.array(guideSchema),
@@ -268,6 +289,18 @@ export const legacyDesignDocumentSchema = z
 	})
 	.strict()
 
+export const versionThreeDesignDocumentSchema = z
+	.object({
+		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
+		version: z.literal(VERSION_THREE_DESIGN_DOCUMENT_VERSION),
+		title: z.string(),
+		page: pageSchema,
+		swatches: z.array(swatchSchema),
+		objects: z.array(previousDesignObjectSchema),
+		guides: z.array(guideSchema),
+	})
+	.strict()
+
 export const previousDesignDocumentSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
@@ -275,7 +308,7 @@ export const previousDesignDocumentSchema = z
 		title: z.string(),
 		page: pageSchema,
 		swatches: z.array(swatchSchema),
-		objects: z.array(previousDesignObjectSchema),
+		objects: z.array(designObjectSchema),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -302,6 +335,18 @@ function relationalDiagnostics(
 	document: DesignDocument,
 ): readonly DesignSourceDiagnostic[] {
 	const errors: DesignSourceDiagnostic[] = []
+	const seenArtboards = new Set<string>()
+	for (const [index, artboard] of document.artboards.entries()) {
+		if (seenArtboards.has(artboard.id))
+			errors.push(
+				diagnostic(
+					"directory.duplicate_id",
+					`$.artboards[${index}].id`,
+					`Duplicate artboard ID ${artboard.id}.`,
+				),
+			)
+		seenArtboards.add(artboard.id)
+	}
 	const seenSwatches = new Set<string>()
 	for (const [index, swatch] of document.swatches.entries()) {
 		if (seenSwatches.has(swatch.id))
@@ -483,7 +528,12 @@ function migrateCompleteDocument(
 	document: Readonly<{
 		readonly format: typeof CREATE_DESIGN_DOCUMENT_FORMAT
 		readonly title: string
-		readonly page: Readonly<{ readonly width: number; readonly height: number }>
+		readonly page: Readonly<{
+			readonly x?: number
+			readonly y?: number
+			readonly width: number
+			readonly height: number
+		}>
 		readonly swatches: readonly unknown[]
 		readonly objects: readonly (
 			| z.infer<typeof designObjectSchema>
@@ -498,11 +548,31 @@ function migrateCompleteDocument(
 		format: document.format,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
 		title: document.title,
-		page: { x: 0, y: 0, ...document.page },
+		artboards: [legacyPageArtboard(document.page)],
 		swatches: document.swatches,
 		objects: document.objects.map(stabilizeDesignObjectIdentities),
 		guides: document.guides,
 	})
+}
+
+export const DEFAULT_ARTBOARD_ID = "artboard:page" as const
+
+function legacyPageArtboard(
+	page: Readonly<{
+		readonly x?: number
+		readonly y?: number
+		readonly width: number
+		readonly height: number
+	}>,
+): DesignArtboard {
+	return {
+		id: DEFAULT_ARTBOARD_ID,
+		name: "Artboard 1",
+		x: page.x ?? 0,
+		y: page.y ?? 0,
+		width: page.width,
+		height: page.height,
+	}
 }
 
 export function migrateDesignDocumentV1(
@@ -527,12 +597,32 @@ export function migrateDesignDocumentV2(
 export function migrateDesignDocumentV3(
 	value: unknown,
 ): DesignSourceResult<DesignDocument> {
+	const parsed = versionThreeDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return validateDesignDocument({
+		format: parsed.data.format,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		title: parsed.data.title,
+		artboards: [legacyPageArtboard(parsed.data.page)],
+		swatches: parsed.data.swatches,
+		objects: parsed.data.objects.map(stabilizeDesignObjectIdentities),
+		guides: parsed.data.guides,
+	})
+}
+
+export function migrateDesignDocumentV4(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
 	const parsed = previousDesignDocumentSchema.safeParse(value)
 	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
 	return validateDesignDocument({
-		...parsed.data,
+		format: parsed.data.format,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
-		objects: parsed.data.objects.map(stabilizeDesignObjectIdentities),
+		title: parsed.data.title,
+		artboards: [legacyPageArtboard(parsed.data.page)],
+		swatches: parsed.data.swatches,
+		objects: parsed.data.objects,
+		guides: parsed.data.guides,
 	})
 }
 
@@ -582,6 +672,8 @@ export function decodeDesignDocument(
 		case VERSION_TWO_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV2(value)
 		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV4(value)
+		case VERSION_THREE_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV3(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)

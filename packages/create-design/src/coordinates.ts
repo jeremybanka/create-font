@@ -1,6 +1,6 @@
 import type { CanvasPoint } from "@create-font/editor/shared"
 
-import type { DesignDocument } from "./types.ts"
+import type { DesignArtboard } from "./types.ts"
 
 export type DocumentPoint = Readonly<{ readonly x: number; readonly y: number }>
 export type InterchangePoint = Readonly<{
@@ -8,6 +8,10 @@ export type InterchangePoint = Readonly<{
 	readonly y: number
 }>
 export type PdfPoint = Readonly<{ readonly x: number; readonly y: number }>
+export type ArtboardBounds = Pick<
+	DesignArtboard,
+	"x" | "y" | "width" | "height"
+>
 
 export interface CoordinateTransform {
 	readonly a: number
@@ -58,23 +62,23 @@ export const interchangeToDocumentVector = documentToInterchangeVector
  * transform without rewriting any object geometry.
  */
 export function documentToPdfTransform(
-	page: DesignDocument["page"],
+	artboard: ArtboardBounds,
 ): CoordinateTransform {
 	return {
 		a: 1,
 		b: 0,
 		c: 0,
 		d: -1,
-		e: -page.x,
-		f: page.y + page.height,
+		e: -artboard.x,
+		f: artboard.y + artboard.height,
 	}
 }
 
 export function documentToPdfPoint(
 	point: DocumentPoint,
-	page: DesignDocument["page"],
+	artboard: ArtboardBounds,
 ): PdfPoint {
-	const transform = documentToPdfTransform(page)
+	const transform = documentToPdfTransform(artboard)
 	return {
 		x: transform.a * point.x + transform.c * point.y + transform.e,
 		y: transform.b * point.x + transform.d * point.y + transform.f,
@@ -83,7 +87,10 @@ export function documentToPdfPoint(
 
 export function pdfToDocumentPoint(
 	point: PdfPoint,
-	page: DesignDocument["page"],
+	artboard: ArtboardBounds,
 ): DocumentPoint {
-	return { x: point.x + page.x, y: page.y + page.height - point.y }
+	return {
+		x: point.x + artboard.x,
+		y: artboard.y + artboard.height - point.y,
+	}
 }

@@ -144,7 +144,7 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
-	it("migrates every shipped v1 field into the explicit v4 model", () => {
+	it("migrates every shipped v1 field into the explicit v5 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)
 		expect(decoded).toEqual({
@@ -153,7 +153,15 @@ describe("complete design document codec", () => {
 				format: legacy.format,
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
 				title: legacy.title,
-				page: { x: 0, y: 0, ...legacy.page },
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						x: 0,
+						y: 0,
+						...legacy.page,
+					},
+				],
 				swatches: legacy.swatches,
 				objects: [
 					{
@@ -179,9 +187,19 @@ describe("complete design document codec", () => {
 		expect(decodeDesignDocument(canonical)).toEqual({
 			ok: true,
 			value: {
-				...canonical,
+				format: canonical.format,
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
-				page: { x: 0, y: 0, ...canonical.page },
+				title: canonical.title,
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						x: 0,
+						y: 0,
+						...canonical.page,
+					},
+				],
+				swatches: canonical.swatches,
 				objects: canonical.objects.map((object) => ({
 					...object,
 					appearance: {
@@ -196,6 +214,7 @@ describe("complete design document codec", () => {
 								}),
 					},
 				})),
+				guides: canonical.guides,
 			},
 		})
 	})
@@ -233,7 +252,16 @@ describe("complete design document codec", () => {
 			ok: true,
 			value: {
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
-				page: { x: 0, y: 0, width: 841.89, height: 595.28 },
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						x: 0,
+						y: 0,
+						width: 841.89,
+						height: 595.28,
+					},
+				],
 				objects: [
 					{
 						id: path.id,
@@ -275,9 +303,11 @@ describe("complete design document codec", () => {
 		const current = decodeDesignDocument(canonicalV1Fixture())
 		if (!current.ok) throw new Error("Expected the fixture to migrate.")
 		const versionThree = {
-			...current.value,
+			format: current.value.format,
 			version: 3 as const,
+			title: current.value.title,
 			page: { x: -48, y: 96, width: 841.89, height: 595.28 },
+			swatches: current.value.swatches,
 			objects: current.value.objects.map((object) => ({
 				...object,
 				appearance: {
@@ -292,12 +322,13 @@ describe("complete design document codec", () => {
 							}),
 				},
 			})),
+			guides: current.value.guides,
 		}
 		const decoded = decodeDesignDocument(versionThree)
 		if (!decoded.ok) throw new Error("Expected the v3 fixture to migrate.")
 		expect(decoded.value).toMatchObject({
 			version: CREATE_DESIGN_DOCUMENT_VERSION,
-			page: versionThree.page,
+			artboards: [{ id: "artboard:page", ...versionThree.page }],
 		})
 		expect(decoded.value.objects[0]?.appearance.stroke).toEqual({
 			swatchId: "swatch:accent",
@@ -349,6 +380,54 @@ describe("complete design document codec", () => {
 		if (!first.ok) throw new Error("Expected migration to succeed.")
 		expect(parseDesignDocumentText(JSON.stringify(first.value))).toEqual(first)
 		expect(validateDesignDocument(first.value)).toEqual(first)
+	})
+
+	it("round-trips ordered named artboards and optional production metadata", () => {
+		const migrated = decodeDesignDocument(canonicalV1Fixture())
+		if (!migrated.ok) throw new Error("Expected migration to succeed.")
+		const document = {
+			...migrated.value,
+			artboards: [
+				{
+					id: "artboard:cover",
+					name: "Cover",
+					x: -40,
+					y: 20,
+					width: 612,
+					height: 792,
+					bleed: { top: 9, right: 12, bottom: 9, left: 12 },
+					safeArea: { top: 36, right: 36, bottom: 42, left: 36 },
+				},
+				{
+					id: "artboard:back",
+					name: "Back",
+					x: 700,
+					y: -120,
+					width: 612,
+					height: 792,
+				},
+			],
+		}
+		expect(parseDesignDocumentText(JSON.stringify(document))).toEqual({
+			ok: true,
+			value: document,
+		})
+		const duplicate = validateDesignDocument({
+			...document,
+			artboards: [
+				document.artboards[0],
+				{ ...document.artboards[1], id: "artboard:cover" },
+			],
+		})
+		expect(duplicate).toMatchObject({
+			ok: false,
+			errors: [
+				expect.objectContaining({
+					code: "directory.duplicate_id",
+					path: "$.artboards[1].id",
+				}),
+			],
+		})
 	})
 
 	it.each([
@@ -557,7 +636,6 @@ describe("complete design document codec", () => {
 		const duplicate = {
 			...current,
 			version: CREATE_DESIGN_DOCUMENT_VERSION,
-			page: { x: 0, y: 0, ...current.page },
 			objects: [
 				path,
 				{
@@ -595,7 +673,7 @@ describe("complete design document codec", () => {
 		})
 	})
 
-	it("requires contour and point identities in current v4 documents", () => {
+	it("requires contour and point identities in current v5 documents", () => {
 		const decoded = decodeDesignDocument(canonicalV1Fixture())
 		if (!decoded.ok) throw new Error("Expected fixture migration to succeed.")
 		const path = decoded.value.objects[1]

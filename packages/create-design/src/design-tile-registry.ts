@@ -17,6 +17,7 @@ import type {
 	DesignSourceReviewController,
 } from "./design-version-control.ts"
 import type {
+	DesignArtboard,
 	DesignDocument,
 	DesignObject,
 	DesignStroke,
@@ -35,6 +36,7 @@ export type DesignTileKind =
 	| "appearance"
 
 export interface DesignTileContext {
+	readonly activeArtboard: DesignArtboard
 	readonly addSwatch: () => void
 	readonly appearanceDisabledReason: string | null
 	readonly appearanceSummary: DesignAppearanceSummary

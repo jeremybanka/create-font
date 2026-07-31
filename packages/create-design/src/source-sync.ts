@@ -10,6 +10,7 @@ import {
 import { createSourceRpcClient } from "@create-art/source-rpc/client"
 import {
 	assembleDesignDocument,
+	defaultArtboardUnitPath,
 	defaultObjectUnitPath,
 	sourceUnitKindForPath,
 	splitDesignDocument,
@@ -65,8 +66,11 @@ function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
 	return { ok: true, document: result.value, revision: state.revision }
 }
 
-function objectPaths(state: SourceSyncState): ReadonlyMap<string, string> {
-	const value = state.units.get(`scene/objects/index.json`)?.value
+function collectionPaths(
+	state: SourceSyncState,
+	indexPath: string,
+): ReadonlyMap<string, string> {
+	const value = state.units.get(indexPath)?.value
 	if (
 		value === null ||
 		typeof value !== `object` ||
@@ -111,9 +115,12 @@ export function designSourceTransaction(
 	removals: readonly SourceUnitRemoval[]
 	writes: readonly SourceUnitWrite[]
 }> {
-	const paths = objectPaths(state)
+	const objectPaths = collectionPaths(state, `scene/objects/index.json`)
+	const artboardPaths = collectionPaths(state, `artboards/index.json`)
 	const split = splitDesignDocument(document, {
-		objectPath: ({ id }) => paths.get(id) ?? defaultObjectUnitPath(id),
+		artboardPath: ({ id }) =>
+			artboardPaths.get(id) ?? defaultArtboardUnitPath(id),
+		objectPath: ({ id }) => objectPaths.get(id) ?? defaultObjectUnitPath(id),
 	})
 	if (!split.ok) {
 		throw new Error(split.errors.map(({ message }) => message).join(`\n`))

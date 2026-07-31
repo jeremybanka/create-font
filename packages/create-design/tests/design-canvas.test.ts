@@ -33,6 +33,10 @@ const rectangle = (
 	appearance: { fill: { swatchId: "swatch:coral" } },
 })
 
+const artboard = (
+	bounds: Readonly<{ x: number; y: number; width: number; height: number }>,
+) => ({ id: "artboard:test", name: "Test artboard", ...bounds })
+
 const strokedPath = (stroke: Partial<DesignStroke> = {}): DesignObject => ({
 	id: "stroke",
 	name: "Stroke",
@@ -151,26 +155,29 @@ describe("design canvas adapter", () => {
 
 	it("snaps an object center to the page center at every zoom", () => {
 		const document = createInitialDocument()
+		const activeArtboard = document.artboards[0]!
 		const nearlyCentered = rectangle(
 			"moving",
-			document.page.width / 2 - 50.5,
-			document.page.height / 2 - 50,
-			document.page.width / 2 + 49.5,
-			document.page.height / 2 + 50,
+			activeArtboard.width / 2 - 50.5,
+			activeArtboard.height / 2 - 50,
+			activeArtboard.width / 2 + 49.5,
+			activeArtboard.height / 2 + 50,
 		)
-		const atOne = snapDesignObject(nearlyCentered, document, 1)
-		expect(atOne.x).toBe(document.page.width / 2)
-		const zoomed = snapDesignObject(nearlyCentered, document, 4)
-		expect(zoomed.x).toBe(document.page.width / 2)
+		const atOne = snapDesignObject(nearlyCentered, activeArtboard, 1)
+		expect(atOne.x).toBe(activeArtboard.width / 2)
+		const zoomed = snapDesignObject(nearlyCentered, activeArtboard, 4)
+		expect(zoomed.x).toBe(activeArtboard.width / 2)
 	})
 
 	it("snaps against an offset page in global coordinates", () => {
-		const document = {
-			...createInitialDocument(),
-			page: { x: -200, y: 300, width: 600, height: 400 },
-		}
+		const activeArtboard = artboard({
+			x: -200,
+			y: 300,
+			width: 600,
+			height: 400,
+		})
 		const nearlyCentered = rectangle("moving", 49, 449, 151, 551)
-		const snapped = snapDesignObject(nearlyCentered, document, 1)
+		const snapped = snapDesignObject(nearlyCentered, activeArtboard, 1)
 		expect(snapped.x).toBe(100)
 		expect(snapped.y).toBe(500)
 		expect(snapped.object.geometry).toEqual(nearlyCentered.geometry)
@@ -180,7 +187,7 @@ describe("design canvas adapter", () => {
 		const square = strokedPath({ cap: "square" })
 		const snapped = snapDesignObject(
 			square,
-			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			artboard({ x: 0, y: 0, width: 100, height: 100 }),
 			1,
 		)
 		expect(snapped.x).toBe(0)
@@ -191,7 +198,7 @@ describe("design canvas adapter", () => {
 		}
 		const transformedSnap = snapDesignObject(
 			transformed,
-			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			artboard({ x: 0, y: 0, width: 100, height: 100 }),
 			1,
 		)
 		expect(transformedSnap.x).toBe(50)
@@ -199,7 +206,7 @@ describe("design canvas adapter", () => {
 		const dashed = strokedPath({ dashArray: [4, 4] })
 		const dashedSnap = snapDesignObject(
 			{ ...dashed, transform: { ...dashed.transform, e: 26 } },
-			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			artboard({ x: 0, y: 0, width: 100, height: 100 }),
 			1,
 		)
 		expect(dashedSnap.x).toBe(50)

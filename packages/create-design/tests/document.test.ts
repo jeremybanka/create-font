@@ -8,6 +8,7 @@ import {
 	PREVIOUS_DESIGN_STORAGE_KEY,
 	parseDesignDocument,
 	readStoredDesignDocument,
+	VERSION_THREE_DESIGN_STORAGE_KEY,
 	VERSION_TWO_DESIGN_STORAGE_KEY,
 } from "../src/document.ts"
 
@@ -84,7 +85,7 @@ describe("design document storage", () => {
 		)
 	})
 
-	it("hydrates a v1 key, migrates once, and saves canonical v4", () => {
+	it("hydrates a v1 key, migrates once, and saves canonical v5", () => {
 		const storage = memoryStorage({
 			[LEGACY_DESIGN_STORAGE_KEY]: JSON.stringify(legacyDocument()),
 		})
@@ -93,8 +94,17 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 4,
-				page: { x: 0, y: 0, width: 120, height: 80 },
+				version: 5,
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						x: 0,
+						y: 0,
+						width: 120,
+						height: 80,
+					},
+				],
 				title: "Stored legacy design",
 				objects: [
 					{
@@ -141,7 +151,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 4,
+				version: 5,
 				objects: [
 					{
 						geometry: {
@@ -163,8 +173,16 @@ describe("design document storage", () => {
 		const initial = createInitialDocument()
 		const object = initial.objects[0]!
 		const versionThree = {
-			...initial,
+			format: initial.format,
 			version: 3,
+			title: initial.title,
+			page: {
+				x: initial.artboards[0]!.x,
+				y: initial.artboards[0]!.y,
+				width: initial.artboards[0]!.width,
+				height: initial.artboards[0]!.height,
+			},
+			swatches: initial.swatches,
 			objects: [
 				{
 					...object,
@@ -173,16 +191,17 @@ describe("design document storage", () => {
 					},
 				},
 			],
+			guides: initial.guides,
 		}
 		const storage = memoryStorage({
-			[PREVIOUS_DESIGN_STORAGE_KEY]: JSON.stringify(versionThree),
+			[VERSION_THREE_DESIGN_STORAGE_KEY]: JSON.stringify(versionThree),
 		})
 		const loaded = readStoredDesignDocument(storage)
 		expect(loaded).toMatchObject({
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 4,
+				version: 5,
 				objects: [
 					{
 						appearance: {
@@ -195,8 +214,46 @@ describe("design document storage", () => {
 				],
 			},
 		})
-		expect(storage.values.has(PREVIOUS_DESIGN_STORAGE_KEY)).toBe(false)
+		expect(storage.values.has(VERSION_THREE_DESIGN_STORAGE_KEY)).toBe(false)
 		expect(storage.values.has(DESIGN_STORAGE_KEY)).toBe(true)
+	})
+
+	it("migrates the previous v4 singleton page without rewriting artwork", () => {
+		const current = createInitialDocument()
+		const artboard = current.artboards[0]!
+		const versionFour = {
+			format: current.format,
+			version: 4,
+			title: current.title,
+			page: {
+				x: artboard.x,
+				y: artboard.y,
+				width: artboard.width,
+				height: artboard.height,
+			},
+			swatches: current.swatches,
+			objects: current.objects,
+			guides: current.guides,
+		}
+		const storage = memoryStorage({
+			[PREVIOUS_DESIGN_STORAGE_KEY]: JSON.stringify(versionFour),
+		})
+		const loaded = readStoredDesignDocument(storage)
+		expect(loaded).toMatchObject({
+			status: "loaded",
+			migrated: true,
+			document: {
+				version: 5,
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						...versionFour.page,
+					},
+				],
+				objects: current.objects,
+			},
+		})
 	})
 
 	it("does not overwrite or delete malformed and future-version input", () => {
