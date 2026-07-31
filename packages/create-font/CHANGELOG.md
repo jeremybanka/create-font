@@ -1,5 +1,33 @@
 # create-font
 
+## 0.3.14
+
+### Patch Changes
+
+- 2b737a0: Expose a product-neutral source review surface with semantic row, navigation adapter, comparison, and guarded selective-commit hooks while preserving create-font glyph review and Diff View.
+
+  Initialize create-font source review in an actionable empty state so the first
+  HEAD-to-working comparison can be requested.
+
+- 0d59cb3: Format canonical create-font and create-design source with the pinned,
+  published dprint contract before hashing and persistence, and expose matching
+  `create-source-format` fmt/check workflows for users, editors, and CI.
+- 05f8226: Generalize bounded source comparison and selective Git commits with adapter-defined semantic change groups, and enable design-aware version control.
+- 76d6aa0: Add shared revisioned source RPC infrastructure and source-backed create-design workspaces with atomic persistence and reliable live editor synchronization, including active glyph restoration after external filesystem resets. Run both editors and their APIs from the root development command on a configurable four-port block, with the checked-in Workbench Poster as create-design's default development source.
+- Updated dependencies [c5b4ace]
+- Updated dependencies [2b737a0]
+- Updated dependencies [0d59cb3]
+- Updated dependencies [05f8226]
+- Updated dependencies [05f8226]
+- Updated dependencies [76d6aa0]
+- Updated dependencies [9e5ee6c]
+  - @create-font/states@0.6.7
+  - @create-font/editor@0.7.10
+  - @create-font/source@0.2.7
+  - @create-art/source-format@0.1.1
+  - @create-art/source-rpc@0.1.1
+  - @create-font/server@0.2.2
+
 ## 0.3.13
 
 ### Patch Changes

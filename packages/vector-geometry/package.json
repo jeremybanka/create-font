@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/vector-geometry",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"description": "Deterministic, application-neutral vector geometry primitives",
 	"repository": {
 		"type": "git",

@@ -1,5 +1,17 @@
 # @create-font/states
 
+## 0.6.7
+
+### Patch Changes
+
+- c5b4ace: Back create-font cubic evaluation, subdivision, and bounds with the shared vector geometry kernel while preserving the existing states API contracts.
+- 76d6aa0: Add shared revisioned source RPC infrastructure and source-backed create-design workspaces with atomic persistence and reliable live editor synchronization, including active glyph restoration after external filesystem resets. Run both editors and their APIs from the root development command on a configurable four-port block, with the checked-in Workbench Poster as create-design's default development source.
+- Updated dependencies [d607691]
+- Updated dependencies [05f8226]
+- Updated dependencies [76d6aa0]
+  - @create-art/vector-geometry@0.0.1
+  - @create-font/server@0.2.2
+
 ## 0.6.6
 
 ### Patch Changes

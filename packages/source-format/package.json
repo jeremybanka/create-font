@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/source-format",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Versioned dprint formatting contract for create-art source files",
 	"repository": {
 		"type": "git",

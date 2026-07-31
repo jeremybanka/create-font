@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/source-rpc",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Revisioned JSON source workspace contracts, RPC, and synchronization primitives",
 	"repository": {
 		"type": "git",

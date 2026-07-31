@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/source",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Deterministic source formats for create-design documents",
 	"repository": {
 		"type": "git",

@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/source",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"description": "A deterministic, versioned JSON source format for create-font editor state",
 	"repository": {
 		"type": "git",
