@@ -15,6 +15,7 @@ import {
 	swatchCss,
 } from "./color.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
+import { exactObjectBounds } from "./shape-expansion.ts"
 import type {
 	DesignTileContext,
 	DesignTileKind,
@@ -165,6 +166,7 @@ function DesignObjectTile({
 	readonly context: DesignTileContext
 }) {
 	const object = context.selectedObject
+	const bounds = object === null ? null : exactObjectBounds(object)
 	return (
 		<design-object-tile>
 			{object === null ? (
@@ -182,6 +184,138 @@ function DesignObjectTile({
 							}
 						/>
 					</label>
+					<object-geometry-editor>
+						<strong>
+							{object.geometry.kind === "rectangle"
+								? "Live rectangle"
+								: object.geometry.kind === "ellipse"
+									? "Live ellipse"
+									: "Path geometry"}
+						</strong>
+						{object.geometry.kind === "rectangle" ? (
+							<shape-number-grid>
+								<ShapeNumberInput
+									label="Local X"
+									value={object.geometry.x}
+									onChange={(x) => {
+										if (object.geometry.kind !== "rectangle") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											x,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Local Y"
+									value={object.geometry.y}
+									onChange={(y) => {
+										if (object.geometry.kind !== "rectangle") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											y,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Width"
+									value={object.geometry.width}
+									min={0}
+									onChange={(width) => {
+										if (object.geometry.kind !== "rectangle") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											width,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Height"
+									value={object.geometry.height}
+									min={0}
+									onChange={(height) => {
+										if (object.geometry.kind !== "rectangle") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											height,
+										})
+									}}
+								/>
+							</shape-number-grid>
+						) : object.geometry.kind === "ellipse" ? (
+							<shape-number-grid>
+								<ShapeNumberInput
+									label="Center X"
+									value={object.geometry.centerX}
+									onChange={(centerX) => {
+										if (object.geometry.kind !== "ellipse") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											centerX,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Center Y"
+									value={object.geometry.centerY}
+									onChange={(centerY) => {
+										if (object.geometry.kind !== "ellipse") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											centerY,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Radius X"
+									value={object.geometry.radiusX}
+									min={0}
+									onChange={(radiusX) => {
+										if (object.geometry.kind !== "ellipse") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											radiusX,
+										})
+									}}
+								/>
+								<ShapeNumberInput
+									label="Radius Y"
+									value={object.geometry.radiusY}
+									min={0}
+									onChange={(radiusY) => {
+										if (object.geometry.kind !== "ellipse") return
+										context.setObjectGeometry(object, {
+											...object.geometry,
+											radiusY,
+										})
+									}}
+								/>
+							</shape-number-grid>
+						) : null}
+						<strong>Exact document bounds</strong>
+						{bounds === null ? (
+							<span>No drawable bounds.</span>
+						) : (
+							<shape-number-grid>
+								<ShapeNumberInput label="Bounds X" value={bounds.x} />
+								<ShapeNumberInput label="Bounds Y" value={bounds.y} />
+								<ShapeNumberInput label="Bounds width" value={bounds.width} />
+								<ShapeNumberInput label="Bounds height" value={bounds.height} />
+							</shape-number-grid>
+						)}
+					</object-geometry-editor>
+					<button
+						type="button"
+						data-expand-shape
+						disabled={context.expansionDisabledReason !== null}
+						aria-describedby="expand-shape-eligibility"
+						onClick={context.expandSelection}
+					>
+						Expand Shape
+					</button>
+					<p id="expand-shape-eligibility">
+						{context.expansionDisabledReason ??
+							"Converts this live shape to ordinary editable cubic path geometry."}
+					</p>
 					<design-object-actions>
 						<button
 							type="button"
@@ -212,6 +346,37 @@ function DesignObjectTile({
 				</>
 			)}
 		</design-object-tile>
+	)
+}
+
+function ShapeNumberInput({
+	label,
+	min,
+	onChange,
+	value,
+}: {
+	readonly label: string
+	readonly min?: number
+	readonly onChange?: (value: number) => void
+	readonly value: number
+}) {
+	return (
+		<shape-number-input>
+			<label>
+				<span>{label}</span>
+				<input
+					type="number"
+					value={value}
+					{...(min === undefined ? {} : { min })}
+					readOnly={onChange === undefined}
+					onInput={
+						onChange === undefined
+							? undefined
+							: (event) => onChange(Number(event.currentTarget.value))
+					}
+				/>
+			</label>
+		</shape-number-input>
 	)
 }
 

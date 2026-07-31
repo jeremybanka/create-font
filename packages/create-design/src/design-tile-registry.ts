@@ -26,6 +26,8 @@ export interface DesignTileContext {
 	readonly addSwatch: () => void
 	readonly deleteSelection: () => void
 	readonly document: DesignDocument
+	readonly expandSelection: () => void
+	readonly expansionDisabledReason: string | null
 	readonly exportDocument: () => void
 	readonly focusCanvas: () => void
 	readonly selectObject: (object: DesignObject) => void
@@ -37,6 +39,10 @@ export interface DesignTileContext {
 	readonly setObjectProperty: (
 		object: DesignObject,
 		property: Partial<DesignObject>,
+	) => void
+	readonly setObjectGeometry: (
+		object: DesignObject,
+		geometry: DesignObject["geometry"],
 	) => void
 	readonly tool: DesignTool
 	readonly updateSwatch: (swatch: DesignSwatch) => void

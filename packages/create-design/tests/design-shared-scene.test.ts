@@ -354,6 +354,101 @@ describe("create-design shared vector scene", () => {
 		expect(contour.zIndex()).toBeLessThan(selection.zIndex())
 	})
 
+	it("edits exact live parameters and expands a selected shape in one undo step", async () => {
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		if (layer === undefined) throw new Error("Rectangle layer was not found.")
+		act(() => layer.click())
+
+		const field = (label: string): HTMLInputElement => {
+			const input = [...document.querySelectorAll("label")]
+				.find(
+					(candidate) => candidate.querySelector("span")?.textContent === label,
+				)
+				?.querySelector("input")
+			if (!(input instanceof HTMLInputElement))
+				throw new Error(`${label} field was not found.`)
+			return input
+		}
+		expect(field("Local X").valueAsNumber).toBe(82)
+		expect(field("Bounds X").readOnly).toBe(true)
+		expect(field("Bounds width").valueAsNumber).toBe(280)
+
+		const width = field("Width")
+		await act(async () => {
+			width.value = "320"
+			width.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get("create-design:document:v1") ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]?.geometry).toMatchObject({
+			kind: "rectangle",
+			width: 320,
+		})
+		expect(field("Bounds width").valueAsNumber).toBe(320)
+
+		const expand = document.querySelector<HTMLButtonElement>(
+			"button[data-expand-shape]",
+		)
+		if (expand === null) throw new Error("Expand Shape action was not found.")
+		expect(expand.disabled).toBe(false)
+		expect(expand.getAttribute("aria-describedby")).toBe(
+			"expand-shape-eligibility",
+		)
+		await act(async () => {
+			expand.click()
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get("create-design:document:v1") ?? "{}",
+		) as DesignDocument
+		const expanded = saved.objects[0]
+		expect(expanded?.geometry.kind).toBe("path")
+		if (expanded?.geometry.kind !== "path") return
+		expect(expanded.geometry.contours[0]?.id).toMatch(/^contour:/u)
+		expect(
+			expanded.geometry.contours[0]?.points.every((point) =>
+				point.id?.startsWith("point:"),
+			),
+		).toBe(true)
+		expect(expanded.appearance).toEqual(
+			createInitialDocument().objects[0]?.appearance,
+		)
+		expect(document.querySelector("design-object-tile")?.textContent).toContain(
+			"Path geometry",
+		)
+		expect(expand.disabled).toBe(true)
+		expect(
+			document.getElementById("expand-shape-eligibility")?.textContent,
+		).toContain("already ordinary path")
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get("create-design:document:v1") ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]?.geometry).toMatchObject({
+			kind: "rectangle",
+			width: 320,
+		})
+		expect(expand.disabled).toBe(false)
+	})
+
 	it.each([
 		["nw", { x: -40, y: -30 }, { x: "maxX", y: "maxY" }],
 		["ne", { x: 40, y: -30 }, { x: "minX", y: "maxY" }],

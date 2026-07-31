@@ -113,6 +113,7 @@ export function transformDesignPoint(
 	point: DesignPoint,
 ): DesignPoint {
 	return {
+		...(point.id === undefined ? {} : { id: point.id }),
 		x: transform.a * point.x + transform.c * point.y + transform.e,
 		y: transform.b * point.x + transform.d * point.y + transform.f,
 		...(point.incoming === undefined

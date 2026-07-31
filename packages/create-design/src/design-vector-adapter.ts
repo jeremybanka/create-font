@@ -61,10 +61,12 @@ export function projectDesignVectorObject(
 		),
 		contours: projectDesignObjectContours(object).map(
 			(contour, contourIndex) => ({
-				id: `${object.id}:contour:${contourIndex}`,
+				id: contour.id ?? `${object.id}:contour:${contourIndex}`,
 				closed: contour.closed,
 				nodes: contour.points.map((point, pointIndex) => ({
-					id: `${object.id}:contour:${contourIndex}:point:${pointIndex}`,
+					id:
+						point.id ??
+						`${object.id}:contour:${contourIndex}:point:${pointIndex}`,
 					mode:
 						point.incoming === undefined && point.outgoing === undefined
 							? "hard"
@@ -131,8 +133,10 @@ function projectDesignClipboardObject(
 
 const designContours = (object: VectorObject): readonly DesignContour[] =>
 	object.contours.map((contour) => ({
+		id: contour.id,
 		closed: contour.closed,
 		points: contour.nodes.map((node) => ({
+			id: node.id,
 			x: node.x,
 			y: node.y,
 			...(node.incoming === undefined
@@ -477,31 +481,38 @@ export function importDesignVectorClipboard(
 
 export function importDesignObjects(
 	document: DesignDocument,
-	selection: DesignVectorSelection,
+	_selection: DesignVectorSelection,
 	addition: Readonly<{
 		objects: readonly DesignObject[]
 		swatches: readonly DesignSwatch[]
 	}>,
 ) {
-	let nextDocument: DesignDocument = {
-		...document,
-		swatches: [...document.swatches, ...addition.swatches],
-	}
-	let nextSelection = selection
-	const importedIds: string[] = []
-	for (const object of addition.objects) {
-		const result = designVectorAdapter.apply(nextDocument, nextSelection, {
-			kind: "create-object",
-			object: projectDesignVectorObject(nextDocument, object),
-		})
-		if (!result.ok) return result
-		nextDocument = result.document
-		nextSelection = result.selection
-		importedIds.push(object.id)
-	}
+	const objectIds = new Set(document.objects.map((object) => object.id))
+	const duplicateObject = addition.objects.find((object) =>
+		objectIds.has(object.id),
+	)
+	if (duplicateObject !== undefined)
+		return reject(`Object ID ${duplicateObject.id} is already in use.`)
+	const swatchIds = new Set([
+		...document.swatches.map((swatch) => swatch.id),
+		...addition.swatches.map((swatch) => swatch.id),
+	])
+	const missingSwatch = addition.objects
+		.flatMap((object) => [
+			object.appearance.fill?.swatchId,
+			object.appearance.stroke?.swatchId,
+		])
+		.find((swatchId) => swatchId !== undefined && !swatchIds.has(swatchId))
+	if (missingSwatch !== undefined)
+		return reject(`Unknown design swatch ${missingSwatch}.`)
+	const importedIds = addition.objects.map((object) => object.id)
 	return {
 		ok: true,
-		document: nextDocument,
+		document: {
+			...document,
+			swatches: [...document.swatches, ...addition.swatches],
+			objects: [...document.objects, ...addition.objects],
+		},
 		selection: importedIds,
 	} as const
 }

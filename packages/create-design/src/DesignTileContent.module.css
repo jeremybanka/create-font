@@ -167,6 +167,71 @@ design-tile-content.class {
 			color: var(--ink-faint);
 		}
 
+		> object-geometry-editor {
+			display: grid;
+			gap: 6px;
+			padding-block: 3px;
+
+			> strong,
+			> span {
+				font-size: 8px;
+				color: var(--ink-muted);
+			}
+
+			> shape-number-grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 5px;
+
+				> shape-number-input > label {
+					display: grid;
+					gap: 3px;
+
+					> span {
+						font-size: 7px;
+						color: var(--ink-faint);
+					}
+
+					> input {
+						width: 100%;
+						min-width: 0;
+						padding: 5px;
+						border: 1px solid var(--line);
+						border-radius: 4px;
+						background: var(--paper);
+						font-size: 8px;
+						color: var(--ink);
+
+						&:read-only {
+							background: color-mix(in srgb, var(--paper) 75%, var(--line));
+							color: var(--ink-muted);
+						}
+					}
+				}
+			}
+		}
+
+		> button[data-expand-shape] {
+			padding: 7px;
+			border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+			border-radius: 4px;
+			background: var(--selected);
+			font-size: 8px;
+			color: var(--ink);
+			cursor: pointer;
+
+			&:disabled {
+				opacity: 0.55;
+				cursor: not-allowed;
+			}
+		}
+
+		> button[data-expand-shape] + p {
+			padding: 0;
+			text-align: left;
+			font-size: 7px;
+		}
+
 		> design-object-actions {
 			display: grid;
 			grid-template-columns: 1fr 1fr;

@@ -7,7 +7,9 @@ import {
 	readDesignClipboard,
 	writeDesignClipboard,
 } from "../src/clipboard.ts"
+import { importDesignObjects } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { expandDesignShape } from "../src/shape-expansion.ts"
 
 describe("vector clipboard interoperability", () => {
 	it("writes native design data and create-font outline data together", () => {
@@ -80,5 +82,69 @@ describe("vector clipboard interoperability", () => {
 		)
 		expect(addition?.objects).toHaveLength(1)
 		expect(addition?.objects[0]?.name).toContain("create-font")
+		expect(
+			readDesignClipboard(
+				{
+					getData: (format) =>
+						format === FONT_OUTLINE_MIME ? JSON.stringify(font) : "",
+				},
+				document,
+				() => "test",
+				{ nativeOnly: true },
+			),
+		).toBeNull()
+	})
+
+	it("preserves native live geometry and refreshes expanded control identities", () => {
+		const document = createInitialDocument()
+		const entries = new Map<string, string>()
+		const rectangle = document.objects[0]
+		const ellipse = document.objects[1]
+		if (rectangle === undefined || ellipse === undefined)
+			throw new Error("Missing live shape fixtures.")
+		let expansionSequence = 0
+		const expanded = expandDesignShape(
+			ellipse,
+			() => `source:${expansionSequence++}`,
+		)
+		const source = {
+			...document,
+			objects: [rectangle, expanded],
+		}
+		writeDesignClipboard(
+			{ setData: (format, value) => entries.set(format, value) },
+			source,
+			source.objects.map((object) => object.id),
+		)
+		let pasteSequence = 0
+		const addition = readDesignClipboard(
+			{ getData: (format) => entries.get(format) ?? "" },
+			document,
+			() => `paste:${pasteSequence++}`,
+		)
+		if (addition === null) throw new Error("Missing native design payload.")
+		expect(addition.objects[0]?.geometry.kind).toBe("rectangle")
+		expect(addition.objects[0]?.transform).toEqual({
+			...rectangle.transform,
+			e: rectangle.transform.e + 12,
+			f: rectangle.transform.f + 12,
+		})
+		const pastedPath = addition.objects[1]
+		expect(pastedPath?.geometry.kind).toBe("path")
+		if (pastedPath?.geometry.kind !== "path") return
+		expect(pastedPath.geometry.contours[0]?.id).toMatch(/^contour:paste:/u)
+		expect(pastedPath.geometry.contours[0]?.id).not.toBe(
+			expanded.geometry.kind === "path"
+				? expanded.geometry.contours[0]?.id
+				: undefined,
+		)
+
+		const imported = importDesignObjects(document, [], addition)
+		expect(imported.ok).toBe(true)
+		if (!imported.ok) return
+		expect(imported.document.objects.at(-2)?.geometry.kind).toBe("rectangle")
+		expect(imported.selection).toEqual(
+			addition.objects.map((object) => object.id),
+		)
 	})
 })

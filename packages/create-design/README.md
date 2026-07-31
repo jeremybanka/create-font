@@ -21,6 +21,15 @@ explicit document-space contour projection. Node-level vector replacement is
 the deliberate bake boundary: it converts the projected result to path
 geometry and resets the transform to identity.
 
+The Object tile exposes the exact local rectangle/ellipse parameters and exact
+document-space bounds. **Expand Shape** is the deliberate live-shape boundary:
+it replaces only the local rectangle or ellipse geometry with visually
+equivalent ordinary cubic contours, assigns fresh stable contour/control IDs,
+and keeps the object ID, affine transform, appearance, stacking position, and
+selection. The replacement is one history entry. Native create-design
+copy/paste retains live parameters; generic vector and create-font clipboard
+formats remain intentional path interoperability boundaries.
+
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its first directory
 format splits document metadata, palette, artboard, layer ordering, and each
