@@ -10,18 +10,4 @@ runs:
 
     - name: Install Dependencies
       shell: bash
-      run: >-
-        pnpm install
-        --frozen-lockfile
-        --filter create-font-workspace
-        --filter create-font
-        --filter create-design
-        --filter @create-art/source-format
-        --filter @create-design/source
-        --filter @create-font/server
-        --filter @create-font/target
-        --filter @create-font/states
-        --filter @create-font/source
-        --filter @create-font/fea-wasm
-        --filter @create-font/preact-konva
-        --filter @create-font/editor
+      run: pnpm install --frozen-lockfile
