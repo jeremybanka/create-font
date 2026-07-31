@@ -19,6 +19,11 @@ import {
 	swatchCss,
 } from "./color.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
+import {
+	artboardPreset,
+	DESIGN_ARTBOARD_PRESETS,
+	type DesignArtboardPresetId,
+} from "./artboard-operations.ts"
 import { exactObjectBounds } from "./shape-expansion.ts"
 import { visibleObjectBounds } from "./painted-geometry.ts"
 import type {
@@ -44,21 +49,192 @@ const svg = {
 	Trash: TrashIcon,
 }
 
+function ArtboardNameInput({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const [name, setName] = useState(context.activeArtboard.name)
+	const commit = (): void => {
+		const trimmed = name.trim()
+		if (trimmed.length === 0) setName(context.activeArtboard.name)
+		else if (trimmed !== context.activeArtboard.name)
+			context.setArtboardProperty({ name: trimmed })
+	}
+	return (
+		<artboard-name-input>
+			<label data-field>
+				<span>Artboard name</span>
+				<input
+					value={name}
+					onInput={(event) => setName(event.currentTarget.value)}
+					onBlur={commit}
+					onKeyDown={(event) => {
+						if (event.key !== "Enter") return
+						commit()
+						event.currentTarget.blur()
+					}}
+				/>
+			</label>
+		</artboard-name-input>
+	)
+}
+
 function DesignPagesTile({ context }: { readonly context: DesignTileContext }) {
 	const artboard = context.activeArtboard
+	const index = context.document.artboards.findIndex(
+		({ id }) => id === artboard.id,
+	)
+	const setNumber = (
+		property: "x" | "y" | "width" | "height",
+		value: number,
+	): void => {
+		if (!Number.isFinite(value)) return
+		if ((property === "width" || property === "height") && value <= 0) return
+		context.setArtboardProperty({ [property]: value })
+	}
 	return (
-		<design-pages-tile>
-			<button type="button" aria-pressed="true" onClick={context.focusCanvas}>
-				<page-thumbnail />
-				<span>
-					<strong>{artboard.name}</strong>
-					<small>
-						{artboard.width} × {artboard.height} pt ·{" "}
-						{context.document.artboards.length} artboard
-						{context.document.artboards.length === 1 ? "" : "s"}
-					</small>
-				</span>
-			</button>
+		<design-pages-tile aria-label="Document artboards">
+			<page-actions role="toolbar" aria-label="Artboard actions">
+				<button type="button" onClick={context.createArtboard}>
+					New
+				</button>
+				<button type="button" onClick={context.duplicateArtboard}>
+					Duplicate
+				</button>
+				<button
+					type="button"
+					disabled={context.document.artboards.length === 1}
+					onClick={context.deleteArtboard}
+				>
+					Delete
+				</button>
+			</page-actions>
+			<artboard-list role="listbox" aria-label="Artboards">
+				{context.document.artboards.map((candidate, candidateIndex) => (
+					<button
+						key={candidate.id}
+						type="button"
+						role="option"
+						aria-selected={candidate.id === artboard.id}
+						aria-current={candidate.id === artboard.id ? "page" : undefined}
+						onClick={() => context.activateArtboard(candidate, true)}
+						onKeyDown={(event) => {
+							const direction =
+								event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0
+							if (direction === 0) return
+							event.preventDefault()
+							const next =
+								context.document.artboards[candidateIndex + direction]
+							if (next !== undefined) context.activateArtboard(next)
+						}}
+					>
+						<page-thumbnail
+							style={{
+								aspectRatio: `${candidate.width} / ${candidate.height}`,
+							}}
+						/>
+						<span>
+							<strong>{candidate.name}</strong>
+							<small>
+								{candidate.width} × {candidate.height} pt
+							</small>
+						</span>
+					</button>
+				))}
+			</artboard-list>
+			<ArtboardNameInput key={artboard.id + artboard.name} context={context} />
+			<label data-field>
+				<span>Preset</span>
+				<select
+					aria-label="Artboard preset"
+					value=""
+					onChange={(event) => {
+						const preset = artboardPreset(
+							event.currentTarget.value as DesignArtboardPresetId,
+						)
+						context.setArtboardProperty({
+							width: preset.width,
+							height: preset.height,
+						})
+					}}
+				>
+					<option value="" disabled>
+						Choose a size…
+					</option>
+					{DESIGN_ARTBOARD_PRESETS.map((preset) => (
+						<option key={preset.id} value={preset.id}>
+							{preset.name} — {preset.width} × {preset.height}
+						</option>
+					))}
+				</select>
+			</label>
+			<artboard-number-grid>
+				{(["x", "y", "width", "height"] as const).map((property) => (
+					<label key={property} data-field>
+						<span>
+							{property === "width"
+								? "W"
+								: property === "height"
+									? "H"
+									: property.toUpperCase()}
+						</span>
+						<input
+							type="number"
+							step="any"
+							value={artboard[property]}
+							onChange={(event) =>
+								setNumber(property, event.currentTarget.valueAsNumber)
+							}
+						/>
+					</label>
+				))}
+			</artboard-number-grid>
+			<page-actions role="toolbar" aria-label="Artboard order and orientation">
+				<button
+					type="button"
+					onClick={() =>
+						context.setArtboardProperty({
+							width: artboard.height,
+							height: artboard.width,
+						})
+					}
+				>
+					Swap orientation
+				</button>
+				<button
+					type="button"
+					disabled={index === 0}
+					onClick={() => context.reorderArtboard(-1)}
+				>
+					Move up
+				</button>
+				<button
+					type="button"
+					disabled={index === context.document.artboards.length - 1}
+					onClick={() => context.reorderArtboard(1)}
+				>
+					Move down
+				</button>
+			</page-actions>
+			<page-actions role="toolbar" aria-label="Fit artboards">
+				<button type="button" onClick={context.focusCanvas}>
+					Fit active
+				</button>
+				<button type="button" onClick={context.fitAllArtboards}>
+					Fit all
+				</button>
+			</page-actions>
+			<label data-artwork-preference>
+				<input
+					type="checkbox"
+					checked={context.moveArtworkWithArtboard}
+					onChange={(event) =>
+						context.setMoveArtworkWithArtboard(event.currentTarget.checked)
+					}
+				/>
+				<span>Move intersecting artwork with artboard</span>
+			</label>
 		</design-pages-tile>
 	)
 }

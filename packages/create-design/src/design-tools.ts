@@ -1,4 +1,5 @@
 import {
+	BorderAllIcon,
 	CircleIcon,
 	CursorArrowIcon,
 	Pencil1Icon,
@@ -26,6 +27,12 @@ export const DESIGN_TOOLS = {
 		key: "F",
 		icon: TransformIcon,
 		paletteIcon: "TransformIcon",
+	},
+	artboard: {
+		label: "Artboard",
+		key: "A",
+		icon: BorderAllIcon,
+		paletteIcon: "SquareIcon",
 	},
 	pen: {
 		label: "Pen",

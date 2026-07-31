@@ -44,7 +44,7 @@ import {
 	useRef,
 	useState,
 } from "preact/hooks"
-import type { ComponentChildren } from "preact"
+import type { ComponentChildren, ComponentProps } from "preact"
 
 import {
 	defaultDesignAppearance,
@@ -56,6 +56,15 @@ import {
 	type AppearancePaintTarget,
 } from "./appearance.ts"
 import { activeDesignArtboard } from "./artboards.ts"
+import {
+	allDesignArtboardsBounds,
+	createDesignArtboard,
+	deleteDesignArtboard,
+	designArtboardsAtPoint,
+	duplicateDesignArtboard,
+	reorderDesignArtboard,
+	updateDesignArtboard,
+} from "./artboard-operations.ts"
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
 import { canvasToDocumentPoint } from "./coordinates.ts"
@@ -140,6 +149,7 @@ import {
 } from "./design-tile-registry.ts"
 import type {
 	DesignAppearance,
+	DesignArtboard,
 	DesignDocument,
 	DesignGeometry,
 	DesignObject,
@@ -151,11 +161,32 @@ import type {
 const svg = {
 	DownloadIcon,
 }
+
+/* eslint-disable lasertag/render-tag-with-own-name -- This renderer guard must return the shared Konva Stage rather than a DOM custom element. */
+function MeasuredStage({
+	width,
+	height,
+	...props
+}: ComponentProps<typeof Stage>) {
+	if (!(width > 0) || !(height > 0)) return null
+	return <Stage {...props} width={width} height={height} />
+}
+/* eslint-enable lasertag/render-tag-with-own-name */
+
 const div = {
-	Stage,
+	Stage: MeasuredStage,
 }
 
 type CanvasGesture =
+	| {
+			readonly kind: "artboard"
+			readonly pointerId: number
+			readonly mode: "create" | "move" | "resize"
+			readonly start: CanvasPoint
+			readonly original: DesignArtboard
+			readonly resizeX: -1 | 0 | 1
+			readonly resizeY: -1 | 0 | 1
+	  }
 	| {
 			readonly kind: "move"
 			readonly originals: readonly DesignObject[]
@@ -300,6 +331,20 @@ function browserLocalStorage(): Storage | null {
 	}
 }
 
+const DESIGN_MOVE_ARTWORK_WITH_ARTBOARD_KEY =
+	"create-design:move-artwork-with-artboard:v1"
+
+function initialMoveArtworkWithArtboard(): boolean {
+	try {
+		return (
+			browserLocalStorage()?.getItem(DESIGN_MOVE_ARTWORK_WITH_ARTBOARD_KEY) ===
+			"true"
+		)
+	} catch {
+		return false
+	}
+}
+
 function editableTarget(target: EventTarget | null): boolean {
 	return (
 		target instanceof HTMLInputElement ||
@@ -372,6 +417,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [directSelection, setDirectSelection] = useState<
 		readonly DesignDirectSelectionTarget[]
 	>([])
+	const [moveArtworkWithArtboard, setMoveArtworkWithArtboardState] = useState(
+		initialMoveArtworkWithArtboard,
+	)
+	const [previewArtboardDocument, setPreviewArtboardDocument] =
+		useState<DesignDocument | null>(null)
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -406,6 +456,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
 	const previewObjectsRef = useRef<readonly DesignObject[]>([])
+	const previewArtboardDocumentRef = useRef<DesignDocument | null>(null)
 	const documentRef = useRef(document)
 	const persistenceRef = useRef(persistence)
 	const serializedDocumentRef = useRef(JSON.stringify(document))
@@ -478,6 +529,27 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
 		setCanvasView(initialDesignCanvasView(canvasViewport, activeArtboard))
 	}, [activeArtboard, canvasViewport])
+	const fitAllArtboards = useCallback((): void => {
+		artboardWrapRef.current?.focus()
+		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
+		setCanvasView(
+			initialDesignCanvasView(
+				canvasViewport,
+				allDesignArtboardsBounds(document.artboards),
+			),
+		)
+	}, [canvasViewport, document.artboards])
+	const setMoveArtworkWithArtboard = useCallback((enabled: boolean): void => {
+		setMoveArtworkWithArtboardState(enabled)
+		try {
+			browserLocalStorage()?.setItem(
+				DESIGN_MOVE_ARTWORK_WITH_ARTBOARD_KEY,
+				String(enabled),
+			)
+		} catch {
+			// The preference remains effective for this session when storage is blocked.
+		}
+	}, [])
 	const gesturePolicy = useMemo(
 		() => ({ yAxis: "down" as const, rotationSnapDegrees: 15 }),
 		[],
@@ -486,6 +558,73 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const commit = useCallback((next: DesignDocument): void => {
 		dispatch({ type: "commit", document: next })
 	}, [])
+	const activateArtboard = useCallback(
+		(artboard: DesignArtboard, focus = false): void => {
+			setActiveArtboardId(artboard.id)
+			setSelection([])
+			if (focus && canvasViewport.width > 0 && canvasViewport.height > 0)
+				setCanvasView(initialDesignCanvasView(canvasViewport, artboard))
+		},
+		[canvasViewport],
+	)
+	const createArtboard = useCallback((): void => {
+		const result = createDesignArtboard(document, `artboard:${nextId()}`)
+		commit(result.document)
+		setActiveArtboardId(result.activeArtboardId)
+		setSelection([])
+		setTool("artboard")
+		setStatus("Created a new artboard.")
+	}, [commit, document, nextId])
+	const duplicateArtboard = useCallback((): void => {
+		const result = duplicateDesignArtboard(
+			document,
+			activeArtboard.id,
+			`artboard:${nextId()}`,
+		)
+		commit(result.document)
+		setActiveArtboardId(result.activeArtboardId)
+		setSelection([])
+		setStatus(`Duplicated ${activeArtboard.name}.`)
+	}, [activeArtboard, commit, document, nextId])
+	const deleteArtboard = useCallback((): void => {
+		const result = deleteDesignArtboard(document, activeArtboard.id)
+		if (result === null) {
+			setStatus("A document must keep at least one artboard.")
+			return
+		}
+		commit(result.document)
+		setActiveArtboardId(result.activeArtboardId)
+		setStatus(`Deleted ${activeArtboard.name}; global artwork was preserved.`)
+	}, [activeArtboard, commit, document])
+	const setArtboardProperty = useCallback(
+		(property: Partial<Omit<DesignArtboard, "id">>): void => {
+			try {
+				commit(
+					updateDesignArtboard(document, activeArtboard.id, property, {
+						moveIntersectingArtwork: moveArtworkWithArtboard,
+					}),
+				)
+				setStatus(`Updated ${activeArtboard.name}.`)
+			} catch (error) {
+				setStatus(error instanceof Error ? error.message : "Invalid artboard.")
+			}
+		},
+		[activeArtboard, commit, document, moveArtworkWithArtboard],
+	)
+	const reorderArtboard = useCallback(
+		(direction: -1 | 1): void => {
+			const index = document.artboards.findIndex(
+				({ id }) => id === activeArtboard.id,
+			)
+			const next = reorderDesignArtboard(
+				document,
+				activeArtboard.id,
+				index + direction,
+			)
+			if (next !== document) commit(next)
+		},
+		[activeArtboard.id, commit, document],
+	)
 	const commitVectorIntent = useCallback(
 		(intent: VectorEditIntent): boolean => {
 			const result = applyDesignVectorIntent(document, selection, intent)
@@ -515,7 +654,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	const cancelCanvasGesture = useCallback((): void => {
 		const gesture = gestureRef.current
-		if (gesture !== null && gesture.kind !== "pan" && gesture.kind !== "direct")
+		if (
+			gesture !== null &&
+			gesture.kind !== "pan" &&
+			gesture.kind !== "direct" &&
+			gesture.kind !== "artboard"
+		)
 			reduceVectorGesture(
 				gesture.state,
 				{
@@ -531,6 +675,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setGesturePreview(null)
 		setPenPoints([])
 		setActiveSnapGuides([])
+		setPreviewArtboardDocument(null)
+		previewArtboardDocumentRef.current = null
 	}, [gesturePolicy])
 
 	const selectTool = useCallback(
@@ -871,6 +1017,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}
 
 	const designTileContext: DesignTileContext = {
+		activateArtboard,
 		addSwatch,
 		appearanceDisabledReason,
 		appearanceSummary,
@@ -878,6 +1025,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		applyAppearancePaint,
 		applyStrokeProperties,
 		canReviewSourceChange,
+		createArtboard,
+		deleteArtboard,
 		deleteSelection,
 		document,
 		expandSelection,
@@ -886,8 +1035,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 			: expansionEligibility.reason,
 		expandStrokeSelection,
 		exportDocument,
+		fitAllArtboards,
 		focusCanvas: focusActiveArtboard,
 		activeArtboard,
+		duplicateArtboard,
+		moveArtworkWithArtboard,
+		reorderArtboard,
 		reviewSourceChange,
 		selectObject: (object, additive = false) => {
 			setSelection((current) =>
@@ -905,6 +1058,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selectedSwatchId,
 		setObjectProperty,
 		setObjectGeometry,
+		setArtboardProperty,
+		setMoveArtworkWithArtboard,
 		setAppearanceTarget: (target) => {
 			setAppearanceTarget(target)
 			const value = appearanceSummary[target]
@@ -1227,7 +1382,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	useEffect(() => {
 		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
 		setCanvasView(initialDesignCanvasView(canvasViewport, activeArtboard))
-	}, [activeArtboard, canvasViewport.height, canvasViewport.width])
+	}, [activeArtboard.id, canvasViewport.height, canvasViewport.width])
 
 	useEffect(() => {
 		if (document.artboards.some(({ id }) => id === activeArtboardId)) return
@@ -1241,7 +1396,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 			if (
 				gesture === null ||
 				gesture.kind === "pan" ||
-				gesture.kind === "direct"
+				gesture.kind === "direct" ||
+				gesture.kind === "artboard"
 			)
 				return
 			const transition = reduceVectorGesture(
@@ -1376,6 +1532,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 					const points = penPointsRef.current.slice(0, -1)
 					penPointsRef.current = points
 					setPenPoints(points)
+				} else if (tool === "artboard") {
+					event.preventDefault()
+					deleteArtboard()
 				} else {
 					event.preventDefault()
 					deleteSelection()
@@ -1400,6 +1559,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}, [
 		deleteSelection,
 		commit,
+		deleteArtboard,
 		cancelCanvasGesture,
 		directSelection,
 		document,
@@ -1603,6 +1763,112 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
+	const beginArtboardGesture = (
+		event: KonvaEventObject<PointerEvent>,
+		point: CanvasPoint,
+	): void => {
+		const hits = designArtboardsAtPoint(document.artboards, point)
+		let hit = hits.find(({ id }) => id === activeArtboard.id) ?? hits.at(-1)
+		if (event.evt.altKey && hits.length > 1) {
+			const current = hits.findIndex(({ id }) => id === activeArtboard.id)
+			hit = hits[(current + 1) % hits.length]
+		}
+		if (hit === undefined) {
+			const id = `artboard:${nextId()}`
+			gestureRef.current = {
+				kind: "artboard",
+				pointerId: event.evt.pointerId,
+				mode: "create",
+				start: point,
+				original: {
+					id,
+					name: `Artboard ${document.artboards.length + 1}`,
+					x: point.x,
+					y: point.y,
+					width: 1,
+					height: 1,
+				},
+				resizeX: 1,
+				resizeY: 1,
+			}
+		} else {
+			setActiveArtboardId(hit.id)
+			const tolerance = 8 / worldScale
+			const resizeX =
+				Math.abs(point.x - hit.x) <= tolerance
+					? -1
+					: Math.abs(point.x - (hit.x + hit.width)) <= tolerance
+						? 1
+						: 0
+			const resizeY =
+				Math.abs(point.y - hit.y) <= tolerance
+					? -1
+					: Math.abs(point.y - (hit.y + hit.height)) <= tolerance
+						? 1
+						: 0
+			gestureRef.current = {
+				kind: "artboard",
+				pointerId: event.evt.pointerId,
+				mode: resizeX === 0 && resizeY === 0 ? "move" : "resize",
+				start: point,
+				original: hit,
+				resizeX,
+				resizeY,
+			}
+		}
+		setSelection([])
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+	}
+	const previewArtboardGesture = (
+		gesture: Extract<CanvasGesture, { readonly kind: "artboard" }>,
+		point: CanvasPoint,
+	): void => {
+		const delta = { x: point.x - gesture.start.x, y: point.y - gesture.start.y }
+		if (gesture.mode === "create") {
+			const bounds = {
+				x: Math.min(gesture.start.x, point.x),
+				y: Math.min(gesture.start.y, point.y),
+				width: Math.max(1, Math.abs(delta.x)),
+				height: Math.max(1, Math.abs(delta.y)),
+			}
+			const preview = createDesignArtboard(
+				document,
+				gesture.original.id,
+				bounds,
+			).document
+			previewArtboardDocumentRef.current = preview
+			setPreviewArtboardDocument(preview)
+			return
+		}
+		let { x, y, width, height } = gesture.original
+		if (gesture.mode === "move") {
+			x += delta.x
+			y += delta.y
+		} else {
+			if (gesture.resizeX < 0) {
+				x = Math.min(
+					gesture.original.x + gesture.original.width - 1,
+					x + delta.x,
+				)
+				width = gesture.original.width - (x - gesture.original.x)
+			} else if (gesture.resizeX > 0) width = Math.max(1, width + delta.x)
+			if (gesture.resizeY < 0) {
+				y = Math.min(
+					gesture.original.y + gesture.original.height - 1,
+					y + delta.y,
+				)
+				height = gesture.original.height - (y - gesture.original.y)
+			} else if (gesture.resizeY > 0) height = Math.max(1, height + delta.y)
+		}
+		const preview = updateDesignArtboard(
+			document,
+			gesture.original.id,
+			{ x, y, width, height },
+			{ moveIntersectingArtwork: moveArtworkWithArtboard },
+		)
+		previewArtboardDocumentRef.current = preview
+		setPreviewArtboardDocument(preview)
+	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
 		if (event.evt.button === 1) {
@@ -1618,6 +1884,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 			return
 		}
 		const point = pagePoint(event)
+		if (tool === "artboard") {
+			beginArtboardGesture(event, point)
+			return
+		}
 		if (tool === "rect" || tool === "ellipse") {
 			beginVectorGesture(event, { tool })
 			return
@@ -1690,6 +1960,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setPreviewObjects(changed)
 			return
 		}
+		if (gesture.kind === "artboard") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			previewArtboardGesture(gesture, pagePoint(event))
+			return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -1742,6 +2017,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 				})
 				setStatus(`Edited ${directSelectionDescription(gesture.selection)}.`)
 			}
+			return
+		}
+		if (gesture.kind === "artboard") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			gestureRef.current = null
+			const preview = previewArtboardDocumentRef.current
+			previewArtboardDocumentRef.current = null
+			setPreviewArtboardDocument(null)
+			if (preview !== null && preview !== document) {
+				commit(preview)
+				setActiveArtboardId(gesture.original.id)
+				setStatus(
+					gesture.mode === "create"
+						? "Created an artboard."
+						: `${gesture.mode === "move" ? "Moved" : "Resized"} ${gesture.original.name}.`,
+				)
+			} else if (gesture.mode !== "create")
+				setStatus(`Selected ${gesture.original.name}.`)
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
@@ -1848,11 +2142,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const gesture = gestureRef.current
 			if (gesture === null) return
 			const activePointerId =
-				gesture.kind === "pan" || gesture.kind === "direct"
+				gesture.kind === "pan" ||
+				gesture.kind === "direct" ||
+				gesture.kind === "artboard"
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
-			if (gesture.kind !== "pan" && gesture.kind !== "direct")
+			if (
+				gesture.kind !== "pan" &&
+				gesture.kind !== "direct" &&
+				gesture.kind !== "artboard"
+			)
 				reduceVectorGesture(
 					gesture.state,
 					{ type: "pointer-cancel", pointerId },
@@ -1864,6 +2164,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setPreviewObjects([])
 			setGesturePreview(null)
 			setActiveSnapGuides([])
+			setPreviewArtboardDocument(null)
+			previewArtboardDocumentRef.current = null
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
 				penPointsRef.current = []
 				setPenPoints([])
@@ -1914,10 +2216,19 @@ export function DesignApplication(props: DesignApplicationProps) {
 		)
 	}
 
+	const canvasDocument = previewArtboardDocument ?? document
+	const canvasActiveArtboardId =
+		gestureRef.current?.kind === "artboard" &&
+		gestureRef.current.mode === "create"
+			? gestureRef.current.original.id
+			: activeArtboardId
+	const canvasActiveArtboard = canvasDocument.artboards.find(
+		({ id }) => id === canvasActiveArtboardId,
+	)
 	const previewById = new Map(
 		previewObjects.map((object) => [object.id, object]),
 	)
-	const displayedObjects = document.objects.map(
+	const displayedObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
 	const previewSwatch = document.swatches.find(
@@ -2110,9 +2421,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 							width={canvasViewport.width}
 							height={canvasViewport.height}
 							style={{
-								cursor: canvasToolCursor(tool === "direct" ? "select" : tool, {
-									dragging: gestureRef.current?.kind === "pan",
-								}),
+								cursor: canvasToolCursor(
+									tool === "direct"
+										? "select"
+										: tool === "artboard"
+											? "rect"
+											: tool,
+									{
+										dragging: gestureRef.current?.kind === "pan",
+									},
+								),
 							}}
 							onPointerDown={pointerDown}
 							onPointerMove={pointerMove}
@@ -2136,7 +2454,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 									scaleX={worldScale}
 									scaleY={worldScale}
 								>
-									{document.artboards.map((artboard) => (
+									{canvasDocument.artboards.map((artboard) => (
 										<Rect
 											key={artboard.id}
 											name={`design-paper ${artboard.id}`}
@@ -2149,8 +2467,56 @@ export function DesignApplication(props: DesignApplicationProps) {
 											shadowBlur={24 / worldScale}
 											shadowOpacity={0.36}
 											shadowOffsetY={9 / worldScale}
+											stroke={
+												artboard.id === canvasActiveArtboardId
+													? "#e17352"
+													: "#8e8c85"
+											}
+											strokeWidth={
+												(artboard.id === canvasActiveArtboardId ? 2 : 1) /
+												worldScale
+											}
+											dash={
+												artboard.id === canvasActiveArtboardId
+													? []
+													: [4 / worldScale, 4 / worldScale]
+											}
 										/>
 									))}
+									{tool !== "artboard" || canvasActiveArtboard === undefined
+										? null
+										: (
+												[
+													[canvasActiveArtboard.x, canvasActiveArtboard.y],
+													[
+														canvasActiveArtboard.x + canvasActiveArtboard.width,
+														canvasActiveArtboard.y,
+													],
+													[
+														canvasActiveArtboard.x,
+														canvasActiveArtboard.y +
+															canvasActiveArtboard.height,
+													],
+													[
+														canvasActiveArtboard.x + canvasActiveArtboard.width,
+														canvasActiveArtboard.y +
+															canvasActiveArtboard.height,
+													],
+												] as const
+											).map(([x, y], index) => (
+												<Rect
+													key={`artboard-handle:${index}`}
+													name="design-artboard-handle"
+													x={x - 4 / worldScale}
+													y={y - 4 / worldScale}
+													width={8 / worldScale}
+													height={8 / worldScale}
+													fill="#fff"
+													stroke="#e17352"
+													strokeWidth={1 / worldScale}
+													listening={false}
+												/>
+											))}
 									{displayedObjects.map((object) => {
 										const fill = document.swatches.find(
 											(candidate) =>
@@ -2170,7 +2536,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 											<VectorContourPath
 												key={object.id}
 												name={`design-object ${object.id}`}
-												object={projectDesignVectorObject(document, object)}
+												object={projectDesignVectorObject(
+													canvasDocument,
+													object,
+												)}
 												{...(fill === undefined
 													? {}
 													: { fill: swatchCss(fill) })}
@@ -2214,7 +2583,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 													const container = event.target.getStage()?.container()
 													if (container !== undefined)
 														container.style.cursor = canvasToolCursor(
-															tool === "direct" ? "select" : tool,
+															tool === "direct"
+																? "select"
+																: tool === "artboard"
+																	? "rect"
+																	: tool,
 														)
 												}}
 											/>

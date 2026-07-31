@@ -45,6 +45,10 @@ afterEach(() => {
 function mountDesign(
 	props: DesignApplicationProps = {},
 	storage = new Map<string, string>(),
+	resize?: {
+		readonly deferred: true
+		readonly capture: (callback: ResizeObserverCallback) => void
+	},
 ) {
 	vi.stubGlobal("localStorage", {
 		getItem: (key: string) => storage.get(key) ?? null,
@@ -76,7 +80,11 @@ function mountDesign(
 			constructor(callback: ResizeObserverCallback) {
 				this.callback = callback
 			}
-			observe() {
+			observe(element: Element) {
+				if (resize !== undefined && element.localName === "artboard-wrap") {
+					resize.capture(this.callback)
+					return
+				}
 				this.callback(
 					[
 						{
@@ -98,11 +106,35 @@ function mountDesign(
 	hosts.push(host)
 	act(() => render(h(DesignApplication, props), host))
 	const stage = Konva.stages.at(-1)
+	if (resize !== undefined) return stage
 	if (stage === undefined) throw new Error("Design stage did not mount.")
 	return stage
 }
 
 describe("create-design shared vector scene", () => {
+	it("waits for a positive viewport before rendering the existing scene", () => {
+		const stageCount = Konva.stages.length
+		const stage = mountDesign({}, new Map(), {
+			deferred: true,
+			capture: (callback) => {
+				expect(Konva.stages).toHaveLength(stageCount)
+				callback(
+					[
+						{
+							contentRect: { width: 960, height: 720 },
+						} as ResizeObserverEntry,
+					],
+					{} as ResizeObserver,
+				)
+			},
+		})
+		if (stage === undefined) throw new Error("Design stage did not mount.")
+		expect(stage.width()).toBe(960)
+		expect(stage.height()).toBe(720)
+		expect(stage.find(".design-paper")).toHaveLength(1)
+		expect(stage.find(".design-object").length).toBeGreaterThan(0)
+	})
+
 	function sourceSession(
 		overrides: Partial<DesignSourceSession> = {},
 	): DesignSourceSession {
@@ -341,6 +373,126 @@ describe("create-design shared vector scene", () => {
 		expect(document.querySelector("design-tools-tile")).not.toBeNull()
 		expect(document.querySelector("design-object-tile")).not.toBeNull()
 		expect(document.querySelector("design-appearance-tile")).not.toBeNull()
+	})
+
+	it("navigates and edits the ordered artboard collection accessibly", async () => {
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const pages = document.querySelector("design-pages-tile")
+		if (pages === null) throw new Error("Pages tile was not found.")
+		const button = (label: string): HTMLButtonElement => {
+			const match = [...pages.querySelectorAll("button")].find(
+				(candidate) => candidate.textContent?.trim() === label,
+			)
+			if (match === undefined) throw new Error(`${label} was not found.`)
+			return match
+		}
+
+		await act(async () => {
+			button("New").click()
+			await Promise.resolve()
+		})
+		let options = [
+			...pages.querySelectorAll<HTMLButtonElement>('[role="option"]'),
+		]
+		expect(options).toHaveLength(2)
+		expect(options[1]?.getAttribute("aria-current")).toBe("page")
+
+		const name = pages.querySelector<HTMLInputElement>(
+			'label[data-field] input:not([type="number"])',
+		)
+		if (name === null) throw new Error("Artboard name was not found.")
+		await act(async () => {
+			name.value = "Outside artwork"
+			name.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		await act(async () => {
+			name.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+			)
+			await Promise.resolve()
+		})
+		expect(options[1]?.textContent).toContain("Outside artwork")
+
+		await act(async () => {
+			options[1]?.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "ArrowUp" }),
+			)
+			await Promise.resolve()
+		})
+		options = [...pages.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+		expect(options[0]?.getAttribute("aria-current")).toBe("page")
+		expect(button("Fit active").disabled).toBe(false)
+		expect(button("Fit all").disabled).toBe(false)
+
+		await act(async () => {
+			button("Delete").click()
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.artboards).toHaveLength(1)
+		expect(saved.objects).toHaveLength(2)
+	})
+
+	it("creates an artboard with a distinct canvas gesture and undoes it atomically", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		const artboardTool = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Artboard"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (artboardTool === null || canvas === null)
+			throw new Error("Artboard tool or canvas was not found.")
+		act(() => artboardTool.click())
+		const fire = (type: string, x: number, y: number): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId: 42,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", 80, 100)
+			fire("pointermove", 180, 200)
+			fire("pointerup", 180, 200)
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.artboards).toHaveLength(2)
+		expect(saved.objects).toHaveLength(2)
+		expect(stage.find(".design-paper")).toHaveLength(2)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.artboards).toHaveLength(1)
+		expect(saved.objects).toHaveLength(2)
 	})
 
 	it("authors mixed multi-object paints atomically with accessible appearance controls", async () => {

@@ -21,6 +21,7 @@ export type DesignTool =
 	| "select"
 	| "direct"
 	| "transform"
+	| "artboard"
 	| "pen"
 	| "rect"
 	| "ellipse"
