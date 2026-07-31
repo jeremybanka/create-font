@@ -1,5 +1,4 @@
 import { Elysia, status, t } from "elysia"
-import type { ElysiaAdapter } from "elysia/adapter"
 
 import {
 	SourceValidationError,
@@ -10,7 +9,6 @@ import {
 } from "./contracts.ts"
 
 export type SourceVersionControlRpcOptions = Readonly<{
-	adapter?: ElysiaAdapter
 	service?: SourceVersionControlService
 }>
 
@@ -39,10 +37,7 @@ function versionControlErrorResponse(error: unknown) {
 export function createSourceVersionControlRpc(
 	options: SourceVersionControlRpcOptions,
 ) {
-	return new Elysia({
-		...(options.adapter === undefined ? {} : { adapter: options.adapter }),
-		name: `create-art-source-version-control-rpc`,
-	})
+	return new Elysia({ name: `create-art-source-version-control-rpc` })
 		.get(
 			`/source/comparison`,
 			async ({ query }) => {

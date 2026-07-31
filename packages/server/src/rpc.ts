@@ -90,10 +90,9 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 		}))
 		.post(`/build`, options.build)
 		.use(
-			createSourceVersionControlRpc({
-				...(options.adapter === undefined ? {} : { adapter: options.adapter }),
-				...(versionControl === undefined ? {} : { service: versionControl }),
-			}),
+			createSourceVersionControlRpc(
+				versionControl === undefined ? {} : { service: versionControl },
+			),
 		)
 		.ws(`/source/events`, {
 			open(ws) {

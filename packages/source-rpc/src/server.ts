@@ -300,12 +300,11 @@ export function createSourceRpc(options: SourceRpcOptions) {
 			}
 		})
 		.use(
-			createSourceVersionControlRpc({
-				...(options.adapter === undefined ? {} : { adapter: options.adapter }),
-				...(options.versionControl === undefined
+			createSourceVersionControlRpc(
+				options.versionControl === undefined
 					? {}
-					: { service: options.versionControl }),
-			}),
+					: { service: options.versionControl },
+			),
 		)
 		.get(
 			`/source/unit`,
