@@ -80,7 +80,20 @@ export interface DesignFill {
 export interface DesignStroke {
 	readonly swatchId: string
 	readonly width: number
+	readonly cap: "butt" | "round" | "square"
+	readonly join: "miter" | "round" | "bevel"
+	readonly miterLimit: number
+	readonly dashArray: readonly number[]
+	readonly dashOffset: number
 }
+
+export const DEFAULT_DESIGN_STROKE_STYLE = Object.freeze({
+	cap: "butt" as const,
+	join: "miter" as const,
+	miterLimit: 4,
+	dashArray: Object.freeze([]) as readonly number[],
+	dashOffset: 0,
+})
 
 export interface DesignAppearance {
 	readonly fill?: DesignFill
@@ -105,7 +118,7 @@ export interface DesignGuide {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 3
+	readonly version: 4
 	readonly title: string
 	/**
 	 * The current page rectangle in the global document coordinate plane.

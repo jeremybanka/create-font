@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
 	LEGACY_DESIGN_STORAGE_KEY,
-	parseDesignDocument,
 	PREVIOUS_DESIGN_STORAGE_KEY,
+	parseDesignDocument,
 	readStoredDesignDocument,
+	VERSION_TWO_DESIGN_STORAGE_KEY,
 } from "../src/document.ts"
 
 function legacyDocument() {
@@ -52,10 +54,20 @@ describe("design document storage", () => {
 		if (template === undefined) throw new Error("Expected a design object.")
 		const appearances = [
 			{ fill: { swatchId: "swatch:coral" } },
-			{ stroke: { swatchId: "swatch:ink", width: 2 } },
+			{
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 2,
+				},
+			},
 			{
 				fill: { swatchId: "swatch:cyan" },
-				stroke: { swatchId: "swatch:ink", width: 3 },
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 3,
+				},
 			},
 			{},
 		]
@@ -72,7 +84,7 @@ describe("design document storage", () => {
 		)
 	})
 
-	it("hydrates a v1 key, migrates once, and saves canonical v3", () => {
+	it("hydrates a v1 key, migrates once, and saves canonical v4", () => {
 		const storage = memoryStorage({
 			[LEGACY_DESIGN_STORAGE_KEY]: JSON.stringify(legacyDocument()),
 		})
@@ -81,7 +93,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 3,
+				version: 4,
 				page: { x: 0, y: 0, width: 120, height: 80 },
 				title: "Stored legacy design",
 				objects: [
@@ -122,14 +134,14 @@ describe("design document storage", () => {
 			],
 		}
 		const storage = memoryStorage({
-			[PREVIOUS_DESIGN_STORAGE_KEY]: JSON.stringify(previous),
+			[VERSION_TWO_DESIGN_STORAGE_KEY]: JSON.stringify(previous),
 		})
 		const loaded = readStoredDesignDocument(storage)
 		expect(loaded).toMatchObject({
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 3,
+				version: 4,
 				objects: [
 					{
 						geometry: {
@@ -144,7 +156,47 @@ describe("design document storage", () => {
 				],
 			},
 		})
+		expect(storage.values.has(VERSION_TWO_DESIGN_STORAGE_KEY)).toBe(false)
+	})
+
+	it("hydrates the prior v3 key with explicit stroke defaults", () => {
+		const initial = createInitialDocument()
+		const object = initial.objects[0]!
+		const versionThree = {
+			...initial,
+			version: 3,
+			objects: [
+				{
+					...object,
+					appearance: {
+						stroke: { swatchId: "swatch:ink", width: 5 },
+					},
+				},
+			],
+		}
+		const storage = memoryStorage({
+			[PREVIOUS_DESIGN_STORAGE_KEY]: JSON.stringify(versionThree),
+		})
+		const loaded = readStoredDesignDocument(storage)
+		expect(loaded).toMatchObject({
+			status: "loaded",
+			migrated: true,
+			document: {
+				version: 4,
+				objects: [
+					{
+						appearance: {
+							stroke: {
+								...DEFAULT_DESIGN_STROKE_STYLE,
+								width: 5,
+							},
+						},
+					},
+				],
+			},
+		})
 		expect(storage.values.has(PREVIOUS_DESIGN_STORAGE_KEY)).toBe(false)
+		expect(storage.values.has(DESIGN_STORAGE_KEY)).toBe(true)
 	})
 
 	it("does not overwrite or delete malformed and future-version input", () => {

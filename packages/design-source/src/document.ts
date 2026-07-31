@@ -1,6 +1,7 @@
 import { z } from "zod/v4"
 
 import { diagnostic, failure, success } from "./result.ts"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
 	DesignObject,
@@ -9,8 +10,9 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 3 as const
-export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 2 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 4 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 3 as const
+export const VERSION_TWO_DESIGN_DOCUMENT_VERSION = 2 as const
 export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
 
 export const finiteNumberSchema = z.number().finite()
@@ -123,6 +125,25 @@ export const transformSchema = z
 		f: finiteNumberSchema,
 	})
 	.strict()
+export const previousAppearanceSchema = z
+	.object({
+		fill: z.object({ swatchId: swatchIdSchema }).strict().optional(),
+		stroke: z
+			.object({
+				swatchId: swatchIdSchema,
+				width: finiteNumberSchema.nonnegative(),
+			})
+			.strict()
+			.optional(),
+	})
+	.strict()
+export const versionTwoAppearanceSchema = previousAppearanceSchema
+const dashArraySchema = z
+	.array(finiteNumberSchema.nonnegative())
+	.refine(
+		(values) => values.length === 0 || values.some((value) => value > 0),
+		"Dash arrays must be empty or contain at least one positive length.",
+	)
 export const appearanceSchema = z
 	.object({
 		fill: z.object({ swatchId: swatchIdSchema }).strict().optional(),
@@ -130,6 +151,11 @@ export const appearanceSchema = z
 			.object({
 				swatchId: swatchIdSchema,
 				width: finiteNumberSchema.nonnegative(),
+				cap: z.enum(["butt", "round", "square"]),
+				join: z.enum(["miter", "round", "bevel"]),
+				miterLimit: finiteNumberSchema.min(1),
+				dashArray: dashArraySchema,
+				dashOffset: finiteNumberSchema,
 			})
 			.strict()
 			.optional(),
@@ -146,6 +172,20 @@ export const designObjectSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+const previousDesignObjectSchema = z
+	.object({
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: geometrySchema,
+		transform: transformSchema,
+		appearance: previousAppearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+const versionTwoDesignObjectSchema = previousDesignObjectSchema.extend({
+	geometry: previousGeometrySchema,
+})
 export const legacyDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
@@ -163,9 +203,7 @@ const versionOneDesignObjectSchema = z.unknown().transform((value, context) => {
 		!Array.isArray(value) &&
 		("geometry" in value || "transform" in value || "appearance" in value)
 	const parsed = (
-		canonical
-			? designObjectSchema.extend({ geometry: previousGeometrySchema })
-			: legacyDesignObjectSchema
+		canonical ? versionTwoDesignObjectSchema : legacyDesignObjectSchema
 	).safeParse(value)
 	if (parsed.success) return parsed.data
 	for (const issue of parsed.error.issues) context.addIssue(issue)
@@ -206,6 +244,18 @@ export const designDocumentSchema = z
 	})
 	.strict()
 
+export const versionTwoDesignDocumentSchema = z
+	.object({
+		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
+		version: z.literal(VERSION_TWO_DESIGN_DOCUMENT_VERSION),
+		title: z.string(),
+		page: previousPageSchema,
+		swatches: z.array(swatchSchema),
+		objects: z.array(versionTwoDesignObjectSchema),
+		guides: z.array(guideSchema),
+	})
+	.strict()
+
 export const legacyDesignDocumentSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
@@ -223,11 +273,9 @@ export const previousDesignDocumentSchema = z
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
-		page: previousPageSchema,
+		page: pageSchema,
 		swatches: z.array(swatchSchema),
-		objects: z.array(
-			designObjectSchema.extend({ geometry: previousGeometrySchema }),
-		),
+		objects: z.array(previousDesignObjectSchema),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -348,7 +396,9 @@ export function validateDesignDocument(
 	return errors.length === 0 ? success(document) : failure(errors)
 }
 
-function migrateObjectV1(object: z.infer<typeof versionOneDesignObjectSchema>) {
+function migrateObjectV1(
+	object: z.infer<typeof versionOneDesignObjectSchema>,
+): z.infer<typeof versionTwoDesignObjectSchema> {
 	if ("geometry" in object) return object
 	return {
 		id: object.id,
@@ -376,9 +426,23 @@ function nextStableId(base: string, reserved: ReadonlySet<string>): string {
 export function stabilizeDesignObjectIdentities(
 	object:
 		| z.infer<typeof designObjectSchema>
+		| z.infer<typeof previousDesignObjectSchema>
+		| z.infer<typeof versionTwoDesignObjectSchema>
 		| ReturnType<typeof migrateObjectV1>,
 ): DesignObject {
-	if (object.geometry.kind !== "path") return object as DesignObject
+	const appearance = {
+		...object.appearance,
+		...(object.appearance.stroke === undefined
+			? {}
+			: {
+					stroke: {
+						...DEFAULT_DESIGN_STROKE_STYLE,
+						...object.appearance.stroke,
+					},
+				}),
+	}
+	if (object.geometry.kind !== "path")
+		return { ...object, appearance } as DesignObject
 	const reservedContours = new Set(
 		object.geometry.contours.flatMap(({ id }) =>
 			id === undefined ? [] : [id],
@@ -391,6 +455,7 @@ export function stabilizeDesignObjectIdentities(
 	)
 	return {
 		...object,
+		appearance,
 		geometry: {
 			kind: "path",
 			contours: object.geometry.contours.map((contour, contourIndex) => {
@@ -422,6 +487,8 @@ function migrateCompleteDocument(
 		readonly swatches: readonly unknown[]
 		readonly objects: readonly (
 			| z.infer<typeof designObjectSchema>
+			| z.infer<typeof previousDesignObjectSchema>
+			| z.infer<typeof versionTwoDesignObjectSchema>
 			| ReturnType<typeof migrateObjectV1>
 		)[]
 		readonly guides: readonly unknown[]
@@ -452,9 +519,21 @@ export function migrateDesignDocumentV1(
 export function migrateDesignDocumentV2(
 	value: unknown,
 ): DesignSourceResult<DesignDocument> {
-	const parsed = previousDesignDocumentSchema.safeParse(value)
+	const parsed = versionTwoDesignDocumentSchema.safeParse(value)
 	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
 	return migrateCompleteDocument(parsed.data)
+}
+
+export function migrateDesignDocumentV3(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
+	const parsed = previousDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return validateDesignDocument({
+		...parsed.data,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		objects: parsed.data.objects.map(stabilizeDesignObjectIdentities),
+	})
 }
 
 function envelope(value: unknown): DesignSourceResult<{
@@ -500,8 +579,10 @@ export function decodeDesignDocument(
 	switch (decodedEnvelope.value.version) {
 		case LEGACY_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV1(value)
-		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+		case VERSION_TWO_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV2(value)
+		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV3(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)
 		default:

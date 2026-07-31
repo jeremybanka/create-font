@@ -416,6 +416,59 @@ design-tile-content.class {
 				}
 			}
 
+			> stroke-properties-editor {
+				display: grid;
+				grid-column: 1 / -1;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 5px;
+				padding-top: 3px;
+
+				> strong,
+				> p,
+				> stroke-dash-array-control {
+					grid-column: 1 / -1;
+				}
+
+				> strong {
+					font-size: 8px;
+					color: var(--ink-muted);
+				}
+
+				> label[data-stroke-field],
+				> stroke-dash-array-control > label[data-stroke-field] {
+					display: grid;
+					gap: 3px;
+
+					> span {
+						font-size: 7px;
+						color: var(--ink-faint);
+					}
+
+					> input,
+					> select {
+						min-width: 0;
+						width: 100%;
+						padding: 5px;
+						border: 1px solid var(--line);
+						border-radius: 4px;
+						background: var(--paper);
+						font-size: 8px;
+						color: var(--ink);
+
+						&:disabled {
+							opacity: 0.55;
+						}
+					}
+				}
+
+				> p {
+					margin: 0;
+					font-size: 7px;
+					line-height: 1.4;
+					color: var(--ink-faint);
+				}
+			}
+
 			> p {
 				grid-column: 1 / -1;
 				margin: 0;

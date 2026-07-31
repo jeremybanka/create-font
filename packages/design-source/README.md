@@ -7,17 +7,18 @@ into validated JSON units.
 
 ## Complete document versions
 
-Complete documents use a strict, version-dispatched codec. Version three is
-the current schema. It retains v2's tagged geometry, affine transform, and
-fill/stroke appearance, requires every authored path contour and point to have
-a stable ID, and gives the current page an explicit position in the global
-document plane. `decodeDesignDocument()` accepts complete version-one and
-version-two documents, validates every persisted field, and deterministically
-migrates them to v3. Existing IDs and geometry are preserved. Missing legacy
-path IDs are derived from the owning object, contour order, and point order;
-the page receives the legacy implicit origin `(0, 0)`. The v1 decoder continues
-to accept both shipped object forms: canonical
-geometry/transform/appearance objects are preserved, while older
+Complete documents use a strict, version-dispatched codec. Version four is the
+current schema. It retains v3's explicit global page position and required
+stable contour/point IDs, and expands strokes from width-only paint to authored
+width, cap, join, miter limit, dash array, and dash offset.
+`decodeDesignDocument()` accepts complete version-one, version-two, and
+version-three documents and deterministically migrates them to v4. Existing
+IDs, global coordinates, geometry, and transforms are preserved. Missing v1/v2
+path IDs are derived from the owning object and source order, and their page
+receives the legacy implicit origin `(0, 0)`. Prior width-only strokes receive
+the renderer-neutral butt cap, miter join, miter limit 4, and solid-dash
+defaults. The v1 decoder continues to accept both shipped object forms:
+canonical geometry/transform/appearance objects are migrated, while older
 `{ contours, fillId }` objects become path geometry with an identity transform
 and fill appearance.
 `validateDesignDocument()` validates only the current version, while
@@ -25,7 +26,8 @@ and fill appearance.
 
 Malformed, partial, and future-version inputs fail with field-located
 diagnostics. Callers must retain their last valid document when decoding fails;
-defaults are an application concern and are never constructed by the codec.
+new-authoring defaults remain an application concern; only explicit versioned
+migration defaults are constructed by the codec.
 
 ## Coordinate and identity contract
 
@@ -109,9 +111,10 @@ Version-one directory readers also accept the earlier `{ contours, fillId }`
 object-unit shape and deterministically normalize it to path geometry, an
 identity transform, and a fill appearance. They accept the originally shipped
 implicit `(0, 0)` artboard origin and missing path IDs, then assign the same v3
-migration defaults as the complete-document decoder. Writers emit the explicit
+migration defaults as the complete-document decoder. Readers also normalize
+prior width-only stroke object units. Writers emit the explicit
 global page rectangle, stable path IDs, and canonical separated object shape,
-and mark the assembled complete document as version three.
+and mark the assembled complete document as version four.
 
 Authored path contours and points always carry stable `id` fields after
 assembly. Expansion and paste assign fresh identities so selection and later

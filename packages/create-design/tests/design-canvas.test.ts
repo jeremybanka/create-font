@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
 	captureDesignPointer,
@@ -10,7 +11,7 @@ import {
 	snapDesignObject,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
-import type { DesignObject } from "../src/types.ts"
+import type { DesignObject, DesignStroke } from "../src/types.ts"
 
 const rectangle = (
 	id: string,
@@ -30,6 +31,33 @@ const rectangle = (
 	},
 	transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 	appearance: { fill: { swatchId: "swatch:coral" } },
+})
+
+const strokedPath = (stroke: Partial<DesignStroke> = {}): DesignObject => ({
+	id: "stroke",
+	name: "Stroke",
+	geometry: {
+		kind: "path",
+		contours: [
+			{
+				id: "contour:stroke",
+				closed: false,
+				points: [
+					{ id: "point:stroke:start", x: 3, y: 20 },
+					{ id: "point:stroke:end", x: 23, y: 20 },
+				],
+			},
+		],
+	},
+	transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+	appearance: {
+		stroke: {
+			...DEFAULT_DESIGN_STROKE_STYLE,
+			swatchId: "swatch:ink",
+			width: 4,
+			...stroke,
+		},
+	},
 })
 
 describe("design canvas adapter", () => {
@@ -85,6 +113,28 @@ describe("design canvas adapter", () => {
 		).toBe("object:cyan")
 	})
 
+	it("hits visible stroke bodies while excluding authored dash gaps", () => {
+		const solid = strokedPath({ width: 10 })
+		expect(
+			nearestDesignObject([solid], { x: 12, y: 24.5 }, 1, 0)?.object.id,
+		).toBe("stroke")
+		const dashed = strokedPath({ dashArray: [4, 4] })
+		for (const worldScale of [0.5, 1, 4])
+			expect(
+				nearestDesignObject([dashed], { x: 5, y: 20 }, worldScale, 0)?.object
+					.id,
+			).toBe("stroke")
+		expect(nearestDesignObject([dashed], { x: 9, y: 20 }, 1, 0)).toBeNull()
+	})
+
+	it("keeps the outside selection tolerance constant in screen pixels", () => {
+		const object = rectangle("fill", 10, 10, 100, 100)
+		expect(
+			nearestDesignObject([object], { x: 105, y: 50 }, 1, 12),
+		).not.toBeNull()
+		expect(nearestDesignObject([object], { x: 105, y: 50 }, 3, 12)).toBeNull()
+	})
+
 	it("keeps outside-stage pointer events captured through release or cancel", () => {
 		const captured = new Set<number>()
 		const target = {
@@ -124,5 +174,35 @@ describe("design canvas adapter", () => {
 		expect(snapped.x).toBe(100)
 		expect(snapped.y).toBe(500)
 		expect(snapped.object.geometry).toEqual(nearlyCentered.geometry)
+	})
+
+	it("snaps the painted stroke edge rather than its centerline bounds", () => {
+		const square = strokedPath({ cap: "square" })
+		const snapped = snapDesignObject(
+			square,
+			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			1,
+		)
+		expect(snapped.x).toBe(0)
+		expect(snapped.object.transform.e).toBe(-1)
+		const transformed = {
+			...square,
+			transform: { ...square.transform, e: 27 },
+		}
+		const transformedSnap = snapDesignObject(
+			transformed,
+			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			1,
+		)
+		expect(transformedSnap.x).toBe(50)
+		expect(transformedSnap.object.transform.e).toBe(25)
+		const dashed = strokedPath({ dashArray: [4, 4] })
+		const dashedSnap = snapDesignObject(
+			{ ...dashed, transform: { ...dashed.transform, e: 26 } },
+			{ page: { x: 0, y: 0, width: 100, height: 100 } },
+			1,
+		)
+		expect(dashedSnap.x).toBe(50)
+		expect(dashedSnap.object.transform.e).toBe(27)
 	})
 })

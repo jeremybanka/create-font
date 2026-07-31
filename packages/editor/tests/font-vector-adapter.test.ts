@@ -9,10 +9,51 @@ import {
 import {
 	createFontVectorAdapter,
 	createFontVectorDocumentAdapter,
+	fontOutlineClipboardFromVector,
 } from "../src/font-vector-adapter.ts"
 import { vectorDocumentAdapterContract } from "./vector-document-adapter.contract.ts"
 
 describe("font layer vector adapter", () => {
+	it("explicitly discards design appearance at the font outline boundary", () => {
+		const outline = fontOutlineClipboardFromVector(
+			{
+				format: "create-vector.selection",
+				version: 1,
+				objects: [
+					{
+						id: "object:design",
+						name: "Painted design object",
+						style: {
+							kind: "fill",
+							swatchId: "swatch:coral",
+							resolvedCss: "rgb(218 94 67)",
+							source: { space: "rgb", r: 218, g: 94, b: 67 },
+						},
+						contours: [
+							{
+								id: "contour:design",
+								closed: false,
+								nodes: [
+									{
+										id: "point:design",
+										mode: "hard",
+										x: 10,
+										y: 20,
+									},
+								],
+							},
+						],
+					},
+				],
+			},
+			"master:regular" as MasterId,
+		)
+		expect(outline.sourceApplication).toBe("create-design")
+		expect(outline.layers[0]?.points[0]).toMatchObject({ x: 10, y: 20 })
+		expect(JSON.stringify(outline)).not.toContain("swatch:coral")
+		expect(JSON.stringify(outline)).not.toContain("resolvedCss")
+	})
+
 	it("projects opaque contour/point IDs with neutral style and clipboard geometry", () => {
 		const source = makeDemoFont()
 		const glyph = source.glyphs.find((candidate) =>

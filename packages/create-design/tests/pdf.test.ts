@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { validatePdf } from "mondrian.pdf"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import { createInitialDocument } from "../src/document.ts"
 import {
@@ -88,7 +89,11 @@ describe("PDF export", () => {
 				{
 					...object,
 					appearance: {
-						stroke: { swatchId: "swatch:ink", width: 3 },
+						stroke: {
+							...DEFAULT_DESIGN_STROKE_STYLE,
+							swatchId: "swatch:ink",
+							width: 3,
+						},
 					},
 				},
 			],
@@ -97,6 +102,78 @@ describe("PDF export", () => {
 		expect(content).toContain("3 w")
 		expect(content).toMatch(/(^|\n)S($|\n)/)
 		expect(content).not.toContain("f*")
+	})
+
+	it("exports authored cap, join, miter, and dash operators", () => {
+		const document = createInitialDocument()
+		const object = document.objects[0]!
+		const content = pdfContentStream({
+			...document,
+			objects: [
+				{
+					...object,
+					appearance: {
+						stroke: {
+							swatchId: "swatch:ink",
+							width: 7.5,
+							cap: "round",
+							join: "bevel",
+							miterLimit: 9,
+							dashArray: [8, 3, 2],
+							dashOffset: -1.5,
+						},
+					},
+				},
+			],
+		})
+		expect(content).toContain("7.5 w\n1 J\n2 j\n9 M\n[8 3 2] -1.5 d")
+		expect(content).toMatch(/(^|\n)S($|\n)/)
+	})
+
+	it("does not turn zero-width authored strokes into PDF hairlines", () => {
+		const document = createInitialDocument()
+		const object = document.objects[0]!
+		const content = pdfContentStream({
+			...document,
+			objects: [
+				{
+					...object,
+					appearance: {
+						stroke: {
+							...DEFAULT_DESIGN_STROKE_STYLE,
+							swatchId: "swatch:ink",
+							width: 0,
+						},
+					},
+				},
+			],
+		})
+		expect(content).not.toContain(" w")
+		expect(content).not.toMatch(/(^|\n)S($|\n)/)
+	})
+
+	it("retains native source spaces for combined fill and stroke paint", () => {
+		const document = createInitialDocument()
+		const object = document.objects[0]!
+		const content = pdfContentStream({
+			...document,
+			objects: [
+				{
+					...object,
+					appearance: {
+						fill: { swatchId: "swatch:ink" },
+						stroke: {
+							...DEFAULT_DESIGN_STROKE_STYLE,
+							swatchId: "swatch:coral",
+							width: 2,
+						},
+					},
+				},
+			],
+		})
+		expect(content).toContain("0.6 0.4 0.4 1 k")
+		expect(content).toContain("0.8549 0.3686 0.2627 RG")
+		expect(content).toContain("B*")
 	})
 
 	it("reuses unrelated object projections after a geometry edit", () => {
@@ -136,6 +213,36 @@ describe("PDF export", () => {
 						}
 					: swatch,
 			),
+		})
+		expect(after.page.objectProjections[0]).not.toBe(
+			before.page.objectProjections[0],
+		)
+		expect(after.page.objectProjections[1]).toBe(
+			before.page.objectProjections[1],
+		)
+	})
+
+	it("invalidates only the object projection with edited appearance", () => {
+		const graph = createPdfProjectionGraph()
+		const document = createInitialDocument()
+		const before = graph.project(document)
+		const first = document.objects[0]!
+		const after = graph.project({
+			...document,
+			objects: [
+				{
+					...first,
+					appearance: {
+						...first.appearance,
+						stroke: {
+							...DEFAULT_DESIGN_STROKE_STYLE,
+							swatchId: "swatch:ink",
+							width: 2,
+						},
+					},
+				},
+				...document.objects.slice(1),
+			],
 		})
 		expect(after.page.objectProjections[0]).not.toBe(
 			before.page.objectProjections[0],

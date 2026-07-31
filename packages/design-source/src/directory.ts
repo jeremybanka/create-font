@@ -14,6 +14,7 @@ import {
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_TWO_DESIGN_DOCUMENT_VERSION,
 	previousContourSchema,
 	previousGeometrySchema,
 	stabilizeDesignObjectIdentities,
@@ -21,8 +22,10 @@ import {
 	swatchSchema,
 	transformSchema,
 	validateDesignDocument,
+	versionTwoAppearanceSchema,
 } from "./document.ts"
 import { diagnostic, failure, success } from "./result.ts"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
 	DesignObject,
@@ -51,6 +54,7 @@ export const projectFileSchema = z
 		documentFormat: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		documentVersion: z.union([
 			z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
+			z.literal(VERSION_TWO_DESIGN_DOCUMENT_VERSION),
 			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
@@ -130,6 +134,33 @@ const canonicalObjectFileSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+const versionTwoObjectFileSchema = z
+	.object({
+		format: z.literal("create-design.object"),
+		version: z.literal(1),
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: previousGeometrySchema,
+		transform: transformSchema,
+		appearance: versionTwoAppearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+	.transform((file) => ({
+		...file,
+		appearance: {
+			...file.appearance,
+			...(file.appearance.stroke === undefined
+				? {}
+				: {
+						stroke: {
+							...file.appearance.stroke,
+							...DEFAULT_DESIGN_STROKE_STYLE,
+						},
+					}),
+		},
+	}))
 const legacyObjectFileSchema = z
 	.object({
 		format: z.literal("create-design.object"),
@@ -154,7 +185,11 @@ const legacyObjectFileSchema = z
 		...(file.locked === undefined ? {} : { locked: file.locked }),
 	}))
 export const objectFileSchema = z
-	.union([canonicalObjectFileSchema, legacyObjectFileSchema])
+	.union([
+		canonicalObjectFileSchema,
+		versionTwoObjectFileSchema,
+		legacyObjectFileSchema,
+	])
 	.transform((file) => ({
 		format: file.format,
 		version: file.version,

@@ -51,6 +51,7 @@ import {
 	setDesignAppearancePaint,
 	summarizeDesignAppearance,
 	swapDesignAppearancePaints,
+	updateDesignStroke,
 	validDesignAppearance,
 	type AppearancePaintTarget,
 } from "./appearance.ts"
@@ -93,11 +94,11 @@ import {
 import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
-	objectBounds,
 	rotateObject,
 	scaleObject,
 	translateObject,
 } from "./geometry.ts"
+import { visibleObjectBounds } from "./painted-geometry.ts"
 import {
 	expandDesignShape,
 	shapeExpansionEligibility,
@@ -126,6 +127,7 @@ import type {
 	DesignDocument,
 	DesignGeometry,
 	DesignObject,
+	DesignStroke,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
@@ -403,6 +405,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 				? "Add a document swatch before assigning paint."
 				: null
 			: `Unlock ${lockedAppearanceObject.name} before editing the selection appearance.`
+	const strokePropertiesDisabledReason =
+		appearanceDisabledReason ??
+		((
+			selectedObjects.length === 0
+				? authoredAppearance.stroke === undefined
+				: selectedObjects.some(
+						(object) => object.appearance.stroke === undefined,
+					)
+		)
+			? "Assign a stroke paint to the complete selection before editing stroke properties."
+			: null)
 	const selectedSwatch =
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
@@ -658,6 +671,58 @@ export function DesignApplication(props: DesignApplicationProps) {
 		)
 	}
 
+	const applyStrokeProperties = (
+		properties: Partial<Omit<DesignStroke, "swatchId">>,
+	): void => {
+		if (strokePropertiesDisabledReason !== null) {
+			setStatus(strokePropertiesDisabledReason)
+			return
+		}
+		const sourceStroke =
+			authoredAppearance.stroke ?? selectedObjects[0]?.appearance.stroke
+		if (sourceStroke === undefined) return
+		const stroke = { ...sourceStroke, ...properties }
+		const validDash =
+			stroke.dashArray.length === 0 ||
+			(stroke.dashArray.every(
+				(value) => Number.isFinite(value) && value >= 0,
+			) &&
+				stroke.dashArray.some((value) => value > 0))
+		if (
+			!Number.isFinite(stroke.width) ||
+			stroke.width < 0 ||
+			!Number.isFinite(stroke.miterLimit) ||
+			stroke.miterLimit < 1 ||
+			!Number.isFinite(stroke.dashOffset) ||
+			!validDash
+		) {
+			setStatus(
+				"Stroke values must be finite; width and dashes non-negative; miter limit at least 1; and a dash pattern cannot be all zero.",
+			)
+			return
+		}
+		setCurrentAppearance((appearance) =>
+			appearance.stroke === undefined
+				? { ...appearance, stroke }
+				: updateDesignStroke(appearance, properties),
+		)
+		if (selectedObjects.length > 0)
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					selection.includes(object.id)
+						? {
+								...object,
+								appearance: updateDesignStroke(object.appearance, properties),
+							}
+						: object,
+				),
+			})
+		setStatus(
+			`Updated stroke properties${selectedObjects.length === 0 ? " for new objects" : ""}.`,
+		)
+	}
+
 	const addSwatch = (): void => {
 		const swatch: DesignSwatch = {
 			id: `swatch:${nextId()}`,
@@ -723,6 +788,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		appearanceSummary,
 		appearanceTarget,
 		applyAppearancePaint,
+		applyStrokeProperties,
 		canReviewSourceChange,
 		deleteSelection,
 		document,
@@ -756,6 +822,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			if (value !== null && value !== "mixed") setSelectedSwatchId(value)
 		},
 		swapAppearancePaints: swapAppearance,
+		strokePropertiesDisabledReason,
 		tool,
 		updateSwatch,
 		...(versionControl === undefined ? {} : { versionControl }),
@@ -1430,7 +1497,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (transition.intent?.kind === "select-marquee") {
 			const intent = transition.intent
 			const ids = document.objects.flatMap((object) => {
-				const bounds = objectBounds(object)
+				if (object.hidden || object.locked) return []
+				const bounds = visibleObjectBounds(object)
 				if (bounds === null) return []
 				const intersects =
 					bounds.maxX >= intent.bounds.minX &&
@@ -1506,7 +1574,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		event: KonvaEventObject<PointerEvent>,
 	): void => {
 		if (selectedObject === null) return
-		const bounds = objectBounds(selectedObject)
+		const bounds = visibleObjectBounds(selectedObject)
 		if (bounds === null) return
 		event.cancelBubble = true
 		beginVectorGesture(
@@ -1535,7 +1603,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 	const selectionBounds =
 		tool === "transform" && selectedObject !== null
-			? objectBounds(previewObject ?? selectedObject)
+			? visibleObjectBounds(previewObject ?? selectedObject)
 			: null
 
 	const recoverDraft = (): void => {
@@ -1751,8 +1819,13 @@ export function DesignApplication(props: DesignApplicationProps) {
 											(candidate) =>
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
+										const strokeStyle = object.appearance.stroke
 										return object.hidden ||
-											(fill === undefined && stroke === undefined) ? null : (
+											((fill === undefined ||
+												object.appearance.fill === undefined) &&
+												(stroke === undefined ||
+													strokeStyle === undefined ||
+													strokeStyle.width === 0)) ? null : (
 											<VectorContourPath
 												key={object.id}
 												name={`design-object ${object.id}`}
@@ -1761,11 +1834,18 @@ export function DesignApplication(props: DesignApplicationProps) {
 													? {}
 													: { fill: swatchCss(fill) })}
 												fillEnabled={fill !== undefined}
-												{...(stroke === undefined
+												{...(stroke === undefined ||
+												strokeStyle === undefined ||
+												strokeStyle.width === 0
 													? {}
 													: {
 															stroke: swatchCss(stroke),
-															strokeWidth: object.appearance.stroke?.width ?? 0,
+															strokeWidth: strokeStyle.width,
+															lineCap: strokeStyle.cap,
+															lineJoin: strokeStyle.join,
+															miterLimit: strokeStyle.miterLimit,
+															dash: [...strokeStyle.dashArray],
+															dashOffset: strokeStyle.dashOffset,
 														})}
 												fillRule="evenodd"
 												onPointerDown={(event) =>

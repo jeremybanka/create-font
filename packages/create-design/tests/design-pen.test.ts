@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
 	cancelDesignPen,
@@ -95,7 +96,11 @@ describe("design Pen lifecycle", () => {
 				id: "object:pen",
 				name: "Pen path",
 				appearance: {
-					stroke: { swatchId: "swatch:coral", width: 2 },
+					stroke: {
+						...DEFAULT_DESIGN_STROKE_STYLE,
+						swatchId: "swatch:coral",
+						width: 2,
+					},
 				},
 				points,
 				closed: false,
@@ -107,7 +112,11 @@ describe("design Pen lifecycle", () => {
 				contours: [{ closed: false, points }],
 			},
 			appearance: {
-				stroke: { swatchId: "swatch:coral", width: 2 },
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:coral",
+					width: 2,
+				},
 			},
 		})
 		expect(cancelDesignPen()).toEqual([])

@@ -6,6 +6,7 @@ import {
 	parseDesignDocumentText,
 	validateDesignDocument,
 } from "../src/document.ts"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "../src/types.ts"
 
 const legacyFixture = () => ({
 	format: "create-design.document" as const,
@@ -143,7 +144,7 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
-	it("migrates every shipped v1 field into the explicit v3 model", () => {
+	it("migrates every shipped v1 field into the explicit v4 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)
 		expect(decoded).toEqual({
@@ -181,6 +182,20 @@ describe("complete design document codec", () => {
 				...canonical,
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
 				page: { x: 0, y: 0, ...canonical.page },
+				objects: canonical.objects.map((object) => ({
+					...object,
+					appearance: {
+						...object.appearance,
+						...(object.appearance.stroke === undefined
+							? {}
+							: {
+									stroke: {
+										...DEFAULT_DESIGN_STROKE_STYLE,
+										...object.appearance.stroke,
+									},
+								}),
+					},
+				})),
 			},
 		})
 	})
@@ -217,7 +232,7 @@ describe("complete design document codec", () => {
 		expect(first).toMatchObject({
 			ok: true,
 			value: {
-				version: 3,
+				version: CREATE_DESIGN_DOCUMENT_VERSION,
 				page: { x: 0, y: 0, width: 841.89, height: 595.28 },
 				objects: [
 					{
@@ -244,6 +259,53 @@ describe("complete design document codec", () => {
 		})
 	})
 
+	it("migrates v2 width-only strokes to explicit authored defaults", () => {
+		const versionTwo = { ...canonicalV1Fixture(), version: 2 as const }
+		const decoded = decodeDesignDocument(versionTwo)
+		if (!decoded.ok) throw new Error("Expected the v2 fixture to migrate.")
+		expect(decoded.value.version).toBe(CREATE_DESIGN_DOCUMENT_VERSION)
+		expect(decoded.value.objects[0]?.appearance.stroke).toEqual({
+			swatchId: "swatch:accent",
+			width: 3.5,
+			...DEFAULT_DESIGN_STROKE_STYLE,
+		})
+	})
+
+	it("migrates v3 width-only strokes while preserving global page coordinates", () => {
+		const current = decodeDesignDocument(canonicalV1Fixture())
+		if (!current.ok) throw new Error("Expected the fixture to migrate.")
+		const versionThree = {
+			...current.value,
+			version: 3 as const,
+			page: { x: -48, y: 96, width: 841.89, height: 595.28 },
+			objects: current.value.objects.map((object) => ({
+				...object,
+				appearance: {
+					...object.appearance,
+					...(object.appearance.stroke === undefined
+						? {}
+						: {
+								stroke: {
+									swatchId: object.appearance.stroke.swatchId,
+									width: object.appearance.stroke.width,
+								},
+							}),
+				},
+			})),
+		}
+		const decoded = decodeDesignDocument(versionThree)
+		if (!decoded.ok) throw new Error("Expected the v3 fixture to migrate.")
+		expect(decoded.value).toMatchObject({
+			version: CREATE_DESIGN_DOCUMENT_VERSION,
+			page: versionThree.page,
+		})
+		expect(decoded.value.objects[0]?.appearance.stroke).toEqual({
+			swatchId: "swatch:accent",
+			width: 3.5,
+			...DEFAULT_DESIGN_STROKE_STYLE,
+		})
+	})
+
 	it("deterministically migrates mixed shipped v1 object forms", () => {
 		const canonical = canonicalV1Fixture()
 		const legacy = legacyFixture()
@@ -259,7 +321,15 @@ describe("complete design document codec", () => {
 			value: {
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
 				objects: [
-					canonical.objects[1],
+					{
+						...canonical.objects[1],
+						appearance: {
+							stroke: {
+								...DEFAULT_DESIGN_STROKE_STYLE,
+								...canonical.objects[1]?.appearance.stroke,
+							},
+						},
+					},
 					{
 						id: "object:mark",
 						geometry: { kind: "path", contours: legacy.objects[0]?.contours },
@@ -472,7 +542,9 @@ describe("complete design document codec", () => {
 	})
 
 	it("rejects ambiguous persisted contour and point identities", () => {
-		const current = canonicalV1Fixture()
+		const decoded = decodeDesignDocument(canonicalV1Fixture())
+		if (!decoded.ok) throw new Error("Expected the fixture to migrate.")
+		const current = decoded.value
 		const path = current.objects[1]
 		if (path?.geometry.kind !== "path")
 			throw new Error("Expected an identified path fixture.")
@@ -523,7 +595,7 @@ describe("complete design document codec", () => {
 		})
 	})
 
-	it("requires contour and point identities in current v3 documents", () => {
+	it("requires contour and point identities in current v4 documents", () => {
 		const decoded = decodeDesignDocument(canonicalV1Fixture())
 		if (!decoded.ok) throw new Error("Expected fixture migration to succeed.")
 		const path = decoded.value.objects[1]
@@ -557,6 +629,35 @@ describe("complete design document codec", () => {
 					path: "$.objects[1].geometry.contours[0].points[0].id",
 				}),
 			]),
+		})
+	})
+
+	it("rejects current dash patterns with no painted length", () => {
+		const decoded = decodeDesignDocument(canonicalV1Fixture())
+		if (!decoded.ok) throw new Error("Expected the fixture to migrate.")
+		const object = decoded.value.objects[0]!
+		const stroke = object.appearance.stroke
+		if (stroke === undefined) throw new Error("Expected a stroke fixture.")
+		const result = validateDesignDocument({
+			...decoded.value,
+			objects: [
+				{
+					...object,
+					appearance: {
+						...object.appearance,
+						stroke: { ...stroke, dashArray: [0, 0] },
+					},
+				},
+			],
+		})
+		expect(result).toMatchObject({
+			ok: false,
+			errors: [
+				expect.objectContaining({
+					code: "document.schema",
+					path: "$.objects[0].appearance.stroke.dashArray",
+				}),
+			],
 		})
 	})
 

@@ -52,15 +52,19 @@ export {
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_TWO_DESIGN_DOCUMENT_VERSION,
 	decodeDesignDocument,
 	designDocumentSchema,
 	legacyDesignDocumentSchema,
 	previousDesignDocumentSchema,
 	migrateDesignDocumentV1,
 	migrateDesignDocumentV2,
+	migrateDesignDocumentV3,
 	parseDesignDocumentText,
 	validateDesignDocument,
+	versionTwoDesignDocumentSchema,
 } from "./document.ts"
+export { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 export type {
 	CmykColor,
 	ColorDefinition,

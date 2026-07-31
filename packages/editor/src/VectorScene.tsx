@@ -35,6 +35,10 @@ export function VectorContourPath({
 	readonly opacity?: number
 	readonly strokeWidth?: number
 	readonly dash?: number[]
+	readonly dashOffset?: number
+	readonly lineCap?: "butt" | "round" | "square"
+	readonly lineJoin?: "miter" | "round" | "bevel"
+	readonly miterLimit?: number
 	readonly listening?: boolean
 	readonly selected?: boolean
 	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void

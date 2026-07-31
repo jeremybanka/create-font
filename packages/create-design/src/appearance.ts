@@ -1,4 +1,11 @@
-import type { DesignAppearance, DesignObject, DesignSwatch } from "./types.ts"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
+
+import type {
+	DesignAppearance,
+	DesignObject,
+	DesignStroke,
+	DesignSwatch,
+} from "./types.ts"
 
 export type AppearancePaintTarget = "fill" | "stroke"
 export type AppearancePaintValue = string | null | "mixed"
@@ -6,6 +13,18 @@ export type AppearancePaintValue = string | null | "mixed"
 export interface DesignAppearanceSummary {
 	readonly fill: AppearancePaintValue
 	readonly stroke: AppearancePaintValue
+	readonly strokeStyle: DesignStrokeSummary
+}
+
+export type AppearancePropertyValue<Value> = Value | null | "mixed"
+
+export interface DesignStrokeSummary {
+	readonly width: AppearancePropertyValue<number>
+	readonly cap: AppearancePropertyValue<DesignStroke["cap"]>
+	readonly join: AppearancePropertyValue<DesignStroke["join"]>
+	readonly miterLimit: AppearancePropertyValue<number>
+	readonly dashArray: AppearancePropertyValue<readonly number[]>
+	readonly dashOffset: AppearancePropertyValue<number>
 }
 
 /** The create-design authoring default for a newly enabled stroke. */
@@ -45,6 +64,23 @@ function paintValue(
 	return values.every((value) => value === first) ? first : "mixed"
 }
 
+function strokePropertyValue<Key extends keyof Omit<DesignStroke, "swatchId">>(
+	appearances: readonly DesignAppearance[],
+	key: Key,
+): AppearancePropertyValue<DesignStroke[Key]> {
+	const values = appearances.map(
+		(appearance) => appearance.stroke?.[key] ?? null,
+	)
+	const first = values[0] ?? null
+	const equal = values.every((value) =>
+		Array.isArray(first) && Array.isArray(value)
+			? first.length === value.length &&
+				first.every((entry, index) => entry === value[index])
+			: value === first,
+	)
+	return equal ? (first as AppearancePropertyValue<DesignStroke[Key]>) : "mixed"
+}
+
 export function summarizeDesignAppearance(
 	objects: readonly DesignObject[],
 	current: DesignAppearance,
@@ -56,7 +92,24 @@ export function summarizeDesignAppearance(
 	return {
 		fill: paintValue(appearances, "fill"),
 		stroke: paintValue(appearances, "stroke"),
+		strokeStyle: {
+			width: strokePropertyValue(appearances, "width"),
+			cap: strokePropertyValue(appearances, "cap"),
+			join: strokePropertyValue(appearances, "join"),
+			miterLimit: strokePropertyValue(appearances, "miterLimit"),
+			dashArray: strokePropertyValue(appearances, "dashArray"),
+			dashOffset: strokePropertyValue(appearances, "dashOffset"),
+		},
 	}
+}
+
+export function updateDesignStroke(
+	appearance: DesignAppearance,
+	properties: Partial<Omit<DesignStroke, "swatchId">>,
+): DesignAppearance {
+	return appearance.stroke === undefined
+		? appearance
+		: { ...appearance, stroke: { ...appearance.stroke, ...properties } }
 }
 
 export function setDesignAppearancePaint(
@@ -74,6 +127,7 @@ export function setDesignAppearancePaint(
 		: {
 				...rest,
 				stroke: {
+					...(appearance.stroke ?? DEFAULT_DESIGN_STROKE_STYLE),
 					swatchId,
 					width: appearance.stroke?.width ?? DEFAULT_DESIGN_STROKE_WIDTH,
 				},
@@ -91,6 +145,7 @@ export function swapDesignAppearancePaints(
 			? {}
 			: {
 					stroke: {
+						...(appearance.stroke ?? DEFAULT_DESIGN_STROKE_STYLE),
 						swatchId: fillId,
 						width: appearance.stroke?.width ?? DEFAULT_DESIGN_STROKE_WIDTH,
 					},
