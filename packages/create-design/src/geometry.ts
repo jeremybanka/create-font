@@ -93,21 +93,27 @@ export function geometryContours(
 	if (geometry.kind === "path") return geometry.contours
 	if (geometry.kind === "rectangle") {
 		return [
-			rectangleContour({
-				minX: geometry.x,
-				minY: geometry.y,
-				maxX: geometry.x + geometry.width,
-				maxY: geometry.y + geometry.height,
-			}, `${identityPrefix}:contour:0`),
+			rectangleContour(
+				{
+					minX: geometry.x,
+					minY: geometry.y,
+					maxX: geometry.x + geometry.width,
+					maxY: geometry.y + geometry.height,
+				},
+				`${identityPrefix}:contour:0`,
+			),
 		]
 	}
 	return [
-		ellipseContour({
-			minX: geometry.centerX - geometry.radiusX,
-			minY: geometry.centerY - geometry.radiusY,
-			maxX: geometry.centerX + geometry.radiusX,
-			maxY: geometry.centerY + geometry.radiusY,
-		}, `${identityPrefix}:contour:0`),
+		ellipseContour(
+			{
+				minX: geometry.centerX - geometry.radiusX,
+				minY: geometry.centerY - geometry.radiusY,
+				maxX: geometry.centerX + geometry.radiusX,
+				maxY: geometry.centerY + geometry.radiusY,
+			},
+			`${identityPrefix}:contour:0`,
+		),
 	]
 }
 

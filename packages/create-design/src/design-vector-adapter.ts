@@ -65,27 +65,25 @@ export function projectDesignVectorObject(
 				(swatch) => swatch.id === object.appearance.fill?.swatchId,
 			),
 		),
-		contours: projectDesignObjectContours(object).map(
-			(contour) => ({
-				id: contour.id,
-				closed: contour.closed,
-				nodes: contour.points.map((point) => ({
-					id: point.id,
-					mode:
-						point.incoming === undefined && point.outgoing === undefined
-							? "hard"
-							: "soft",
-					x: point.x,
-					y: point.y,
-					...(point.incoming === undefined
-						? {}
-						: { incoming: { ...point.incoming } }),
-					...(point.outgoing === undefined
-						? {}
-						: { outgoing: { ...point.outgoing } }),
-				})),
-			}),
-		),
+		contours: projectDesignObjectContours(object).map((contour) => ({
+			id: contour.id,
+			closed: contour.closed,
+			nodes: contour.points.map((point) => ({
+				id: point.id,
+				mode:
+					point.incoming === undefined && point.outgoing === undefined
+						? "hard"
+						: "soft",
+				x: point.x,
+				y: point.y,
+				...(point.incoming === undefined
+					? {}
+					: { incoming: { ...point.incoming } }),
+				...(point.outgoing === undefined
+					? {}
+					: { outgoing: { ...point.outgoing } }),
+			})),
+		})),
 	}
 }
 
@@ -118,14 +116,14 @@ function projectDesignClipboardObject(
 					? {}
 					: {
 							incoming: {
-							...documentToInterchangeVector(node.incoming),
+								...documentToInterchangeVector(node.incoming),
 							},
 						}),
 				...(node.outgoing === undefined
 					? {}
 					: {
 							outgoing: {
-							...documentToInterchangeVector(node.outgoing),
+								...documentToInterchangeVector(node.outgoing),
 							},
 						}),
 			})),

@@ -84,10 +84,7 @@ import {
 	snapDesignObject,
 } from "./design-canvas.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
-import {
-	createDesignPenObject,
-	type DesignPenPoint,
-} from "./design-pen.ts"
+import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import css from "./DesignApplication.module.css"
 import {
@@ -218,12 +215,7 @@ function designSnapGuides(
 					{
 						id: `design-snap-x:${snap.x}`,
 						axis: "x" as const,
-						points: [
-							snap.x,
-							page.y,
-							snap.x,
-							page.y + page.height,
-						] as const,
+						points: [snap.x, page.y, snap.x, page.y + page.height] as const,
 					},
 				]),
 		...(snap.y === null
@@ -232,12 +224,7 @@ function designSnapGuides(
 					{
 						id: `design-snap-y:${snap.y}`,
 						axis: "y" as const,
-						points: [
-							page.x,
-							snap.y,
-							page.x + page.width,
-							snap.y,
-						] as const,
+						points: [page.x, snap.y, page.x + page.width, snap.y] as const,
 					},
 				]),
 	]

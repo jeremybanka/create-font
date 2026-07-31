@@ -171,12 +171,8 @@ describe("PDF export", () => {
 		}
 		const moved = graph.project(movedDocument)
 		expect(moved.page).not.toBe(resized.page)
-		expect(moved.page.objectProjections).toEqual(
-			before.page.objectProjections,
-		)
-		expect(
-			pdfContentStream(movedDocument),
-		).toContain("1 0 0 -1 -120 752 cm")
+		expect(moved.page.objectProjections).toEqual(before.page.objectProjections)
+		expect(pdfContentStream(movedDocument)).toContain("1 0 0 -1 -120 752 cm")
 		expect(movedDocument.objects).toBe(document.objects)
 	})
 

@@ -162,9 +162,10 @@ const versionOneDesignObjectSchema = z.unknown().transform((value, context) => {
 		value !== null &&
 		!Array.isArray(value) &&
 		("geometry" in value || "transform" in value || "appearance" in value)
-	const parsed = (canonical
-		? designObjectSchema.extend({ geometry: previousGeometrySchema })
-		: legacyDesignObjectSchema
+	const parsed = (
+		canonical
+			? designObjectSchema.extend({ geometry: previousGeometrySchema })
+			: legacyDesignObjectSchema
 	).safeParse(value)
 	if (parsed.success) return parsed.data
 	for (const issue of parsed.error.issues) context.addIssue(issue)
@@ -224,7 +225,9 @@ export const previousDesignDocumentSchema = z
 		title: z.string(),
 		page: previousPageSchema,
 		swatches: z.array(swatchSchema),
-		objects: z.array(designObjectSchema.extend({ geometry: previousGeometrySchema })),
+		objects: z.array(
+			designObjectSchema.extend({ geometry: previousGeometrySchema }),
+		),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -371,7 +374,9 @@ function nextStableId(base: string, reserved: ReadonlySet<string>): string {
  * reserved before generation so migration never rewrites an authored ID.
  */
 export function stabilizeDesignObjectIdentities(
-	object: z.infer<typeof designObjectSchema> | ReturnType<typeof migrateObjectV1>,
+	object:
+		| z.infer<typeof designObjectSchema>
+		| ReturnType<typeof migrateObjectV1>,
 ): DesignObject {
 	if (object.geometry.kind !== "path") return object as DesignObject
 	const reservedContours = new Set(
@@ -399,10 +404,7 @@ export function stabilizeDesignObjectIdentities(
 					points: contour.points.map((point, pointIndex) => {
 						const pointId =
 							point.id ??
-							nextStableId(
-								`${contourId}:point:${pointIndex}`,
-								reservedPoints,
-							)
+							nextStableId(`${contourId}:point:${pointIndex}`, reservedPoints)
 						reservedPoints.add(pointId)
 						return { ...point, id: pointId }
 					}),

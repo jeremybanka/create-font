@@ -45,10 +45,7 @@ describe("design canvas adapter", () => {
 
 	it("converts out-of-page gestures to page-edge coordinates", () => {
 		expect(
-			clampToPage(
-				{ x: -20, y: 900 },
-				{ x: 0, y: 0, width: 612, height: 792 },
-			),
+			clampToPage({ x: -20, y: 900 }, { x: 0, y: 0, width: 612, height: 792 }),
 		).toEqual({ x: 0, y: 792 })
 	})
 

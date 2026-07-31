@@ -65,7 +65,7 @@ describe("vector clipboard interoperability", () => {
 		const addition = readDesignClipboard(
 			{
 				getData: (format) =>
-					format === FONT_OUTLINE_MIME ? entries.get(format) ?? "" : "",
+					format === FONT_OUTLINE_MIME ? (entries.get(format) ?? "") : "",
 			},
 			targetDocument,
 			() => `round-trip:${sequence++}`,

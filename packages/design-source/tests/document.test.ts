@@ -537,14 +537,10 @@ describe("complete design document codec", () => {
 					...path,
 					geometry: {
 						...path.geometry,
-						contours: path.geometry.contours.map(
-							({ id: _id, ...contour }) => ({
-								...contour,
-								points: contour.points.map(
-									({ id: _pointId, ...point }) => point,
-								),
-							}),
-						),
+						contours: path.geometry.contours.map(({ id: _id, ...contour }) => ({
+							...contour,
+							points: contour.points.map(({ id: _pointId, ...point }) => point),
+						})),
 					},
 				},
 			],

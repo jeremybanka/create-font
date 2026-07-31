@@ -114,9 +114,7 @@ describe("design document storage", () => {
 					name: "Legacy object",
 					geometry: {
 						kind: "path",
-						contours: [
-							{ closed: false, points: [{ x: 1, y: 2 }] },
-						],
+						contours: [{ closed: false, points: [{ x: 1, y: 2 }] }],
 					},
 					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 					appearance: { fill: { swatchId: "swatch:black" } },
@@ -138,9 +136,7 @@ describe("design document storage", () => {
 							contours: [
 								{
 									id: "object:legacy:contour:0",
-									points: [
-										{ id: "object:legacy:contour:0:point:0" },
-									],
+									points: [{ id: "object:legacy:contour:0:point:0" }],
 								},
 							],
 						},

@@ -180,9 +180,7 @@ describe("design object vector adapter", () => {
 				contour.points.map(({ id }) => id),
 			),
 		).toEqual(
-			vector.contours.flatMap((contour) =>
-				contour.nodes.map(({ id }) => id),
-			),
+			vector.contours.flatMap((contour) => contour.nodes.map(({ id }) => id)),
 		)
 	})
 

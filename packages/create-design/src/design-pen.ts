@@ -3,11 +3,7 @@ import {
 	shouldCloseVectorPen,
 } from "@create-font/editor/shared"
 
-import type {
-	DesignAppearance,
-	DesignObject,
-	DesignPoint,
-} from "./types.ts"
+import type { DesignAppearance, DesignObject, DesignPoint } from "./types.ts"
 import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
