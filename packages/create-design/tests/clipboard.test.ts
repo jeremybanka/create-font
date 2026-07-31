@@ -139,7 +139,15 @@ describe("vector clipboard interoperability", () => {
 		)
 		const targetDocument = {
 			...sourceDocument,
-			page: { x: 500, y: -900, width: 300, height: 2_000 },
+			artboards: [
+				{
+					...sourceDocument.artboards[0]!,
+					x: 500,
+					y: -900,
+					width: 300,
+					height: 2_000,
+				},
+			],
 		}
 		let sequence = 0
 		const addition = readDesignClipboard(
@@ -208,6 +216,72 @@ describe("vector clipboard interoperability", () => {
 				{ nativeOnly: true },
 			),
 		).toBeNull()
+	})
+
+	it("centers external outlines on the noncanonical active artboard", () => {
+		const document = createInitialDocument()
+		const activeArtboard = {
+			id: "artboard:social",
+			name: "Social",
+			x: 1_000,
+			y: -500,
+			width: 400,
+			height: 300,
+		}
+		const font = {
+			format: "create-font.outline",
+			version: 1,
+			masterIds: ["master:regular"],
+			contours: [
+				{
+					closed: true,
+					points: [
+						{ key: "0/0", mode: "hard" },
+						{ key: "0/1", mode: "hard" },
+						{ key: "0/2", mode: "hard" },
+					],
+				},
+			],
+			layers: [
+				{
+					masterId: "master:regular",
+					points: [
+						{ key: "0/0", x: 0, y: 0 },
+						{ key: "0/1", x: 100, y: 0 },
+						{ key: "0/2", x: 0, y: 100 },
+					],
+				},
+			],
+		}
+		const addition = readDesignClipboard(
+			{
+				getData: (format) =>
+					format === FONT_OUTLINE_MIME ? JSON.stringify(font) : "",
+			},
+			document,
+			() => "active",
+			{ activeArtboard },
+		)
+		const object = addition?.objects[0]
+		if (object === undefined) throw new Error("Expected pasted artwork.")
+		const bounds = projectDesignObjectContours(object)
+			.flatMap(({ points }) => points)
+			.reduce(
+				(accumulator, point) => ({
+					minX: Math.min(accumulator.minX, point.x),
+					maxX: Math.max(accumulator.maxX, point.x),
+					minY: Math.min(accumulator.minY, point.y),
+					maxY: Math.max(accumulator.maxY, point.y),
+				}),
+				{
+					minX: Number.POSITIVE_INFINITY,
+					maxX: Number.NEGATIVE_INFINITY,
+					minY: Number.POSITIVE_INFINITY,
+					maxY: Number.NEGATIVE_INFINITY,
+				},
+			)
+		expect((bounds.minX + bounds.maxX) / 2).toBe(1_200)
+		expect((bounds.minY + bounds.maxY) / 2).toBe(-350)
 	})
 
 	it("preserves native live geometry and refreshes expanded control identities", () => {

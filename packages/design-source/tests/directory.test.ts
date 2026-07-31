@@ -5,6 +5,7 @@ import {
 	DEFAULT_LAYER_ID,
 	assembleDesignDocument,
 	decodeDesignDocument,
+	defaultArtboardUnitPath,
 	defaultObjectUnitPath,
 	designSourcePaths,
 	formatSourceUnit,
@@ -20,9 +21,18 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 4,
+	version: 5,
 	title: "Directory proof",
-	page: { x: -24, y: 36, width: 612, height: 792 },
+	artboards: [
+		{
+			id: "artboard:page",
+			name: "Artboard 1",
+			x: -24,
+			y: 36,
+			width: 612,
+			height: 792,
+		},
+	],
 	swatches: [
 		{
 			id: "swatch:coral",
@@ -138,9 +148,14 @@ describe("create-design directory source", () => {
 	it("normalizes legacy path-and-fill objects deterministically", () => {
 		const document = fixture()
 		const result = decodeDesignDocument({
-			...document,
+			format: document.format,
 			version: 1,
-			page: { width: document.page.width, height: document.page.height },
+			title: document.title,
+			page: {
+				width: document.artboards[0]!.width,
+				height: document.artboards[0]!.height,
+			},
+			swatches: document.swatches,
 			objects: [
 				{
 					id: "object:legacy",
@@ -158,6 +173,7 @@ describe("create-design directory source", () => {
 					fillId: "swatch:coral",
 				},
 			],
+			guides: document.guides,
 		})
 		expect(result).toMatchObject({
 			ok: true,
@@ -193,7 +209,7 @@ describe("create-design directory source", () => {
 			stroke: { swatchId: "swatch:ink", width: 3 },
 		}
 		const assembled = assemble(files as DesignSourceDirectoryFiles)
-		expect(assembled.version).toBe(4)
+		expect(assembled.version).toBe(5)
 		expect(assembled.objects[0]?.appearance.stroke).toEqual({
 			...DEFAULT_DESIGN_STROKE_STYLE,
 			swatchId: "swatch:ink",
@@ -250,20 +266,37 @@ describe("create-design directory source", () => {
 		)
 	})
 
-	it("owns the global page rectangle independently from object units", () => {
+	it("owns ordered global artboards independently from object units", () => {
 		const original = fixture()
 		const originalFiles = split(original)
+		const artboard = original.artboards[0]!
 		expect(originalFiles["artboards/page.json"]).toMatchObject({
-			x: original.page.x,
-			y: original.page.y,
-			width: original.page.width,
-			height: original.page.height,
+			id: artboard.id,
+			name: artboard.name,
+			x: artboard.x,
+			y: artboard.y,
+			width: artboard.width,
+			height: artboard.height,
 		})
 		const movedFiles = split({
 			...original,
-			page: { ...original.page, x: 240, y: -180, height: 1_000 },
+			artboards: [
+				{ ...artboard, x: 240, y: -180, height: 1_000 },
+				{
+					id: "artboard:social",
+					name: "Social square",
+					x: 700,
+					y: -180,
+					width: 500,
+					height: 500,
+					bleed: { top: 9, right: 9, bottom: 9, left: 9 },
+					safeArea: { top: 24, right: 24, bottom: 24, left: 24 },
+				},
+			],
 		})
 		expect(changedPaths(originalFiles, movedFiles)).toEqual([
+			defaultArtboardUnitPath("artboard:social"),
+			"artboards/index.json",
 			"artboards/page.json",
 		])
 		for (const object of original.objects) {
@@ -271,6 +304,19 @@ describe("create-design directory source", () => {
 				originalFiles[defaultObjectUnitPath(object.id)],
 			)
 		}
+		expect(assemble(movedFiles).artboards).toEqual([
+			{ ...artboard, x: 240, y: -180, height: 1_000 },
+			{
+				id: "artboard:social",
+				name: "Social square",
+				x: 700,
+				y: -180,
+				width: 500,
+				height: 500,
+				bleed: { top: 9, right: 9, bottom: 9, left: 9 },
+				safeArea: { top: 24, right: 24, bottom: 24, left: 24 },
+			},
+		])
 	})
 
 	it("supports explicit stable object paths without deriving identity from them", () => {
@@ -495,7 +541,7 @@ describe("create-design directory source", () => {
 		expect(assembleDesignDocument(files)).toMatchObject({ ok: true })
 	})
 
-	it("reserves groups, fonts, and multiple artboards for later versions", () => {
+	it("reserves groups and fonts for later versions", () => {
 		const files = mutable(split(fixture()))
 		unit(files, designSourcePaths.groupIndex).entries = [
 			{ id: "group:future", path: "scene/groups/future.json" },
@@ -514,6 +560,34 @@ describe("create-design directory source", () => {
 				expect.objectContaining({
 					code: "directory.unsupported",
 					unitPath: designSourcePaths.groupIndex,
+				}),
+			]),
+		})
+	})
+
+	it("requires a source-version bump before adding artboards", () => {
+		const files = mutable(split(fixture()))
+		unit(files, designSourcePaths.project).sourceVersion = 1
+		unit(files, designSourcePaths.artboardIndex).entries = [
+			{ id: "artboard:page", path: "artboards/page.json" },
+			{ id: "artboard:second", path: "artboards/second.json" },
+		]
+		files["artboards/second.json"] = {
+			format: "create-design.artboard",
+			version: 2,
+			id: "artboard:second",
+			name: "Second",
+			x: 700,
+			y: 0,
+			width: 400,
+			height: 400,
+		}
+		expect(assembleDesignDocument(files)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.unsupported",
+					unitPath: designSourcePaths.artboardIndex,
 				}),
 			]),
 		})

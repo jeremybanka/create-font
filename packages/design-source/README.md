@@ -7,17 +7,20 @@ into validated JSON units.
 
 ## Complete document versions
 
-Complete documents use a strict, version-dispatched codec. Version four is the
-current schema. It retains v3's explicit global page position and required
-stable contour/point IDs, and expands strokes from width-only paint to authored
-width, cap, join, miter limit, dash array, and dash offset.
-`decodeDesignDocument()` accepts complete version-one, version-two, and
-version-three documents and deterministically migrates them to v4. Existing
-IDs, global coordinates, geometry, and transforms are preserved. Missing v1/v2
-path IDs are derived from the owning object and source order, and their page
-receives the legacy implicit origin `(0, 0)`. Prior width-only strokes receive
-the renderer-neutral butt cap, miter join, miter limit 4, and solid-dash
-defaults. The v1 decoder continues to accept both shipped object forms:
+Complete documents use a strict, version-dispatched codec. Version five is the
+current schema. It replaces v4's singleton global page with a nonempty ordered
+`artboards` collection. Each artboard persists a stable ID, display name,
+global `{ x, y, width, height }` rectangle, and optional nonnegative
+`bleed`/`safeArea` edge insets. Array order is canonical output order; active
+artboard state is deliberately absent from the document.
+`decodeDesignDocument()` accepts complete version-one through version-four
+documents and deterministically migrates them to v5. Every legacy page becomes
+the single equivalent `artboard:page` named `Artboard 1`. Existing object IDs,
+global coordinates, geometry, transforms, and appearance are preserved.
+Missing v1/v2 path IDs are derived from the owning object and source order, and
+their artboard receives the legacy implicit origin `(0, 0)`. Prior width-only
+strokes receive the renderer-neutral butt cap, miter join, miter limit 4, and
+solid-dash defaults. The v1 decoder continues to accept both shipped object forms:
 canonical geometry/transform/appearance objects are migrated, while older
 `{ contours, fillId }` objects become path geometry with an identity transform
 and fill appearance.
@@ -34,32 +37,33 @@ migration defaults are constructed by the codec.
 Canonical geometry lives in one unbounded global document plane measured in
 points. X increases right and Y increases down. Object geometry is local to its
 object and reaches the global plane only through the object's persisted affine
-`transform`. Pages are independent rectangles `{ x, y, width, height }` in that
-plane; ordinary objects are not page children. Moving or resizing a page must
-therefore never rewrite object geometry or transforms. Guides use the same
-global axis values.
+`transform`. Artboards are independent named rectangles in that plane;
+ordinary objects are not artboard children. Artwork may intersect several
+artboards or none. Adding, moving, resizing, renaming, or reordering an
+artboard must therefore never rewrite object geometry or transforms. Guides
+use the same global axis values.
 
 Canvas world coordinates are identical to document coordinates; pan and zoom
 are view-only transforms. Native create-design clipboard objects remain in the
 global Y-down plane. Shared create-* vector and font-outline clipboard payloads
-use a page-independent Cartesian Y-up plane, so their boundary conversion is
-`(x, y) -> (x, -y)` for points and vectors. PDF lowering derives a page-local,
-bottom-left Y-up transform from the selected page:
-`[1 0 0 -1 -page.x page.y+page.height]`. These clipboard and PDF transforms,
-including any deliberate paste offset, are projections and never canonical
-geometry mutations.
+use an artboard-independent Cartesian Y-up plane, so their boundary conversion
+is `(x, y) -> (x, -y)` for points and vectors. PDF lowering derives a
+page-local, bottom-left Y-up transform from the selected artboard:
+`[1 0 0 -1 -artboard.x artboard.y+artboard.height]`. These clipboard and PDF
+transforms, including any deliberate paste offset, are projections and never
+canonical geometry mutations.
 
 Object IDs are document-wide. Contour and point IDs are required and unique
 within their owning object. Edits preserve every unaffected identity. Copying
 or deriving a distinct object assigns a new object ID and new path IDs;
-transforming, renaming, restyling, reordering, moving a page, or projecting to
-canvas/PDF does not. This is the foundation expected by multi-selection work
-in #253 and global multi-artboard/output work in #283.
+transforming, renaming, restyling, reordering, editing an artboard, or
+projecting to canvas/PDF does not. This is the foundation expected by
+multi-selection work in #254 and global multi-artboard/output work in #283.
 
-## Version-one directory
+## Version-two directory
 
-The first directory version deliberately matches the current application
-model: one artboard, one layer, authored path/rectangle/ellipse geometry,
+The second directory version matches the current application model: ordered
+artboards, one layer, authored path/rectangle/ellipse geometry,
 independent affine object transforms, optional fill/stroke appearance, one
 palette, and empty group, asset, and font inventories.
 
@@ -89,7 +93,9 @@ Each fact has one owner:
 
 - `document.json` owns the title and guides;
 - `palette.json` owns ordered swatches;
-- the sole artboard unit owns the page's global rectangle;
+- the ordered artboard inventory owns output order and maps each stable ID to
+  an independent unit that owns its name, global rectangle, and optional
+  bleed/safe-area metadata;
 - the sole layer unit owns object stacking order;
 - the object inventory maps stable object IDs to stable source paths; and
 - each object unit owns one complete object.
@@ -98,23 +104,26 @@ Object inventory order has no scene meaning. Renaming or editing an object
 therefore changes only its object unit, while reordering changes only the layer
 unit. IDs, display names, source paths, and stacking order are independent.
 
-Groups, embedded fonts, multiple layers, and multiple artboards already have
-explicit inventories, but source version one requires them to be empty or
-singular where the current `DesignDocument` cannot faithfully represent them.
+Groups, embedded fonts, and multiple layers already have explicit inventories,
+but source version two requires them to be empty or singular where the current
+`DesignDocument` cannot faithfully represent them.
 Asset inventory entries are active: each records a stable ID, safe path, media
 type, byte length, and SHA-256 digest. Asset bytes remain outside the JSON
 directory codec and are transferred atomically through
 `@create-art/source-rpc`; image decoding and placement semantics remain editor
 concerns.
 
-Version-one directory readers also accept the earlier `{ contours, fillId }`
+Directory readers also accept source version one and the earlier
+`{ contours, fillId }`
 object-unit shape and deterministically normalize it to path geometry, an
 identity transform, and a fill appearance. They accept the originally shipped
 implicit `(0, 0)` artboard origin and missing path IDs, then assign the same v3
 migration defaults as the complete-document decoder. Readers also normalize
 prior width-only stroke object units. Writers emit the explicit
-global page rectangle, stable path IDs, and canonical separated object shape,
-and mark the assembled complete document as version four.
+ordered named global artboards, stable path IDs, and canonical separated object
+shape, and mark the assembled complete document as version five. Splitting an
+artboard edit changes only that artboard unit; reordering changes only
+`artboards/index.json`; and object units retain byte-equivalent semantic values.
 
 Authored path contours and points always carry stable `id` fields after
 assembly. Expansion and paste assign fresh identities so selection and later

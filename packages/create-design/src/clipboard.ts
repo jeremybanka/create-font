@@ -20,6 +20,7 @@ import {
 	interchangeToDocumentVector,
 } from "./coordinates.ts"
 import type {
+	DesignArtboard,
 	DesignContour,
 	DesignDocument,
 	DesignObject,
@@ -114,7 +115,10 @@ export function readDesignClipboard(
 	clipboard: ClipboardReader,
 	document: DesignDocument,
 	nextId: () => string,
-	options: Readonly<{ nativeOnly?: boolean }> = {},
+	options: Readonly<{
+		activeArtboard?: DesignArtboard
+		nativeOnly?: boolean
+	}> = {},
 ): Readonly<{
 	objects: readonly DesignObject[]
 	swatches: readonly DesignSwatch[]
@@ -199,7 +203,9 @@ export function readDesignClipboard(
 	if (serialized.length === 0) return null
 	const font = parseFontPayload(serialized)
 	if (font === null) return null
-	const object = fontOutlineToDesignObject(font, document.page, nextId)
+	const artboard = options.activeArtboard ?? document.artboards[0]
+	if (artboard === undefined) return null
+	const object = fontOutlineToDesignObject(font, artboard, nextId)
 	return object === null ? null : { objects: [object], swatches: [] }
 }
 
@@ -271,16 +277,32 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 		const envelope = {
 			format: "create-design.document" as const,
 			title: "Clipboard",
-			page: { x: 0, y: 0, width: 1, height: 1 },
 			objects: parsed.objects,
 			swatches: parsed.swatches,
 			guides: [],
 		}
 		const compatible =
 			parsed.version === 3
-				? validateDesignDocument({ ...envelope, version: 4 })
+				? validateDesignDocument({
+						...envelope,
+						version: 5,
+						artboards: [
+							{
+								id: "artboard:clipboard",
+								name: "Clipboard",
+								x: 0,
+								y: 0,
+								width: 1,
+								height: 1,
+							},
+						],
+					})
 				: parsed.version === 2
-					? decodeDesignDocument({ ...envelope, version: 3 })
+					? decodeDesignDocument({
+							...envelope,
+							version: 3,
+							page: { x: 0, y: 0, width: 1, height: 1 },
+						})
 					: decodeDesignDocument({
 							...envelope,
 							version: 2,
@@ -329,7 +351,7 @@ function parseFontPayload(value: string): FontOutlinePayload | null {
 
 function fontOutlineToDesignObject(
 	payload: FontOutlinePayload,
-	page: DesignDocument["page"],
+	artboard: DesignArtboard,
 	nextId: () => string,
 ): DesignObject | null {
 	const layer = payload.layers[0]
@@ -376,7 +398,7 @@ function fontOutlineToDesignObject(
 		? translateObject(object, 12, 12)
 		: translateObject(
 				object,
-				page.x + page.width / 2 - (bounds.minX + bounds.maxX) / 2,
-				page.y + page.height / 2 - (bounds.minY + bounds.maxY) / 2,
+				artboard.x + artboard.width / 2 - (bounds.minX + bounds.maxX) / 2,
+				artboard.y + artboard.height / 2 - (bounds.minY + bounds.maxY) / 2,
 			)
 }

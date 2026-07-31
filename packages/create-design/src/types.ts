@@ -2,6 +2,8 @@ export type {
 	CmykColor,
 	ColorDefinition,
 	DesignAppearance,
+	DesignArtboard,
+	DesignArtboardInsets,
 	DesignContour,
 	DesignDocument,
 	DesignFill,

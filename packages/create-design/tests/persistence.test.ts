@@ -220,10 +220,10 @@ describe("create-design recovery storage", () => {
 	it("suppresses stale durable copies but offers divergent drafts from older revisions", () => {
 		const durable = createInitialDocument()
 		const reordered = {
+			artboards: durable.artboards,
 			guides: durable.guides,
 			objects: durable.objects,
 			swatches: durable.swatches,
-			page: durable.page,
 			title: durable.title,
 			version: durable.version,
 			format: durable.format,
@@ -307,8 +307,17 @@ describe("create-design recovery storage", () => {
 		}
 		expect(readDesignRecoveryDraft(storage)).toMatchObject({
 			document: {
-				version: 4,
-				page: { x: 0, y: 0, width: 100, height: 100 },
+				version: 5,
+				artboards: [
+					{
+						id: "artboard:page",
+						name: "Artboard 1",
+						x: 0,
+						y: 0,
+						width: 100,
+						height: 100,
+					},
+				],
 				objects: [
 					{
 						geometry: { kind: "path" },

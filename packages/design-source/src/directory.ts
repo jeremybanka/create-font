@@ -6,14 +6,18 @@ import { z } from "zod/v4"
 
 import {
 	appearanceSchema,
+	artboardIdSchema,
+	artboardInsetsSchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
+	DEFAULT_ARTBOARD_ID,
 	designObjectIdSchema,
 	finiteNumberSchema,
 	guideSchema,
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_THREE_DESIGN_DOCUMENT_VERSION,
 	VERSION_TWO_DESIGN_DOCUMENT_VERSION,
 	previousContourSchema,
 	previousGeometrySchema,
@@ -34,11 +38,10 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
-export const CREATE_DESIGN_SOURCE_VERSION = 1 as const
-export const DEFAULT_ARTBOARD_ID = "artboard:page" as const
+export const CREATE_DESIGN_SOURCE_VERSION = 2 as const
+export const LEGACY_CREATE_DESIGN_SOURCE_VERSION = 1 as const
 export const DEFAULT_LAYER_ID = "layer:artwork" as const
 
-const artboardIdSchema = z.string().regex(/^artboard:.+/u)
 const layerIdSchema = z.string().regex(/^layer:.+/u)
 const groupIdSchema = z.string().regex(/^group:.+/u)
 const assetIdSchema = z.string().regex(/^asset:.+/u)
@@ -50,12 +53,16 @@ const mediaTypeSchema = z
 export const projectFileSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_SOURCE_FORMAT),
-		sourceVersion: z.literal(CREATE_DESIGN_SOURCE_VERSION),
+		sourceVersion: z.union([
+			z.literal(LEGACY_CREATE_DESIGN_SOURCE_VERSION),
+			z.literal(CREATE_DESIGN_SOURCE_VERSION),
+		]),
 		documentFormat: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		documentVersion: z.union([
 			z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_TWO_DESIGN_DOCUMENT_VERSION),
 			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+			z.literal(VERSION_THREE_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
 	})
@@ -78,6 +85,20 @@ export const paletteFileSchema = z
 const currentArtboardFileSchema = z
 	.object({
 		format: z.literal("create-design.artboard"),
+		version: z.literal(2),
+		id: artboardIdSchema,
+		name: z.string(),
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		width: positiveNumberSchema,
+		height: positiveNumberSchema,
+		bleed: artboardInsetsSchema.optional(),
+		safeArea: artboardInsetsSchema.optional(),
+	})
+	.strict()
+const offsetLegacyArtboardFileSchema = z
+	.object({
+		format: z.literal("create-design.artboard"),
 		version: z.literal(1),
 		id: artboardIdSchema,
 		x: finiteNumberSchema,
@@ -86,7 +107,12 @@ const currentArtboardFileSchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
-const legacyArtboardFileSchema = z
+	.transform((file) => ({
+		...file,
+		version: 2 as const,
+		name: "Artboard 1",
+	}))
+const originLegacyArtboardFileSchema = z
 	.object({
 		format: z.literal("create-design.artboard"),
 		version: z.literal(1),
@@ -95,10 +121,17 @@ const legacyArtboardFileSchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
-	.transform((file) => ({ ...file, x: 0, y: 0 }))
+	.transform((file) => ({
+		...file,
+		version: 2 as const,
+		name: "Artboard 1",
+		x: 0,
+		y: 0,
+	}))
 export const artboardFileSchema = z.union([
 	currentArtboardFileSchema,
-	legacyArtboardFileSchema,
+	offsetLegacyArtboardFileSchema,
+	originLegacyArtboardFileSchema,
 ])
 const sceneChildSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("object"), id: designObjectIdSchema }).strict(),
@@ -455,6 +488,12 @@ export function defaultObjectUnitPath(id: string): string {
 	return `scene/objects/${encodePathSegment(id)}.json`
 }
 
+export function defaultArtboardUnitPath(id: string): string {
+	return id === DEFAULT_ARTBOARD_ID
+		? "artboards/page.json"
+		: `artboards/${encodePathSegment(id)}.json`
+}
+
 export function sourceUnitKindForPath(
 	path: string,
 ): DesignSourceUnitKind | null {
@@ -532,6 +571,10 @@ export function formatSourceUnit(
 }
 
 export interface SplitDesignDocumentOptions {
+	readonly artboardPath?: (
+		artboard: DesignDocument["artboards"][number],
+		index: number,
+	) => string
 	readonly objectPath?: (object: DesignObject, index: number) => string
 }
 
@@ -560,8 +603,34 @@ export function splitDesignDocument(
 		path:
 			options.objectPath?.(object, index) ?? defaultObjectUnitPath(object.id),
 	}))
+	const artboardEntries = validated.value.artboards.map((artboard, index) => ({
+		id: artboard.id,
+		path:
+			options.artboardPath?.(artboard, index) ??
+			defaultArtboardUnitPath(artboard.id),
+	}))
 	const errors: DesignSourceDiagnostic[] = []
 	const paths = new Set<string>()
+	for (const [index, entry] of artboardEntries.entries()) {
+		if (!artboardUnitPathSchema.safeParse(entry.path).success)
+			errors.push(
+				diagnostic(
+					"directory.unsafe_path",
+					`$.artboards[${index}].path`,
+					`Artboard ${entry.id} has unsafe source path ${entry.path}.`,
+				),
+			)
+		if (paths.has(entry.path))
+			errors.push(
+				diagnostic(
+					"directory.duplicate_path",
+					`$.artboards[${index}].path`,
+					`Duplicate artboard source path ${entry.path}.`,
+				),
+			)
+		paths.add(entry.path)
+	}
+	paths.clear()
 	for (const [index, entry] of objectEntries.entries()) {
 		if (!objectUnitPathSchema.safeParse(entry.path).success)
 			errors.push(
@@ -583,7 +652,6 @@ export function splitDesignDocument(
 	}
 	if (errors.length > 0) return failure(errors)
 
-	const artboardPath = "artboards/page.json"
 	const layerPath = "scene/layers/artwork.json"
 	const files: Record<string, unknown> = {
 		[designSourcePaths.project]: {
@@ -613,14 +681,8 @@ export function splitDesignDocument(
 		[designSourcePaths.artboardIndex]: {
 			format: "create-design.artboard-index",
 			version: 1,
-			entries: [{ id: DEFAULT_ARTBOARD_ID, path: artboardPath }],
+			entries: artboardEntries,
 		} satisfies ArtboardIndexFile,
-		[artboardPath]: {
-			format: "create-design.artboard",
-			version: 1,
-			id: DEFAULT_ARTBOARD_ID,
-			...validated.value.page,
-		} satisfies ArtboardFile,
 		[designSourcePaths.layerIndex]: {
 			format: "create-design.layer-index",
 			version: 1,
@@ -657,6 +719,15 @@ export function splitDesignDocument(
 			version: 1,
 			entries: [],
 		} satisfies FontIndexFile,
+	}
+	for (const [index, artboard] of validated.value.artboards.entries()) {
+		const entry = artboardEntries[index]
+		if (entry === undefined) continue
+		files[entry.path] = {
+			format: "create-design.artboard",
+			version: 2,
+			...artboard,
+		} satisfies ArtboardFile
 	}
 	for (const [index, object] of validated.value.objects.entries()) {
 		const entry = objectEntries[index]
@@ -726,7 +797,12 @@ export function assembleDesignDocument(
 	files: DesignSourceDirectoryFiles,
 ): DesignSourceResult<DesignDocument> {
 	const errors: DesignSourceDiagnostic[] = []
-	requiredUnit(files, designSourcePaths.project, projectFileSchema, errors)
+	const project = requiredUnit(
+		files,
+		designSourcePaths.project,
+		projectFileSchema,
+		errors,
+	)
 	const metadata = requiredUnit(
 		files,
 		designSourcePaths.document,
@@ -808,24 +884,25 @@ export function assembleDesignDocument(
 		)
 	}
 
-	if (artboardIndex !== null && artboardIndex.entries.length !== 1)
+	if (artboardIndex !== null && artboardIndex.entries.length === 0)
 		errors.push(
 			diagnostic(
-				"directory.unsupported",
+				"directory.hierarchy",
 				"$.entries",
-				"Source version 1 requires exactly one artboard.",
+				"A design source requires at least one artboard.",
 				designSourcePaths.artboardIndex,
 			),
 		)
 	if (
-		artboardIndex !== null &&
-		artboardIndex.entries[0]?.id !== DEFAULT_ARTBOARD_ID
+		project?.sourceVersion === LEGACY_CREATE_DESIGN_SOURCE_VERSION &&
+		(artboardIndex?.entries.length !== 1 ||
+			artboardIndex.entries[0]?.id !== DEFAULT_ARTBOARD_ID)
 	)
 		errors.push(
 			diagnostic(
-				"directory.entity_id",
-				"$.entries[0].id",
-				`Source version 1 requires artboard ID ${DEFAULT_ARTBOARD_ID}.`,
+				"directory.unsupported",
+				"$.entries",
+				`Source version ${LEGACY_CREATE_DESIGN_SOURCE_VERSION} requires the singleton ${DEFAULT_ARTBOARD_ID} artboard.`,
 				designSourcePaths.artboardIndex,
 			),
 		)
@@ -862,25 +939,26 @@ export function assembleDesignDocument(
 			)
 	}
 
-	const artboardEntry = artboardIndex?.entries[0]
 	const layerEntry = layerIndex?.entries[0]
-	const artboard =
-		artboardEntry === undefined
-			? null
-			: requiredUnit(files, artboardEntry.path, artboardFileSchema, errors)
+	const artboards = [] as ArtboardFile[]
+	for (const entry of artboardIndex?.entries ?? []) {
+		const artboard = requiredUnit(files, entry.path, artboardFileSchema, errors)
+		if (artboard === null) continue
+		if (artboard.id !== entry.id)
+			errors.push(
+				diagnostic(
+					"directory.entity_id",
+					"$.id",
+					`Artboard unit ID ${artboard.id} does not match indexed ID ${entry.id}.`,
+					entry.path,
+				),
+			)
+		artboards.push(artboard)
+	}
 	const layer =
 		layerEntry === undefined
 			? null
 			: requiredUnit(files, layerEntry.path, layerFileSchema, errors)
-	if (artboard !== null && artboard.id !== artboardEntry?.id)
-		errors.push(
-			diagnostic(
-				"directory.entity_id",
-				"$.id",
-				`Artboard unit ID ${artboard.id} does not match indexed ID ${artboardEntry?.id}.`,
-				artboardEntry?.path,
-			),
-		)
 	if (layer !== null && layer.id !== layerEntry?.id)
 		errors.push(
 			diagnostic(
@@ -967,7 +1045,7 @@ export function assembleDesignDocument(
 		errors.length > 0 ||
 		metadata === null ||
 		palette === null ||
-		artboard === null ||
+		artboards.length === 0 ||
 		layer === null
 	)
 		return failure(
@@ -985,12 +1063,18 @@ export function assembleDesignDocument(
 		format: CREATE_DESIGN_DOCUMENT_FORMAT,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
 		title: metadata.title,
-		page: {
+		artboards: artboards.map((artboard) => ({
+			id: artboard.id,
+			name: artboard.name,
 			x: artboard.x,
 			y: artboard.y,
 			width: artboard.width,
 			height: artboard.height,
-		},
+			...(artboard.bleed === undefined ? {} : { bleed: artboard.bleed }),
+			...(artboard.safeArea === undefined
+				? {}
+				: { safeArea: artboard.safeArea }),
+		})),
 		swatches: palette.swatches,
 		objects: orderedObjects,
 		guides: metadata.guides,

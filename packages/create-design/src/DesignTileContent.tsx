@@ -45,14 +45,17 @@ const svg = {
 }
 
 function DesignPagesTile({ context }: { readonly context: DesignTileContext }) {
+	const artboard = context.activeArtboard
 	return (
 		<design-pages-tile>
 			<button type="button" aria-pressed="true" onClick={context.focusCanvas}>
 				<page-thumbnail />
 				<span>
-					<strong>Page 1</strong>
+					<strong>{artboard.name}</strong>
 					<small>
-						{context.document.page.width} × {context.document.page.height} pt
+						{artboard.width} × {artboard.height} pt ·{" "}
+						{context.document.artboards.length} artboard
+						{context.document.artboards.length === 1 ? "" : "s"}
 					</small>
 				</span>
 			</button>
@@ -115,7 +118,7 @@ function DesignCanvasTile({
 		<design-canvas-tile>
 			<strong>{context.document.title}</strong>
 			<span>
-				{context.document.page.width} × {context.document.page.height} pt ·{" "}
+				{context.activeArtboard.width} × {context.activeArtboard.height} pt ·{" "}
 				{Math.round(context.zoom * 100)}%
 			</span>
 			<button type="button" onClick={context.focusCanvas}>
@@ -178,7 +181,12 @@ function DesignExportTile({
 				/>
 				<span>Live PDF proof</span>
 			</label>
-			{previewEnabled ? <PdfPreview document={context.document} /> : null}
+			{previewEnabled ? (
+				<PdfPreview
+					document={context.document}
+					artboard={context.activeArtboard}
+				/>
+			) : null}
 		</design-export-tile>
 	)
 }

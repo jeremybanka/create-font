@@ -13,6 +13,7 @@ describe("PDF preview tile", () => {
 	it("lets the user opt in and disposes the preview when disabled", () => {
 		const document = createInitialDocument()
 		const context: DesignTileContext = {
+			activeArtboard: document.artboards[0]!,
 			addSwatch: vi.fn(),
 			appearanceDisabledReason: null,
 			appearanceSummary: {

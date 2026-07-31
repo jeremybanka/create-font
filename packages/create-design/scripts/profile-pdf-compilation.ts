@@ -16,6 +16,7 @@ function percentile(values: readonly number[], ratio: number): number {
 
 function largeDocument(): DesignDocument {
 	const initial = createInitialDocument()
+	const artboard = initial.artboards[0]!
 	const template = initial.objects[0]!
 	const objects: DesignObject[] = Array.from(
 		{ length: OBJECT_COUNT },
@@ -28,8 +29,8 @@ function largeDocument(): DesignDocument {
 				name: `Benchmark object ${index}`,
 				transform: {
 					...template.transform,
-					e: (column * 23) % initial.page.width,
-					f: (row * 23) % initial.page.height,
+					e: (column * 23) % artboard.width,
+					f: (row * 23) % artboard.height,
 				},
 			}
 		},

@@ -5,7 +5,7 @@ import {
 	type PdfDocumentProjection,
 	type PdfProjectionGraph,
 } from "./pdf.ts"
-import type { DesignDocument } from "./types.ts"
+import type { DesignArtboard, DesignDocument } from "./types.ts"
 
 export type LivePdfDiagnostic = Readonly<{
 	code: string
@@ -127,6 +127,7 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 	}
 	const compile = (
 		document: DesignDocument,
+		artboard: DesignArtboard | undefined,
 		currentGeneration: number,
 		currentRevision: number,
 		requestedAt: number,
@@ -136,7 +137,7 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 		const startedAt = now()
 		let projection: PdfDocumentProjection
 		try {
-			projection = graph.project(document)
+			projection = graph.project(document, artboard)
 		} catch (error) {
 			publishFailure(
 				currentGeneration,
@@ -200,7 +201,7 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 
 	return {
 		getState: (): LivePdfCompilationState => state,
-		request(document: DesignDocument): void {
+		request(document: DesignDocument, artboard?: DesignArtboard): void {
 			if (!running) return
 			const currentGeneration = ++generation
 			const currentRevision = ++revision
@@ -215,7 +216,13 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 				}),
 			)
 			cancelScheduled = schedule(() =>
-				compile(document, currentGeneration, currentRevision, requestedAt),
+				compile(
+					document,
+					artboard,
+					currentGeneration,
+					currentRevision,
+					requestedAt,
+				),
 			)
 		},
 		start(): void {

@@ -12,7 +12,7 @@ import {
 	objectStrokeDistance,
 	visibleObjectBounds,
 } from "./painted-geometry.ts"
-import type { DesignDocument, DesignObject } from "./types.ts"
+import type { DesignArtboard, DesignObject } from "./types.ts"
 
 export const DESIGN_MIN_ZOOM = 0.2
 export const DESIGN_MAX_ZOOM = 8
@@ -169,7 +169,7 @@ const anchors = (bounds: Bounds, axis: "x" | "y") =>
 
 export function snapDesignObject(
 	object: DesignObject,
-	document: Pick<DesignDocument, "page">,
+	artboard: DesignArtboard,
 	worldScale: number,
 	thresholdPixels = 7,
 ): DesignSnapResult {
@@ -177,20 +177,20 @@ export function snapDesignObject(
 	if (bounds === null || !(worldScale > 0)) return { object, x: null, y: null }
 	const threshold = thresholdPixels / worldScale
 	const xTargets = [
-		{ id: "page:left", value: document.page.x },
+		{ id: "artboard:left", value: artboard.x },
 		{
-			id: "page:center-x",
-			value: document.page.x + document.page.width / 2,
+			id: "artboard:center-x",
+			value: artboard.x + artboard.width / 2,
 		},
-		{ id: "page:right", value: document.page.x + document.page.width },
+		{ id: "artboard:right", value: artboard.x + artboard.width },
 	]
 	const yTargets = [
-		{ id: "page:top", value: document.page.y },
+		{ id: "artboard:top", value: artboard.y },
 		{
-			id: "page:center-y",
-			value: document.page.y + document.page.height / 2,
+			id: "artboard:center-y",
+			value: artboard.y + artboard.height / 2,
 		},
-		{ id: "page:bottom", value: document.page.y + document.page.height },
+		{ id: "artboard:bottom", value: artboard.y + artboard.height },
 	]
 	const xSnap = rankAxisCandidate(
 		0,

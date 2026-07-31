@@ -30,14 +30,18 @@ explicit document-space contour projection. Node-level vector replacement is
 the deliberate bake boundary: it converts the projected result to path
 geometry and resets the transform to identity.
 
-The canonical document plane is global, point-based, and Y-down. The current
-page is a positioned rectangle in that plane, not the parent of ordinary
-objects. Canvas world coordinates use the plane directly. Native design
+The canonical document plane is global, point-based, and Y-down. Ordered named
+artboards are positioned rectangles in that plane, not parents of ordinary
+objects. Artwork can cross several artboards or sit outside all of them. The
+active artboard is UI state, never canonical document source. Canvas world
+coordinates use the plane directly. Native design
 clipboard data stays global; shared vector/font clipboard data crosses an
-explicit page-independent Y-up boundary; and PDF applies an artboard-relative
-Y flip and translation at the page stream boundary. Moving or resizing a page
-therefore changes canvas framing or PDF placement without invalidating object
-geometry. The full downstream contract is documented in
+explicit artboard-independent Y-up boundary; and PDF applies the active
+artboard's Y flip and translation at the page stream boundary. Moving,
+resizing, or reordering an artboard therefore changes canvas framing or PDF
+placement without invalidating object geometry. Multi-page composition and
+artboard editing gestures remain separate follow-up features. The full
+downstream contract is documented in
 [`@create-design/source`](../design-source/README.md#coordinate-and-identity-contract).
 
 The Object tile exposes the exact local rectangle/ellipse parameters, exact
@@ -55,9 +59,11 @@ payload version three retains complete appearance; the create-font outline
 flavor deliberately carries only projected geometry.
 
 The versioned repository source boundary lives in
-[`@create-design/source`](../design-source/README.md). Its first directory
-format splits document metadata, palette, artboard, layer ordering, and each
-design object into independently validated units. Object IDs, display names,
+[`@create-design/source`](../design-source/README.md). Its second directory
+format splits document metadata, palette, ordered artboards, layer ordering,
+and each design object into independently validated units. Artboard order lives
+only in its inventory while each artboard's stable ID, name, global bounds,
+bleed, and safe-area metadata live in its own unit. Object IDs, display names,
 source paths, and stacking order remain independent so ordinary edits produce
 narrow Git diffs. Group, asset, and font inventories reserve future source
 boundaries without duplicating facts the current document model cannot yet

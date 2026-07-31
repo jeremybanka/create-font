@@ -17,10 +17,12 @@ import {
 } from "mondrian.pdf"
 
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
+import { activeDesignArtboard } from "./artboards.ts"
 import { documentToPdfTransform } from "./coordinates.ts"
 import { projectDesignObjectContours } from "./geometry.ts"
 import type {
 	DesignContour,
+	DesignArtboard,
 	DesignDocument,
 	DesignObject,
 	DesignPoint,
@@ -137,6 +139,7 @@ export interface PdfObjectProjection {
 }
 
 export interface PdfPageProjection {
+	readonly artboardId: string
 	readonly x: number
 	readonly y: number
 	readonly height: number
@@ -152,7 +155,10 @@ export interface PdfDocumentProjection {
 }
 
 export interface PdfProjectionGraph {
-	project(document: DesignDocument): PdfDocumentProjection
+	project(
+		document: DesignDocument,
+		artboard?: DesignArtboard,
+	): PdfDocumentProjection
 }
 
 type ObjectCacheEntry = Readonly<{
@@ -249,25 +255,27 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 	}
 
 	const projectPage = (
-		document: DesignDocument,
+		artboard: DesignArtboard,
 		objectProjections: readonly PdfObjectProjection[],
 	): PdfPageProjection => {
 		const cached = pageCache
 		if (
 			cached !== null &&
-			cached.x === document.page.x &&
-			cached.y === document.page.y &&
-			cached.width === document.page.width &&
-			cached.height === document.page.height &&
+			cached.artboardId === artboard.id &&
+			cached.x === artboard.x &&
+			cached.y === artboard.y &&
+			cached.width === artboard.width &&
+			cached.height === artboard.height &&
 			sameOrderedProjections(cached.objectProjections, objectProjections)
 		) {
 			return cached
 		}
-		const transform = documentToPdfTransform(document.page)
+		const transform = documentToPdfTransform(artboard)
 		pageCache = Object.freeze({
-			x: document.page.x,
-			y: document.page.y,
-			height: document.page.height,
+			artboardId: artboard.id,
+			x: artboard.x,
+			y: artboard.y,
+			height: artboard.height,
 			objectProjections: Object.freeze(objectProjections),
 			prefix: stream(
 				{},
@@ -276,7 +284,7 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 				),
 			),
 			suffix: stream({}, ascii("Q")),
-			width: document.page.width,
+			width: artboard.width,
 		})
 		return pageCache
 	}
@@ -339,7 +347,7 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 	}
 
 	return {
-		project(document) {
+		project(document, artboard = activeDesignArtboard(document)) {
 			const swatches = new Map(
 				document.swatches.map((swatch) => [swatch.id, swatch]),
 			)
@@ -352,17 +360,20 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 			)
 			return projectDocument(
 				document.title,
-				projectPage(document, objectProjections),
+				projectPage(artboard, objectProjections),
 			)
 		},
 	}
 }
 
-export function pdfContentStream(document: DesignDocument): string {
+export function pdfContentStream(
+	document: DesignDocument,
+	artboard: DesignArtboard = activeDesignArtboard(document),
+): string {
 	const swatches = new Map(
 		document.swatches.map((swatch) => [swatch.id, swatch]),
 	)
-	const transform = documentToPdfTransform(document.page)
+	const transform = documentToPdfTransform(artboard)
 	const commands = [
 		`q`,
 		`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
@@ -384,16 +395,25 @@ export function pdfContentStream(document: DesignDocument): string {
 	return commands.join("\n")
 }
 
-export function createPdfIr(document: DesignDocument): PdfDocument {
-	return createPdfProjectionGraph().project(document).document
+export function createPdfIr(
+	document: DesignDocument,
+	artboard: DesignArtboard = activeDesignArtboard(document),
+): PdfDocument {
+	return createPdfProjectionGraph().project(document, artboard).document
 }
 
-export function exportPdf(document: DesignDocument): Uint8Array {
-	return serializePdf(createPdfIr(document))
+export function exportPdf(
+	document: DesignDocument,
+	artboard: DesignArtboard = activeDesignArtboard(document),
+): Uint8Array {
+	return serializePdf(createPdfIr(document, artboard))
 }
 
-export function downloadPdf(document: DesignDocument): void {
-	const blob = new Blob([exportPdf(document) as BlobPart], {
+export function downloadPdf(
+	document: DesignDocument,
+	artboard: DesignArtboard = activeDesignArtboard(document),
+): void {
+	const blob = new Blob([exportPdf(document, artboard) as BlobPart], {
 		type: "application/pdf",
 	})
 	const url = URL.createObjectURL(blob)
