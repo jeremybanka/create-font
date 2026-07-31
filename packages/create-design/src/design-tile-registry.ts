@@ -1,6 +1,8 @@
 import {
 	createRegistryDefaultLayout,
 	createTileRegistry,
+	parseTilingLayout,
+	serializeTilingLayout,
 	type TileRegistration,
 } from "@create-font/editor/shared"
 import { h } from "preact"
@@ -11,6 +13,10 @@ import type {
 	DesignAppearanceSummary,
 } from "./appearance.ts"
 import type {
+	DesignSourceReviewChange,
+	DesignSourceReviewController,
+} from "./design-version-control.ts"
+import type {
 	DesignDocument,
 	DesignObject,
 	DesignSwatch,
@@ -18,6 +24,7 @@ import type {
 } from "./types.ts"
 
 export type DesignTileKind =
+	| "version-control"
 	| "pages"
 	| "layers"
 	| "canvas"
@@ -35,12 +42,14 @@ export interface DesignTileContext {
 		target: AppearancePaintTarget,
 		swatchId: string | undefined,
 	) => void
+	readonly canReviewSourceChange?: (change: DesignSourceReviewChange) => boolean
 	readonly deleteSelection: () => void
 	readonly document: DesignDocument
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
 	readonly exportDocument: () => void
 	readonly focusCanvas: () => void
+	readonly reviewSourceChange?: (change: DesignSourceReviewChange) => void
 	readonly selectObject: (object: DesignObject, additive?: boolean) => void
 	readonly selectSwatch: (swatch: DesignSwatch) => void
 	readonly selectTool: (tool: DesignTool) => void
@@ -61,10 +70,20 @@ export interface DesignTileContext {
 	readonly swapAppearancePaints: () => void
 	readonly tool: DesignTool
 	readonly updateSwatch: (swatch: DesignSwatch) => void
+	readonly versionControl?: DesignSourceReviewController
 	readonly zoom: number
 }
 
 const registrations = [
+	{
+		kind: "version-control",
+		name: "Version Control",
+		description: "Review and commit complete semantic design changes.",
+		defaultFill: true,
+		defaultPlacement: { column: 2, fill: true },
+		render: ({ context }) =>
+			h(DesignTileContent, { context, kind: "version-control" }),
+	},
 	{
 		kind: "pages",
 		name: "Pages",
@@ -131,4 +150,26 @@ export const DESIGN_TILE_REGISTRY = createTileRegistry<
 >(registrations)
 export const DEFAULT_DESIGN_TILING_LAYOUT =
 	createRegistryDefaultLayout(DESIGN_TILE_REGISTRY)
+export const LEGACY_DESIGN_TILING_STORAGE_KEY =
+	"create-design:tiling-workspace:v2"
 export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v3"
+
+/**
+ * Preserve customized v2 layouts without injecting the new tile. The new
+ * tile is default-placed only for new workspaces, while migrated workspaces
+ * can open it from the command palette or tile pool without an injected panel.
+ */
+export function migrateDesignTilingStorage(
+	storage: Pick<Storage, "getItem" | "setItem">,
+): void {
+	for (const suffix of ["saved:v1", "draft:v1"] as const) {
+		const destination = `${DESIGN_TILING_STORAGE_KEY}:${suffix}`
+		if (storage.getItem(destination) !== null) continue
+		const legacy = storage.getItem(
+			`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`,
+		)
+		const layout = parseTilingLayout(legacy)
+		if (layout !== null)
+			storage.setItem(destination, serializeTilingLayout(layout))
+	}
+}

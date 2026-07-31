@@ -26,6 +26,7 @@ import type {
 } from "./design-tile-registry.ts"
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
+import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
@@ -709,7 +710,9 @@ export function DesignTileContent({
 }) {
 	return (
 		<design-tile-content className={css.class}>
-			{kind === "pages" ? (
+			{kind === "version-control" ? (
+				<DesignVersionControlTile context={context} />
+			) : kind === "pages" ? (
 				<DesignPagesTile context={context} />
 			) : kind === "layers" ? (
 				<DesignLayersTile context={context} />

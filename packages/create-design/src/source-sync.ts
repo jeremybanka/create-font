@@ -16,6 +16,7 @@ import {
 	type DesignDocument,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
+import type { DesignVersionControlSession } from "./design-version-control.ts"
 
 export type DesignSourceStatus =
 	| `connected`
@@ -39,6 +40,7 @@ export type DesignExternalSourceUpdate =
 export interface DesignSourceSession {
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
+	readonly versionControl?: DesignVersionControlSession
 	reload(): Promise<DesignExternalSourceUpdate>
 	save(document: DesignDocument): Promise<Readonly<{ revision: string }>>
 	subscribeDocument(
@@ -161,6 +163,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 		(update: DesignExternalSourceUpdate) => void
 	>()
 	const statusListeners = new Set<(status: DesignSourceStatus) => void>()
+	const sourceChangeListeners = new Set<() => void>()
 	const localOperations = new Set<string>()
 	let externalConflict = false
 	let pendingSaves = 0
@@ -184,6 +187,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	socket.addEventListener(`message`, (message) => {
 		void (async () => {
 			const event = JSON.parse(String(message.data)) as SourceChangedEvent
+			for (const listener of sourceChangeListeners) listener()
 			const isLocal =
 				event.operationId !== undefined &&
 				localOperations.delete(event.operationId)
@@ -212,6 +216,14 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	return {
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
+		versionControl: {
+			commitUnits: (input) => client.commitUnits(input),
+			readComparison: (input) => client.readComparison(input),
+			subscribeSourceChange(listener) {
+				sourceChangeListeners.add(listener)
+				return () => sourceChangeListeners.delete(listener)
+			},
+		},
 		async reload() {
 			externalConflict = false
 			return recover(false)
