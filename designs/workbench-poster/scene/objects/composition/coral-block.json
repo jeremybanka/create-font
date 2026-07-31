@@ -1,18 +1,23 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{ "x": 432, "y": 388 },
-				{ "x": 558, "y": 388 },
-				{ "x": 558, "y": 514 },
-				{ "x": 432, "y": 514 }
-			]
-		}
-	],
-	"fillId": "swatch:coral",
+	"appearance": { "fill": { "swatchId": "swatch:coral" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:coral-block:contour:0",
+				"points": [
+					{ "id": "object:coral-block:contour:0:point:0", "x": 432, "y": 388 },
+					{ "id": "object:coral-block:contour:0:point:1", "x": 558, "y": 388 },
+					{ "id": "object:coral-block:contour:0:point:2", "x": 558, "y": 514 },
+					{ "id": "object:coral-block:contour:0:point:3", "x": 432, "y": 514 }
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:coral-block",
 	"name": "Coral block",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

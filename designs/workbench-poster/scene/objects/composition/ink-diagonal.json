@@ -1,18 +1,23 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{ "x": 92, "y": 552 },
-				{ "x": 390, "y": 52 },
-				{ "x": 438, "y": 82 },
-				{ "x": 140, "y": 582 }
-			]
-		}
-	],
-	"fillId": "swatch:ink",
+	"appearance": { "fill": { "swatchId": "swatch:ink" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:ink-diagonal:contour:0",
+				"points": [
+					{ "id": "object:ink-diagonal:contour:0:point:0", "x": 92, "y": 552 },
+					{ "id": "object:ink-diagonal:contour:0:point:1", "x": 390, "y": 52 },
+					{ "id": "object:ink-diagonal:contour:0:point:2", "x": 438, "y": 82 },
+					{ "id": "object:ink-diagonal:contour:0:point:3", "x": 140, "y": 582 }
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:ink-diagonal",
 	"name": "Ink diagonal",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

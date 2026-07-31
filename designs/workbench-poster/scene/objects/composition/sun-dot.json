@@ -1,38 +1,47 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -25.405098492216492, "y": 0 },
-					"outgoing": { "x": 25.405098492216492, "y": 0 },
-					"x": 118,
-					"y": 434
-				},
-				{
-					"incoming": { "x": 0, "y": -25.405098492216492 },
-					"outgoing": { "x": 0, "y": 25.405098492216492 },
-					"x": 164,
-					"y": 480
-				},
-				{
-					"incoming": { "x": 25.405098492216492, "y": 0 },
-					"outgoing": { "x": -25.405098492216492, "y": 0 },
-					"x": 118,
-					"y": 526
-				},
-				{
-					"incoming": { "x": 0, "y": 25.405098492216492 },
-					"outgoing": { "x": 0, "y": -25.405098492216492 },
-					"x": 72,
-					"y": 480
-				}
-			]
-		}
-	],
-	"fillId": "swatch:sun",
+	"appearance": { "fill": { "swatchId": "swatch:sun" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:sun-dot:contour:0",
+				"points": [
+					{
+						"id": "object:sun-dot:contour:0:point:0",
+						"incoming": { "x": -25.405098492216492, "y": 0 },
+						"outgoing": { "x": 25.405098492216492, "y": 0 },
+						"x": 118,
+						"y": 434
+					},
+					{
+						"id": "object:sun-dot:contour:0:point:1",
+						"incoming": { "x": 0, "y": -25.405098492216492 },
+						"outgoing": { "x": 0, "y": 25.405098492216492 },
+						"x": 164,
+						"y": 480
+					},
+					{
+						"id": "object:sun-dot:contour:0:point:2",
+						"incoming": { "x": 25.405098492216492, "y": 0 },
+						"outgoing": { "x": -25.405098492216492, "y": 0 },
+						"x": 118,
+						"y": 526
+					},
+					{
+						"id": "object:sun-dot:contour:0:point:3",
+						"incoming": { "x": 0, "y": 25.405098492216492 },
+						"outgoing": { "x": 0, "y": -25.405098492216492 },
+						"x": 72,
+						"y": 480
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:sun-dot",
 	"name": "Sun dot",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

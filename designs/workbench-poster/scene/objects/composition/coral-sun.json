@@ -1,38 +1,47 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -91.6792684719117, "y": 0 },
-					"outgoing": { "x": 91.6792684719117, "y": 0 },
-					"x": 462,
-					"y": -80
-				},
-				{
-					"incoming": { "x": 0, "y": -91.6792684719117 },
-					"outgoing": { "x": 0, "y": 91.6792684719117 },
-					"x": 628,
-					"y": 86
-				},
-				{
-					"incoming": { "x": 91.6792684719117, "y": 0 },
-					"outgoing": { "x": -91.6792684719117, "y": 0 },
-					"x": 462,
-					"y": 252
-				},
-				{
-					"incoming": { "x": 0, "y": 91.6792684719117 },
-					"outgoing": { "x": 0, "y": -91.6792684719117 },
-					"x": 296,
-					"y": 86
-				}
-			]
-		}
-	],
-	"fillId": "swatch:coral",
+	"appearance": { "fill": { "swatchId": "swatch:coral" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:coral-sun:contour:0",
+				"points": [
+					{
+						"id": "object:coral-sun:contour:0:point:0",
+						"incoming": { "x": -91.6792684719117, "y": 0 },
+						"outgoing": { "x": 91.6792684719117, "y": 0 },
+						"x": 462,
+						"y": -80
+					},
+					{
+						"id": "object:coral-sun:contour:0:point:1",
+						"incoming": { "x": 0, "y": -91.6792684719117 },
+						"outgoing": { "x": 0, "y": 91.6792684719117 },
+						"x": 628,
+						"y": 86
+					},
+					{
+						"id": "object:coral-sun:contour:0:point:2",
+						"incoming": { "x": 91.6792684719117, "y": 0 },
+						"outgoing": { "x": -91.6792684719117, "y": 0 },
+						"x": 462,
+						"y": 252
+					},
+					{
+						"id": "object:coral-sun:contour:0:point:3",
+						"incoming": { "x": 0, "y": 91.6792684719117 },
+						"outgoing": { "x": 0, "y": -91.6792684719117 },
+						"x": 296,
+						"y": 86
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:coral-sun",
 	"name": "Coral sun",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

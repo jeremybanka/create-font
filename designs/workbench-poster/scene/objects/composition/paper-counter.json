@@ -1,38 +1,47 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -87.26099047326535, "y": 0 },
-					"outgoing": { "x": 87.26099047326535, "y": 0 },
-					"x": 286,
-					"y": 132
-				},
-				{
-					"incoming": { "x": 0, "y": -87.26099047326535 },
-					"outgoing": { "x": 0, "y": 87.26099047326535 },
-					"x": 444,
-					"y": 290
-				},
-				{
-					"incoming": { "x": 87.26099047326535, "y": 0 },
-					"outgoing": { "x": -87.26099047326535, "y": 0 },
-					"x": 286,
-					"y": 448
-				},
-				{
-					"incoming": { "x": 0, "y": 87.26099047326535 },
-					"outgoing": { "x": 0, "y": -87.26099047326535 },
-					"x": 128,
-					"y": 290
-				}
-			]
-		}
-	],
-	"fillId": "swatch:paper",
+	"appearance": { "fill": { "swatchId": "swatch:paper" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:paper-counter:contour:0",
+				"points": [
+					{
+						"id": "object:paper-counter:contour:0:point:0",
+						"incoming": { "x": -87.26099047326535, "y": 0 },
+						"outgoing": { "x": 87.26099047326535, "y": 0 },
+						"x": 286,
+						"y": 132
+					},
+					{
+						"id": "object:paper-counter:contour:0:point:1",
+						"incoming": { "x": 0, "y": -87.26099047326535 },
+						"outgoing": { "x": 0, "y": 87.26099047326535 },
+						"x": 444,
+						"y": 290
+					},
+					{
+						"id": "object:paper-counter:contour:0:point:2",
+						"incoming": { "x": 87.26099047326535, "y": 0 },
+						"outgoing": { "x": -87.26099047326535, "y": 0 },
+						"x": 286,
+						"y": 448
+					},
+					{
+						"id": "object:paper-counter:contour:0:point:3",
+						"incoming": { "x": 0, "y": 87.26099047326535 },
+						"outgoing": { "x": 0, "y": -87.26099047326535 },
+						"x": 128,
+						"y": 290
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:paper-counter",
 	"name": "Paper counter",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

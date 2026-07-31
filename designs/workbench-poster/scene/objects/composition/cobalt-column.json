@@ -1,18 +1,27 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{ "x": 48, "y": 52 },
-				{ "x": 184, "y": 52 },
-				{ "x": 184, "y": 548 },
-				{ "x": 48, "y": 548 }
-			]
-		}
-	],
-	"fillId": "swatch:cobalt",
+	"appearance": { "fill": { "swatchId": "swatch:cobalt" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:cobalt-column:contour:0",
+				"points": [
+					{ "id": "object:cobalt-column:contour:0:point:0", "x": 48, "y": 52 },
+					{ "id": "object:cobalt-column:contour:0:point:1", "x": 184, "y": 52 },
+					{
+						"id": "object:cobalt-column:contour:0:point:2",
+						"x": 184,
+						"y": 548
+					},
+					{ "id": "object:cobalt-column:contour:0:point:3", "x": 48, "y": 548 }
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:cobalt-column",
 	"name": "Cobalt column",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

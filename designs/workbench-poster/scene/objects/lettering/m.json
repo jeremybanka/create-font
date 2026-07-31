@@ -1,27 +1,32 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{ "x": 420, "y": 744 },
-				{ "x": 420, "y": 632 },
-				{ "x": 444, "y": 632 },
-				{ "x": 472, "y": 680 },
-				{ "x": 500, "y": 632 },
-				{ "x": 524, "y": 632 },
-				{ "x": 524, "y": 744 },
-				{ "x": 500, "y": 744 },
-				{ "x": 500, "y": 674 },
-				{ "x": 480, "y": 708 },
-				{ "x": 464, "y": 708 },
-				{ "x": 444, "y": 674 },
-				{ "x": 444, "y": 744 }
-			]
-		}
-	],
-	"fillId": "swatch:cobalt",
+	"appearance": { "fill": { "swatchId": "swatch:cobalt" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:letter-m:contour:0",
+				"points": [
+					{ "id": "object:letter-m:contour:0:point:0", "x": 420, "y": 744 },
+					{ "id": "object:letter-m:contour:0:point:1", "x": 420, "y": 632 },
+					{ "id": "object:letter-m:contour:0:point:2", "x": 444, "y": 632 },
+					{ "id": "object:letter-m:contour:0:point:3", "x": 472, "y": 680 },
+					{ "id": "object:letter-m:contour:0:point:4", "x": 500, "y": 632 },
+					{ "id": "object:letter-m:contour:0:point:5", "x": 524, "y": 632 },
+					{ "id": "object:letter-m:contour:0:point:6", "x": 524, "y": 744 },
+					{ "id": "object:letter-m:contour:0:point:7", "x": 500, "y": 744 },
+					{ "id": "object:letter-m:contour:0:point:8", "x": 500, "y": 674 },
+					{ "id": "object:letter-m:contour:0:point:9", "x": 480, "y": 708 },
+					{ "id": "object:letter-m:contour:0:point:10", "x": 464, "y": 708 },
+					{ "id": "object:letter-m:contour:0:point:11", "x": 444, "y": 674 },
+					{ "id": "object:letter-m:contour:0:point:12", "x": 444, "y": 744 }
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:letter-m",
 	"name": "M",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

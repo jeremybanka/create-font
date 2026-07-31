@@ -1,67 +1,81 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -28.166522241370462, "y": 0 },
-					"outgoing": { "x": 28.166522241370462, "y": 0 },
-					"x": 223,
-					"y": 632
-				},
-				{
-					"incoming": { "x": 0, "y": -30.927945990524428 },
-					"outgoing": { "x": 0, "y": 30.927945990524428 },
-					"x": 274,
-					"y": 688
-				},
-				{
-					"incoming": { "x": 28.166522241370462, "y": 0 },
-					"outgoing": { "x": -28.166522241370462, "y": 0 },
-					"x": 223,
-					"y": 744
-				},
-				{
-					"incoming": { "x": 0, "y": 30.927945990524428 },
-					"outgoing": { "x": 0, "y": -30.927945990524428 },
-					"x": 172,
-					"y": 688
-				}
-			]
-		},
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -14.91168824543142, "y": 0 },
-					"outgoing": { "x": 14.91168824543142, "y": 0 },
-					"x": 223,
-					"y": 654
-				},
-				{
-					"incoming": { "x": 0, "y": -18.777681494246973 },
-					"outgoing": { "x": 0, "y": 18.777681494246973 },
-					"x": 250,
-					"y": 688
-				},
-				{
-					"incoming": { "x": 14.91168824543142, "y": 0 },
-					"outgoing": { "x": -14.91168824543142, "y": 0 },
-					"x": 223,
-					"y": 722
-				},
-				{
-					"incoming": { "x": 0, "y": 18.777681494246973 },
-					"outgoing": { "x": 0, "y": -18.777681494246973 },
-					"x": 196,
-					"y": 688
-				}
-			]
-		}
-	],
-	"fillId": "swatch:coral",
+	"appearance": { "fill": { "swatchId": "swatch:coral" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:letter-o:contour:0",
+				"points": [
+					{
+						"id": "object:letter-o:contour:0:point:0",
+						"incoming": { "x": -28.166522241370462, "y": 0 },
+						"outgoing": { "x": 28.166522241370462, "y": 0 },
+						"x": 223,
+						"y": 632
+					},
+					{
+						"id": "object:letter-o:contour:0:point:1",
+						"incoming": { "x": 0, "y": -30.927945990524428 },
+						"outgoing": { "x": 0, "y": 30.927945990524428 },
+						"x": 274,
+						"y": 688
+					},
+					{
+						"id": "object:letter-o:contour:0:point:2",
+						"incoming": { "x": 28.166522241370462, "y": 0 },
+						"outgoing": { "x": -28.166522241370462, "y": 0 },
+						"x": 223,
+						"y": 744
+					},
+					{
+						"id": "object:letter-o:contour:0:point:3",
+						"incoming": { "x": 0, "y": 30.927945990524428 },
+						"outgoing": { "x": 0, "y": -30.927945990524428 },
+						"x": 172,
+						"y": 688
+					}
+				]
+			},
+			{
+				"closed": true,
+				"id": "object:letter-o:contour:1",
+				"points": [
+					{
+						"id": "object:letter-o:contour:1:point:0",
+						"incoming": { "x": -14.91168824543142, "y": 0 },
+						"outgoing": { "x": 14.91168824543142, "y": 0 },
+						"x": 223,
+						"y": 654
+					},
+					{
+						"id": "object:letter-o:contour:1:point:1",
+						"incoming": { "x": 0, "y": -18.777681494246973 },
+						"outgoing": { "x": 0, "y": 18.777681494246973 },
+						"x": 250,
+						"y": 688
+					},
+					{
+						"id": "object:letter-o:contour:1:point:2",
+						"incoming": { "x": 14.91168824543142, "y": 0 },
+						"outgoing": { "x": -14.91168824543142, "y": 0 },
+						"x": 223,
+						"y": 722
+					},
+					{
+						"id": "object:letter-o:contour:1:point:3",
+						"incoming": { "x": 0, "y": 18.777681494246973 },
+						"outgoing": { "x": 0, "y": -18.777681494246973 },
+						"x": 196,
+						"y": 688
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:letter-o",
 	"name": "O",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }
