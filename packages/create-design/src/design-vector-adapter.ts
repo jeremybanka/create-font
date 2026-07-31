@@ -61,23 +61,23 @@ export function projectDesignVectorObject(
 		),
 		contours: projectDesignObjectContours(object).map(
 			(contour, contourIndex) => ({
-			id: `${object.id}:contour:${contourIndex}`,
-			closed: contour.closed,
-			nodes: contour.points.map((point, pointIndex) => ({
-				id: `${object.id}:contour:${contourIndex}:point:${pointIndex}`,
-				mode:
-					point.incoming === undefined && point.outgoing === undefined
-						? "hard"
-						: "soft",
-				x: point.x,
-				y: point.y,
-				...(point.incoming === undefined
-					? {}
-					: { incoming: { ...point.incoming } }),
-				...(point.outgoing === undefined
-					? {}
-					: { outgoing: { ...point.outgoing } }),
-			})),
+				id: `${object.id}:contour:${contourIndex}`,
+				closed: contour.closed,
+				nodes: contour.points.map((point, pointIndex) => ({
+					id: `${object.id}:contour:${contourIndex}:point:${pointIndex}`,
+					mode:
+						point.incoming === undefined && point.outgoing === undefined
+							? "hard"
+							: "soft",
+					x: point.x,
+					y: point.y,
+					...(point.incoming === undefined
+						? {}
+						: { incoming: { ...point.incoming } }),
+					...(point.outgoing === undefined
+						? {}
+						: { outgoing: { ...point.outgoing } }),
+				})),
 			}),
 		),
 	}
@@ -167,9 +167,7 @@ function reject(error: string) {
 }
 
 function appearanceFromStyle(style: VectorStyle) {
-	return style.kind === "fill"
-		? { fill: { swatchId: style.swatchId } }
-		: {}
+	return style.kind === "fill" ? { fill: { swatchId: style.swatchId } } : {}
 }
 
 function setAppearanceFill(

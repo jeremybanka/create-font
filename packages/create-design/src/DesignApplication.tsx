@@ -178,17 +178,9 @@ function resolveDesignGestureObject(
 	if (gesture.kind !== "transform" || preview?.kind !== "transform") return null
 	const transformed =
 		preview.handle === "rotation"
-			? rotateObject(
-					gesture.original,
-					preview.anchor,
-					preview.rotationDegrees,
-				)
+			? rotateObject(gesture.original, preview.anchor, preview.rotationDegrees)
 			: preview.handle === "move"
-				? translateObject(
-						gesture.original,
-						preview.delta.x,
-						preview.delta.y,
-					)
+				? translateObject(gesture.original, preview.delta.x, preview.delta.y)
 				: scaleObject(
 						gesture.original,
 						preview.anchor,
@@ -487,8 +479,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	): void => {
 		if (property.appearance?.fill !== undefined) {
 			const swatch = document.swatches.find(
-				(candidate) =>
-					candidate.id === property.appearance?.fill?.swatchId,
+				(candidate) => candidate.id === property.appearance?.fill?.swatchId,
 			)
 			if (swatch !== undefined)
 				commitVectorIntent({
@@ -1522,8 +1513,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 													? {}
 													: {
 															stroke: swatchCss(stroke),
-															strokeWidth:
-																object.appearance.stroke?.width ?? 0,
+															strokeWidth: object.appearance.stroke?.width ?? 0,
 														})}
 												fillRule="evenodd"
 												onPointerDown={(event) =>

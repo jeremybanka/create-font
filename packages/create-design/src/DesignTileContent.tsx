@@ -57,8 +57,7 @@ function DesignLayersTile({
 			<strong>{context.document.objects.length} objects</strong>
 			{[...context.document.objects].reverse().map((object) => {
 				const swatch = context.document.swatches.find(
-					(candidate) =>
-						candidate.id === object.appearance.fill?.swatchId,
+					(candidate) => candidate.id === object.appearance.fill?.swatchId,
 				)
 				return (
 					<button

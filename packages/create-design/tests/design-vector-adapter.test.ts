@@ -244,9 +244,7 @@ vectorDocumentAdapterContract("design", () => {
 				next.objects[0] === undefined
 					? undefined
 					: projectDesignObjectContours(next.objects[0])[0]?.points[0]?.x,
-			).toBe(
-				projectDesignObjectContours(object)[0]!.points[0]!.x + 13,
-			)
+			).toBe(projectDesignObjectContours(object)[0]!.points[0]!.x + 13)
 		},
 		assertDeleted: (next: typeof document) => {
 			expect(next.objects.some((candidate) => candidate.id === object.id)).toBe(

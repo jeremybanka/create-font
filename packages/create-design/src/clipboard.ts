@@ -144,9 +144,8 @@ export function readDesignClipboard(
 									: {
 											fill: {
 												swatchId:
-													swatchIds.get(
-														object.appearance.fill.swatchId,
-													) ?? object.appearance.fill.swatchId,
+													swatchIds.get(object.appearance.fill.swatchId) ??
+													object.appearance.fill.swatchId,
 											},
 										}),
 								...(object.appearance.stroke === undefined
@@ -155,9 +154,8 @@ export function readDesignClipboard(
 											stroke: {
 												...object.appearance.stroke,
 												swatchId:
-													swatchIds.get(
-														object.appearance.stroke.swatchId,
-													) ?? object.appearance.stroke.swatchId,
+													swatchIds.get(object.appearance.stroke.swatchId) ??
+													object.appearance.stroke.swatchId,
 											},
 										}),
 							},

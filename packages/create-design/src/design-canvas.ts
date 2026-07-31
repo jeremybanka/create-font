@@ -201,22 +201,22 @@ function objectSegmentCandidates(
 ) {
 	return projectDesignObjectContours(object).flatMap(
 		(contour, contourIndex) => {
-		const flattened = flattenedContour(contour)
-		const segmentCount = flattened.length - (contour.closed ? 0 : 1)
-		return Array.from({ length: segmentCount }, (_, segmentIndex) => {
-			const from = flattened[segmentIndex]
-			const to = flattened[(segmentIndex + 1) % flattened.length]
-			if (from === undefined || to === undefined) return []
-			const nearest = nearestSegmentPoint(point, from, to)
-			return [
-				{
-					id: `${object.id}:${contourIndex}:${segmentIndex}`,
-					priority,
-					...nearest,
-					object,
-				},
-			]
-		}).flat()
+			const flattened = flattenedContour(contour)
+			const segmentCount = flattened.length - (contour.closed ? 0 : 1)
+			return Array.from({ length: segmentCount }, (_, segmentIndex) => {
+				const from = flattened[segmentIndex]
+				const to = flattened[(segmentIndex + 1) % flattened.length]
+				if (from === undefined || to === undefined) return []
+				const nearest = nearestSegmentPoint(point, from, to)
+				return [
+					{
+						id: `${object.id}:${contourIndex}:${segmentIndex}`,
+						priority,
+						...nearest,
+						object,
+					},
+				]
+			}).flat()
 		},
 	)
 }
@@ -228,11 +228,7 @@ export function nearestDesignObject(
 	maxDistancePixels = 12,
 ): DesignObjectHit | null {
 	const containing = objects.flatMap((object, index) => {
-		if (
-			object.hidden ||
-			object.locked ||
-			object.appearance.fill === undefined
-		)
+		if (object.hidden || object.locked || object.appearance.fill === undefined)
 			return []
 		const filled = projectDesignObjectContours(object).reduce(
 			(inside, contour) => contourContainsPoint(contour, point) !== inside,
@@ -250,9 +246,9 @@ export function nearestDesignObject(
 		point,
 		objects.flatMap((object, index) =>
 			object.hidden ||
-				object.locked ||
-				(object.appearance.fill === undefined &&
-					object.appearance.stroke === undefined)
+			object.locked ||
+			(object.appearance.fill === undefined &&
+				object.appearance.stroke === undefined)
 				? []
 				: objectSegmentCandidates(object, point, objects.length - index),
 		),
