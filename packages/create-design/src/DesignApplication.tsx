@@ -86,6 +86,10 @@ import {
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
+import {
+	type DesignSourceReviewChange,
+	useDesignVersionControl,
+} from "./design-version-control.ts"
 import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
@@ -300,6 +304,7 @@ export type DesignApplicationProps = Readonly<{
 export function DesignApplication(props: DesignApplicationProps) {
 	const { initialDocument, sourceSession } = props
 	const [initialLoad] = useState(() => initialDesignLoad(initialDocument))
+	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
 	const [history, dispatch] = useReducer(
 		reduceDesignHistory,
 		initialLoad.document,
@@ -365,6 +370,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
+	const openTile = useCallback((kind: DesignTileKind): void => {
+		tileCommandSequence.current += 1
+		setTileCommandRequest({ id: tileCommandSequence.current, kind })
+	}, [])
 	const nextId = useCallback(() => {
 		sequence.current += 1
 		return `${Date.now().toString(36)}:${sequence.current.toString(36)}`
@@ -659,12 +668,62 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setSelectedSwatchId(swatch.id)
 	}
 
+	const canReviewSourceChange = (change: DesignSourceReviewChange): boolean => {
+		switch (change.kind) {
+			case "object":
+				return (
+					change.change !== "deleted" &&
+					document.objects.some((object) => object.id === change.id)
+				)
+			case "artboard":
+			case "document":
+			case "palette":
+			case "structure":
+				return true
+			default:
+				return false
+		}
+	}
+
+	const reviewSourceChange = (change: DesignSourceReviewChange): void => {
+		if (!canReviewSourceChange(change)) return
+		switch (change.kind) {
+			case "object": {
+				const object = document.objects.find(
+					(candidate) => candidate.id === change.id,
+				)
+				if (object === undefined) return
+				setSelection([object.id])
+				selectTool("select")
+				requestAnimationFrame(() => artboardWrapRef.current?.focus())
+				setStatus(`Reviewing ${object.name}.`)
+				return
+			}
+			case "palette":
+				openTile("appearance")
+				setStatus("Reviewing the document palette.")
+				return
+			case "structure":
+				openTile("layers")
+				setStatus("Reviewing coordinated layer and object structure.")
+				return
+			case "artboard":
+				openTile("pages")
+				setStatus("Reviewing the active artboard.")
+				return
+			case "document":
+				openTile("canvas")
+				setStatus("Reviewing document details.")
+		}
+	}
+
 	const designTileContext: DesignTileContext = {
 		addSwatch,
 		appearanceDisabledReason,
 		appearanceSummary,
 		appearanceTarget,
 		applyAppearancePaint,
+		canReviewSourceChange,
 		deleteSelection,
 		document,
 		expandSelection,
@@ -673,6 +732,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			: expansionEligibility.reason,
 		exportDocument,
 		focusCanvas: () => artboardWrapRef.current?.focus(),
+		reviewSourceChange,
 		selectObject: (object, additive = false) =>
 			setSelection((current) =>
 				additive
@@ -698,6 +758,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		swapAppearancePaints: swapAppearance,
 		tool,
 		updateSwatch,
+		...(versionControl === undefined ? {} : { versionControl }),
 		zoom: canvasView.zoom,
 	}
 
@@ -771,13 +832,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
 				(command): PaletteCommand => ({
 					...command,
-					do: () => {
-						tileCommandSequence.current += 1
-						setTileCommandRequest({
-							id: tileCommandSequence.current,
-							kind: command.kind,
-						})
-					},
+					do: () => openTile(command.kind),
 				}),
 			),
 		],
@@ -788,6 +843,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			exportDocument,
 			history.future.length,
 			history.past.length,
+			openTile,
 			selectTool,
 			selection.length,
 			selectedObject?.id,

@@ -145,9 +145,9 @@ describe("create-design shared vector scene", () => {
 			{ initialDocument: session.initialDocument, sourceSession: session },
 			storage,
 		)
-		expect(document.querySelector('[role="status"]')?.textContent).toContain(
-			"has not been saved",
-		)
+		expect(
+			document.querySelector('footer [role="status"]')?.textContent,
+		).toContain("has not been saved")
 		const recover = [...document.querySelectorAll("button")].find(
 			(button) => button.textContent?.trim() === "Recover draft",
 		)
@@ -165,9 +165,9 @@ describe("create-design shared vector scene", () => {
 		).toBe("Recovered design")
 		await vi.waitFor(() => {
 			expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
-			expect(document.querySelector('[role="status"]')?.textContent).toContain(
-				"source:two",
-			)
+			expect(
+				document.querySelector('footer [role="status"]')?.textContent,
+			).toContain("source:two")
 		})
 	})
 
@@ -186,9 +186,9 @@ describe("create-design shared vector scene", () => {
 			storage,
 		)
 		expect(document.querySelector("persistence-alert")).toBeNull()
-		expect(document.querySelector('[role="status"]')?.textContent).toContain(
-			"source:one",
-		)
+		expect(
+			document.querySelector('footer [role="status"]')?.textContent,
+		).toContain("source:one")
 		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
 		expect(session.save).not.toHaveBeenCalled()
 		const event = new Event("beforeunload", { cancelable: true })
@@ -320,9 +320,9 @@ describe("create-design shared vector scene", () => {
 		expect(retry.tabIndex).toBeGreaterThanOrEqual(0)
 		act(() => retry.click())
 		await vi.waitFor(() =>
-			expect(document.querySelector('[role="status"]')?.textContent).toContain(
-				"source:two",
-			),
+			expect(
+				document.querySelector('footer [role="status"]')?.textContent,
+			).toContain("source:two"),
 		)
 		expect(save).toHaveBeenCalledTimes(2)
 		expect(save).toHaveBeenLastCalledWith(
