@@ -9,7 +9,7 @@ import {
 	DesignApplication,
 	type DesignApplicationProps,
 } from "../src/DesignApplication.tsx"
-import { createInitialDocument } from "../src/document.ts"
+import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { objectBounds } from "../src/geometry.ts"
 import {
 	DESIGN_RECOVERY_STORAGE_KEY,
@@ -119,6 +119,16 @@ describe("create-design shared vector scene", () => {
 			...overrides,
 		}
 	}
+
+	it("leaves invalid persisted input untouched until the user edits", () => {
+		const invalid = JSON.stringify({
+			...createInitialDocument(),
+			version: 999,
+		})
+		const storage = new Map([[DESIGN_STORAGE_KEY, invalid]])
+		mountDesign({}, storage)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(invalid)
+	})
 
 	it("offers a recovery draft without labeling it saved, then saves an explicit recovery", async () => {
 		const storage = new Map<string, string>()
@@ -386,7 +396,7 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		let saved = JSON.parse(
-			storage.get("create-design:document:v1") ?? "{}",
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
 		) as DesignDocument
 		expect(saved.objects[0]?.geometry).toMatchObject({
 			kind: "rectangle",
@@ -407,7 +417,7 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		saved = JSON.parse(
-			storage.get("create-design:document:v1") ?? "{}",
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
 		) as DesignDocument
 		const expanded = saved.objects[0]
 		expect(expanded?.geometry.kind).toBe("path")
@@ -440,7 +450,7 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		saved = JSON.parse(
-			storage.get("create-design:document:v1") ?? "{}",
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
 		) as DesignDocument
 		expect(saved.objects[0]?.geometry).toMatchObject({
 			kind: "rectangle",
@@ -522,7 +532,7 @@ describe("create-design shared vector scene", () => {
 				}
 				await Promise.resolve()
 			})
-			const saved = localStorage.getItem("create-design:document:v1")
+			const saved = localStorage.getItem(DESIGN_STORAGE_KEY)
 			if (saved === null) throw new Error("Design document was not persisted.")
 			const next = JSON.parse(saved) as DesignDocument
 			const bounds = objectBounds(
@@ -576,7 +586,7 @@ describe("create-design shared vector scene", () => {
 			fire("pointerup", 440, 380)
 			await Promise.resolve()
 		})
-		const saved = localStorage.getItem("create-design:document:v1")
+		const saved = localStorage.getItem(DESIGN_STORAGE_KEY)
 		if (saved === null) throw new Error("Design document was not persisted.")
 		expect(JSON.parse(saved).objects).toHaveLength(2)
 	})
@@ -631,7 +641,7 @@ describe("create-design shared vector scene", () => {
 			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
 			await Promise.resolve()
 		})
-		let saved = localStorage.getItem("create-design:document:v1")
+		let saved = localStorage.getItem(DESIGN_STORAGE_KEY)
 		if (saved === null) throw new Error("Design document was not persisted.")
 		let parsed = JSON.parse(saved)
 		expect(parsed.objects).toHaveLength(3)
@@ -657,7 +667,7 @@ describe("create-design shared vector scene", () => {
 			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
 			await Promise.resolve()
 		})
-		saved = localStorage.getItem("create-design:document:v1")
+		saved = localStorage.getItem(DESIGN_STORAGE_KEY)
 		if (saved === null) throw new Error("Design document was not persisted.")
 		parsed = JSON.parse(saved)
 		expect(parsed.objects).toHaveLength(3)

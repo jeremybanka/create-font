@@ -1,14 +1,18 @@
-import { validateDesignDocument } from "@create-design/source"
+import {
+	parseDesignDocumentText,
+	type DesignSourceDiagnostic,
+} from "@create-design/source"
 
 import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 import type { DesignDocument } from "./types.ts"
 
-export const DESIGN_STORAGE_KEY = "create-design:document:v1"
+export const DESIGN_STORAGE_KEY = "create-design:document:v2"
+export const LEGACY_DESIGN_STORAGE_KEY = "create-design:document:v1"
 
 export function createInitialDocument(): DesignDocument {
 	return {
 		format: "create-design.document",
-		version: 1,
+		version: 2,
 		title: "Untitled design",
 		page: { width: 612, height: 792 },
 		swatches: [
@@ -70,10 +74,57 @@ export function parseDesignDocument(
 	value: string | null,
 ): DesignDocument | null {
 	if (value === null) return null
+	const parsed = parseDesignDocumentText(value)
+	return parsed.ok ? parsed.value : null
+}
+
+export type StoredDesignDocumentResult =
+	| Readonly<{ status: "empty" }>
+	| Readonly<{
+			status: "loaded"
+			document: DesignDocument
+			migrated: boolean
+	  }>
+	| Readonly<{
+			status: "invalid"
+			errors: readonly DesignSourceDiagnostic[]
+	  }>
+
+type DesignStorage = Pick<Storage, "getItem" | "removeItem" | "setItem">
+
+/**
+ * Reads the current key before the legacy key and only writes after a
+ * successful decode. Invalid input is left byte-for-byte intact for recovery.
+ */
+export function readStoredDesignDocument(
+	storage: DesignStorage,
+): StoredDesignDocumentResult {
+	let current: string | null
 	try {
-		const parsed = validateDesignDocument(JSON.parse(value))
-		return parsed.ok ? parsed.value : null
+		current = storage.getItem(DESIGN_STORAGE_KEY)
 	} catch {
-		return null
+		return { status: "empty" }
 	}
+	if (current !== null) {
+		const decoded = parseDesignDocumentText(current)
+		return decoded.ok
+			? { status: "loaded", document: decoded.value, migrated: false }
+			: { status: "invalid", errors: decoded.errors }
+	}
+	let legacy: string | null
+	try {
+		legacy = storage.getItem(LEGACY_DESIGN_STORAGE_KEY)
+	} catch {
+		return { status: "empty" }
+	}
+	if (legacy === null) return { status: "empty" }
+	const decoded = parseDesignDocumentText(legacy)
+	if (!decoded.ok) return { status: "invalid", errors: decoded.errors }
+	try {
+		storage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(decoded.value))
+		storage.removeItem(LEGACY_DESIGN_STORAGE_KEY)
+	} catch {
+		// A decoded document can still hydrate when migration persistence is blocked.
+	}
+	return { status: "loaded", document: decoded.value, migrated: true }
 }

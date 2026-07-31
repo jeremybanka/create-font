@@ -105,7 +105,7 @@ export interface DesignGuide {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 1
+	readonly version: 2
 	readonly title: string
 	readonly page: Readonly<{
 		readonly width: number
@@ -117,6 +117,10 @@ export interface DesignDocument {
 }
 
 export type DesignSourceDiagnosticCode =
+	| "document.format"
+	| "document.future_version"
+	| "document.schema"
+	| "document.version"
 	| "directory.duplicate_id"
 	| "directory.duplicate_path"
 	| "directory.entity_id"

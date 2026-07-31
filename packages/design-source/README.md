@@ -5,6 +5,23 @@
 repository-native directory codec that splits independently editable facts
 into validated JSON units.
 
+## Complete document versions
+
+Complete documents use a strict, version-dispatched codec. Version two is the
+current schema and stores each object's tagged geometry, affine transform, and
+fill/stroke appearance explicitly. `decodeDesignDocument()` accepts a complete
+version-one document, validates every persisted field, and deterministically
+migrates its objects to the version-two representation. The v1 decoder accepts
+both shipped object forms: canonical geometry/transform/appearance objects are
+preserved exactly, while older `{ contours, fillId }` objects become path
+geometry with an identity transform and fill appearance.
+`validateDesignDocument()` validates only the current version, while
+`parseDesignDocumentText()` additionally owns JSON decoding.
+
+Malformed, partial, and future-version inputs fail with field-located
+diagnostics. Callers must retain their last valid document when decoding fails;
+defaults are an application concern and are never constructed by the codec.
+
 ## Version-one directory
 
 The first directory version deliberately matches the current application
@@ -56,11 +73,10 @@ directory codec and are transferred atomically through
 `@create-art/source-rpc`; image decoding and placement semantics remain editor
 concerns.
 
-Version-one readers also accept the earlier `{ contours, fillId }` object shape
-and deterministically normalize it to path geometry, an identity transform,
-and a fill appearance. Writers emit only the canonical separated shape. This
-compatibility normalization does not claim the future document-version
-dispatch and diagnostics contract tracked separately by the versioning work.
+Version-one directory readers also accept the earlier `{ contours, fillId }`
+object-unit shape and deterministically normalize it to path geometry, an
+identity transform, and a fill appearance. Writers emit only the canonical
+separated shape and mark the assembled complete document as version two.
 
 Authored path contours and controls may carry stable `id` fields. Expansion
 assigns them so selection and later path edits can refer to persisted

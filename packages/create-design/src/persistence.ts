@@ -1,6 +1,7 @@
-import type {
-	DesignDocument,
-	DesignSourceDiagnostic,
+import {
+	decodeDesignDocument,
+	type DesignDocument,
+	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
 export const DESIGN_RECOVERY_STORAGE_KEY = "create-design:recovery-draft:v1"
@@ -267,14 +268,17 @@ export function readDesignRecoveryDraft(
 			value.version !== 1 ||
 			typeof value.updatedAt !== "number" ||
 			!Number.isFinite(value.updatedAt) ||
-			!(
-				value.baseRevision === null || typeof value.baseRevision === "string"
-			) ||
-			value.document?.format !== "create-design.document" ||
-			value.document.version !== 1
+			!(value.baseRevision === null || typeof value.baseRevision === "string")
 		)
 			return null
-		return value as DesignRecoveryDraft
+		const document = decodeDesignDocument(value.document)
+		if (!document.ok) return null
+		return {
+			version: 1,
+			baseRevision: value.baseRevision,
+			document: document.value,
+			updatedAt: value.updatedAt,
+		}
 	} catch {
 		return null
 	}

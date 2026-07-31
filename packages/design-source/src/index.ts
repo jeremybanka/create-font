@@ -1,6 +1,4 @@
 export {
-	CREATE_DESIGN_DOCUMENT_FORMAT,
-	CREATE_DESIGN_DOCUMENT_VERSION,
 	CREATE_DESIGN_SOURCE_FORMAT,
 	CREATE_DESIGN_SOURCE_VERSION,
 	DEFAULT_ARTBOARD_ID,
@@ -12,7 +10,6 @@ export {
 	assetIndexFileSchema,
 	assetUnitPathSchema,
 	defaultObjectUnitPath,
-	designDocumentSchema,
 	designSourcePaths,
 	documentFileSchema,
 	fontIndexFileSchema,
@@ -32,7 +29,6 @@ export {
 	sourceUnitDescriptors,
 	sourceUnitKindForPath,
 	splitDesignDocument,
-	validateDesignDocument,
 	validateSourceUnit,
 	type ArtboardFile,
 	type ArtboardIndexFile,
@@ -51,6 +47,17 @@ export {
 	type ProjectFile,
 	type SplitDesignDocumentOptions,
 } from "./directory.ts"
+export {
+	CREATE_DESIGN_DOCUMENT_FORMAT,
+	CREATE_DESIGN_DOCUMENT_VERSION,
+	LEGACY_DESIGN_DOCUMENT_VERSION,
+	decodeDesignDocument,
+	designDocumentSchema,
+	legacyDesignDocumentSchema,
+	migrateDesignDocumentV1,
+	parseDesignDocumentText,
+	validateDesignDocument,
+} from "./document.ts"
 export type {
 	CmykColor,
 	ColorDefinition,

@@ -50,7 +50,7 @@ import { swatchCss } from "./color.ts"
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
-	parseDesignDocument,
+	readStoredDesignDocument,
 } from "./document.ts"
 import {
 	clearDesignRecoveryDraft,
@@ -73,11 +73,7 @@ import {
 	releaseDesignPointer,
 	snapDesignObject,
 } from "./design-canvas.ts"
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-	type DesignHistory,
-} from "./design-history.ts"
+import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
 import { createDesignPenObject } from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import css from "./DesignApplication.module.css"
@@ -224,14 +220,27 @@ function designSnapGuides(
 	]
 }
 
-function initialHistory(initialDocument?: DesignDocument): DesignHistory {
-	let document = initialDocument ?? createInitialDocument()
-	if (initialDocument !== undefined) return createDesignHistory(initialDocument)
+function initialDesignLoad(initialDocument?: DesignDocument): Readonly<{
+	document: DesignDocument
+	preserveInvalidStorage: boolean
+}> {
+	if (initialDocument !== undefined)
+		return { document: initialDocument, preserveInvalidStorage: false }
 	const storage = browserLocalStorage()
-	if (storage !== null)
-		document =
-			parseDesignDocument(storage.getItem(DESIGN_STORAGE_KEY)) ?? document
-	return createDesignHistory(document)
+	if (storage !== null) {
+		const stored = readStoredDesignDocument(storage)
+		if (stored.status === "loaded")
+			return { document: stored.document, preserveInvalidStorage: false }
+		if (stored.status === "invalid")
+			return {
+				document: createInitialDocument(),
+				preserveInvalidStorage: true,
+			}
+	}
+	return {
+		document: createInitialDocument(),
+		preserveInvalidStorage: false,
+	}
 }
 
 function browserLocalStorage(): Storage | null {
@@ -280,10 +289,11 @@ export type DesignApplicationProps = Readonly<{
 
 export function DesignApplication(props: DesignApplicationProps) {
 	const { initialDocument, sourceSession } = props
+	const [initialLoad] = useState(() => initialDesignLoad(initialDocument))
 	const [history, dispatch] = useReducer(
 		reduceDesignHistory,
-		initialDocument,
-		initialHistory,
+		initialLoad.document,
+		createDesignHistory,
 	)
 	const document = history.present
 	const [persistence, dispatchPersistence] = useReducer(
@@ -333,6 +343,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const documentRef = useRef(document)
 	const persistenceRef = useRef(persistence)
 	const serializedDocumentRef = useRef(JSON.stringify(document))
+	const preserveInvalidStorageRef = useRef(initialLoad.preserveInvalidStorage)
 	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
@@ -709,13 +720,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 	useEffect(() => {
 		const serialized = JSON.stringify(document)
 		if (serialized === serializedDocumentRef.current) {
-			if (sourceSession === undefined)
+			if (sourceSession === undefined && !preserveInvalidStorageRef.current)
 				browserLocalStorage()?.setItem(DESIGN_STORAGE_KEY, serialized)
 			window.document.title = `${history.present.title} — create-design`
 			return
 		}
 		serializedDocumentRef.current = serialized
 		if (sourceSession === undefined) {
+			preserveInvalidStorageRef.current = false
 			browserLocalStorage()?.setItem(
 				DESIGN_STORAGE_KEY,
 				JSON.stringify(document),
