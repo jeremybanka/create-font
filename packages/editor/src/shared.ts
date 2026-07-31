@@ -113,3 +113,17 @@ export {
 	type TilingWorkspaceProps,
 	type TilingWorkspaceStatus,
 } from "./TilingWorkspace.tsx"
+export { SourceReviewSurface } from "./SourceReviewSurface.tsx"
+export {
+	selectedSourceReviewPaths,
+	sourceReviewChangeKey,
+	sourceReviewCounts,
+	type SourceReviewAdapter,
+	type SourceReviewChange,
+	type SourceReviewChangeState,
+	type SourceReviewCommitRequest,
+	type SourceReviewComparison,
+	type SourceReviewController,
+	type SourceReviewCounts,
+	type SourceReviewEndpoint,
+} from "./source-review.ts"
