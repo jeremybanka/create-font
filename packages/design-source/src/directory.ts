@@ -6,14 +6,17 @@ import { z } from "zod/v4"
 
 import {
 	appearanceSchema,
-	contourSchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	designObjectIdSchema,
-	geometrySchema,
+	finiteNumberSchema,
 	guideSchema,
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
+	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	previousContourSchema,
+	previousGeometrySchema,
+	stabilizeDesignObjectIdentities,
 	swatchIdSchema,
 	swatchSchema,
 	transformSchema,
@@ -48,6 +51,7 @@ export const projectFileSchema = z
 		documentFormat: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		documentVersion: z.union([
 			z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
+			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
 	})
@@ -67,7 +71,18 @@ export const paletteFileSchema = z
 		swatches: z.array(swatchSchema),
 	})
 	.strict()
-export const artboardFileSchema = z
+const currentArtboardFileSchema = z
+	.object({
+		format: z.literal("create-design.artboard"),
+		version: z.literal(1),
+		id: artboardIdSchema,
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		width: positiveNumberSchema,
+		height: positiveNumberSchema,
+	})
+	.strict()
+const legacyArtboardFileSchema = z
 	.object({
 		format: z.literal("create-design.artboard"),
 		version: z.literal(1),
@@ -76,6 +91,11 @@ export const artboardFileSchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
+	.transform((file) => ({ ...file, x: 0, y: 0 }))
+export const artboardFileSchema = z.union([
+	currentArtboardFileSchema,
+	legacyArtboardFileSchema,
+])
 const sceneChildSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("object"), id: designObjectIdSchema }).strict(),
 	z.object({ kind: z.literal("group"), id: groupIdSchema }).strict(),
@@ -103,7 +123,7 @@ const canonicalObjectFileSchema = z
 		version: z.literal(1),
 		id: designObjectIdSchema,
 		name: z.string(),
-		geometry: geometrySchema,
+		geometry: previousGeometrySchema,
 		transform: transformSchema,
 		appearance: appearanceSchema,
 		hidden: z.boolean().optional(),
@@ -116,7 +136,7 @@ const legacyObjectFileSchema = z
 		version: z.literal(1),
 		id: designObjectIdSchema,
 		name: z.string(),
-		contours: z.array(contourSchema),
+		contours: z.array(previousContourSchema),
 		fillId: swatchIdSchema,
 		hidden: z.boolean().optional(),
 		locked: z.boolean().optional(),
@@ -133,10 +153,21 @@ const legacyObjectFileSchema = z
 		...(file.hidden === undefined ? {} : { hidden: file.hidden }),
 		...(file.locked === undefined ? {} : { locked: file.locked }),
 	}))
-export const objectFileSchema = z.union([
-	canonicalObjectFileSchema,
-	legacyObjectFileSchema,
-])
+export const objectFileSchema = z
+	.union([canonicalObjectFileSchema, legacyObjectFileSchema])
+	.transform((file) => ({
+		format: file.format,
+		version: file.version,
+		...stabilizeDesignObjectIdentities({
+			id: file.id,
+			name: file.name,
+			geometry: file.geometry,
+			transform: file.transform,
+			appearance: file.appearance,
+			...(file.hidden === undefined ? {} : { hidden: file.hidden }),
+			...(file.locked === undefined ? {} : { locked: file.locked }),
+		}),
+	}))
 
 const indexEntry = <Id extends z.ZodType>(id: Id, path: z.ZodType<string>) =>
 	z.object({ id, path }).strict()
@@ -919,7 +950,12 @@ export function assembleDesignDocument(
 		format: CREATE_DESIGN_DOCUMENT_FORMAT,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
 		title: metadata.title,
-		page: { width: artboard.width, height: artboard.height },
+		page: {
+			x: artboard.x,
+			y: artboard.y,
+			width: artboard.width,
+			height: artboard.height,
+		},
 		swatches: palette.swatches,
 		objects: orderedObjects,
 		guides: metadata.guides,

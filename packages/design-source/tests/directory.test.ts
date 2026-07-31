@@ -19,9 +19,9 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 2,
+	version: 3,
 	title: "Directory proof",
-	page: { width: 612, height: 792 },
+	page: { x: -24, y: 36, width: 612, height: 792 },
 	swatches: [
 		{
 			id: "swatch:coral",
@@ -139,6 +139,7 @@ describe("create-design directory source", () => {
 		const result = decodeDesignDocument({
 			...document,
 			version: 1,
+			page: { width: document.page.width, height: document.page.height },
 			objects: [
 				{
 					id: "object:legacy",
@@ -162,7 +163,19 @@ describe("create-design directory source", () => {
 			value: {
 				objects: [
 					{
-						geometry: { kind: "path" },
+						geometry: {
+							kind: "path",
+							contours: [
+								{
+									id: "object:legacy:contour:0",
+									points: [
+										{ id: "object:legacy:contour:0:point:0" },
+										{ id: "object:legacy:contour:0:point:1" },
+										{ id: "object:legacy:contour:0:point:2" },
+									],
+								},
+							],
+						},
 						transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 						appearance: { fill: { swatchId: "swatch:coral" } },
 					},
@@ -218,6 +231,29 @@ describe("create-design directory source", () => {
 		expect(reorderedFiles[designSourcePaths.objectIndex]).toEqual(
 			originalFiles[designSourcePaths.objectIndex],
 		)
+	})
+
+	it("owns the global page rectangle independently from object units", () => {
+		const original = fixture()
+		const originalFiles = split(original)
+		expect(originalFiles["artboards/page.json"]).toMatchObject({
+			x: original.page.x,
+			y: original.page.y,
+			width: original.page.width,
+			height: original.page.height,
+		})
+		const movedFiles = split({
+			...original,
+			page: { ...original.page, x: 240, y: -180, height: 1_000 },
+		})
+		expect(changedPaths(originalFiles, movedFiles)).toEqual([
+			"artboards/page.json",
+		])
+		for (const object of original.objects) {
+			expect(movedFiles[defaultObjectUnitPath(object.id)]).toEqual(
+				originalFiles[defaultObjectUnitPath(object.id)],
+			)
+		}
 	})
 
 	it("supports explicit stable object paths without deriving identity from them", () => {

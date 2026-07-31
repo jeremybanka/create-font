@@ -17,6 +17,7 @@ import {
 } from "mondrian.pdf"
 
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
+import { documentToPdfTransform } from "./coordinates.ts"
 import { projectDesignObjectContours } from "./geometry.ts"
 import type {
 	DesignContour,
@@ -119,6 +120,8 @@ export interface PdfObjectProjection {
 }
 
 export interface PdfPageProjection {
+	readonly x: number
+	readonly y: number
 	readonly height: number
 	readonly objectProjections: readonly PdfObjectProjection[]
 	readonly prefix: PdfStream
@@ -235,18 +238,25 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 		const cached = pageCache
 		if (
 			cached !== null &&
+			cached.x === document.page.x &&
+			cached.y === document.page.y &&
 			cached.width === document.page.width &&
 			cached.height === document.page.height &&
 			sameOrderedProjections(cached.objectProjections, objectProjections)
 		) {
 			return cached
 		}
+		const transform = documentToPdfTransform(document.page)
 		pageCache = Object.freeze({
+			x: document.page.x,
+			y: document.page.y,
 			height: document.page.height,
 			objectProjections: Object.freeze(objectProjections),
 			prefix: stream(
 				{},
-				ascii(`q\n1 0 0 -1 0 ${number(document.page.height)} cm`),
+				ascii(
+					`q\n${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
+				),
 			),
 			suffix: stream({}, ascii("Q")),
 			width: document.page.width,
@@ -335,7 +345,11 @@ export function pdfContentStream(document: DesignDocument): string {
 	const swatches = new Map(
 		document.swatches.map((swatch) => [swatch.id, swatch]),
 	)
-	const commands = [`q`, `1 0 0 -1 0 ${number(document.page.height)} cm`]
+	const transform = documentToPdfTransform(document.page)
+	const commands = [
+		`q`,
+		`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
+	]
 	for (const object of document.objects) {
 		if (object.hidden) continue
 		const fill =

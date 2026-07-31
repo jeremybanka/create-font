@@ -9,6 +9,7 @@ import {
 } from "../src/clipboard.ts"
 import { importDesignObjects } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { projectDesignObjectContours } from "../src/geometry.ts"
 import { expandDesignShape } from "../src/shape-expansion.ts"
 
 describe("vector clipboard interoperability", () => {
@@ -24,7 +25,8 @@ describe("vector clipboard interoperability", () => {
 		).toBe(1)
 		expect(JSON.parse(entries.get(DESIGN_VECTOR_MIME) ?? "{}")).toMatchObject({
 			format: "create-design.vector",
-			version: 1,
+			version: 2,
+			coordinateSpace: "global-document-y-down",
 		})
 		expect(JSON.parse(entries.get(FONT_OUTLINE_MIME) ?? "{}")).toMatchObject({
 			format: "create-font.outline",
@@ -38,10 +40,43 @@ describe("vector clipboard interoperability", () => {
 		const document = createInitialDocument()
 		const object = document.objects[0]
 		if (object === undefined) throw new Error("Missing fixture object.")
-		const payload = designObjectsToFontOutline([object], document.page.height)
+		const payload = designObjectsToFontOutline([object])
 		expect(payload.layers[0]?.points[0]).toMatchObject({
 			x: 82,
-			y: 690,
+			y: -102,
+		})
+	})
+
+	it("round-trips create-design outline placement independently of page height", () => {
+		const sourceDocument = createInitialDocument()
+		const source = sourceDocument.objects[0]
+		if (source === undefined) throw new Error("Missing fixture object.")
+		const entries = new Map<string, string>()
+		writeDesignClipboard(
+			{ setData: (format, value) => entries.set(format, value) },
+			sourceDocument,
+			[source.id],
+		)
+		const targetDocument = {
+			...sourceDocument,
+			page: { x: 500, y: -900, width: 300, height: 2_000 },
+		}
+		let sequence = 0
+		const addition = readDesignClipboard(
+			{
+				getData: (format) =>
+					format === FONT_OUTLINE_MIME ? entries.get(format) ?? "" : "",
+			},
+			targetDocument,
+			() => `round-trip:${sequence++}`,
+		)
+		const pasted = addition?.objects[0]
+		if (pasted === undefined) throw new Error("Missing round-tripped object.")
+		const sourcePoint = projectDesignObjectContours(source)[0]?.points[0]
+		const pastedPoint = projectDesignObjectContours(pasted)[0]?.points[0]
+		expect(pastedPoint).toMatchObject({
+			x: (sourcePoint?.x ?? 0) + 12,
+			y: (sourcePoint?.y ?? 0) + 12,
 		})
 	})
 

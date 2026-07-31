@@ -24,8 +24,8 @@ export interface DesignSwatch {
 }
 
 export interface DesignPoint {
-	/** Stable identity for authored path controls when one has been assigned. */
-	readonly id?: string
+	/** Stable identity for this authored path control. */
+	readonly id: string
 	readonly x: number
 	readonly y: number
 	readonly incoming?: Readonly<{ readonly x: number; readonly y: number }>
@@ -33,8 +33,8 @@ export interface DesignPoint {
 }
 
 export interface DesignContour {
-	/** Stable identity for authored path contours when one has been assigned. */
-	readonly id?: string
+	/** Stable identity for this authored path contour. */
+	readonly id: string
 	readonly closed: boolean
 	readonly points: readonly DesignPoint[]
 }
@@ -105,9 +105,16 @@ export interface DesignGuide {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 2
+	readonly version: 3
 	readonly title: string
+	/**
+	 * The current page rectangle in the global document coordinate plane.
+	 * Objects are not children of this rectangle and retain their coordinates
+	 * when it moves or resizes.
+	 */
 	readonly page: Readonly<{
+		readonly x: number
+		readonly y: number
 		readonly width: number
 		readonly height: number
 	}>

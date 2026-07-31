@@ -90,23 +90,23 @@ export function designBaseScale(
 
 export function initialDesignCanvasView(
 	viewport: CanvasViewport,
-	page: Readonly<{ width: number; height: number }>,
+	page: Readonly<{ x: number; y: number; width: number; height: number }>,
 	baseScale = designBaseScale(viewport, page),
 ): CanvasView {
 	return {
-		x: (viewport.width - page.width * baseScale) / 2,
-		y: (viewport.height - page.height * baseScale) / 2,
+		x: (viewport.width - page.width * baseScale) / 2 - page.x * baseScale,
+		y: (viewport.height - page.height * baseScale) / 2 - page.y * baseScale,
 		zoom: 1,
 	}
 }
 
 export function clampToPage(
 	point: CanvasPoint,
-	page: Readonly<{ width: number; height: number }>,
+	page: Readonly<{ x: number; y: number; width: number; height: number }>,
 ): CanvasPoint {
 	return {
-		x: Math.max(0, Math.min(page.width, point.x)),
-		y: Math.max(0, Math.min(page.height, point.y)),
+		x: Math.max(page.x, Math.min(page.x + page.width, point.x)),
+		y: Math.max(page.y, Math.min(page.y + page.height, point.y)),
 	}
 }
 
@@ -289,14 +289,20 @@ export function snapDesignObject(
 	if (bounds === null || !(worldScale > 0)) return { object, x: null, y: null }
 	const threshold = thresholdPixels / worldScale
 	const xTargets = [
-		{ id: "page:left", value: 0 },
-		{ id: "page:center-x", value: document.page.width / 2 },
-		{ id: "page:right", value: document.page.width },
+		{ id: "page:left", value: document.page.x },
+		{
+			id: "page:center-x",
+			value: document.page.x + document.page.width / 2,
+		},
+		{ id: "page:right", value: document.page.x + document.page.width },
 	]
 	const yTargets = [
-		{ id: "page:top", value: 0 },
-		{ id: "page:center-y", value: document.page.height / 2 },
-		{ id: "page:bottom", value: document.page.height },
+		{ id: "page:top", value: document.page.y },
+		{
+			id: "page:center-y",
+			value: document.page.y + document.page.height / 2,
+		},
+		{ id: "page:bottom", value: document.page.y + document.page.height },
 	]
 	const xSnap = rankAxisCandidate(
 		0,

@@ -307,7 +307,8 @@ describe("create-design recovery storage", () => {
 		}
 		expect(readDesignRecoveryDraft(storage)).toMatchObject({
 			document: {
-				version: 2,
+				version: 3,
+				page: { x: 0, y: 0, width: 100, height: 100 },
 				objects: [
 					{
 						geometry: { kind: "path" },

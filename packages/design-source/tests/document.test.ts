@@ -5,7 +5,7 @@ import {
 	decodeDesignDocument,
 	parseDesignDocumentText,
 	validateDesignDocument,
-} from "../src/index.ts"
+} from "../src/document.ts"
 
 const legacyFixture = () => ({
 	format: "create-design.document" as const,
@@ -143,7 +143,7 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
-	it("migrates every shipped v1 field into the explicit v2 model", () => {
+	it("migrates every shipped v1 field into the explicit v3 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)
 		expect(decoded).toEqual({
@@ -152,7 +152,7 @@ describe("complete design document codec", () => {
 				format: legacy.format,
 				version: CREATE_DESIGN_DOCUMENT_VERSION,
 				title: legacy.title,
-				page: legacy.page,
+				page: { x: 0, y: 0, ...legacy.page },
 				swatches: legacy.swatches,
 				objects: [
 					{
@@ -177,7 +177,70 @@ describe("complete design document codec", () => {
 		const canonical = canonicalV1Fixture()
 		expect(decodeDesignDocument(canonical)).toEqual({
 			ok: true,
-			value: { ...canonical, version: CREATE_DESIGN_DOCUMENT_VERSION },
+			value: {
+				...canonical,
+				version: CREATE_DESIGN_DOCUMENT_VERSION,
+				page: { x: 0, y: 0, ...canonical.page },
+			},
+		})
+	})
+
+	it("deterministically assigns missing v2 path identities without rewriting authored IDs or geometry", () => {
+		const canonical = canonicalV1Fixture()
+		const path = canonical.objects[1]
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected a path fixture.")
+		const previous = {
+			...canonical,
+			version: 2,
+			objects: [
+				{
+					...path,
+					geometry: {
+						kind: "path" as const,
+						contours: [
+							{
+								closed: false,
+								points: [
+									{ id: "point:authored", x: 1, y: 2 },
+									{ x: 50, y: 60, incoming: { x: -7, y: 8 } },
+								],
+							},
+						],
+					},
+				},
+			],
+		}
+		const first = decodeDesignDocument(previous)
+		const second = decodeDesignDocument(structuredClone(previous))
+		expect(second).toEqual(first)
+		expect(first).toMatchObject({
+			ok: true,
+			value: {
+				version: 3,
+				page: { x: 0, y: 0, width: 841.89, height: 595.28 },
+				objects: [
+					{
+						id: path.id,
+						geometry: {
+							kind: "path",
+							contours: [
+								{
+									id: `${path.id}:contour:0`,
+									points: [
+										{ id: "point:authored", x: 1, y: 2 },
+										{
+											id: `${path.id}:contour:0:point:1`,
+											x: 50,
+											y: 60,
+										},
+									],
+								},
+							],
+						},
+					},
+				],
+			},
 		})
 	})
 
@@ -422,6 +485,7 @@ describe("complete design document codec", () => {
 		const duplicate = {
 			...current,
 			version: CREATE_DESIGN_DOCUMENT_VERSION,
+			page: { x: 0, y: 0, ...current.page },
 			objects: [
 				path,
 				{
@@ -454,6 +518,47 @@ describe("complete design document codec", () => {
 				expect.objectContaining({
 					code: "directory.duplicate_id",
 					path: "$.objects[1].geometry.contours[1].points[1].id",
+				}),
+			]),
+		})
+	})
+
+	it("requires contour and point identities in current v3 documents", () => {
+		const decoded = decodeDesignDocument(canonicalV1Fixture())
+		if (!decoded.ok) throw new Error("Expected fixture migration to succeed.")
+		const path = decoded.value.objects[1]
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected a current path fixture.")
+		const withoutContourId = {
+			...decoded.value,
+			objects: [
+				decoded.value.objects[0],
+				{
+					...path,
+					geometry: {
+						...path.geometry,
+						contours: path.geometry.contours.map(
+							({ id: _id, ...contour }) => ({
+								...contour,
+								points: contour.points.map(
+									({ id: _pointId, ...point }) => point,
+								),
+							}),
+						),
+					},
+				},
+			],
+		}
+		expect(validateDesignDocument(withoutContourId)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "document.schema",
+					path: "$.objects[1].geometry.contours[0].id",
+				}),
+				expect.objectContaining({
+					code: "document.schema",
+					path: "$.objects[1].geometry.contours[0].points[0].id",
 				}),
 			]),
 		})

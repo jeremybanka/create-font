@@ -5,6 +5,7 @@ import {
 	DESIGN_STORAGE_KEY,
 	LEGACY_DESIGN_STORAGE_KEY,
 	parseDesignDocument,
+	PREVIOUS_DESIGN_STORAGE_KEY,
 	readStoredDesignDocument,
 } from "../src/document.ts"
 
@@ -71,7 +72,7 @@ describe("design document storage", () => {
 		)
 	})
 
-	it("hydrates a v1 key, migrates once, and saves canonical v2", () => {
+	it("hydrates a v1 key, migrates once, and saves canonical v3", () => {
 		const storage = memoryStorage({
 			[LEGACY_DESIGN_STORAGE_KEY]: JSON.stringify(legacyDocument()),
 		})
@@ -80,7 +81,8 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 2,
+				version: 3,
+				page: { x: 0, y: 0, width: 120, height: 80 },
 				title: "Stored legacy design",
 				objects: [
 					{
@@ -100,6 +102,53 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: false,
 		})
+	})
+
+	it("migrates the previous v2 key with deterministic path identities", () => {
+		const previous = {
+			...legacyDocument(),
+			version: 2,
+			objects: [
+				{
+					id: "object:legacy",
+					name: "Legacy object",
+					geometry: {
+						kind: "path",
+						contours: [
+							{ closed: false, points: [{ x: 1, y: 2 }] },
+						],
+					},
+					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+					appearance: { fill: { swatchId: "swatch:black" } },
+				},
+			],
+		}
+		const storage = memoryStorage({
+			[PREVIOUS_DESIGN_STORAGE_KEY]: JSON.stringify(previous),
+		})
+		const loaded = readStoredDesignDocument(storage)
+		expect(loaded).toMatchObject({
+			status: "loaded",
+			migrated: true,
+			document: {
+				version: 3,
+				objects: [
+					{
+						geometry: {
+							contours: [
+								{
+									id: "object:legacy:contour:0",
+									points: [
+										{ id: "object:legacy:contour:0:point:0" },
+									],
+								},
+							],
+						},
+					},
+				],
+			},
+		})
+		expect(storage.values.has(PREVIOUS_DESIGN_STORAGE_KEY)).toBe(false)
 	})
 
 	it("does not overwrite or delete malformed and future-version input", () => {

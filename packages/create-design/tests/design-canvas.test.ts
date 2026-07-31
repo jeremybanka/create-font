@@ -35,7 +35,7 @@ const rectangle = (
 describe("design canvas adapter", () => {
 	it("fits and centers a page in a viewport", () => {
 		const viewport = { width: 800, height: 600 }
-		const page = { width: 612, height: 792 }
+		const page = { x: 0, y: 0, width: 612, height: 792 }
 		const scale = designBaseScale(viewport, page)
 		const view = initialDesignCanvasView(viewport, page, scale)
 		expect(scale).toBeCloseTo(504 / 792)
@@ -45,8 +45,28 @@ describe("design canvas adapter", () => {
 
 	it("converts out-of-page gestures to page-edge coordinates", () => {
 		expect(
-			clampToPage({ x: -20, y: 900 }, { width: 612, height: 792 }),
+			clampToPage(
+				{ x: -20, y: 900 },
+				{ x: 0, y: 0, width: 612, height: 792 },
+			),
 		).toEqual({ x: 0, y: 792 })
+	})
+
+	it("centers and clamps an offset page without changing the document plane", () => {
+		const viewport = { width: 800, height: 600 }
+		const page = { x: -120, y: 240, width: 400, height: 300 }
+		const scale = designBaseScale(viewport, page)
+		const view = initialDesignCanvasView(viewport, page, scale)
+		expect(view.x + page.x * scale).toBeCloseTo(
+			(viewport.width - page.width * scale) / 2,
+		)
+		expect(view.y + page.y * scale).toBeCloseTo(
+			(viewport.height - page.height * scale) / 2,
+		)
+		expect(clampToPage({ x: -500, y: 900 }, page)).toEqual({
+			x: page.x,
+			y: page.y + page.height,
+		})
 	})
 
 	it("uses deterministic topmost object hit precedence", () => {
@@ -95,5 +115,17 @@ describe("design canvas adapter", () => {
 		expect(atOne.x).toBe(document.page.width / 2)
 		const zoomed = snapDesignObject(nearlyCentered, document, 4)
 		expect(zoomed.x).toBe(document.page.width / 2)
+	})
+
+	it("snaps against an offset page in global coordinates", () => {
+		const document = {
+			...createInitialDocument(),
+			page: { x: -200, y: 300, width: 600, height: 400 },
+		}
+		const nearlyCentered = rectangle("moving", 49, 449, 151, 551)
+		const snapped = snapDesignObject(nearlyCentered, document, 1)
+		expect(snapped.x).toBe(100)
+		expect(snapped.y).toBe(500)
+		expect(snapped.object.geometry).toEqual(nearlyCentered.geometry)
 	})
 })

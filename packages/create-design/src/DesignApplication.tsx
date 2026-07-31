@@ -17,6 +17,7 @@ import {
 	VectorSnapGuides,
 	tileRegistryCommands,
 	type PaletteCommand,
+	type CanvasPoint,
 	type VectorGestureDown,
 	type VectorGestureDownInput,
 	type VectorGesturePreview,
@@ -55,6 +56,7 @@ import {
 } from "./appearance.ts"
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
+import { canvasToDocumentPoint } from "./coordinates.ts"
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
@@ -82,7 +84,10 @@ import {
 	snapDesignObject,
 } from "./design-canvas.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
-import { createDesignPenObject } from "./design-pen.ts"
+import {
+	createDesignPenObject,
+	type DesignPenPoint,
+} from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import css from "./DesignApplication.module.css"
 import {
@@ -120,7 +125,6 @@ import type {
 	DesignDocument,
 	DesignGeometry,
 	DesignObject,
-	DesignPoint,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
@@ -141,7 +145,7 @@ type CanvasGesture =
 	| {
 			readonly kind: "pan"
 			readonly pointerId: number
-			readonly start: DesignPoint
+			readonly start: CanvasPoint
 			readonly original: Readonly<{ x: number; y: number; zoom: number }>
 	  }
 	| {
@@ -205,7 +209,7 @@ function resolveDesignGestureObject(
 
 function designSnapGuides(
 	snap: Readonly<{ x: number | null; y: number | null }>,
-	page: Readonly<{ width: number; height: number }>,
+	page: Readonly<{ x: number; y: number; width: number; height: number }>,
 ): readonly VectorSnapGuide[] {
 	return [
 		...(snap.x === null
@@ -214,7 +218,12 @@ function designSnapGuides(
 					{
 						id: `design-snap-x:${snap.x}`,
 						axis: "x" as const,
-						points: [snap.x, 0, snap.x, page.height] as const,
+						points: [
+							snap.x,
+							page.y,
+							snap.x,
+							page.y + page.height,
+						] as const,
 					},
 				]),
 		...(snap.y === null
@@ -223,7 +232,12 @@ function designSnapGuides(
 					{
 						id: `design-snap-y:${snap.y}`,
 						axis: "y" as const,
-						points: [0, snap.y, page.width, snap.y] as const,
+						points: [
+							page.x,
+							snap.y,
+							page.x + page.width,
+							snap.y,
+						] as const,
 					},
 				]),
 	]
@@ -344,7 +358,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [previewObject, setPreviewObject] = useState<DesignObject | null>(null)
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
-	const [penPoints, setPenPoints] = useState<readonly DesignPoint[]>([])
+	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
 	const [canvasViewport, setCanvasViewport] = useState({
 		width: 0,
 		height: 0,
@@ -355,7 +369,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	>([])
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
-	const penPointsRef = useRef<readonly DesignPoint[]>([])
+	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
 	const previewObjectRef = useRef<DesignObject | null>(null)
 	const documentRef = useRef(document)
 	const persistenceRef = useRef(persistence)
@@ -430,13 +444,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 
 	const pagePoint = useCallback(
-		(event: KonvaEventObject<PointerEvent | MouseEvent>): DesignPoint => {
+		(event: KonvaEventObject<PointerEvent | MouseEvent>): CanvasPoint => {
 			const pointer = event.target.getStage()?.getPointerPosition() ?? {
 				x: 0,
 				y: 0,
 			}
 			return clampToPage(
-				screenToDocument(pointer, canvasView, viewOptions),
+				canvasToDocumentPoint(
+					screenToDocument(pointer, canvasView, viewOptions),
+				),
 				document.page,
 			)
 		},
@@ -1331,6 +1347,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				...penPointsRef.current,
 				{
 					...intent.point,
+					id: `point:${nextId()}`,
 					...(intent.handles === null ? {} : intent.handles),
 				},
 			]
@@ -1665,13 +1682,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 									y={canvasView.y}
 									scaleX={worldScale}
 									scaleY={worldScale}
-									clipX={-30 / worldScale}
-									clipY={-30 / worldScale}
+									clipX={document.page.x - 30 / worldScale}
+									clipY={document.page.y - 30 / worldScale}
 									clipWidth={document.page.width + 60 / worldScale}
 									clipHeight={document.page.height + 60 / worldScale}
 								>
 									<Rect
 										name="design-paper"
+										x={document.page.x}
+										y={document.page.y}
 										width={document.page.width}
 										height={document.page.height}
 										fill="#fff"

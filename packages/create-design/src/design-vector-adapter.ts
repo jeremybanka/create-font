@@ -11,6 +11,12 @@ import {
 
 import { swatchCss } from "./color.ts"
 import {
+	documentToInterchangePoint,
+	documentToInterchangeVector,
+	interchangeToDocumentPoint,
+	interchangeToDocumentVector,
+} from "./coordinates.ts"
+import {
 	IDENTITY_DESIGN_TRANSFORM,
 	projectDesignObjectContours,
 } from "./geometry.ts"
@@ -60,13 +66,11 @@ export function projectDesignVectorObject(
 			),
 		),
 		contours: projectDesignObjectContours(object).map(
-			(contour, contourIndex) => ({
-				id: contour.id ?? `${object.id}:contour:${contourIndex}`,
+			(contour) => ({
+				id: contour.id,
 				closed: contour.closed,
-				nodes: contour.points.map((point, pointIndex) => ({
-					id:
-						point.id ??
-						`${object.id}:contour:${contourIndex}:point:${pointIndex}`,
+				nodes: contour.points.map((point) => ({
+					id: point.id,
 					mode:
 						point.incoming === undefined && point.outgoing === undefined
 							? "hard"
@@ -109,21 +113,19 @@ function projectDesignClipboardObject(
 			...contour,
 			nodes: contour.nodes.map((node) => ({
 				...node,
-				y: document.page.height - node.y,
+				...documentToInterchangePoint(node),
 				...(node.incoming === undefined
 					? {}
 					: {
 							incoming: {
-								x: node.incoming.x,
-								y: -node.incoming.y,
+							...documentToInterchangeVector(node.incoming),
 							},
 						}),
 				...(node.outgoing === undefined
 					? {}
 					: {
 							outgoing: {
-								x: node.outgoing.x,
-								y: -node.outgoing.y,
+							...documentToInterchangeVector(node.outgoing),
 							},
 						}),
 			})),
@@ -439,28 +441,29 @@ export function importDesignVectorClipboard(
 			contours: source.contours.map((contour, contourIndex) => ({
 				...contour,
 				id: `${objectId}:contour:${contourIndex}`,
-				nodes: contour.nodes.map((node, nodeIndex) => ({
-					...node,
-					id: `${objectId}:contour:${contourIndex}:point:${nodeIndex}`,
-					x: node.x + 12,
-					y: nextDocument.page.height - node.y + 12,
-					...(node.incoming === undefined
-						? {}
-						: {
-								incoming: {
-									x: node.incoming.x,
-									y: -node.incoming.y,
-								},
-							}),
-					...(node.outgoing === undefined
-						? {}
-						: {
-								outgoing: {
-									x: node.outgoing.x,
-									y: -node.outgoing.y,
-								},
-							}),
-				})),
+				nodes: contour.nodes.map((node, nodeIndex) => {
+					const position = interchangeToDocumentPoint(node)
+					return {
+						...node,
+						id: `${objectId}:contour:${contourIndex}:point:${nodeIndex}`,
+						x: position.x + 12,
+						y: position.y + 12,
+						...(node.incoming === undefined
+							? {}
+							: {
+									incoming: {
+										...interchangeToDocumentVector(node.incoming),
+									},
+								}),
+						...(node.outgoing === undefined
+							? {}
+							: {
+									outgoing: {
+										...interchangeToDocumentVector(node.outgoing),
+									},
+								}),
+					}
+				}),
 			})),
 		}
 		const result = designVectorAdapter.apply(nextDocument, nextSelection, {

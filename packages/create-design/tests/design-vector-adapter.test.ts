@@ -134,6 +134,58 @@ describe("design object vector adapter", () => {
 		expect(payload.objects[0]?.style.kind).toBe("fill")
 	})
 
+	it("keeps clipboard coordinates independent of page placement and height", () => {
+		const document = createInitialDocument()
+		const original = designVectorAdapter.clipboard(document, ["object:coral"])
+		const movedPage = designVectorAdapter.clipboard(
+			{
+				...document,
+				page: { x: 900, y: -700, width: 200, height: 3_000 },
+			},
+			["object:coral"],
+		)
+		expect(movedPage).toEqual(original)
+	})
+
+	it("preserves object, contour, and point identities across unrelated edits", () => {
+		const document = createInitialDocument()
+		const source = document.objects[0]
+		const unaffected = document.objects[1]
+		if (source === undefined || unaffected === undefined)
+			throw new Error("Design fixtures are missing.")
+		const vector = projectDesignVectorObject(document, source)
+		const replacement = {
+			...vector,
+			contours: vector.contours.map((contour) => ({
+				...contour,
+				nodes: contour.nodes.map((node) => ({ ...node, x: node.x + 10 })),
+			})),
+		}
+		const result = designVectorAdapter.apply(document, [source.id], {
+			kind: "replace-object",
+			object: replacement,
+		})
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const updated = result.document.objects[0]
+		expect(updated?.id).toBe(source.id)
+		expect(result.document.objects[1]).toBe(unaffected)
+		if (updated?.geometry.kind !== "path")
+			throw new Error("Expected edited path geometry.")
+		expect(updated.geometry.contours.map(({ id }) => id)).toEqual(
+			vector.contours.map(({ id }) => id),
+		)
+		expect(
+			updated.geometry.contours.flatMap((contour) =>
+				contour.points.map(({ id }) => id),
+			),
+		).toEqual(
+			vector.contours.flatMap((contour) =>
+				contour.nodes.map(({ id }) => id),
+			),
+		)
+	})
+
 	it("round-trips neutral clipboard geometry, IDs, and authored fill atomically", () => {
 		const document = createInitialDocument()
 		const source = document.objects[0]

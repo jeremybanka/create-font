@@ -5,7 +5,6 @@ import {
 
 import type {
 	DesignAppearance,
-	DesignContour,
 	DesignObject,
 	DesignPoint,
 } from "./types.ts"
@@ -14,19 +13,23 @@ import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
 export const DESIGN_PEN_CLOSE_RADIUS_PIXELS = 10
 
+export type DesignPenPoint = Omit<DesignPoint, "id"> & {
+	readonly id?: string
+}
+
 export interface DesignPenGesture {
-	readonly anchor: DesignPoint
-	readonly downScreen: DesignPoint
+	readonly anchor: DesignPenPoint
+	readonly downScreen: DesignPenPoint
 }
 
 /** Compatibility wrapper over the shared Pen gesture reducer. */
 export function resolveDesignPenPoint(input: {
 	readonly gesture: DesignPenGesture
-	readonly current: DesignPoint
-	readonly currentScreen: DesignPoint
+	readonly current: DesignPenPoint
+	readonly currentScreen: DesignPenPoint
 	readonly shiftKey?: boolean
 	readonly thresholdPixels?: number
-}): DesignPoint {
+}): DesignPenPoint {
 	const screenDistance = Math.hypot(
 		input.currentScreen.x - input.gesture.downScreen.x,
 		input.currentScreen.y - input.gesture.downScreen.y,
@@ -100,8 +103,8 @@ export function resolveDesignPenPoint(input: {
 }
 
 export function shouldCloseDesignPen(
-	points: readonly DesignPoint[],
-	point: DesignPoint,
+	points: readonly DesignPenPoint[],
+	point: DesignPenPoint,
 	worldScale: number,
 	radiusPixels = DESIGN_PEN_CLOSE_RADIUS_PIXELS,
 ): boolean {
@@ -109,14 +112,17 @@ export function shouldCloseDesignPen(
 }
 
 export function finishDesignPenContour(
-	points: readonly DesignPoint[],
+	points: readonly DesignPenPoint[],
 	closed: boolean,
-): DesignContour | null {
+): Readonly<{
+	readonly closed: boolean
+	readonly points: readonly DesignPenPoint[]
+}> | null {
 	if (points.length < (closed ? 3 : 2)) return null
 	return { closed, points }
 }
 
-export function cancelDesignPen(): readonly DesignPoint[] {
+export function cancelDesignPen(): readonly DesignPenPoint[] {
 	return []
 }
 
@@ -124,7 +130,7 @@ export function createDesignPenObject(input: {
 	readonly id: string
 	readonly name: string
 	readonly appearance: DesignAppearance
-	readonly points: readonly DesignPoint[]
+	readonly points: readonly DesignPenPoint[]
 	readonly closed: boolean
 }): DesignObject | null {
 	const contour = finishDesignPenContour(input.points, input.closed)
@@ -133,7 +139,19 @@ export function createDesignPenObject(input: {
 		: {
 				id: input.id,
 				name: input.name,
-				geometry: { kind: "path", contours: [contour] },
+				geometry: {
+					kind: "path",
+					contours: [
+						{
+							...contour,
+							id: `${input.id}:contour:0`,
+							points: contour.points.map((point, index) => ({
+								...point,
+								id: point.id ?? `${input.id}:contour:0:point:${index}`,
+							})),
+						},
+					],
+				},
 				transform: IDENTITY_DESIGN_TRANSFORM,
 				appearance: input.appearance,
 			}

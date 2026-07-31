@@ -51,10 +51,13 @@ export {
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
+	PREVIOUS_DESIGN_DOCUMENT_VERSION,
 	decodeDesignDocument,
 	designDocumentSchema,
 	legacyDesignDocumentSchema,
+	previousDesignDocumentSchema,
 	migrateDesignDocumentV1,
+	migrateDesignDocumentV2,
 	parseDesignDocumentText,
 	validateDesignDocument,
 } from "./document.ts"
