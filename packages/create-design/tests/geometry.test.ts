@@ -5,9 +5,13 @@ import {
 	normalizedBounds,
 	objectBounds,
 	objectSvgPath,
+	projectDesignObjectContours,
 	rectangleContour,
+	rotateObject,
 	scaleObject,
+	translateObject,
 } from "../src/geometry.ts"
+import type { DesignObject } from "../src/types.ts"
 
 describe("design geometry", () => {
 	it("uses the same editable contour model for primitive shapes", () => {
@@ -22,16 +26,24 @@ describe("design geometry", () => {
 	})
 
 	it("builds cubic SVG paths and scales control vectors", () => {
-		const object = {
+		const object: DesignObject = {
 			id: "object:test",
 			name: "Ellipse",
-			fillId: "swatch:test",
-			contours: [ellipseContour({ minX: 0, minY: 0, maxX: 100, maxY: 100 })],
+			geometry: {
+				kind: "ellipse",
+				centerX: 50,
+				centerY: 50,
+				radiusX: 50,
+				radiusY: 50,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:test" } },
 		}
 		expect(objectSvgPath(object)).toContain("C")
 		const scaled = scaleObject(object, { x: 0, y: 0 }, 2, 0.5)
-		expect(scaled.contours[0]?.points[0]?.x).toBe(100)
-		expect(scaled.contours[0]?.points[0]?.outgoing?.x).toBeGreaterThan(50)
+		expect(scaled.geometry).toBe(object.geometry)
+		expect(scaled.transform).toMatchObject({ a: 2, d: 0.5 })
+		expect(projectDesignObjectContours(scaled)[0]?.points[0]?.x).toBe(100)
 	})
 
 	it("supports constrained, centered drawing bounds", () => {
@@ -40,27 +52,59 @@ describe("design geometry", () => {
 		).toEqual({ minX: 20, minY: 20, maxX: 80, maxY: 80 })
 	})
 
+	it("keeps authored live geometry unchanged across object transforms", () => {
+		const object: DesignObject = {
+			id: "object:live",
+			name: "Live rectangle",
+			geometry: {
+				kind: "rectangle",
+				x: 10,
+				y: 20,
+				width: 80,
+				height: 40,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {},
+		}
+		const moved = translateObject(object, 12, 8)
+		const scaled = scaleObject(moved, { x: 0, y: 0 }, 2, 3)
+		const rotated = rotateObject(scaled, { x: 0, y: 0 }, 90)
+		expect(moved.geometry).toBe(object.geometry)
+		expect(scaled.geometry).toBe(object.geometry)
+		expect(rotated.geometry).toBe(object.geometry)
+		expect(moved.transform).toMatchObject({ e: 12, f: 8 })
+		expect(scaled.transform).toMatchObject({ a: 2, d: 3, e: 24, f: 24 })
+		expect(rotated.transform.a).toBeCloseTo(0)
+		expect(rotated.transform.b).toBeCloseTo(2)
+		expect(rotated.transform.c).toBeCloseTo(-3)
+		expect(rotated.transform.d).toBeCloseTo(0)
+	})
+
 	it("includes Pen handle endpoints in transform bounds", () => {
 		expect(
 			objectBounds({
 				id: "pen",
 				name: "Pen",
-				fillId: "swatch:coral",
-				contours: [
-					{
-						closed: false,
-						points: [
-							{
-								x: 50,
-								y: 60,
-								incoming: { x: -30, y: -40 },
-								outgoing: { x: 80, y: 90 },
-							},
-							{ x: 200, y: 180 },
-						],
-					},
-				],
+				geometry: {
+					kind: "path",
+					contours: [
+						{
+							closed: false,
+							points: [
+								{
+									x: 50,
+									y: 60,
+									incoming: { x: -30, y: -40 },
+									outgoing: { x: 80, y: 90 },
+								},
+								{ x: 200, y: 180 },
+							],
+						},
+					],
+				},
+				transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+				appearance: { fill: { swatchId: "swatch:coral" } },
 			}),
-		).toEqual({ minX: 20, minY: 20, maxX: 200, maxY: 180 })
+		).toEqual({ minX: 50, minY: 60, maxX: 200, maxY: 180 })
 	})
 })

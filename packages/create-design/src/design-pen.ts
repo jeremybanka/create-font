@@ -4,6 +4,7 @@ import {
 } from "@create-font/editor/shared"
 
 import type { DesignContour, DesignObject, DesignPoint } from "./types.ts"
+import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
 export const DESIGN_PEN_CLOSE_RADIUS_PIXELS = 10
@@ -127,7 +128,8 @@ export function createDesignPenObject(input: {
 		: {
 				id: input.id,
 				name: input.name,
-				fillId: input.fillId,
-				contours: [contour],
+				geometry: { kind: "path", contours: [contour] },
+				transform: IDENTITY_DESIGN_TRANSFORM,
+				appearance: { fill: { swatchId: input.fillId } },
 			}
 }

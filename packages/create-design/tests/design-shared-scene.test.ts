@@ -540,7 +540,7 @@ describe("create-design shared vector scene", () => {
 		if (saved === null) throw new Error("Design document was not persisted.")
 		let parsed = JSON.parse(saved)
 		expect(parsed.objects).toHaveLength(3)
-		const contour = parsed.objects.at(-1).contours[0]
+		const contour = parsed.objects.at(-1).geometry.contours[0]
 		expect(contour.closed).toBe(false)
 		expect(contour.points).toHaveLength(2)
 		expect("incoming" in contour.points[0]).toBe(false)

@@ -7,6 +7,7 @@ import {
 	projectDesignVectorObject,
 } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { projectDesignObjectContours } from "../src/geometry.ts"
 
 describe("design object vector adapter", () => {
 	it("projects authored RGB/CMYK swatches without lossy neutral sentinels", () => {
@@ -75,7 +76,8 @@ describe("design object vector adapter", () => {
 		expect(styled.ok).toBe(true)
 		if (!styled.ok) return
 		expect(
-			styled.document.objects.find((object) => object.id === vector.id)?.fillId,
+			styled.document.objects.find((object) => object.id === vector.id)
+				?.appearance.fill?.swatchId,
 		).toBe("swatch:cyan")
 		const reordered = designVectorAdapter.apply(
 			styled.document,
@@ -135,7 +137,10 @@ describe("design object vector adapter", () => {
 	it("round-trips neutral clipboard geometry, IDs, and authored fill atomically", () => {
 		const document = createInitialDocument()
 		const source = document.objects[0]
-		const sourcePoint = source?.contours[0]?.points[0]
+		const sourcePoint =
+			source === undefined
+				? undefined
+				: projectDesignObjectContours(source)[0]?.points[0]
 		if (source === undefined || sourcePoint === undefined)
 			throw new Error("Design fixture object is missing.")
 		const payload = designVectorAdapter.clipboard(document, [source.id])
@@ -151,9 +156,12 @@ describe("design object vector adapter", () => {
 		if (!imported.ok) return
 		const pasted = imported.document.objects.at(-1)
 		expect(pasted?.id).not.toBe(source.id)
-		expect(pasted?.fillId).toBe(source.fillId)
-		expect(pasted?.contours[0]?.closed).toBe(source.contours[0]?.closed)
-		expect(pasted?.contours[0]?.points[0]).toMatchObject({
+		expect(pasted?.appearance.fill).toEqual(source.appearance.fill)
+		const pastedContour =
+			pasted === undefined ? undefined : projectDesignObjectContours(pasted)[0]
+		const sourceContour = projectDesignObjectContours(source)[0]
+		expect(pastedContour?.closed).toBe(sourceContour?.closed)
+		expect(pastedContour?.points[0]).toMatchObject({
 			x: sourcePoint.x + 12,
 			y: sourcePoint.y + 12,
 		})
@@ -182,7 +190,9 @@ describe("design object vector adapter", () => {
 		)
 		expect(withActiveFill.ok).toBe(true)
 		if (!withActiveFill.ok) return
-		expect(withActiveFill.document.objects.at(-1)?.fillId).toBe("swatch:coral")
+		expect(
+			withActiveFill.document.objects.at(-1)?.appearance.fill?.swatchId,
+		).toBe("swatch:coral")
 
 		const withInkFallback = importDesignVectorClipboard(
 			document,
@@ -193,7 +203,9 @@ describe("design object vector adapter", () => {
 		)
 		expect(withInkFallback.ok).toBe(true)
 		if (!withInkFallback.ok) return
-		expect(withInkFallback.document.objects.at(-1)?.fillId).toBe("swatch:ink")
+		expect(
+			withInkFallback.document.objects.at(-1)?.appearance.fill?.swatchId,
+		).toBe("swatch:ink")
 	})
 })
 
@@ -228,8 +240,12 @@ vectorDocumentAdapterContract("design", () => {
 			},
 		},
 		assertUpdated: (next: typeof document) => {
-			expect(next.objects[0]?.contours[0]?.points[0]?.x).toBe(
-				object.contours[0]!.points[0]!.x + 13,
+			expect(
+				next.objects[0] === undefined
+					? undefined
+					: projectDesignObjectContours(next.objects[0])[0]?.points[0]?.x,
+			).toBe(
+				projectDesignObjectContours(object)[0]!.points[0]!.x + 13,
 			)
 		},
 		assertDeleted: (next: typeof document) => {

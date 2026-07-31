@@ -7,18 +7,14 @@ import {
 	readVectorClipboard,
 	reduceVectorGesture,
 	reduceCanvasWheel,
-	rotateVectorObject,
-	scaleVectorObject,
 	screenToDocument,
 	shouldCloseVectorPen,
-	translateVectorObject,
 	VectorControlHandles,
 	VectorContourPath,
 	VectorPenPreview,
 	VectorSelectionBounds,
 	VectorShapePreview,
 	VectorSnapGuides,
-	vectorShapeNodes,
 	tileRegistryCommands,
 	type PaletteCommand,
 	type VectorGestureDown,
@@ -85,10 +81,15 @@ import {
 import { createDesignPenObject } from "./design-pen.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import css from "./DesignApplication.module.css"
-import { objectBounds } from "./geometry.ts"
+import {
+	IDENTITY_DESIGN_TRANSFORM,
+	objectBounds,
+	rotateObject,
+	scaleObject,
+	translateObject,
+} from "./geometry.ts"
 import {
 	applyDesignVectorIntent,
-	designObjectFromVector,
 	designVectorAdapter,
 	importDesignVectorClipboard,
 	importDesignObjects,
@@ -163,12 +164,10 @@ function resolveDesignGestureObject(
 	worldScale: number,
 ): DesignGestureObjectPreview | null {
 	if (gesture.kind === "move" && preview?.kind === "select-move") {
-		const rawObject = designObjectFromVector(
+		const rawObject = translateObject(
 			gesture.original,
-			translateVectorObject(
-				projectDesignVectorObject(document, gesture.original),
-				preview.delta,
-			),
+			preview.delta.x,
+			preview.delta.y,
 		)
 		const snapped = snapDesignObject(rawObject, document, worldScale)
 		return {
@@ -177,15 +176,27 @@ function resolveDesignGestureObject(
 		}
 	}
 	if (gesture.kind !== "transform" || preview?.kind !== "transform") return null
-	const source = projectDesignVectorObject(document, gesture.original)
 	const transformed =
 		preview.handle === "rotation"
-			? rotateVectorObject(source, preview.anchor, preview.rotationDegrees)
+			? rotateObject(
+					gesture.original,
+					preview.anchor,
+					preview.rotationDegrees,
+				)
 			: preview.handle === "move"
-				? translateVectorObject(source, preview.delta)
-				: scaleVectorObject(source, preview.anchor, preview.scale)
+				? translateObject(
+						gesture.original,
+						preview.delta.x,
+						preview.delta.y,
+					)
+				: scaleObject(
+						gesture.original,
+						preview.anchor,
+						preview.scale.x,
+						preview.scale.y,
+					)
 	return {
-		object: designObjectFromVector(gesture.original, transformed),
+		object: transformed,
 		snap: { x: null, y: null },
 	}
 }
@@ -474,9 +485,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 		object: DesignObject,
 		property: Partial<DesignObject>,
 	): void => {
-		if (property.fillId !== undefined) {
+		if (property.appearance?.fill !== undefined) {
 			const swatch = document.swatches.find(
-				(candidate) => candidate.id === property.fillId,
+				(candidate) =>
+					candidate.id === property.appearance?.fill?.swatchId,
 			)
 			if (swatch !== undefined)
 				commitVectorIntent({
@@ -484,7 +496,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 					objectId: object.id,
 					style: projectDesignVectorObject(document, {
 						...object,
-						fillId: swatch.id,
+						appearance: {
+							...object.appearance,
+							fill: { swatchId: swatch.id },
+						},
 					}).style,
 				})
 			return
@@ -529,7 +544,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setSelectedSwatchId(swatch.id)
 			setCurrentSwatchId(swatch.id)
 			if (selectedObject !== null)
-				setObjectProperty(selectedObject, { fillId: swatch.id })
+				setObjectProperty(selectedObject, {
+					appearance: {
+						...selectedObject.appearance,
+						fill: { swatchId: swatch.id },
+					},
+				})
 		},
 		selectTool,
 		selectedObject,
@@ -1141,31 +1161,31 @@ export function DesignApplication(props: DesignApplicationProps) {
 			return
 		}
 		if (transition.intent?.kind === "shape") {
+			const bounds = transition.intent.bounds
 			const object: DesignObject = {
 				id: `object:${nextId()}`,
 				name: `${transition.intent.shape === "rect" ? "Rectangle" : "Ellipse"} ${document.objects.length + 1}`,
-				fillId: currentSwatchId,
-				contours: [],
+				geometry:
+					transition.intent.shape === "rect"
+						? {
+								kind: "rectangle",
+								x: bounds.minX,
+								y: bounds.minY,
+								width: bounds.maxX - bounds.minX,
+								height: bounds.maxY - bounds.minY,
+							}
+						: {
+								kind: "ellipse",
+								centerX: (bounds.minX + bounds.maxX) / 2,
+								centerY: (bounds.minY + bounds.maxY) / 2,
+								radiusX: (bounds.maxX - bounds.minX) / 2,
+								radiusY: (bounds.maxY - bounds.minY) / 2,
+							},
+				transform: IDENTITY_DESIGN_TRANSFORM,
+				appearance: { fill: { swatchId: currentSwatchId } },
 			}
-			const vector = projectDesignVectorObject(document, {
-				...object,
-				contours: [
-					{
-						closed: true,
-						points: vectorShapeNodes(
-							transition.intent.shape,
-							transition.intent.bounds,
-						),
-					},
-				],
-			})
-			if (
-				!commitVectorIntent({
-					kind: "create-object",
-					object: vector,
-				})
-			)
-				return
+			commit({ ...document, objects: [...document.objects, object] })
+			setSelection([object.id])
 			setStatus(`Created ${object.name}.`)
 			return
 		}
@@ -1189,13 +1209,13 @@ export function DesignApplication(props: DesignApplicationProps) {
 		const committedPreview = previewObjectRef.current
 		previewObjectRef.current = null
 		if (committedPreview !== null) {
-			if (
-				commitVectorIntent({
-					kind: "replace-object",
-					object: projectDesignVectorObject(document, committedPreview),
-				})
-			)
-				setPreviewObject(null)
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					object.id === committedPreview.id ? committedPreview : object,
+				),
+			})
+			setPreviewObject(null)
 		}
 	}
 	const cancelPointer = useCallback(
@@ -1480,15 +1500,31 @@ export function DesignApplication(props: DesignApplicationProps) {
 										shadowOffsetY={9 / worldScale}
 									/>
 									{previewObjects.map((object) => {
-										const swatch = document.swatches.find(
-											(candidate) => candidate.id === object.fillId,
+										const fill = document.swatches.find(
+											(candidate) =>
+												candidate.id === object.appearance.fill?.swatchId,
 										)
-										return object.hidden || swatch === undefined ? null : (
+										const stroke = document.swatches.find(
+											(candidate) =>
+												candidate.id === object.appearance.stroke?.swatchId,
+										)
+										return object.hidden ||
+											(fill === undefined && stroke === undefined) ? null : (
 											<VectorContourPath
 												key={object.id}
 												name={`design-object ${object.id}`}
 												object={projectDesignVectorObject(document, object)}
-												fill={swatchCss(swatch)}
+												{...(fill === undefined
+													? {}
+													: { fill: swatchCss(fill) })}
+												fillEnabled={fill !== undefined}
+												{...(stroke === undefined
+													? {}
+													: {
+															stroke: swatchCss(stroke),
+															strokeWidth:
+																object.appearance.stroke?.width ?? 0,
+														})}
 												fillRule="evenodd"
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)

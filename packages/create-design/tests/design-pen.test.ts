@@ -100,7 +100,10 @@ describe("design Pen lifecycle", () => {
 			}),
 		).toMatchObject({
 			id: "object:pen",
-			contours: [{ closed: false, points }],
+			geometry: {
+				kind: "path",
+				contours: [{ closed: false, points }],
+			},
 		})
 		expect(cancelDesignPen()).toEqual([])
 	})

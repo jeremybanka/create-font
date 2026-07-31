@@ -76,7 +76,69 @@ const contourSchema = z
 		points: z.array(pointSchema),
 	})
 	.strict()
-const designObjectSchema = z
+const pathGeometrySchema = z
+	.object({
+		kind: z.literal("path"),
+		contours: z.array(contourSchema),
+	})
+	.strict()
+const rectangleGeometrySchema = z
+	.object({
+		kind: z.literal("rectangle"),
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		width: finiteNumberSchema,
+		height: finiteNumberSchema,
+	})
+	.strict()
+const ellipseGeometrySchema = z
+	.object({
+		kind: z.literal("ellipse"),
+		centerX: finiteNumberSchema,
+		centerY: finiteNumberSchema,
+		radiusX: finiteNumberSchema.nonnegative(),
+		radiusY: finiteNumberSchema.nonnegative(),
+	})
+	.strict()
+const geometrySchema = z.discriminatedUnion("kind", [
+	pathGeometrySchema,
+	rectangleGeometrySchema,
+	ellipseGeometrySchema,
+])
+const transformSchema = z
+	.object({
+		a: finiteNumberSchema,
+		b: finiteNumberSchema,
+		c: finiteNumberSchema,
+		d: finiteNumberSchema,
+		e: finiteNumberSchema,
+		f: finiteNumberSchema,
+	})
+	.strict()
+const appearanceSchema = z
+	.object({
+		fill: z.object({ swatchId: swatchIdSchema }).strict().optional(),
+		stroke: z
+			.object({
+				swatchId: swatchIdSchema,
+				width: finiteNumberSchema.nonnegative(),
+			})
+			.strict()
+			.optional(),
+	})
+	.strict()
+const canonicalDesignObjectSchema = z
+	.object({
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: geometrySchema,
+		transform: transformSchema,
+		appearance: appearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+const legacyDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
 		name: z.string(),
@@ -86,6 +148,19 @@ const designObjectSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+	.transform((object) => ({
+		id: object.id,
+		name: object.name,
+		geometry: { kind: "path" as const, contours: object.contours },
+		transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		appearance: { fill: { swatchId: object.fillId } },
+		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
+		...(object.locked === undefined ? {} : { locked: object.locked }),
+	}))
+const designObjectSchema = z.union([
+	canonicalDesignObjectSchema,
+	legacyDesignObjectSchema,
+])
 const guideSchema = z
 	.object({
 		id: guideIdSchema,
@@ -164,7 +239,20 @@ export const groupFileSchema = z
 		children: z.array(sceneChildSchema),
 	})
 	.strict()
-export const objectFileSchema = z
+const canonicalObjectFileSchema = z
+	.object({
+		format: z.literal("create-design.object"),
+		version: z.literal(1),
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: geometrySchema,
+		transform: transformSchema,
+		appearance: appearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+const legacyObjectFileSchema = z
 	.object({
 		format: z.literal("create-design.object"),
 		version: z.literal(1),
@@ -176,6 +264,21 @@ export const objectFileSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+	.transform((file) => ({
+		format: file.format,
+		version: file.version,
+		id: file.id,
+		name: file.name,
+		geometry: { kind: "path" as const, contours: file.contours },
+		transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		appearance: { fill: { swatchId: file.fillId } },
+		...(file.hidden === undefined ? {} : { hidden: file.hidden }),
+		...(file.locked === undefined ? {} : { locked: file.locked }),
+	}))
+export const objectFileSchema = z.union([
+	canonicalObjectFileSchema,
+	legacyObjectFileSchema,
+])
 
 const indexEntry = <Id extends z.ZodType>(id: Id, path: z.ZodType<string>) =>
 	z.object({ id, path }).strict()
@@ -532,14 +635,19 @@ export function validateDesignDocument(
 				),
 			)
 		seenObjects.add(object.id)
-		if (!seenSwatches.has(object.fillId))
-			errors.push(
-				diagnostic(
-					"directory.reference",
-					`$.objects[${index}].fillId`,
-					`Object ${object.id} references missing swatch ${object.fillId}.`,
-				),
-			)
+		for (const [kind, paint] of [
+			["fill", object.appearance.fill],
+			["stroke", object.appearance.stroke],
+		] as const) {
+			if (paint !== undefined && !seenSwatches.has(paint.swatchId))
+				errors.push(
+					diagnostic(
+						"directory.reference",
+						`$.objects[${index}].appearance.${kind}.swatchId`,
+						`Object ${object.id} references missing swatch ${paint.swatchId}.`,
+					),
+				)
+		}
 	}
 	const seenGuides = new Set<string>()
 	for (const [index, guide] of parsed.data.guides.entries()) {
@@ -568,20 +676,9 @@ function objectFile(object: DesignObject): ObjectFile {
 		version: 1,
 		id: object.id,
 		name: object.name,
-		contours: object.contours.map((contour) => ({
-			closed: contour.closed,
-			points: contour.points.map((point) => ({
-				x: point.x,
-				y: point.y,
-				...(point.incoming === undefined
-					? {}
-					: { incoming: { ...point.incoming } }),
-				...(point.outgoing === undefined
-					? {}
-					: { outgoing: { ...point.outgoing } }),
-			})),
-		})),
-		fillId: object.fillId,
+		geometry: object.geometry,
+		transform: object.transform,
+		appearance: object.appearance,
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
 		...(object.locked === undefined ? {} : { locked: object.locked }),
 	}
@@ -941,20 +1038,9 @@ export function assembleDesignDocument(
 		objects.set(entry.id, {
 			id: file.id,
 			name: file.name,
-			contours: file.contours.map((contour) => ({
-				closed: contour.closed,
-				points: contour.points.map((point) => ({
-					x: point.x,
-					y: point.y,
-					...(point.incoming === undefined
-						? {}
-						: { incoming: { ...point.incoming } }),
-					...(point.outgoing === undefined
-						? {}
-						: { outgoing: { ...point.outgoing } }),
-				})),
-			})),
-			fillId: file.fillId,
+			geometry: file.geometry,
+			transform: file.transform,
+			appearance: file.appearance,
 			...(file.hidden === undefined ? {} : { hidden: file.hidden }),
 			...(file.locked === undefined ? {} : { locked: file.locked }),
 		})

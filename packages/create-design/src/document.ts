@@ -1,4 +1,6 @@
-import { ellipseContour, rectangleContour } from "./geometry.ts"
+import { validateDesignDocument } from "@create-design/source"
+
+import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 import type { DesignDocument } from "./types.ts"
 
 export const DESIGN_STORAGE_KEY = "create-design:document:v1"
@@ -36,28 +38,28 @@ export function createInitialDocument(): DesignDocument {
 			{
 				id: "object:coral",
 				name: "Coral rectangle",
-				contours: [
-					rectangleContour({
-						minX: 82,
-						minY: 102,
-						maxX: 362,
-						maxY: 342,
-					}),
-				],
-				fillId: "swatch:coral",
+				geometry: {
+					kind: "rectangle",
+					x: 82,
+					y: 102,
+					width: 280,
+					height: 240,
+				},
+				transform: IDENTITY_DESIGN_TRANSFORM,
+				appearance: { fill: { swatchId: "swatch:coral" } },
 			},
 			{
 				id: "object:cyan",
 				name: "Cyan ellipse",
-				contours: [
-					ellipseContour({
-						minX: 248,
-						minY: 278,
-						maxX: 530,
-						maxY: 560,
-					}),
-				],
-				fillId: "swatch:cyan",
+				geometry: {
+					kind: "ellipse",
+					centerX: 389,
+					centerY: 419,
+					radiusX: 141,
+					radiusY: 141,
+				},
+				transform: IDENTITY_DESIGN_TRANSFORM,
+				appearance: { fill: { swatchId: "swatch:cyan" } },
 			},
 		],
 		guides: [],
@@ -69,20 +71,8 @@ export function parseDesignDocument(
 ): DesignDocument | null {
 	if (value === null) return null
 	try {
-		const parsed = JSON.parse(value) as Partial<DesignDocument>
-		if (
-			parsed.format !== "create-design.document" ||
-			parsed.version !== 1 ||
-			typeof parsed.title !== "string" ||
-			typeof parsed.page?.width !== "number" ||
-			typeof parsed.page.height !== "number" ||
-			!Array.isArray(parsed.swatches) ||
-			!Array.isArray(parsed.objects) ||
-			!Array.isArray(parsed.guides)
-		) {
-			return null
-		}
-		return parsed as DesignDocument
+		const parsed = validateDesignDocument(JSON.parse(value))
+		return parsed.ok ? parsed.value : null
 	} catch {
 		return null
 	}

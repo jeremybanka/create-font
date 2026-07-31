@@ -68,9 +68,11 @@ describe("design Pen timeline", () => {
 		const document = completedPenDocument()
 		const restored = parseDesignDocument(JSON.stringify(document))
 		expect(restored?.objects.at(-1)).toEqual(document.objects.at(-1))
-		expect(restored?.objects.at(-1)?.contours[0]?.points[1]?.outgoing).toEqual({
-			x: 30,
-			y: 20,
-		})
+		const geometry = restored?.objects.at(-1)?.geometry
+		expect(
+			geometry?.kind === "path"
+				? geometry.contours[0]?.points[1]?.outgoing
+				: undefined,
+		).toEqual({ x: 30, y: 20 })
 	})
 })

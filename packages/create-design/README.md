@@ -6,8 +6,20 @@ allocation logic, uses the same Bézier point representation, and exchanges
 vectors with `create-font` through its versioned outline clipboard format.
 
 The first output target is PDF through `mondrian.pdf`'s validated object IR.
-RGB-authored fills are emitted with PDF RGB operators and CMYK-authored fills
-with native PDF CMYK operators.
+RGB-authored fills and strokes are emitted with PDF RGB operators and
+CMYK-authored paints with native PDF CMYK operators.
+
+Design objects keep three authored concerns separate:
+
+- `geometry` is a tagged path, live rectangle, or live ellipse;
+- `transform` is an independent local-to-document affine transform; and
+- `appearance` contains optional fill and stroke paints.
+
+Move, scale, and rotate compose the object transform without rewriting source
+points or converting live shapes. Canvas, selection, clipboard, and PDF use an
+explicit document-space contour projection. Node-level vector replacement is
+the deliberate bake boundary: it converts the projected result to path
+geometry and resets the transform to identity.
 
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its first directory
