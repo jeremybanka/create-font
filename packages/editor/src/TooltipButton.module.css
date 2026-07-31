@@ -12,6 +12,7 @@ tooltip-button.class {
 
 	> tooltip-popover {
 		position: fixed;
+		inset: auto;
 		display: grid;
 		gap: 5px;
 		width: max-content;
