@@ -378,6 +378,19 @@ function DesignObjectTile({
 						{context.expansionDisabledReason ??
 							"Converts this live shape to ordinary editable cubic path geometry."}
 					</p>
+					<button
+						type="button"
+						data-expand-stroke
+						disabled={context.strokeExpansionDisabledReason !== null}
+						aria-describedby="expand-stroke-eligibility"
+						onClick={context.expandStrokeSelection}
+					>
+						Expand Stroke
+					</button>
+					<p id="expand-stroke-eligibility">
+						{context.strokeExpansionDisabledReason ??
+							"Converts the visible stroke to ordinary editable filled contours."}
+					</p>
 					<design-object-actions>
 						<button
 							type="button"

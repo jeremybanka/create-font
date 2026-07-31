@@ -1,4 +1,8 @@
-import { boundsOfPoints, flattenCubic } from "@create-art/vector-geometry"
+import {
+	boundsOfPoints,
+	flattenCubic,
+	type StrokeJoin,
+} from "@create-art/vector-geometry"
 
 import {
 	objectBounds,
@@ -18,10 +22,59 @@ type StrokePiece = Readonly<{
 const CURVE_FLATNESS = 0.05
 const EPSILON = 1e-7
 
-export function flattenDesignContour(contour: DesignContour): readonly Point[] {
+function strokeJoinAtPoint(
+	contour: DesignContour,
+	index: number,
+	authoredJoin: StrokeJoin,
+): StrokeJoin {
+	const point = contour.points[index]
+	const previous =
+		contour.points[(index - 1 + contour.points.length) % contour.points.length]
+	const next = contour.points[(index + 1) % contour.points.length]
+	if (point === undefined || previous === undefined || next === undefined)
+		return authoredJoin
+	const incoming =
+		point.incoming === undefined
+			? { x: point.x - previous.x, y: point.y - previous.y }
+			: { x: -point.incoming.x, y: -point.incoming.y }
+	const outgoing =
+		point.outgoing === undefined
+			? { x: next.x - point.x, y: next.y - point.y }
+			: point.outgoing
+	const incomingLength = Math.hypot(incoming.x, incoming.y)
+	const outgoingLength = Math.hypot(outgoing.x, outgoing.y)
+	if (incomingLength <= EPSILON || outgoingLength <= EPSILON)
+		return authoredJoin
+	const sine =
+		(incoming.x * outgoing.y - incoming.y * outgoing.x) /
+		(incomingLength * outgoingLength)
+	const cosine =
+		(incoming.x * outgoing.x + incoming.y * outgoing.y) /
+		(incomingLength * outgoingLength)
+	return Math.abs(sine) <= 1e-6 && cosine > 0 ? "miter" : authoredJoin
+}
+
+export function flattenDesignContour(
+	contour: DesignContour,
+	flatness = CURVE_FLATNESS,
+): readonly Point[] {
+	return flattenDesignContourForStroke(contour, "miter", flatness).points
+}
+
+export function flattenDesignContourForStroke(
+	contour: DesignContour,
+	authoredJoin: StrokeJoin,
+	flatness = CURVE_FLATNESS,
+): Readonly<{
+	points: readonly Point[]
+	vertexJoins: readonly StrokeJoin[]
+}> {
 	const first = contour.points[0]
-	if (first === undefined) return []
+	if (first === undefined) return { points: [], vertexJoins: [] }
 	const flattened: Point[] = [first]
+	const vertexJoins: StrokeJoin[] = [
+		strokeJoinAtPoint(contour, 0, authoredJoin),
+	]
 	const segmentCount = contour.points.length - (contour.closed ? 0 : 1)
 	for (let index = 0; index < segmentCount; index += 1) {
 		const from = contour.points[index]
@@ -29,23 +82,40 @@ export function flattenDesignContour(contour: DesignContour): readonly Point[] {
 		if (from === undefined || to === undefined) continue
 		if (from.outgoing === undefined && to.incoming === undefined) {
 			flattened.push(to)
+			vertexJoins.push(
+				strokeJoinAtPoint(
+					contour,
+					(index + 1) % contour.points.length,
+					authoredJoin,
+				),
+			)
 			continue
 		}
 		const first = from.outgoing ?? { x: 0, y: 0 }
 		const second = to.incoming ?? { x: 0, y: 0 }
-		flattened.push(
-			...flattenCubic(
-				{
-					p0: from,
-					c1: { x: from.x + first.x, y: from.y + first.y },
-					c2: { x: to.x + second.x, y: to.y + second.y },
-					p3: to,
-				},
-				{ flatness: CURVE_FLATNESS },
-			).slice(1),
+		const segment = flattenCubic(
+			{
+				p0: from,
+				c1: { x: from.x + first.x, y: from.y + first.y },
+				c2: { x: to.x + second.x, y: to.y + second.y },
+				p3: to,
+			},
+			{ flatness },
+		).slice(1)
+		flattened.push(...segment)
+		vertexJoins.push(
+			...segment.map((_, pointIndex) =>
+				pointIndex === segment.length - 1
+					? strokeJoinAtPoint(
+							contour,
+							(index + 1) % contour.points.length,
+							authoredJoin,
+						)
+					: "miter",
+			),
 		)
 	}
-	return flattened
+	return { points: flattened, vertexJoins }
 }
 
 function normalizedDashArray(stroke: DesignStroke): readonly number[] {

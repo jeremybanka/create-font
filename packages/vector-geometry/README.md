@@ -15,6 +15,7 @@ The public boundary uses only immutable `Point`, `Cubic`, `Contour`, and
 - `signedArea`, `contourOrientation`, and `windingNumber`
 - `normalizeContour` and `normalizeContours`
 - `offsetContour` and `boundsOfPoints`
+- `expandStroke` and `fitCubicContour`
 
 Every tolerance is an absolute, caller-visible value. Pass any subset of
 `GeometryTolerances` to override the defaults:
@@ -60,6 +61,26 @@ to the authored contour's left. It supports bevel and limited-miter joins, but
 does not run boolean cleanup, remove loops, or reconstruct cubic curves after a
 collapse or self-intersection. Those topology-changing operations belong in a
 future Pathfinder backend behind this package's data boundary.
+
+`expandStroke` converts a polyline centerline to closed fill contours with
+butt, round, or square caps; bevel, limited-miter, or round joins; and SVG/PDF
+dash phase semantics. Round pieces use the configured `flatness` as their
+maximum chord error. Callers that flatten curves may supply `vertexJoins` so
+generated smooth samples use miter intersections while authored corners keep
+their requested joins, including after dash splitting. Adjacent points within
+`distance` are coincident, a wholly
+zero-length centerline produces no contours, and invalid style or non-finite
+coordinate input throws `GeometryError` before output is returned. Simple
+closed strokes produce separate outside and hole contours. Self-crossing
+centerlines fail deterministically, without partial output, until the later
+boolean-cleanup backend can normalize them safely.
+
+`fitCubicContour` reconstructs a compact cubic contour from sampled points.
+`maxError` bounds the distance from every source sample to its fitted cubic at
+the fitter's corresponding parameter; this deterministic sample-to-curve
+construction metric is not a formal Hausdorff bound between continuous paths.
+Turns at or above 30 degrees are exact anchors by default, while smooth closed
+contours receive deterministic quarter-length anchors.
 
 `normalizeContours` infers ordinary hole nesting with nonzero point
 classification. Touching and partially overlapping contours are kept
