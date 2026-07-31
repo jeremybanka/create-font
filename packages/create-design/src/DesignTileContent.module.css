@@ -10,7 +10,7 @@ design-tile-content.class {
 	> design-tools-tile,
 	> design-export-tile,
 	> design-object-tile,
-	> design-color-tile {
+	> design-appearance-tile {
 		display: grid;
 		align-content: start;
 		gap: 7px;
@@ -26,7 +26,7 @@ design-tile-content.class {
 	> design-canvas-tile > button,
 	> design-tools-tile > button,
 	> design-export-tile > button,
-	> design-color-tile > swatch-list > button {
+	> design-appearance-tile > swatch-list > button {
 		border: 1px solid var(--line);
 		border-radius: 5px;
 		background: var(--paper);
@@ -278,7 +278,7 @@ design-tile-content.class {
 	}
 
 	> design-object-tile > label[data-field],
-	> design-color-tile > swatch-editor > label[data-field] {
+	> design-appearance-tile > swatch-editor > label[data-field] {
 		display: grid;
 		gap: 5px;
 
@@ -300,10 +300,130 @@ design-tile-content.class {
 		}
 	}
 
-	> design-color-tile {
-		grid-template-rows: minmax(110px, auto) minmax(0, 1fr);
+	> design-appearance-tile {
+		grid-template-rows: min-content minmax(110px, auto) minmax(0, 1fr);
 		padding: 0;
 		overflow: hidden;
+
+		> appearance-editor {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 5px;
+			padding: 8px;
+			border-bottom: 1px solid var(--line);
+
+			> appearance-heading {
+				display: flex;
+				grid-column: 1 / -1;
+				align-items: baseline;
+				justify-content: space-between;
+				gap: 8px;
+
+				> strong {
+					color: var(--ink-muted);
+				}
+
+				> span {
+					font-size: 7px;
+					color: var(--ink-faint);
+				}
+			}
+
+			> appearance-paint-control {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+
+				> button {
+					border: 1px solid var(--line);
+					background: var(--paper);
+					font-size: 8px;
+					color: var(--ink);
+					cursor: pointer;
+
+					&:disabled {
+						opacity: 0.55;
+						cursor: not-allowed;
+					}
+				}
+
+				> button[data-paint-target] {
+					display: grid;
+					grid-template-columns: 19px minmax(0, 1fr);
+					align-items: center;
+					gap: 5px;
+					padding: 5px;
+					border-radius: 4px 0 0 4px;
+					text-align: left;
+
+					&[aria-pressed="true"] {
+						border-color: var(--accent);
+						background: var(--selected);
+					}
+
+					> i[data-appearance-chip] {
+						width: 17px;
+						height: 17px;
+						border: 1px solid rgb(127 127 127 / 50%);
+						border-radius: 3px;
+
+						&[data-none="true"] {
+							background: linear-gradient(
+								to bottom right,
+								transparent 45%,
+								#c45b4f 46% 54%,
+								transparent 55%
+							);
+						}
+					}
+
+					> span {
+						display: grid;
+						min-width: 0;
+						gap: 1px;
+
+						> small {
+							overflow: hidden;
+							font-size: 7px;
+							color: var(--ink-faint);
+							text-overflow: ellipsis;
+							white-space: nowrap;
+						}
+					}
+				}
+
+				> button[data-paint-none] {
+					padding: 4px;
+					border-left: 0;
+					border-radius: 0 4px 4px 0;
+					font-size: 7px;
+					color: var(--ink-faint);
+				}
+			}
+
+			> button[data-swap-appearance] {
+				grid-column: 1 / -1;
+				padding: 6px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--paper);
+				font-size: 8px;
+				color: var(--ink);
+				cursor: pointer;
+
+				&:disabled {
+					opacity: 0.55;
+					cursor: not-allowed;
+				}
+			}
+
+			> p {
+				grid-column: 1 / -1;
+				margin: 0;
+				font-size: 7px;
+				line-height: 1.4;
+				color: var(--ink-faint);
+			}
+		}
 
 		> swatch-list {
 			display: grid;
@@ -422,8 +542,8 @@ design-tile-content.class {
 		}
 	}
 
-	> design-color-tile > swatch-editor > color-channels,
-	> design-color-tile > swatch-editor > alternate-color > color-channels {
+	> design-appearance-tile > swatch-editor > color-channels,
+	> design-appearance-tile > swatch-editor > alternate-color > color-channels {
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 4px;

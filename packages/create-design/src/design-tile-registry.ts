@@ -7,6 +7,10 @@ import { h } from "preact"
 
 import { DesignTileContent } from "./DesignTileContent.tsx"
 import type {
+	AppearancePaintTarget,
+	DesignAppearanceSummary,
+} from "./appearance.ts"
+import type {
 	DesignDocument,
 	DesignObject,
 	DesignSwatch,
@@ -20,20 +24,29 @@ export type DesignTileKind =
 	| "tools"
 	| "export"
 	| "object"
-	| "color"
+	| "appearance"
 
 export interface DesignTileContext {
 	readonly addSwatch: () => void
+	readonly appearanceDisabledReason: string | null
+	readonly appearanceSummary: DesignAppearanceSummary
+	readonly appearanceTarget: AppearancePaintTarget
+	readonly applyAppearancePaint: (
+		target: AppearancePaintTarget,
+		swatchId: string | undefined,
+	) => void
 	readonly deleteSelection: () => void
 	readonly document: DesignDocument
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
 	readonly exportDocument: () => void
 	readonly focusCanvas: () => void
-	readonly selectObject: (object: DesignObject) => void
+	readonly selectObject: (object: DesignObject, additive?: boolean) => void
 	readonly selectSwatch: (swatch: DesignSwatch) => void
 	readonly selectTool: (tool: DesignTool) => void
 	readonly selectedObject: DesignObject | null
+	readonly selectedObjectCount: number
+	readonly selectedObjectIds: readonly string[]
 	readonly selectedSwatch: DesignSwatch | undefined
 	readonly selectedSwatchId: string
 	readonly setObjectProperty: (
@@ -44,6 +57,8 @@ export interface DesignTileContext {
 		object: DesignObject,
 		geometry: DesignObject["geometry"],
 	) => void
+	readonly setAppearanceTarget: (target: AppearancePaintTarget) => void
+	readonly swapAppearancePaints: () => void
 	readonly tool: DesignTool
 	readonly updateSwatch: (swatch: DesignSwatch) => void
 	readonly zoom: number
@@ -96,12 +111,14 @@ const registrations = [
 		render: ({ context }) => h(DesignTileContent, { context, kind: "object" }),
 	},
 	{
-		kind: "color",
-		name: "Color",
-		description: "Edit RGB and CMYK document swatches and object fills.",
+		kind: "appearance",
+		name: "Appearance",
+		description:
+			"Author independent fill and stroke paints from shared swatches.",
 		defaultFill: true,
 		defaultPlacement: { column: 4, fill: true },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "color" }),
+		render: ({ context }) =>
+			h(DesignTileContent, { context, kind: "appearance" }),
 	},
 ] as const satisfies readonly TileRegistration<
 	DesignTileKind,
@@ -114,4 +131,4 @@ export const DESIGN_TILE_REGISTRY = createTileRegistry<
 >(registrations)
 export const DEFAULT_DESIGN_TILING_LAYOUT =
 	createRegistryDefaultLayout(DESIGN_TILE_REGISTRY)
-export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v2"
+export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v3"

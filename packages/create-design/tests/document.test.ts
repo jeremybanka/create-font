@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	createInitialDocument,
 	DESIGN_STORAGE_KEY,
 	LEGACY_DESIGN_STORAGE_KEY,
+	parseDesignDocument,
 	readStoredDesignDocument,
 } from "../src/document.ts"
 
@@ -43,6 +45,32 @@ function memoryStorage(entries: Readonly<Record<string, string>>) {
 }
 
 describe("design document storage", () => {
+	it("round-trips fill-only, stroke-only, combined, and invisible appearances", () => {
+		const initial = createInitialDocument()
+		const template = initial.objects[0]
+		if (template === undefined) throw new Error("Expected a design object.")
+		const appearances = [
+			{ fill: { swatchId: "swatch:coral" } },
+			{ stroke: { swatchId: "swatch:ink", width: 2 } },
+			{
+				fill: { swatchId: "swatch:cyan" },
+				stroke: { swatchId: "swatch:ink", width: 3 },
+			},
+			{},
+		]
+		const document = {
+			...initial,
+			objects: appearances.map((appearance, index) => ({
+				...template,
+				id: `object:appearance-${index}`,
+				appearance,
+			})),
+		}
+		expect(parseDesignDocument(JSON.stringify(document))?.objects).toEqual(
+			document.objects,
+		)
+	})
+
 	it("hydrates a v1 key, migrates once, and saves canonical v2", () => {
 		const storage = memoryStorage({
 			[LEGACY_DESIGN_STORAGE_KEY]: JSON.stringify(legacyDocument()),

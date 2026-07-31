@@ -3,7 +3,12 @@ import {
 	shouldCloseVectorPen,
 } from "@create-font/editor/shared"
 
-import type { DesignContour, DesignObject, DesignPoint } from "./types.ts"
+import type {
+	DesignAppearance,
+	DesignContour,
+	DesignObject,
+	DesignPoint,
+} from "./types.ts"
 import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
@@ -118,7 +123,7 @@ export function cancelDesignPen(): readonly DesignPoint[] {
 export function createDesignPenObject(input: {
 	readonly id: string
 	readonly name: string
-	readonly fillId: string
+	readonly appearance: DesignAppearance
 	readonly points: readonly DesignPoint[]
 	readonly closed: boolean
 }): DesignObject | null {
@@ -130,6 +135,6 @@ export function createDesignPenObject(input: {
 				name: input.name,
 				geometry: { kind: "path", contours: [contour] },
 				transform: IDENTITY_DESIGN_TRANSFORM,
-				appearance: { fill: { swatchId: input.fillId } },
+				appearance: input.appearance,
 			}
 }

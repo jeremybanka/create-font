@@ -6,6 +6,10 @@ import {
 	TrashIcon,
 } from "@radix-ui/react-icons"
 import { useState } from "preact/hooks"
+import type {
+	AppearancePaintTarget,
+	AppearancePaintValue,
+} from "./appearance.ts"
 import {
 	cmykToRgb,
 	oppositeColorSpace,
@@ -22,7 +26,12 @@ import type {
 } from "./design-tile-registry.ts"
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
-import type { ColorDefinition, DesignSwatch, DesignTool } from "./types.ts"
+import type {
+	ColorDefinition,
+	DesignDocument,
+	DesignSwatch,
+	DesignTool,
+} from "./types.ts"
 
 const svg = {
 	EyeClosed: EyeClosedIcon,
@@ -58,14 +67,22 @@ function DesignLayersTile({
 			<strong>{context.document.objects.length} objects</strong>
 			{[...context.document.objects].reverse().map((object) => {
 				const swatch = context.document.swatches.find(
-					(candidate) => candidate.id === object.appearance.fill?.swatchId,
+					(candidate) =>
+						candidate.id ===
+						(object.appearance.fill?.swatchId ??
+							object.appearance.stroke?.swatchId),
 				)
 				return (
 					<button
 						key={object.id}
 						type="button"
-						aria-pressed={context.selectedObject?.id === object.id}
-						onClick={() => context.selectObject(object)}
+						aria-pressed={context.selectedObjectIds.includes(object.id)}
+						onClick={(event) =>
+							context.selectObject(
+								object,
+								event.shiftKey || event.metaKey || event.ctrlKey,
+							)
+						}
 					>
 						<i
 							data-layer-color
@@ -547,16 +564,117 @@ function SwatchEditor({
 	)
 }
 
-function DesignColorTile({ context }: { readonly context: DesignTileContext }) {
+function appearancePaintLabel(
+	value: AppearancePaintValue,
+	document: DesignDocument,
+): string {
+	if (value === "mixed") return "Mixed"
+	if (value === null) return "None"
+	return document.swatches.find((swatch) => swatch.id === value)?.name ?? value
+}
+
+function AppearancePaintControl({
+	context,
+	target,
+}: {
+	readonly context: DesignTileContext
+	readonly target: AppearancePaintTarget
+}) {
+	const value = context.appearanceSummary[target]
+	const label = appearancePaintLabel(value, context.document)
+	const swatch =
+		typeof value === "string" && value !== "mixed"
+			? context.document.swatches.find((candidate) => candidate.id === value)
+			: undefined
+	const describedBy = "appearance-eligibility"
 	return (
-		<design-color-tile>
+		<appearance-paint-control
+			data-target={target}
+			data-mixed={value === "mixed"}
+		>
+			<button
+				type="button"
+				data-paint-target
+				aria-label={`${target === "fill" ? "Fill" : "Stroke"} paint: ${label}`}
+				aria-pressed={context.appearanceTarget === target}
+				aria-describedby={describedBy}
+				disabled={context.appearanceDisabledReason !== null}
+				onClick={() => context.setAppearanceTarget(target)}
+			>
+				<i
+					data-appearance-chip
+					data-none={swatch === undefined}
+					style={swatch === undefined ? {} : { background: swatchCss(swatch) }}
+				/>
+				<span>
+					<strong>{target === "fill" ? "Fill" : "Stroke"}</strong>
+					<small>{label}</small>
+				</span>
+			</button>
+			<button
+				type="button"
+				data-paint-none
+				aria-label={`Set ${target} paint to none`}
+				aria-describedby={describedBy}
+				disabled={context.appearanceDisabledReason !== null}
+				onClick={() => context.applyAppearancePaint(target, undefined)}
+			>
+				None
+			</button>
+		</appearance-paint-control>
+	)
+}
+
+function DesignAppearanceTile({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	return (
+		<design-appearance-tile>
+			<appearance-editor role="group" aria-label="Object appearance">
+				<appearance-heading>
+					<strong>Fill and stroke</strong>
+					<span>
+						{context.selectedObjectCount === 0
+							? "New objects"
+							: context.selectedObjectCount === 1
+								? "1 selected object"
+								: `${context.selectedObjectCount} selected objects`}
+					</span>
+				</appearance-heading>
+				<AppearancePaintControl context={context} target="fill" />
+				<AppearancePaintControl context={context} target="stroke" />
+				<button
+					type="button"
+					data-swap-appearance
+					aria-label="Swap fill and stroke paints"
+					aria-describedby="appearance-eligibility"
+					disabled={context.appearanceDisabledReason !== null}
+					onClick={context.swapAppearancePaints}
+				>
+					Swap fill and stroke
+				</button>
+				<p id="appearance-eligibility">
+					{context.appearanceDisabledReason ??
+						(context.selectedObjectCount === 0
+							? "Changes set the appearance used by new Pen, rectangle, and ellipse objects."
+							: "Changes apply to the complete selection in one history entry and become the default for new objects.")}
+				</p>
+			</appearance-editor>
 			<swatch-list>
 				{context.document.swatches.map((swatch) => (
 					<button
 						key={swatch.id}
 						type="button"
+						aria-label={`Use ${swatch.name} as ${context.appearanceTarget} paint`}
 						aria-pressed={context.selectedSwatchId === swatch.id}
-						onClick={() => context.selectSwatch(swatch)}
+						aria-describedby="appearance-eligibility"
+						disabled={context.appearanceDisabledReason !== null}
+						onClick={() => {
+							context.selectSwatch(swatch)
+							context.applyAppearancePaint(context.appearanceTarget, swatch.id)
+						}}
 					>
 						<i data-swatch-chip style={{ background: swatchCss(swatch) }} />
 						<span>
@@ -578,7 +696,7 @@ function DesignColorTile({ context }: { readonly context: DesignTileContext }) {
 					onChange={context.updateSwatch}
 				/>
 			)}
-		</design-color-tile>
+		</design-appearance-tile>
 	)
 }
 
@@ -604,7 +722,7 @@ export function DesignTileContent({
 			) : kind === "object" ? (
 				<DesignObjectTile context={context} />
 			) : (
-				<DesignColorTile context={context} />
+				<DesignAppearanceTile context={context} />
 			)}
 		</design-tile-content>
 	)

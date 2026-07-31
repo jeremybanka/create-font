@@ -13,7 +13,7 @@ describe("design Pen timeline", () => {
 		const object = createDesignPenObject({
 			id: "object:pen",
 			name: "Pen path 3",
-			fillId: "swatch:coral",
+			appearance: { fill: { swatchId: "swatch:coral" } },
 			points: [
 				{ x: 40, y: 50 },
 				{

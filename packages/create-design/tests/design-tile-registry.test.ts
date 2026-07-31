@@ -14,7 +14,7 @@ describe("create-design tile registry", () => {
 			"export",
 			"tools",
 			"object",
-			"color",
+			"appearance",
 		])
 		expect(
 			DEFAULT_DESIGN_TILING_LAYOUT.columns.map((column) =>
@@ -24,7 +24,7 @@ describe("create-design tile registry", () => {
 			["pages", "layers"],
 			["canvas", "export"],
 			["tools"],
-			["object", "color"],
+			["object", "appearance"],
 		])
 	})
 })
