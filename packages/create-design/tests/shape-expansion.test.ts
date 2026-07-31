@@ -58,7 +58,12 @@ describe("live shape expansion", () => {
 					closed: contour.closed,
 					points: contour.points.map(({ id: _id, ...point }) => point),
 				})),
-			).toEqual(projectDesignObjectContours(transformed))
+			).toEqual(
+				projectDesignObjectContours(transformed).map((contour) => ({
+					closed: contour.closed,
+					points: contour.points.map(({ id: _id, ...point }) => point),
+				})),
+			)
 
 			const vector = projectDesignVectorObject(document, expanded)
 			expect(vector.contours.map((contour) => contour.id)).toEqual([

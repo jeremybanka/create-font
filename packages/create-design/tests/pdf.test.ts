@@ -48,11 +48,22 @@ describe("PDF export", () => {
 						kind: "path",
 						contours: [
 							{
+								id: "contour:pen",
 								closed: false,
 								points: [
-									{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
-									{ x: 160, y: 120, incoming: { x: -30, y: -20 } },
-									{ x: 80, y: 200 },
+									{
+										id: "point:pen:0",
+										x: 40,
+										y: 50,
+										outgoing: { x: 30, y: 20 },
+									},
+									{
+										id: "point:pen:1",
+										x: 160,
+										y: 120,
+										incoming: { x: -30, y: -20 },
+									},
+									{ id: "point:pen:2", x: 80, y: 200 },
 								],
 							},
 						],
@@ -134,7 +145,7 @@ describe("PDF export", () => {
 		)
 	})
 
-	it("reuses object streams across stacking and page-size changes", () => {
+	it("reuses object streams across stacking and page-transform changes", () => {
 		const graph = createPdfProjectionGraph()
 		const document = createInitialDocument()
 		const before = graph.project(document)
@@ -154,6 +165,15 @@ describe("PDF export", () => {
 		expect(resized.page.objectProjections).toEqual(
 			before.page.objectProjections,
 		)
+		const movedDocument = {
+			...document,
+			page: { ...document.page, x: 120, y: -40 },
+		}
+		const moved = graph.project(movedDocument)
+		expect(moved.page).not.toBe(resized.page)
+		expect(moved.page.objectProjections).toEqual(before.page.objectProjections)
+		expect(pdfContentStream(movedDocument)).toContain("1 0 0 -1 -120 752 cm")
+		expect(movedDocument.objects).toBe(document.objects)
 	})
 
 	it("keeps page and document projections for non-export state", () => {

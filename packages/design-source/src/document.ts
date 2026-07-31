@@ -9,7 +9,8 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 2 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 3 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 2 as const
 export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
 
 export const finiteNumberSchema = z.number().finite()
@@ -17,6 +18,8 @@ export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
+export const contourIdSchema = z.string().min(1)
+export const pointIdSchema = z.string().min(1)
 
 export const rgbColorSchema = z
 	.object({
@@ -52,7 +55,7 @@ export const vectorSchema = z
 	.strict()
 export const pointSchema = z
 	.object({
-		id: z.string().min(1).optional(),
+		id: pointIdSchema,
 		x: finiteNumberSchema,
 		y: finiteNumberSchema,
 		incoming: vectorSchema.optional(),
@@ -61,17 +64,27 @@ export const pointSchema = z
 	.strict()
 export const contourSchema = z
 	.object({
-		id: z.string().min(1).optional(),
+		id: contourIdSchema,
 		closed: z.boolean(),
 		points: z.array(pointSchema),
 	})
 	.strict()
+export const previousPointSchema = pointSchema.extend({
+	id: pointIdSchema.optional(),
+})
+export const previousContourSchema = contourSchema.extend({
+	id: contourIdSchema.optional(),
+	points: z.array(previousPointSchema),
+})
 export const pathGeometrySchema = z
 	.object({
 		kind: z.literal("path"),
 		contours: z.array(contourSchema),
 	})
 	.strict()
+export const previousPathGeometrySchema = pathGeometrySchema.extend({
+	contours: z.array(previousContourSchema),
+})
 export const rectangleGeometrySchema = z
 	.object({
 		kind: z.literal("rectangle"),
@@ -92,6 +105,11 @@ export const ellipseGeometrySchema = z
 	.strict()
 export const geometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
+	rectangleGeometrySchema,
+	ellipseGeometrySchema,
+])
+export const previousGeometrySchema = z.discriminatedUnion("kind", [
+	previousPathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
 ])
@@ -132,7 +150,7 @@ export const legacyDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
 		name: z.string(),
-		contours: z.array(contourSchema),
+		contours: z.array(previousContourSchema),
 		fillId: swatchIdSchema,
 		hidden: z.boolean().optional(),
 		locked: z.boolean().optional(),
@@ -145,7 +163,9 @@ const versionOneDesignObjectSchema = z.unknown().transform((value, context) => {
 		!Array.isArray(value) &&
 		("geometry" in value || "transform" in value || "appearance" in value)
 	const parsed = (
-		canonical ? designObjectSchema : legacyDesignObjectSchema
+		canonical
+			? designObjectSchema.extend({ geometry: previousGeometrySchema })
+			: legacyDesignObjectSchema
 	).safeParse(value)
 	if (parsed.success) return parsed.data
 	for (const issue of parsed.error.issues) context.addIssue(issue)
@@ -160,6 +180,14 @@ export const guideSchema = z
 	.strict()
 
 const pageSchema = z
+	.object({
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		width: positiveNumberSchema,
+		height: positiveNumberSchema,
+	})
+	.strict()
+export const previousPageSchema = z
 	.object({
 		width: positiveNumberSchema,
 		height: positiveNumberSchema,
@@ -183,9 +211,23 @@ export const legacyDesignDocumentSchema = z
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		version: z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
-		page: pageSchema,
+		page: previousPageSchema,
 		swatches: z.array(swatchSchema),
 		objects: z.array(versionOneDesignObjectSchema),
+		guides: z.array(guideSchema),
+	})
+	.strict()
+
+export const previousDesignDocumentSchema = z
+	.object({
+		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
+		version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+		title: z.string(),
+		page: previousPageSchema,
+		swatches: z.array(swatchSchema),
+		objects: z.array(
+			designObjectSchema.extend({ geometry: previousGeometrySchema }),
+		),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -306,9 +348,7 @@ export function validateDesignDocument(
 	return errors.length === 0 ? success(document) : failure(errors)
 }
 
-function migrateObjectV1(
-	object: z.infer<typeof versionOneDesignObjectSchema>,
-): DesignObject {
+function migrateObjectV1(object: z.infer<typeof versionOneDesignObjectSchema>) {
 	if ("geometry" in object) return object
 	return {
 		id: object.id,
@@ -321,20 +361,100 @@ function migrateObjectV1(
 	}
 }
 
+function nextStableId(base: string, reserved: ReadonlySet<string>): string {
+	if (!reserved.has(base)) return base
+	for (let suffix = 1; ; suffix += 1) {
+		const candidate = `${base}:${suffix}`
+		if (!reserved.has(candidate)) return candidate
+	}
+}
+
+/**
+ * Fills only identities that predate the v3 contract. Existing identities are
+ * reserved before generation so migration never rewrites an authored ID.
+ */
+export function stabilizeDesignObjectIdentities(
+	object:
+		| z.infer<typeof designObjectSchema>
+		| ReturnType<typeof migrateObjectV1>,
+): DesignObject {
+	if (object.geometry.kind !== "path") return object as DesignObject
+	const reservedContours = new Set(
+		object.geometry.contours.flatMap(({ id }) =>
+			id === undefined ? [] : [id],
+		),
+	)
+	const reservedPoints = new Set(
+		object.geometry.contours.flatMap((contour) =>
+			contour.points.flatMap(({ id }) => (id === undefined ? [] : [id])),
+		),
+	)
+	return {
+		...object,
+		geometry: {
+			kind: "path",
+			contours: object.geometry.contours.map((contour, contourIndex) => {
+				const contourId =
+					contour.id ??
+					nextStableId(`${object.id}:contour:${contourIndex}`, reservedContours)
+				reservedContours.add(contourId)
+				return {
+					...contour,
+					id: contourId,
+					points: contour.points.map((point, pointIndex) => {
+						const pointId =
+							point.id ??
+							nextStableId(`${contourId}:point:${pointIndex}`, reservedPoints)
+						reservedPoints.add(pointId)
+						return { ...point, id: pointId }
+					}),
+				}
+			}),
+		},
+	}
+}
+
+function migrateCompleteDocument(
+	document: Readonly<{
+		readonly format: typeof CREATE_DESIGN_DOCUMENT_FORMAT
+		readonly title: string
+		readonly page: Readonly<{ readonly width: number; readonly height: number }>
+		readonly swatches: readonly unknown[]
+		readonly objects: readonly (
+			| z.infer<typeof designObjectSchema>
+			| ReturnType<typeof migrateObjectV1>
+		)[]
+		readonly guides: readonly unknown[]
+	}>,
+): DesignSourceResult<DesignDocument> {
+	return validateDesignDocument({
+		format: document.format,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		title: document.title,
+		page: { x: 0, y: 0, ...document.page },
+		swatches: document.swatches,
+		objects: document.objects.map(stabilizeDesignObjectIdentities),
+		guides: document.guides,
+	})
+}
+
 export function migrateDesignDocumentV1(
 	value: unknown,
 ): DesignSourceResult<DesignDocument> {
 	const parsed = legacyDesignDocumentSchema.safeParse(value)
 	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
-	return validateDesignDocument({
-		format: CREATE_DESIGN_DOCUMENT_FORMAT,
-		version: CREATE_DESIGN_DOCUMENT_VERSION,
-		title: parsed.data.title,
-		page: parsed.data.page,
-		swatches: parsed.data.swatches,
+	return migrateCompleteDocument({
+		...parsed.data,
 		objects: parsed.data.objects.map(migrateObjectV1),
-		guides: parsed.data.guides,
 	})
+}
+
+export function migrateDesignDocumentV2(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
+	const parsed = previousDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return migrateCompleteDocument(parsed.data)
 }
 
 function envelope(value: unknown): DesignSourceResult<{
@@ -380,6 +500,8 @@ export function decodeDesignDocument(
 	switch (decodedEnvelope.value.version) {
 		case LEGACY_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV1(value)
+		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV2(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)
 		default:

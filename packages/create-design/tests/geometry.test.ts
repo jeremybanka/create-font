@@ -89,15 +89,17 @@ describe("design geometry", () => {
 					kind: "path",
 					contours: [
 						{
+							id: "contour:pen",
 							closed: false,
 							points: [
 								{
+									id: "point:pen:start",
 									x: 50,
 									y: 60,
 									incoming: { x: -30, y: -40 },
 									outgoing: { x: 80, y: 90 },
 								},
-								{ x: 200, y: 180 },
+								{ id: "point:pen:end", x: 200, y: 180 },
 							],
 						},
 					],

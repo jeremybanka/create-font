@@ -13,6 +13,12 @@ import {
 	projectDesignObjectContours,
 	translateObject,
 } from "./geometry.ts"
+import {
+	documentToInterchangePoint,
+	documentToInterchangeVector,
+	interchangeToDocumentPoint,
+	interchangeToDocumentVector,
+} from "./coordinates.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -30,7 +36,8 @@ const MASTER_ID = "master:create-design"
 
 interface DesignClipboardPayload {
 	readonly format: "create-design.vector"
-	readonly version: 1
+	readonly version: 1 | 2
+	readonly coordinateSpace?: "global-document-y-down"
 	readonly objects: readonly DesignObject[]
 	readonly swatches: readonly DesignSwatch[]
 }
@@ -89,11 +96,12 @@ export function writeDesignClipboard(
 	)
 	const payload: DesignClipboardPayload = {
 		format: "create-design.vector",
-		version: 1,
+		version: 2,
+		coordinateSpace: "global-document-y-down",
 		objects: selected,
 		swatches: document.swatches.filter((swatch) => swatchIds.has(swatch.id)),
 	}
-	const font = designObjectsToFontOutline(selected, document.page.height)
+	const font = designObjectsToFontOutline(selected)
 	clipboard.setData(DESIGN_VECTOR_MIME, JSON.stringify(payload))
 	clipboard.setData(FONT_OUTLINE_MIME, JSON.stringify(font))
 	clipboard.setData("text/plain", `${FONT_TEXT_PREFIX}${JSON.stringify(font)}`)
@@ -191,18 +199,12 @@ export function readDesignClipboard(
 	if (serialized.length === 0) return null
 	const font = parseFontPayload(serialized)
 	if (font === null) return null
-	const object = fontOutlineToDesignObject(
-		font,
-		document.page.width,
-		document.page.height,
-		nextId,
-	)
+	const object = fontOutlineToDesignObject(font, document.page, nextId)
 	return object === null ? null : { objects: [object], swatches: [] }
 }
 
 export function designObjectsToFontOutline(
 	objects: readonly DesignObject[],
-	pageHeight: number,
 ): FontOutlinePayload {
 	const contours: FontOutlinePayload["contours"][number][] = []
 	const points: FontOutlinePayload["layers"][number]["points"][number][] = []
@@ -211,24 +213,22 @@ export function designObjectsToFontOutline(
 		for (const contour of projectDesignObjectContours(object)) {
 			const outlinePoints = contour.points.map((point, pointIndex) => {
 				const key = `${contourIndex}/${pointIndex}`
+				const position = documentToInterchangePoint(point)
 				points.push({
 					key,
-					x: point.x,
-					y: pageHeight - point.y,
+					...position,
 					...(point.incoming === undefined
 						? {}
 						: {
 								incoming: {
-									x: point.incoming.x,
-									y: -point.incoming.y,
+									...documentToInterchangeVector(point.incoming),
 								},
 							}),
 					...(point.outgoing === undefined
 						? {}
 						: {
 								outgoing: {
-									x: point.outgoing.x,
-									y: -point.outgoing.y,
+									...documentToInterchangeVector(point.outgoing),
 								},
 							}),
 				})
@@ -261,22 +261,35 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 		const parsed = JSON.parse(value) as Partial<DesignClipboardPayload>
 		if (
 			parsed.format !== "create-design.vector" ||
-			parsed.version !== 1 ||
+			(parsed.version !== 1 && parsed.version !== 2) ||
+			(parsed.version === 2 &&
+				parsed.coordinateSpace !== "global-document-y-down") ||
 			!Array.isArray(parsed.objects) ||
 			!Array.isArray(parsed.swatches)
 		)
 			return null
 		const normalized = validateDesignDocument({
 			format: "create-design.document",
-			version: 2,
+			version: 3,
 			title: "Clipboard",
-			page: { width: 1, height: 1 },
+			page: { x: 0, y: 0, width: 1, height: 1 },
 			objects: parsed.objects,
 			swatches: parsed.swatches,
 			guides: [],
 		})
-		const compatible = normalized.ok
+		const previous = normalized.ok
 			? normalized
+			: decodeDesignDocument({
+					format: "create-design.document",
+					version: 2,
+					title: "Clipboard",
+					page: { width: 1, height: 1 },
+					objects: parsed.objects,
+					swatches: parsed.swatches,
+					guides: [],
+				})
+		const compatible = previous.ok
+			? previous
 			: decodeDesignDocument({
 					format: "create-design.document",
 					version: 1,
@@ -289,7 +302,8 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 		return compatible.ok
 			? {
 					format: "create-design.vector",
-					version: 1,
+					version: 2,
+					coordinateSpace: "global-document-y-down",
 					objects: compatible.value.objects,
 					swatches: compatible.value.swatches,
 				}
@@ -319,36 +333,34 @@ function parseFontPayload(value: string): FontOutlinePayload | null {
 
 function fontOutlineToDesignObject(
 	payload: FontOutlinePayload,
-	pageWidth: number,
-	pageHeight: number,
+	page: DesignDocument["page"],
 	nextId: () => string,
 ): DesignObject | null {
 	const layer = payload.layers[0]
 	if (layer === undefined) return null
 	const byKey = new Map(layer.points.map((point) => [point.key, point]))
 	const contours: DesignContour[] = payload.contours.map((contour) => ({
+		id: `contour:${nextId()}`,
 		closed: contour.closed,
 		points: contour.points.flatMap((point): DesignPoint[] => {
 			const layerPoint = byKey.get(point.key)
 			if (layerPoint === undefined) return []
 			return [
 				{
-					x: layerPoint.x,
-					y: -layerPoint.y,
+					id: `point:${nextId()}`,
+					...interchangeToDocumentPoint(layerPoint),
 					...(layerPoint.incoming === undefined
 						? {}
 						: {
 								incoming: {
-									x: layerPoint.incoming.x,
-									y: -layerPoint.incoming.y,
+									...interchangeToDocumentVector(layerPoint.incoming),
 								},
 							}),
 					...(layerPoint.outgoing === undefined
 						? {}
 						: {
 								outgoing: {
-									x: layerPoint.outgoing.x,
-									y: -layerPoint.outgoing.y,
+									...interchangeToDocumentVector(layerPoint.outgoing),
 								},
 							}),
 				},
@@ -364,9 +376,11 @@ function fontOutlineToDesignObject(
 	}
 	const bounds = objectBounds(object)
 	if (bounds === null) return null
-	return translateObject(
-		object,
-		pageWidth / 2 - (bounds.minX + bounds.maxX) / 2,
-		pageHeight / 2 - (bounds.minY + bounds.maxY) / 2,
-	)
+	return payload.sourceApplication === "create-design"
+		? translateObject(object, 12, 12)
+		: translateObject(
+				object,
+				page.x + page.width / 2 - (bounds.minX + bounds.maxX) / 2,
+				page.y + page.height / 2 - (bounds.minY + bounds.maxY) / 2,
+			)
 }

@@ -28,6 +28,16 @@ explicit document-space contour projection. Node-level vector replacement is
 the deliberate bake boundary: it converts the projected result to path
 geometry and resets the transform to identity.
 
+The canonical document plane is global, point-based, and Y-down. The current
+page is a positioned rectangle in that plane, not the parent of ordinary
+objects. Canvas world coordinates use the plane directly. Native design
+clipboard data stays global; shared vector/font clipboard data crosses an
+explicit page-independent Y-up boundary; and PDF applies an artboard-relative
+Y flip and translation at the page stream boundary. Moving or resizing a page
+therefore changes canvas framing or PDF placement without invalidating object
+geometry. The full downstream contract is documented in
+[`@create-design/source`](../design-source/README.md#coordinate-and-identity-contract).
+
 The Object tile exposes the exact local rectangle/ellipse parameters and exact
 document-space bounds. **Expand Shape** is the deliberate live-shape boundary:
 it replaces only the local rectangle or ellipse geometry with visually

@@ -1,19 +1,36 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{ "x": 0, "y": 0 },
-				{ "x": 612, "y": 0 },
-				{ "x": 612, "y": 792 },
-				{ "x": 0, "y": 792 }
-			]
-		}
-	],
-	"fillId": "swatch:paper",
+	"appearance": { "fill": { "swatchId": "swatch:paper" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:background-paper:contour:0",
+				"points": [
+					{ "id": "object:background-paper:contour:0:point:0", "x": 0, "y": 0 },
+					{
+						"id": "object:background-paper:contour:0:point:1",
+						"x": 612,
+						"y": 0
+					},
+					{
+						"id": "object:background-paper:contour:0:point:2",
+						"x": 612,
+						"y": 792
+					},
+					{
+						"id": "object:background-paper:contour:0:point:3",
+						"x": 0,
+						"y": 792
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:background-paper",
 	"locked": true,
 	"name": "Paper",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

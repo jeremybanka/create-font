@@ -6,15 +6,16 @@ import {
 import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 import type { DesignDocument } from "./types.ts"
 
-export const DESIGN_STORAGE_KEY = "create-design:document:v2"
+export const DESIGN_STORAGE_KEY = "create-design:document:v3"
+export const PREVIOUS_DESIGN_STORAGE_KEY = "create-design:document:v2"
 export const LEGACY_DESIGN_STORAGE_KEY = "create-design:document:v1"
 
 export function createInitialDocument(): DesignDocument {
 	return {
 		format: "create-design.document",
-		version: 2,
+		version: 3,
 		title: "Untitled design",
-		page: { width: 612, height: 792 },
+		page: { x: 0, y: 0, width: 612, height: 792 },
 		swatches: [
 			{
 				id: "swatch:paper",
@@ -111,20 +112,26 @@ export function readStoredDesignDocument(
 			? { status: "loaded", document: decoded.value, migrated: false }
 			: { status: "invalid", errors: decoded.errors }
 	}
-	let legacy: string | null
-	try {
-		legacy = storage.getItem(LEGACY_DESIGN_STORAGE_KEY)
-	} catch {
-		return { status: "empty" }
+	for (const priorKey of [
+		PREVIOUS_DESIGN_STORAGE_KEY,
+		LEGACY_DESIGN_STORAGE_KEY,
+	]) {
+		let prior: string | null
+		try {
+			prior = storage.getItem(priorKey)
+		} catch {
+			return { status: "empty" }
+		}
+		if (prior === null) continue
+		const decoded = parseDesignDocumentText(prior)
+		if (!decoded.ok) return { status: "invalid", errors: decoded.errors }
+		try {
+			storage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(decoded.value))
+			storage.removeItem(priorKey)
+		} catch {
+			// A decoded document can still hydrate when migration persistence is blocked.
+		}
+		return { status: "loaded", document: decoded.value, migrated: true }
 	}
-	if (legacy === null) return { status: "empty" }
-	const decoded = parseDesignDocumentText(legacy)
-	if (!decoded.ok) return { status: "invalid", errors: decoded.errors }
-	try {
-		storage.setItem(DESIGN_STORAGE_KEY, JSON.stringify(decoded.value))
-		storage.removeItem(LEGACY_DESIGN_STORAGE_KEY)
-	} catch {
-		// A decoded document can still hydrate when migration persistence is blocked.
-	}
-	return { status: "loaded", document: decoded.value, migrated: true }
+	return { status: "empty" }
 }

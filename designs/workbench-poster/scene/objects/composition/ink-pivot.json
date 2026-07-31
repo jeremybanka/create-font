@@ -1,38 +1,47 @@
 {
-	"contours": [
-		{
-			"closed": true,
-			"points": [
-				{
-					"incoming": { "x": -20.986820493570146, "y": 0 },
-					"outgoing": { "x": 20.986820493570146, "y": 0 },
-					"x": 286,
-					"y": 252
-				},
-				{
-					"incoming": { "x": 0, "y": -20.986820493570146 },
-					"outgoing": { "x": 0, "y": 20.986820493570146 },
-					"x": 324,
-					"y": 290
-				},
-				{
-					"incoming": { "x": 20.986820493570146, "y": 0 },
-					"outgoing": { "x": -20.986820493570146, "y": 0 },
-					"x": 286,
-					"y": 328
-				},
-				{
-					"incoming": { "x": 0, "y": 20.986820493570146 },
-					"outgoing": { "x": 0, "y": -20.986820493570146 },
-					"x": 248,
-					"y": 290
-				}
-			]
-		}
-	],
-	"fillId": "swatch:ink",
+	"appearance": { "fill": { "swatchId": "swatch:ink" } },
 	"format": "create-design.object",
+	"geometry": {
+		"contours": [
+			{
+				"closed": true,
+				"id": "object:ink-pivot:contour:0",
+				"points": [
+					{
+						"id": "object:ink-pivot:contour:0:point:0",
+						"incoming": { "x": -20.986820493570146, "y": 0 },
+						"outgoing": { "x": 20.986820493570146, "y": 0 },
+						"x": 286,
+						"y": 252
+					},
+					{
+						"id": "object:ink-pivot:contour:0:point:1",
+						"incoming": { "x": 0, "y": -20.986820493570146 },
+						"outgoing": { "x": 0, "y": 20.986820493570146 },
+						"x": 324,
+						"y": 290
+					},
+					{
+						"id": "object:ink-pivot:contour:0:point:2",
+						"incoming": { "x": 20.986820493570146, "y": 0 },
+						"outgoing": { "x": -20.986820493570146, "y": 0 },
+						"x": 286,
+						"y": 328
+					},
+					{
+						"id": "object:ink-pivot:contour:0:point:3",
+						"incoming": { "x": 0, "y": 20.986820493570146 },
+						"outgoing": { "x": 0, "y": -20.986820493570146 },
+						"x": 248,
+						"y": 290
+					}
+				]
+			}
+		],
+		"kind": "path"
+	},
 	"id": "object:ink-pivot",
 	"name": "Ink pivot",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
 	"version": 1
 }

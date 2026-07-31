@@ -7,20 +7,52 @@ into validated JSON units.
 
 ## Complete document versions
 
-Complete documents use a strict, version-dispatched codec. Version two is the
-current schema and stores each object's tagged geometry, affine transform, and
-fill/stroke appearance explicitly. `decodeDesignDocument()` accepts a complete
-version-one document, validates every persisted field, and deterministically
-migrates its objects to the version-two representation. The v1 decoder accepts
-both shipped object forms: canonical geometry/transform/appearance objects are
-preserved exactly, while older `{ contours, fillId }` objects become path
-geometry with an identity transform and fill appearance.
+Complete documents use a strict, version-dispatched codec. Version three is
+the current schema. It retains v2's tagged geometry, affine transform, and
+fill/stroke appearance, requires every authored path contour and point to have
+a stable ID, and gives the current page an explicit position in the global
+document plane. `decodeDesignDocument()` accepts complete version-one and
+version-two documents, validates every persisted field, and deterministically
+migrates them to v3. Existing IDs and geometry are preserved. Missing legacy
+path IDs are derived from the owning object, contour order, and point order;
+the page receives the legacy implicit origin `(0, 0)`. The v1 decoder continues
+to accept both shipped object forms: canonical
+geometry/transform/appearance objects are preserved, while older
+`{ contours, fillId }` objects become path geometry with an identity transform
+and fill appearance.
 `validateDesignDocument()` validates only the current version, while
 `parseDesignDocumentText()` additionally owns JSON decoding.
 
 Malformed, partial, and future-version inputs fail with field-located
 diagnostics. Callers must retain their last valid document when decoding fails;
 defaults are an application concern and are never constructed by the codec.
+
+## Coordinate and identity contract
+
+Canonical geometry lives in one unbounded global document plane measured in
+points. X increases right and Y increases down. Object geometry is local to its
+object and reaches the global plane only through the object's persisted affine
+`transform`. Pages are independent rectangles `{ x, y, width, height }` in that
+plane; ordinary objects are not page children. Moving or resizing a page must
+therefore never rewrite object geometry or transforms. Guides use the same
+global axis values.
+
+Canvas world coordinates are identical to document coordinates; pan and zoom
+are view-only transforms. Native create-design clipboard objects remain in the
+global Y-down plane. Shared create-* vector and font-outline clipboard payloads
+use a page-independent Cartesian Y-up plane, so their boundary conversion is
+`(x, y) -> (x, -y)` for points and vectors. PDF lowering derives a page-local,
+bottom-left Y-up transform from the selected page:
+`[1 0 0 -1 -page.x page.y+page.height]`. These clipboard and PDF transforms,
+including any deliberate paste offset, are projections and never canonical
+geometry mutations.
+
+Object IDs are document-wide. Contour and point IDs are required and unique
+within their owning object. Edits preserve every unaffected identity. Copying
+or deriving a distinct object assigns a new object ID and new path IDs;
+transforming, renaming, restyling, reordering, moving a page, or projecting to
+canvas/PDF does not. This is the foundation expected by multi-selection work
+in #253 and global multi-artboard/output work in #283.
 
 ## Version-one directory
 
@@ -55,7 +87,7 @@ Each fact has one owner:
 
 - `document.json` owns the title and guides;
 - `palette.json` owns ordered swatches;
-- the sole artboard unit owns page dimensions;
+- the sole artboard unit owns the page's global rectangle;
 - the sole layer unit owns object stacking order;
 - the object inventory maps stable object IDs to stable source paths; and
 - each object unit owns one complete object.
@@ -75,14 +107,15 @@ concerns.
 
 Version-one directory readers also accept the earlier `{ contours, fillId }`
 object-unit shape and deterministically normalize it to path geometry, an
-identity transform, and a fill appearance. Writers emit only the canonical
-separated shape and mark the assembled complete document as version two.
+identity transform, and a fill appearance. They accept the originally shipped
+implicit `(0, 0)` artboard origin and missing path IDs, then assign the same v3
+migration defaults as the complete-document decoder. Writers emit the explicit
+global page rectangle, stable path IDs, and canonical separated object shape,
+and mark the assembled complete document as version three.
 
-Authored path contours and controls may carry stable `id` fields. Expansion
-assigns them so selection and later path edits can refer to persisted
-identities; version-one paths written before control identities remain valid
-and receive deterministic projection-only fallback IDs until rewritten by an
-identity-producing operation.
+Authored path contours and points always carry stable `id` fields after
+assembly. Expansion and paste assign fresh identities so selection and later
+path edits never depend on array indexes.
 
 ## Use
 

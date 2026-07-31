@@ -26,45 +26,57 @@ export const IDENTITY_DESIGN_TRANSFORM: DesignTransform = Object.freeze({
 
 export const ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
-export function rectangleContour(bounds: Bounds): DesignContour {
+export function rectangleContour(
+	bounds: Bounds,
+	id = "contour:rectangle-projection",
+): DesignContour {
 	return {
+		id,
 		closed: true,
 		points: [
-			{ x: bounds.minX, y: bounds.minY },
-			{ x: bounds.maxX, y: bounds.minY },
-			{ x: bounds.maxX, y: bounds.maxY },
-			{ x: bounds.minX, y: bounds.maxY },
+			{ id: `${id}:point:0`, x: bounds.minX, y: bounds.minY },
+			{ id: `${id}:point:1`, x: bounds.maxX, y: bounds.minY },
+			{ id: `${id}:point:2`, x: bounds.maxX, y: bounds.maxY },
+			{ id: `${id}:point:3`, x: bounds.minX, y: bounds.maxY },
 		],
 	}
 }
 
-export function ellipseContour(bounds: Bounds): DesignContour {
+export function ellipseContour(
+	bounds: Bounds,
+	id = "contour:ellipse-projection",
+): DesignContour {
 	const centerX = (bounds.minX + bounds.maxX) / 2
 	const centerY = (bounds.minY + bounds.maxY) / 2
 	const handleX = ((bounds.maxX - bounds.minX) / 2) * ELLIPSE_KAPPA
 	const handleY = ((bounds.maxY - bounds.minY) / 2) * ELLIPSE_KAPPA
 	return {
+		id,
 		closed: true,
 		points: [
 			{
+				id: `${id}:point:0`,
 				x: centerX,
 				y: bounds.minY,
 				incoming: { x: -handleX, y: 0 },
 				outgoing: { x: handleX, y: 0 },
 			},
 			{
+				id: `${id}:point:1`,
 				x: bounds.maxX,
 				y: centerY,
 				incoming: { x: 0, y: -handleY },
 				outgoing: { x: 0, y: handleY },
 			},
 			{
+				id: `${id}:point:2`,
 				x: centerX,
 				y: bounds.maxY,
 				incoming: { x: handleX, y: 0 },
 				outgoing: { x: -handleX, y: 0 },
 			},
 			{
+				id: `${id}:point:3`,
 				x: bounds.minX,
 				y: centerY,
 				incoming: { x: 0, y: handleY },
@@ -76,25 +88,32 @@ export function ellipseContour(bounds: Bounds): DesignContour {
 
 export function geometryContours(
 	geometry: DesignGeometry,
+	identityPrefix = "geometry-projection",
 ): readonly DesignContour[] {
 	if (geometry.kind === "path") return geometry.contours
 	if (geometry.kind === "rectangle") {
 		return [
-			rectangleContour({
-				minX: geometry.x,
-				minY: geometry.y,
-				maxX: geometry.x + geometry.width,
-				maxY: geometry.y + geometry.height,
-			}),
+			rectangleContour(
+				{
+					minX: geometry.x,
+					minY: geometry.y,
+					maxX: geometry.x + geometry.width,
+					maxY: geometry.y + geometry.height,
+				},
+				`${identityPrefix}:contour:0`,
+			),
 		]
 	}
 	return [
-		ellipseContour({
-			minX: geometry.centerX - geometry.radiusX,
-			minY: geometry.centerY - geometry.radiusY,
-			maxX: geometry.centerX + geometry.radiusX,
-			maxY: geometry.centerY + geometry.radiusY,
-		}),
+		ellipseContour(
+			{
+				minX: geometry.centerX - geometry.radiusX,
+				minY: geometry.centerY - geometry.radiusY,
+				maxX: geometry.centerX + geometry.radiusX,
+				maxY: geometry.centerY + geometry.radiusY,
+			},
+			`${identityPrefix}:contour:0`,
+		),
 	]
 }
 
@@ -113,7 +132,7 @@ export function transformDesignPoint(
 	point: DesignPoint,
 ): DesignPoint {
 	return {
-		...(point.id === undefined ? {} : { id: point.id }),
+		id: point.id,
 		x: transform.a * point.x + transform.c * point.y + transform.e,
 		y: transform.b * point.x + transform.d * point.y + transform.f,
 		...(point.incoming === undefined
@@ -130,9 +149,9 @@ export function transformDesignPoint(
  * intentional bake boundary used by renderers and interoperability adapters.
  */
 export function projectDesignObjectContours(
-	object: Pick<DesignObject, "geometry" | "transform">,
+	object: Pick<DesignObject, "id" | "geometry" | "transform">,
 ): readonly DesignContour[] {
-	return geometryContours(object.geometry).map((contour) => ({
+	return geometryContours(object.geometry, object.id).map((contour) => ({
 		...contour,
 		points: contour.points.map((point) =>
 			transformDesignPoint(object.transform, point),
