@@ -67,6 +67,7 @@ const vectorSchema = z
 	.strict()
 const pointSchema = z
 	.object({
+		id: z.string().min(1).optional(),
 		x: finiteNumberSchema,
 		y: finiteNumberSchema,
 		incoming: vectorSchema.optional(),
@@ -75,6 +76,7 @@ const pointSchema = z
 	.strict()
 const contourSchema = z
 	.object({
+		id: z.string().min(1).optional(),
 		closed: z.boolean(),
 		points: z.array(pointSchema),
 	})

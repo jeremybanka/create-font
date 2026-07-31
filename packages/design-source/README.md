@@ -62,6 +62,12 @@ and a fill appearance. Writers emit only the canonical separated shape. This
 compatibility normalization does not claim the future document-version
 dispatch and diagnostics contract tracked separately by the versioning work.
 
+Authored path contours and controls may carry stable `id` fields. Expansion
+assigns them so selection and later path edits can refer to persisted
+identities; version-one paths written before control identities remain valid
+and receive deterministic projection-only fallback IDs until rewritten by an
+identity-producing operation.
+
 ## Use
 
 ```ts

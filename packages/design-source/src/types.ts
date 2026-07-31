@@ -24,6 +24,8 @@ export interface DesignSwatch {
 }
 
 export interface DesignPoint {
+	/** Stable identity for authored path controls when one has been assigned. */
+	readonly id?: string
 	readonly x: number
 	readonly y: number
 	readonly incoming?: Readonly<{ readonly x: number; readonly y: number }>
@@ -31,6 +33,8 @@ export interface DesignPoint {
 }
 
 export interface DesignContour {
+	/** Stable identity for authored path contours when one has been assigned. */
+	readonly id?: string
 	readonly closed: boolean
 	readonly points: readonly DesignPoint[]
 }

@@ -103,6 +103,7 @@ export function readDesignClipboard(
 	clipboard: ClipboardReader,
 	document: DesignDocument,
 	nextId: () => string,
+	options: Readonly<{ nativeOnly?: boolean }> = {},
 ): Readonly<{
 	objects: readonly DesignObject[]
 	swatches: readonly DesignSwatch[]
@@ -138,6 +139,20 @@ export function readDesignClipboard(
 						{
 							...object,
 							id: `object:${nextId()}`,
+							geometry:
+								object.geometry.kind === "path"
+									? {
+											...object.geometry,
+											contours: object.geometry.contours.map((contour) => ({
+												...contour,
+												id: `contour:${nextId()}`,
+												points: contour.points.map((point) => ({
+													...point,
+													id: `point:${nextId()}`,
+												})),
+											})),
+										}
+									: object.geometry,
 							appearance: {
 								...(object.appearance.fill === undefined
 									? {}
@@ -167,6 +182,7 @@ export function readDesignClipboard(
 			}
 		}
 	}
+	if (options.nativeOnly === true) return null
 	const serialized =
 		clipboard.getData(FONT_OUTLINE_MIME) || clipboard.getData("text/plain")
 	if (serialized.length === 0) return null

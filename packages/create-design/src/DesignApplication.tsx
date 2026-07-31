@@ -89,6 +89,10 @@ import {
 	translateObject,
 } from "./geometry.ts"
 import {
+	expandDesignShape,
+	shapeExpansionEligibility,
+} from "./shape-expansion.ts"
+import {
 	applyDesignVectorIntent,
 	designVectorAdapter,
 	importDesignVectorClipboard,
@@ -109,6 +113,7 @@ import {
 } from "./design-tile-registry.ts"
 import type {
 	DesignDocument,
+	DesignGeometry,
 	DesignObject,
 	DesignPoint,
 	DesignSwatch,
@@ -342,6 +347,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const selectedSwatch =
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
+	const expansionEligibility = shapeExpansionEligibility(document, selection)
 	const baseScale = designBaseScale(canvasViewport, document.page)
 	const viewOptions = useMemo(
 		() => ({
@@ -428,6 +434,23 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setStatus("Deleted selection.")
 	}, [commitVectorIntent, selection])
 
+	const expandSelection = useCallback((): void => {
+		const eligibility = shapeExpansionEligibility(document, selection)
+		if (!eligibility.eligible) {
+			setStatus(eligibility.reason)
+			return
+		}
+		const expanded = expandDesignShape(eligibility.object, nextId)
+		commit({
+			...document,
+			objects: document.objects.map((object) =>
+				object.id === expanded.id ? expanded : object,
+			),
+		})
+		setSelection([expanded.id])
+		setStatus(`Expanded ${expanded.name} to ordinary path geometry.`)
+	}, [commit, document, nextId, selection])
+
 	const finishPen = useCallback(
 		(closed = false): void => {
 			const points = penPointsRef.current
@@ -504,6 +527,36 @@ export function DesignApplication(props: DesignApplicationProps) {
 		})
 	}
 
+	const setObjectGeometry = (
+		object: DesignObject,
+		geometry: DesignGeometry,
+	): void => {
+		if (object.locked) {
+			setStatus("Unlock the selected shape before editing its parameters.")
+			return
+		}
+		if (
+			geometry.kind === "path" ||
+			!Object.values(geometry)
+				.filter((value): value is number => typeof value === "number")
+				.every(Number.isFinite) ||
+			(geometry.kind === "rectangle" &&
+				(geometry.width < 0 || geometry.height < 0)) ||
+			(geometry.kind === "ellipse" &&
+				(geometry.radiusX < 0 || geometry.radiusY < 0))
+		) {
+			setStatus("Shape parameters must be finite and non-negative in size.")
+			return
+		}
+		commit({
+			...document,
+			objects: document.objects.map((candidate) =>
+				candidate.id === object.id ? { ...candidate, geometry } : candidate,
+			),
+		})
+		setStatus(`Updated exact parameters for ${object.name}.`)
+	}
+
 	const updateSwatch = (swatch: DesignSwatch): void => {
 		commit({
 			...document,
@@ -528,6 +581,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 		addSwatch,
 		deleteSelection,
 		document,
+		expandSelection,
+		expansionDisabledReason: expansionEligibility.eligible
+			? null
+			: expansionEligibility.reason,
 		exportDocument,
 		focusCanvas: () => artboardWrapRef.current?.focus(),
 		selectObject: (object) => setSelection([object.id]),
@@ -547,6 +604,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selectedSwatch,
 		selectedSwatchId,
 		setObjectProperty,
+		setObjectGeometry,
 		tool,
 		updateSwatch,
 		zoom: canvasView.zoom,
@@ -577,6 +635,19 @@ export function DesignApplication(props: DesignApplicationProps) {
 				icon: "DoubleArrowRightIcon",
 				shortcut: "⌘ E",
 				do: exportDocument,
+			},
+			{
+				id: "expand-shape",
+				displayName: "Expand Shape",
+				category: "Object",
+				description:
+					"Convert the selected live rectangle or ellipse to ordinary cubic path geometry.",
+				icon: "HobbyKnifeIcon",
+				disabled: !expansionEligibility.eligible,
+				...(expansionEligibility.eligible
+					? {}
+					: { disabledReason: expansionEligibility.reason }),
+				do: expandSelection,
 			},
 			{
 				id: "delete-selection",
@@ -621,6 +692,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		],
 		[
 			deleteSelection,
+			expandSelection,
+			expansionEligibility,
 			exportDocument,
 			history.future.length,
 			history.past.length,
@@ -931,6 +1004,26 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 		const paste = (event: ClipboardEvent): void => {
 			if (editableTarget(event.target) || event.clipboardData === null) return
+			const nativeAddition = readDesignClipboard(
+				event.clipboardData,
+				document,
+				nextId,
+				{ nativeOnly: true },
+			)
+			if (nativeAddition !== null && nativeAddition.objects.length > 0) {
+				const result = importDesignObjects(document, selection, nativeAddition)
+				if (!result.ok) {
+					setStatus(result.error)
+					return
+				}
+				event.preventDefault()
+				commit(result.document)
+				setSelection(result.selection)
+				setStatus(
+					`Pasted ${nativeAddition.objects.length} vector object${nativeAddition.objects.length === 1 ? "" : "s"}.`,
+				)
+				return
+			}
 			const vector = readVectorClipboard(event.clipboardData)
 			if (vector !== null) {
 				const result = importDesignVectorClipboard(
@@ -952,13 +1045,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 				)
 				return
 			}
-			const addition = readDesignClipboard(
+			const fallbackAddition = readDesignClipboard(
 				event.clipboardData,
 				document,
 				nextId,
 			)
-			if (addition === null || addition.objects.length === 0) return
-			const result = importDesignObjects(document, selection, addition)
+			if (fallbackAddition === null || fallbackAddition.objects.length === 0)
+				return
+			const result = importDesignObjects(document, selection, fallbackAddition)
 			if (!result.ok) {
 				setStatus(result.error)
 				return
@@ -967,7 +1061,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			commit(result.document)
 			setSelection(result.selection)
 			setStatus(
-				`Pasted ${addition.objects.length} vector object${addition.objects.length === 1 ? "" : "s"}.`,
+				`Pasted ${fallbackAddition.objects.length} vector object${fallbackAddition.objects.length === 1 ? "" : "s"}.`,
 			)
 		}
 		window.addEventListener("copy", copy)

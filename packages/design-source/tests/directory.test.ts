@@ -56,10 +56,21 @@ const fixture = (): DesignDocument => ({
 				kind: "path",
 				contours: [
 					{
+						id: "contour:ink",
 						closed: false,
 						points: [
-							{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
-							{ x: 180, y: 120, incoming: { x: -40, y: -10 } },
+							{
+								id: "point:ink:start",
+								x: 40,
+								y: 50,
+								outgoing: { x: 30, y: 20 },
+							},
+							{
+								id: "point:ink:end",
+								x: 180,
+								y: 120,
+								incoming: { x: -40, y: -10 },
+							},
 						],
 					},
 				],
