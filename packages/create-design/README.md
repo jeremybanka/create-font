@@ -15,6 +15,13 @@ Design objects keep three authored concerns separate:
 - `transform` is an independent local-to-document affine transform; and
 - `appearance` contains optional fill and stroke paints.
 
+The Appearance tile authors fill and stroke independently from shared RGB and
+CMYK swatches. Either paint can be none, the two paints can be swapped, and
+mixed multi-object selections are edited atomically. With no selection, the
+same controls set the appearance for new Pen paths, rectangles, and ellipses.
+Swatches remain shared references, so editing one updates every painted object
+without rewriting its geometry.
+
 Move, scale, and rotate compose the object transform without rewriting source
 points or converting live shapes. Canvas, selection, clipboard, and PDF use an
 explicit document-space contour projection. Node-level vector replacement is

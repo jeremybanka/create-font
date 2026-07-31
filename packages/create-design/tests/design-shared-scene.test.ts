@@ -338,7 +338,252 @@ describe("create-design shared vector scene", () => {
 		expect(document.querySelector("design-layers-tile")).not.toBeNull()
 		expect(document.querySelector("design-tools-tile")).not.toBeNull()
 		expect(document.querySelector("design-object-tile")).not.toBeNull()
-		expect(document.querySelector("design-color-tile")).not.toBeNull()
+		expect(document.querySelector("design-appearance-tile")).not.toBeNull()
+	})
+
+	it("authors mixed multi-object paints atomically with accessible appearance controls", async () => {
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const layers = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		]
+		if (layers.length < 2) throw new Error("Expected two design layers.")
+		await act(async () => {
+			layers[0]!.click()
+			layers[1]!.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			)
+			await Promise.resolve()
+		})
+
+		expect(
+			layers.every((layer) => layer.getAttribute("aria-pressed") === "true"),
+		).toBe(true)
+		expect(
+			document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Fill paint: Mixed"]',
+			),
+		).not.toBeNull()
+		const strokeTarget = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Stroke paint: None"]',
+		)
+		if (strokeTarget === null) throw new Error("Stroke target was not found.")
+		await act(async () => {
+			strokeTarget.click()
+			await Promise.resolve()
+		})
+		const ink = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Use Rich black as stroke paint"]',
+		)
+		if (ink === null) throw new Error("Stroke swatch was not found.")
+		await act(async () => {
+			ink.click()
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map((object) => object.appearance.stroke)).toEqual([
+			{ swatchId: "swatch:ink", width: 1 },
+			{ swatchId: "swatch:ink", width: 1 },
+		])
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(
+			saved.objects.every((object) => object.appearance.stroke === undefined),
+		).toBe(true)
+
+		const strokeInk = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Use Rich black as stroke paint"]',
+		)
+		const noFill = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Set fill paint to none"]',
+		)
+		const swap = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Swap fill and stroke paints"]',
+		)
+		if (strokeInk === null || noFill === null || swap === null)
+			throw new Error("Appearance paint actions were not found.")
+		await act(async () => {
+			strokeInk.click()
+			await Promise.resolve()
+		})
+		await act(async () => {
+			noFill.click()
+			await Promise.resolve()
+		})
+		await act(async () => {
+			swap.click()
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map((object) => object.appearance)).toEqual([
+			{ fill: { swatchId: "swatch:ink" } },
+			{ fill: { swatchId: "swatch:ink" } },
+		])
+	})
+
+	it("exposes why selection appearance controls are disabled", () => {
+		const initial = createInitialDocument()
+		const first = initial.objects[0]
+		if (first === undefined) throw new Error("Expected a design object.")
+		mountDesign({
+			initialDocument: {
+				...initial,
+				objects: [{ ...first, locked: true }, ...initial.objects.slice(1)],
+			},
+		})
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(first.name))
+		if (layer === undefined) throw new Error("Locked layer was not found.")
+		act(() => layer.click())
+		const fill = document.querySelector<HTMLButtonElement>(
+			'button[aria-label^="Fill paint:"]',
+		)
+		expect(fill?.disabled).toBe(true)
+		expect(fill?.getAttribute("aria-describedby")).toBe(
+			"appearance-eligibility",
+		)
+		expect(
+			document.getElementById("appearance-eligibility")?.textContent,
+		).toContain(`Unlock ${first.name}`)
+	})
+
+	it("updates shared swatch consumers without rewriting object geometry", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		const before = createInitialDocument().objects.map(
+			(object) => object.geometry,
+		)
+		const red = [...document.querySelectorAll("channel-input label")]
+			.find((label) => label.querySelector("span")?.textContent === "R")
+			?.querySelector("input")
+		if (!(red instanceof HTMLInputElement))
+			throw new Error("Selected swatch red channel was not found.")
+		await act(async () => {
+			red.value = "120"
+			red.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map((object) => object.geometry)).toEqual(before)
+		expect(saved.objects[0]?.appearance.fill?.swatchId).toBe("swatch:coral")
+		expect(stage.findOne(".design-object").fill()).toContain("120")
+	})
+
+	it("uses the current optional appearance for new Pen, rectangle, and ellipse objects", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const strokeTarget = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Stroke paint: None"]',
+		)
+		if (canvas === null || strokeTarget === null)
+			throw new Error("Appearance or canvas controls were not found.")
+		await act(async () => {
+			strokeTarget.click()
+			await Promise.resolve()
+		})
+		const ink = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Use Rich black as stroke paint"]',
+		)
+		const noFill = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Set fill paint to none"]',
+		)
+		if (ink === null || noFill === null)
+			throw new Error("Optional paint actions were not found.")
+		await act(async () => {
+			ink.click()
+			noFill.click()
+			await Promise.resolve()
+		})
+
+		const fire = (
+			type: string,
+			x: number,
+			y: number,
+			pointerId: number,
+		): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const drawShape = async (
+			label: "Rectangle" | "Ellipse",
+			start: readonly [number, number],
+			end: readonly [number, number],
+			pointerId: number,
+		): Promise<void> => {
+			const tool = document.querySelector<HTMLButtonElement>(
+				`button[aria-label="${label}"]`,
+			)
+			if (tool === null) throw new Error(`${label} tool was not found.`)
+			act(() => tool.click())
+			await act(async () => {
+				fire("pointerdown", start[0], start[1], pointerId)
+				fire("pointermove", end[0], end[1], pointerId)
+				fire("pointerup", end[0], end[1], pointerId)
+				await Promise.resolve()
+			})
+		}
+		await drawShape("Rectangle", [300, 240], [380, 300], 21)
+		await drawShape("Ellipse", [420, 260], [500, 340], 22)
+
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		if (pen === null) throw new Error("Pen tool was not found.")
+		act(() => pen.click())
+		await act(async () => {
+			fire("pointerdown", 340, 420, 23)
+			fire("pointerup", 340, 420, 23)
+			fire("pointerdown", 440, 440, 24)
+			fire("pointerup", 440, 440, 24)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
+			await Promise.resolve()
+		})
+
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(
+			saved.objects.slice(-3).map((object) => object.geometry.kind),
+		).toEqual(["rectangle", "ellipse", "path"])
+		expect(saved.objects.slice(-3).map((object) => object.appearance)).toEqual([
+			{ stroke: { swatchId: "swatch:ink", width: 1 } },
+			{ stroke: { swatchId: "swatch:ink", width: 1 } },
+			{ stroke: { swatchId: "swatch:ink", width: 1 } },
+		])
 	})
 
 	it("renders authored geometry through the shared contour component", () => {

@@ -94,7 +94,9 @@ describe("design Pen lifecycle", () => {
 			createDesignPenObject({
 				id: "object:pen",
 				name: "Pen path",
-				fillId: "swatch:coral",
+				appearance: {
+					stroke: { swatchId: "swatch:coral", width: 2 },
+				},
 				points,
 				closed: false,
 			}),
@@ -103,6 +105,9 @@ describe("design Pen lifecycle", () => {
 			geometry: {
 				kind: "path",
 				contours: [{ closed: false, points }],
+			},
+			appearance: {
+				stroke: { swatchId: "swatch:coral", width: 2 },
 			},
 		})
 		expect(cancelDesignPen()).toEqual([])

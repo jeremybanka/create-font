@@ -45,6 +45,14 @@ import {
 } from "preact/hooks"
 import type { ComponentChildren } from "preact"
 
+import {
+	defaultDesignAppearance,
+	setDesignAppearancePaint,
+	summarizeDesignAppearance,
+	swapDesignAppearancePaints,
+	validDesignAppearance,
+	type AppearancePaintTarget,
+} from "./appearance.ts"
 import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
 import {
@@ -108,6 +116,7 @@ import {
 	type DesignTileKind,
 } from "./design-tile-registry.ts"
 import type {
+	DesignAppearance,
 	DesignDocument,
 	DesignGeometry,
 	DesignObject,
@@ -316,8 +325,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
-	const [currentSwatchId, setCurrentSwatchId] = useState("swatch:coral")
-	const [selectedSwatchId, setSelectedSwatchId] = useState("swatch:coral")
+	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
+		() => defaultDesignAppearance(initialLoad.document.swatches),
+	)
+	const [appearanceTarget, setAppearanceTarget] =
+		useState<AppearancePaintTarget>("fill")
+	const [selectedSwatchId, setSelectedSwatchId] = useState(
+		() =>
+			defaultDesignAppearance(initialLoad.document.swatches).fill?.swatchId ??
+			"",
+	)
 	const [paletteOpen, setPaletteOpen] = useState(false)
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<DesignTileKind> | null>(null)
@@ -353,8 +370,29 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}, [])
 	documentRef.current = document
 	persistenceRef.current = persistence
-	const selectedObject =
-		document.objects.find((object) => selection.includes(object.id)) ?? null
+	const selectedObjects = document.objects.filter((object) =>
+		selection.includes(object.id),
+	)
+	const selectedObject = selectedObjects[0] ?? null
+	const authoredAppearance = validDesignAppearance(
+		currentAppearance,
+		document.swatches,
+	)
+	const fallbackSwatchId =
+		authoredAppearance.fill?.swatchId ??
+		authoredAppearance.stroke?.swatchId ??
+		document.swatches[0]?.id
+	const appearanceSummary = summarizeDesignAppearance(
+		selectedObjects,
+		authoredAppearance,
+	)
+	const lockedAppearanceObject = selectedObjects.find((object) => object.locked)
+	const appearanceDisabledReason =
+		lockedAppearanceObject === undefined
+			? document.swatches.length === 0
+				? "Add a document swatch before assigning paint."
+				: null
+			: `Unlock ${lockedAppearanceObject.name} before editing the selection appearance.`
 	const selectedSwatch =
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
@@ -468,7 +506,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const object = createDesignPenObject({
 				id: `object:${nextId()}`,
 				name: `Pen path ${document.objects.length + 1}`,
-				fillId: currentSwatchId,
+				appearance: authoredAppearance,
 				points,
 				closed,
 			})
@@ -476,13 +514,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 				cancelCanvasGesture()
 				return
 			}
-			if (
-				!commitVectorIntent({
-					kind: "create-object",
-					object: projectDesignVectorObject(document, object),
-				})
-			)
-				return
+			commit({ ...document, objects: [...document.objects, object] })
+			setSelection([object.id])
 			penPointsRef.current = []
 			setPenPoints([])
 			setGesturePreview(null)
@@ -491,13 +524,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
 			)
 		},
-		[
-			cancelCanvasGesture,
-			commitVectorIntent,
-			currentSwatchId,
-			document,
-			nextId,
-		],
+		[cancelCanvasGesture, commit, authoredAppearance, document, nextId],
 	)
 
 	const exportDocument = useCallback((): void => {
@@ -511,24 +538,6 @@ export function DesignApplication(props: DesignApplicationProps) {
 		object: DesignObject,
 		property: Partial<DesignObject>,
 	): void => {
-		if (property.appearance?.fill !== undefined) {
-			const swatch = document.swatches.find(
-				(candidate) => candidate.id === property.appearance?.fill?.swatchId,
-			)
-			if (swatch !== undefined)
-				commitVectorIntent({
-					kind: "set-style",
-					objectId: object.id,
-					style: projectDesignVectorObject(document, {
-						...object,
-						appearance: {
-							...object.appearance,
-							fill: { swatchId: swatch.id },
-						},
-					}).style,
-				})
-			return
-		}
 		commitVectorIntent({
 			kind: "set-object-properties",
 			objectId: object.id,
@@ -577,6 +586,66 @@ export function DesignApplication(props: DesignApplicationProps) {
 		})
 	}
 
+	const applyAppearancePaint = (
+		target: AppearancePaintTarget,
+		swatchId: string | undefined,
+	): void => {
+		if (appearanceDisabledReason !== null) {
+			setStatus(appearanceDisabledReason)
+			return
+		}
+		if (
+			swatchId !== undefined &&
+			!document.swatches.some((swatch) => swatch.id === swatchId)
+		) {
+			setStatus(`Unknown design swatch ${swatchId}.`)
+			return
+		}
+		const update = (appearance: DesignAppearance): DesignAppearance =>
+			setDesignAppearancePaint(appearance, target, swatchId)
+		setCurrentAppearance(update)
+		if (selectedObjects.length > 0)
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					selection.includes(object.id)
+						? { ...object, appearance: update(object.appearance) }
+						: object,
+				),
+			})
+		setStatus(
+			`${target === "fill" ? "Fill" : "Stroke"} paint set to ${
+				swatchId === undefined
+					? "none"
+					: (document.swatches.find((swatch) => swatch.id === swatchId)?.name ??
+						swatchId)
+			}${selectedObjects.length === 0 ? " for new objects" : ""}.`,
+		)
+	}
+
+	const swapAppearance = (): void => {
+		if (appearanceDisabledReason !== null) {
+			setStatus(appearanceDisabledReason)
+			return
+		}
+		setCurrentAppearance(swapDesignAppearancePaints)
+		if (selectedObjects.length > 0)
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					selection.includes(object.id)
+						? {
+								...object,
+								appearance: swapDesignAppearancePaints(object.appearance),
+							}
+						: object,
+				),
+			})
+		setStatus(
+			`Swapped fill and stroke${selectedObjects.length === 0 ? " for new objects" : ""}.`,
+		)
+	}
+
 	const addSwatch = (): void => {
 		const swatch: DesignSwatch = {
 			id: `swatch:${nextId()}`,
@@ -585,11 +654,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 		commit({ ...document, swatches: [...document.swatches, swatch] })
 		setSelectedSwatchId(swatch.id)
-		setCurrentSwatchId(swatch.id)
 	}
 
 	const designTileContext: DesignTileContext = {
 		addSwatch,
+		appearanceDisabledReason,
+		appearanceSummary,
+		appearanceTarget,
+		applyAppearancePaint,
 		deleteSelection,
 		document,
 		expandSelection,
@@ -598,24 +670,29 @@ export function DesignApplication(props: DesignApplicationProps) {
 			: expansionEligibility.reason,
 		exportDocument,
 		focusCanvas: () => artboardWrapRef.current?.focus(),
-		selectObject: (object) => setSelection([object.id]),
-		selectSwatch: (swatch) => {
-			setSelectedSwatchId(swatch.id)
-			setCurrentSwatchId(swatch.id)
-			if (selectedObject !== null)
-				setObjectProperty(selectedObject, {
-					appearance: {
-						...selectedObject.appearance,
-						fill: { swatchId: swatch.id },
-					},
-				})
-		},
+		selectObject: (object, additive = false) =>
+			setSelection((current) =>
+				additive
+					? current.includes(object.id)
+						? current.filter((id) => id !== object.id)
+						: [...current, object.id]
+					: [object.id],
+			),
+		selectSwatch: (swatch) => setSelectedSwatchId(swatch.id),
 		selectTool,
 		selectedObject,
+		selectedObjectCount: selectedObjects.length,
+		selectedObjectIds: selection,
 		selectedSwatch,
 		selectedSwatchId,
 		setObjectProperty,
 		setObjectGeometry,
+		setAppearanceTarget: (target) => {
+			setAppearanceTarget(target)
+			const value = appearanceSummary[target]
+			if (value !== null && value !== "mixed") setSelectedSwatchId(value)
+		},
+		swapAppearancePaints: swapAppearance,
 		tool,
 		updateSwatch,
 		zoom: canvasView.zoom,
@@ -1038,12 +1115,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 			}
 			const vector = readVectorClipboard(event.clipboardData)
 			if (vector !== null) {
+				if (fallbackSwatchId === undefined) {
+					setStatus("Add a document swatch before pasting vector artwork.")
+					return
+				}
 				const result = importDesignVectorClipboard(
 					document,
 					selection,
 					vector,
 					nextId,
-					currentSwatchId,
+					fallbackSwatchId,
 				)
 				if (!result.ok) {
 					setStatus(result.error)
@@ -1082,7 +1163,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			window.removeEventListener("copy", copy)
 			window.removeEventListener("paste", paste)
 		}
-	}, [commit, currentSwatchId, document, nextId, selection])
+	}, [commit, document, fallbackSwatchId, nextId, selection])
 
 	const gestureModifiers = (
 		event: Pick<PointerEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
@@ -1279,7 +1360,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 								radiusY: (bounds.maxY - bounds.minY) / 2,
 							},
 				transform: IDENTITY_DESIGN_TRANSFORM,
-				appearance: { fill: { swatchId: currentSwatchId } },
+				appearance: authoredAppearance,
 			}
 			commit({ ...document, objects: [...document.objects, object] })
 			setSelection([object.id])
@@ -1386,9 +1467,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 			: document.objects.map((object) =>
 					object.id === previewObject.id ? previewObject : object,
 				)
-	const currentSwatch =
-		document.swatches.find((swatch) => swatch.id === currentSwatchId) ??
-		document.swatches[0]
+	const previewSwatch = document.swatches.find(
+		(swatch) =>
+			swatch.id ===
+			(authoredAppearance.fill?.swatchId ??
+				authoredAppearance.stroke?.swatchId),
+	)
 	const selectionBounds =
 		tool === "transform" && selectedObject !== null
 			? objectBounds(previewObject ?? selectedObject)
@@ -1661,13 +1745,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 													/>
 												)),
 											)}
-									{gesturePreview?.kind !== "shape" ||
-									currentSwatch === undefined ? null : (
+									{gesturePreview?.kind !== "shape" ? null : (
 										<VectorShapePreview
 											preview={gesturePreview}
 											inverseScale={1 / worldScale}
 											color="#e17352"
-											fill={swatchCss(currentSwatch)}
+											{...(previewSwatch === undefined
+												? {}
+												: { fill: swatchCss(previewSwatch) })}
 										/>
 									)}
 									{gesturePreview?.kind === "pen" ? (
