@@ -108,6 +108,13 @@ describe("VersionControlTile", () => {
 		)
 		if (!(glyph instanceof HTMLButtonElement))
 			throw new Error("Changed glyph action not found.")
+		const source = [...host.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("names.jsonmodified"),
+		)
+		if (!(source instanceof HTMLButtonElement))
+			throw new Error("Changed source row not found.")
+		expect(glyph.getAttribute("aria-label")).toBe("Review glyph O")
+		expect(source.disabled).toBe(true)
 		act(() => glyph.click())
 		expect(review).toHaveBeenCalledExactlyOnceWith(oGlyphId)
 	})

@@ -166,7 +166,7 @@ let versionControlState: Readonly<{
 	comparison?: NonNullable<EditorBrowserOptions["versionControl"]>["comparison"]
 	error?: string
 	loading: boolean
-}> = { loading: true }
+}> = { loading: false }
 const rpcClient = createFontRpcClient(window.location.origin)
 let comparisonRequestSequence = 0
 let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }

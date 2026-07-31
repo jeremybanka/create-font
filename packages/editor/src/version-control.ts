@@ -1,45 +1,59 @@
 import type { EditorFontSource, GlyphId } from "@create-font/states"
 
-export type VersionControlChangeKind = "added" | "deleted" | "modified"
+import type {
+	SourceReviewAdapter,
+	SourceReviewChange,
+	SourceReviewChangeState,
+	SourceReviewCommitRequest,
+	SourceReviewComparison,
+	SourceReviewController,
+	SourceReviewEndpoint,
+} from "./source-review.ts"
 
-export type VersionControlChangeUnit = Readonly<{
-	change: VersionControlChangeKind
-	id: string
-	kind: "glyph" | "source"
-	label: string
-	paths: readonly string[]
-}>
+export type VersionControlChangeKind = SourceReviewChangeState
 
-export type VersionControlEndpoint = Readonly<{
-	identity: string
-	kind: "ref" | "working"
-	label: string
-	ref?: string
-	source: EditorFontSource
-}>
+export type VersionControlChangeUnit = SourceReviewChange &
+	Readonly<{
+		kind: "glyph" | "source"
+	}>
 
-export type VersionControlComparison = Readonly<{
-	base: VersionControlEndpoint
-	changes: readonly VersionControlChangeUnit[]
-	identity: string
-	target: VersionControlEndpoint
-}>
+export type VersionControlEndpoint = SourceReviewEndpoint &
+	Readonly<{
+		source: EditorFontSource
+	}>
 
-export type VersionControlCommitRequest = Readonly<{
-	expectedComparisonIdentity: string
-	message: string
-	paths: readonly string[]
-}>
+export type VersionControlComparison = Omit<
+	SourceReviewComparison,
+	"base" | "changes" | "target"
+> &
+	Readonly<{
+		base: VersionControlEndpoint
+		changes: readonly VersionControlChangeUnit[]
+		target: VersionControlEndpoint
+	}>
 
-export type EditorVersionControl = Readonly<{
-	comparison?: VersionControlComparison
-	error?: string
-	loading: boolean
-	onCommit: (request: VersionControlCommitRequest) => Promise<void>
-	onCompare: (baseRef: string, targetRef?: string) => Promise<void>
-}>
+export type VersionControlCommitRequest = SourceReviewCommitRequest
+
+export type EditorVersionControl = Omit<SourceReviewController, "comparison"> &
+	Readonly<{
+		comparison?: VersionControlComparison
+	}>
 
 export type GlyphDifference = VersionControlChangeKind | "unchanged"
+
+/** Font-owned navigation adapter for the product-neutral review surface. */
+export function createFontSourceReviewAdapter(
+	onReviewGlyph: (glyphId: GlyphId) => void,
+): SourceReviewAdapter<VersionControlChangeUnit> {
+	return {
+		canReview: (change) => change.kind === "glyph",
+		review(change) {
+			if (change.kind === "glyph") onReviewGlyph(change.id as GlyphId)
+		},
+		reviewLabel: (change) =>
+			change.kind === "glyph" ? `Review glyph ${change.label}` : change.label,
+	}
+}
 
 export function glyphDifference(
 	comparison: VersionControlComparison | undefined,
