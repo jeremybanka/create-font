@@ -32,7 +32,7 @@ export async function createDesignServerApp(
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
 			.get(`/workspace`, () => ({ root }))
-			.use(createSourceRpc({ adapter, source })),
+			.use(createSourceRpc({ adapter, assets: source, source })),
 	)
 	if (options.assets === undefined) return app
 	return app.use(

@@ -13,6 +13,7 @@ export type SourceUnitDescriptor = Readonly<{
 }>
 
 export type SourceManifest = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	revision: string
 	units: readonly SourceUnitDescriptor[]
 }>
@@ -23,14 +24,17 @@ export type SourceUnitSnapshot = SourceUnitDescriptor &
 	}>
 
 export type SourceProjectSnapshot = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	revision: string
 	units: readonly SourceUnitSnapshot[]
 }>
 
 export type SourceChangedEvent = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	type: `source.changed`
 	operationId?: string
 	previousRevision: string
+	removedAssetPaths?: readonly import("./assets.ts").SourceAssetPath[]
 	removedPaths: readonly SourceUnitPath[]
 	revision: string
 	units: readonly SourceUnitSnapshot[]

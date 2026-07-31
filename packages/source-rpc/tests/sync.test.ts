@@ -11,6 +11,7 @@ describe(`source synchronization`, () => {
 			revision: `one`,
 			units: [{ path: `a.json`, revision: `a1`, value: { value: 1 } }],
 		})
+		expect(state).not.toHaveProperty(`assets`)
 		const applied = applySourceSyncDelta(state, {
 			type: `source.changed`,
 			previousRevision: `one`,
@@ -30,5 +31,30 @@ describe(`source synchronization`, () => {
 				units: [],
 			}).kind,
 		).toBe(`gap`)
+	})
+
+	test(`tracks optional asset deltas without changing JSON-only state`, () => {
+		const asset = {
+			byteLength: 3,
+			digest: `sha256:${`0`.repeat(64)}` as const,
+			id: `asset:test`,
+			mediaType: `application/octet-stream`,
+			path: `assets/test.bin`,
+		}
+		const state = sourceSyncStateFromSnapshot({
+			assets: [asset],
+			revision: `one`,
+			units: [],
+		})
+		expect(state.assets?.get(asset.path)).toEqual(asset)
+		const removed = applySourceSyncDelta(state, {
+			previousRevision: `one`,
+			removedAssetPaths: [asset.path],
+			removedPaths: [],
+			revision: `two`,
+			type: `source.changed`,
+			units: [],
+		})
+		expect(removed.state.assets?.size).toBe(0)
 	})
 })

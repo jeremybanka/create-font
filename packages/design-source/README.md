@@ -46,11 +46,14 @@ Object inventory order has no scene meaning. Renaming or editing an object
 therefore changes only its object unit, while reordering changes only the layer
 unit. IDs, display names, source paths, and stacking order are independent.
 
-Groups, placed assets, embedded fonts, multiple layers, and multiple artboards
-already have explicit inventories, but source version one requires them to be
-empty or singular where the current `DesignDocument` cannot faithfully
-represent them. Later document/source versions can activate those inventories
-without inventing a competing storage boundary.
+Groups, embedded fonts, multiple layers, and multiple artboards already have
+explicit inventories, but source version one requires them to be empty or
+singular where the current `DesignDocument` cannot faithfully represent them.
+Asset inventory entries are active: each records a stable ID, safe path, media
+type, byte length, and SHA-256 digest. Asset bytes remain outside the JSON
+directory codec and are transferred atomically through
+`@create-art/source-rpc`; image decoding and placement semantics remain editor
+concerns.
 
 ## Use
 

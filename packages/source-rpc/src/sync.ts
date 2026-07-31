@@ -3,8 +3,10 @@ import type {
 	SourceProjectSnapshot,
 	SourceUnitSnapshot,
 } from "./contracts.ts"
+import type { SourceAssetDescriptor } from "./assets.ts"
 
 export type SourceSyncState = Readonly<{
+	assets?: ReadonlyMap<string, SourceAssetDescriptor>
 	revision: string
 	units: ReadonlyMap<string, SourceUnitSnapshot>
 }>
@@ -18,6 +20,11 @@ export function sourceSyncStateFromSnapshot(
 	snapshot: SourceProjectSnapshot,
 ): SourceSyncState {
 	return {
+		...(snapshot.assets === undefined
+			? {}
+			: {
+					assets: new Map(snapshot.assets.map((asset) => [asset.path, asset])),
+				}),
 		revision: snapshot.revision,
 		units: new Map(snapshot.units.map((unit) => [unit.path, unit])),
 	}
@@ -30,10 +37,21 @@ export function applySourceSyncDelta(
 	if (event.revision === state.revision) return { kind: `duplicate`, state }
 	if (event.previousRevision !== state.revision) return { kind: `gap`, state }
 	const units = new Map(state.units)
+	const assets = new Map(state.assets ?? [])
 	for (const path of event.removedPaths) units.delete(path)
 	for (const unit of event.units) units.set(unit.path, unit)
+	for (const path of event.removedAssetPaths ?? []) assets.delete(path)
+	for (const asset of event.assets ?? []) assets.set(asset.path, asset)
 	return {
 		kind: `applied`,
-		state: { revision: event.revision, units },
+		state: {
+			...(state.assets === undefined &&
+			event.assets === undefined &&
+			event.removedAssetPaths === undefined
+				? {}
+				: { assets }),
+			revision: event.revision,
+			units,
+		},
 	}
 }

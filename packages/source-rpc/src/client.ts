@@ -1,4 +1,12 @@
 import type {
+	SourceAssetContent,
+	SourceAssetDescriptor,
+	SourceAssetDigest,
+	StagedSourceAsset,
+	WriteSourceAssetsInput,
+	WriteSourceAssetsResult,
+} from "./assets.ts"
+import type {
 	SourceProjectSnapshot,
 	WriteSourceUnitsInput,
 	WriteSourceUnitsResult,
@@ -7,9 +15,10 @@ import type {
 async function responseJson<Value>(response: Response): Promise<Value> {
 	const value = (await response.json()) as Value | { message?: string }
 	if (!response.ok) {
+		const errorValue = value as { message?: unknown }
 		throw new Error(
-			`message` in Object(value) && typeof value.message === `string`
-				? value.message
+			typeof errorValue.message === `string`
+				? errorValue.message
 				: `Source RPC request failed with ${response.status}.`,
 		)
 	}
@@ -19,10 +28,81 @@ async function responseJson<Value>(response: Response): Promise<Value> {
 export function createSourceRpcClient(origin = ``) {
 	const base = origin.replace(/\/$/, ``)
 	return {
+		discardAssetStage: (stagingToken: string) =>
+			fetch(
+				`${base}/api/source/asset/stage?${new URLSearchParams({
+					stagingToken,
+				})}`,
+				{ method: `DELETE` },
+			).then((response) =>
+				responseJson<Readonly<{ discarded: true }>>(response),
+			),
+		readAsset: async (path: string): Promise<SourceAssetContent> => {
+			const response = await fetch(
+				`${base}/api/source/asset?${new URLSearchParams({ path })}`,
+			)
+			if (!response.ok) {
+				await responseJson<never>(response)
+				throw new Error(`Unreachable source asset response.`)
+			}
+			const bytes = response.body
+			const id = response.headers.get(`x-source-asset-id`)
+			const digest = response.headers.get(`x-source-asset-digest`)
+			const mediaType = response.headers.get(`content-type`)
+			const byteLength = Number(response.headers.get(`content-length`))
+			if (
+				bytes === null ||
+				id === null ||
+				digest === null ||
+				mediaType === null ||
+				!Number.isSafeInteger(byteLength)
+			) {
+				throw new Error(`Source RPC returned invalid asset metadata.`)
+			}
+			return {
+				bytes,
+				descriptor: {
+					byteLength,
+					digest: digest as SourceAssetDigest,
+					id: decodeURIComponent(id),
+					mediaType,
+					path,
+				},
+			}
+		},
 		readSnapshot: () =>
 			fetch(`${base}/api/source/snapshot`).then((response) =>
 				responseJson<SourceProjectSnapshot>(response),
 			),
+		stageAsset: (
+			operationId: string,
+			descriptor: SourceAssetDescriptor,
+			bytes: BodyInit,
+		) =>
+			fetch(
+				`${base}/api/source/asset/stage?${new URLSearchParams({
+					byteLength: String(descriptor.byteLength),
+					digest: descriptor.digest,
+					id: descriptor.id,
+					mediaType: descriptor.mediaType,
+					operationId,
+					path: descriptor.path,
+				})}`,
+				{
+					body: bytes,
+					duplex: `half`,
+					headers: {
+						"content-type": `application/vnd.create-art.source-asset`,
+					},
+					method: `PUT`,
+				} as RequestInit & { duplex: `half` },
+			).then((response) => responseJson<StagedSourceAsset>(response)),
+		writeAssets: (input: WriteSourceAssetsInput) =>
+			fetch(`${base}/api/source/assets`, {
+				body: JSON.stringify(input),
+				headers: { "content-type": `application/json` },
+				method: `PUT`,
+			}).then((response) => responseJson<WriteSourceAssetsResult>(response)),
 		writeUnits: (input: WriteSourceUnitsInput) =>
 			fetch(`${base}/api/source/units`, {
 				body: JSON.stringify(input),
