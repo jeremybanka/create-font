@@ -44,17 +44,21 @@ describe("PDF export", () => {
 				{
 					id: "object:pen",
 					name: "Pen",
-					fillId: "swatch:coral",
-					contours: [
-						{
-							closed: false,
-							points: [
-								{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
-								{ x: 160, y: 120, incoming: { x: -30, y: -20 } },
-								{ x: 80, y: 200 },
-							],
-						},
-					],
+					geometry: {
+						kind: "path",
+						contours: [
+							{
+								closed: false,
+								points: [
+									{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
+									{ x: 160, y: 120, incoming: { x: -30, y: -20 } },
+									{ x: 80, y: 200 },
+								],
+							},
+						],
+					},
+					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+					appearance: { fill: { swatchId: "swatch:coral" } },
 				},
 			],
 		})
@@ -64,27 +68,37 @@ describe("PDF export", () => {
 		expect(content).not.toMatch(/(^|\n)S($|\n)/)
 	})
 
+	it("exports optional strokes without requiring a fill", () => {
+		const document = createInitialDocument()
+		const object = document.objects[0]!
+		const content = pdfContentStream({
+			...document,
+			objects: [
+				{
+					...object,
+					appearance: {
+						stroke: { swatchId: "swatch:ink", width: 3 },
+					},
+				},
+			],
+		})
+		expect(content).toContain("0.6 0.4 0.4 1 K")
+		expect(content).toContain("3 w")
+		expect(content).toMatch(/(^|\n)S($|\n)/)
+		expect(content).not.toContain("f*")
+	})
+
 	it("reuses unrelated object projections after a geometry edit", () => {
 		const graph = createPdfProjectionGraph()
 		const document = createInitialDocument()
 		const before = graph.project(document)
 		const object = document.objects[0]!
-		const contour = object.contours[0]!
-		const point = contour.points[0]!
 		const after = graph.project({
 			...document,
 			objects: [
 				{
 					...object,
-					contours: [
-						{
-							...contour,
-							points: [
-								{ ...point, x: point.x + 1 },
-								...contour.points.slice(1),
-							],
-						},
-					],
+					transform: { ...object.transform, e: object.transform.e + 1 },
 				},
 				...document.objects.slice(1),
 			],

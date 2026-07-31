@@ -10,7 +10,6 @@ import {
 	snapDesignObject,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
-import { rectangleContour } from "../src/geometry.ts"
 import type { DesignObject } from "../src/types.ts"
 
 const rectangle = (
@@ -22,8 +21,15 @@ const rectangle = (
 ): DesignObject => ({
 	id,
 	name: id,
-	fillId: "swatch:coral",
-	contours: [{ ...rectangleContour({ minX, minY, maxX, maxY }) }],
+	geometry: {
+		kind: "rectangle",
+		x: minX,
+		y: minY,
+		width: maxX - minX,
+		height: maxY - minY,
+	},
+	transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+	appearance: { fill: { swatchId: "swatch:coral" } },
 })
 
 describe("design canvas adapter", () => {

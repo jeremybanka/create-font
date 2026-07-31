@@ -8,8 +8,9 @@ into validated JSON units.
 ## Version-one directory
 
 The first directory version deliberately matches the current application
-model: one artboard, one layer, ordinary path objects, one palette, and empty
-group, asset, and font inventories.
+model: one artboard, one layer, authored path/rectangle/ellipse geometry,
+independent affine object transforms, optional fill/stroke appearance, one
+palette, and empty group, asset, and font inventories.
 
 ```text
 create-design.json
@@ -54,6 +55,12 @@ type, byte length, and SHA-256 digest. Asset bytes remain outside the JSON
 directory codec and are transferred atomically through
 `@create-art/source-rpc`; image decoding and placement semantics remain editor
 concerns.
+
+Version-one readers also accept the earlier `{ contours, fillId }` object shape
+and deterministically normalize it to path geometry, an identity transform,
+and a fill appearance. Writers emit only the canonical separated shape. This
+compatibility normalization does not claim the future document-version
+dispatch and diagnostics contract tracked separately by the versioning work.
 
 ## Use
 

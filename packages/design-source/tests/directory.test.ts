@@ -38,33 +38,34 @@ const fixture = (): DesignDocument => ({
 		{
 			id: "object:coral",
 			name: "Coral rectangle",
-			fillId: "swatch:coral",
-			contours: [
-				{
-					closed: true,
-					points: [
-						{ x: 82, y: 102 },
-						{ x: 362, y: 102 },
-						{ x: 362, y: 342 },
-						{ x: 82, y: 342 },
-					],
-				},
-			],
+			geometry: {
+				kind: "rectangle",
+				x: 82,
+				y: 102,
+				width: 280,
+				height: 240,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:coral" } },
 		},
 		{
 			id: "object:ink",
 			name: "Ink curve",
-			fillId: "swatch:ink",
 			locked: true,
-			contours: [
-				{
-					closed: false,
-					points: [
-						{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
-						{ x: 180, y: 120, incoming: { x: -40, y: -10 } },
-					],
-				},
-			],
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						closed: false,
+						points: [
+							{ x: 40, y: 50, outgoing: { x: 30, y: 20 } },
+							{ x: 180, y: 120, incoming: { x: -40, y: -10 } },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:ink" } },
 		},
 	],
 	guides: [{ id: "guide:center", axis: "x", value: 306 }],
@@ -121,6 +122,42 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("normalizes legacy path-and-fill objects deterministically", () => {
+		const document = fixture()
+		const result = validateDesignDocument({
+			...document,
+			objects: [
+				{
+					id: "object:legacy",
+					name: "Legacy",
+					contours: [
+						{
+							closed: true,
+							points: [
+								{ x: 1, y: 2 },
+								{ x: 3, y: 4 },
+								{ x: 5, y: 6 },
+							],
+						},
+					],
+					fillId: "swatch:coral",
+				},
+			],
+		})
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				objects: [
+					{
+						geometry: { kind: "path" },
+						transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+						appearance: { fill: { swatchId: "swatch:coral" } },
+					},
+				],
+			},
+		})
+	})
+
 	it("splits and reassembles the current document without losing authored facts", () => {
 		const document = fixture()
 		const files = split(document)
@@ -423,7 +460,10 @@ describe("create-design directory source", () => {
 				...document,
 				objects: [
 					...document.objects,
-					{ ...document.objects[0], fillId: "swatch:missing" },
+					{
+						...document.objects[0],
+						appearance: { fill: { swatchId: "swatch:missing" } },
+					},
 				],
 			}),
 		).toMatchObject({

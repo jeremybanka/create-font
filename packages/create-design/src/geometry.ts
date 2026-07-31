@@ -1,11 +1,28 @@
-import type { DesignContour, DesignObject, DesignPoint } from "./types.ts"
+import {
+	boundsOfPoints,
+	cubicBounds,
+	type Bounds,
+	type Cubic,
+} from "@create-art/vector-geometry"
 
-export interface Bounds {
-	readonly minX: number
-	readonly minY: number
-	readonly maxX: number
-	readonly maxY: number
-}
+import type {
+	DesignContour,
+	DesignGeometry,
+	DesignObject,
+	DesignPoint,
+	DesignTransform,
+} from "./types.ts"
+
+export type { Bounds } from "@create-art/vector-geometry"
+
+export const IDENTITY_DESIGN_TRANSFORM: DesignTransform = Object.freeze({
+	a: 1,
+	b: 0,
+	c: 0,
+	d: 1,
+	e: 0,
+	f: 0,
+})
 
 export const ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
@@ -57,6 +74,71 @@ export function ellipseContour(bounds: Bounds): DesignContour {
 	}
 }
 
+export function geometryContours(
+	geometry: DesignGeometry,
+): readonly DesignContour[] {
+	if (geometry.kind === "path") return geometry.contours
+	if (geometry.kind === "rectangle") {
+		return [
+			rectangleContour({
+				minX: geometry.x,
+				minY: geometry.y,
+				maxX: geometry.x + geometry.width,
+				maxY: geometry.y + geometry.height,
+			}),
+		]
+	}
+	return [
+		ellipseContour({
+			minX: geometry.centerX - geometry.radiusX,
+			minY: geometry.centerY - geometry.radiusY,
+			maxX: geometry.centerX + geometry.radiusX,
+			maxY: geometry.centerY + geometry.radiusY,
+		}),
+	]
+}
+
+function transformVector(
+	transform: DesignTransform,
+	vector: Readonly<{ x: number; y: number }>,
+) {
+	return {
+		x: transform.a * vector.x + transform.c * vector.y,
+		y: transform.b * vector.x + transform.d * vector.y,
+	}
+}
+
+export function transformDesignPoint(
+	transform: DesignTransform,
+	point: DesignPoint,
+): DesignPoint {
+	return {
+		x: transform.a * point.x + transform.c * point.y + transform.e,
+		y: transform.b * point.x + transform.d * point.y + transform.f,
+		...(point.incoming === undefined
+			? {}
+			: { incoming: transformVector(transform, point.incoming) }),
+		...(point.outgoing === undefined
+			? {}
+			: { outgoing: transformVector(transform, point.outgoing) }),
+	}
+}
+
+/**
+ * Projects authored geometry into document-space contours. This is the single
+ * intentional bake boundary used by renderers and interoperability adapters.
+ */
+export function projectDesignObjectContours(
+	object: Pick<DesignObject, "geometry" | "transform">,
+): readonly DesignContour[] {
+	return geometryContours(object.geometry).map((contour) => ({
+		...contour,
+		points: contour.points.map((point) =>
+			transformDesignPoint(object.transform, point),
+		),
+	}))
+}
+
 const pathNumber = (value: number): string =>
 	Number(value.toFixed(3)).toString()
 
@@ -96,38 +178,44 @@ function segmentSvgPath(from: DesignPoint, to: DesignPoint): string {
 }
 
 export function objectSvgPath(object: DesignObject): string {
-	return object.contours.map(contourSvgPath).join(" ")
+	return projectDesignObjectContours(object).map(contourSvgPath).join(" ")
+}
+
+function cubicForSegment(from: DesignPoint, to: DesignPoint): Cubic {
+	const outgoing = from.outgoing ?? { x: 0, y: 0 }
+	const incoming = to.incoming ?? { x: 0, y: 0 }
+	return {
+		p0: from,
+		c1: { x: from.x + outgoing.x, y: from.y + outgoing.y },
+		c2: { x: to.x + incoming.x, y: to.y + incoming.y },
+		p3: to,
+	}
 }
 
 export function objectBounds(object: DesignObject): Bounds | null {
-	const points = object.contours.flatMap((contour) =>
-		contour.points.flatMap((point) => [
-			point,
-			...(point.incoming === undefined
-				? []
-				: [
-						{
-							x: point.x + point.incoming.x,
-							y: point.y + point.incoming.y,
-						},
-					]),
-			...(point.outgoing === undefined
-				? []
-				: [
-						{
-							x: point.x + point.outgoing.x,
-							y: point.y + point.outgoing.y,
-						},
-					]),
-		]),
-	)
+	const contours = projectDesignObjectContours(object)
+	const points = contours.flatMap((contour) => contour.points)
 	if (points.length === 0) return null
-	return {
-		minX: Math.min(...points.map((point) => point.x)),
-		minY: Math.min(...points.map((point) => point.y)),
-		maxX: Math.max(...points.map((point) => point.x)),
-		maxY: Math.max(...points.map((point) => point.y)),
+	let bounds = boundsOfPoints(points)
+	if (bounds === null) return null
+	for (const contour of contours) {
+		const count = contour.closed
+			? contour.points.length
+			: Math.max(0, contour.points.length - 1)
+		for (let index = 0; index < count; index += 1) {
+			const from = contour.points[index]
+			const to = contour.points[(index + 1) % contour.points.length]
+			if (from === undefined || to === undefined) continue
+			const segmentBounds = cubicBounds(cubicForSegment(from, to))
+			bounds = {
+				minX: Math.min(bounds.minX, segmentBounds.minX),
+				minY: Math.min(bounds.minY, segmentBounds.minY),
+				maxX: Math.max(bounds.maxX, segmentBounds.maxX),
+				maxY: Math.max(bounds.maxY, segmentBounds.maxY),
+			}
+		}
 	}
+	return bounds
 }
 
 export function translateObject(
@@ -135,11 +223,14 @@ export function translateObject(
 	x: number,
 	y: number,
 ): DesignObject {
-	return mapObjectPoints(object, (point) => ({
-		...point,
-		x: point.x + x,
-		y: point.y + y,
-	}))
+	return {
+		...object,
+		transform: {
+			...object.transform,
+			e: object.transform.e + x,
+			f: object.transform.f + y,
+		},
+	}
 }
 
 export function scaleObject(
@@ -148,39 +239,50 @@ export function scaleObject(
 	scaleX: number,
 	scaleY: number,
 ): DesignObject {
-	return mapObjectPoints(object, (point) => ({
-		...point,
-		x: anchor.x + (point.x - anchor.x) * scaleX,
-		y: anchor.y + (point.y - anchor.y) * scaleY,
-		...(point.incoming === undefined
-			? {}
-			: {
-					incoming: {
-						x: point.incoming.x * scaleX,
-						y: point.incoming.y * scaleY,
-					},
-				}),
-		...(point.outgoing === undefined
-			? {}
-			: {
-					outgoing: {
-						x: point.outgoing.x * scaleX,
-						y: point.outgoing.y * scaleY,
-					},
-				}),
-	}))
-}
-
-function mapObjectPoints(
-	object: DesignObject,
-	map: (point: DesignPoint) => DesignPoint,
-): DesignObject {
+	const transform = object.transform
 	return {
 		...object,
-		contours: object.contours.map((contour) => ({
-			...contour,
-			points: contour.points.map(map),
-		})),
+		transform: {
+			a: scaleX * transform.a,
+			b: scaleY * transform.b,
+			c: scaleX * transform.c,
+			d: scaleY * transform.d,
+			e: anchor.x + scaleX * (transform.e - anchor.x),
+			f: anchor.y + scaleY * (transform.f - anchor.y),
+		},
+	}
+}
+
+export function rotateObject(
+	object: DesignObject,
+	anchor: Readonly<{ x: number; y: number }>,
+	degrees: number,
+): DesignObject {
+	const radians = (degrees * Math.PI) / 180
+	const cosine = Math.cos(radians)
+	const sine = Math.sin(radians)
+	const transform = object.transform
+	const offsetX = transform.e - anchor.x
+	const offsetY = transform.f - anchor.y
+	return {
+		...object,
+		transform: {
+			a: cosine * transform.a - sine * transform.b,
+			b: sine * transform.a + cosine * transform.b,
+			c: cosine * transform.c - sine * transform.d,
+			d: sine * transform.c + cosine * transform.d,
+			e: anchor.x + cosine * offsetX - sine * offsetY,
+			f: anchor.y + sine * offsetX + cosine * offsetY,
+		},
+	}
+}
+
+/** Explicitly bakes the current transform and any live shape into path geometry. */
+export function bakeDesignObject(object: DesignObject): DesignObject {
+	return {
+		...object,
+		geometry: { kind: "path", contours: projectDesignObjectContours(object) },
+		transform: IDENTITY_DESIGN_TRANSFORM,
 	}
 }
 

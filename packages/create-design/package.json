@@ -38,6 +38,7 @@
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {
+		"@create-art/vector-geometry": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
 		"@create-design/source": "workspace:*",
 		"@create-font/editor": "workspace:*",

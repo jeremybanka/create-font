@@ -2,8 +2,14 @@ import {
 	writeVectorClipboard,
 	type VectorClipboardPayload,
 } from "@create-font/editor/shared"
+import { validateDesignDocument } from "@create-design/source"
 
-import { objectBounds, translateObject } from "./geometry.ts"
+import {
+	IDENTITY_DESIGN_TRANSFORM,
+	objectBounds,
+	projectDesignObjectContours,
+	translateObject,
+} from "./geometry.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -68,12 +74,21 @@ export function writeDesignClipboard(
 		objectIds.includes(object.id),
 	)
 	if (selected.length === 0) return 0
-	const fillIds = new Set(selected.map((object) => object.fillId))
+	const swatchIds = new Set(
+		selected.flatMap((object) => [
+			...(object.appearance.fill === undefined
+				? []
+				: [object.appearance.fill.swatchId]),
+			...(object.appearance.stroke === undefined
+				? []
+				: [object.appearance.stroke.swatchId]),
+		]),
+	)
 	const payload: DesignClipboardPayload = {
 		format: "create-design.vector",
 		version: 1,
 		objects: selected,
-		swatches: document.swatches.filter((swatch) => fillIds.has(swatch.id)),
+		swatches: document.swatches.filter((swatch) => swatchIds.has(swatch.id)),
 	}
 	const font = designObjectsToFontOutline(selected, document.page.height)
 	clipboard.setData(DESIGN_VECTOR_MIME, JSON.stringify(payload))
@@ -123,7 +138,27 @@ export function readDesignClipboard(
 						{
 							...object,
 							id: `object:${nextId()}`,
-							fillId: swatchIds.get(object.fillId) ?? object.fillId,
+							appearance: {
+								...(object.appearance.fill === undefined
+									? {}
+									: {
+											fill: {
+												swatchId:
+													swatchIds.get(object.appearance.fill.swatchId) ??
+													object.appearance.fill.swatchId,
+											},
+										}),
+								...(object.appearance.stroke === undefined
+									? {}
+									: {
+											stroke: {
+												...object.appearance.stroke,
+												swatchId:
+													swatchIds.get(object.appearance.stroke.swatchId) ??
+													object.appearance.stroke.swatchId,
+											},
+										}),
+							},
 						},
 						12,
 						12,
@@ -154,7 +189,7 @@ export function designObjectsToFontOutline(
 	const points: FontOutlinePayload["layers"][number]["points"][number][] = []
 	let contourIndex = 0
 	for (const object of objects) {
-		for (const contour of object.contours) {
+		for (const contour of projectDesignObjectContours(object)) {
 			const outlinePoints = contour.points.map((point, pointIndex) => {
 				const key = `${contourIndex}/${pointIndex}`
 				points.push({
@@ -205,11 +240,29 @@ export function designObjectsToFontOutline(
 function parseDesignPayload(value: string): DesignClipboardPayload | null {
 	try {
 		const parsed = JSON.parse(value) as Partial<DesignClipboardPayload>
-		return parsed.format === "create-design.vector" &&
-			parsed.version === 1 &&
-			Array.isArray(parsed.objects) &&
-			Array.isArray(parsed.swatches)
-			? (parsed as DesignClipboardPayload)
+		if (
+			parsed.format !== "create-design.vector" ||
+			parsed.version !== 1 ||
+			!Array.isArray(parsed.objects) ||
+			!Array.isArray(parsed.swatches)
+		)
+			return null
+		const normalized = validateDesignDocument({
+			format: "create-design.document",
+			version: 1,
+			title: "Clipboard",
+			page: { width: 1, height: 1 },
+			objects: parsed.objects,
+			swatches: parsed.swatches,
+			guides: [],
+		})
+		return normalized.ok
+			? {
+					format: "create-design.vector",
+					version: 1,
+					objects: normalized.value.objects,
+					swatches: normalized.value.swatches,
+				}
 			: null
 	} catch {
 		return null
@@ -275,8 +328,9 @@ function fontOutlineToDesignObject(
 	const object: DesignObject = {
 		id: `object:${nextId()}`,
 		name: "Pasted create-font outline",
-		contours,
-		fillId: "swatch:ink",
+		geometry: { kind: "path", contours },
+		transform: IDENTITY_DESIGN_TRANSFORM,
+		appearance: { fill: { swatchId: "swatch:ink" } },
 	}
 	const bounds = objectBounds(object)
 	if (bounds === null) return null

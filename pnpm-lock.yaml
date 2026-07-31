@@ -58,6 +58,9 @@ importers:
 
   packages/create-design:
     dependencies:
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../vector-geometry
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../source-rpc

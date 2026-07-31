@@ -93,7 +93,12 @@ describe("live PDF compilation", () => {
 		expect(first.status).toBe("ready")
 		const invalid = {
 			...document,
-			objects: [{ ...document.objects[0]!, fillId: "swatch:missing" }],
+			objects: [
+				{
+					...document.objects[0]!,
+					appearance: { fill: { swatchId: "swatch:missing" } },
+				},
+			],
 		}
 		compiler.request(invalid)
 		queue.work[1]?.run()

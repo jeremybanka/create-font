@@ -10,6 +10,10 @@ import {
 } from "@create-font/editor/shared"
 
 import { swatchCss } from "./color.ts"
+import {
+	IDENTITY_DESIGN_TRANSFORM,
+	projectDesignObjectContours,
+} from "./geometry.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -51,27 +55,31 @@ export function projectDesignVectorObject(
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
 		...(object.locked === undefined ? {} : { locked: object.locked }),
 		style: swatchStyle(
-			document.swatches.find((swatch) => swatch.id === object.fillId),
+			document.swatches.find(
+				(swatch) => swatch.id === object.appearance.fill?.swatchId,
+			),
 		),
-		contours: object.contours.map((contour, contourIndex) => ({
-			id: `${object.id}:contour:${contourIndex}`,
-			closed: contour.closed,
-			nodes: contour.points.map((point, pointIndex) => ({
-				id: `${object.id}:contour:${contourIndex}:point:${pointIndex}`,
-				mode:
-					point.incoming === undefined && point.outgoing === undefined
-						? "hard"
-						: "soft",
-				x: point.x,
-				y: point.y,
-				...(point.incoming === undefined
-					? {}
-					: { incoming: { ...point.incoming } }),
-				...(point.outgoing === undefined
-					? {}
-					: { outgoing: { ...point.outgoing } }),
-			})),
-		})),
+		contours: projectDesignObjectContours(object).map(
+			(contour, contourIndex) => ({
+				id: `${object.id}:contour:${contourIndex}`,
+				closed: contour.closed,
+				nodes: contour.points.map((point, pointIndex) => ({
+					id: `${object.id}:contour:${contourIndex}:point:${pointIndex}`,
+					mode:
+						point.incoming === undefined && point.outgoing === undefined
+							? "hard"
+							: "soft",
+					x: point.x,
+					y: point.y,
+					...(point.incoming === undefined
+						? {}
+						: { incoming: { ...point.incoming } }),
+					...(point.outgoing === undefined
+						? {}
+						: { outgoing: { ...point.outgoing } }),
+				})),
+			}),
+		),
 	}
 }
 
@@ -143,10 +151,14 @@ export function designObjectFromVector(
 	return {
 		...current,
 		name: object.name,
-		contours: designContours(object),
+		geometry: { kind: "path", contours: designContours(object) },
+		transform: IDENTITY_DESIGN_TRANSFORM,
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
 		...(object.locked === undefined ? {} : { locked: object.locked }),
-		...(object.style.kind === "fill" ? { fillId: object.style.swatchId } : {}),
+		appearance: setAppearanceFill(
+			current.appearance,
+			object.style.kind === "fill" ? object.style.swatchId : undefined,
+		),
 	}
 }
 
@@ -154,8 +166,18 @@ function reject(error: string) {
 	return { ok: false, error } as const
 }
 
-function styleFillId(style: VectorStyle): string | null {
-	return style.kind === "fill" ? style.swatchId : null
+function appearanceFromStyle(style: VectorStyle) {
+	return style.kind === "fill" ? { fill: { swatchId: style.swatchId } } : {}
+}
+
+function setAppearanceFill(
+	current: DesignObject["appearance"],
+	swatchId: string | undefined,
+): DesignObject["appearance"] {
+	const { fill: _fill, ...withoutFill } = current
+	return swatchId === undefined
+		? withoutFill
+		: { ...withoutFill, fill: { swatchId } }
 }
 
 function replaceAt(
@@ -181,17 +203,19 @@ export const designVectorAdapter: VectorDocumentAdapter<
 			if (error !== null) return reject(error)
 			if (document.objects.some((object) => object.id === intent.object.id))
 				return reject(`Object ID ${intent.object.id} is already in use.`)
-			const fillId = styleFillId(intent.object.style)
+			const appearance = appearanceFromStyle(intent.object.style)
+			const fillId = appearance.fill?.swatchId
 			if (
-				fillId === null ||
+				fillId !== undefined &&
 				!document.swatches.some((swatch) => swatch.id === fillId)
 			)
-				return reject("Design objects require an existing fill swatch.")
+				return reject(`Unknown design swatch ${fillId}.`)
 			const object: DesignObject = {
 				id: intent.object.id,
 				name: intent.object.name,
-				contours: designContours(intent.object),
-				fillId,
+				geometry: { kind: "path", contours: designContours(intent.object) },
+				transform: IDENTITY_DESIGN_TRANSFORM,
+				appearance,
 				...(intent.object.hidden === undefined
 					? {}
 					: { hidden: intent.object.hidden }),
@@ -214,16 +238,26 @@ export const designVectorAdapter: VectorDocumentAdapter<
 			if (current === undefined)
 				return reject(`Unknown design object ${intent.object.id}.`)
 			if (current.locked) return reject(`Object ${current.id} is locked.`)
-			const fillId = styleFillId(intent.object.style) ?? current.fillId
-			if (!document.swatches.some((swatch) => swatch.id === fillId))
+			const fillId =
+				intent.object.style.kind === "fill"
+					? intent.object.style.swatchId
+					: undefined
+			if (
+				fillId !== undefined &&
+				!document.swatches.some((swatch) => swatch.id === fillId)
+			)
 				return reject(`Unknown design swatch ${fillId}.`)
 			return {
 				ok: true,
 				document: replaceAt(document, {
 					...current,
 					name: intent.object.name,
-					contours: designContours(intent.object),
-					fillId,
+					geometry: {
+						kind: "path",
+						contours: designContours(intent.object),
+					},
+					transform: IDENTITY_DESIGN_TRANSFORM,
+					appearance: setAppearanceFill(current.appearance, fillId),
 					...(intent.object.hidden === undefined
 						? {}
 						: { hidden: intent.object.hidden }),
@@ -281,15 +315,19 @@ export const designVectorAdapter: VectorDocumentAdapter<
 			if (object === undefined)
 				return reject(`Unknown design object ${intent.objectId}.`)
 			if (object.locked) return reject(`Object ${object.id} is locked.`)
-			const fillId = styleFillId(intent.style)
+			const fillId =
+				intent.style.kind === "fill" ? intent.style.swatchId : undefined
 			if (
-				fillId === null ||
+				fillId !== undefined &&
 				!document.swatches.some((swatch) => swatch.id === fillId)
 			)
-				return reject("Design objects require an existing fill swatch.")
+				return reject(`Unknown design swatch ${fillId}.`)
 			return {
 				ok: true,
-				document: replaceAt(document, { ...object, fillId }),
+				document: replaceAt(document, {
+					...object,
+					appearance: setAppearanceFill(object.appearance, fillId),
+				}),
 				selection,
 			}
 		}

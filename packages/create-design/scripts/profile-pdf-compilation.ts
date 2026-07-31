@@ -26,14 +26,11 @@ function largeDocument(): DesignDocument {
 				...template,
 				id: `benchmark:${index}`,
 				name: `Benchmark object ${index}`,
-				contours: template.contours.map((contour) => ({
-					...contour,
-					points: contour.points.map((point) => ({
-						...point,
-						x: (point.x + column * 23) % initial.page.width,
-						y: (point.y + row * 23) % initial.page.height,
-					})),
-				})),
+				transform: {
+					...template.transform,
+					e: (column * 23) % initial.page.width,
+					f: (row * 23) % initial.page.height,
+				},
 			}
 		},
 	)
@@ -45,22 +42,15 @@ function editFirstPoint(
 	iteration: number,
 ): DesignDocument {
 	const object = document.objects[0]!
-	const contour = object.contours[0]!
-	const point = contour.points[0]!
 	return {
 		...document,
 		objects: [
 			{
 				...object,
-				contours: [
-					{
-						...contour,
-						points: [
-							{ ...point, x: point.x + (iteration % 2 === 0 ? 1 : -1) },
-							...contour.points.slice(1),
-						],
-					},
-				],
+				transform: {
+					...object.transform,
+					e: object.transform.e + (iteration % 2 === 0 ? 1 : -1),
+				},
 			},
 			...document.objects.slice(1),
 		],

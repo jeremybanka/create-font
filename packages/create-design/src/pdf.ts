@@ -17,6 +17,7 @@ import {
 } from "mondrian.pdf"
 
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
+import { projectDesignObjectContours } from "./geometry.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -73,6 +74,10 @@ function fillOperator(swatch: DesignSwatch): string {
 	return `${number(r / 255)} ${number(g / 255)} ${number(b / 255)} rg`
 }
 
+function strokeOperator(swatch: DesignSwatch): string {
+	return fillOperator(swatch).replace(/ k$/u, " K").replace(/ rg$/u, " RG")
+}
+
 function colorSignature(swatch: DesignSwatch): string {
 	const source = swatch.source
 	return source.space === "rgb"
@@ -82,13 +87,28 @@ function colorSignature(swatch: DesignSwatch): string {
 
 export function pdfObjectContentStream(
 	object: DesignObject,
-	swatch: DesignSwatch,
+	fill?: DesignSwatch,
+	stroke?: DesignSwatch,
 ): string {
-	const commands = [fillOperator(swatch)]
-	for (const contour of object.contours) {
+	const commands = [
+		...(fill === undefined ? [] : [fillOperator(fill)]),
+		...(stroke === undefined
+			? []
+			: [
+					strokeOperator(stroke),
+					`${number(object.appearance.stroke?.width ?? 0)} w`,
+				]),
+	]
+	for (const contour of projectDesignObjectContours(object)) {
 		commands.push(...contourCommands(contour))
 	}
-	commands.push("f*")
+	commands.push(
+		fill !== undefined && stroke !== undefined
+			? "B*"
+			: fill !== undefined
+				? "f*"
+				: "S",
+	)
 	return commands.join("\n")
 }
 
@@ -116,11 +136,12 @@ export interface PdfProjectionGraph {
 }
 
 type ObjectCacheEntry = Readonly<{
-	contours: DesignObject["contours"]
-	fillId: string
+	appearance: DesignObject["appearance"]
+	geometry: DesignObject["geometry"]
 	hidden: boolean
 	projection: PdfObjectProjection
 	swatchSignature: string
+	transform: DesignObject["transform"]
 }>
 
 function sameOrderedProjections(
@@ -151,19 +172,31 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 		swatches: ReadonlyMap<string, DesignSwatch>,
 	): PdfObjectProjection => {
 		const hidden = object.hidden === true
-		const swatch = swatches.get(object.fillId)
-		if (!hidden && swatch === undefined) {
+		const fillId = object.appearance.fill?.swatchId
+		const strokeId = object.appearance.stroke?.swatchId
+		const fill = fillId === undefined ? undefined : swatches.get(fillId)
+		const stroke = strokeId === undefined ? undefined : swatches.get(strokeId)
+		const missingId =
+			fillId !== undefined && fill === undefined
+				? fillId
+				: strokeId !== undefined && stroke === undefined
+					? strokeId
+					: undefined
+		if (!hidden && missingId !== undefined) {
 			throw new Error(
-				`Object ${object.name || object.id} references missing swatch ${object.fillId}.`,
+				`Object ${object.name || object.id} references missing swatch ${missingId}.`,
 			)
 		}
-		const swatchSignature =
-			swatch === undefined ? "missing" : colorSignature(swatch)
+		const swatchSignature = [
+			fill === undefined ? "none" : `fill:${colorSignature(fill)}`,
+			stroke === undefined ? "none" : `stroke:${colorSignature(stroke)}`,
+		].join("|")
 		const cached = objects.get(object.id)
 		if (
 			cached !== undefined &&
-			cached.contours === object.contours &&
-			cached.fillId === object.fillId &&
+			cached.geometry === object.geometry &&
+			cached.transform === object.transform &&
+			cached.appearance === object.appearance &&
 			cached.hidden === hidden &&
 			cached.swatchSignature === swatchSignature
 		) {
@@ -174,9 +207,9 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 			stream: stream(
 				{},
 				ascii(
-					hidden || swatch === undefined
+					hidden || (fill === undefined && stroke === undefined)
 						? ""
-						: pdfObjectContentStream(object, swatch),
+						: pdfObjectContentStream(object, fill, stroke),
 				),
 			),
 			visible: !hidden,
@@ -184,11 +217,12 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 		objects.set(
 			object.id,
 			Object.freeze({
-				contours: object.contours,
-				fillId: object.fillId,
+				appearance: object.appearance,
+				geometry: object.geometry,
 				hidden,
 				projection,
 				swatchSignature,
+				transform: object.transform,
 			}),
 		)
 		return projection
@@ -304,9 +338,16 @@ export function pdfContentStream(document: DesignDocument): string {
 	const commands = [`q`, `1 0 0 -1 0 ${number(document.page.height)} cm`]
 	for (const object of document.objects) {
 		if (object.hidden) continue
-		const swatch = swatches.get(object.fillId)
-		if (swatch === undefined) continue
-		commands.push(pdfObjectContentStream(object, swatch))
+		const fill =
+			object.appearance.fill === undefined
+				? undefined
+				: swatches.get(object.appearance.fill.swatchId)
+		const stroke =
+			object.appearance.stroke === undefined
+				? undefined
+				: swatches.get(object.appearance.stroke.swatchId)
+		if (fill === undefined && stroke === undefined) continue
+		commands.push(pdfObjectContentStream(object, fill, stroke))
 	}
 	commands.push("Q")
 	return commands.join("\n")

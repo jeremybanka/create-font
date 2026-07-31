@@ -35,11 +35,60 @@ export interface DesignContour {
 	readonly points: readonly DesignPoint[]
 }
 
+export type DesignGeometry =
+	| Readonly<{
+			readonly kind: "path"
+			readonly contours: readonly DesignContour[]
+	  }>
+	| Readonly<{
+			readonly kind: "rectangle"
+			readonly x: number
+			readonly y: number
+			readonly width: number
+			readonly height: number
+	  }>
+	| Readonly<{
+			readonly kind: "ellipse"
+			readonly centerX: number
+			readonly centerY: number
+			readonly radiusX: number
+			readonly radiusY: number
+	  }>
+
+/**
+ * An authored object's local-to-document affine transform.
+ *
+ * Points use `x' = a*x + c*y + e` and `y' = b*x + d*y + f`.
+ */
+export interface DesignTransform {
+	readonly a: number
+	readonly b: number
+	readonly c: number
+	readonly d: number
+	readonly e: number
+	readonly f: number
+}
+
+export interface DesignFill {
+	readonly swatchId: string
+}
+
+export interface DesignStroke {
+	readonly swatchId: string
+	readonly width: number
+}
+
+export interface DesignAppearance {
+	readonly fill?: DesignFill
+	readonly stroke?: DesignStroke
+}
+
 export interface DesignObject {
 	readonly id: string
 	readonly name: string
-	readonly contours: readonly DesignContour[]
-	readonly fillId: string
+	readonly geometry: DesignGeometry
+	readonly transform: DesignTransform
+	readonly appearance: DesignAppearance
 	readonly hidden?: boolean
 	readonly locked?: boolean
 }

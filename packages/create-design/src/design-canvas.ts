@@ -6,7 +6,12 @@ import {
 	type CanvasViewport,
 } from "@create-font/editor/shared"
 
-import { objectBounds, translateObject, type Bounds } from "./geometry.ts"
+import {
+	objectBounds,
+	projectDesignObjectContours,
+	translateObject,
+	type Bounds,
+} from "./geometry.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -194,24 +199,26 @@ function objectSegmentCandidates(
 	point: CanvasPoint,
 	priority: number,
 ) {
-	return object.contours.flatMap((contour, contourIndex) => {
-		const flattened = flattenedContour(contour)
-		const segmentCount = flattened.length - (contour.closed ? 0 : 1)
-		return Array.from({ length: segmentCount }, (_, segmentIndex) => {
-			const from = flattened[segmentIndex]
-			const to = flattened[(segmentIndex + 1) % flattened.length]
-			if (from === undefined || to === undefined) return []
-			const nearest = nearestSegmentPoint(point, from, to)
-			return [
-				{
-					id: `${object.id}:${contourIndex}:${segmentIndex}`,
-					priority,
-					...nearest,
-					object,
-				},
-			]
-		}).flat()
-	})
+	return projectDesignObjectContours(object).flatMap(
+		(contour, contourIndex) => {
+			const flattened = flattenedContour(contour)
+			const segmentCount = flattened.length - (contour.closed ? 0 : 1)
+			return Array.from({ length: segmentCount }, (_, segmentIndex) => {
+				const from = flattened[segmentIndex]
+				const to = flattened[(segmentIndex + 1) % flattened.length]
+				if (from === undefined || to === undefined) return []
+				const nearest = nearestSegmentPoint(point, from, to)
+				return [
+					{
+						id: `${object.id}:${contourIndex}:${segmentIndex}`,
+						priority,
+						...nearest,
+						object,
+					},
+				]
+			}).flat()
+		},
+	)
 }
 
 export function nearestDesignObject(
@@ -221,8 +228,9 @@ export function nearestDesignObject(
 	maxDistancePixels = 12,
 ): DesignObjectHit | null {
 	const containing = objects.flatMap((object, index) => {
-		if (object.hidden || object.locked) return []
-		const filled = object.contours.reduce(
+		if (object.hidden || object.locked || object.appearance.fill === undefined)
+			return []
+		const filled = projectDesignObjectContours(object).reduce(
 			(inside, contour) => contourContainsPoint(contour, point) !== inside,
 			false,
 		)
@@ -237,7 +245,10 @@ export function nearestDesignObject(
 	const ranked = rankPointCandidate(
 		point,
 		objects.flatMap((object, index) =>
-			object.hidden || object.locked
+			object.hidden ||
+			object.locked ||
+			(object.appearance.fill === undefined &&
+				object.appearance.stroke === undefined)
 				? []
 				: objectSegmentCandidates(object, point, objects.length - index),
 		),
