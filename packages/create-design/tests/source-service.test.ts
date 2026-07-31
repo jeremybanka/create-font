@@ -12,6 +12,58 @@ import {
 } from "../src/source-service.ts"
 
 describe(`create-design source service`, () => {
+	test(`publishes byte-preserved assets with their design inventory`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-source-`))
+		const service = await createDesignSourceService(root)
+		const index = await service.readUnit(`assets/index.json`)
+		const bytes = new Uint8Array([0, 255, 137, 80, 78, 71])
+		const sha256 = createHash(`sha256`).update(bytes).digest(`hex`)
+		const descriptor = {
+			byteLength: bytes.byteLength,
+			digest: `sha256:${sha256}` as const,
+			id: `asset:reference`,
+			mediaType: `image/png`,
+			path: `assets/reference.png`,
+		}
+		const staged = await service.stageAsset({
+			bytes: (async function* () {
+				yield bytes
+			})(),
+			descriptor,
+			operationId: `publish-reference`,
+		})
+		await service.writeAssets({
+			assetWrites: [
+				{ expectedDigest: null, stagingToken: staged.stagingToken },
+			],
+			idempotencyKey: `publish-reference`,
+			writes: [
+				{
+					expectedRevision: index.revision,
+					path: index.path,
+					value: {
+						format: `create-design.asset-index`,
+						version: 1,
+						entries: [
+							{
+								byteLength: bytes.byteLength,
+								id: descriptor.id,
+								mediaType: descriptor.mediaType,
+								path: descriptor.path,
+								sha256,
+							},
+						],
+					},
+				},
+			],
+		})
+		const content = await service.readAsset(descriptor.path)
+		expect(content.descriptor).toEqual(descriptor)
+		expect(
+			new Uint8Array(await new Response(content.bytes).arrayBuffer()),
+		).toEqual(bytes)
+	})
+
 	test(`initializes and atomically replaces units`, async () => {
 		const root = await mkdtemp(join(tmpdir(), `create-design-source-`))
 		const service = await createDesignSourceService(root)

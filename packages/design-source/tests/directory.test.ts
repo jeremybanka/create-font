@@ -277,6 +277,7 @@ describe("create-design directory source", () => {
 						id: "asset:escape",
 						path: "assets/%252e%252e/escape.png",
 						mediaType: "image/png",
+						byteLength: 42,
 						sha256: "0".repeat(64),
 					},
 				],
@@ -377,7 +378,21 @@ describe("create-design directory source", () => {
 		).toBe(true)
 	})
 
-	it("reserves groups, assets, fonts, and multiple artboards for later versions", () => {
+	it("accepts byte-preserved asset descriptors without treating bytes as JSON units", () => {
+		const files = mutable(split(fixture()))
+		unit(files, designSourcePaths.assetIndex).entries = [
+			{
+				id: "asset:reference",
+				path: "assets/reference.png",
+				mediaType: "image/png",
+				byteLength: 42,
+				sha256: "0".repeat(64),
+			},
+		]
+		expect(assembleDesignDocument(files)).toMatchObject({ ok: true })
+	})
+
+	it("reserves groups, fonts, and multiple artboards for later versions", () => {
 		const files = mutable(split(fixture()))
 		unit(files, designSourcePaths.groupIndex).entries = [
 			{ id: "group:future", path: "scene/groups/future.json" },

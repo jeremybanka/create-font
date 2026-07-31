@@ -1,5 +1,6 @@
 import { resolve } from "node:path"
 
+import { createSourceVersionControlRpc } from "@create-art/source-rpc/server"
 import { Elysia, status, t } from "elysia"
 import type { ElysiaAdapter } from "elysia/adapter"
 
@@ -7,7 +8,6 @@ import {
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
 	SourceValidationError,
-	SourceVersionControlError,
 } from "./contracts.ts"
 import type {
 	BuildResult,
@@ -17,7 +17,6 @@ import type {
 	SourceServiceUnavailable,
 	SourceValidationFailure,
 	CreateFontSourceService,
-	CommitSourceUnitsInput,
 	WriteSourceUnitInput,
 	WriteSourceUnitsInput,
 } from "./contracts.ts"
@@ -37,16 +36,6 @@ const sourceServiceUnavailable: SourceServiceUnavailable = {
 }
 
 function sourceErrorResponse(error: unknown) {
-	if (error instanceof SourceVersionControlError) {
-		return status(
-			error.code === `source.invalid_ref`
-				? 422
-				: error.code === `source.commit_conflict`
-					? 409
-					: 503,
-			{ code: error.code, message: error.message },
-		)
-	}
 	if (error instanceof SourceUnitNotFoundError) {
 		const body: SourceUnitNotFound = {
 			code: `source.unit_not_found`,
@@ -79,6 +68,14 @@ function sourceErrorResponse(error: unknown) {
 export function createFontRpc(options: CreateFontRpcOptions) {
 	const root = resolve(options.root ?? process.cwd())
 	const sourceConnections = new WeakMap<object, () => void>()
+	const versionControl =
+		options.source?.commitUnits === undefined ||
+		options.source.readComparison === undefined
+			? undefined
+			: {
+					commitUnits: options.source.commitUnits.bind(options.source),
+					readComparison: options.source.readComparison.bind(options.source),
+				}
 	return new Elysia({
 		name: `create-font-rpc`,
 		prefix: `/api`,
@@ -92,6 +89,11 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			root,
 		}))
 		.post(`/build`, options.build)
+		.use(
+			createSourceVersionControlRpc(
+				versionControl === undefined ? {} : { service: versionControl },
+			),
+		)
 		.ws(`/source/events`, {
 			open(ws) {
 				if (options.source?.subscribe === undefined) {
@@ -140,61 +142,6 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 				return sourceErrorResponse(error)
 			}
 		})
-		.get(
-			`/source/comparison`,
-			async ({ query }) => {
-				if (options.source?.readComparison === undefined) {
-					return status(501, {
-						code: `source.git_unavailable` as const,
-						message: `Version control is not available for this font source.`,
-					})
-				}
-				try {
-					return await options.source.readComparison({
-						baseRef: query.baseRef,
-						...(query.targetRef === undefined
-							? {}
-							: { targetRef: query.targetRef }),
-					})
-				} catch (error) {
-					return sourceErrorResponse(error)
-				}
-			},
-			{
-				query: t.Object({
-					baseRef: t.String({ minLength: 1, maxLength: 256 }),
-					targetRef: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-				}),
-			},
-		)
-		.post(
-			`/source/commit`,
-			async ({ body }) => {
-				if (options.source?.commitUnits === undefined) {
-					return status(501, {
-						code: `source.git_unavailable` as const,
-						message: `Version control commits are not available for this font source.`,
-					})
-				}
-				try {
-					return await options.source.commitUnits(
-						body as CommitSourceUnitsInput,
-					)
-				} catch (error) {
-					return sourceErrorResponse(error)
-				}
-			},
-			{
-				body: t.Object({
-					expectedComparisonIdentity: t.String({ minLength: 1 }),
-					message: t.String({ minLength: 1, maxLength: 10_000 }),
-					paths: t.Array(t.String({ minLength: 1 }), {
-						minItems: 1,
-						maxItems: 1_000,
-					}),
-				}),
-			},
-		)
 		.get(
 			`/source/unit`,
 			async ({ query }) => {

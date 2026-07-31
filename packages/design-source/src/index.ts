@@ -10,6 +10,7 @@ export {
 	artboardUnitPathSchema,
 	assembleDesignDocument,
 	assetIndexFileSchema,
+	assetUnitPathSchema,
 	defaultObjectUnitPath,
 	designDocumentSchema,
 	designSourcePaths,

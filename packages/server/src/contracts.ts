@@ -1,17 +1,25 @@
 import type { SourceService } from "@create-art/source-rpc"
 import {
 	SourceValidationError as WorkspaceSourceValidationError,
+	type CommitSourceUnitsInput,
+	type ReadSourceComparisonInput,
+	type SourceChangeGroup,
+	type SourceComparison as WorkspaceSourceComparison,
 	type SourceValidationIssue,
 } from "@create-art/source-rpc"
 
 export {
 	SourceUnitConflictError,
 	SourceUnitNotFoundError,
+	SourceVersionControlError,
 } from "@create-art/source-rpc"
 export type {
 	JsonPrimitive,
 	JsonValue,
 	SourceChangedEvent,
+	SourceChangeGroup,
+	SourceChangeKind,
+	SourceComparisonEndpoint,
 	SourceInvalidRequest,
 	SourceManifest,
 	SourceProjectSnapshot,
@@ -65,45 +73,13 @@ export type BuildResult =
 			errors: readonly [BuildDiagnostic, ...BuildDiagnostic[]]
 	  }>
 
-export type SourceComparisonEndpoint = Readonly<{
-	/** Immutable commit object ID, or the live source manifest revision. */
-	identity: string
-	kind: `ref` | `working`
-	label: string
-	ref?: string
-	snapshot: SourceProjectSnapshot
-}>
+export type SourceChangeUnit = Omit<SourceChangeGroup, `kind`> &
+	Readonly<{ kind: `glyph` | `source` }>
 
-export type SourceChangeKind = `added` | `deleted` | `modified`
+export type SourceComparison = Omit<WorkspaceSourceComparison, `changes`> &
+	Readonly<{ changes: readonly SourceChangeUnit[] }>
 
-export type SourceChangeUnit = Readonly<{
-	change: SourceChangeKind
-	id: string
-	kind: `glyph` | `source`
-	label: string
-	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
-}>
-
-export type SourceComparison = Readonly<{
-	base: SourceComparisonEndpoint
-	/** Changes from base to target, grouped into safely committable source units. */
-	changes: readonly SourceChangeUnit[]
-	/** Changes when either endpoint changes; used as the optimistic commit guard. */
-	identity: string
-	target: SourceComparisonEndpoint
-}>
-
-export type ReadSourceComparisonInput = Readonly<{
-	baseRef: string
-	/** Omit for the live working source (tracked, staged, and untracked). */
-	targetRef?: string
-}>
-
-export type CommitSourceUnitsInput = Readonly<{
-	expectedComparisonIdentity: string
-	message: string
-	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
-}>
+export type { CommitSourceUnitsInput, ReadSourceComparisonInput }
 
 export type CommitSourceUnitsResult = Readonly<{
 	commit: string
@@ -113,19 +89,4 @@ export type CommitSourceUnitsResult = Readonly<{
 export interface CreateFontSourceService extends SourceService {
 	commitUnits?(input: CommitSourceUnitsInput): Promise<CommitSourceUnitsResult>
 	readComparison?(input: ReadSourceComparisonInput): Promise<SourceComparison>
-}
-
-export class SourceVersionControlError extends Error {
-	readonly code:
-		| `source.git_unavailable`
-		| `source.invalid_ref`
-		| `source.repository_state`
-		| `source.snapshot_too_large`
-		| `source.commit_conflict`
-
-	constructor(code: SourceVersionControlError["code"], message: string) {
-		super(message)
-		this.name = `SourceVersionControlError`
-		this.code = code
-	}
 }

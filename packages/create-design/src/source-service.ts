@@ -1,17 +1,24 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 
-import type { JsonValue, SourceService } from "@create-art/source-rpc"
+import type {
+	JsonValue,
+	SourceAssetService,
+	SourceService,
+} from "@create-art/source-rpc"
 import {
 	createFileSystemSourceService,
 	type JsonSourceWorkspaceCodec,
 } from "@create-art/source-rpc/node"
 import {
 	assembleDesignDocument,
+	assetUnitPathSchema,
 	formatSourceUnit,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
 	splitDesignDocument,
+	validateSourceUnit,
+	type AssetIndexFile,
 	type DesignDocument,
 	type DesignSourceDiagnostic,
 	type DesignSourceDirectoryFiles,
@@ -44,6 +51,29 @@ function issues(errors: readonly DesignSourceDiagnostic[]) {
 
 export const designSourceWorkspaceCodec: JsonSourceWorkspaceCodec<DesignSourceUnitKind> =
 	{
+		assets: {
+			descriptors(files) {
+				const path = `assets/index.json`
+				const validated = validateSourceUnit(`asset-index`, files[path], path)
+				if (!validated.ok) {
+					return { ok: false, errors: issues(validated.errors) }
+				}
+				const index = validated.value as AssetIndexFile
+				return {
+					ok: true,
+					value: index.entries.map((entry) => ({
+						byteLength: entry.byteLength,
+						digest: `sha256:${entry.sha256}` as const,
+						id: entry.id,
+						mediaType: entry.mediaType,
+						path: entry.path,
+					})),
+				}
+			},
+			isPath(path) {
+				return assetUnitPathSchema.safeParse(path).success
+			},
+		},
 		assemble(files) {
 			const result = assembleDesignDocument(files as DesignSourceDirectoryFiles)
 			return result.ok
@@ -95,7 +125,7 @@ export async function initializeDesignSourceWorkspace(
 export async function createDesignSourceService(
 	rootInput: string,
 	options: Readonly<{ initialize?: boolean }> = {},
-): Promise<SourceService> {
+): Promise<SourceService & SourceAssetService> {
 	const root =
 		options.initialize === false
 			? resolve(rootInput)
@@ -104,3 +134,9 @@ export async function createDesignSourceService(
 		controlDirectory: `.create-design`,
 	})
 }
+
+export {
+	coordinateDesignSourceVersionControl,
+	createDesignSourceVersionControl,
+	designSourceVersionControlAdapter,
+} from "./version-control.ts"

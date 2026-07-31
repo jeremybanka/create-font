@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -57,6 +58,19 @@ async function workspace() {
 }
 
 describe(`filesystem source service`, () => {
+	test(`preserves the JSON-only manifest shape and revision algorithm`, async () => {
+		const { service } = await workspace()
+		const snapshot = await service.readSnapshot()
+		const unit = snapshot.units[0]
+		if (unit === undefined) throw new Error(`Missing project unit.`)
+		expect(snapshot).not.toHaveProperty(`assets`)
+		expect(snapshot.revision).toBe(
+			`sha256:${createHash(`sha256`)
+				.update(`${unit.path}\0${unit.revision}\n`)
+				.digest(`hex`)}`,
+		)
+	})
+
 	test(`creates, replaces, and removes units as one conditional transaction`, async () => {
 		const { service } = await workspace()
 		const events: SourceChangedEvent[] = []

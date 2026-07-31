@@ -13,6 +13,7 @@ export type SourceUnitDescriptor = Readonly<{
 }>
 
 export type SourceManifest = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	revision: string
 	units: readonly SourceUnitDescriptor[]
 }>
@@ -23,14 +24,17 @@ export type SourceUnitSnapshot = SourceUnitDescriptor &
 	}>
 
 export type SourceProjectSnapshot = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	revision: string
 	units: readonly SourceUnitSnapshot[]
 }>
 
 export type SourceChangedEvent = Readonly<{
+	assets?: readonly import("./assets.ts").SourceAssetDescriptor[]
 	type: `source.changed`
 	operationId?: string
 	previousRevision: string
+	removedAssetPaths?: readonly import("./assets.ts").SourceAssetPath[]
 	removedPaths: readonly SourceUnitPath[]
 	revision: string
 	units: readonly SourceUnitSnapshot[]
@@ -66,6 +70,57 @@ export type WriteSourceUnitsResult = Readonly<{
 	units: readonly SourceUnitSnapshot[]
 }>
 
+export type SourceComparisonEndpoint = Readonly<{
+	/** Immutable commit object ID, or the live source manifest revision. */
+	identity: string
+	kind: `ref` | `working`
+	label: string
+	ref?: string
+	snapshot: SourceProjectSnapshot
+}>
+
+export type SourceChangeKind = `added` | `deleted` | `modified`
+
+/**
+ * A semantically safe review and commit unit. `kind` is deliberately
+ * adapter-defined so shared source infrastructure remains product-neutral.
+ */
+export type SourceChangeGroup = Readonly<{
+	change: SourceChangeKind
+	id: string
+	kind: string
+	label: string
+	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
+}>
+
+/** Backwards-compatible singular name for one semantic change group. */
+export type SourceChangeUnit = SourceChangeGroup
+
+export type SourceComparison = Readonly<{
+	base: SourceComparisonEndpoint
+	changes: readonly SourceChangeGroup[]
+	/** Changes when either endpoint changes; used as the optimistic commit guard. */
+	identity: string
+	target: SourceComparisonEndpoint
+}>
+
+export type ReadSourceComparisonInput = Readonly<{
+	baseRef: string
+	/** Omit for the live working source (tracked, staged, and untracked). */
+	targetRef?: string
+}>
+
+export type CommitSourceUnitsInput = Readonly<{
+	expectedComparisonIdentity: string
+	message: string
+	paths: readonly [SourceUnitPath, ...SourceUnitPath[]]
+}>
+
+export type CommitSourceUnitsResult = Readonly<{
+	commit: string
+	comparison: SourceComparison
+}>
+
 export interface SourceService {
 	readManifest(): Promise<SourceManifest>
 	readSnapshot(): Promise<SourceProjectSnapshot>
@@ -73,6 +128,11 @@ export interface SourceService {
 	writeUnit(input: WriteSourceUnitInput): Promise<SourceUnitSnapshot>
 	writeUnits(input: WriteSourceUnitsInput): Promise<WriteSourceUnitsResult>
 	subscribe?(listener: (event: SourceChangedEvent) => void): () => void
+}
+
+export interface SourceVersionControlService {
+	commitUnits(input: CommitSourceUnitsInput): Promise<CommitSourceUnitsResult>
+	readComparison(input: ReadSourceComparisonInput): Promise<SourceComparison>
 }
 
 export type SourceServiceUnavailable = Readonly<{
@@ -150,5 +210,20 @@ export class SourceValidationError extends Error {
 		super(message)
 		this.name = `SourceValidationError`
 		this.issues = issues
+	}
+}
+
+export class SourceVersionControlError extends Error {
+	readonly code:
+		| `source.git_unavailable`
+		| `source.invalid_ref`
+		| `source.repository_state`
+		| `source.snapshot_too_large`
+		| `source.commit_conflict`
+
+	constructor(code: SourceVersionControlError["code"], message: string) {
+		super(message)
+		this.name = `SourceVersionControlError`
+		this.code = code
 	}
 }

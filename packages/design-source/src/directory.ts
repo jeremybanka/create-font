@@ -29,6 +29,9 @@ const layerIdSchema = z.string().regex(/^layer:.+/u)
 const groupIdSchema = z.string().regex(/^group:.+/u)
 const assetIdSchema = z.string().regex(/^asset:.+/u)
 const fontIdSchema = z.string().regex(/^font:.+/u)
+const mediaTypeSchema = z
+	.string()
+	.regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u)
 
 const rgbColorSchema = z
 	.object({
@@ -234,7 +237,7 @@ export const artboardUnitPathSchema = collectionUnitPathSchema("artboards")
 export const layerUnitPathSchema = collectionUnitPathSchema("scene/layers")
 export const groupUnitPathSchema = collectionUnitPathSchema("scene/groups")
 export const objectUnitPathSchema = collectionUnitPathSchema("scene/objects")
-const assetUnitPathSchema = z
+export const assetUnitPathSchema = z
 	.string()
 	.refine(
 		(path) =>
@@ -296,7 +299,8 @@ export const assetIndexFileSchema = z
 				.object({
 					id: assetIdSchema,
 					path: assetUnitPathSchema,
-					mediaType: z.string().min(1),
+					mediaType: mediaTypeSchema,
+					byteLength: z.number().int().nonnegative(),
 					sha256: z.string().regex(/^[0-9a-f]{64}$/u),
 				})
 				.strict(),
@@ -815,6 +819,11 @@ export function assembleDesignDocument(
 	)
 
 	const expected = new Set<string>(Object.values(designSourcePaths))
+	if (assetIndex !== null) {
+		errors.push(
+			...indexedErrors(assetIndex.entries, designSourcePaths.assetIndex),
+		)
+	}
 	for (const [index, entries] of [
 		[designSourcePaths.artboardIndex, artboardIndex?.entries],
 		[designSourcePaths.layerIndex, layerIndex?.entries],
@@ -882,7 +891,6 @@ export function assembleDesignDocument(
 		)
 	for (const [path, entries, name] of [
 		[designSourcePaths.groupIndex, groupIndex?.entries, "groups"],
-		[designSourcePaths.assetIndex, assetIndex?.entries, "assets"],
 		[designSourcePaths.fontIndex, fontIndex?.entries, "fonts"],
 	] as const) {
 		if (entries !== undefined && entries.length > 0)
