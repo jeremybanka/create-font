@@ -1,5 +1,34 @@
 # create-design
 
+## 0.1.3
+
+### Patch Changes
+
+- 0d59cb3: Format canonical create-font and create-design source with the pinned,
+  published dprint contract before hashing and persistence, and expose matching
+  `create-source-format` fmt/check workflows for users, editors, and CI.
+- 05f8226: Transfer byte-preserved design assets through bounded, atomic source RPC transactions.
+- 07d8245: Preserve editable live rectangles and ellipses with exact parameters and atomic path expansion.
+- 05f8226: Generalize bounded source comparison and selective Git commits with adapter-defined semantic change groups, and enable design-aware version control.
+- f311815: Add explicit persistence, conflict, invalid-source, and crash-recovery workflows with accessible controls.
+- 76d6aa0: Add shared revisioned source RPC infrastructure and source-backed create-design workspaces with atomic persistence and reliable live editor synchronization, including active glyph restoration after external filesystem resets. Run both editors and their APIs from the root development command on a configurable four-port block, with the checked-in Workbench Poster as create-design's default development source.
+- 0bdcb56: Separate authored geometry, object transforms, and optional fill/stroke appearance while preserving legacy path objects.
+- 4b938c1: Add a deterministic directory-shaped create-design source codec with indexed document, palette, artboard, layer, object, asset, and font boundaries.
+- Updated dependencies [2b737a0]
+- Updated dependencies [d607691]
+- Updated dependencies [0d59cb3]
+- Updated dependencies [05f8226]
+- Updated dependencies [07d8245]
+- Updated dependencies [05f8226]
+- Updated dependencies [76d6aa0]
+- Updated dependencies [0bdcb56]
+- Updated dependencies [4b938c1]
+- Updated dependencies [9e5ee6c]
+  - @create-font/editor@0.7.10
+  - @create-art/vector-geometry@0.0.1
+  - @create-design/source@0.2.0
+  - @create-art/source-rpc@0.1.1
+
 ## 0.1.2
 
 ### Patch Changes

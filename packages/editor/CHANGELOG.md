@@ -1,5 +1,19 @@
 # @create-font/editor
 
+## 0.7.10
+
+### Patch Changes
+
+- 2b737a0: Expose a product-neutral source review surface with semantic row, navigation adapter, comparison, and guarded selective-commit hooks while preserving create-font glyph review and Diff View.
+
+  Initialize create-font source review in an actionable empty state so the first
+  HEAD-to-working comparison can be requested.
+
+- 9e5ee6c: Keep editor tooltips compact by resetting browser popover inset constraints.
+- Updated dependencies [c5b4ace]
+- Updated dependencies [76d6aa0]
+  - @create-font/states@0.6.7
+
 ## 0.7.9
 
 ### Patch Changes

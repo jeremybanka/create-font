@@ -1,5 +1,18 @@
 # @create-font/source
 
+## 0.2.7
+
+### Patch Changes
+
+- 0d59cb3: Format canonical create-font and create-design source with the pinned,
+  published dprint contract before hashing and persistence, and expose matching
+  `create-source-format` fmt/check workflows for users, editors, and CI.
+- Updated dependencies [c5b4ace]
+- Updated dependencies [0d59cb3]
+- Updated dependencies [76d6aa0]
+  - @create-font/states@0.6.7
+  - @create-art/source-format@0.1.1
+
 ## 0.2.6
 
 ### Patch Changes
