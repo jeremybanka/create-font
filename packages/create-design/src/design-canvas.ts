@@ -1,23 +1,18 @@
 import {
 	rankAxisCandidate,
-	rankPointCandidate,
 	type CanvasPoint,
 	type CanvasView,
 	type CanvasViewport,
 } from "@create-font/editor/shared"
 
+import { translateObject, type Bounds } from "./geometry.ts"
 import {
-	objectBounds,
-	projectDesignObjectContours,
-	translateObject,
-	type Bounds,
-} from "./geometry.ts"
-import type {
-	DesignContour,
-	DesignDocument,
-	DesignObject,
-	DesignPoint,
-} from "./types.ts"
+	objectCenterlineDistance,
+	objectFillContainsPoint,
+	objectStrokeDistance,
+	visibleObjectBounds,
+} from "./painted-geometry.ts"
+import type { DesignDocument, DesignObject } from "./types.ts"
 
 export const DESIGN_MIN_ZOOM = 0.2
 export const DESIGN_MAX_ZOOM = 8
@@ -115,147 +110,40 @@ interface DesignObjectHit {
 	readonly distancePixels: number
 }
 
-const pointOnCubic = (
-	from: DesignPoint,
-	to: DesignPoint,
-	amount: number,
-): CanvasPoint => {
-	const first = from.outgoing ?? { x: 0, y: 0 }
-	const second = to.incoming ?? { x: 0, y: 0 }
-	const inverse = 1 - amount
-	return {
-		x:
-			inverse ** 3 * from.x +
-			3 * inverse ** 2 * amount * (from.x + first.x) +
-			3 * inverse * amount ** 2 * (to.x + second.x) +
-			amount ** 3 * to.x,
-		y:
-			inverse ** 3 * from.y +
-			3 * inverse ** 2 * amount * (from.y + first.y) +
-			3 * inverse * amount ** 2 * (to.y + second.y) +
-			amount ** 3 * to.y,
-	}
-}
-
-function flattenedContour(contour: DesignContour): readonly CanvasPoint[] {
-	const first = contour.points[0]
-	if (first === undefined) return []
-	const flattened: CanvasPoint[] = [first]
-	const segmentCount = contour.points.length - (contour.closed ? 0 : 1)
-	for (let index = 0; index < segmentCount; index += 1) {
-		const from = contour.points[index]
-		const to = contour.points[(index + 1) % contour.points.length]
-		if (from === undefined || to === undefined) continue
-		const curved = from.outgoing !== undefined || to.incoming !== undefined
-		const steps = curved ? 16 : 1
-		for (let step = 1; step <= steps; step += 1)
-			flattened.push(pointOnCubic(from, to, step / steps))
-	}
-	return flattened
-}
-
-function contourContainsPoint(
-	contour: DesignContour,
-	point: CanvasPoint,
-): boolean {
-	if (!contour.closed || contour.points.length < 3) return false
-	const polygon = flattenedContour(contour)
-	let inside = false
-	for (let index = 0; index < polygon.length; index += 1) {
-		const from = polygon[index]
-		const to = polygon[(index + 1) % polygon.length]
-		if (from === undefined || to === undefined) continue
-		if (
-			from.y > point.y !== to.y > point.y &&
-			point.x <
-				((to.x - from.x) * (point.y - from.y)) / (to.y - from.y) + from.x
-		)
-			inside = !inside
-	}
-	return inside
-}
-
-function nearestSegmentPoint(
-	point: CanvasPoint,
-	from: CanvasPoint,
-	to: CanvasPoint,
-): CanvasPoint {
-	const x = to.x - from.x
-	const y = to.y - from.y
-	const denominator = x * x + y * y
-	if (denominator === 0) return from
-	const amount = Math.max(
-		0,
-		Math.min(
-			1,
-			((point.x - from.x) * x + (point.y - from.y) * y) / denominator,
-		),
-	)
-	return { x: from.x + x * amount, y: from.y + y * amount }
-}
-
-function objectSegmentCandidates(
-	object: DesignObject,
-	point: CanvasPoint,
-	priority: number,
-) {
-	return projectDesignObjectContours(object).flatMap(
-		(contour, contourIndex) => {
-			const flattened = flattenedContour(contour)
-			const segmentCount = flattened.length - (contour.closed ? 0 : 1)
-			return Array.from({ length: segmentCount }, (_, segmentIndex) => {
-				const from = flattened[segmentIndex]
-				const to = flattened[(segmentIndex + 1) % flattened.length]
-				if (from === undefined || to === undefined) return []
-				const nearest = nearestSegmentPoint(point, from, to)
-				return [
-					{
-						id: `${object.id}:${contourIndex}:${segmentIndex}`,
-						priority,
-						...nearest,
-						object,
-					},
-				]
-			}).flat()
-		},
-	)
-}
-
 export function nearestDesignObject(
 	objects: readonly DesignObject[],
 	point: CanvasPoint,
 	worldScale: number,
 	maxDistancePixels = 12,
 ): DesignObjectHit | null {
-	const containing = objects.flatMap((object, index) => {
-		if (object.hidden || object.locked || object.appearance.fill === undefined)
-			return []
-		const filled = projectDesignObjectContours(object).reduce(
-			(inside, contour) => contourContainsPoint(contour, point) !== inside,
-			false,
-		)
-		return filled ? [{ object, index }] : []
-	})
-	const topmost = containing.toSorted(
-		(left, right) => right.index - left.index,
+	if (!(worldScale > 0)) return null
+	const candidates: (DesignObjectHit & { readonly index: number })[] = []
+	for (const [index, object] of objects.entries()) {
+		if (object.hidden || object.locked) continue
+		const strokeVisible =
+			object.appearance.stroke !== undefined &&
+			object.appearance.stroke.width > 0
+		if (object.appearance.fill === undefined && !strokeVisible) continue
+		const fillHit = objectFillContainsPoint(object, point)
+		const strokeDistance = objectStrokeDistance(object, point)
+		if (fillHit || strokeDistance === 0)
+			candidates.push({ object, distancePixels: 0, index })
+		else {
+			const centerlineDistance =
+				object.appearance.fill === undefined
+					? Number.POSITIVE_INFINITY
+					: objectCenterlineDistance(object, point)
+			const distancePixels =
+				Math.min(strokeDistance, centerlineDistance) * worldScale
+			if (distancePixels <= maxDistancePixels)
+				candidates.push({ object, distancePixels, index })
+		}
+	}
+	const ranked = candidates.toSorted(
+		(left, right) =>
+			left.distancePixels - right.distancePixels || right.index - left.index,
 	)[0]
-	if (topmost !== undefined)
-		return { object: topmost.object, distancePixels: 0 }
-
-	const ranked = rankPointCandidate(
-		point,
-		objects.flatMap((object, index) =>
-			object.hidden ||
-			object.locked ||
-			(object.appearance.fill === undefined &&
-				object.appearance.stroke === undefined)
-				? []
-				: objectSegmentCandidates(object, point, objects.length - index),
-		),
-		worldScale,
-		maxDistancePixels,
-	)
-	return ranked === null
+	return ranked === undefined
 		? null
 		: { object: ranked.object, distancePixels: ranked.distancePixels }
 }
@@ -285,7 +173,7 @@ export function snapDesignObject(
 	worldScale: number,
 	thresholdPixels = 7,
 ): DesignSnapResult {
-	const bounds = objectBounds(object)
+	const bounds = visibleObjectBounds(object)
 	if (bounds === null || !(worldScale > 0)) return { object, x: null, y: null }
 	const threshold = thresholdPixels / worldScale
 	const xTargets = [

@@ -4,6 +4,7 @@ import { createRequire } from "node:module"
 import { h, render } from "preact"
 import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
 	DesignApplication,
@@ -386,8 +387,16 @@ describe("create-design shared vector scene", () => {
 			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
 		) as DesignDocument
 		expect(saved.objects.map((object) => object.appearance.stroke)).toEqual([
-			{ swatchId: "swatch:ink", width: 1 },
-			{ swatchId: "swatch:ink", width: 1 },
+			{
+				...DEFAULT_DESIGN_STROKE_STYLE,
+				swatchId: "swatch:ink",
+				width: 1,
+			},
+			{
+				...DEFAULT_DESIGN_STROKE_STYLE,
+				swatchId: "swatch:ink",
+				width: 1,
+			},
 		])
 
 		await act(async () => {
@@ -437,6 +446,106 @@ describe("create-design shared vector scene", () => {
 			{ fill: { swatchId: "swatch:ink" } },
 			{ fill: { swatchId: "swatch:ink" } },
 		])
+	})
+
+	it("authors the complete stroke vocabulary and renders it on canvas", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		const layer = document.querySelector<HTMLButtonElement>(
+			"design-layers-tile > button:last-child",
+		)
+		if (layer === null) throw new Error("Design layer was not found.")
+		act(() => layer.click())
+		const strokeTarget = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Stroke paint: None"]',
+		)
+		if (strokeTarget === null) throw new Error("Stroke target was not found.")
+		await act(async () => {
+			strokeTarget.click()
+			await Promise.resolve()
+		})
+		const ink = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Use Rich black as stroke paint"]',
+		)
+		if (ink === null) throw new Error("Stroke swatch was not found.")
+		await act(async () => {
+			ink.click()
+			await Promise.resolve()
+		})
+
+		const input = (label: string): HTMLInputElement => {
+			const result = document.querySelector<HTMLInputElement>(
+				`input[aria-label="Stroke ${label}"]`,
+			)
+			if (result === null) throw new Error(`Stroke ${label} was not found.`)
+			return result
+		}
+		const setNumber = async (label: string, value: string): Promise<void> => {
+			await act(async () => {
+				const field = input(label)
+				field.value = value
+				field.dispatchEvent(new InputEvent("input", { bubbles: true }))
+				await Promise.resolve()
+			})
+		}
+		const setSelect = async (label: string, value: string): Promise<void> => {
+			await act(async () => {
+				const field = document.querySelector<HTMLSelectElement>(
+					`select[aria-label="Stroke ${label}"]`,
+				)
+				if (field === null) throw new Error(`Stroke ${label} was not found.`)
+				field.value = value
+				field.dispatchEvent(new Event("change", { bubbles: true }))
+				await Promise.resolve()
+			})
+		}
+		await setNumber("width", "6")
+		await setSelect("cap", "round")
+		await setSelect("join", "bevel")
+		await setNumber("miter limit", "8")
+		await act(async () => {
+			const dash = input("dash pattern")
+			dash.value = "7, 3, 2"
+			dash.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		await act(async () => {
+			input("dash pattern").dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+			)
+			await Promise.resolve()
+		})
+		await setNumber("dash offset", "-2")
+
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(
+			saved.objects.find((object) => object.appearance.stroke !== undefined)
+				?.appearance.stroke,
+		).toEqual({
+			swatchId: "swatch:ink",
+			width: 6,
+			cap: "round",
+			join: "bevel",
+			miterLimit: 8,
+			dashArray: [7, 3, 2],
+			dashOffset: -2,
+		})
+		const rendered = stage
+			.find(".design-object")
+			.find(
+				(node: { getAttr(name: string): unknown }) =>
+					node.getAttr("strokeWidth") === 6,
+			)
+		expect(rendered?.getAttrs()).toMatchObject({
+			strokeWidth: 6,
+			lineCap: "round",
+			lineJoin: "bevel",
+			miterLimit: 8,
+			dash: [7, 3, 2],
+			dashOffset: -2,
+		})
 	})
 
 	it("exposes why selection appearance controls are disabled", () => {
@@ -580,9 +689,27 @@ describe("create-design shared vector scene", () => {
 			saved.objects.slice(-3).map((object) => object.geometry.kind),
 		).toEqual(["rectangle", "ellipse", "path"])
 		expect(saved.objects.slice(-3).map((object) => object.appearance)).toEqual([
-			{ stroke: { swatchId: "swatch:ink", width: 1 } },
-			{ stroke: { swatchId: "swatch:ink", width: 1 } },
-			{ stroke: { swatchId: "swatch:ink", width: 1 } },
+			{
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 1,
+				},
+			},
+			{
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 1,
+				},
+			},
+			{
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 1,
+				},
+			},
 		])
 	})
 

@@ -25,14 +25,94 @@ describe("vector clipboard interoperability", () => {
 		).toBe(1)
 		expect(JSON.parse(entries.get(DESIGN_VECTOR_MIME) ?? "{}")).toMatchObject({
 			format: "create-design.vector",
-			version: 2,
+			version: 3,
 			coordinateSpace: "global-document-y-down",
 		})
-		expect(JSON.parse(entries.get(FONT_OUTLINE_MIME) ?? "{}")).toMatchObject({
+		const font = JSON.parse(entries.get(FONT_OUTLINE_MIME) ?? "{}")
+		expect(font).toMatchObject({
 			format: "create-font.outline",
 			version: 1,
 			sourceApplication: "create-design",
 			masterIds: ["master:create-design"],
+		})
+		expect(JSON.stringify(font)).not.toContain("appearance")
+		expect(JSON.stringify(font)).not.toContain("swatch")
+	})
+
+	it("reads legacy v1 native payloads with deterministic stroke defaults", () => {
+		const document = createInitialDocument()
+		const object = document.objects[0]!
+		const legacy = {
+			format: "create-design.vector",
+			version: 1,
+			objects: [
+				{
+					...object,
+					appearance: {
+						stroke: { swatchId: "swatch:ink", width: 5 },
+					},
+				},
+			],
+			swatches: document.swatches.filter(
+				(swatch) => swatch.id === "swatch:ink",
+			),
+		}
+		const addition = readDesignClipboard(
+			{
+				getData: (format) =>
+					format === DESIGN_VECTOR_MIME ? JSON.stringify(legacy) : "",
+			},
+			document,
+			() => "legacy",
+		)
+		expect(addition?.objects[0]?.appearance.stroke).toEqual({
+			swatchId: "swatch:ink",
+			width: 5,
+			cap: "butt",
+			join: "miter",
+			miterLimit: 4,
+			dashArray: [],
+			dashOffset: 0,
+		})
+	})
+
+	it("round-trips every native v3 appearance property", () => {
+		const document = createInitialDocument()
+		const stroke = {
+			swatchId: "swatch:ink",
+			width: 6,
+			cap: "square" as const,
+			join: "round" as const,
+			miterLimit: 7,
+			dashArray: [9, 4, 2],
+			dashOffset: -3,
+		}
+		const source = {
+			...document,
+			objects: [
+				{
+					...document.objects[0]!,
+					appearance: {
+						fill: { swatchId: "swatch:coral" },
+						stroke,
+					},
+				},
+			],
+		}
+		const entries = new Map<string, string>()
+		writeDesignClipboard(
+			{ setData: (format, value) => entries.set(format, value) },
+			source,
+			[source.objects[0]!.id],
+		)
+		const addition = readDesignClipboard(
+			{ getData: (format) => entries.get(format) ?? "" },
+			document,
+			() => "roundtrip",
+		)
+		expect(addition?.objects[0]?.appearance).toEqual({
+			fill: { swatchId: "swatch:coral" },
+			stroke,
 		})
 	})
 

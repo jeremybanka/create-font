@@ -36,8 +36,8 @@ const MASTER_ID = "master:create-design"
 
 interface DesignClipboardPayload {
 	readonly format: "create-design.vector"
-	readonly version: 1 | 2
-	readonly coordinateSpace?: "global-document-y-down"
+	readonly version: 3
+	readonly coordinateSpace: "global-document-y-down"
 	readonly objects: readonly DesignObject[]
 	readonly swatches: readonly DesignSwatch[]
 }
@@ -96,7 +96,7 @@ export function writeDesignClipboard(
 	)
 	const payload: DesignClipboardPayload = {
 		format: "create-design.vector",
-		version: 2,
+		version: 3,
 		coordinateSpace: "global-document-y-down",
 		objects: selected,
 		swatches: document.swatches.filter((swatch) => swatchIds.has(swatch.id)),
@@ -258,54 +258,50 @@ export function designObjectsToFontOutline(
 
 function parseDesignPayload(value: string): DesignClipboardPayload | null {
 	try {
-		const parsed = JSON.parse(value) as Partial<DesignClipboardPayload>
+		const parsed = JSON.parse(value) as Record<string, unknown>
 		if (
 			parsed.format !== "create-design.vector" ||
-			(parsed.version !== 1 && parsed.version !== 2) ||
-			(parsed.version === 2 &&
+			(parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) ||
+			(parsed.version !== 1 &&
 				parsed.coordinateSpace !== "global-document-y-down") ||
 			!Array.isArray(parsed.objects) ||
 			!Array.isArray(parsed.swatches)
 		)
 			return null
-		const normalized = validateDesignDocument({
-			format: "create-design.document",
-			version: 3,
+		const envelope = {
+			format: "create-design.document" as const,
 			title: "Clipboard",
 			page: { x: 0, y: 0, width: 1, height: 1 },
 			objects: parsed.objects,
 			swatches: parsed.swatches,
 			guides: [],
-		})
-		const previous = normalized.ok
-			? normalized
-			: decodeDesignDocument({
-					format: "create-design.document",
-					version: 2,
-					title: "Clipboard",
-					page: { width: 1, height: 1 },
-					objects: parsed.objects,
-					swatches: parsed.swatches,
-					guides: [],
-				})
-		const compatible = previous.ok
-			? previous
-			: decodeDesignDocument({
-					format: "create-design.document",
-					version: 1,
-					title: "Clipboard",
-					page: { width: 1, height: 1 },
-					objects: parsed.objects,
-					swatches: parsed.swatches,
-					guides: [],
-				})
-		return compatible.ok
+		}
+		const compatible =
+			parsed.version === 3
+				? validateDesignDocument({ ...envelope, version: 4 })
+				: parsed.version === 2
+					? decodeDesignDocument({ ...envelope, version: 3 })
+					: decodeDesignDocument({
+							...envelope,
+							version: 2,
+							page: { width: 1, height: 1 },
+						})
+		const ancient = compatible.ok
+			? compatible
+			: parsed.version === 1
+				? decodeDesignDocument({
+						...envelope,
+						version: 1,
+						page: { width: 1, height: 1 },
+					})
+				: compatible
+		return ancient.ok
 			? {
 					format: "create-design.vector",
-					version: 2,
+					version: 3,
 					coordinateSpace: "global-document-y-down",
-					objects: compatible.value.objects,
-					swatches: compatible.value.swatches,
+					objects: ancient.value.objects,
+					swatches: ancient.value.swatches,
 				}
 			: null
 	} catch {

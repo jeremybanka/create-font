@@ -6,14 +6,15 @@ import {
 import { IDENTITY_DESIGN_TRANSFORM } from "./geometry.ts"
 import type { DesignDocument } from "./types.ts"
 
-export const DESIGN_STORAGE_KEY = "create-design:document:v3"
-export const PREVIOUS_DESIGN_STORAGE_KEY = "create-design:document:v2"
+export const DESIGN_STORAGE_KEY = "create-design:document:v4"
+export const PREVIOUS_DESIGN_STORAGE_KEY = "create-design:document:v3"
+export const VERSION_TWO_DESIGN_STORAGE_KEY = "create-design:document:v2"
 export const LEGACY_DESIGN_STORAGE_KEY = "create-design:document:v1"
 
 export function createInitialDocument(): DesignDocument {
 	return {
 		format: "create-design.document",
-		version: 3,
+		version: 4,
 		title: "Untitled design",
 		page: { x: 0, y: 0, width: 612, height: 792 },
 		swatches: [
@@ -114,6 +115,7 @@ export function readStoredDesignDocument(
 	}
 	for (const priorKey of [
 		PREVIOUS_DESIGN_STORAGE_KEY,
+		VERSION_TWO_DESIGN_STORAGE_KEY,
 		LEGACY_DESIGN_STORAGE_KEY,
 	]) {
 		let prior: string | null

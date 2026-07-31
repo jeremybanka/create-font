@@ -20,7 +20,9 @@ CMYK swatches. Either paint can be none, the two paints can be swapped, and
 mixed multi-object selections are edited atomically. With no selection, the
 same controls set the appearance for new Pen paths, rectangles, and ellipses.
 Swatches remain shared references, so editing one updates every painted object
-without rewriting its geometry.
+without rewriting its geometry. Stroke width, caps, joins, miter limit, dash
+pattern, and dash offset are independently authored and shared by canvas and
+PDF rendering.
 
 Move, scale, and rotate compose the object transform without rewriting source
 points or converting live shapes. Canvas, selection, clipboard, and PDF use an
@@ -38,14 +40,19 @@ therefore changes canvas framing or PDF placement without invalidating object
 geometry. The full downstream contract is documented in
 [`@create-design/source`](../design-source/README.md#coordinate-and-identity-contract).
 
-The Object tile exposes the exact local rectangle/ellipse parameters and exact
-document-space bounds. **Expand Shape** is the deliberate live-shape boundary:
+The Object tile exposes the exact local rectangle/ellipse parameters, exact
+geometric document-space bounds, and separate visible painted bounds.
+Selection, marquee handles, and snapping use the visible fill/stroke extent,
+including authored caps, joins, miters, and dash runs. **Expand Shape** is the
+deliberate live-shape boundary:
 it replaces only the local rectangle or ellipse geometry with visually
 equivalent ordinary cubic contours, assigns fresh stable contour/control IDs,
 and keeps the object ID, affine transform, appearance, stacking position, and
 selection. The replacement is one history entry. Native create-design
 copy/paste retains live parameters; generic vector and create-font clipboard
-formats remain intentional path interoperability boundaries.
+formats remain intentional path interoperability boundaries. Native clipboard
+payload version three retains complete appearance; the create-font outline
+flavor deliberately carries only projected geometry.
 
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its first directory

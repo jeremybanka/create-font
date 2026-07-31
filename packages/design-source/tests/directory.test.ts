@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	DEFAULT_DESIGN_STROKE_STYLE,
 	DEFAULT_LAYER_ID,
 	assembleDesignDocument,
 	decodeDesignDocument,
@@ -19,7 +20,7 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 3,
+	version: 4,
 	title: "Directory proof",
 	page: { x: -24, y: 36, width: 612, height: 792 },
 	swatches: [
@@ -181,6 +182,22 @@ describe("create-design directory source", () => {
 					},
 				],
 			},
+		})
+	})
+
+	it("normalizes v2 width-only stroke object units", () => {
+		const files = mutable(split(fixture()))
+		unit(files, "create-design.json").documentVersion = 2
+		const object = unit(files, defaultObjectUnitPath("object:coral"))
+		object.appearance = {
+			stroke: { swatchId: "swatch:ink", width: 3 },
+		}
+		const assembled = assemble(files as DesignSourceDirectoryFiles)
+		expect(assembled.version).toBe(4)
+		expect(assembled.objects[0]?.appearance.stroke).toEqual({
+			...DEFAULT_DESIGN_STROKE_STYLE,
+			swatchId: "swatch:ink",
+			width: 3,
 		})
 	})
 

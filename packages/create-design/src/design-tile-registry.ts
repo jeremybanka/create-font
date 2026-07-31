@@ -19,6 +19,7 @@ import type {
 import type {
 	DesignDocument,
 	DesignObject,
+	DesignStroke,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
@@ -41,6 +42,9 @@ export interface DesignTileContext {
 	readonly applyAppearancePaint: (
 		target: AppearancePaintTarget,
 		swatchId: string | undefined,
+	) => void
+	readonly applyStrokeProperties: (
+		properties: Partial<Omit<DesignStroke, "swatchId">>,
 	) => void
 	readonly canReviewSourceChange?: (change: DesignSourceReviewChange) => boolean
 	readonly deleteSelection: () => void
@@ -68,6 +72,7 @@ export interface DesignTileContext {
 	) => void
 	readonly setAppearanceTarget: (target: AppearancePaintTarget) => void
 	readonly swapAppearancePaints: () => void
+	readonly strokePropertiesDisabledReason: string | null
 	readonly tool: DesignTool
 	readonly updateSwatch: (swatch: DesignSwatch) => void
 	readonly versionControl?: DesignSourceReviewController

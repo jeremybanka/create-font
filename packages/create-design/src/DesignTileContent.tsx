@@ -20,6 +20,7 @@ import {
 } from "./color.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import { exactObjectBounds } from "./shape-expansion.ts"
+import { visibleObjectBounds } from "./painted-geometry.ts"
 import type {
 	DesignTileContext,
 	DesignTileKind,
@@ -30,6 +31,7 @@ import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
+	DesignStroke,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
@@ -161,7 +163,10 @@ function DesignExportTile({
 	return (
 		<design-export-tile>
 			<strong>Portable Document Format</strong>
-			<span>RGB and CMYK vector fills are preserved through mondrian.pdf.</span>
+			<span>
+				RGB and CMYK vector fills and strokes are preserved through
+				mondrian.pdf.
+			</span>
 			<button type="button" onClick={context.exportDocument}>
 				Export PDF
 			</button>
@@ -185,6 +190,7 @@ function DesignObjectTile({
 }) {
 	const object = context.selectedObject
 	const bounds = object === null ? null : exactObjectBounds(object)
+	const visibleBounds = object === null ? null : visibleObjectBounds(object)
 	return (
 		<design-object-tile>
 			{object === null ? (
@@ -309,7 +315,7 @@ function DesignObjectTile({
 								/>
 							</shape-number-grid>
 						) : null}
-						<strong>Exact document bounds</strong>
+						<strong>Geometric document bounds</strong>
 						{bounds === null ? (
 							<span>No drawable bounds.</span>
 						) : (
@@ -318,6 +324,29 @@ function DesignObjectTile({
 								<ShapeNumberInput label="Bounds Y" value={bounds.y} />
 								<ShapeNumberInput label="Bounds width" value={bounds.width} />
 								<ShapeNumberInput label="Bounds height" value={bounds.height} />
+							</shape-number-grid>
+						)}
+						<strong>Visible document bounds</strong>
+						{visibleBounds === null ? (
+							<span>No painted bounds.</span>
+						) : (
+							<shape-number-grid>
+								<ShapeNumberInput
+									label="Visible X"
+									value={visibleBounds.minX}
+								/>
+								<ShapeNumberInput
+									label="Visible Y"
+									value={visibleBounds.minY}
+								/>
+								<ShapeNumberInput
+									label="Visible width"
+									value={visibleBounds.maxX - visibleBounds.minX}
+								/>
+								<ShapeNumberInput
+									label="Visible height"
+									value={visibleBounds.maxY - visibleBounds.minY}
+								/>
 							</shape-number-grid>
 						)}
 					</object-geometry-editor>
@@ -626,6 +655,139 @@ function AppearancePaintControl({
 	)
 }
 
+function numberPropertyValue(value: number | null | "mixed"): string {
+	return typeof value === "number" ? String(value) : ""
+}
+
+function propertyPlaceholder(value: unknown): string | undefined {
+	return value === "mixed" ? "Mixed" : value === null ? "No stroke" : undefined
+}
+
+function StrokeDashArrayControl({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const value = context.appearanceSummary.strokeStyle.dashArray
+	const [text, setText] = useState(Array.isArray(value) ? value.join(", ") : "")
+	const commit = (): void => {
+		const entries = text
+			.split(/[\s,]+/u)
+			.filter(Boolean)
+			.map(Number)
+		context.applyStrokeProperties({ dashArray: entries })
+	}
+	return (
+		<stroke-dash-array-control>
+			<label data-stroke-field>
+				<span>Dash pattern</span>
+				<input
+					type="text"
+					inputMode="decimal"
+					value={text}
+					placeholder={propertyPlaceholder(value) ?? "Solid"}
+					aria-label="Stroke dash pattern"
+					aria-describedby="stroke-properties-eligibility"
+					disabled={context.strokePropertiesDisabledReason !== null}
+					onInput={(event) => setText(event.currentTarget.value)}
+					onBlur={commit}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							commit()
+							event.currentTarget.blur()
+						}
+					}}
+				/>
+			</label>
+		</stroke-dash-array-control>
+	)
+}
+
+function StrokePropertiesEditor({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const style = context.appearanceSummary.strokeStyle
+	const disabled = context.strokePropertiesDisabledReason !== null
+	const numberInput = (
+		label: string,
+		property: "width" | "miterLimit" | "dashOffset",
+		minimum?: number,
+	) => (
+		<label data-stroke-field>
+			<span>{label}</span>
+			<input
+				type="number"
+				step="any"
+				{...(minimum === undefined ? {} : { min: minimum })}
+				value={numberPropertyValue(style[property])}
+				placeholder={propertyPlaceholder(style[property])}
+				aria-label={`Stroke ${label.toLowerCase()}`}
+				aria-describedby="stroke-properties-eligibility"
+				disabled={disabled}
+				onInput={(event) => {
+					const value = event.currentTarget.valueAsNumber
+					if (Number.isFinite(value))
+						context.applyStrokeProperties({ [property]: value })
+				}}
+			/>
+		</label>
+	)
+	const select = <Property extends "cap" | "join">(
+		label: string,
+		property: Property,
+		options: readonly DesignStroke[Property][],
+	) => (
+		<label data-stroke-field>
+			<span>{label}</span>
+			<select
+				value={
+					style[property] === null || style[property] === "mixed"
+						? ""
+						: style[property]
+				}
+				aria-label={`Stroke ${label.toLowerCase()}`}
+				aria-describedby="stroke-properties-eligibility"
+				disabled={disabled}
+				onChange={(event) =>
+					context.applyStrokeProperties({
+						[property]: event.currentTarget.value,
+					} as Partial<Omit<DesignStroke, "swatchId">>)
+				}
+			>
+				<option value="" disabled>
+					{propertyPlaceholder(style[property])}
+				</option>
+				{options.map((option) => (
+					<option key={option} value={option}>
+						{option[0]?.toUpperCase()}
+						{option.slice(1)}
+					</option>
+				))}
+			</select>
+		</label>
+	)
+	const dashKey = Array.isArray(style.dashArray)
+		? style.dashArray.join(",")
+		: String(style.dashArray)
+	return (
+		<stroke-properties-editor role="group" aria-label="Stroke properties">
+			<strong>Stroke properties</strong>
+			{numberInput("Width", "width", 0)}
+			{select("Cap", "cap", ["butt", "round", "square"])}
+			{select("Join", "join", ["miter", "round", "bevel"])}
+			{numberInput("Miter limit", "miterLimit", 1)}
+			<StrokeDashArrayControl key={dashKey} context={context} />
+			{numberInput("Dash offset", "dashOffset")}
+			<p id="stroke-properties-eligibility">
+				{context.strokePropertiesDisabledReason ??
+					"Stroke properties apply to the complete selection and new objects."}
+			</p>
+		</stroke-properties-editor>
+	)
+}
+
 function DesignAppearanceTile({
 	context,
 }: {
@@ -646,6 +808,7 @@ function DesignAppearanceTile({
 				</appearance-heading>
 				<AppearancePaintControl context={context} target="fill" />
 				<AppearancePaintControl context={context} target="stroke" />
+				<StrokePropertiesEditor context={context} />
 				<button
 					type="button"
 					data-swap-appearance

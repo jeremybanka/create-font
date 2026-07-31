@@ -79,6 +79,9 @@ function strokeOperator(swatch: DesignSwatch): string {
 	return fillOperator(swatch).replace(/ k$/u, " K").replace(/ rg$/u, " RG")
 }
 
+const PDF_LINE_CAP = { butt: 0, round: 1, square: 2 } as const
+const PDF_LINE_JOIN = { miter: 0, round: 1, bevel: 2 } as const
+
 function colorSignature(swatch: DesignSwatch): string {
 	const source = swatch.source
 	return source.space === "rgb"
@@ -91,20 +94,34 @@ export function pdfObjectContentStream(
 	fill?: DesignSwatch,
 	stroke?: DesignSwatch,
 ): string {
+	const authoredStroke = object.appearance.stroke
+	const paintedStroke =
+		stroke !== undefined &&
+		authoredStroke !== undefined &&
+		authoredStroke.width > 0
+			? authoredStroke
+			: undefined
+	if (fill === undefined && paintedStroke === undefined) return ""
 	const commands = [
 		...(fill === undefined ? [] : [fillOperator(fill)]),
-		...(stroke === undefined
+		...(stroke === undefined || paintedStroke === undefined
 			? []
 			: [
 					strokeOperator(stroke),
-					`${number(object.appearance.stroke?.width ?? 0)} w`,
+					`${number(paintedStroke.width)} w`,
+					`${PDF_LINE_CAP[paintedStroke.cap]} J`,
+					`${PDF_LINE_JOIN[paintedStroke.join]} j`,
+					`${number(paintedStroke.miterLimit)} M`,
+					`[${paintedStroke.dashArray.map(number).join(" ")}] ${number(
+						paintedStroke.dashOffset,
+					)} d`,
 				]),
 	]
 	for (const contour of projectDesignObjectContours(object)) {
 		commands.push(...contourCommands(contour))
 	}
 	commands.push(
-		fill !== undefined && stroke !== undefined
+		fill !== undefined && paintedStroke !== undefined
 			? "B*"
 			: fill !== undefined
 				? "f*"
