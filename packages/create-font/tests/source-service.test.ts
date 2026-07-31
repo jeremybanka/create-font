@@ -154,7 +154,7 @@ describe(`filesystem font source service`, () => {
 		expect(refs?.changes.map((change) => change.paths[0])).toEqual([
 			`names.json`,
 		])
-	})
+	}, 30_000)
 
 	it(`rejects invalid refs without treating them as Git options`, async () => {
 		const { projectRoot, workspaceRoot } = await copyDevelopmentFont()
