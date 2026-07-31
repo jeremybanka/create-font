@@ -1,3 +1,9 @@
+import {
+	cubicBounds,
+	evaluateCubic,
+	splitCubic,
+} from "@create-art/vector-geometry"
+
 export interface CurvePoint {
 	readonly x: number
 	readonly y: number
@@ -68,10 +74,24 @@ export const interpolateCurvePoint = (
 	y: left.y + (right.y - left.y) * amount,
 })
 
-export function evaluateCubicCurve(
+const hasFiniteCubicCoordinates = (cubic: CubicCurve): boolean =>
+	Number.isFinite(cubic.p0.x) &&
+	Number.isFinite(cubic.p0.y) &&
+	Number.isFinite(cubic.c1.x) &&
+	Number.isFinite(cubic.c1.y) &&
+	Number.isFinite(cubic.c2.x) &&
+	Number.isFinite(cubic.c2.y) &&
+	Number.isFinite(cubic.p3.x) &&
+	Number.isFinite(cubic.p3.y)
+
+/**
+ * Preserves the former permissive result for malformed inputs at this public
+ * compatibility boundary. Finite editor geometry delegates to the kernel.
+ */
+const evaluateMalformedCubic = (
 	cubic: CubicCurve,
 	amount: number,
-): CurvePoint {
+): CurvePoint => {
 	const inverse = 1 - amount
 	const inverseSquared = inverse * inverse
 	const amountSquared = amount * amount
@@ -89,7 +109,16 @@ export function evaluateCubicCurve(
 	}
 }
 
-function derivativeRoots(
+export function evaluateCubicCurve(
+	cubic: CubicCurve,
+	amount: number,
+): CurvePoint {
+	return hasFiniteCubicCoordinates(cubic) && Number.isFinite(amount)
+		? evaluateCubic(cubic, amount)
+		: evaluateMalformedCubic(cubic, amount)
+}
+
+function malformedDerivativeRoots(
 	p0: number,
 	c1: number,
 	c2: number,
@@ -119,13 +148,16 @@ function derivativeRoots(
 
 /** Exact axis-aligned bounds of a cubic's locus, including interior extrema. */
 export function cubicCurveBounds(cubic: CubicCurve): CurveBounds {
+	if (hasFiniteCubicCoordinates(cubic)) return cubicBounds(cubic)
 	const amounts = new Set<number>([
 		0,
 		1,
-		...derivativeRoots(cubic.p0.x, cubic.c1.x, cubic.c2.x, cubic.p3.x),
-		...derivativeRoots(cubic.p0.y, cubic.c1.y, cubic.c2.y, cubic.p3.y),
+		...malformedDerivativeRoots(cubic.p0.x, cubic.c1.x, cubic.c2.x, cubic.p3.x),
+		...malformedDerivativeRoots(cubic.p0.y, cubic.c1.y, cubic.c2.y, cubic.p3.y),
 	])
-	const points = [...amounts].map((amount) => evaluateCubicCurve(cubic, amount))
+	const points = [...amounts].map((amount) =>
+		evaluateMalformedCubic(cubic, amount),
+	)
 	return {
 		minX: Math.min(...points.map((point) => point.x)),
 		minY: Math.min(...points.map((point) => point.y)),
@@ -139,6 +171,7 @@ export function splitCubicCurve(cubic: CubicCurve, amount: number): CubicSplit {
 	if (!Number.isFinite(amount) || amount < 0 || amount > 1) {
 		throw new RangeError("Cubic split parameter must be in [0, 1].")
 	}
+	if (hasFiniteCubicCoordinates(cubic)) return splitCubic(cubic, amount)
 	const p01 = interpolateCurvePoint(cubic.p0, cubic.c1, amount)
 	const p12 = interpolateCurvePoint(cubic.c1, cubic.c2, amount)
 	const p23 = interpolateCurvePoint(cubic.c2, cubic.p3, amount)

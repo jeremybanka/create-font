@@ -146,6 +146,28 @@ If malformed coordinates or the subdivision limit prevent a bounded result,
 projection returns a typed error. It never silently changes tolerance or lets
 masters choose incompatible point counts.
 
+### Shared cubic geometry boundary
+
+The public `evaluateCubicCurve`, `splitCubicCurve`, and `cubicCurveBounds`
+functions retain their `@create-font/states` names, types, return shapes, and
+legacy malformed-input behavior, while finite cubic geometry delegates to
+`@create-art/vector-geometry`. Callers do not need to import kernel types.
+
+Related algorithms remain local until a feature can migrate their complete
+behavior:
+
+- `editor/src/geometry.ts` keeps its fixed sampling and nearest-point refinement
+  because those values define pointer hit-testing;
+- `editor/src/rule-geometry.ts` keeps rule-line roots, fixed contour flattening,
+  signed-area classification, and point containment together because they
+  define one measurement model;
+- the states cubic-to-quadratic compatibility pipeline remains coordinated
+  across masters and is not ordinary display flattening.
+
+Those routines are candidates for later kernel-backed changes with dedicated
+interaction and compatibility coverage. Create-design geometry is outside this
+adoption.
+
 ## Projection and compilation
 
 Intermediate selectors return `ProjectionResult<T>`:
