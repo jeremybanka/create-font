@@ -8,10 +8,15 @@ describe("create-design tool registration", () => {
 			"select",
 			"direct",
 			"transform",
+			"artboard",
 			"pen",
 			"rect",
 			"ellipse",
 		])
+		expect(DESIGN_TOOLS.artboard).toMatchObject({
+			label: "Artboard",
+			key: "A",
+		})
 		expect("rule" in DESIGN_TOOLS).toBe(false)
 		expect(
 			Object.values(DESIGN_TOOLS).some((tool) => String(tool.key) === "L"),

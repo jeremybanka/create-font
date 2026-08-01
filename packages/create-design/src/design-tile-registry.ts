@@ -37,6 +37,17 @@ export type DesignTileKind =
 
 export interface DesignTileContext {
 	readonly activeArtboard: DesignArtboard
+	readonly activateArtboard: (artboard: DesignArtboard, focus?: boolean) => void
+	readonly createArtboard: () => void
+	readonly deleteArtboard: () => void
+	readonly duplicateArtboard: () => void
+	readonly fitAllArtboards: () => void
+	readonly moveArtworkWithArtboard: boolean
+	readonly reorderArtboard: (direction: -1 | 1) => void
+	readonly setArtboardProperty: (
+		property: Partial<Omit<DesignArtboard, "id">>,
+	) => void
+	readonly setMoveArtworkWithArtboard: (enabled: boolean) => void
 	readonly addSwatch: () => void
 	readonly appearanceDisabledReason: string | null
 	readonly appearanceSummary: DesignAppearanceSummary
