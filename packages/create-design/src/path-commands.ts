@@ -2,11 +2,15 @@ import {
 	contourOrientation,
 	fitCubicContour,
 	flattenCubic,
+	selfIntersections,
 	windingNumber,
 	type Cubic,
 } from "@create-art/vector-geometry"
 
-import type { DesignDirectSelectionTarget } from "./design-selection.ts"
+import {
+	directSelectionKey,
+	type DesignDirectSelectionTarget,
+} from "./design-selection.ts"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	projectDesignObjectContours,
@@ -254,24 +258,23 @@ function replaceSelectedContours(
 					contourId: contour.id,
 				})),
 	)
-	return {
-		...context.document,
-		objects: context.document.objects.map((object) =>
-			object.geometry.kind !== "path"
-				? object
-				: {
-						...object,
-						geometry: {
-							kind: "path" as const,
-							contours: object.geometry.contours.map((contour) =>
-								keys.has(`${object.id}\0${contour.id}`)
-									? replace(contour, object)
-									: contour,
-							),
-						},
-					},
-		),
-	}
+	const objects = context.document.objects.map((object) => {
+		if (object.geometry.kind !== "path") return object
+		const sourceContours = object.geometry.contours
+		const contours = sourceContours.map((contour) =>
+			keys.has(`${object.id}\0${contour.id}`)
+				? replace(contour, object)
+				: contour,
+		)
+		return contours.every((contour, index) => contour === sourceContours[index])
+			? object
+			: { ...object, geometry: { kind: "path" as const, contours } }
+	})
+	return objects.every(
+		(object, index) => object === context.document.objects[index],
+	)
+		? context.document
+		: { ...context.document, objects }
 }
 
 const distance = (left: DesignPoint, right: DesignPoint): number =>
@@ -497,37 +500,203 @@ function flattenDesignContour(
 	return points
 }
 
-function fittedPoints(
-	contour: DesignContour,
-	maxError: number,
-	cleanupTolerance: number,
-	nextId: () => string,
-): readonly DesignPoint[] {
-	const samplingBudget = maxError / 4
-	const fittingBudget = maxError - samplingBudget
-	const source = flattenDesignContour(contour, samplingBudget)
-	const pieces = fitCubicContour(
-		{ points: source, closed: contour.closed },
-		{
-			maxError: fittingBudget,
-			cornerAngleDegrees: 30,
-			tolerances: { distance: cleanupTolerance },
-		},
+const vectorLength = (
+	vector: Readonly<{ x: number; y: number }> | undefined,
+): number => Math.hypot(vector?.x ?? 0, vector?.y ?? 0)
+
+function zeroLengthSegment(
+	from: DesignPoint,
+	to: DesignPoint,
+	tolerance: number,
+): boolean {
+	return (
+		distance(from, to) <= tolerance &&
+		vectorLength(from.outgoing) <= tolerance &&
+		vectorLength(to.incoming) <= tolerance
 	)
-	if (pieces.length === 0) return contour.points
-	const authoredId = (point: Readonly<{ x: number; y: number }>): string => {
-		const match = contour.points.find(
-			(candidate) =>
-				Math.hypot(candidate.x - point.x, candidate.y - point.y) <=
-				cleanupTolerance,
-		)
-		return match?.id ?? `point:${nextId()}`
+}
+
+function outgoingAtAnchor(
+	point: DesignPoint,
+	anchor: DesignPoint,
+): Readonly<{ x: number; y: number }> | undefined {
+	return point.outgoing === undefined
+		? undefined
+		: {
+				x: point.x + point.outgoing.x - anchor.x,
+				y: point.y + point.outgoing.y - anchor.y,
+			}
+}
+
+function incomingAtAnchor(
+	point: DesignPoint,
+	anchor: DesignPoint,
+): Readonly<{ x: number; y: number }> | undefined {
+	return point.incoming === undefined
+		? undefined
+		: {
+				x: point.x + point.incoming.x - anchor.x,
+				y: point.y + point.incoming.y - anchor.y,
+			}
+}
+
+/** Removes only spans whose complete cubic control polygon is coincident. */
+export function cleanupDesignContour(
+	contour: DesignContour,
+	tolerance = DEFAULT_PATH_CLEANUP_TOLERANCE,
+): DesignContour {
+	let points = [...contour.points]
+	let changed = false
+	while (points.length > 1) {
+		let removed = false
+		for (let index = 0; index + 1 < points.length; index += 1) {
+			const from = points[index]
+			const to = points[index + 1]
+			if (
+				from === undefined ||
+				to === undefined ||
+				!zeroLengthSegment(from, to, tolerance)
+			)
+				continue
+			const outgoing = outgoingAtAnchor(to, from)
+			const { outgoing: _previousOutgoing, ...withoutOutgoing } = from
+			points.splice(index, 2, {
+				...withoutOutgoing,
+				...(outgoing === undefined ? {} : { outgoing }),
+			})
+			changed = true
+			removed = true
+			break
+		}
+		if (removed) continue
+		const first = points[0]
+		const last = points.at(-1)
+		if (
+			contour.closed &&
+			first !== undefined &&
+			last !== undefined &&
+			zeroLengthSegment(last, first, tolerance)
+		) {
+			const incoming = incomingAtAnchor(last, first)
+			const { incoming: _previousIncoming, ...withoutIncoming } = first
+			points = [
+				{
+					...withoutIncoming,
+					...(incoming === undefined ? {} : { incoming }),
+				},
+				...points.slice(1, -1),
+			]
+			changed = true
+			continue
+		}
+		break
 	}
-	if (contour.closed)
+	return changed ? { ...contour, points } : contour
+}
+
+function pointToSegmentDistance(
+	point: Readonly<{ x: number; y: number }>,
+	start: Readonly<{ x: number; y: number }>,
+	end: Readonly<{ x: number; y: number }>,
+): number {
+	const x = end.x - start.x
+	const y = end.y - start.y
+	const denominator = x * x + y * y
+	const amount =
+		denominator === 0
+			? 0
+			: Math.max(
+					0,
+					Math.min(
+						1,
+						((point.x - start.x) * x + (point.y - start.y) * y) / denominator,
+					),
+				)
+	return Math.hypot(
+		start.x + amount * x - point.x,
+		start.y + amount * y - point.y,
+	)
+}
+
+function pointToPolylineDistance(
+	point: Readonly<{ x: number; y: number }>,
+	polyline: readonly Readonly<{ x: number; y: number }>[],
+	closed: boolean,
+): number {
+	let result = Number.POSITIVE_INFINITY
+	const count = polyline.length - (closed ? 0 : 1)
+	for (let index = 0; index < count; index += 1) {
+		const start = polyline[index]
+		const end = polyline[(index + 1) % polyline.length]
+		if (start !== undefined && end !== undefined)
+			result = Math.min(result, pointToSegmentDistance(point, start, end))
+	}
+	return result
+}
+
+function directedPolylineWithin(
+	from: readonly Readonly<{ x: number; y: number }>[],
+	fromClosed: boolean,
+	to: readonly Readonly<{ x: number; y: number }>[],
+	toClosed: boolean,
+	tolerance: number,
+): boolean {
+	if (to.length < 2) return false
+	const count = from.length - (fromClosed ? 0 : 1)
+	for (let index = 0; index < count; index += 1) {
+		const start = from[index]
+		const end = from[(index + 1) % from.length]
+		if (start === undefined || end === undefined) continue
+		const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+		if (
+			pointToPolylineDistance(start, to, toClosed) > tolerance ||
+			pointToPolylineDistance(midpoint, to, toClosed) > tolerance
+		)
+			return false
+	}
+	return true
+}
+
+function nodeTurnDegrees(contour: DesignContour, index: number): number {
+	if (!contour.closed && (index === 0 || index === contour.points.length - 1))
+		return 180
+	const previous =
+		contour.points[(index - 1 + contour.points.length) % contour.points.length]
+	const point = contour.points[index]
+	const next = contour.points[(index + 1) % contour.points.length]
+	if (previous === undefined || point === undefined || next === undefined)
+		return 0
+	const incoming =
+		vectorLength(point.incoming) > 0
+			? { x: -(point.incoming?.x ?? 0), y: -(point.incoming?.y ?? 0) }
+			: { x: point.x - previous.x, y: point.y - previous.y }
+	const outgoing =
+		vectorLength(point.outgoing) > 0
+			? (point.outgoing as Readonly<{ x: number; y: number }>)
+			: { x: next.x - point.x, y: next.y - point.y }
+	const incomingLength = Math.hypot(incoming.x, incoming.y)
+	const outgoingLength = Math.hypot(outgoing.x, outgoing.y)
+	if (incomingLength === 0 || outgoingLength === 0) return 180
+	const cosine = Math.max(
+		-1,
+		Math.min(
+			1,
+			(incoming.x * outgoing.x + incoming.y * outgoing.y) /
+				(incomingLength * outgoingLength),
+		),
+	)
+	return (Math.acos(cosine) * 180) / Math.PI
+}
+
+function fittedContourPoints(
+	pieces: readonly Cubic[],
+	closed: boolean,
+): readonly DesignPoint[] {
+	if (closed)
 		return pieces.map((piece, index) => {
 			const previous = pieces[(index - 1 + pieces.length) % pieces.length]
 			return {
-				id: authoredId(piece.p0),
+				id: `__fit:${index}`,
 				x: piece.p0.x,
 				y: piece.p0.y,
 				incoming: {
@@ -541,14 +710,14 @@ function fittedPoints(
 	for (const [index, piece] of pieces.entries()) {
 		if (index === 0)
 			points.push({
-				id: authoredId(piece.p0),
+				id: "__fit:0",
 				x: piece.p0.x,
 				y: piece.p0.y,
 				outgoing: { x: piece.c1.x - piece.p0.x, y: piece.c1.y - piece.p0.y },
 			})
 		const next = pieces[index + 1]
 		points.push({
-			id: authoredId(piece.p3),
+			id: `__fit:${index + 1}`,
 			x: piece.p3.x,
 			y: piece.p3.y,
 			incoming: { x: piece.c2.x - piece.p3.x, y: piece.c2.y - piece.p3.y },
@@ -560,6 +729,193 @@ function fittedPoints(
 		})
 	}
 	return points
+}
+
+function validSimplification(
+	source: DesignContour,
+	candidate: DesignContour,
+	maxError: number,
+	cleanupTolerance: number,
+): boolean {
+	const validationFlatness = Math.max(cleanupTolerance, maxError / 16)
+	const sourcePolyline = flattenDesignContour(source, validationFlatness)
+	const candidatePolyline = flattenDesignContour(candidate, validationFlatness)
+	if (
+		selfIntersections(sourcePolyline, {
+			closed: source.closed,
+			tolerances: { distance: cleanupTolerance },
+		}).length > 0 ||
+		selfIntersections(candidatePolyline, {
+			closed: candidate.closed,
+			tolerances: { distance: cleanupTolerance },
+		}).length > 0
+	)
+		return false
+	if (
+		!directedPolylineWithin(
+			sourcePolyline,
+			source.closed,
+			candidatePolyline,
+			candidate.closed,
+			maxError,
+		) ||
+		!directedPolylineWithin(
+			candidatePolyline,
+			candidate.closed,
+			sourcePolyline,
+			source.closed,
+			maxError,
+		)
+	)
+		return false
+	if (
+		source.closed &&
+		contourOrientation(sourcePolyline, { distance: cleanupTolerance }) !==
+			contourOrientation(candidatePolyline, { distance: cleanupTolerance })
+	)
+		return false
+	return source.points.every((point, index) =>
+		nodeTurnDegrees(source, index) < 30
+			? true
+			: candidate.points.some(
+					(candidatePoint) =>
+						distance(point, candidatePoint) <= cleanupTolerance,
+				),
+	)
+}
+
+function assignFittedPointIds(
+	points: readonly DesignPoint[],
+	authored: readonly DesignPoint[],
+	tolerance: number,
+	nextId: () => string,
+): readonly DesignPoint[] {
+	const used = new Set<string>()
+	return points.map((point) => {
+		const match = authored.find(
+			(candidate) =>
+				!used.has(candidate.id) && distance(candidate, point) <= tolerance,
+		)
+		const id = match?.id ?? `point:${nextId()}`
+		used.add(id)
+		return { ...point, id }
+	})
+}
+
+function simplifyDesignContour(
+	contour: DesignContour,
+	maxError: number,
+	cleanupTolerance: number,
+	nextId: () => string,
+): DesignContour {
+	const cleaned = cleanupDesignContour(contour, cleanupTolerance)
+	const minimum = cleaned.closed ? 3 : 2
+	if (cleaned.points.length < minimum) return cleaned
+	const samplingBudget = maxError / 4
+	const fittingBudget = maxError - samplingBudget
+	const source = flattenDesignContour(cleaned, samplingBudget)
+	if (
+		selfIntersections(source, {
+			closed: cleaned.closed,
+			tolerances: { distance: cleanupTolerance },
+		}).length > 0
+	)
+		return cleaned
+	const pieces = fitCubicContour(
+		{ points: source, closed: cleaned.closed },
+		{
+			maxError: fittingBudget,
+			cornerAngleDegrees: 30,
+			tolerances: { distance: cleanupTolerance },
+		},
+	)
+	const candidateCount = cleaned.closed ? pieces.length : pieces.length + 1
+	if (pieces.length === 0 || candidateCount >= cleaned.points.length)
+		return cleaned
+	const candidate: DesignContour = {
+		...cleaned,
+		points: fittedContourPoints(pieces, cleaned.closed),
+	}
+	if (!validSimplification(cleaned, candidate, maxError, cleanupTolerance))
+		return cleaned
+	return {
+		...candidate,
+		points: assignFittedPointIds(
+			candidate.points,
+			cleaned.points,
+			cleanupTolerance,
+			nextId,
+		),
+	}
+}
+
+function contourInDocument(
+	document: DesignDocument,
+	objectId: string,
+	contourId: string,
+): DesignContour | undefined {
+	const object = document.objects.find((candidate) => candidate.id === objectId)
+	return object?.geometry.kind === "path"
+		? object.geometry.contours.find((contour) => contour.id === contourId)
+		: undefined
+}
+
+function repairSimplifiedDirectSelection(
+	context: DesignPathCommandContext,
+	document: DesignDocument,
+): readonly DesignDirectSelectionTarget[] {
+	const repaired = context.directSelection.flatMap(
+		(target): readonly DesignDirectSelectionTarget[] => {
+			const before = contourInDocument(
+				context.document,
+				target.objectId,
+				target.contourId,
+			)
+			const after = contourInDocument(
+				document,
+				target.objectId,
+				target.contourId,
+			)
+			if (before === undefined || after === undefined) return []
+			if (target.kind === "contour") return [target]
+			if (target.kind === "node")
+				return after.points.some((point) => point.id === target.pointId)
+					? [target]
+					: []
+			if (target.kind === "handle") {
+				const point = after.points.find(
+					(candidate) => candidate.id === target.pointId,
+				)
+				return point?.[target.handle] === undefined ? [] : [target]
+			}
+			const beforeCount = before.closed
+				? before.points.length
+				: Math.max(0, before.points.length - 1)
+			if (target.segmentIndex < 0 || target.segmentIndex >= beforeCount)
+				return []
+			const beforeFrom = before.points[target.segmentIndex]
+			const beforeTo =
+				before.points[(target.segmentIndex + 1) % before.points.length]
+			if (beforeFrom === undefined || beforeTo === undefined) return []
+			const afterCount = after.closed
+				? after.points.length
+				: Math.max(0, after.points.length - 1)
+			for (let index = 0; index < afterCount; index += 1) {
+				const afterFrom = after.points[index]
+				const afterTo = after.points[(index + 1) % after.points.length]
+				if (afterFrom?.id === beforeFrom.id && afterTo?.id === beforeTo.id)
+					return [{ ...target, segmentIndex: index }]
+			}
+			return []
+		},
+	)
+	return repaired.filter(
+		(target, index) =>
+			repaired.findIndex(
+				(candidate) =>
+					directSelectionKey(candidate) === directSelectionKey(target),
+			) === index,
+	)
 }
 
 function normalizeSelectedWinding(
@@ -744,15 +1100,14 @@ export function applyDesignPathCommand(
 						}))
 					: command === "normalize-winding"
 						? normalizeSelectedWinding(context)
-						: replaceSelectedContours(context, (contour) => ({
-								...contour,
-								points: fittedPoints(
+						: replaceSelectedContours(context, (contour) =>
+								simplifyDesignContour(
 									contour,
 									simplifyTolerance,
 									cleanupTolerance,
 									nextId,
 								),
-							}))
+							)
 	} catch (error) {
 		return {
 			ok: false,
@@ -763,7 +1118,10 @@ export function applyDesignPathCommand(
 		ok: true,
 		document,
 		objectSelection: context.objectSelection,
-		directSelection: context.directSelection,
+		directSelection:
+			command === "simplify"
+				? repairSimplifiedDirectSelection(context, document)
+				: context.directSelection,
 		message:
 			command === "reverse"
 				? "Reversed the selected paths."

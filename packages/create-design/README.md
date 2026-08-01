@@ -85,12 +85,19 @@ Path commands operate on the exact directly selected contours, or on every
 contour of the selected path objects when there is no direct selection. Reverse,
 Join, Close, Simplify, Make Compound Path, Release Compound Path, and Normalize
 Compound Winding each report why the current selection is ineligible before
-editing. Simplify uses a `0.25` document-unit bidirectional reconstruction
-budget and treats points within `1e-6` units as coincident; retained authored
-anchors keep their stable IDs. Joining uses the same coincidence tolerance and
-otherwise adds an ordinary straight bridge. Making a compound path bakes the
-selected closed paths into the topmost selected object's coordinate space and
-appearance without silently changing contour winding. Canvas and PDF both use
+editing. Simplify first removes only zero-length cubic spans whose complete
+control polygon is coincident within `1e-6` document units. An optional refit
+uses a `0.25` unit bidirectional reconstruction budget, preserves authored
+corners at or above 30 degrees, and is accepted only when it has strictly fewer
+anchors, introduces no crossing, and retains closed-path winding. Otherwise the
+cleaned or original contour is returned unchanged, without allocating IDs or
+rewriting handles; Simplify therefore never increases anchor count. Retained
+authored anchors keep their stable IDs, and direct selections are repaired by
+surviving point and segment-endpoint identities. Joining uses the same
+coincidence tolerance and otherwise adds an ordinary straight bridge. Making a
+compound path bakes the selected closed paths into the topmost selected
+object's coordinate space and appearance without silently changing contour
+winding. Canvas and PDF both use
 even-odd filling, so nested counterforms agree before and after the separate,
 explicit winding-normalization command. Every successful command is committed
 as one immutable history entry.

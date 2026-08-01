@@ -1,4 +1,8 @@
-import { contourOrientation, flattenCubic } from "@create-art/vector-geometry"
+import {
+	contourOrientation,
+	flattenCubic,
+	selfIntersections,
+} from "@create-art/vector-geometry"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -6,8 +10,10 @@ import {
 	reduceDesignHistory,
 } from "../src/design-history.ts"
 import { nearestDesignObject } from "../src/design-canvas.ts"
+import { ellipseContour } from "../src/geometry.ts"
 import {
 	applyDesignPathCommand,
+	cleanupDesignContour,
 	DEFAULT_PATH_SIMPLIFY_TOLERANCE,
 	designPathCommandEligibility,
 	type DesignPathCommandContext,
@@ -220,6 +226,7 @@ describe("create-design path commands", () => {
 		}))
 		points.splice(10, 0, { ...points[10]!, id: "duplicate" })
 		const original = contour("sampled", points)
+		const cleanedPoints = cleanupDesignContour(original).points
 		let sequence = 0
 		const result = applyDesignPathCommand(
 			"simplify",
@@ -255,10 +262,13 @@ describe("create-design path commands", () => {
 				).slice(index === 0 ? 0 : 1),
 			)
 		}
-		const nearest = (point: DesignPoint) =>
+		const nearest = (
+			point: Readonly<{ x: number; y: number }>,
+			polyline: readonly Readonly<{ x: number; y: number }>[],
+		) =>
 			Math.min(
-				...flattened.slice(1).map((candidate, index) => {
-					const previous = flattened[index]
+				...polyline.slice(1).map((candidate, index) => {
+					const previous = polyline[index]
 					if (previous === undefined) return Number.POSITIVE_INFINITY
 					const x = candidate.x - previous.x
 					const y = candidate.y - previous.y
@@ -280,9 +290,215 @@ describe("create-design path commands", () => {
 					)
 				}),
 			)
-		expect(Math.max(...points.map(nearest))).toBeLessThanOrEqual(
-			DEFAULT_PATH_SIMPLIFY_TOLERANCE,
+		expect(
+			Math.max(...points.map((point) => nearest(point, flattened))),
+		).toBeLessThanOrEqual(DEFAULT_PATH_SIMPLIFY_TOLERANCE)
+		expect(
+			Math.max(...flattened.map((point) => nearest(point, cleanedPoints))),
+		).toBeLessThanOrEqual(DEFAULT_PATH_SIMPLIFY_TOLERANCE)
+		expect(selfIntersections(cleanedPoints, { closed: false })).toEqual([])
+		expect(selfIntersections(flattened, { closed: false })).toEqual([])
+		expect(new Set(simplified.points.map(({ id }) => id)).size).toBe(
+			simplified.points.length,
 		)
+		expect(simplified.points[0]?.id).toBe("p0")
+		expect(simplified.points.at(-1)?.id).toBe("p20")
+	})
+
+	it("never expands compact authored curves merely to improve fit error", () => {
+		const acute = contour(
+			"acute",
+			[
+				{
+					id: "acute:a",
+					x: 40,
+					y: 10,
+					incoming: { x: -24, y: 8 },
+					outgoing: { x: 18, y: 24 },
+				},
+				{
+					id: "acute:b",
+					x: 85,
+					y: 80,
+					incoming: { x: -4, y: -36 },
+					outgoing: { x: -48, y: -8 },
+				},
+				{
+					id: "acute:c",
+					x: 10,
+					y: 70,
+					incoming: { x: 28, y: 12 },
+					outgoing: { x: -2, y: -38 },
+				},
+			],
+			true,
+		)
+		const circle = ellipseContour(
+			{ minX: 0, minY: 0, maxX: 100, maxY: 100 },
+			"circle",
+		)
+		const singleCubic = contour("single", [
+			{ id: "single:a", x: 0, y: 0, outgoing: { x: 40, y: 80 } },
+			{ id: "single:b", x: 100, y: 0, incoming: { x: -40, y: 80 } },
+		])
+		const hardCorners = contour(
+			"corners",
+			[
+				{ id: "corner:a", x: 0, y: 0 },
+				{ id: "corner:b", x: 100, y: 0 },
+				{ id: "corner:c", x: 100, y: 100 },
+				{ id: "corner:d", x: 0, y: 100 },
+			],
+			true,
+		)
+		for (const authored of [acute, circle, singleCubic, hardCorners]) {
+			const source = documentWith(path(`shape:${authored.id}`, [authored]))
+			let generated = 0
+			const result = applyDesignPathCommand(
+				"simplify",
+				context(source, [`shape:${authored.id}`]),
+				{ nextId: () => `unexpected:${generated++}` },
+			)
+			expect(result.ok).toBe(true)
+			if (!result.ok) continue
+			expect(result.document).toBe(source)
+			expect(result.document.objects[0]?.geometry).toEqual({
+				kind: "path",
+				contours: [authored],
+			})
+			expect(generated).toBe(0)
+		}
+		expect(acute.points).toHaveLength(3)
+	})
+
+	it("refuses reduction when an inflection or crossing makes topology risky", () => {
+		const loopRisk = contour("loop-risk", [
+			{ id: "l0", x: 0, y: 0 },
+			{ id: "l1", x: 100, y: 100 },
+			{ id: "l2", x: 0, y: 100 },
+			{ id: "l3", x: 100, y: 0 },
+			{ id: "l4", x: 140, y: 50 },
+		])
+		const inflection = contour("inflection", [
+			{ id: "i0", x: 0, y: 0 },
+			{ id: "i1", x: 20, y: 35 },
+			{ id: "i2", x: 40, y: 50 },
+			{ id: "i3", x: 60, y: -50 },
+			{ id: "i4", x: 80, y: -35 },
+			{ id: "i5", x: 100, y: 0 },
+		])
+		const crossingSource = documentWith(path("crossing", [loopRisk]))
+		const crossingResult = applyDesignPathCommand(
+			"simplify",
+			context(crossingSource, ["crossing"]),
+		)
+		expect(crossingResult.ok && crossingResult.document).toBe(crossingSource)
+
+		const inflectionSource = documentWith(
+			path("inflection-shape", [inflection]),
+		)
+		const inflectionResult = applyDesignPathCommand(
+			"simplify",
+			context(inflectionSource, ["inflection-shape"]),
+		)
+		expect(inflectionResult.ok).toBe(true)
+		if (!inflectionResult.ok) return
+		const geometry = inflectionResult.document.objects[0]?.geometry
+		if (geometry?.kind !== "path") throw new Error("Expected path")
+		expect(geometry.contours[0]?.points.length).toBeLessThanOrEqual(
+			inflection.points.length,
+		)
+	})
+
+	it("cleans coincident zero-length spans and removes dangling direct targets", () => {
+		const original = contour("cleanup", [
+			{ id: "a", x: 0, y: 0 },
+			{ id: "duplicate", x: 0, y: 0, outgoing: { x: 10, y: 12 } },
+			{ id: "c", x: 30, y: 0, incoming: { x: -8, y: 5 } },
+			{ id: "d", x: 30, y: 30 },
+		])
+		const source = documentWith(path("shape", [original]))
+		const selected = [
+			{ kind: "contour" as const, objectId: "shape", contourId: "cleanup" },
+			{
+				kind: "node" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				pointId: "duplicate",
+			},
+			{
+				kind: "handle" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				pointId: "duplicate",
+				handle: "outgoing" as const,
+			},
+			{
+				kind: "node" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				pointId: "c",
+			},
+			{
+				kind: "handle" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				pointId: "c",
+				handle: "incoming" as const,
+			},
+			{
+				kind: "segment" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				segmentIndex: 0,
+			},
+			{
+				kind: "segment" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				segmentIndex: 1,
+			},
+			{
+				kind: "segment" as const,
+				objectId: "shape",
+				contourId: "cleanup",
+				segmentIndex: 2,
+			},
+		]
+		let generated = 0
+		const result = applyDesignPathCommand(
+			"simplify",
+			context(source, ["shape"], selected),
+			{ nextId: () => `unexpected:${generated++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const geometry = result.document.objects[0]?.geometry
+		if (geometry?.kind !== "path") throw new Error("Expected path")
+		expect(geometry.contours[0]?.points).toEqual([
+			{ id: "a", x: 0, y: 0, outgoing: { x: 10, y: 12 } },
+			{ id: "c", x: 30, y: 0, incoming: { x: -8, y: 5 } },
+			{ id: "d", x: 30, y: 30 },
+		])
+		expect(generated).toBe(0)
+		expect(result.objectSelection).toEqual(["shape"])
+		expect(result.directSelection).toEqual([
+			{ kind: "contour", objectId: "shape", contourId: "cleanup" },
+			{ kind: "node", objectId: "shape", contourId: "cleanup", pointId: "c" },
+			{
+				kind: "handle",
+				objectId: "shape",
+				contourId: "cleanup",
+				pointId: "c",
+				handle: "incoming",
+			},
+			{
+				kind: "segment",
+				objectId: "shape",
+				contourId: "cleanup",
+				segmentIndex: 1,
+			},
+		])
 	})
 
 	it("makes and releases compounds without silently changing authored winding or stacking", () => {
