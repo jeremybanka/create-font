@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest"
 import { DesignTileContent } from "../src/DesignTileContent.tsx"
 import type { DesignTileContext } from "../src/design-tile-registry.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { DEFAULT_DESIGN_SNAP_SETTINGS } from "../src/design-canvas.ts"
 
 describe("PDF preview tile", () => {
 	it("lets the user opt in and disposes the preview when disabled", () => {
@@ -56,6 +57,13 @@ describe("PDF preview tile", () => {
 			selectedObjectIds: [],
 			selectedSwatch: document.swatches[0],
 			selectedSwatchId: document.swatches[0]!.id,
+			selectedGuideId: null,
+			snapSettings: DEFAULT_DESIGN_SNAP_SETTINGS,
+			setSnapCategory: vi.fn(),
+			setSnapThreshold: vi.fn(),
+			selectGuide: vi.fn(),
+			toggleGuideLock: vi.fn(),
+			deleteGuide: vi.fn(),
 			setObjectProperty: vi.fn(),
 			setObjectGeometry: vi.fn(),
 			setAppearanceTarget: vi.fn(),

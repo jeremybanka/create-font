@@ -91,7 +91,7 @@ const fixture = (): DesignDocument => ({
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		},
 	],
-	guides: [{ id: "guide:center", axis: "x", value: 306 }],
+	guides: [{ id: "guide:center", axis: "x", value: 306, locked: true }],
 })
 
 function split(

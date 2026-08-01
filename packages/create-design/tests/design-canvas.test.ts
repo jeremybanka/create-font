@@ -4,11 +4,15 @@ import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 import {
 	captureDesignPointer,
 	clampToPage,
+	DEFAULT_DESIGN_SNAP_SETTINGS,
 	designBaseScale,
+	designSnapTargets,
+	designSnapThreshold,
 	initialDesignCanvasView,
 	nearestDesignObject,
 	releaseDesignPointer,
 	snapDesignObject,
+	snapDesignObjects,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
 import type { DesignObject, DesignStroke } from "../src/types.ts"
@@ -35,7 +39,11 @@ const rectangle = (
 
 const artboard = (
 	bounds: Readonly<{ x: number; y: number; width: number; height: number }>,
-) => ({ id: "artboard:test", name: "Test artboard", ...bounds })
+) => ({
+	id: "artboard:test",
+	name: "Test artboard",
+	...bounds,
+})
 
 const strokedPath = (stroke: Partial<DesignStroke> = {}): DesignObject => ({
 	id: "stroke",
@@ -78,7 +86,10 @@ describe("design canvas adapter", () => {
 	it("converts out-of-page gestures to page-edge coordinates", () => {
 		expect(
 			clampToPage({ x: -20, y: 900 }, { x: 0, y: 0, width: 612, height: 792 }),
-		).toEqual({ x: 0, y: 792 })
+		).toEqual({
+			x: 0,
+			y: 792,
+		})
 	})
 
 	it("centers and clamps an offset page without changing the document plane", () => {
@@ -211,5 +222,127 @@ describe("design canvas adapter", () => {
 		)
 		expect(dashedSnap.x).toBe(50)
 		expect(dashedSnap.object.transform.e).toBe(27)
+	})
+
+	it("collects every configurable target category and excludes hidden objects", () => {
+		const moving = rectangle("moving", 10, 10, 20, 20)
+		const locked = {
+			...rectangle("locked", 40, 50, 60, 70),
+			locked: true,
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:locked",
+						closed: false,
+						points: [
+							{
+								id: "point:locked",
+								x: 40,
+								y: 50,
+								outgoing: { x: 8, y: 3 },
+							},
+						],
+					},
+				],
+			},
+		}
+		const hidden = { ...rectangle("hidden", 80, 90, 100, 110), hidden: true }
+		const document = {
+			...createInitialDocument(),
+			objects: [moving, locked, hidden],
+			guides: [
+				{ id: "guide:locked", axis: "x" as const, value: 32, locked: true },
+			],
+		}
+		const targets = designSnapTargets(
+			document,
+			"x",
+			DEFAULT_DESIGN_SNAP_SETTINGS,
+			new Set([moving.id]),
+		)
+		expect(new Set(targets.map(({ category }) => category))).toEqual(
+			new Set([
+				"artboards",
+				"guides",
+				"objectBounds",
+				"anchors",
+				"controlPoints",
+			]),
+		)
+		expect(targets.some(({ id }) => id.includes("locked"))).toBe(true)
+		expect(targets.some(({ id }) => id.includes("hidden"))).toBe(false)
+	})
+
+	it("honors disabled categories without changing document geometry", () => {
+		const moving = rectangle("moving", 100, 100, 110, 110)
+		const document = {
+			...createInitialDocument(),
+			artboards: [artboard({ x: 1_000, y: 1_000, width: 100, height: 100 })],
+			objects: [moving],
+			guides: [{ id: "guide:near", axis: "x" as const, value: 112 }],
+		}
+		const enabled = snapDesignObject(moving, document, 1)
+		expect(enabled.x).toBe(112)
+		const disabled = snapDesignObject(moving, document, 1, {
+			thresholdPixels: 7,
+			enabled: {
+				artboards: false,
+				guides: false,
+				objectBounds: false,
+				anchors: false,
+				controlPoints: false,
+			},
+		})
+		expect(disabled.object).toEqual(moving)
+		expect(document.guides[0]?.value).toBe(112)
+	})
+
+	it("ranks equal-distance candidates deterministically by priority then identity", () => {
+		const moving = rectangle("moving", 100, 100, 110, 110)
+		const scene = {
+			artboards: [] as const,
+			objects: [moving],
+			guides: [
+				{ id: "guide:z", axis: "x" as const, value: 98 },
+				{ id: "guide:a", axis: "x" as const, value: 112 },
+			],
+		}
+		const outcomes = Array.from(
+			{ length: 20 },
+			() => snapDesignObject(moving, scene, 1).x,
+		)
+		expect(new Set(outcomes)).toEqual(new Set([98]))
+		expect(snapDesignObject(moving, scene, 1).matches?.[0]?.category).toBe(
+			"guides",
+		)
+	})
+
+	it("keeps snap distance screen-constant across zoom and invariant under pan or rotation", () => {
+		expect(designSnapThreshold(7, 1, 0)).toBe(7)
+		expect(designSnapThreshold(7, 2, 90)).toBe(3.5)
+		expect(designSnapThreshold(7, 2, -37)).toBe(3.5)
+		const moving = rectangle("moving", 100, 100, 110, 110)
+		const scene = {
+			artboards: [] as const,
+			objects: [moving],
+			guides: [{ id: "guide:five", axis: "x" as const, value: 115 }],
+		}
+		expect(snapDesignObject(moving, scene, 1).x).toBe(115)
+		expect(snapDesignObject(moving, scene, 2).x).toBeNull()
+	})
+
+	it("snaps multi-selected objects rigidly from their combined bounds", () => {
+		const first = rectangle("first", 10, 20, 30, 40)
+		const second = rectangle("second", 40, 50, 60, 70)
+		const scene = {
+			artboards: [] as const,
+			objects: [first, second],
+			guides: [{ id: "guide:right", axis: "x" as const, value: 63 }],
+		}
+		const result = snapDesignObjects([first, second], scene, 1)
+		expect(result.x).toBe(63)
+		expect(result.objects[0]?.transform.e).toBe(3)
+		expect(result.objects[1]?.transform.e).toBe(3)
 	})
 })

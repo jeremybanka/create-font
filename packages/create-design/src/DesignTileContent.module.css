@@ -172,12 +172,57 @@ design-tile-content.class {
 		}
 	}
 
+	> design-canvas-tile {
+		> snap-options {
+			display: grid;
+			gap: 5px;
+			padding: 7px;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: var(--paper);
+
+			> label {
+				display: grid;
+				grid-template-columns: min-content minmax(0, 1fr) auto;
+				align-items: center;
+				gap: 6px;
+				color: var(--ink-muted);
+			}
+		}
+
+		> guide-list {
+			display: grid;
+			gap: 3px;
+
+			> guide-row {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) 28px 28px;
+
+				&[data-selected] > button:first-child {
+					background: var(--selected);
+				}
+
+				> button {
+					min-width: 0;
+					padding: 5px;
+					border: 1px solid var(--line);
+					background: var(--paper);
+					color: var(--ink);
+					text-align: left;
+					cursor: pointer;
+
+					> svg {
+						width: 11px;
+						height: 11px;
+					}
+				}
+			}
+		}
+	}
+
 	> design-export-tile {
 		grid-template-rows:
-			min-content min-content min-content min-content minmax(
-				0,
-				1fr
-			);
+			min-content min-content min-content min-content minmax(0, 1fr);
 
 		> label[data-live-preview] {
 			display: flex;
