@@ -9,6 +9,14 @@ import type { LivePdfArtifact } from "../src/live-pdf-compilation.ts"
 const artifact = (generation: number): LivePdfArtifact => ({
 	bytes: new Uint8Array([generation]),
 	generation,
+	preflight: {
+		capabilities: [],
+		decision: "ready",
+		diagnostics: [],
+		regions: [],
+		summary: { errors: 0, infos: 0, warnings: 0 },
+		target: "pdf",
+	},
 	requestedAt: 0,
 	revision: generation,
 	timings: {

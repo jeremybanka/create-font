@@ -140,6 +140,15 @@ ordinary geometry edits reuse unrelated object streams. The last successfully
 loaded proof remains visible while a replacement compiles or if an edit makes
 the document temporarily invalid.
 
+PDF output runs the shared runtime preflight contract before preview or
+download. Invalid page scopes and unsupported material block output. Warnings
+and notices remain advisory and never suppress output; the Export tile offers an
+ephemeral opt-in check for artwork outside the requested page-region union.
+Diagnostics remain separate from canonical source validity and carry stable
+target, capability, entity, artboard, and action data for browser and
+noninteractive consumers. Exporter extension rules are documented in
+[`docs/export-preflight.md`](../../docs/export-preflight.md).
+
 ```sh
 pnpm --filter create-design dev
 pnpm --filter create-design test
