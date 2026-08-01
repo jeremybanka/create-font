@@ -57,12 +57,67 @@ describe("filled-region Boolean operations", () => {
 		])
 	})
 
+	it("intersects every independently filled region", () => {
+		expect(
+			booleanContours(
+				[
+					[rectangle(0, 0, 20, 20)],
+					[rectangle(5, 0, 15, 20)],
+					[rectangle(10, 0, 25, 20)],
+				],
+				{ operation: "intersection" },
+			),
+		).toEqual([rectangle(10, 0, 15, 20)])
+		expect(
+			booleanContours([[rectangle(0, 0, 10, 10)], [rectangle(20, 0, 30, 10)]], {
+				operation: "intersection",
+			}),
+		).toEqual([])
+
+		const outer = rectangle(0, 0, 20, 20)
+		const hole = rectangle(5, 5, 15, 15)
+		const holed = booleanContours([[outer, hole], [outer]], {
+			operation: "intersection",
+		})
+		expect(holed).toHaveLength(2)
+		expect(holed.map(({ points }) => Math.sign(signedArea(points)))).toEqual([
+			1, -1,
+		])
+	})
+
+	it("excludes even object coverage while preserving authored holes", () => {
+		expect(
+			booleanContours([[rectangle(0, 0, 10, 10)], [rectangle(5, 0, 15, 10)]], {
+				operation: "xor",
+			}),
+		).toEqual([rectangle(0, 0, 5, 10), rectangle(10, 0, 15, 10)])
+
+		const outer = rectangle(0, 0, 20, 20)
+		const hole = rectangle(5, 5, 15, 15)
+		expect(
+			booleanContours([[outer, hole], [hole]], { operation: "xor" }),
+		).toEqual([outer])
+		expect(
+			booleanContours([[outer], [outer], [outer]], { operation: "xor" }),
+		).toEqual([outer])
+	})
+
 	it("is stable for tangent and self-intersecting inputs", () => {
 		const tangent = booleanContours(
 			[[rectangle(0, 0, 10, 10)], [rectangle(10, 0, 20, 10)]],
 			{ operation: "union" },
 		)
 		expect(tangent).toEqual([rectangle(0, 0, 20, 10)])
+		expect(
+			booleanContours([[rectangle(0, 0, 10, 10)], [rectangle(10, 0, 20, 10)]], {
+				operation: "intersection",
+			}),
+		).toEqual([])
+		expect(
+			booleanContours([[rectangle(0, 0, 10, 10)], [rectangle(10, 0, 20, 10)]], {
+				operation: "xor",
+			}),
+		).toEqual([rectangle(0, 0, 20, 10)])
 
 		const bowTie: Contour = {
 			closed: true,
