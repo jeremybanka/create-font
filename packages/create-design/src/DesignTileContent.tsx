@@ -5,7 +5,7 @@ import {
 	LockOpen1Icon,
 	TrashIcon,
 } from "@radix-ui/react-icons"
-import { useState } from "preact/hooks"
+import { useMemo, useState } from "preact/hooks"
 import type {
 	AppearancePaintTarget,
 	AppearancePaintValue,
@@ -33,6 +33,7 @@ import type {
 } from "./design-tile-registry.ts"
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
+import { resolvePdfArtboards, type PdfExportRequest } from "./pdf.ts"
 import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
@@ -410,6 +411,55 @@ function DesignExportTile({
 	readonly context: DesignTileContext
 }) {
 	const [previewEnabled, setPreviewEnabled] = useState(false)
+	const [scope, setScope] =
+		useState<PdfExportRequest["scope"]["kind"]>("active")
+	const [selectedArtboardIds, setSelectedArtboardIds] = useState<
+		readonly string[]
+	>([context.activeArtboard.id])
+	const [rangeStartId, setRangeStartId] = useState(context.activeArtboard.id)
+	const [rangeEndId, setRangeEndId] = useState(context.activeArtboard.id)
+	const [includeBleed, setIncludeBleed] = useState(false)
+	const selectedIds = useMemo(() => {
+		const valid = context.document.artboards
+			.filter(({ id }) => selectedArtboardIds.includes(id))
+			.map(({ id }) => id)
+		return valid.length === 0 ? [context.activeArtboard.id] : valid
+	}, [
+		context.activeArtboard.id,
+		context.document.artboards,
+		selectedArtboardIds,
+	])
+	const startId = context.document.artboards.some(
+		({ id }) => id === rangeStartId,
+	)
+		? rangeStartId
+		: context.activeArtboard.id
+	const endId = context.document.artboards.some(({ id }) => id === rangeEndId)
+		? rangeEndId
+		: context.activeArtboard.id
+	const target = useMemo<PdfExportRequest>(() => {
+		const exportScope: PdfExportRequest["scope"] =
+			scope === "all"
+				? { kind: "all" }
+				: scope === "selected"
+					? { kind: "selected", artboardIds: selectedIds }
+					: scope === "range"
+						? {
+								kind: "range",
+								startArtboardId: startId,
+								endArtboardId: endId,
+							}
+						: { kind: "active", artboardId: context.activeArtboard.id }
+		return { scope: exportScope, includeBleed }
+	}, [
+		context.activeArtboard.id,
+		endId,
+		includeBleed,
+		scope,
+		selectedIds,
+		startId,
+	])
+	const pageCount = resolvePdfArtboards(context.document, target).length
 	return (
 		<design-export-tile>
 			<strong>Portable Document Format</strong>
@@ -417,8 +467,84 @@ function DesignExportTile({
 				RGB and CMYK vector fills and strokes are preserved through
 				mondrian.pdf.
 			</span>
-			<button type="button" onClick={context.exportDocument}>
-				Export PDF
+			<label data-field>
+				<span>Pages</span>
+				<select
+					data-export-scope
+					value={scope}
+					onChange={(event) =>
+						setScope(
+							event.currentTarget.value as PdfExportRequest["scope"]["kind"],
+						)
+					}
+				>
+					<option value="active">Active artboard</option>
+					<option value="all">All artboards</option>
+					<option value="selected">Selected artboards</option>
+					<option value="range">Artboard range</option>
+				</select>
+			</label>
+			{scope !== "selected" ? null : (
+				<fieldset data-export-selection>
+					<legend>Selected artboards</legend>
+					{context.document.artboards.map((artboard) => (
+						<label key={artboard.id}>
+							<input
+								type="checkbox"
+								checked={selectedIds.includes(artboard.id)}
+								onChange={(event) =>
+									setSelectedArtboardIds((current) =>
+										event.currentTarget.checked
+											? [...new Set([...current, artboard.id])]
+											: current.filter((id) => id !== artboard.id),
+									)
+								}
+							/>
+							<span>{artboard.name}</span>
+						</label>
+					))}
+				</fieldset>
+			)}
+			{scope !== "range" ? null : (
+				<export-range>
+					<label data-field>
+						<span>From</span>
+						<select
+							value={startId}
+							onChange={(event) => setRangeStartId(event.currentTarget.value)}
+						>
+							{context.document.artboards.map((artboard) => (
+								<option key={artboard.id} value={artboard.id}>
+									{artboard.name}
+								</option>
+							))}
+						</select>
+					</label>
+					<label data-field>
+						<span>To</span>
+						<select
+							value={endId}
+							onChange={(event) => setRangeEndId(event.currentTarget.value)}
+						>
+							{context.document.artboards.map((artboard) => (
+								<option key={artboard.id} value={artboard.id}>
+									{artboard.name}
+								</option>
+							))}
+						</select>
+					</label>
+				</export-range>
+			)}
+			<label data-include-bleed>
+				<input
+					type="checkbox"
+					checked={includeBleed}
+					onChange={(event) => setIncludeBleed(event.currentTarget.checked)}
+				/>
+				<span>Include authored bleed</span>
+			</label>
+			<button type="button" onClick={() => context.exportDocument(target)}>
+				Export {pageCount} page{pageCount === 1 ? "" : "s"} as PDF
 			</button>
 			<label data-live-preview>
 				<input
@@ -429,10 +555,7 @@ function DesignExportTile({
 				<span>Live PDF proof</span>
 			</label>
 			{previewEnabled ? (
-				<PdfPreview
-					document={context.document}
-					artboard={context.activeArtboard}
-				/>
+				<PdfPreview document={context.document} target={target} />
 			) : null}
 		</design-export-tile>
 	)

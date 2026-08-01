@@ -11,14 +11,17 @@ import {
 } from "./live-pdf-compilation.ts"
 import css from "./PdfPreview.module.css"
 import { activeDesignArtboard } from "./artboards.ts"
+import type { PdfExportTarget } from "./pdf.ts"
 import type { DesignArtboard, DesignDocument } from "./types.ts"
 
 export function PdfPreview({
 	document,
-	artboard = activeDesignArtboard(document),
+	artboard,
+	target = artboard ?? activeDesignArtboard(document),
 }: {
 	readonly document: DesignDocument
 	readonly artboard?: DesignArtboard
+	readonly target?: PdfExportTarget
 }) {
 	const compiler = useMemo(() => createLivePdfCompiler(), [])
 	const manager = useMemo(() => {
@@ -53,8 +56,15 @@ export function PdfPreview({
 		}
 	}, [compiler, manager])
 	useEffect(() => {
-		compiler.request(document, artboard)
-	}, [compiler, document.objects, artboard, document.swatches, document.title])
+		compiler.request(document, target)
+	}, [
+		compiler,
+		document.artboards,
+		document.objects,
+		document.swatches,
+		document.title,
+		target,
+	])
 	useEffect(() => {
 		if (
 			manager === null ||

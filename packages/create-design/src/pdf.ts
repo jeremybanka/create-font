@@ -13,6 +13,7 @@ import {
 	type PdfInfoDictionary,
 	type PdfPageDictionary,
 	type PdfPagesDictionary,
+	type PdfReference,
 	type PdfStream,
 } from "mondrian.pdf"
 
@@ -140,24 +141,41 @@ export interface PdfObjectProjection {
 
 export interface PdfPageProjection {
 	readonly artboardId: string
+	readonly bleedBox?: readonly [number, number, number, number]
 	readonly x: number
 	readonly y: number
 	readonly height: number
+	readonly mediaBox: readonly [number, number, number, number]
 	readonly objectProjections: readonly PdfObjectProjection[]
 	readonly prefix: PdfStream
 	readonly suffix: PdfStream
+	readonly trimBox?: readonly [number, number, number, number]
 	readonly width: number
 }
 
 export interface PdfDocumentProjection {
 	readonly document: PdfDocument
 	readonly page: PdfPageProjection
+	readonly pages: readonly PdfPageProjection[]
 }
+
+export type PdfExportScope =
+	| Readonly<{ kind: "active"; artboardId: string }>
+	| Readonly<{ kind: "all" }>
+	| Readonly<{ kind: "selected"; artboardIds: readonly string[] }>
+	| Readonly<{ kind: "range"; startArtboardId: string; endArtboardId: string }>
+
+export interface PdfExportRequest {
+	readonly includeBleed?: boolean
+	readonly scope: PdfExportScope
+}
+
+export type PdfExportTarget = DesignArtboard | PdfExportRequest
 
 export interface PdfProjectionGraph {
 	project(
 		document: DesignDocument,
-		artboard?: DesignArtboard,
+		target?: PdfExportTarget,
 	): PdfDocumentProjection
 }
 
@@ -180,6 +198,56 @@ function sameOrderedProjections(
 	)
 }
 
+function isArtboard(target: PdfExportTarget): target is DesignArtboard {
+	return "id" in target
+}
+
+function exportRequest(
+	document: DesignDocument,
+	target: PdfExportTarget = activeDesignArtboard(document),
+): PdfExportRequest {
+	return isArtboard(target)
+		? { scope: { kind: "active", artboardId: target.id } }
+		: target
+}
+
+export function resolvePdfArtboards(
+	document: DesignDocument,
+	target?: PdfExportTarget,
+): readonly DesignArtboard[] {
+	if (target !== undefined && isArtboard(target)) return [target]
+	const request = exportRequest(document, target)
+	const scope = request.scope
+	if (scope.kind === "all") return document.artboards
+	if (scope.kind === "selected") {
+		const selected = new Set(scope.artboardIds)
+		const artboards = document.artboards.filter(({ id }) => selected.has(id))
+		if (artboards.length === 0)
+			throw new Error("PDF export requires at least one selected artboard.")
+		return artboards
+	}
+	if (scope.kind === "range") {
+		const start = document.artboards.findIndex(
+			({ id }) => id === scope.startArtboardId,
+		)
+		const end = document.artboards.findIndex(
+			({ id }) => id === scope.endArtboardId,
+		)
+		if (start < 0 || end < 0)
+			throw new Error("PDF export range references an unknown artboard.")
+		return document.artboards.slice(
+			Math.min(start, end),
+			Math.max(start, end) + 1,
+		)
+	}
+	const artboard = document.artboards.find(({ id }) => id === scope.artboardId)
+	if (artboard === undefined)
+		throw new Error(
+			`PDF export references unknown artboard ${scope.artboardId}.`,
+		)
+	return [artboard]
+}
+
 /**
  * Owns create-design's semantic PDF invalidation boundaries. Cached streams
  * are ordinary immutable mondrian.pdf values and can be inserted into each
@@ -187,7 +255,7 @@ function sameOrderedProjections(
  */
 export function createPdfProjectionGraph(): PdfProjectionGraph {
 	const objects = new Map<string, ObjectCacheEntry>()
-	let pageCache: PdfPageProjection | null = null
+	const pageCaches = new Map<string, PdfPageProjection>()
 	let documentCache: Readonly<{
 		projection: PdfDocumentProjection
 		title: string
@@ -257,72 +325,126 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 	const projectPage = (
 		artboard: DesignArtboard,
 		objectProjections: readonly PdfObjectProjection[],
+		includeBleed: boolean,
 	): PdfPageProjection => {
-		const cached = pageCache
+		const cacheKey = `${artboard.id}:${includeBleed ? "bleed" : "trim"}`
+		const cached = pageCaches.get(cacheKey)
+		const bleed = includeBleed ? artboard.bleed : undefined
 		if (
-			cached !== null &&
+			cached !== undefined &&
 			cached.artboardId === artboard.id &&
 			cached.x === artboard.x &&
 			cached.y === artboard.y &&
 			cached.width === artboard.width &&
 			cached.height === artboard.height &&
+			(cached.trimBox !== undefined) === (bleed !== undefined) &&
+			(cached.trimBox?.[0] ?? 0) === (bleed?.left ?? 0) &&
+			(cached.trimBox?.[1] ?? 0) === (bleed?.bottom ?? 0) &&
+			cached.mediaBox[2] ===
+				artboard.width + (bleed?.left ?? 0) + (bleed?.right ?? 0) &&
+			cached.mediaBox[3] ===
+				artboard.height + (bleed?.top ?? 0) + (bleed?.bottom ?? 0) &&
 			sameOrderedProjections(cached.objectProjections, objectProjections)
 		) {
 			return cached
 		}
+		const left = bleed?.left ?? 0
+		const bottom = bleed?.bottom ?? 0
+		const mediaWidth = artboard.width + left + (bleed?.right ?? 0)
+		const mediaHeight = artboard.height + bottom + (bleed?.top ?? 0)
 		const transform = documentToPdfTransform(artboard)
-		pageCache = Object.freeze({
+		const projection = Object.freeze({
 			artboardId: artboard.id,
+			...(bleed === undefined
+				? {}
+				: {
+						bleedBox: [0, 0, mediaWidth, mediaHeight] as const,
+						trimBox: [
+							left,
+							bottom,
+							left + artboard.width,
+							bottom + artboard.height,
+						] as const,
+					}),
 			x: artboard.x,
 			y: artboard.y,
 			height: artboard.height,
+			mediaBox: [0, 0, mediaWidth, mediaHeight] as const,
 			objectProjections: Object.freeze(objectProjections),
 			prefix: stream(
 				{},
 				ascii(
-					`q\n${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
+					[
+						"q",
+						`0 0 ${number(mediaWidth)} ${number(mediaHeight)} re W n`,
+						`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e + left)} ${number(transform.f + bottom)} cm`,
+					].join("\n"),
 				),
 			),
 			suffix: stream({}, ascii("Q")),
 			width: artboard.width,
 		})
-		return pageCache
+		pageCaches.set(cacheKey, projection)
+		return projection
 	}
 
 	const projectDocument = (
 		title: string,
-		page: PdfPageProjection,
+		projectedPages: readonly PdfPageProjection[],
 	): PdfDocumentProjection => {
 		if (
 			documentCache !== null &&
 			documentCache.title === title &&
-			documentCache.projection.page === page
+			documentCache.projection.pages.length === projectedPages.length &&
+			documentCache.projection.pages.every(
+				(page, index) => page === projectedPages[index],
+			)
 		) {
 			return documentCache.projection
 		}
+		const page = projectedPages[0]
+		if (page === undefined)
+			throw new Error("PDF export requires at least one artboard.")
 		const builder = createPdfObjectBuilder()
 		const pages = builder.reserve<PdfPagesDictionary>()
-		const contents = [
-			builder.add(page.prefix),
-			...page.objectProjections
-				.filter(({ visible }) => visible)
-				.map(({ stream: objectStream }) => builder.add(objectStream)),
-			builder.add(page.suffix),
-		]
-		const pageReference = builder.add(
-			dictionary({
-				Type: name("Page"),
-				Parent: pages.ref,
-				MediaBox: array(0, 0, page.width, page.height),
-				Resources: dictionary({}),
-				Contents: array(...contents),
-			}) satisfies PdfPageDictionary,
-		)
+		const objectReferences = new Map<
+			PdfObjectProjection,
+			PdfReference<PdfStream>
+		>()
+		for (const projection of projectedPages.flatMap(
+			({ objectProjections }) => objectProjections,
+		)) {
+			if (projection.visible && !objectReferences.has(projection))
+				objectReferences.set(projection, builder.add(projection.stream))
+		}
+		const pageReferences = projectedPages.map((projectedPage) => {
+			const mediaBox = projectedPage.mediaBox
+			const trimBox = projectedPage.trimBox
+			const bleedBox = projectedPage.bleedBox
+			return builder.add(
+				dictionary({
+					Type: name("Page"),
+					Parent: pages.ref,
+					MediaBox: array(...mediaBox),
+					...(trimBox === undefined ? {} : { TrimBox: array(...trimBox) }),
+					...(bleedBox === undefined ? {} : { BleedBox: array(...bleedBox) }),
+					Resources: dictionary({}),
+					Contents: array(
+						builder.add(projectedPage.prefix),
+						...projectedPage.objectProjections.flatMap((projection) => {
+							const reference = objectReferences.get(projection)
+							return reference === undefined ? [] : [reference]
+						}),
+						builder.add(projectedPage.suffix),
+					),
+				}) satisfies PdfPageDictionary,
+			)
+		})
 		pages.set(
 			dictionary({
 				Type: name("Pages"),
-				Kids: array(pageReference),
-				Count: 1,
+				Kids: array(...pageReferences),
+				Count: pageReferences.length,
 			}) satisfies PdfPagesDictionary,
 		)
 		const root = builder.add(
@@ -341,13 +463,14 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 		const projection = Object.freeze({
 			document: builder.build({ version: "1.7", root, info }),
 			page,
+			pages: Object.freeze(projectedPages),
 		}) satisfies PdfDocumentProjection
 		documentCache = Object.freeze({ projection, title })
 		return projection
 	}
 
 	return {
-		project(document, artboard = activeDesignArtboard(document)) {
+		project(document, target = activeDesignArtboard(document)) {
 			const swatches = new Map(
 				document.swatches.map((swatch) => [swatch.id, swatch]),
 			)
@@ -358,9 +481,16 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 			const objectProjections = document.objects.map((object) =>
 				projectObject(object, swatches),
 			)
+			const request = exportRequest(document, target)
+			const includeBleed = request.includeBleed === true
+			const artboards = isArtboard(target)
+				? [target]
+				: resolvePdfArtboards(document, request)
 			return projectDocument(
 				document.title,
-				projectPage(artboard, objectProjections),
+				artboards.map((artboard) =>
+					projectPage(artboard, objectProjections, includeBleed),
+				),
 			)
 		},
 	}
@@ -376,6 +506,7 @@ export function pdfContentStream(
 	const transform = documentToPdfTransform(artboard)
 	const commands = [
 		`q`,
+		`0 0 ${number(artboard.width)} ${number(artboard.height)} re W n`,
 		`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
 	]
 	for (const object of document.objects) {
@@ -397,23 +528,23 @@ export function pdfContentStream(
 
 export function createPdfIr(
 	document: DesignDocument,
-	artboard: DesignArtboard = activeDesignArtboard(document),
+	target: PdfExportTarget = activeDesignArtboard(document),
 ): PdfDocument {
-	return createPdfProjectionGraph().project(document, artboard).document
+	return createPdfProjectionGraph().project(document, target).document
 }
 
 export function exportPdf(
 	document: DesignDocument,
-	artboard: DesignArtboard = activeDesignArtboard(document),
+	target: PdfExportTarget = activeDesignArtboard(document),
 ): Uint8Array {
-	return serializePdf(createPdfIr(document, artboard))
+	return serializePdf(createPdfIr(document, target))
 }
 
 export function downloadPdf(
 	document: DesignDocument,
-	artboard: DesignArtboard = activeDesignArtboard(document),
+	target: PdfExportTarget = activeDesignArtboard(document),
 ): void {
-	const blob = new Blob([exportPdf(document, artboard) as BlobPart], {
+	const blob = new Blob([exportPdf(document, target) as BlobPart], {
 		type: "application/pdf",
 	})
 	const url = URL.createObjectURL(blob)

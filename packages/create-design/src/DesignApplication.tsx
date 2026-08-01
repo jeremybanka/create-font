@@ -155,7 +155,8 @@ import {
 	importDesignObjects,
 	projectDesignVectorObject,
 } from "./design-vector-adapter.ts"
-import { downloadPdf } from "./pdf.ts"
+import { createPdfDownloadManager } from "./pdf-download.ts"
+import type { PdfExportTarget } from "./pdf.ts"
 import type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
@@ -518,6 +519,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
+	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
+	useEffect(() => () => pdfDownloadManager.dispose(), [pdfDownloadManager])
 	const openTile = useCallback((kind: DesignTileKind): void => {
 		tileCommandSequence.current += 1
 		setTileCommandRequest({ id: tileCommandSequence.current, kind })
@@ -961,12 +964,24 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[cancelCanvasGesture, commit, authoredAppearance, document, nextId],
 	)
 
-	const exportDocument = useCallback((): void => {
-		downloadPdf(document, activeArtboard)
-		setStatus(
-			`Exported ${document.title}.pdf with ${document.objects.length} vector objects.`,
-		)
-	}, [activeArtboard, document])
+	const exportDocument = useCallback(
+		(target: PdfExportTarget = activeArtboard): void => {
+			setStatus(`Preparing ${document.title}.pdf…`)
+			void pdfDownloadManager.request(document, target).then(
+				(downloaded) => {
+					if (downloaded)
+						setStatus(
+							`Exported ${document.title}.pdf with ${document.objects.length} vector objects.`,
+						)
+				},
+				(error) =>
+					setStatus(
+						`PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
+					),
+			)
+		},
+		[activeArtboard, document, pdfDownloadManager],
+	)
 
 	const setObjectProperty = (
 		object: DesignObject,
@@ -2715,7 +2730,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 					>
 						Commands <kbd>⇧⌘P</kbd>
 					</button>
-					<button type="button" data-export onClick={exportDocument}>
+					<button type="button" data-export onClick={() => exportDocument()}>
 						<svg.DownloadIcon aria-hidden="true" /> Export PDF
 					</button>
 				</header-actions>
