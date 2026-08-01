@@ -129,6 +129,11 @@ import {
 	shapeExpansionEligibility,
 } from "./shape-expansion.ts"
 import {
+	applyDesignPathCommand,
+	designPathCommandEligibility,
+	type DesignPathCommand,
+} from "./path-commands.ts"
+import {
 	expandDesignStroke,
 	strokeExpansionEligibility,
 } from "./stroke-expansion.ts"
@@ -426,6 +431,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 	const [previewArtboardDocument, setPreviewArtboardDocument] =
 		useState<DesignDocument | null>(null)
+	const pathCommandSelectionsRef = useRef(
+		new WeakMap<
+			DesignDocument,
+			Readonly<{
+				objectSelection: readonly string[]
+				directSelection: readonly DesignDirectSelectionTarget[]
+			}>
+		>(),
+	)
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -518,6 +532,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 		document.swatches[0]
 	const expansionEligibility = shapeExpansionEligibility(document, selection)
 	const strokeEligibility = strokeExpansionEligibility(document, selection)
+	const pathCommandContext = {
+		document,
+		objectSelection: selection,
+		directSelection,
+	}
 	const baseScale = designBaseScale(canvasViewport, activeArtboard)
 	const viewOptions = useMemo(
 		() => ({
@@ -764,6 +783,50 @@ export function DesignApplication(props: DesignApplicationProps) {
 			`Expanded ${eligibility.object.name}'s stroke to filled contours.`,
 		)
 	}, [commit, document, nextId, selection])
+
+	const executePathCommand = useCallback(
+		(command: DesignPathCommand): void => {
+			const result = applyDesignPathCommand(
+				command,
+				{
+					document,
+					objectSelection: selection,
+					directSelection,
+				},
+				{ nextId },
+			)
+			if (!result.ok) {
+				setStatus(result.error)
+				return
+			}
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: selection,
+				directSelection,
+			})
+			pathCommandSelectionsRef.current.set(result.document, {
+				objectSelection: result.objectSelection,
+				directSelection: result.directSelection,
+			})
+			commit(result.document)
+			setSelection(result.objectSelection)
+			setDirectSelection(result.directSelection)
+			setStatus(result.message)
+		},
+		[commit, directSelection, document, nextId, selection],
+	)
+
+	const navigateDesignHistory = useCallback(
+		(type: "redo" | "undo"): void => {
+			const target = type === "undo" ? history.past.at(-1) : history.future[0]
+			if (target === undefined) return
+			dispatch({ type })
+			const recorded = pathCommandSelectionsRef.current.get(target)
+			if (recorded === undefined) return
+			setSelection(recorded.objectSelection)
+			setDirectSelection(recorded.directSelection)
+		},
+		[history.future, history.past],
+	)
 
 	const finishPen = useCallback(
 		(closed = false): void => {
@@ -1143,6 +1206,55 @@ export function DesignApplication(props: DesignApplicationProps) {
 					: { disabledReason: strokeEligibility.reason }),
 				do: expandStrokeSelection,
 			},
+			...(
+				[
+					[
+						"reverse",
+						"Reverse Path",
+						"Reverse selected contour direction without changing its shape.",
+					],
+					[
+						"join",
+						"Join Paths",
+						"Join exactly two selected open-path endpoints.",
+					],
+					["close", "Close Path", "Close the exact selected open contours."],
+					[
+						"simplify",
+						"Simplify Path",
+						"Remove redundant points and refit curves within 0.25 document units.",
+					],
+					[
+						"make-compound",
+						"Make Compound Path",
+						"Combine selected closed path objects under the topmost appearance.",
+					],
+					[
+						"release-compound",
+						"Release Compound Path",
+						"Split the selected compound into independently painted paths.",
+					],
+					[
+						"normalize-winding",
+						"Normalize Compound Winding",
+						"Explicitly orient outer contours and nested holes.",
+					],
+				] as const
+			).map(([id, displayName, description]) => {
+				const eligibility = designPathCommandEligibility(id, pathCommandContext)
+				return {
+					id: `path-${id}`,
+					displayName,
+					category: "Path",
+					description,
+					icon: "HobbyKnifeIcon" as const,
+					disabled: !eligibility.eligible,
+					...(eligibility.eligible
+						? {}
+						: { disabledReason: eligibility.reason }),
+					do: () => executePathCommand(id),
+				}
+			}),
 			{
 				id: "select-all",
 				displayName: "Select All",
@@ -1199,7 +1311,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				icon: "DoubleArrowLeftIcon",
 				shortcut: "⌘ Z",
 				disabled: history.past.length === 0,
-				do: () => dispatch({ type: "undo" }),
+				do: () => navigateDesignHistory("undo"),
 			},
 			{
 				id: "redo",
@@ -1208,7 +1320,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				icon: "DoubleArrowRightIcon",
 				shortcut: "⇧⌘ Z",
 				disabled: history.future.length === 0,
-				do: () => dispatch({ type: "redo" }),
+				do: () => navigateDesignHistory("redo"),
 			},
 			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
 				(command): PaletteCommand => ({
@@ -1222,13 +1334,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 			duplicateSelection,
 			expandSelection,
 			expandStrokeSelection,
+			executePathCommand,
 			expansionEligibility,
 			exportDocument,
 			history.future.length,
 			history.past.length,
+			navigateDesignHistory,
 			openTile,
 			selectTool,
 			selection.length,
+			selection,
+			directSelection,
 			strokeEligibility,
 			selectedObject?.id,
 			selectedSwatchId,
@@ -1503,7 +1619,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			}
 			if (mod && event.key.toLowerCase() === "z") {
 				event.preventDefault()
-				dispatch({ type: event.shiftKey ? "redo" : "undo" })
+				navigateDesignHistory(event.shiftKey ? "redo" : "undo")
 				return
 			}
 			if (event.key === "Enter" && tool === "pen") {
@@ -1600,6 +1716,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		exportDocument,
 		finishPen,
 		gesturePolicy,
+		navigateDesignHistory,
 		paletteOpen,
 		penPoints.length,
 		selectTool,
