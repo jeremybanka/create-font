@@ -109,6 +109,14 @@ import {
 	updateDesignGuide,
 } from "./design-guides.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
+import {
+	appendDesignHierarchyObjects,
+	groupDesignSelection,
+	replaceDesignHierarchyObject,
+	stackDesignSelection,
+	ungroupDesignSelection,
+	type DesignStackCommand,
+} from "./design-hierarchy.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import {
 	directSelectionDescription,
@@ -843,6 +851,44 @@ export function DesignApplication(props: DesignApplicationProps) {
 		)
 	}, [commit, document, nextId, selection])
 
+	const groupSelection = useCallback((): void => {
+		const result = groupDesignSelection(document, selection, nextId)
+		if (result === null) {
+			setStatus("Select at least two sibling objects to group.")
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus("Grouped selection.")
+	}, [commit, document, nextId, selection])
+
+	const ungroupSelection = useCallback((): void => {
+		const result = ungroupDesignSelection(document, selection)
+		if (result === null) {
+			setStatus("Select every object in one group to ungroup it.")
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus("Ungrouped selection.")
+	}, [commit, document, selection])
+
+	const stackSelection = useCallback(
+		(command: DesignStackCommand): void => {
+			const result = stackDesignSelection(document, selection, command)
+			if (result === null) {
+				setStatus("The selection is already at that stacking position.")
+				return
+			}
+			commit(result.document)
+			setSelection(result.selection)
+			setStatus("Changed selection stacking order.")
+		},
+		[commit, document, selection],
+	)
+
 	const expandSelection = useCallback((): void => {
 		const eligibility = shapeExpansionEligibility(document, selection)
 		if (!eligibility.eligible) {
@@ -878,14 +924,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setStatus("The selected object is unavailable.")
 			return
 		}
-		commit({
-			...document,
-			objects: [
-				...document.objects.slice(0, index),
-				...result.objects,
-				...document.objects.slice(index + 1),
-			],
-		})
+		commit(
+			replaceDesignHierarchyObject(
+				{
+					...document,
+					objects: [
+						...document.objects.slice(0, index),
+						...result.objects,
+						...document.objects.slice(index + 1),
+					],
+				},
+				eligibility.object.id,
+				result.objects.map((object) => object.id),
+			),
+		)
 		setSelection([result.selectedObjectId])
 		setDirectSelection([])
 		setStatus(
@@ -951,7 +1003,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				cancelCanvasGesture()
 				return
 			}
-			commit({ ...document, objects: [...document.objects, object] })
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+				),
+			)
 			setSelection([object.id])
 			penPointsRef.current = []
 			setPenPoints([])
@@ -1327,6 +1384,46 @@ export function DesignApplication(props: DesignApplicationProps) {
 				do: exportDocument,
 			},
 			{
+				id: "group-selection",
+				displayName: "Group",
+				category: "Object",
+				description:
+					"Group selected sibling objects without changing their appearance.",
+				icon: "Link1Icon",
+				shortcut: "⌘ G",
+				disabled: selection.length < 2,
+				disabledReason: "Select at least two objects.",
+				do: groupSelection,
+			},
+			{
+				id: "ungroup-selection",
+				displayName: "Ungroup",
+				category: "Object",
+				description: "Release the selected group's children in place.",
+				icon: "LinkBreak1Icon",
+				shortcut: "⇧⌘ G",
+				disabled: selection.length === 0,
+				disabledReason: "Select a complete group first.",
+				do: ungroupSelection,
+			},
+			...(
+				[
+					["forward", "Bring Forward"],
+					["backward", "Send Backward"],
+					["front", "Bring to Front"],
+					["back", "Send to Back"],
+				] as const
+			).map(([command, displayName]) => ({
+				id: `stack-${command}`,
+				displayName,
+				category: "Object",
+				description: "Change the selected object or group's stacking order.",
+				icon: "ShuffleIcon" as const,
+				disabled: selection.length === 0,
+				disabledReason: "Select an object first.",
+				do: () => stackSelection(command),
+			})),
+			{
 				id: "expand-shape",
 				displayName: "Expand Shape",
 				category: "Object",
@@ -1506,6 +1603,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[
 			deleteSelection,
 			duplicateSelection,
+			groupSelection,
 			expandSelection,
 			expandStrokeSelection,
 			executePathCommand,
@@ -1519,10 +1617,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 			selection.length,
 			selection,
 			directSelection,
+			stackSelection,
 			strokeEligibility,
 			selectedObject?.id,
 			selectedSwatchId,
 			tool,
+			ungroupSelection,
 			document,
 		],
 	)
@@ -1793,6 +1893,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				duplicateSelection()
 				return
 			}
+			if (mod && event.key.toLowerCase() === "g") {
+				event.preventDefault()
+				if (event.shiftKey) ungroupSelection()
+				else groupSelection()
+				return
+			}
 			if (mod && event.key.toLowerCase() === "z") {
 				event.preventDefault()
 				navigateDesignHistory(event.shiftKey ? "redo" : "undo")
@@ -1894,6 +2000,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}, [
 		deleteSelection,
 		duplicateSelection,
+		groupSelection,
 		commit,
 		deleteArtboard,
 		cancelCanvasGesture,
@@ -1910,6 +2017,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selection,
 		snapSettings,
 		tool,
+		ungroupSelection,
 		worldScale,
 	])
 
@@ -2485,7 +2593,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				transform: IDENTITY_DESIGN_TRANSFORM,
 				appearance: authoredAppearance,
 			}
-			commit({ ...document, objects: [...document.objects, object] })
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+				),
+			)
 			setSelection([object.id])
 			setStatus(`Created ${object.name}.`)
 			return

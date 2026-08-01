@@ -20,6 +20,10 @@ import {
 	IDENTITY_DESIGN_TRANSFORM,
 	projectDesignObjectContours,
 } from "./geometry.ts"
+import {
+	appendDesignHierarchyObjects,
+	removeDesignHierarchyObjects,
+} from "./design-hierarchy.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -227,9 +231,10 @@ export const designVectorAdapter: VectorDocumentAdapter<
 					? {}
 					: { locked: intent.object.locked }),
 			}
+			const next = { ...document, objects: [...document.objects, object] }
 			return {
 				ok: true,
-				document: { ...document, objects: [...document.objects, object] },
+				document: appendDesignHierarchyObjects(next, [object.id]),
 				selection: [object.id],
 			}
 		}
@@ -283,16 +288,21 @@ export const designVectorAdapter: VectorDocumentAdapter<
 				(object) => ids.has(object.id) && object.locked,
 			)
 			if (locked !== undefined) return reject(`Object ${locked.id} is locked.`)
+			const next = {
+				...document,
+				objects: document.objects.filter((object) => !ids.has(object.id)),
+			}
 			return {
 				ok: true,
-				document: {
-					...document,
-					objects: document.objects.filter((object) => !ids.has(object.id)),
-				},
+				document: removeDesignHierarchyObjects(next, ids),
 				selection: selection.filter((objectId) => !ids.has(objectId)),
 			}
 		}
 		if (intent.kind === "reorder") {
+			if (document.scene !== undefined)
+				return reject(
+					"Use hierarchy-aware stacking commands for grouped artwork.",
+				)
 			const fromIndex = document.objects.findIndex(
 				(object) => object.id === intent.objectId,
 			)
@@ -507,13 +517,14 @@ export function importDesignObjects(
 	if (missingSwatch !== undefined)
 		return reject(`Unknown design swatch ${missingSwatch}.`)
 	const importedIds = addition.objects.map((object) => object.id)
+	const next = {
+		...document,
+		swatches: [...document.swatches, ...addition.swatches],
+		objects: [...document.objects, ...addition.objects],
+	}
 	return {
 		ok: true,
-		document: {
-			...document,
-			swatches: [...document.swatches, ...addition.swatches],
-			objects: [...document.objects, ...addition.objects],
-		},
+		document: appendDesignHierarchyObjects(next, importedIds),
 		selection: importedIds,
 	} as const
 }

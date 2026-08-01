@@ -32,7 +32,9 @@ import { diagnostic, failure, success } from "./result.ts"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
+	DesignGroup,
 	DesignObject,
+	DesignSceneChild,
 	DesignSourceDiagnostic,
 	DesignSourceResult,
 } from "./types.ts"
@@ -488,6 +490,10 @@ export function defaultObjectUnitPath(id: string): string {
 	return `scene/objects/${encodePathSegment(id)}.json`
 }
 
+export function defaultGroupUnitPath(id: string): string {
+	return `scene/groups/${encodePathSegment(id)}.json`
+}
+
 export function defaultArtboardUnitPath(id: string): string {
 	return id === DEFAULT_ARTBOARD_ID
 		? "artboards/page.json"
@@ -576,6 +582,7 @@ export interface SplitDesignDocumentOptions {
 		index: number,
 	) => string
 	readonly objectPath?: (object: DesignObject, index: number) => string
+	readonly groupPath?: (group: DesignGroup, index: number) => string
 }
 
 function objectFile(object: DesignObject): ObjectFile {
@@ -603,6 +610,14 @@ export function splitDesignDocument(
 		path:
 			options.objectPath?.(object, index) ?? defaultObjectUnitPath(object.id),
 	}))
+	const groups = validated.value.groups ?? []
+	const scene =
+		validated.value.scene ??
+		validated.value.objects.map(({ id }) => ({ kind: "object" as const, id }))
+	const groupEntries = groups.map((group, index) => ({
+		id: group.id,
+		path: options.groupPath?.(group, index) ?? defaultGroupUnitPath(group.id),
+	}))
 	const artboardEntries = validated.value.artboards.map((artboard, index) => ({
 		id: artboard.id,
 		path:
@@ -626,6 +641,26 @@ export function splitDesignDocument(
 					"directory.duplicate_path",
 					`$.artboards[${index}].path`,
 					`Duplicate artboard source path ${entry.path}.`,
+				),
+			)
+		paths.add(entry.path)
+	}
+	paths.clear()
+	for (const [index, entry] of groupEntries.entries()) {
+		if (!groupUnitPathSchema.safeParse(entry.path).success)
+			errors.push(
+				diagnostic(
+					"directory.unsafe_path",
+					`$.groups[${index}].path`,
+					`Group ${entry.id} has unsafe source path ${entry.path}.`,
+				),
+			)
+		if (paths.has(entry.path))
+			errors.push(
+				diagnostic(
+					"directory.duplicate_path",
+					`$.groups[${index}].path`,
+					`Duplicate group source path ${entry.path}.`,
 				),
 			)
 		paths.add(entry.path)
@@ -692,15 +727,14 @@ export function splitDesignDocument(
 			format: "create-design.layer",
 			version: 1,
 			id: DEFAULT_LAYER_ID,
-			children: validated.value.objects.map(({ id }) => ({
-				kind: "object",
-				id,
-			})),
+			children: scene,
 		} satisfies LayerFile,
 		[designSourcePaths.groupIndex]: {
 			format: "create-design.group-index",
 			version: 1,
-			entries: [],
+			entries: groupEntries.toSorted((left, right) =>
+				left.id.localeCompare(right.id),
+			),
 		} satisfies GroupIndexFile,
 		[designSourcePaths.objectIndex]: {
 			format: "create-design.object-index",
@@ -732,6 +766,15 @@ export function splitDesignDocument(
 	for (const [index, object] of validated.value.objects.entries()) {
 		const entry = objectEntries[index]
 		if (entry !== undefined) files[entry.path] = objectFile(object)
+	}
+	for (const [index, group] of groups.entries()) {
+		const entry = groupEntries[index]
+		if (entry !== undefined)
+			files[entry.path] = {
+				format: "create-design.group",
+				version: 1,
+				...group,
+			} satisfies GroupFile
 	}
 	return success(files)
 }
@@ -924,20 +967,28 @@ export function assembleDesignDocument(
 				designSourcePaths.layerIndex,
 			),
 		)
-	for (const [path, entries, name] of [
-		[designSourcePaths.groupIndex, groupIndex?.entries, "groups"],
-		[designSourcePaths.fontIndex, fontIndex?.entries, "fonts"],
-	] as const) {
-		if (entries !== undefined && entries.length > 0)
-			errors.push(
-				diagnostic(
-					"directory.unsupported",
-					"$.entries",
-					`Source version 1 reserves ${name} but requires an empty inventory.`,
-					path,
-				),
-			)
-	}
+	if (
+		project?.sourceVersion === LEGACY_CREATE_DESIGN_SOURCE_VERSION &&
+		groupIndex !== null &&
+		groupIndex.entries.length > 0
+	)
+		errors.push(
+			diagnostic(
+				"directory.unsupported",
+				"$.entries",
+				"Source version 1 reserves groups but requires an empty inventory.",
+				designSourcePaths.groupIndex,
+			),
+		)
+	if (fontIndex !== null && fontIndex.entries.length > 0)
+		errors.push(
+			diagnostic(
+				"directory.unsupported",
+				"$.entries",
+				"This source version reserves fonts but requires an empty inventory.",
+				designSourcePaths.fontIndex,
+			),
+		)
 
 	const layerEntry = layerIndex?.entries[0]
 	const artboards = [] as ArtboardFile[]
@@ -992,43 +1043,92 @@ export function assembleDesignDocument(
 			...(file.locked === undefined ? {} : { locked: file.locked }),
 		})
 	}
+	const groups = new Map<string, DesignGroup>()
+	for (const entry of groupIndex?.entries ?? []) {
+		const file = requiredUnit(files, entry.path, groupFileSchema, errors)
+		if (file === null) continue
+		if (file.id !== entry.id)
+			errors.push(
+				diagnostic(
+					"directory.entity_id",
+					"$.id",
+					`Group unit ID ${file.id} does not match indexed ID ${entry.id}.`,
+					entry.path,
+				),
+			)
+		groups.set(entry.id, {
+			id: file.id,
+			name: file.name,
+			children: file.children,
+		})
+	}
 
 	const orderedObjects: DesignObject[] = []
 	const structural = new Set<string>()
-	for (const [index, child] of layer?.children.entries() ?? []) {
-		if (child.kind === "group") {
-			errors.push(
-				diagnostic(
-					"directory.unsupported",
-					`$.children[${index}]`,
-					"Source version 1 reserves groups but cannot assemble grouped objects.",
-					layerEntry?.path,
-				),
-			)
-			continue
+	const structuralGroups = new Set<string>()
+	const activeGroups = new Set<string>()
+	const visit = (
+		children: readonly DesignSceneChild[],
+		unitPath: string | undefined,
+	) => {
+		for (const [index, child] of children.entries()) {
+			if (child.kind === "group") {
+				const group = groups.get(child.id)
+				if (group === undefined) {
+					errors.push(
+						diagnostic(
+							"directory.reference",
+							`$.children[${index}].id`,
+							`Scene references missing group ${child.id}.`,
+							unitPath,
+						),
+					)
+					continue
+				}
+				if (structuralGroups.has(child.id) || activeGroups.has(child.id)) {
+					errors.push(
+						diagnostic(
+							"directory.hierarchy",
+							`$.children[${index}].id`,
+							`Group ${child.id} appears more than once or creates a cycle.`,
+							unitPath,
+						),
+					)
+					continue
+				}
+				structuralGroups.add(child.id)
+				activeGroups.add(child.id)
+				const groupPath = groupIndex?.entries.find(
+					(entry) => entry.id === child.id,
+				)?.path
+				visit(group.children, groupPath)
+				activeGroups.delete(child.id)
+				continue
+			}
+			if (structural.has(child.id))
+				errors.push(
+					diagnostic(
+						"directory.hierarchy",
+						`$.children[${index}].id`,
+						`Object ${child.id} appears more than once in the scene hierarchy.`,
+						unitPath,
+					),
+				)
+			structural.add(child.id)
+			const object = objects.get(child.id)
+			if (object === undefined)
+				errors.push(
+					diagnostic(
+						"directory.reference",
+						`$.children[${index}].id`,
+						`Layer references missing object ${child.id}.`,
+						unitPath,
+					),
+				)
+			else orderedObjects.push(object)
 		}
-		if (structural.has(child.id))
-			errors.push(
-				diagnostic(
-					"directory.hierarchy",
-					`$.children[${index}].id`,
-					`Object ${child.id} appears more than once in the scene hierarchy.`,
-					layerEntry?.path,
-				),
-			)
-		structural.add(child.id)
-		const object = objects.get(child.id)
-		if (object === undefined)
-			errors.push(
-				diagnostic(
-					"directory.reference",
-					`$.children[${index}].id`,
-					`Layer references missing object ${child.id}.`,
-					layerEntry?.path,
-				),
-			)
-		else orderedObjects.push(object)
 	}
+	visit(layer?.children ?? [], layerEntry?.path)
 	for (const id of objects.keys()) {
 		if (!structural.has(id))
 			errors.push(
@@ -1037,6 +1137,17 @@ export function assembleDesignDocument(
 					"$.entries",
 					`Object ${id} has no structural parent.`,
 					designSourcePaths.objectIndex,
+				),
+			)
+	}
+	for (const id of groups.keys()) {
+		if (!structuralGroups.has(id))
+			errors.push(
+				diagnostic(
+					"directory.hierarchy",
+					"$.entries",
+					`Group ${id} has no structural parent.`,
+					designSourcePaths.groupIndex,
 				),
 			)
 	}
@@ -1077,6 +1188,9 @@ export function assembleDesignDocument(
 		})),
 		swatches: palette.swatches,
 		objects: orderedObjects,
+		...(groups.size === 0
+			? {}
+			: { scene: layer.children, groups: [...groups.values()] }),
 		guides: metadata.guides,
 	})
 }

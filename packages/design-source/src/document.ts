@@ -20,6 +20,7 @@ export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
 export const finiteNumberSchema = z.number().finite()
 export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
+export const groupIdSchema = z.string().regex(/^group:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
 export const artboardIdSchema = z.string().regex(/^artboard:.+/u)
@@ -221,6 +222,18 @@ export const guideSchema = z
 	})
 	.strict()
 
+export const sceneChildSchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("object"), id: designObjectIdSchema }).strict(),
+	z.object({ kind: z.literal("group"), id: groupIdSchema }).strict(),
+])
+export const groupSchema = z
+	.object({
+		id: groupIdSchema,
+		name: z.string(),
+		children: z.array(sceneChildSchema),
+	})
+	.strict()
+
 export const artboardInsetsSchema = z
 	.object({
 		top: finiteNumberSchema.nonnegative(),
@@ -262,6 +275,8 @@ export const designDocumentSchema = z
 		artboards: z.array(artboardSchema).min(1),
 		swatches: z.array(swatchSchema),
 		objects: z.array(designObjectSchema),
+		scene: z.array(sceneChildSchema).optional(),
+		groups: z.array(groupSchema).optional(),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -416,6 +431,102 @@ function relationalDiagnostics(
 				}
 			}
 		}
+	}
+	if ((document.scene === undefined) !== (document.groups === undefined))
+		errors.push(
+			diagnostic(
+				"directory.hierarchy",
+				"$.scene",
+				"Scene roots and groups must be authored together.",
+			),
+		)
+	if (document.scene !== undefined && document.groups !== undefined) {
+		const groups = new Map(document.groups.map((group) => [group.id, group]))
+		if (groups.size !== document.groups.length)
+			errors.push(
+				diagnostic(
+					"directory.duplicate_id",
+					"$.groups",
+					"Group IDs must be unique.",
+				),
+			)
+		const visitedObjects: string[] = []
+		const visitedGroups = new Set<string>()
+		const activeGroups = new Set<string>()
+		const visit = (
+			children: readonly import("./types.ts").DesignSceneChild[],
+		) => {
+			for (const child of children) {
+				if (child.kind === "object") {
+					if (!seenObjects.has(child.id))
+						errors.push(
+							diagnostic(
+								"directory.reference",
+								"$.scene",
+								`Scene references missing object ${child.id}.`,
+							),
+						)
+					visitedObjects.push(child.id)
+					continue
+				}
+				const group = groups.get(child.id)
+				if (group === undefined) {
+					errors.push(
+						diagnostic(
+							"directory.reference",
+							"$.scene",
+							`Scene references missing group ${child.id}.`,
+						),
+					)
+					continue
+				}
+				if (activeGroups.has(child.id)) {
+					errors.push(
+						diagnostic(
+							"directory.hierarchy",
+							"$.groups",
+							`Group ${child.id} creates a hierarchy cycle.`,
+						),
+					)
+					continue
+				}
+				if (visitedGroups.has(child.id)) {
+					errors.push(
+						diagnostic(
+							"directory.hierarchy",
+							"$.groups",
+							`Group ${child.id} has more than one structural parent.`,
+						),
+					)
+					continue
+				}
+				visitedGroups.add(child.id)
+				activeGroups.add(child.id)
+				visit(group.children)
+				activeGroups.delete(child.id)
+			}
+		}
+		visit(document.scene)
+		if (
+			visitedObjects.length !== seenObjects.size ||
+			new Set(visitedObjects).size !== visitedObjects.length ||
+			visitedObjects.some((id, index) => document.objects[index]?.id !== id)
+		)
+			errors.push(
+				diagnostic(
+					"directory.hierarchy",
+					"$.scene",
+					"Every object must appear once in scene paint order.",
+				),
+			)
+		if (visitedGroups.size !== groups.size)
+			errors.push(
+				diagnostic(
+					"directory.hierarchy",
+					"$.groups",
+					"Every group must have one structural parent.",
+				),
+			)
 	}
 	const seenGuides = new Set<string>()
 	for (const [index, guide] of document.guides.entries()) {
