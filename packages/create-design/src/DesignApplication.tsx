@@ -111,6 +111,13 @@ import {
 } from "./design-guides.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
 import {
+	alignDesignObjects,
+	distributeDesignObjects,
+	transformDesignSelection,
+	type DesignAlignment,
+	type DesignAlignmentTarget,
+} from "./design-arrangement.ts"
+import {
 	appendDesignHierarchyObjects,
 	designGroupSelectionUnit,
 	designSelectInteraction,
@@ -959,6 +966,49 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[commit, document, selection],
 	)
 
+	const alignSelection = useCallback(
+		(
+			alignment: DesignAlignment,
+			target: DesignAlignmentTarget,
+			keyObjectId?: string,
+		): void => {
+			const next = alignDesignObjects(
+				document,
+				selection,
+				alignment,
+				target,
+				activeArtboard,
+				keyObjectId,
+			)
+			if (next === null) return
+			commit(next)
+			setStatus(`Aligned selection ${alignment}.`)
+		},
+		[activeArtboard, commit, document, selection],
+	)
+
+	const distributeSelection = useCallback(
+		(axis: "x" | "y"): void => {
+			const next = distributeDesignObjects(document, selection, axis)
+			if (next === null) return
+			commit(next)
+			setStatus(
+				`Distributed selection ${axis === "x" ? "horizontally" : "vertically"}.`,
+			)
+		},
+		[commit, document, selection],
+	)
+
+	const transformSelection = useCallback(
+		(input: Parameters<typeof transformDesignSelection>[2]): void => {
+			const next = transformDesignSelection(document, selection, input)
+			if (next === null) return
+			commit(next)
+			setStatus("Transformed selection numerically.")
+		},
+		[commit, document, selection],
+	)
+
 	const expandSelection = useCallback((): void => {
 		const eligibility = shapeExpansionEligibility(document, selection)
 		if (!eligibility.eligible) {
@@ -1369,10 +1419,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 		appearanceTarget,
 		applyAppearancePaint,
 		applyStrokeProperties,
+		alignSelection,
 		canReviewSourceChange,
 		createArtboard,
 		deleteArtboard,
 		deleteSelection,
+		distributeSelection,
 		document,
 		expandSelection,
 		expansionDisabledReason: expansionEligibility.eligible
@@ -1413,6 +1465,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selectedObject,
 		selectedObjectCount: selectedObjects.length,
 		selectedObjectIds: selection,
+		selectionBounds: combinedSelectionBounds(selectedObjects),
 		directSelectionSummary: directSelectionDescription(directSelection),
 		selectedSwatch,
 		selectedSwatchId,
@@ -1456,6 +1509,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			? null
 			: strokeEligibility.reason,
 		tool,
+		transformSelection,
 		updateSwatch,
 		...(versionControl === undefined ? {} : { versionControl }),
 		zoom: canvasView.zoom,
@@ -1477,6 +1531,35 @@ export function DesignApplication(props: DesignApplicationProps) {
 				shortcut: definition.key,
 				checked: tool === id,
 				do: () => selectTool(id),
+			})),
+			...(
+				[
+					["left", "Align Left"],
+					["center", "Align Center"],
+					["right", "Align Right"],
+					["top", "Align Top"],
+					["middle", "Align Middle"],
+					["bottom", "Align Bottom"],
+				] as const
+			).map(([alignment, displayName]) => ({
+				id: `align-${alignment}`,
+				displayName,
+				category: "Object",
+				description: "Align selected objects within their combined bounds.",
+				icon: "AlignCenterVerticallyIcon" as const,
+				disabled: selection.length < 2,
+				disabledReason: "Select at least two objects.",
+				do: () => alignSelection(alignment, "selection"),
+			})),
+			...(["x", "y"] as const).map((axis) => ({
+				id: `distribute-${axis}`,
+				displayName: `Distribute ${axis === "x" ? "Horizontally" : "Vertically"}`,
+				category: "Object",
+				description: "Distribute selected objects with stable equal gaps.",
+				icon: "ShuffleIcon" as const,
+				disabled: selection.length < 3,
+				disabledReason: "Select at least three objects.",
+				do: () => distributeSelection(axis),
 			})),
 			{
 				id: "export-pdf",
@@ -1719,8 +1802,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 			),
 		],
 		[
+			alignSelection,
 			deleteSelection,
 			duplicateSelection,
+			distributeSelection,
 			groupSelection,
 			expandSelection,
 			expandStrokeSelection,
