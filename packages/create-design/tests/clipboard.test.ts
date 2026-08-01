@@ -10,10 +10,50 @@ import {
 } from "../src/clipboard.ts"
 import { importDesignObjects } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { groupDesignSelection } from "../src/design-hierarchy.ts"
 import { projectDesignObjectContours } from "../src/geometry.ts"
 import { expandDesignShape } from "../src/shape-expansion.ts"
 
 describe("vector clipboard interoperability", () => {
+	it("duplicates a selected group as one offset hierarchy unit", () => {
+		const document = createInitialDocument()
+		const source = document.objects[0]!
+		const paired = {
+			...document,
+			objects: [source, { ...source, id: "object:second", name: "Second" }],
+		}
+		const grouped = groupDesignSelection(
+			paired,
+			["object:coral", "object:second"],
+			() => "source",
+		)
+		if (grouped === null) throw new Error("Expected grouping to succeed.")
+		let sequence = 0
+		const duplicate = duplicateDesignObjects(
+			grouped.document,
+			grouped.selection,
+			() => `duplicate:${sequence++}`,
+		)
+		if (duplicate === null) throw new Error("Expected duplicate to succeed.")
+		expect(duplicate.selection).toHaveLength(2)
+		expect(duplicate.document.scene).toEqual([
+			{ kind: "group", id: "group:source" },
+			{ kind: "group", id: expect.stringMatching(/^group:duplicate:/) },
+		])
+		expect(duplicate.document.groups?.[1]).toMatchObject({
+			name: "Group 1 copy",
+			children: duplicate.selection.map((id) => ({ kind: "object", id })),
+		})
+		for (const [index, id] of duplicate.selection.entries()) {
+			const original = grouped.document.objects[index]!
+			const copy = duplicate.document.objects.find(
+				(object) => object.id === id,
+			)!
+			expect(copy.transform.e).toBe(original.transform.e + 12)
+			expect(copy.transform.f).toBe(original.transform.f + 12)
+		}
+	})
+
 	it("writes native design data and create-font outline data together", () => {
 		const document = createInitialDocument()
 		const entries = new Map<string, string>()

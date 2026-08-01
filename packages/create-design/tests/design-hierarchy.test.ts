@@ -2,13 +2,21 @@ import { describe, expect, it } from "vitest"
 
 import {
 	appendDesignHierarchyObjects,
+	designSelectInteraction,
+	designSelectionUnitAtObject,
 	groupDesignSelection,
+	normalizeDesignSelection,
 	removeDesignHierarchyObjects,
 	replaceDesignHierarchyObject,
 	stackDesignSelection,
 	ungroupDesignSelection,
 } from "../src/design-hierarchy.ts"
 import { createInitialDocument } from "../src/document.ts"
+import {
+	createDesignHistory,
+	reduceDesignHistory,
+} from "../src/design-history.ts"
+import { translateObject } from "../src/geometry.ts"
 
 const fixture = () => {
 	const document = createInitialDocument()
@@ -139,5 +147,120 @@ describe("design hierarchy commands", () => {
 			kind: "object",
 			id: "object:new",
 		})
+	})
+
+	it("turns a normal member hit into one rigid group interaction and exact undo", () => {
+		const grouped = groupDesignSelection(
+			fixture(),
+			["object:coral", "object:middle"],
+			() => "selection",
+		)
+		if (grouped === null) throw new Error("Expected grouping to succeed.")
+		const interaction = designSelectInteraction(
+			grouped.document,
+			[],
+			"object:middle",
+		)
+		expect(interaction?.unit).toMatchObject({
+			kind: "group",
+			id: "group:selection",
+			name: "Group 1",
+			objectIds: ["object:coral", "object:middle"],
+		})
+		expect(interaction?.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:middle",
+		])
+		const moved = {
+			...grouped.document,
+			objects: grouped.document.objects.map((object) =>
+				interaction?.selection.includes(object.id)
+					? translateObject(object, 17, -9)
+					: object,
+			),
+		}
+		const before = grouped.document.objects.slice(0, 2).map((object) => ({
+			x: object.transform.e,
+			y: object.transform.f,
+		}))
+		const after = moved.objects.slice(0, 2).map((object) => ({
+			x: object.transform.e,
+			y: object.transform.f,
+		}))
+		expect(after).toEqual(before.map(({ x, y }) => ({ x: x + 17, y: y - 9 })))
+		const committed = reduceDesignHistory(
+			createDesignHistory(grouped.document),
+			{
+				type: "commit",
+				document: moved,
+			},
+		)
+		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
+			grouped.document,
+		)
+	})
+
+	it("resolves nested units by explicit group scope and never partially selects", () => {
+		const inner = groupDesignSelection(
+			fixture(),
+			["object:coral", "object:middle"],
+			() => "inner",
+		)
+		if (inner === null) throw new Error("Expected inner group.")
+		const outer = groupDesignSelection(
+			inner.document,
+			[...inner.selection, "object:front"],
+			() => "outer",
+		)
+		if (outer === null) throw new Error("Expected outer group.")
+		expect(
+			designSelectionUnitAtObject(outer.document, "object:coral"),
+		).toMatchObject({ id: "group:outer", objectIds: outer.selection })
+		expect(
+			designSelectionUnitAtObject(
+				outer.document,
+				"object:coral",
+				"group:outer",
+			),
+		).toMatchObject({ id: "group:inner", objectIds: inner.selection })
+		expect(
+			designSelectionUnitAtObject(
+				outer.document,
+				"object:coral",
+				"group:inner",
+			),
+		).toMatchObject({ id: "object:coral", objectIds: ["object:coral"] })
+		expect(normalizeDesignSelection(outer.document, ["object:middle"])).toEqual(
+			outer.selection,
+		)
+	})
+
+	it("keeps hidden descendants in the rigid batch and reports locked descendants", () => {
+		const document = fixture()
+		const guarded = {
+			...document,
+			objects: document.objects.map((object, index) =>
+				index === 0
+					? { ...object, hidden: true }
+					: index === 1
+						? { ...object, locked: true }
+						: object,
+			),
+		}
+		const grouped = groupDesignSelection(
+			guarded,
+			["object:coral", "object:middle"],
+			() => "guarded",
+		)
+		const interaction = designSelectInteraction(
+			grouped!.document,
+			[],
+			"object:middle",
+		)
+		expect(interaction?.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:middle",
+		])
+		expect(interaction?.lockedObject?.id).toBe("object:middle")
 	})
 })
