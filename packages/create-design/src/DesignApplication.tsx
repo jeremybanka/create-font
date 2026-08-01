@@ -65,7 +65,11 @@ import {
 	reorderDesignArtboard,
 	updateDesignArtboard,
 } from "./artboard-operations.ts"
-import { readDesignClipboard, writeDesignClipboard } from "./clipboard.ts"
+import {
+	duplicateDesignObjects,
+	readDesignClipboard,
+	writeDesignClipboard,
+} from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
 import { canvasToDocumentPoint } from "./coordinates.ts"
 import {
@@ -700,6 +704,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setStatus("Deleted selection.")
 	}, [commitVectorIntent, selection])
 
+	const duplicateSelection = useCallback((): void => {
+		const result = duplicateDesignObjects(document, selection, nextId)
+		if (result === null) return
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus(
+			`Duplicated ${result.selection.length} object${result.selection.length === 1 ? "" : "s"} with offset.`,
+		)
+	}, [commit, document, nextId, selection])
+
 	const expandSelection = useCallback((): void => {
 		const eligibility = shapeExpansionEligibility(document, selection)
 		if (!eligibility.eligible) {
@@ -1156,6 +1171,18 @@ export function DesignApplication(props: DesignApplicationProps) {
 				},
 			},
 			{
+				id: "duplicate-offset",
+				displayName: "Duplicate Offset",
+				category: "Edit",
+				description:
+					"Duplicate the selected objects twelve points down and right.",
+				icon: "PlusIcon",
+				shortcut: "⌘ D",
+				disabled: selection.length === 0,
+				disabledReason: "Select an object first.",
+				do: duplicateSelection,
+			},
+			{
 				id: "delete-selection",
 				displayName: "Delete selection",
 				category: "Edit",
@@ -1192,6 +1219,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		],
 		[
 			deleteSelection,
+			duplicateSelection,
 			expandSelection,
 			expandStrokeSelection,
 			expansionEligibility,
@@ -1468,6 +1496,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 				exportDocument()
 				return
 			}
+			if (mod && event.key.toLowerCase() === "d") {
+				event.preventDefault()
+				duplicateSelection()
+				return
+			}
 			if (mod && event.key.toLowerCase() === "z") {
 				event.preventDefault()
 				dispatch({ type: event.shiftKey ? "redo" : "undo" })
@@ -1558,6 +1591,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		}
 	}, [
 		deleteSelection,
+		duplicateSelection,
 		commit,
 		deleteArtboard,
 		cancelCanvasGesture,

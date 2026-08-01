@@ -220,8 +220,8 @@ describe("design object vector adapter", () => {
 		const sourceContour = projectDesignObjectContours(source)[0]
 		expect(pastedContour?.closed).toBe(sourceContour?.closed)
 		expect(pastedContour?.points[0]).toMatchObject({
-			x: sourcePoint.x + 12,
-			y: sourcePoint.y + 12,
+			x: sourcePoint.x,
+			y: sourcePoint.y,
 		})
 	})
 

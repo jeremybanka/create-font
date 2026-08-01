@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	DESIGN_VECTOR_MIME,
 	designObjectsToFontOutline,
+	duplicateDesignObjects,
 	FONT_OUTLINE_MIME,
 	readDesignClipboard,
 	writeDesignClipboard,
@@ -163,8 +164,8 @@ describe("vector clipboard interoperability", () => {
 		const sourcePoint = projectDesignObjectContours(source)[0]?.points[0]
 		const pastedPoint = projectDesignObjectContours(pasted)[0]?.points[0]
 		expect(pastedPoint).toMatchObject({
-			x: (sourcePoint?.x ?? 0) + 12,
-			y: (sourcePoint?.y ?? 0) + 12,
+			x: sourcePoint?.x ?? 0,
+			y: sourcePoint?.y ?? 0,
 		})
 	})
 
@@ -315,8 +316,8 @@ describe("vector clipboard interoperability", () => {
 		expect(addition.objects[0]?.geometry.kind).toBe("rectangle")
 		expect(addition.objects[0]?.transform).toEqual({
 			...rectangle.transform,
-			e: rectangle.transform.e + 12,
-			f: rectangle.transform.f + 12,
+			e: rectangle.transform.e,
+			f: rectangle.transform.f,
 		})
 		const pastedPath = addition.objects[1]
 		expect(pastedPath?.geometry.kind).toBe("path")
@@ -335,5 +336,32 @@ describe("vector clipboard interoperability", () => {
 		expect(imported.selection).toEqual(
 			addition.objects.map((object) => object.id),
 		)
+	})
+
+	it("duplicates the exact ordered selection with fresh identities and one offset", () => {
+		const document = createInitialDocument()
+		const sourceOrder = [document.objects[1]!.id, document.objects[0]!.id]
+		let sequence = 0
+		const result = duplicateDesignObjects(
+			document,
+			sourceOrder,
+			() => `duplicate:${sequence++}`,
+		)
+		if (result === null) throw new Error("Missing duplicate result.")
+		const duplicates = result.document.objects.slice(document.objects.length)
+		expect(duplicates.map((object) => object.name)).toEqual(
+			document.objects.map((object) => object.name),
+		)
+		expect(result.selection).toEqual(duplicates.map((object) => object.id))
+		expect(new Set(result.selection).size).toBe(duplicates.length)
+		for (const [index, duplicate] of duplicates.entries()) {
+			const source = document.objects[index]!
+			expect(duplicate.id).not.toBe(source.id)
+			expect(duplicate.transform).toMatchObject({
+				e: source.transform.e + 12,
+				f: source.transform.f + 12,
+			})
+			expect(duplicate.appearance).toEqual(source.appearance)
+		}
 	})
 })

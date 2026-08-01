@@ -75,6 +75,57 @@ export interface ClipboardReader {
 	getData(format: string): string
 }
 
+const cloneDesignObject = (
+	object: DesignObject,
+	nextId: () => string,
+	deltaX = 0,
+	deltaY = 0,
+): DesignObject =>
+	translateObject(
+		{
+			...object,
+			id: `object:${nextId()}`,
+			geometry:
+				object.geometry.kind === "path"
+					? {
+							...object.geometry,
+							contours: object.geometry.contours.map((contour) => ({
+								...contour,
+								id: `contour:${nextId()}`,
+								points: contour.points.map((point) => ({
+									...point,
+									id: `point:${nextId()}`,
+								})),
+							})),
+						}
+					: object.geometry,
+		},
+		deltaX,
+		deltaY,
+	)
+
+/** Creates one ordered, offset duplicate batch suitable for a single history entry. */
+export function duplicateDesignObjects(
+	document: DesignDocument,
+	objectIds: readonly string[],
+	nextId: () => string,
+	deltaX = 12,
+	deltaY = 12,
+): Readonly<{
+	document: DesignDocument
+	selection: readonly string[]
+}> | null {
+	const selectedIds = new Set(objectIds)
+	const duplicates = document.objects
+		.filter((object) => selectedIds.has(object.id))
+		.map((object) => cloneDesignObject(object, nextId, deltaX, deltaY))
+	if (duplicates.length === 0) return null
+	return {
+		document: { ...document, objects: [...document.objects, ...duplicates] },
+		selection: duplicates.map((object) => object.id),
+	}
+}
+
 export function writeDesignClipboard(
 	clipboard: ClipboardWriter,
 	document: DesignDocument,
@@ -150,24 +201,9 @@ export function readDesignClipboard(
 			return {
 				swatches,
 				objects: parsed.objects.map((object) =>
-					translateObject(
+					cloneDesignObject(
 						{
 							...object,
-							id: `object:${nextId()}`,
-							geometry:
-								object.geometry.kind === "path"
-									? {
-											...object.geometry,
-											contours: object.geometry.contours.map((contour) => ({
-												...contour,
-												id: `contour:${nextId()}`,
-												points: contour.points.map((point) => ({
-													...point,
-													id: `point:${nextId()}`,
-												})),
-											})),
-										}
-									: object.geometry,
 							appearance: {
 								...(object.appearance.fill === undefined
 									? {}
@@ -190,8 +226,7 @@ export function readDesignClipboard(
 										}),
 							},
 						},
-						12,
-						12,
+						nextId,
 					),
 				),
 			}
@@ -395,7 +430,7 @@ function fontOutlineToDesignObject(
 	const bounds = objectBounds(object)
 	if (bounds === null) return null
 	return payload.sourceApplication === "create-design"
-		? translateObject(object, 12, 12)
+		? object
 		: translateObject(
 				object,
 				artboard.x + artboard.width / 2 - (bounds.minX + bounds.maxX) / 2,
