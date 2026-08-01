@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest"
 
-import { signedArea } from "@create-art/vector-geometry"
+import {
+	distance,
+	expandStroke,
+	fitCubicContour,
+	flattenCubic,
+	selfIntersections,
+	signedArea,
+	type Contour,
+	type Cubic,
+	type Point,
+	type StrokeJoin,
+} from "@create-art/vector-geometry"
 
 import {
 	createDesignHistory,
@@ -15,14 +26,99 @@ import {
 } from "../src/geometry.ts"
 import {
 	flattenDesignContour,
+	flattenDesignContourForStroke,
 	objectFillContainsPoint,
 } from "../src/painted-geometry.ts"
 import {
 	expandDesignStroke,
 	STROKE_EXPANSION_MAX_ERROR,
+	STROKE_EXPANSION_REFIT_ERROR,
+	STROKE_EXPANSION_TOLERANCES,
 	strokeExpansionEligibility,
 } from "../src/stroke-expansion.ts"
-import type { DesignDocument, DesignObject } from "../src/types.ts"
+import type {
+	DesignContour,
+	DesignDocument,
+	DesignObject,
+} from "../src/types.ts"
+
+function flattenFit(cubics: readonly Cubic[]): readonly Point[] {
+	const points: Point[] = []
+	for (const cubic of cubics)
+		points.push(
+			...flattenCubic(cubic, { flatness: 0.002 }).slice(
+				points.length > 0 ? 1 : 0,
+			),
+		)
+	if (
+		points.length > 1 &&
+		distance(points[0] as Point, points.at(-1) as Point) <= 1e-7
+	)
+		points.pop()
+	return points
+}
+
+function pointToContour(point: Point, contour: Contour): number {
+	let result = Number.POSITIVE_INFINITY
+	for (const [index, start] of contour.points.entries()) {
+		const end = contour.points[(index + 1) % contour.points.length]
+		if (end === undefined) continue
+		const x = end.x - start.x
+		const y = end.y - start.y
+		const denominator = x * x + y * y
+		const parameter =
+			denominator === 0
+				? 0
+				: Math.max(
+						0,
+						Math.min(
+							1,
+							((point.x - start.x) * x + (point.y - start.y) * y) / denominator,
+						),
+					)
+		result = Math.min(
+			result,
+			Math.hypot(
+				point.x - start.x - x * parameter,
+				point.y - start.y - y * parameter,
+			),
+		)
+	}
+	return result
+}
+
+function expandedHardContour(
+	contour: DesignContour,
+	join: StrokeJoin,
+	width: number,
+): Readonly<{ raw: Contour; fitted: readonly Point[] }> {
+	const flattened = flattenDesignContourForStroke(
+		contour,
+		join,
+		STROKE_EXPANSION_TOLERANCES.flatness,
+	)
+	const raw = expandStroke(
+		{ closed: contour.closed, points: flattened.points },
+		{
+			width,
+			cap: "butt",
+			join,
+			vertexJoins: flattened.vertexJoins,
+			miterLimit: 4,
+			tolerances: STROKE_EXPANSION_TOLERANCES,
+		},
+	)[0]
+	if (raw === undefined) throw new Error("Missing expanded contour fixture.")
+	return {
+		raw,
+		fitted: flattenFit(
+			fitCubicContour(raw, {
+				maxError: STROKE_EXPANSION_REFIT_ERROR,
+				tolerances: STROKE_EXPANSION_TOLERANCES,
+			}),
+		),
+	}
+}
 
 function strokedPath(
 	overrides: Partial<NonNullable<DesignObject["appearance"]["stroke"]>> = {},
@@ -63,7 +159,123 @@ function documentWith(object: DesignObject): DesignDocument {
 	return { ...createInitialDocument(), objects: [object] }
 }
 
+function straightHardContour(angleDegrees: number): DesignContour {
+	const angle = (angleDegrees * Math.PI) / 180
+	const direction = { x: Math.cos(angle), y: Math.sin(angle) }
+	return {
+		id: `contour:hard:${angleDegrees}`,
+		closed: false,
+		points: [
+			{
+				id: "point:hard:start",
+				x: -100,
+				y: 0,
+				outgoing: { x: 30, y: 0 },
+			},
+			{
+				id: "point:hard:corner",
+				x: 0,
+				y: 0,
+				incoming: { x: -30, y: 0 },
+				outgoing: { x: direction.x * 30, y: direction.y * 30 },
+			},
+			{
+				id: "point:hard:end",
+				x: direction.x * 100,
+				y: direction.y * 100,
+				incoming: { x: direction.x * -30, y: direction.y * -30 },
+			},
+		],
+	}
+}
+
+const hardJoinCases = [
+	{ label: "acute", angle: 35, join: "miter", rawPoints: 6 },
+	{ label: "acute", angle: 35, join: "round", rawPoints: 10 },
+	{ label: "acute", angle: 35, join: "bevel", rawPoints: 7 },
+	{ label: "obtuse", angle: 110, join: "miter", rawPoints: 6 },
+	{ label: "obtuse", angle: 110, join: "round", rawPoints: 16 },
+	{ label: "obtuse", angle: 110, join: "bevel", rawPoints: 7 },
+	{ label: "near-reversal", angle: 166, join: "miter", rawPoints: 7 },
+	{ label: "near-reversal", angle: 166, join: "round", rawPoints: 21 },
+	{ label: "near-reversal", angle: 166, join: "bevel", rawPoints: 7 },
+] as const satisfies readonly Readonly<{
+	label: string
+	angle: number
+	join: StrokeJoin
+	rawPoints: number
+}>[]
+
 describe("design stroke expansion", () => {
+	it.each(hardJoinCases)(
+		"keeps $label hard Bézier nodes simple with a $join join",
+		({ angle, join, rawPoints }) => {
+			const { raw, fitted } = expandedHardContour(
+				straightHardContour(angle),
+				join,
+				10,
+			)
+			expect(raw.points).toHaveLength(rawPoints)
+			expect(selfIntersections(raw.points, { closed: true })).toEqual([])
+			expect(selfIntersections(fitted, { closed: true })).toEqual([])
+			expect(Math.sign(signedArea(raw.points))).toBe(1)
+			expect(Math.sign(signedArea(fitted))).toBe(1)
+
+			const fittedContour = { closed: true, points: fitted }
+			expect(
+				Math.max(
+					...raw.points.map((point) => pointToContour(point, fittedContour)),
+				),
+			).toBeLessThanOrEqual(STROKE_EXPANSION_REFIT_ERROR)
+			expect(
+				Math.max(...fitted.map((point) => pointToContour(point, raw))),
+			).toBeLessThanOrEqual(STROKE_EXPANSION_REFIT_ERROR)
+		},
+	)
+
+	it.each(["miter", "round", "bevel"] as const)(
+		"replaces an invalid inner $join intersection with a bounded cusp",
+		(join) => {
+			const angle = (177.5 * Math.PI) / 180
+			const contour: DesignContour = {
+				id: "contour:hard:cusp",
+				closed: false,
+				points: [
+					{
+						id: "point:cusp:start",
+						x: -100,
+						y: 27,
+						outgoing: { x: 20, y: 38 },
+					},
+					{
+						id: "point:cusp:corner",
+						x: 0,
+						y: 0,
+						incoming: { x: -7, y: 0 },
+						outgoing: {
+							x: Math.cos(angle) * 0.5,
+							y: Math.sin(angle) * 0.5,
+						},
+					},
+					{
+						id: "point:cusp:end",
+						x: 5,
+						y: 31,
+						incoming: { x: 60, y: 4 },
+					},
+				],
+			}
+			const { raw, fitted } = expandedHardContour(contour, join, 2.2)
+			expect(raw.points).toHaveLength(
+				{ miter: 178, round: 180, bevel: 179 }[join],
+			)
+			expect(selfIntersections(raw.points, { closed: true })).toEqual([])
+			expect(selfIntersections(fitted, { closed: true })).toEqual([])
+			expect(Math.sign(signedArea(raw.points))).toBe(1)
+			expect(Math.sign(signedArea(fitted))).toBe(1)
+		},
+	)
+
 	it("retains the object transform while replacing stroke with editable fill", () => {
 		const transformed = rotateObject(
 			scaleObject(

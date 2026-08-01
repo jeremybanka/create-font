@@ -301,11 +301,21 @@ function lineIntersection(
 	second: Point,
 	secondDirection: Point,
 	tolerances: GeometryTolerances,
-): Point | null {
+): Readonly<{
+	point: Point
+	firstParameter: number
+	secondParameter: number
+}> | null {
 	const determinant = cross(firstDirection, secondDirection)
 	if (Math.abs(determinant) <= tolerances.parameter) return null
-	const amount = cross(subtract(second, first), secondDirection) / determinant
-	return add(first, firstDirection, amount)
+	const delta = subtract(second, first)
+	const firstParameter = cross(delta, secondDirection) / determinant
+	const secondParameter = cross(delta, firstDirection) / determinant
+	return {
+		point: add(first, firstDirection, firstParameter),
+		firstParameter,
+		secondParameter,
+	}
 }
 
 function arc(
@@ -340,6 +350,8 @@ function joinPoints(
 	vertex: Point,
 	incoming: Point,
 	outgoing: Point,
+	incomingLength: number,
+	outgoingLength: number,
 	side: 1 | -1,
 	radius: number,
 	join: StrokeJoin,
@@ -359,8 +371,19 @@ function joinPoints(
 	if (Math.abs(turn) <= tolerances.parameter && dot(incoming, outgoing) > 0)
 		return [nextEdge]
 	const outer = turn * side < 0
-	if (!outer)
-		return intersection === null ? [previousEdge, nextEdge] : [intersection]
+	const withinLimit =
+		intersection !== null &&
+		distance(vertex, intersection.point) <=
+			radius * options.miterLimit + tolerances.distance
+	if (!outer) {
+		const trimsBothOffsetRays =
+			intersection !== null &&
+			intersection.firstParameter <= tolerances.parameter &&
+			intersection.firstParameter >= -incomingLength - tolerances.distance &&
+			intersection.secondParameter >= -tolerances.parameter &&
+			intersection.secondParameter <= outgoingLength + tolerances.distance
+		return withinLimit && trimsBothOffsetRays ? [intersection.point] : [vertex]
+	}
 	if (join === "round")
 		return arc(
 			vertex,
@@ -372,11 +395,12 @@ function joinPoints(
 		)
 	if (
 		join === "miter" &&
+		withinLimit &&
 		intersection !== null &&
-		distance(vertex, intersection) <=
-			radius * options.miterLimit + tolerances.distance
+		intersection.firstParameter >= -tolerances.parameter &&
+		intersection.secondParameter <= tolerances.parameter
 	)
-		return [intersection]
+		return [intersection.point]
 	return [previousEdge, nextEdge]
 }
 
@@ -409,6 +433,8 @@ function sidePoints(
 				vertex,
 				unit(previous, vertex),
 				unit(vertex, next),
+				distance(previous, vertex),
+				distance(vertex, next),
 				side,
 				radius,
 				vertexJoins[index] ?? options.join,

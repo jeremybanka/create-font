@@ -67,8 +67,10 @@ butt, round, or square caps; bevel, limited-miter, or round joins; and SVG/PDF
 dash phase semantics. Round pieces use the configured `flatness` as their
 maximum chord error. Callers that flatten curves may supply `vertexJoins` so
 generated smooth samples use miter intersections while authored corners keep
-their requested joins, including after dash splitting. Adjacent points within
-`distance` are coincident, a wholly
+their requested joins, including after dash splitting. Join intersections are
+accepted only on their intended offset rays; inner trims must also stay within
+both adjacent segments and the miter limit, otherwise expansion emits a bounded
+cusp at the authored vertex. Adjacent points within `distance` are coincident, a wholly
 zero-length centerline produces no contours, and invalid style or non-finite
 coordinate input throws `GeometryError` before output is returned. Simple
 closed strokes produce separate outside and hole contours. Self-crossing
