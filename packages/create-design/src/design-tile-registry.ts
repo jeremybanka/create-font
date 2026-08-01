@@ -54,6 +54,7 @@ export interface DesignTileContext {
 	readonly document: DesignDocument
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
+	readonly expandStrokeSelection: () => void
 	readonly exportDocument: () => void
 	readonly focusCanvas: () => void
 	readonly reviewSourceChange?: (change: DesignSourceReviewChange) => void
@@ -76,6 +77,7 @@ export interface DesignTileContext {
 	readonly setAppearanceTarget: (target: AppearancePaintTarget) => void
 	readonly swapAppearancePaints: () => void
 	readonly strokePropertiesDisabledReason: string | null
+	readonly strokeExpansionDisabledReason: string | null
 	readonly tool: DesignTool
 	readonly updateSwatch: (swatch: DesignSwatch) => void
 	readonly versionControl?: DesignSourceReviewController

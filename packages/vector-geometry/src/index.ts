@@ -25,7 +25,13 @@ export {
 	type PolylineIntersection,
 	type SegmentIntersection,
 } from "./intersections.ts"
+export { fitCubicContour, type CubicFitOptions } from "./fit.ts"
 export { offsetContour, type OffsetContourOptions } from "./offset.ts"
+export {
+	expandStroke,
+	type StrokeExpansionOptions,
+	type StrokeJoin,
+} from "./stroke.ts"
 export {
 	DEFAULT_GEOMETRY_TOLERANCES,
 	GeometryError,

@@ -1021,6 +1021,242 @@ describe("create-design shared vector scene", () => {
 		expect(expand.disabled).toBe(false)
 	})
 
+	it("expands a selected stroke atomically and restores it with one undo", async () => {
+		const initial = createInitialDocument()
+		const first = initial.objects[0]
+		if (first === undefined) throw new Error("Missing rectangle fixture.")
+		const source: DesignDocument = {
+			...initial,
+			objects: [
+				{
+					...first,
+					appearance: {
+						...first.appearance,
+						stroke: {
+							swatchId: "swatch:ink",
+							width: 12,
+							cap: "round",
+							join: "bevel",
+							miterLimit: 4,
+							dashArray: [20, 8],
+							dashOffset: -3,
+						},
+					},
+				},
+				...initial.objects.slice(1),
+			],
+		}
+		const storage = new Map([[DESIGN_STORAGE_KEY, JSON.stringify(source)]])
+		mountDesign({}, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		if (layer === undefined) throw new Error("Rectangle layer was not found.")
+		act(() => layer.click())
+
+		const expand = document.querySelector<HTMLButtonElement>(
+			"button[data-expand-stroke]",
+		)
+		if (expand === null) throw new Error("Expand Stroke action was not found.")
+		expect(expand.disabled).toBe(false)
+		await act(async () => {
+			expand.click()
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects).toHaveLength(3)
+		expect(saved.objects[0]).toMatchObject({
+			name: "Coral rectangle fill",
+			appearance: { fill: { swatchId: "swatch:coral" } },
+		})
+		expect(saved.objects[1]).toMatchObject({
+			id: "object:coral",
+			geometry: { kind: "path" },
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		})
+		expect(saved.objects[2]).toEqual(source.objects[1])
+		expect(expand.disabled).toBe(true)
+		expect(
+			document.getElementById("expand-stroke-eligibility")?.textContent,
+		).toContain("Assign a stroke")
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved).toEqual(source)
+		expect(expand.disabled).toBe(false)
+	})
+
+	it("clears stale direct node selection after expanding a path stroke", async () => {
+		const initial = createInitialDocument()
+		const first = initial.objects[0]
+		if (first === undefined) throw new Error("Missing rectangle fixture.")
+		let identity = 0
+		const path = expandDesignShape(first, () => `source:${identity++}`)
+		const source: DesignDocument = {
+			...initial,
+			objects: [
+				{
+					...path,
+					appearance: {
+						stroke: {
+							swatchId: "swatch:ink",
+							width: 12,
+							cap: "round",
+							join: "bevel",
+							miterLimit: 4,
+							dashArray: [],
+							dashOffset: 0,
+						},
+					},
+				},
+			],
+		}
+		const storage = new Map([[DESIGN_STORAGE_KEY, JSON.stringify(source)]])
+		const stage = mountDesign({}, storage)
+		const layer = document.querySelector<HTMLButtonElement>(
+			"design-layers-tile > button",
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct selection controls were not found.")
+		act(() => layer.click())
+		const expand = document.querySelector<HTMLButtonElement>(
+			"button[data-expand-stroke]",
+		)
+		if (expand === null) throw new Error("Expand Stroke action was not found.")
+		act(() => direct.click())
+		const node = stage.findOne(".vector-node")
+		if (node === undefined) throw new Error("Direct node was not rendered.")
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 267,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(pointerDown)
+			node.fire("pointerdown", { evt: pointerDown }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 267,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".vector-node-selection")).toHaveLength(1)
+
+		await act(async () => {
+			expand.click()
+			await Promise.resolve()
+		})
+		expect(stage.find(".vector-node-selection")).toHaveLength(0)
+		expect(document.querySelector("design-object-tile")?.textContent).toContain(
+			"No direct controls selected.",
+		)
+	})
+
+	it("leaves document, selection, and history unchanged when stroke expansion fails", async () => {
+		const initial = createInitialDocument()
+		const first = initial.objects[0]
+		if (first === undefined) throw new Error("Missing rectangle fixture.")
+		const source: DesignDocument = {
+			...initial,
+			objects: [
+				{
+					...first,
+					name: "Degenerate stroke",
+					geometry: {
+						kind: "path",
+						contours: [
+							{
+								id: "contour:degenerate",
+								closed: false,
+								points: [
+									{ id: "point:degenerate:0", x: 10, y: 10 },
+									{ id: "point:degenerate:1", x: 10, y: 10 },
+								],
+							},
+						],
+					},
+					appearance: {
+						stroke: {
+							swatchId: "swatch:ink",
+							width: 10,
+							cap: "round",
+							join: "round",
+							miterLimit: 4,
+							dashArray: [],
+							dashOffset: 0,
+						},
+					},
+				},
+				...initial.objects.slice(1),
+			],
+		}
+		const storage = new Map([[DESIGN_STORAGE_KEY, JSON.stringify(source)]])
+		mountDesign({}, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Degenerate stroke"))
+		if (layer === undefined) throw new Error("Degenerate layer was not found.")
+		act(() => layer.click())
+		const expand = document.querySelector<HTMLButtonElement>(
+			"button[data-expand-stroke]",
+		)
+		if (expand === null) throw new Error("Expand Stroke action was not found.")
+		expect(expand.disabled).toBe(false)
+
+		await act(async () => {
+			expand.click()
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+		expect(layer.getAttribute("aria-pressed")).toBe("true")
+		expect(document.querySelector("footer > span")?.textContent).toContain(
+			"no visible length",
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+		expect(layer.getAttribute("aria-pressed")).toBe("true")
+	})
+
 	it.each([
 		["nw", { x: -40, y: -30 }, { x: "maxX", y: "maxY" }],
 		["ne", { x: 40, y: -30 }, { x: "minX", y: "maxY" }],

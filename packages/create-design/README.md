@@ -65,6 +65,22 @@ formats remain intentional path interoperability boundaries. Native clipboard
 payload version three retains complete appearance; the create-font outline
 flavor deliberately carries only projected geometry.
 
+**Expand Stroke** uses a `0.05` local-unit construction budget: at most `0.025`
+for centerline/round-geometry sampling and at most `0.025` from every generated
+sampled outline to its reconstructed cubic envelope in both nearest-distance
+directions. This is a stated, deterministic discrete construction metric rather
+than a formal continuous Hausdorff bound. The refit locally subdivides any span
+that overshoots the envelope, loops, introduces a self-intersection absent from
+the sampled outline, or reverses winding. Points within `1e-7` local units are
+coincident. Generated curve samples remain smooth while authored corners keep
+their cap/join/miter behavior; dash boundaries remain independent capped
+regions. The command retains the affine transform, promotes stroke paint to
+fill, and assigns fresh stable contour/control IDs. A source fill is preserved
+as a fill-only sibling immediately below the expanded stroke. Wholly zero-length
+strokes fail without a history entry; coincident spans are discarded; invalid
+values fail without mutation; and self-crossing centerlines fail without
+mutation at the separate cleanup/Pathfinder boundary.
+
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its second directory
 format splits document metadata, palette, ordered artboards, layer ordering,

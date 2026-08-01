@@ -116,6 +116,10 @@ import {
 	shapeExpansionEligibility,
 } from "./shape-expansion.ts"
 import {
+	expandDesignStroke,
+	strokeExpansionEligibility,
+} from "./stroke-expansion.ts"
+import {
 	applyDesignVectorIntent,
 	designVectorAdapter,
 	importDesignVectorClipboard,
@@ -458,6 +462,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
 	const expansionEligibility = shapeExpansionEligibility(document, selection)
+	const strokeEligibility = strokeExpansionEligibility(document, selection)
 	const baseScale = designBaseScale(canvasViewport, activeArtboard)
 	const viewOptions = useMemo(
 		() => ({
@@ -564,6 +569,39 @@ export function DesignApplication(props: DesignApplicationProps) {
 		})
 		setSelection([expanded.id])
 		setStatus(`Expanded ${expanded.name} to ordinary path geometry.`)
+	}, [commit, document, nextId, selection])
+
+	const expandStrokeSelection = useCallback((): void => {
+		const eligibility = strokeExpansionEligibility(document, selection)
+		if (!eligibility.eligible) {
+			setStatus(eligibility.reason)
+			return
+		}
+		const result = expandDesignStroke(eligibility.object, nextId)
+		if (!result.ok) {
+			setStatus(result.error)
+			return
+		}
+		const index = document.objects.findIndex(
+			(object) => object.id === eligibility.object.id,
+		)
+		if (index < 0) {
+			setStatus("The selected object is unavailable.")
+			return
+		}
+		commit({
+			...document,
+			objects: [
+				...document.objects.slice(0, index),
+				...result.objects,
+				...document.objects.slice(index + 1),
+			],
+		})
+		setSelection([result.selectedObjectId])
+		setDirectSelection([])
+		setStatus(
+			`Expanded ${eligibility.object.name}'s stroke to filled contours.`,
+		)
 	}, [commit, document, nextId, selection])
 
 	const finishPen = useCallback(
@@ -846,6 +884,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		expansionDisabledReason: expansionEligibility.eligible
 			? null
 			: expansionEligibility.reason,
+		expandStrokeSelection,
 		exportDocument,
 		focusCanvas: focusActiveArtboard,
 		activeArtboard,
@@ -873,6 +912,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 		},
 		swapAppearancePaints: swapAppearance,
 		strokePropertiesDisabledReason,
+		strokeExpansionDisabledReason: strokeEligibility.eligible
+			? null
+			: strokeEligibility.reason,
 		tool,
 		updateSwatch,
 		...(versionControl === undefined ? {} : { versionControl }),
@@ -917,6 +959,19 @@ export function DesignApplication(props: DesignApplicationProps) {
 					? {}
 					: { disabledReason: expansionEligibility.reason }),
 				do: expandSelection,
+			},
+			{
+				id: "expand-stroke",
+				displayName: "Expand Stroke",
+				category: "Object",
+				description:
+					"Convert the selected visible stroke to ordinary editable filled contours.",
+				icon: "HobbyKnifeIcon",
+				disabled: !strokeEligibility.eligible,
+				...(strokeEligibility.eligible
+					? {}
+					: { disabledReason: strokeEligibility.reason }),
+				do: expandStrokeSelection,
 			},
 			{
 				id: "select-all",
@@ -983,6 +1038,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[
 			deleteSelection,
 			expandSelection,
+			expandStrokeSelection,
 			expansionEligibility,
 			exportDocument,
 			history.future.length,
@@ -990,6 +1046,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			openTile,
 			selectTool,
 			selection.length,
+			strokeEligibility,
 			selectedObject?.id,
 			selectedSwatchId,
 			tool,
