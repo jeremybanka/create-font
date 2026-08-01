@@ -1,4 +1,9 @@
 export {
+	booleanContours,
+	type BooleanContoursOptions,
+	type BooleanOperation,
+} from "./boolean.ts"
+export {
 	contourOrientation,
 	normalizeContour,
 	normalizeContours,

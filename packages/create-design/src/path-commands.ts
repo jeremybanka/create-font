@@ -1,4 +1,5 @@
 import {
+	booleanContours,
 	contourOrientation,
 	fitCubicContour,
 	flattenCubic,
@@ -26,12 +27,16 @@ import type {
 export const DEFAULT_PATH_SIMPLIFY_TOLERANCE = 0.25
 /** Coincidence tolerance used by cleanup and endpoint joining. */
 export const DEFAULT_PATH_CLEANUP_TOLERANCE = 1e-6
+/** Maximum construction deviation for Pathfinder output, in document units. */
+export const DEFAULT_PATHFINDER_TOLERANCE = 0.05
 
 export type DesignPathCommand =
 	| "close"
 	| "join"
 	| "make-compound"
 	| "normalize-winding"
+	| "pathfinder-subtract-front"
+	| "pathfinder-unite"
 	| "release-compound"
 	| "reverse"
 	| "simplify"
@@ -58,6 +63,7 @@ export type DesignPathCommandResult =
 
 export interface DesignPathCommandOptions {
 	readonly cleanupTolerance?: number
+	readonly pathfinderTolerance?: number
 	readonly simplifyTolerance?: number
 	readonly nextId?: () => string
 }
@@ -152,6 +158,44 @@ function releaseEligibility(
 	return { eligible: true }
 }
 
+function pathfinderEligibility(
+	context: DesignPathCommandContext,
+): DesignPathCommandEligibility {
+	if (context.objectSelection.length < 2)
+		return reject("Select at least two filled objects for Pathfinder.")
+	const selected = new Set(context.objectSelection)
+	if (selected.size < 2)
+		return reject("Select at least two distinct filled objects for Pathfinder.")
+	const objects = context.document.objects.filter((object) =>
+		selected.has(object.id),
+	)
+	if (objects.length !== selected.size)
+		return reject("A selected Pathfinder object is unavailable.")
+	const locked = objects.find((object) => object.locked)
+	if (locked !== undefined)
+		return reject(`Unlock ${locked.name} before using Pathfinder.`)
+	const hidden = objects.find((object) => object.hidden)
+	if (hidden !== undefined)
+		return reject(`Show ${hidden.name} before using Pathfinder.`)
+	const unfilled = objects.find(
+		(object) => object.appearance.fill === undefined,
+	)
+	if (unfilled !== undefined)
+		return reject(`${unfilled.name} needs a fill before using Pathfinder.`)
+	const invalid = objects.find((object) => {
+		const contours = projectDesignObjectContours(object)
+		return (
+			contours.length === 0 ||
+			contours.some((contour) => !contour.closed || contour.points.length < 3)
+		)
+	})
+	if (invalid !== undefined)
+		return reject(
+			`${invalid.name} needs non-empty closed geometry for Pathfinder.`,
+		)
+	return { eligible: true }
+}
+
 function joinEligibility(
 	context: DesignPathCommandContext,
 ): DesignPathCommandEligibility {
@@ -206,6 +250,8 @@ export function designPathCommandEligibility(
 	command: DesignPathCommand,
 	context: DesignPathCommandContext,
 ): DesignPathCommandEligibility {
+	if (command === "pathfinder-unite" || command === "pathfinder-subtract-front")
+		return pathfinderEligibility(context)
 	if (command === "make-compound") return compoundEligibility(context)
 	if (command === "release-compound") return releaseEligibility(context)
 	if (command === "join") return joinEligibility(context)
@@ -1062,6 +1108,122 @@ function releaseCompound(
 	}
 }
 
+function pathfinderContour(
+	contour: Readonly<{
+		closed: true
+		points: readonly Readonly<{ x: number; y: number }>[]
+	}>,
+	fitTolerance: number,
+	nextId: () => string,
+): DesignContour {
+	const pieces = fitCubicContour(contour, {
+		maxError: fitTolerance,
+		cornerAngleDegrees: 30,
+		tolerances: { distance: DEFAULT_PATH_CLEANUP_TOLERANCE },
+	})
+	if (pieces.length === 0)
+		throw new Error("Pathfinder could not fit editable output geometry.")
+	return {
+		id: `contour:${nextId()}`,
+		closed: true,
+		points: fittedContourPoints(pieces, true).map((point) => ({
+			...point,
+			id: `point:${nextId()}`,
+		})),
+	}
+}
+
+function applyPathfinder(
+	command: Extract<
+		DesignPathCommand,
+		"pathfinder-subtract-front" | "pathfinder-unite"
+	>,
+	context: DesignPathCommandContext,
+	tolerance: number,
+	nextId: () => string,
+): DesignPathCommandResult {
+	const selectedIds = new Set(context.objectSelection)
+	const entries = context.document.objects.flatMap((object, index) =>
+		selectedIds.has(object.id) ? [{ object, index }] : [],
+	)
+	const unite = command === "pathfinder-unite"
+	const survivor = unite ? entries.at(-1) : entries[0]
+	if (survivor === undefined)
+		return {
+			ok: false,
+			error: "The selected Pathfinder objects are unavailable.",
+		}
+	const inputFlatness = tolerance / 4
+	const fittingTolerance = tolerance - inputFlatness
+	const regions = entries.map(({ object }) =>
+		projectDesignObjectContours(object).map((contour) => ({
+			closed: true as const,
+			points: flattenDesignContour(contour, inputFlatness),
+		})),
+	)
+	try {
+		const resolved = unite
+			? booleanContours(regions, {
+					operation: "union",
+					tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+				})
+			: booleanContours([regions[0] ?? []], {
+					operation: "difference",
+					clips: regions.slice(1),
+					tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+				})
+		const contours = resolved.map((contour) =>
+			pathfinderContour(
+				{ closed: true, points: contour.points },
+				fittingTolerance,
+				nextId,
+			),
+		)
+		const result: DesignObject | undefined =
+			contours.length === 0
+				? undefined
+				: {
+						...survivor.object,
+						name: unite
+							? `Unite ${survivor.object.name}`
+							: `Subtract ${survivor.object.name}`,
+						geometry: { kind: "path", contours },
+						transform: IDENTITY_DESIGN_TRANSFORM,
+					}
+		return {
+			ok: true,
+			document: {
+				...context.document,
+				objects: context.document.objects.flatMap((object) =>
+					object.id === survivor.object.id
+						? result === undefined
+							? []
+							: [result]
+						: selectedIds.has(object.id)
+							? []
+							: [object],
+				),
+			},
+			objectSelection: result === undefined ? [] : [result.id],
+			directSelection: [],
+			message:
+				result === undefined
+					? "Subtract Front produced an empty filled region."
+					: unite
+						? `United ${entries.length} filled objects.`
+						: `Subtracted ${entries.length - 1} front object${entries.length === 2 ? "" : "s"}.`,
+		}
+	} catch (error) {
+		return {
+			ok: false,
+			error:
+				error instanceof Error
+					? error.message
+					: "Pathfinder could not resolve the selected fills.",
+		}
+	}
+}
+
 export function applyDesignPathCommand(
 	command: DesignPathCommand,
 	context: DesignPathCommandContext,
@@ -1073,6 +1235,8 @@ export function applyDesignPathCommand(
 		options.cleanupTolerance ?? DEFAULT_PATH_CLEANUP_TOLERANCE
 	const simplifyTolerance =
 		options.simplifyTolerance ?? DEFAULT_PATH_SIMPLIFY_TOLERANCE
+	const pathfinderTolerance =
+		options.pathfinderTolerance ?? DEFAULT_PATHFINDER_TOLERANCE
 	if (!(cleanupTolerance >= 0) || !Number.isFinite(cleanupTolerance))
 		return {
 			ok: false,
@@ -1083,7 +1247,14 @@ export function applyDesignPathCommand(
 			ok: false,
 			error: "Simplify tolerance must be finite and positive.",
 		}
+	if (!(pathfinderTolerance > 0) || !Number.isFinite(pathfinderTolerance))
+		return {
+			ok: false,
+			error: "Pathfinder tolerance must be finite and positive.",
+		}
 	const nextId = options.nextId ?? (() => crypto.randomUUID())
+	if (command === "pathfinder-unite" || command === "pathfinder-subtract-front")
+		return applyPathfinder(command, context, pathfinderTolerance, nextId)
 	if (command === "join")
 		return joinSelectedEndpoints(context, cleanupTolerance)
 	if (command === "make-compound") return makeCompound(context)

@@ -102,6 +102,23 @@ even-odd filling, so nested counterforms agree before and after the separate,
 explicit winding-normalization command. Every successful command is committed
 as one immutable history entry.
 
+**Pathfinder: Unite** and **Pathfinder: Subtract Front** operate on actual
+even-odd filled regions, not bounding boxes or stroke centerlines. Both use a
+`0.05` document-unit construction budget: `0.0125` for adaptive cubic sampling
+and `0.0375` for deterministic cubic reconstruction after integer topology
+resolution on a `1e-6` document-unit grid. Unite combines all selected fills
+into one ordinary compound path at the topmost selected object's stack position
+and inherits that object's complete appearance. Subtract Front treats the
+backmost selected fill as the subject, subtracts every selected object above it,
+and preserves the backmost object's stack position and appearance. Affine
+transforms are baked at this explicit editing boundary. Inputs with no fill,
+open or empty geometry, or hidden/locked objects are rejected without mutation.
+Successful output receives canonical contour ordering and fresh stable contour
+and control IDs, replaces all sources in one history entry, and becomes the
+sole selection. A subtraction that removes the target completely commits the
+source deletion with an empty selection. Canvas and PDF consume the same
+ordinary even-odd path output.
+
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its second directory
 format splits document metadata, palette, ordered artboards, layer ordering,
