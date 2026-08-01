@@ -63,7 +63,7 @@
 		"react": "npm:@preact/compat@18.3.2",
 		"react-dom": "npm:@preact/compat@18.3.2",
 		"vite": "8.2.0",
-		"vite-plus": "0.2.6",
+		"vite-plus": "0.2.7",
 		"vitest": "4.1.10"
 	},
 	"engines": {
