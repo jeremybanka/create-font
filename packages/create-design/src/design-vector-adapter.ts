@@ -444,8 +444,8 @@ export function importDesignVectorClipboard(
 					return {
 						...node,
 						id: `${objectId}:contour:${contourIndex}:point:${nodeIndex}`,
-						x: position.x + 12,
-						y: position.y + 12,
+						x: position.x,
+						y: position.y,
 						...(node.incoming === undefined
 							? {}
 							: {
