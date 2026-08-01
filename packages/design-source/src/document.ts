@@ -217,6 +217,7 @@ export const guideSchema = z
 		id: guideIdSchema,
 		axis: z.enum(["x", "y"]),
 		value: finiteNumberSchema,
+		locked: z.boolean().optional(),
 	})
 	.strict()
 

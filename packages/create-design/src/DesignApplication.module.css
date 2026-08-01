@@ -276,6 +276,80 @@ design-application.class {
 				overflow: hidden;
 				touch-action: none;
 
+				> ruler-corner,
+				> ruler-horizontal,
+				> ruler-vertical {
+					position: absolute;
+					z-index: 5;
+					display: block;
+					background: color-mix(
+						in srgb,
+						var(--surface-header) 92%,
+						transparent
+					);
+					color: var(--ink-faint);
+					font-size: 7px;
+					user-select: none;
+				}
+
+				> ruler-corner {
+					top: 0;
+					left: 0;
+					width: 20px;
+					height: 20px;
+					border-right: 1px solid var(--line-strong);
+					border-bottom: 1px solid var(--line-strong);
+				}
+
+				> ruler-horizontal {
+					top: 0;
+					right: 0;
+					left: 20px;
+					height: 20px;
+					overflow: hidden;
+					border-bottom: 1px solid var(--line-strong);
+					cursor: crosshair;
+
+					> i {
+						position: absolute;
+						bottom: 0;
+						width: 1px;
+						height: 4px;
+						border-left: 1px solid currentcolor;
+						font-style: normal;
+
+						&[data-major] {
+							height: 9px;
+							padding: 0 0 0 2px;
+						}
+					}
+				}
+
+				> ruler-vertical {
+					top: 20px;
+					bottom: 0;
+					left: 0;
+					width: 20px;
+					overflow: hidden;
+					border-right: 1px solid var(--line-strong);
+					cursor: crosshair;
+
+					> i {
+						position: absolute;
+						right: 0;
+						width: 4px;
+						height: 1px;
+						border-top: 1px solid currentcolor;
+						font-style: normal;
+						writing-mode: vertical-rl;
+
+						&[data-major] {
+							width: 9px;
+							padding-top: 2px;
+						}
+					}
+				}
+
 				> div {
 					display: block;
 					width: 100%;

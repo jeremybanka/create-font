@@ -16,6 +16,7 @@ import type {
 	DesignSourceReviewChange,
 	DesignSourceReviewController,
 } from "./design-version-control.ts"
+import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
 import type {
 	DesignArtboard,
 	DesignDocument,
@@ -77,6 +78,16 @@ export interface DesignTileContext {
 	readonly selectedObjectIds: readonly string[]
 	readonly selectedSwatch: DesignSwatch | undefined
 	readonly selectedSwatchId: string
+	readonly selectedGuideId: string | null
+	readonly snapSettings: DesignSnapSettings
+	readonly setSnapCategory: (
+		category: DesignSnapCategory,
+		enabled: boolean,
+	) => void
+	readonly setSnapThreshold: (pixels: number) => void
+	readonly selectGuide: (id: string | null) => void
+	readonly toggleGuideLock: (id: string) => void
+	readonly deleteGuide: (id: string) => void
 	readonly setObjectProperty: (
 		object: DesignObject,
 		property: Partial<DesignObject>,

@@ -31,6 +31,7 @@ import {
 	Group,
 	type KonvaEventObject,
 	Layer,
+	Line,
 	Rect,
 	Stage,
 } from "@create-font/preact-konva"
@@ -87,12 +88,22 @@ import {
 	captureDesignPointer,
 	DESIGN_MAX_ZOOM,
 	DESIGN_MIN_ZOOM,
+	DEFAULT_DESIGN_SNAP_SETTINGS,
 	designBaseScale,
 	initialDesignCanvasView,
 	nearestDesignObject,
 	releaseDesignPointer,
 	snapDesignObject,
+	snapDesignObjects,
+	type DesignSnapSettings,
+	type DesignSnapMatch,
 } from "./design-canvas.ts"
+import {
+	addDesignGuide,
+	deleteDesignGuide,
+	designRulerTicks,
+	updateDesignGuide,
+} from "./design-guides.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import {
@@ -152,6 +163,7 @@ import type {
 	DesignArtboard,
 	DesignDocument,
 	DesignGeometry,
+	DesignGuide,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -214,6 +226,15 @@ type CanvasGesture =
 			readonly original: DesignDocument
 			readonly selection: readonly DesignDirectSelectionTarget[]
 	  }
+	| {
+			readonly kind: "guide"
+			readonly pointerId: number
+			readonly id: string
+			readonly axis: "x" | "y"
+			readonly original: DesignDocument
+			readonly start: CanvasPoint
+			readonly value: number
+	  }
 
 type DesignObjectGesture = Extract<
 	CanvasGesture,
@@ -225,14 +246,16 @@ interface DesignGestureObjectPreview {
 	readonly snap: {
 		readonly x: number | null
 		readonly y: number | null
+		readonly matches: readonly DesignSnapMatch[]
 	}
 }
 
 function resolveDesignGestureObject(
-	artboard: DesignDocument["artboards"][number],
+	document: DesignDocument,
 	gesture: DesignObjectGesture,
 	preview: VectorGesturePreview | null,
 	worldScale: number,
+	snapSettings: DesignSnapSettings,
 ): DesignGestureObjectPreview | null {
 	if (gesture.kind === "move" && preview?.kind === "select-move") {
 		const rawObjects = gesture.originals.map((object) =>
@@ -240,14 +263,11 @@ function resolveDesignGestureObject(
 		)
 		const snapped =
 			rawObjects.length === 1
-				? snapDesignObject(rawObjects[0]!, artboard, worldScale)
-				: null
+				? snapDesignObject(rawObjects[0]!, document, worldScale, snapSettings)
+				: snapDesignObjects(rawObjects, document, worldScale, snapSettings)
 		return {
-			objects: snapped === null ? rawObjects : [snapped.object],
-			snap:
-				snapped === null
-					? { x: null, y: null }
-					: { x: snapped.x, y: snapped.y },
+			objects: "object" in snapped ? [snapped.object] : snapped.objects,
+			snap: { x: snapped.x, y: snapped.y, matches: snapped.matches ?? [] },
 		}
 	}
 	if (gesture.kind !== "transform" || preview?.kind !== "transform") return null
@@ -260,14 +280,20 @@ function resolveDesignGestureObject(
 	)
 	return {
 		objects: transformed,
-		snap: { x: null, y: null },
+		snap: { x: null, y: null, matches: [] },
 	}
 }
 
 function designSnapGuides(
-	snap: Readonly<{ x: number | null; y: number | null }>,
+	snap: Readonly<{
+		x: number | null
+		y: number | null
+		matches?: readonly DesignSnapMatch[]
+	}>,
 	artboard: Readonly<{ x: number; y: number; width: number; height: number }>,
 ): readonly VectorSnapGuide[] {
+	const xLabel = snap.matches?.find(({ axis }) => axis === "x")?.label
+	const yLabel = snap.matches?.find(({ axis }) => axis === "y")?.label
 	return [
 		...(snap.x === null
 			? []
@@ -281,6 +307,7 @@ function designSnapGuides(
 							snap.x,
 							artboard.y + artboard.height,
 						] as const,
+						...(xLabel === undefined ? {} : { label: xLabel }),
 					},
 				]),
 		...(snap.y === null
@@ -295,6 +322,7 @@ function designSnapGuides(
 							artboard.x + artboard.width,
 							snap.y,
 						] as const,
+						...(yLabel === undefined ? {} : { label: yLabel }),
 					},
 				]),
 	]
@@ -452,6 +480,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [activeSnapGuides, setActiveSnapGuides] = useState<
 		readonly VectorSnapGuide[]
 	>([])
+	const [snapSettings, setSnapSettings] = useState<DesignSnapSettings>(
+		DEFAULT_DESIGN_SNAP_SETTINGS,
+	)
+	const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null)
+	const [guidePreview, setGuidePreview] = useState<Readonly<{
+		id: string
+		value: number
+	}> | null>(null)
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
@@ -651,6 +687,74 @@ export function DesignApplication(props: DesignApplicationProps) {
 		},
 		[canvasView, viewOptions],
 	)
+	const documentPointFromClient = useCallback(
+		(point: Readonly<{ clientX: number; clientY: number }>): CanvasPoint => {
+			const bounds = artboardWrapRef.current?.getBoundingClientRect()
+			const screen = {
+				x: point.clientX - (bounds?.left ?? 0),
+				y: point.clientY - (bounds?.top ?? 0),
+			}
+			return canvasToDocumentPoint(
+				screenToDocument(screen, canvasView, viewOptions),
+			)
+		},
+		[canvasView, viewOptions],
+	)
+	const createGuideFromRuler = useCallback(
+		(
+			axis: "x" | "y",
+			event: Readonly<{ clientX: number; clientY: number }>,
+		): void => {
+			const point = documentPointFromClient(event)
+			const guide: DesignGuide = {
+				id: `guide:${nextId()}`,
+				axis,
+				value: axis === "x" ? point.x : point.y,
+			}
+			commit(addDesignGuide(document, guide))
+			setSelectedGuideId(guide.id)
+			setStatus(
+				`Created ${axis === "x" ? "vertical" : "horizontal"} guide at ${Number(guide.value.toFixed(2))} pt.`,
+			)
+		},
+		[commit, document, documentPointFromClient, nextId],
+	)
+	const visibleDocumentBounds = useMemo(() => {
+		const minimum = canvasToDocumentPoint(
+			screenToDocument({ x: 0, y: 0 }, canvasView, viewOptions),
+		)
+		const maximum = canvasToDocumentPoint(
+			screenToDocument(
+				{ x: canvasViewport.width, y: canvasViewport.height },
+				canvasView,
+				viewOptions,
+			),
+		)
+		return {
+			minX: minimum.x,
+			minY: minimum.y,
+			maxX: maximum.x,
+			maxY: maximum.y,
+		}
+	}, [canvasView, canvasViewport, viewOptions])
+	const horizontalRulerTicks = useMemo(
+		() =>
+			designRulerTicks(
+				visibleDocumentBounds.minX,
+				visibleDocumentBounds.maxX,
+				worldScale,
+			),
+		[visibleDocumentBounds, worldScale],
+	)
+	const verticalRulerTicks = useMemo(
+		() =>
+			designRulerTicks(
+				visibleDocumentBounds.minY,
+				visibleDocumentBounds.maxY,
+				worldScale,
+			),
+		[visibleDocumentBounds, worldScale],
+	)
 
 	const cancelCanvasGesture = useCallback((): void => {
 		const gesture = gestureRef.current
@@ -658,7 +762,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 			gesture !== null &&
 			gesture.kind !== "pan" &&
 			gesture.kind !== "direct" &&
-			gesture.kind !== "artboard"
+			gesture.kind !== "artboard" &&
+			gesture.kind !== "guide"
 		)
 			reduceVectorGesture(
 				gesture.state,
@@ -677,6 +782,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setActiveSnapGuides([])
 		setPreviewArtboardDocument(null)
 		previewArtboardDocumentRef.current = null
+		setGuidePreview(null)
 	}, [gesturePolicy])
 
 	const selectTool = useCallback(
@@ -1056,6 +1162,31 @@ export function DesignApplication(props: DesignApplicationProps) {
 		directSelectionSummary: directSelectionDescription(directSelection),
 		selectedSwatch,
 		selectedSwatchId,
+		selectedGuideId,
+		snapSettings,
+		setSnapCategory: (category, enabled) =>
+			setSnapSettings((current) => ({
+				...current,
+				enabled: { ...current.enabled, [category]: enabled },
+			})),
+		setSnapThreshold: (thresholdPixels) =>
+			setSnapSettings((current) => ({
+				...current,
+				thresholdPixels: Math.max(1, Math.min(24, thresholdPixels)),
+			})),
+		selectGuide: setSelectedGuideId,
+		toggleGuideLock: (id) => {
+			const guide = document.guides.find((candidate) => candidate.id === id)
+			if (guide !== undefined)
+				commit(updateDesignGuide(document, id, { locked: !guide.locked }))
+		},
+		deleteGuide: (id) => {
+			const next = deleteDesignGuide(document, id)
+			if (next !== document) {
+				commit(next)
+				setSelectedGuideId((current) => (current === id ? null : current))
+			}
+		},
 		setObjectProperty,
 		setObjectGeometry,
 		setArtboardProperty,
@@ -1397,7 +1528,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 				gesture === null ||
 				gesture.kind === "pan" ||
 				gesture.kind === "direct" ||
-				gesture.kind === "artboard"
+				gesture.kind === "artboard" ||
+				gesture.kind === "guide"
 			)
 				return
 			const transition = reduceVectorGesture(
@@ -1418,10 +1550,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setGesturePreview(transition.preview)
 			if (gesture.kind === "move" || gesture.kind === "transform") {
 				const resolved = resolveDesignGestureObject(
-					activeArtboard,
+					document,
 					gesture,
 					transition.preview,
 					worldScale,
+					snapSettings,
 				)
 				if (resolved !== null) {
 					previewObjectsRef.current = resolved.objects
@@ -1482,6 +1615,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				cancelCanvasGesture()
 				setSelection([])
 				setDirectSelection([])
+				setSelectedGuideId(null)
 				setStatus("Selection cleared.")
 				return
 			}
@@ -1535,6 +1669,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 				} else if (tool === "artboard") {
 					event.preventDefault()
 					deleteArtboard()
+				} else if (selectedGuideId !== null) {
+					event.preventDefault()
+					const next = deleteDesignGuide(document, selectedGuideId)
+					if (next === document) setStatus("Locked guides cannot be deleted.")
+					else {
+						commit(next)
+						setSelectedGuideId(null)
+						setStatus("Guide deleted.")
+					}
 				} else {
 					event.preventDefault()
 					deleteSelection()
@@ -1569,7 +1712,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 		paletteOpen,
 		penPoints.length,
 		selectTool,
+		selectedGuideId,
 		selection,
+		snapSettings,
 		tool,
 		worldScale,
 	])
@@ -1593,7 +1738,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 				event.clipboardData,
 				document,
 				nextId,
-				{ activeArtboard, nativeOnly: true },
+				{
+					activeArtboard,
+					nativeOnly: true,
+				},
 			)
 			if (nativeAddition !== null && nativeAddition.objects.length > 0) {
 				const result = importDesignObjects(document, selection, nativeAddition)
@@ -1638,7 +1786,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 				event.clipboardData,
 				document,
 				nextId,
-				{ activeArtboard },
+				{
+					activeArtboard,
+				},
 			)
 			if (fallbackAddition === null || fallbackAddition.objects.length === 0)
 				return
@@ -1869,6 +2019,27 @@ export function DesignApplication(props: DesignApplicationProps) {
 		previewArtboardDocumentRef.current = preview
 		setPreviewArtboardDocument(preview)
 	}
+	const startGuideGesture = (
+		event: KonvaEventObject<PointerEvent>,
+		guide: DesignGuide,
+	): void => {
+		event.cancelBubble = true
+		setSelectedGuideId(guide.id)
+		if (guide.locked) {
+			setStatus("Guide is locked. Unlock it in Canvas settings to move it.")
+			return
+		}
+		gestureRef.current = {
+			kind: "guide",
+			pointerId: event.evt.pointerId,
+			id: guide.id,
+			axis: guide.axis,
+			original: document,
+			start: pagePoint(event),
+			value: guide.value,
+		}
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
 		if (event.evt.button === 1) {
@@ -1906,7 +2077,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 				displayedObjects,
 				point,
 				worldScale,
-				{ contour: event.evt.altKey },
+				{
+					contour: event.evt.altKey,
+				},
 			)
 			if (target === null) {
 				if (!gestureModifiers(event.evt).additive) {
@@ -1965,6 +2138,18 @@ export function DesignApplication(props: DesignApplicationProps) {
 			previewArtboardGesture(gesture, pagePoint(event))
 			return
 		}
+		if (gesture.kind === "guide") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			const current = pagePoint(event)
+			const value =
+				gesture.value +
+				(gesture.axis === "x"
+					? current.x - gesture.start.x
+					: current.y - gesture.start.y)
+			gestureRef.current = { ...gesture, start: current, value }
+			setGuidePreview({ id: gesture.id, value })
+			return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -1980,10 +2165,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setGesturePreview(transition.preview)
 		if (gesture.kind !== "move" && gesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
-			activeArtboard,
+			document,
 			gesture,
 			transition.preview,
 			worldScale,
+			snapSettings,
 		)
 		if (resolved === null) return
 		previewObjectsRef.current = resolved.objects
@@ -2036,6 +2222,21 @@ export function DesignApplication(props: DesignApplicationProps) {
 				)
 			} else if (gesture.mode !== "create")
 				setStatus(`Selected ${gesture.original.name}.`)
+			return
+		}
+		if (gesture.kind === "guide") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			gestureRef.current = null
+			setGuidePreview(null)
+			commit(
+				updateDesignGuide(gesture.original, gesture.id, {
+					value: gesture.value,
+				}),
+			)
+			setStatus(
+				`Moved ${gesture.axis === "x" ? "vertical" : "horizontal"} guide to ${Number(gesture.value.toFixed(2))} pt.`,
+			)
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
@@ -2144,14 +2345,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const activePointerId =
 				gesture.kind === "pan" ||
 				gesture.kind === "direct" ||
-				gesture.kind === "artboard"
+				gesture.kind === "artboard" ||
+				gesture.kind === "guide"
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
 			if (
 				gesture.kind !== "pan" &&
 				gesture.kind !== "direct" &&
-				gesture.kind !== "artboard"
+				gesture.kind !== "artboard" &&
+				gesture.kind !== "guide"
 			)
 				reduceVectorGesture(
 					gesture.state,
@@ -2166,6 +2369,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setActiveSnapGuides([])
 			setPreviewArtboardDocument(null)
 			previewArtboardDocumentRef.current = null
+			setGuidePreview(null)
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
 				penPointsRef.current = []
 				setPenPoints([])
@@ -2417,6 +2621,43 @@ export function DesignApplication(props: DesignApplicationProps) {
 									? "No objects selected."
 									: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`}
 						</span>
+						<ruler-corner aria-hidden="true" />
+						<ruler-horizontal
+							role="button"
+							tabIndex={0}
+							aria-label="Horizontal ruler; click to create a vertical guide"
+							onPointerDown={(event: PointerEvent) =>
+								createGuideFromRuler("x", event)
+							}
+						>
+							{horizontalRulerTicks.map((tick) => (
+								<i
+									key={tick.value}
+									data-major={tick.major || undefined}
+									style={{ left: canvasView.x + tick.value * worldScale - 20 }}
+								>
+									{tick.major ? Number(tick.value.toFixed(2)) : ""}
+								</i>
+							))}
+						</ruler-horizontal>
+						<ruler-vertical
+							role="button"
+							tabIndex={0}
+							aria-label="Vertical ruler; click to create a horizontal guide"
+							onPointerDown={(event: PointerEvent) =>
+								createGuideFromRuler("y", event)
+							}
+						>
+							{verticalRulerTicks.map((tick) => (
+								<i
+									key={tick.value}
+									data-major={tick.major || undefined}
+									style={{ top: canvasView.y + tick.value * worldScale - 20 }}
+								>
+									{tick.major ? Number(tick.value.toFixed(2)) : ""}
+								</i>
+							))}
+						</ruler-vertical>
 						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
@@ -2589,6 +2830,55 @@ export function DesignApplication(props: DesignApplicationProps) {
 																	? "rect"
 																	: tool,
 														)
+												}}
+											/>
+										)
+									})}
+									{document.guides.map((guide) => {
+										const value =
+											guidePreview !== null && guidePreview.id === guide.id
+												? guidePreview.value
+												: guide.value
+										return (
+											<Line
+												key={guide.id}
+												name={`design-guide ${guide.id}`}
+												points={
+													guide.axis === "x"
+														? [
+																value,
+																visibleDocumentBounds.minY,
+																value,
+																visibleDocumentBounds.maxY,
+															]
+														: [
+																visibleDocumentBounds.minX,
+																value,
+																visibleDocumentBounds.maxX,
+																value,
+															]
+												}
+												stroke={
+													selectedGuideId === guide.id ? "#e17352" : "#36a8e0"
+												}
+												strokeWidth={1 / worldScale}
+												{...(guide.locked
+													? { dash: [4 / worldScale, 3 / worldScale] }
+													: {})}
+												hitStrokeWidth={12 / worldScale}
+												onPointerDown={(event) =>
+													startGuideGesture(event, guide)
+												}
+												onDblClick={(event) => {
+													event.cancelBubble = true
+													commit(
+														updateDesignGuide(document, guide.id, {
+															locked: !guide.locked,
+														}),
+													)
+													setStatus(
+														guide.locked ? "Guide unlocked." : "Guide locked.",
+													)
 												}}
 											/>
 										)

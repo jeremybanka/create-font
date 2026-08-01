@@ -114,6 +114,8 @@ export interface DesignGuide {
 	readonly id: string
 	readonly axis: "x" | "y"
 	readonly value: number
+	/** Locked guides remain visible snap targets but cannot be moved or deleted. */
+	readonly locked?: boolean
 }
 
 export interface DesignArtboardInsets {

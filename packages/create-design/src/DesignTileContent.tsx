@@ -24,6 +24,7 @@ import {
 	DESIGN_ARTBOARD_PRESETS,
 	type DesignArtboardPresetId,
 } from "./artboard-operations.ts"
+import type { DesignSnapCategory } from "./design-canvas.ts"
 import { exactObjectBounds } from "./shape-expansion.ts"
 import { visibleObjectBounds } from "./painted-geometry.ts"
 import type {
@@ -290,6 +291,13 @@ function DesignCanvasTile({
 }: {
 	readonly context: DesignTileContext
 }) {
+	const snapCategories = [
+		["artboards", "Artboard edges and centers"],
+		["guides", "Guides"],
+		["objectBounds", "Object bounds"],
+		["anchors", "Anchors"],
+		["controlPoints", "Control points"],
+	] as const satisfies readonly (readonly [DesignSnapCategory, string])[]
 	return (
 		<design-canvas-tile>
 			<strong>{context.document.title}</strong>
@@ -300,6 +308,69 @@ function DesignCanvasTile({
 			<button type="button" onClick={context.focusCanvas}>
 				Focus artboard
 			</button>
+			<strong>Smart snapping</strong>
+			<snap-options role="group" aria-label="Snap categories">
+				{snapCategories.map(([category, label]) => (
+					<label key={category}>
+						<input
+							type="checkbox"
+							checked={context.snapSettings.enabled[category]}
+							onChange={(event) =>
+								context.setSnapCategory(category, event.currentTarget.checked)
+							}
+						/>
+						<span>{label}</span>
+					</label>
+				))}
+				<label>
+					<span>Threshold</span>
+					<input
+						type="range"
+						min={1}
+						max={24}
+						value={context.snapSettings.thresholdPixels}
+						onInput={(event) =>
+							context.setSnapThreshold(event.currentTarget.valueAsNumber)
+						}
+					/>
+					<output>{context.snapSettings.thresholdPixels} px</output>
+				</label>
+			</snap-options>
+			<strong>Guides</strong>
+			{context.document.guides.length === 0 ? (
+				<span>Click a ruler to create a guide.</span>
+			) : (
+				<guide-list>
+					{context.document.guides.map((guide) => (
+						<guide-row
+							key={guide.id}
+							data-selected={context.selectedGuideId === guide.id || undefined}
+						>
+							<button
+								type="button"
+								onClick={() => context.selectGuide(guide.id)}
+							>
+								{guide.axis.toUpperCase()} {Number(guide.value.toFixed(2))} pt
+							</button>
+							<button
+								type="button"
+								aria-label={guide.locked ? "Unlock guide" : "Lock guide"}
+								onClick={() => context.toggleGuideLock(guide.id)}
+							>
+								{guide.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+							</button>
+							<button
+								type="button"
+								aria-label="Delete guide"
+								disabled={guide.locked}
+								onClick={() => context.deleteGuide(guide.id)}
+							>
+								<svg.Trash />
+							</button>
+						</guide-row>
+					))}
+				</guide-list>
+			)}
 		</design-canvas-tile>
 	)
 }
