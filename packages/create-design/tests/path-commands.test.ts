@@ -74,6 +74,24 @@ const line = (id: string, startX: number, endX: number): DesignContour =>
 		{ id: `${id}:b`, x: endX, y: 0 },
 	])
 
+const rectangle = (
+	id: string,
+	minX: number,
+	minY: number,
+	maxX: number,
+	maxY: number,
+): DesignContour =>
+	contour(
+		id,
+		[
+			{ id: `${id}:0`, x: minX, y: minY },
+			{ id: `${id}:1`, x: maxX, y: minY },
+			{ id: `${id}:2`, x: maxX, y: maxY },
+			{ id: `${id}:3`, x: minX, y: maxY },
+		],
+		true,
+	)
+
 describe("create-design path commands", () => {
 	it("reports precise eligibility without changing the document", () => {
 		const open = path("open", [line("line", 0, 10)])
@@ -617,5 +635,183 @@ describe("create-design path commands", () => {
 		})
 		const undone = reduceDesignHistory(committed, { type: "undo" })
 		expect(undone.present).toEqual(source)
+	})
+
+	it("reports useful Pathfinder ineligibility without mutating mixed selections", () => {
+		const valid = path("valid", [rectangle("valid-box", 0, 0, 10, 10)])
+		const cases = [
+			path("locked", [rectangle("locked-box", 0, 0, 10, 10)], {
+				locked: true,
+			}),
+			path("hidden", [rectangle("hidden-box", 0, 0, 10, 10)], {
+				hidden: true,
+			}),
+			path("stroke-only", [rectangle("stroke-box", 0, 0, 10, 10)], {
+				appearance: {},
+			}),
+			path("open", [line("open-line", 0, 10)]),
+		]
+		for (const invalid of cases) {
+			const source = documentWith(valid, invalid)
+			const eligibility = designPathCommandEligibility(
+				"pathfinder-unite",
+				context(source, [valid.id, invalid.id]),
+			)
+			expect(eligibility.eligible).toBe(false)
+			expect(source.objects).toEqual([valid, invalid])
+		}
+	})
+
+	it("unites transformed, overlapping, and disjoint fills under the topmost appearance", () => {
+		const bottom = path("bottom", [rectangle("bottom-box", 0, 0, 10, 10)], {
+			transform: { ...identity, e: 10 },
+		})
+		const untouched = path("untouched", [
+			rectangle("untouched-box", 60, 0, 70, 10),
+		])
+		const topAppearance: DesignObject["appearance"] = {
+			fill: { swatchId: "ink" },
+			stroke: {
+				swatchId: "ink",
+				width: 2,
+				cap: "round",
+				join: "bevel",
+				miterLimit: 4,
+				dashArray: [],
+				dashOffset: 0,
+			},
+		}
+		const top = path(
+			"top",
+			[rectangle("overlap", 15, 0, 25, 10), rectangle("island", 40, 0, 50, 10)],
+			{ appearance: topAppearance },
+		)
+		const source = documentWith(bottom, untouched, top)
+		let id = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-unite",
+			context(source, [top.id, bottom.id]),
+			{ nextId: () => `pathfinder:${id++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects.map(({ id }) => id)).toEqual([
+			"untouched",
+			"top",
+		])
+		const united = result.document.objects[1]
+		expect(united?.appearance).toEqual(topAppearance)
+		expect(united?.transform).toEqual(identity)
+		expect(result.objectSelection).toEqual(["top"])
+		expect(result.directSelection).toEqual([])
+		if (united?.geometry.kind !== "path") throw new Error("Expected path")
+		expect(united.geometry.contours).toHaveLength(2)
+		expect(nearestDesignObject([united], { x: 12, y: 5 }, 1)?.object.id).toBe(
+			"top",
+		)
+		expect(nearestDesignObject([united], { x: 45, y: 5 }, 1)?.object.id).toBe(
+			"top",
+		)
+	})
+
+	it("subtracts every front fill from the backmost object and preserves holes in canvas and PDF", () => {
+		const back = path("back", [rectangle("back-box", 0, 0, 20, 20)])
+		const front = path("front", [rectangle("front-box", 2, 2, 18, 18)])
+		const frontTwo = path("front-two", [
+			rectangle("front-two-box", 0.5, 0.5, 1.5, 1.5),
+		])
+		const source = documentWith(back, front, frontTwo)
+		let id = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-subtract-front",
+			context(source, [frontTwo.id, back.id, front.id]),
+			{ nextId: () => `subtract:${id++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects.map(({ id }) => id)).toEqual(["back"])
+		const subtracted = result.document.objects[0]
+		if (subtracted?.geometry.kind !== "path") throw new Error("Expected path")
+		expect(subtracted.geometry.contours).toHaveLength(3)
+		expect(subtracted.appearance).toEqual(back.appearance)
+		expect(
+			nearestDesignObject([subtracted], { x: 0.25, y: 0.25 }, 1)?.object.id,
+		).toBe("back")
+		expect(nearestDesignObject([subtracted], { x: 10, y: 10 }, 1, 1)).toBeNull()
+		expect(nearestDesignObject([subtracted], { x: 1, y: 1 }, 1, 0.1)).toBeNull()
+		expect(pdfObjectContentStream(subtracted, source.swatches[0])).toContain(
+			"f*",
+		)
+		expect(result.message).toMatch(/2 front objects/iu)
+
+		const committed = reduceDesignHistory(createDesignHistory(source), {
+			type: "commit",
+			document: result.document,
+		})
+		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
+			source,
+		)
+	})
+
+	it("commits a deterministic empty subtraction when front fills cover the target", () => {
+		const back = path("back", [rectangle("small", 2, 2, 4, 4)])
+		const front = path("front", [rectangle("cover", 0, 0, 10, 10)])
+		const first = applyDesignPathCommand(
+			"pathfinder-subtract-front",
+			context(documentWith(back, front), [back.id, front.id]),
+			{ nextId: () => "unused" },
+		)
+		expect(first.ok).toBe(true)
+		if (!first.ok) return
+		expect(first.document.objects).toEqual([])
+		expect(first.objectSelection).toEqual([])
+		expect(first.message).toMatch(/empty/iu)
+	})
+
+	it("returns deterministic ordinary cubic geometry for overlapping live curves", () => {
+		const first: DesignObject = {
+			...path("first", []),
+			geometry: {
+				kind: "ellipse",
+				centerX: 20,
+				centerY: 20,
+				radiusX: 20,
+				radiusY: 15,
+			},
+		}
+		const second: DesignObject = {
+			...path("second", []),
+			geometry: {
+				kind: "ellipse",
+				centerX: 35,
+				centerY: 20,
+				radiusX: 20,
+				radiusY: 15,
+			},
+		}
+		const source = documentWith(first, second)
+		const run = () => {
+			let id = 0
+			return applyDesignPathCommand(
+				"pathfinder-unite",
+				context(source, [first.id, second.id]),
+				{ nextId: () => `curve:${id++}` },
+			)
+		}
+		const left = run()
+		const right = run()
+		expect(left).toEqual(right)
+		expect(left.ok).toBe(true)
+		if (!left.ok) return
+		const geometry = left.document.objects[0]?.geometry
+		if (geometry?.kind !== "path") throw new Error("Expected ordinary path")
+		expect(
+			geometry.contours.some((output) =>
+				output.points.some(
+					(point) =>
+						point.incoming !== undefined || point.outgoing !== undefined,
+				),
+			),
+		).toBe(true)
 	})
 })

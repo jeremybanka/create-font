@@ -15,6 +15,7 @@ The public boundary uses only immutable `Point`, `Cubic`, `Contour`, and
   `intersectCubicCurves`
 - `signedArea`, `contourOrientation`, and `windingNumber`
 - `normalizeContour` and `normalizeContours`
+- `booleanContours`
 - `offsetContour` and `boundsOfPoints`
 - `expandStroke` and `fitCubicContour`
 
@@ -57,11 +58,20 @@ rendering/geometry criterion, not a formal Hausdorff-distance proof. Cubic
 intersections are line intersections over those flattened spans and inherit the
 configured flattening error.
 
+`booleanContours` resolves each authored contour group independently with
+even-odd fill semantics, then combines those regions with integer Unite or
+Difference topology. This two-stage contract preserves compound holes without
+turning overlap between separate objects into XOR. Coordinates are quantized to
+at least a `1e-6` grid (or the caller's larger normalization tolerance), unsafe
+integer ranges and empty operands fail before returning output, and results use
+canonical nesting-aware winding, contour starts, and ordering. Cubic sampling
+and reconstruction remain explicit caller responsibilities.
+
 `offsetContour` creates a piecewise-linear parallel offset. Positive distance is
 to the authored contour's left. It supports bevel and limited-miter joins, but
 does not run boolean cleanup, remove loops, or reconstruct cubic curves after a
-collapse or self-intersection. Those topology-changing operations belong in a
-future Pathfinder backend behind this package's data boundary.
+collapse or self-intersection. Those topology-changing operations belong at the
+Boolean cleanup boundary behind this package's data boundary.
 
 `expandStroke` converts a polyline centerline to closed fill contours with
 butt, round, or square caps; bevel, limited-miter, or round joins; and SVG/PDF
@@ -114,7 +124,7 @@ Alternatives evaluated:
   normalization and ordering are not the package's explicit contract.
 - **PathKit/Skia Wasm** was rejected for the current scope because of binary
   size, initialization, build/distribution maintenance, and backend-version
-  sensitivity. It remains a candidate for mature boolean operations.
+  sensitivity.
 - **A Rust/Wasm backend using kurbo/lyon-style crates** was deferred. Rust is
   attractive for more demanding Pathfinder and outline workloads, but today it
   would add serialization, Wasm toolchain, and error-translation work without

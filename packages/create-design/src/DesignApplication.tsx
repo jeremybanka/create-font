@@ -1340,6 +1340,34 @@ export function DesignApplication(props: DesignApplicationProps) {
 			...(
 				[
 					[
+						"pathfinder-unite",
+						"Pathfinder: Unite",
+						"Merge selected filled regions using the topmost appearance.",
+					],
+					[
+						"pathfinder-subtract-front",
+						"Pathfinder: Subtract Front",
+						"Subtract selected front fills from the backmost filled object.",
+					],
+				] as const
+			).map(([id, displayName, description]) => {
+				const eligibility = designPathCommandEligibility(id, pathCommandContext)
+				return {
+					id,
+					displayName,
+					category: "Path",
+					description,
+					icon: "HobbyKnifeIcon" as const,
+					disabled: !eligibility.eligible,
+					...(eligibility.eligible
+						? {}
+						: { disabledReason: eligibility.reason }),
+					do: () => executePathCommand(id),
+				}
+			}),
+			...(
+				[
+					[
 						"reverse",
 						"Reverse Path",
 						"Reverse selected contour direction without changing its shape.",
