@@ -1,4 +1,6 @@
-import { evaluateCubic } from "./cubic.ts"
+import { signedArea } from "./contours.ts"
+import { evaluateCubic, flattenCubic } from "./cubic.ts"
+import { selfIntersections } from "./intersections.ts"
 import {
 	assertFinitePoint,
 	GeometryError,
@@ -9,11 +11,18 @@ import type { Contour, Cubic, Point } from "./types.ts"
 import { distance } from "./vector.ts"
 
 export interface CubicFitOptions {
-	/** Maximum source-sample distance from the fitted cubic. */
+	/** Maximum bidirectional distance between the source polyline and fit. */
 	readonly maxError: number
 	/** Vertices at or above this turn remain exact corners. Defaults to 30°. */
 	readonly cornerAngleDegrees?: number
 	readonly tolerances?: Partial<GeometryTolerances>
+}
+
+interface FittedPiece {
+	readonly cubic: Cubic
+	readonly source: readonly Point[]
+	readonly startTangent: Point
+	readonly endTangent: Point
 }
 
 const add = (left: Point, right: Point, scale = 1): Point => ({
@@ -217,38 +226,140 @@ function maximumError(
 	return { errorSquared, index: split }
 }
 
+function segmentDistance(point: Point, start: Point, end: Point): number {
+	const vector = subtract(end, start)
+	const denominator = dot(vector, vector)
+	const parameter =
+		denominator === 0
+			? 0
+			: Math.max(
+					0,
+					Math.min(1, dot(subtract(point, start), vector) / denominator),
+				)
+	return distance(point, add(start, vector, parameter))
+}
+
+function pointToPolyline(
+	point: Point,
+	polyline: readonly Point[],
+	closed: boolean,
+): number {
+	let result = Number.POSITIVE_INFINITY
+	const segmentCount = polyline.length - (closed ? 0 : 1)
+	for (let index = 0; index < segmentCount; index += 1) {
+		const start = polyline[index]
+		const end = polyline[(index + 1) % polyline.length]
+		if (start === undefined || end === undefined) continue
+		result = Math.min(result, segmentDistance(point, start, end))
+	}
+	return result
+}
+
+function directedPolylineWithin(
+	from: readonly Point[],
+	fromClosed: boolean,
+	to: readonly Point[],
+	toClosed: boolean,
+	maximum: number,
+): boolean {
+	if (to.length < 2) return false
+	const segmentCount = from.length - (fromClosed ? 0 : 1)
+	for (let index = 0; index < segmentCount; index += 1) {
+		const start = from[index]
+		const end = from[(index + 1) % from.length]
+		if (start === undefined || end === undefined) continue
+		const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
+		if (
+			pointToPolyline(start, to, toClosed) > maximum ||
+			pointToPolyline(midpoint, to, toClosed) > maximum
+		)
+			return false
+	}
+	return true
+}
+
+function validCubicFit(
+	points: readonly Point[],
+	cubic: Cubic,
+	maxError: number,
+	tolerances: GeometryTolerances,
+): boolean {
+	const validationFlatness = Math.max(tolerances.distance, maxError / 16)
+	const maximumPolylineError = maxError - validationFlatness
+	if (maximumPolylineError <= tolerances.distance) return false
+	const fitted = flattenCubic(cubic, {
+		...tolerances,
+		flatness: validationFlatness,
+	})
+	const topologyFit = flattenCubic(cubic, {
+		...tolerances,
+		flatness: Math.max(tolerances.distance, maxError / 4),
+	})
+	if (
+		selfIntersections(topologyFit, { tolerances }).length > 0 ||
+		!directedPolylineWithin(
+			points,
+			false,
+			fitted,
+			false,
+			maximumPolylineError,
+		) ||
+		!directedPolylineWithin(fitted, false, points, false, maximumPolylineError)
+	)
+		return false
+	return true
+}
+
 function centerTangent(points: readonly Point[], index: number): Point {
 	const previous = points[index - 1] as Point
 	const next = points[index + 1] as Point
 	return unit(subtract(previous, next))
 }
 
+function linePiece(from: Point, to: Point): FittedPiece {
+	return {
+		cubic: lineCubic(from, to),
+		source: [from, to],
+		startTangent: unit(subtract(to, from)),
+		endTangent: unit(subtract(from, to)),
+	}
+}
+
 function fitRange(
 	points: readonly Point[],
 	startTangent: Point,
 	endTangent: Point,
-	maxErrorSquared: number,
+	maxError: number,
+	tolerances: GeometryTolerances,
 	depth = 0,
-): readonly Cubic[] {
+): readonly FittedPiece[] {
 	if (points.length < 2) return []
 	if (points.length === 2)
-		return [lineCubic(points[0] as Point, points[1] as Point)]
+		return [linePiece(points[0] as Point, points[1] as Point)]
 	let parameters = chordParameters(points)
 	let cubic = generateCubic(points, parameters, startTangent, endTangent)
 	let measured = maximumError(points, parameters, cubic)
-	if (measured.errorSquared <= maxErrorSquared) return [cubic]
+	if (
+		measured.errorSquared <= maxError * maxError &&
+		validCubicFit(points, cubic, maxError, tolerances)
+	)
+		return [{ cubic, source: points, startTangent, endTangent }]
 	for (let attempt = 0; attempt < 4; attempt += 1) {
 		const nextParameters = reparameterize(points, parameters, cubic)
 		if (nextParameters === null) break
 		parameters = nextParameters
 		cubic = generateCubic(points, parameters, startTangent, endTangent)
 		measured = maximumError(points, parameters, cubic)
-		if (measured.errorSquared <= maxErrorSquared) return [cubic]
+		if (
+			measured.errorSquared <= maxError * maxError &&
+			validCubicFit(points, cubic, maxError, tolerances)
+		)
+			return [{ cubic, source: points, startTangent, endTangent }]
 	}
 	if (depth >= 24)
 		return points
 			.slice(1)
-			.map((point, index) => lineCubic(points[index] as Point, point))
+			.map((point, index) => linePiece(points[index] as Point, point))
 	const split = Math.max(1, Math.min(points.length - 2, measured.index))
 	const tangent = centerTangent(points, split)
 	return [
@@ -256,14 +367,16 @@ function fitRange(
 			points.slice(0, split + 1),
 			startTangent,
 			tangent,
-			maxErrorSquared,
+			maxError,
+			tolerances,
 			depth + 1,
 		),
 		...fitRange(
 			points.slice(split),
 			negate(tangent),
 			endTangent,
-			maxErrorSquared,
+			maxError,
+			tolerances,
 			depth + 1,
 		),
 	]
@@ -342,12 +455,140 @@ function anchorTangent(
 	return direction === "forward" ? tangent : negate(tangent)
 }
 
+function flattenedPieces(
+	pieces: readonly FittedPiece[],
+	closed: boolean,
+	flatness: number,
+	tolerances: GeometryTolerances,
+): Readonly<{
+	points: readonly Point[]
+	segmentOwners: readonly number[]
+}> {
+	const first = pieces[0]
+	if (first === undefined) return { points: [], segmentOwners: [] }
+	const points: Point[] = [first.cubic.p0]
+	const segmentOwners: number[] = []
+	for (const [pieceIndex, piece] of pieces.entries()) {
+		const flattened = flattenCubic(piece.cubic, {
+			...tolerances,
+			flatness,
+		})
+		for (const point of flattened.slice(1)) {
+			points.push(point)
+			segmentOwners.push(pieceIndex)
+		}
+	}
+	if (
+		closed &&
+		points.length > 1 &&
+		distance(points[0] as Point, points.at(-1) as Point) <= tolerances.distance
+	) {
+		points.pop()
+		const closingOwner = segmentOwners.pop()
+		if (closingOwner !== undefined) segmentOwners.push(closingOwner)
+	}
+	return { points, segmentOwners }
+}
+
+function topologyOffenders(
+	pieces: readonly FittedPiece[],
+	closed: boolean,
+	maxError: number,
+	tolerances: GeometryTolerances,
+): ReadonlySet<number> {
+	const flattened = flattenedPieces(
+		pieces,
+		closed,
+		Math.max(tolerances.distance, maxError / 4),
+		tolerances,
+	)
+	const offenders = new Set<number>()
+	for (const intersection of selfIntersections(flattened.points, {
+		closed,
+		tolerances,
+	})) {
+		const first = flattened.segmentOwners[intersection.firstSegment]
+		const second = flattened.segmentOwners[intersection.secondSegment]
+		if (first !== undefined) offenders.add(first)
+		if (second !== undefined) offenders.add(second)
+	}
+	return offenders
+}
+
+function refinePiece(
+	piece: FittedPiece,
+	maxError: number,
+	tolerances: GeometryTolerances,
+): readonly FittedPiece[] {
+	if (piece.source.length <= 2) return [piece]
+	const split = Math.floor(piece.source.length / 2)
+	const tangent = centerTangent(piece.source, split)
+	return [
+		...fitRange(
+			piece.source.slice(0, split + 1),
+			piece.startTangent,
+			tangent,
+			maxError,
+			tolerances,
+		),
+		...fitRange(
+			piece.source.slice(split),
+			negate(tangent),
+			piece.endTangent,
+			maxError,
+			tolerances,
+		),
+	]
+}
+
+function topologySafePieces(
+	initial: readonly FittedPiece[],
+	source: readonly Point[],
+	closed: boolean,
+	maxError: number,
+	tolerances: GeometryTolerances,
+): readonly FittedPiece[] {
+	if (selfIntersections(source, { closed, tolerances }).length > 0)
+		return initial
+	let pieces = [...initial]
+	const sourceOrientation = closed ? Math.sign(signedArea(source)) : 0
+	for (let attempt = 0; attempt < 24; attempt += 1) {
+		let offenders = topologyOffenders(pieces, closed, maxError, tolerances)
+		if (closed && offenders.size === 0) {
+			const fitted = flattenedPieces(
+				pieces,
+				closed,
+				Math.max(tolerances.distance, maxError / 4),
+				tolerances,
+			)
+			if (Math.sign(signedArea(fitted.points)) !== sourceOrientation)
+				offenders = new Set(pieces.map((_, index) => index))
+		}
+		if (offenders.size === 0) return pieces
+		let refined = false
+		pieces = pieces.flatMap((piece, index) => {
+			if (!offenders.has(index)) return [piece]
+			const replacements = refinePiece(piece, maxError, tolerances)
+			if (
+				replacements.length !== 1 ||
+				replacements[0]?.source.length !== piece.source.length
+			)
+				refined = true
+			return replacements
+		})
+		if (!refined) break
+	}
+	return pieces
+}
+
 /**
  * Reconstructs a compact cubic path from a sampled contour.
  *
- * Fit error is measured in coordinate units from every source sample to its
- * fitted cubic. Vertices at the configured turn angle remain exact anchors;
- * smooth closed contours receive deterministic quarter-length anchors.
+ * Fit error is measured bidirectionally between the source polyline and an
+ * adaptively flattened fitted path. Candidates that overshoot that envelope
+ * or introduce a loop/self-intersection are split and refitted locally.
+ * Vertices at the configured turn angle remain exact anchors; smooth closed
+ * contours receive deterministic quarter-length anchors.
  */
 export function fitCubicContour(
 	contour: Contour,
@@ -392,7 +633,7 @@ export function fitCubicContour(
 	].filter((index, position, values) => values.indexOf(index) === position)
 	anchors.sort((left, right) => left - right)
 	const segmentCount = contour.closed ? anchors.length : anchors.length - 1
-	const result: Cubic[] = []
+	const result: FittedPiece[] = []
 	for (let segment = 0; segment < segmentCount; segment += 1) {
 		const start = anchors[segment]
 		const end = contour.closed
@@ -416,9 +657,16 @@ export function fitCubicContour(
 					corners.has(end),
 					"backward",
 				),
-				options.maxError * options.maxError,
+				options.maxError,
+				tolerances,
 			),
 		)
 	}
-	return result
+	return topologySafePieces(
+		result,
+		points,
+		contour.closed,
+		options.maxError,
+		tolerances,
+	).map((piece) => piece.cubic)
 }

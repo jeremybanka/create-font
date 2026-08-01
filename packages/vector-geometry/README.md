@@ -76,11 +76,15 @@ centerlines fail deterministically, without partial output, until the later
 boolean-cleanup backend can normalize them safely.
 
 `fitCubicContour` reconstructs a compact cubic contour from sampled points.
-`maxError` bounds the distance from every source sample to its fitted cubic at
-the fitter's corresponding parameter; this deterministic sample-to-curve
-construction metric is not a formal Hausdorff bound between continuous paths.
-Turns at or above 30 degrees are exact anchors by default, while smooth closed
-contours receive deterministic quarter-length anchors.
+`maxError` is checked as a bidirectional nearest-segment envelope between the
+source polyline (including segment midpoints) and an adaptively flattened fit;
+the fit's own flattening allowance is reserved inside that budget. This
+deterministic discrete construction metric is not a formal continuous
+Hausdorff proof. A candidate that loops, introduces a self-intersection absent
+from the source, or reverses closed-contour winding is split and refitted
+locally until it is safe. Turns at or above 30 degrees are exact anchors by
+default, while smooth closed contours receive deterministic quarter-length
+anchors.
 
 `normalizeContours` infers ordinary hole nesting with nonzero point
 classification. Touching and partially overlapping contours are kept
