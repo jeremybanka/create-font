@@ -4,7 +4,9 @@ import {
 	boundsOfPoints,
 	expandStroke,
 	GeometryError,
+	selfIntersections,
 	signedArea,
+	windingNumber,
 	type Contour,
 } from "../src/index.ts"
 
@@ -93,6 +95,31 @@ describe("stroke expansion", () => {
 			}),
 		).toThrowError(/align/iu)
 	})
+
+	it.each(["miter", "round", "bevel"] as const)(
+		"unions a retracing $join stroke into one simple filled contour",
+		(join) => {
+			const angle = (175 * Math.PI) / 180
+			const expanded = expandStroke(
+				{
+					closed: false,
+					points: [
+						{ x: -100, y: 0 },
+						{ x: 0, y: 0 },
+						{ x: Math.cos(angle) * 20, y: Math.sin(angle) * 20 },
+					],
+				},
+				{ ...style, width: 10, join },
+			)
+			expect(expanded).toHaveLength(1)
+			expect(
+				selfIntersections(expanded[0]?.points ?? [], { closed: true }),
+			).toEqual([])
+			expect(
+				windingNumber({ x: -10, y: 0 }, expanded[0]?.points ?? []),
+			).toMatchObject({ classification: "inside", winding: 1 })
+		},
+	)
 
 	it("creates one closed contour per open dashed run and honors offsets", () => {
 		const dashed = expandStroke(

@@ -1,8 +1,9 @@
 # @create-art/vector-geometry
 
 Application-neutral, deterministic vector geometry primitives shared by
-create-art design and font tooling. The package has no runtime dependencies and
-does not import UI, document-model, canvas, or PDF types.
+create-art design and font tooling. The package uses the BSL-1.0-licensed,
+exact-pinned `clipper2-ts` integer kernel for topology cleanup, and does not
+import UI, document-model, canvas, or PDF types.
 
 ## Contract
 
@@ -70,12 +71,15 @@ generated smooth samples use miter intersections while authored corners keep
 their requested joins, including after dash splitting. Join intersections are
 accepted only on their intended offset rays; inner trims must also stay within
 both adjacent segments and the miter limit, otherwise expansion emits a bounded
-cusp at the authored vertex. Adjacent points within `distance` are coincident, a wholly
-zero-length centerline produces no contours, and invalid style or non-finite
-coordinate input throws `GeometryError` before output is returned. Simple
-closed strokes produce separate outside and hole contours. Self-crossing
-centerlines fail deterministically, without partial output, until the later
-boolean-cleanup backend can normalize them safely.
+cusp at the authored vertex. Adjacent points within `distance` are coincident,
+a wholly zero-length centerline produces no contours, and invalid style or
+non-finite coordinate input throws `GeometryError` before output is returned.
+Simple closed strokes produce separate outside and hole contours. If locally
+constructed offsets overlap, expansion reruns that centerline through a
+quantized integer offset and filled-union cleanup so the painted sweep is
+simple while genuine counterforms remain holes. Self-crossing centerlines still
+fail deterministically before expansion because their authored fill intent is
+ambiguous.
 
 `fitCubicContour` reconstructs a compact cubic contour from sampled points.
 `maxError` is checked as a bidirectional nearest-segment envelope between the

@@ -5,8 +5,10 @@ import {
 	expandStroke,
 	fitCubicContour,
 	flattenCubic,
+	intersectPolylines,
 	selfIntersections,
 	signedArea,
+	windingNumber,
 	type Contour,
 	type Cubic,
 	type Point,
@@ -398,6 +400,107 @@ describe("design stroke expansion", () => {
 			)
 			expect(maximumError).toBeLessThanOrEqual(STROKE_EXPANSION_MAX_ERROR)
 		}
+	})
+
+	it("unions a heavy acute cubic stroke while preserving its main counterform", () => {
+		const ellipse = ellipseContour({ minX: 0, minY: 0, maxX: 200, maxY: 200 })
+		const contour: DesignContour = {
+			...ellipse,
+			points: ellipse.points.map((point, index) =>
+				index === 0 ? { ...point, outgoing: { x: -150, y: 25 } } : point,
+			),
+		}
+		const flattened = flattenDesignContourForStroke(
+			contour,
+			"miter",
+			STROKE_EXPANSION_TOLERANCES.flatness,
+		)
+		const raw = expandStroke(
+			{ closed: true, points: flattened.points },
+			{
+				width: 40,
+				cap: "butt",
+				join: "miter",
+				miterLimit: 4,
+				vertexJoins: flattened.vertexJoins,
+				tolerances: STROKE_EXPANSION_TOLERANCES,
+			},
+		)
+		expect(raw.map((candidate) => candidate.points.length)).toEqual([232, 206])
+		expect(
+			raw.map((candidate) =>
+				selfIntersections(candidate.points, { closed: true }),
+			),
+		).toEqual([[], []])
+		expect(
+			intersectPolylines(raw[0]?.points ?? [], raw[1]?.points ?? [], {
+				firstClosed: true,
+				secondClosed: true,
+			}),
+		).toEqual([])
+
+		const fitted = raw.map((candidate) =>
+			flattenFit(
+				fitCubicContour(candidate, {
+					maxError: STROKE_EXPANSION_REFIT_ERROR,
+					tolerances: STROKE_EXPANSION_TOLERANCES,
+				}),
+			),
+		)
+		expect(
+			fitted.map((points) => selfIntersections(points, { closed: true })),
+		).toEqual([[], []])
+		expect(
+			intersectPolylines(fitted[0] ?? [], fitted[1] ?? [], {
+				firstClosed: true,
+				secondClosed: true,
+			}),
+		).toEqual([])
+		expect(fitted.map((points) => Math.sign(signedArea(points)))).toEqual([
+			1, -1,
+		])
+		for (const [index, candidate] of raw.entries()) {
+			const fittedContour = {
+				closed: true,
+				points: fitted[index] ?? [],
+			}
+			expect(
+				Math.max(
+					...candidate.points.map((point) =>
+						pointToContour(point, fittedContour),
+					),
+				),
+			).toBeLessThanOrEqual(STROKE_EXPANSION_REFIT_ERROR)
+			expect(
+				Math.max(
+					...fittedContour.points.map((point) =>
+						pointToContour(point, candidate),
+					),
+				),
+			).toBeLessThanOrEqual(STROKE_EXPANSION_REFIT_ERROR)
+		}
+
+		const occupancy = (point: Point) =>
+			fitted.reduce(
+				(sum, candidate) => sum + windingNumber(point, candidate).winding,
+				0,
+			)
+		expect(occupancy({ x: 105, y: -15 })).toBe(1)
+		expect(occupancy({ x: 100, y: 100 })).toBe(0)
+
+		const source: DesignObject = {
+			...strokedPath({ width: 40, join: "miter" }),
+			geometry: { kind: "path", contours: [contour] },
+		}
+		let sequence = 0
+		const result = expandDesignStroke(source, () => `union:${sequence++}`)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const expanded = result.objects[0]
+		if (expanded === undefined)
+			throw new Error("Missing expanded union fixture.")
+		expect(objectFillContainsPoint(expanded, { x: 105, y: -15 })).toBe(true)
+		expect(objectFillContainsPoint(expanded, { x: 100, y: 100 })).toBe(false)
 	})
 
 	it("preserves a differently painted source fill immediately below the outline", () => {

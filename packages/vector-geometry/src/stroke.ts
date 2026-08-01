@@ -1,5 +1,13 @@
-import { normalizeContour, signedArea } from "./contours.ts"
-import { selfIntersections } from "./intersections.ts"
+import {
+	ClipperOffset,
+	EndType,
+	JoinType,
+	type Path64,
+	type Paths64,
+} from "clipper2-ts"
+
+import { normalizeContour, normalizeContours, signedArea } from "./contours.ts"
+import { intersectPolylines, selfIntersections } from "./intersections.ts"
 import {
 	assertFinitePoint,
 	GeometryError,
@@ -473,11 +481,10 @@ function normalizedOutput(
 	}
 }
 
-function expandRun(
+function expandedRunPoints(
 	run: CenterlineRun,
 	options: StrokeExpansionOptions,
-	tolerances: GeometryTolerances,
-): readonly Contour[] {
+): readonly Point[] {
 	const radius = options.width / 2
 	let points = [...run.points]
 	if (!run.closed && options.cap === "square") {
@@ -495,6 +502,16 @@ function expandRun(
 			points[points.length - 1] = add(last, unit(previous, last), radius)
 		}
 	}
+	return points
+}
+
+function expandRunRaw(
+	run: CenterlineRun,
+	options: StrokeExpansionOptions,
+	tolerances: GeometryTolerances,
+): readonly Contour[] {
+	const radius = options.width / 2
+	const points = expandedRunPoints(run, options)
 	const left = sidePoints(
 		points,
 		run.vertexJoins,
@@ -566,6 +583,116 @@ function expandRun(
 			tolerances,
 		),
 	]
+}
+
+function resolveOverlappingRun(
+	run: CenterlineRun,
+	options: StrokeExpansionOptions,
+	tolerances: GeometryTolerances,
+): readonly Contour[] {
+	const clippingGrid = Math.max(
+		tolerances.normalization,
+		Math.min(1e-6, tolerances.flatness / 100),
+	)
+	const scale = 1 / clippingGrid
+	const path: Path64 = run.points.map((point) => {
+		const x = Math.round(point.x * scale)
+		const y = Math.round(point.y * scale)
+		if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y))
+			throw new GeometryError(
+				"INVALID_ARGUMENT",
+				"Stroke coordinates exceed the safe topology-cleanup range.",
+				{ x: point.x, y: point.y },
+			)
+		return { x, y }
+	})
+	const joinType =
+		options.join === "round"
+			? JoinType.Round
+			: options.join === "bevel"
+				? JoinType.Bevel
+				: JoinType.Miter
+	const endType = run.closed
+		? EndType.Joined
+		: options.cap === "round"
+			? EndType.Round
+			: options.cap === "square"
+				? EndType.Square
+				: EndType.Butt
+	const offset = new ClipperOffset(
+		options.miterLimit,
+		tolerances.flatness * scale,
+	)
+	offset.addPath(path, joinType, endType)
+	const solution: Paths64 = []
+	offset.execute((options.width / 2) * scale, solution)
+	const contours = solution.flatMap((resolved) =>
+		resolved.length < 3
+			? []
+			: [
+					{
+						closed: true,
+						points: resolved.map(({ x, y }) => ({
+							x: x / scale,
+							y: y / scale,
+						})),
+					},
+				],
+	)
+	const normalized = normalizeContours(contours, {
+		tolerances: {
+			...tolerances,
+			normalization: Math.max(tolerances.normalization, clippingGrid),
+		},
+	})
+	if (hasExpandedOverlap(normalized, tolerances))
+		throw new GeometryError(
+			"INVALID_ARGUMENT",
+			"Stroke overlap could not be resolved into simple fill contours.",
+		)
+	return normalized
+}
+
+function hasExpandedOverlap(
+	contours: readonly Contour[],
+	tolerances: GeometryTolerances,
+): boolean {
+	if (
+		contours.some(
+			(contour) =>
+				selfIntersections(contour.points, {
+					closed: true,
+					tolerances,
+				}).length > 0,
+		)
+	)
+		return true
+	for (let first = 0; first < contours.length; first += 1)
+		for (let second = first + 1; second < contours.length; second += 1) {
+			const firstContour = contours[first]
+			const secondContour = contours[second]
+			if (
+				firstContour !== undefined &&
+				secondContour !== undefined &&
+				intersectPolylines(firstContour.points, secondContour.points, {
+					firstClosed: true,
+					secondClosed: true,
+					tolerances,
+				}).length > 0
+			)
+				return true
+		}
+	return false
+}
+
+function expandRun(
+	run: CenterlineRun,
+	options: StrokeExpansionOptions,
+	tolerances: GeometryTolerances,
+): readonly Contour[] {
+	const raw = expandRunRaw(run, options, tolerances)
+	if (!hasExpandedOverlap(raw, tolerances)) return raw
+	return resolveOverlappingRun(run, options, tolerances)
 }
 
 /**
