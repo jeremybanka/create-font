@@ -8,9 +8,149 @@ import {
 	createPdfProjectionGraph,
 	exportPdf,
 	pdfContentStream,
+	resolvePdfArtboards,
 } from "../src/pdf.ts"
+import { parsePdfFixture } from "./pdf-parser-fixture.ts"
 
 describe("PDF export", () => {
+	const multiArtboardDocument = () => {
+		const document = createInitialDocument()
+		return {
+			...document,
+			artboards: [
+				{
+					id: "artboard:first",
+					name: "First",
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 200,
+					bleed: { top: 10, right: 20, bottom: 30, left: 40 },
+				},
+				{
+					id: "artboard:second",
+					name: "Second",
+					x: 100,
+					y: 20,
+					width: 300,
+					height: 150,
+				},
+				{
+					id: "artboard:third",
+					name: "Third",
+					x: 400,
+					y: -10,
+					width: 50,
+					height: 60,
+				},
+			],
+		}
+	}
+
+	it("resolves active, selected, ranged, and all scopes in document order", () => {
+		const document = multiArtboardDocument()
+		expect(
+			resolvePdfArtboards(document, { scope: { kind: "all" } }).map(
+				({ id }) => id,
+			),
+		).toEqual(["artboard:first", "artboard:second", "artboard:third"])
+		expect(
+			resolvePdfArtboards(document, {
+				scope: {
+					kind: "selected",
+					artboardIds: ["artboard:third", "artboard:first"],
+				},
+			}).map(({ id }) => id),
+		).toEqual(["artboard:first", "artboard:third"])
+		expect(
+			resolvePdfArtboards(document, {
+				scope: {
+					kind: "range",
+					startArtboardId: "artboard:third",
+					endArtboardId: "artboard:second",
+				},
+			}).map(({ id }) => id),
+		).toEqual(["artboard:second", "artboard:third"])
+		expect(
+			resolvePdfArtboards(document, {
+				scope: { kind: "active", artboardId: "artboard:second" },
+			}),
+		).toEqual([document.artboards[1]])
+	})
+
+	it("serializes ordered clipped pages with shared spanning artwork streams", () => {
+		expect(
+			validatePdf(
+				createPdfProjectionGraph().project(multiArtboardDocument(), {
+					scope: { kind: "all" },
+				}).document,
+			),
+		).toEqual([])
+		const parsed = parsePdfFixture(
+			exportPdf(multiArtboardDocument(), { scope: { kind: "all" } }),
+		)
+		expect(parsed.pages.map(({ mediaBox }) => mediaBox)).toEqual([
+			[0, 0, 100, 200],
+			[0, 0, 300, 150],
+			[0, 0, 50, 60],
+		])
+		expect(parsed.pages[0]?.trimBox).toBeUndefined()
+		expect(parsed.pages[0]?.bleedBox).toBeUndefined()
+		expect(parsed.stream(parsed.pages[0]!.contents[0]!)).toBe(
+			"q\n0 0 100 200 re W n\n1 0 0 -1 0 200 cm",
+		)
+		expect(parsed.stream(parsed.pages[1]!.contents[0]!)).toBe(
+			"q\n0 0 300 150 re W n\n1 0 0 -1 -100 170 cm",
+		)
+		const firstObjects = parsed.pages[0]!.contents.slice(1, -1)
+		expect(firstObjects.length).toBeGreaterThan(0)
+		expect(parsed.pages[1]!.contents.slice(1, -1)).toEqual(firstObjects)
+		expect(parsed.pages[2]!.contents.slice(1, -1)).toEqual(firstObjects)
+		expect(
+			firstObjects.some((reference) => parsed.stream(reference).includes("f*")),
+		).toBe(true)
+	})
+
+	it("expands media and emits trim and bleed boxes when requested", () => {
+		const parsed = parsePdfFixture(
+			exportPdf(multiArtboardDocument(), {
+				includeBleed: true,
+				scope: { kind: "active", artboardId: "artboard:first" },
+			}),
+		)
+		expect(parsed.pages[0]).toMatchObject({
+			mediaBox: [0, 0, 160, 240],
+			trimBox: [40, 30, 140, 230],
+			bleedBox: [0, 0, 160, 240],
+		})
+		expect(parsed.stream(parsed.pages[0]!.contents[0]!)).toBe(
+			"q\n0 0 160 240 re W n\n1 0 0 -1 40 230 cm",
+		)
+	})
+
+	it("reuses unrelated page and object projections after one artboard edit", () => {
+		const graph = createPdfProjectionGraph()
+		const document = multiArtboardDocument()
+		const before = graph.project(document, { scope: { kind: "all" } })
+		const after = graph.project(
+			{
+				...document,
+				artboards: document.artboards.map((artboard) =>
+					artboard.id === "artboard:second"
+						? { ...artboard, width: artboard.width + 1 }
+						: artboard,
+				),
+			},
+			{ scope: { kind: "all" } },
+		)
+		expect(after.pages[0]).toBe(before.pages[0])
+		expect(after.pages[1]).not.toBe(before.pages[1])
+		expect(after.pages[2]).toBe(before.pages[2])
+		expect(after.pages[1]?.objectProjections).toEqual(
+			before.pages[1]?.objectProjections,
+		)
+	})
+
 	it("keeps RGB and CMYK fills as native vector operators", () => {
 		const content = pdfContentStream(createInitialDocument())
 		expect(content).toContain(" rg")

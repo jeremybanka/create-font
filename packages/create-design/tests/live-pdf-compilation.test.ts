@@ -189,4 +189,43 @@ describe("live PDF compilation", () => {
 		expect(serialize).toHaveBeenCalledTimes(1)
 		expect(compiler.getState()).toEqual(first)
 	})
+
+	it("treats an export-scope change as a new generation", async () => {
+		const queue = scheduler()
+		const serialize = vi.fn(() => new Uint8Array([1]))
+		const compiler = createLivePdfCompiler({
+			schedule: queue.schedule,
+			serialize,
+		})
+		const initial = createInitialDocument()
+		const document = {
+			...initial,
+			artboards: [
+				initial.artboards[0]!,
+				{
+					id: "artboard:second",
+					name: "Second",
+					x: 700,
+					y: 0,
+					width: 200,
+					height: 300,
+				},
+			],
+		}
+		compiler.start()
+		compiler.request(document, {
+			scope: { kind: "active", artboardId: initial.artboards[0]!.id },
+		})
+		queue.work[0]?.run()
+		await flush()
+		compiler.request(document, { scope: { kind: "all" } })
+		queue.work[1]?.run()
+		await flush()
+		expect(serialize).toHaveBeenCalledTimes(2)
+		expect(compiler.getState()).toMatchObject({
+			status: "ready",
+			generation: 2,
+			revision: 2,
+		})
+	})
 })
