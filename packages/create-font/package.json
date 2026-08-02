@@ -43,8 +43,10 @@
 	"scripts": {
 		"build": "node ./scripts/build.ts",
 		"dev": "node ./scripts/dev.ts",
-		"test": "node ./scripts/build-development.ts && vp test && vp test --config ./vitest.e2e.config.ts && pnpm run test:node-server",
+		"test": "pnpm run test:unit && pnpm run test:e2e && pnpm run test:node-server",
 		"test:bun-server": "node ./scripts/build-development.ts && bun --conditions=development ./tests/runtime-server-smoke.ts",
+		"test:e2e": "vp test --config ./vitest.e2e.config.ts",
+		"test:unit": "node ./scripts/build-development.ts && vp test",
 		"test:node-server": "node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {

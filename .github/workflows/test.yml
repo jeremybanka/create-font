@@ -14,23 +14,119 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Node:
+  node-artifacts:
+    name: Node · Package artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
+      - name: Restore Rust build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: target
+          key: node-package-artifacts-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
+          restore-keys: node-package-artifacts-${{ runner.os }}-
+      - name: Verify Node test shard ownership
+        run: node scripts/node-test-shards.ts verify
       - run: pnpm run build
-      - run: pnpm run test
-      - run: pnpm --filter @create-font/editor test:coverage
+      - name: Archive package artifacts
+        run: >-
+          tar -czf "$RUNNER_TEMP/node-package-artifacts.tgz"
+          packages/*/dist
+          packages/dprint-plugin-fea/plugin.wasm
+          packages/dprint-plugin-fea/manifest.json
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: node-package-artifacts
+          path: ${{ runner.temp }}/node-package-artifacts.tgz
+          if-no-files-found: error
+          retention-days: 1
 
-  Bun:
+  node-shared-foundations:
+    name: Node · Shared foundations
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - run: pnpm run build
+      - run: node scripts/node-test-shards.ts shared-foundations
+
+  node-feature-syntax-core:
+    name: Node · Feature syntax core
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - name: Restore Rust test cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: target
+          key: node-feature-syntax-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**') }}
+          restore-keys: node-feature-syntax-${{ runner.os }}-
+      - run: node scripts/node-test-shards.ts feature-syntax-core
+
+  node-source-formats:
+    name: Node · Source formats
+    needs: node-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
+      - run: node scripts/node-test-shards.ts source-formats
+
+  node-state-and-editor:
+    name: Node · State & editor
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - run: node scripts/node-test-shards.ts state-and-editor
+
+  node-design-application:
+    name: Node · Design application
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - run: node scripts/node-test-shards.ts design-application
+
+  node-create-font-application:
+    name: Node · Create Font application
+    needs: node-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
+      - run: node scripts/node-test-shards.ts create-font-application
+
+  node-filesystem-integration:
+    name: Node · Filesystem integration
+    needs: node-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
+      - run: node scripts/node-test-shards.ts filesystem-integration
+
+  Bun:
+    needs: node-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
       - run: node packages/create-font/scripts/build-development.ts
       - run: >-
           mise exec bun@1.3.14 --

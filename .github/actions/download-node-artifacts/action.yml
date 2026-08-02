@@ -1,0 +1,17 @@
+name: Download Node package artifacts
+description: Restore the package build produced by the Node artifact job.
+runs:
+  using: composite
+  steps:
+    - name: Download package archive
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: node-package-artifacts
+        path: ${{ runner.temp }}/create-font-node-artifacts
+
+    - name: Extract package archive
+      shell: bash
+      run: >-
+        tar -xzf
+        "$RUNNER_TEMP/create-font-node-artifacts/node-package-artifacts.tgz"
+        -C "$GITHUB_WORKSPACE"
