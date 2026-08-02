@@ -15,6 +15,14 @@ describe(`create-design workspace RPC`, () => {
 		const health = await app.handle(new Request(`http://localhost/api/health`))
 		expect(health.status).toBe(200)
 		expect(await health.json()).toEqual({ ok: true, rpcVersion: 2 })
+		const workspace = await app.handle(
+			new Request(`http://localhost/api/workspace`),
+		)
+		expect(workspace.status).toBe(200)
+		expect(await workspace.json()).toEqual({
+			name: root.split(`/`).at(-1),
+			root,
+		})
 
 		const response = await app.handle(
 			new Request(`http://localhost/api/source/snapshot`),

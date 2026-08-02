@@ -1,4 +1,4 @@
-import { resolve } from "node:path"
+import { basename, resolve } from "node:path"
 
 import { staticPlugin } from "@elysia/static"
 import { createSourceRpc } from "@create-art/source-rpc/server"
@@ -37,7 +37,7 @@ export async function createDesignServerApp(
 				ok: true as const,
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
-			.get(`/workspace`, () => ({ root }))
+			.get(`/workspace`, () => ({ name: basename(root), root }))
 			.use(
 				createSourceRpc({
 					adapter,

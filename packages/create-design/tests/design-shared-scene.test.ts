@@ -136,6 +136,79 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".design-object").length).toBeGreaterThan(0)
 	})
 
+	it("composes source identity, commands, contextual Help, and one live status path", async () => {
+		const session = sourceSession({ displayName: "campaign-poster" })
+		mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+		})
+		const identity = document.querySelector("project-identity")
+		expect(identity?.textContent).toContain("campaign-poster")
+		expect(identity?.textContent).not.toContain("proof of concept")
+		expect(document.querySelector("canvas-meta")).toBeNull()
+		expect(document.querySelector("canvas-hint")).toBeNull()
+
+		const selectionStatus = document.getElementById("design-selection-status")
+		expect(selectionStatus?.hasAttribute("data-screen-reader")).toBe(true)
+		expect(selectionStatus?.hasAttribute("aria-live")).toBe(false)
+		expect(
+			document.querySelector("artboard-wrap")?.getAttribute("aria-describedby"),
+		).toBe("design-selection-status")
+		expect(document.querySelectorAll('footer [role="status"]')).toHaveLength(1)
+		const firstLayer = document.querySelector<HTMLButtonElement>(
+			"design-layers-tile > button",
+		)
+		if (firstLayer === null) throw new Error("A design layer was not found.")
+		act(() => firstLayer.click())
+		expect(
+			document.querySelector('footer [role="status"]')?.textContent,
+		).toContain("1 object selected")
+
+		const command = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Command Palette"]',
+		)
+		if (command === null) throw new Error("Command center was not found.")
+		expect(command.getAttribute("aria-keyshortcuts")).toBe(
+			"Meta+Shift+P Control+Shift+P",
+		)
+		act(() => command.click())
+		const search = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (search === null) throw new Error("Command search was not found.")
+		await act(async () => {
+			search.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => resolve()),
+			)
+		})
+		expect(document.activeElement).toBe(command)
+
+		const help = document.querySelector<HTMLButtonElement>(
+			'button[aria-controls="design-contextual-help"]',
+		)
+		if (help === null) throw new Error("Canvas Help was not found.")
+		expect(help.textContent).toContain("Select help")
+		act(() => help.click())
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"Drag objects to move",
+		)
+		const close = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Close Help"]',
+		)
+		if (close === null) throw new Error("Close Help was not found.")
+		await act(async () => {
+			close.click()
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => resolve()),
+			)
+		})
+		expect(document.querySelector("canvas-help")).toBeNull()
+		expect(document.activeElement).toBe(help)
+	})
+
 	it("enters nested groups on the mounted double-click sequence without moving them", async () => {
 		const base = createInitialDocument()
 		const first = base.objects[0]!
@@ -252,11 +325,9 @@ describe("create-design shared vector scene", () => {
 		}
 		const groupLabel = () =>
 			stage.findOne(".design-group-selection-label")?.text() ?? null
-		const hint = () => document.querySelector("canvas-hint")?.textContent
 
 		await doubleClick(first.id)
 		expect(groupLabel()).toBe("Group 1 · 2 objects")
-		expect(hint()).toContain("Editing group contents")
 		expect(document.querySelector("footer > span")?.textContent).toContain(
 			"Editing inside Group 2",
 		)
@@ -382,7 +453,9 @@ describe("create-design shared vector scene", () => {
 		})
 		expect(session.save).toHaveBeenCalledWith(recovered)
 		expect(
-			document.querySelector<HTMLInputElement>("header input")?.value,
+			document.querySelector<HTMLInputElement>(
+				'design-canvas-tile input[aria-label="Document title"]',
+			)?.value,
 		).toBe("Recovered design")
 		await vi.waitFor(() => {
 			expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
@@ -444,7 +517,9 @@ describe("create-design shared vector scene", () => {
 		expect(session.save).not.toHaveBeenCalled()
 		expect(session.reload).toHaveBeenCalledOnce()
 		expect(
-			document.querySelector<HTMLInputElement>("header input")?.value,
+			document.querySelector<HTMLInputElement>(
+				'design-canvas-tile input[aria-label="Document title"]',
+			)?.value,
 		).toBe("Untitled design")
 	})
 
@@ -498,7 +573,9 @@ describe("create-design shared vector scene", () => {
 			{ initialDocument: session.initialDocument, sourceSession: session },
 			storage,
 		)
-		const title = document.querySelector<HTMLInputElement>("header input")
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
 		if (title === null) throw new Error("Document title was not found.")
 		act(() => {
 			title.value = "Pending title"
@@ -523,7 +600,9 @@ describe("create-design shared vector scene", () => {
 			initialDocument: session.initialDocument,
 			sourceSession: session,
 		})
-		const title = document.querySelector<HTMLInputElement>("header input")
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
 		if (title === null) throw new Error("Document title was not found.")
 		act(() => {
 			title.value = "Retained title"
@@ -1117,7 +1196,9 @@ describe("create-design shared vector scene", () => {
 				'design-layers-tile > button[aria-pressed="true"]',
 			),
 		).toHaveLength(0)
-		const title = document.querySelector<HTMLInputElement>("header input")
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
 		if (title === null) throw new Error("Document title field was not found.")
 		title.focus()
 		title.setSelectionRange(0, title.value.length)

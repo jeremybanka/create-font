@@ -36,7 +36,11 @@ import {
 	Stage,
 	Text,
 } from "@create-font/preact-konva"
-import { DownloadIcon } from "@radix-ui/react-icons"
+import {
+	Cross2Icon,
+	MagnifyingGlassIcon,
+	QuestionMarkCircledIcon,
+} from "@radix-ui/react-icons"
 import {
 	useCallback,
 	useEffect,
@@ -206,8 +210,15 @@ import type {
 } from "./types.ts"
 
 const svg = {
-	DownloadIcon,
+	Cross2Icon,
+	MagnifyingGlassIcon,
+	QuestionMarkCircledIcon,
 }
+
+const MAC_LIKE =
+	typeof navigator !== "undefined" &&
+	/Mac|iPhone|iPad|iPod/i.test(navigator.platform)
+const MOD_KEY_LABEL = MAC_LIKE ? "⌘" : "Ctrl"
 
 /* eslint-disable lasertag/render-tag-with-own-name -- This renderer guard must return the shared Konva Stage rather than a DOM custom element. */
 function MeasuredStage({
@@ -456,6 +467,16 @@ function persistenceLabel(state: DesignPersistenceState): string {
 	}
 }
 
+function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
+	if (tool === "pen")
+		return "Click for corners · Drag for curves · Click start to close · Enter finishes open · Escape cancels"
+	if (tool === "rect" || tool === "ellipse")
+		return "Drag to draw · Shift constrains · Alt draws from center"
+	if (editingGroup)
+		return "Editing group contents · Double-click nested groups · Escape exits group"
+	return "Drag objects to move · Double-click a group to edit contents · F shows transform handles"
+}
+
 export type DesignApplicationProps = Readonly<{
 	children?: ComponentChildren
 	initialDocument?: DesignDocument
@@ -525,11 +546,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 			"",
 	)
 	const [paletteOpen, setPaletteOpen] = useState(false)
+	const [helpOpen, setHelpOpen] = useState(false)
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<DesignTileKind> | null>(null)
 	const [status, setStatus] = useState(
-		"Ready — draw a shape or press ⇧⌘P for commands.",
+		`Ready — draw a shape or press ${MOD_KEY_LABEL}+Shift+P for commands.`,
 	)
+	const [announcement, setAnnouncement] = useState(() =>
+		persistenceLabel(persistence),
+	)
+	useEffect(() => setAnnouncement(status), [status])
 	const [previewObjects, setPreviewObjects] = useState<readonly DesignObject[]>(
 		[],
 	)
@@ -553,6 +579,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		value: number
 	}> | null>(null)
 	const artboardWrapRef = useRef<HTMLElement>(null)
+	const commandCenterRef = useRef<HTMLButtonElement>(null)
+	const helpButtonRef = useRef<HTMLButtonElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
 	const groupClickCandidateRef = useRef<GroupClickCandidate | null>(null)
 	const groupPointerPressRef = useRef<GroupPointerPress | null>(null)
@@ -562,6 +590,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const previewArtboardDocumentRef = useRef<DesignDocument | null>(null)
 	const documentRef = useRef(document)
 	const persistenceRef = useRef(persistence)
+	const announcedPersistenceStatusRef = useRef(persistence.status)
 	const serializedDocumentRef = useRef(JSON.stringify(document))
 	const preserveInvalidStorageRef = useRef(initialLoad.preserveInvalidStorage)
 	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
@@ -569,9 +598,32 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const tileCommandSequence = useRef(0)
 	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
 	useEffect(() => () => pdfDownloadManager.dispose(), [pdfDownloadManager])
+	useEffect(() => {
+		if (announcedPersistenceStatusRef.current === persistence.status) return
+		announcedPersistenceStatusRef.current = persistence.status
+		if (
+			persistence.status === "saved" ||
+			persistence.status === "conflicted" ||
+			persistence.status === "invalid-external-source" ||
+			persistence.status === "recoverable-draft"
+		)
+			setAnnouncement(persistenceLabel(persistence))
+	}, [persistence])
 	const openTile = useCallback((kind: DesignTileKind): void => {
 		tileCommandSequence.current += 1
 		setTileCommandRequest({ id: tileCommandSequence.current, kind })
+	}, [])
+	const openCommandPalette = useCallback((): void => {
+		setHelpOpen(false)
+		setPaletteOpen(true)
+	}, [])
+	const closeCommandPalette = useCallback((): void => {
+		setPaletteOpen(false)
+		requestAnimationFrame(() => commandCenterRef.current?.focus())
+	}, [])
+	const closeHelp = useCallback((): void => {
+		setHelpOpen(false)
+		requestAnimationFrame(() => helpButtonRef.current?.focus())
 	}, [])
 	const nextId = useCallback(() => {
 		sequence.current += 1
@@ -599,6 +651,21 @@ export function DesignApplication(props: DesignApplicationProps) {
 				? "No objects selected."
 				: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`
 			: `${selectedGroup.name}, group with ${selectedGroup.objectIds.length} object${selectedGroup.objectIds.length === 1 ? "" : "s"}, selected${selectedLockedObject === undefined ? "" : "; contains locked artwork"}.`
+	const selectionAnnouncement =
+		tool === "direct"
+			? directSelectionDescription(directSelection)
+			: selectionDescription
+	const announcedSelectionRef = useRef(selectionAnnouncement)
+	const selectionStatusRef = useRef(status)
+	useEffect(() => {
+		if (announcedSelectionRef.current === selectionAnnouncement) return
+		announcedSelectionRef.current = selectionAnnouncement
+		if (selectionStatusRef.current !== status) return
+		setAnnouncement(selectionAnnouncement)
+	}, [selectionAnnouncement, status])
+	useEffect(() => {
+		selectionStatusRef.current = status
+	})
 	useEffect(() => {
 		setGroupScope((current) => {
 			const validIds = new Set(document.groups?.map(({ id }) => id) ?? [])
@@ -1499,6 +1566,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setObjectProperty,
 		setObjectGeometry,
 		setArtboardProperty,
+		setDocumentTitle: (title) => commit({ ...document, title }),
 		setMoveArtworkWithArtboard,
 		setAppearanceTarget: (target) => {
 			setAppearanceTarget(target)
@@ -2064,10 +2132,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 				)
 			) {
 				event.preventDefault()
-				setPaletteOpen(true)
+				openCommandPalette()
 				return
 			}
 			if (paletteOpen || editableTarget(event.target)) return
+			if (helpOpen && event.key === "Escape") {
+				event.preventDefault()
+				closeHelp()
+				return
+			}
 			const mod = event.metaKey || event.ctrlKey
 			if (mod && event.key.toLowerCase() === "a") {
 				event.preventDefault()
@@ -2235,12 +2308,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 		commit,
 		deleteArtboard,
 		cancelCanvasGesture,
+		closeHelp,
 		directSelection,
 		document,
 		exportDocument,
 		finishPen,
 		gesturePolicy,
+		helpOpen,
 		navigateDesignHistory,
+		openCommandPalette,
 		paletteOpen,
 		penPoints.length,
 		selectTool,
@@ -3202,28 +3278,37 @@ export function DesignApplication(props: DesignApplicationProps) {
 						<path d="M4 4h20v20H4z" />
 						<circle cx="18" cy="10" r="5" />
 					</svg>
-					<strong>create-design</strong>
-					<span>PDF proof of concept</span>
+					<project-identity>
+						<strong title={sourceSession?.displayName ?? "Untitled design"}>
+							{sourceSession?.displayName ?? "Untitled design"}
+						</strong>
+						<span>create-design</span>
+					</project-identity>
 				</brand-lockup>
-				<label>
-					<span data-screen-reader>Document title</span>
-					<input
-						value={document.title}
-						onInput={(event) =>
-							commit({ ...document, title: event.currentTarget.value })
-						}
-					/>
-				</label>
+				<command-center>
+					<button
+						ref={commandCenterRef}
+						type="button"
+						aria-label="Open Command Palette"
+						aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+						onClick={openCommandPalette}
+					>
+						<svg.MagnifyingGlassIcon aria-hidden="true" />
+						<strong>Commands</strong>
+						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
+					</button>
+				</command-center>
 				<header-actions>
 					<button
 						type="button"
-						data-command-trigger
-						onClick={() => setPaletteOpen(true)}
+						data-export
+						aria-label="Open Export options"
+						onClick={() => {
+							openTile("export")
+							setStatus("Opened Export options.")
+						}}
 					>
-						Commands <kbd>⇧⌘P</kbd>
-					</button>
-					<button type="button" data-export onClick={() => exportDocument()}>
-						<svg.DownloadIcon aria-hidden="true" /> Export PDF
+						Export…
 					</button>
 				</header-actions>
 			</header>
@@ -3282,13 +3367,6 @@ export function DesignApplication(props: DesignApplicationProps) {
 					</persistence-alert>
 				)}
 				<design-canvas>
-					<canvas-meta>
-						<span>{DESIGN_TOOLS[tool].label}</span>
-						<span>
-							{activeArtboard.width} × {activeArtboard.height} pt ·{" "}
-							{Math.round(canvasView.zoom * 100)}%
-						</span>
-					</canvas-meta>
 					<artboard-wrap
 						ref={artboardWrapRef}
 						role="application"
@@ -3296,11 +3374,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 						aria-describedby="design-selection-status"
 						tabIndex={-1}
 					>
-						<span
-							id="design-selection-status"
-							data-screen-reader
-							aria-live="polite"
-						>
+						<span id="design-selection-status" data-screen-reader>
 							{tool === "direct"
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
@@ -3698,15 +3772,38 @@ export function DesignApplication(props: DesignApplicationProps) {
 							</Layer>
 						</div.Stage>
 					</artboard-wrap>
-					<canvas-hint>
-						{tool === "pen"
-							? "Click for corners · Drag for curves · Click start to close · Enter finishes open · Esc cancels"
-							: tool === "rect" || tool === "ellipse"
-								? "Drag to draw · Shift constrains · Alt draws from center"
-								: currentGroupScope === null
-									? "Drag objects to move · Double-click a group to edit contents · F shows transform handles"
-									: "Editing group contents · Double-click nested groups · Escape exits group"}
-					</canvas-hint>
+					<canvas-help-controls>
+						<button
+							ref={helpButtonRef}
+							type="button"
+							aria-controls="design-contextual-help"
+							aria-expanded={helpOpen}
+							aria-label={`Help for the ${DESIGN_TOOLS[tool].label} tool`}
+							onClick={() => setHelpOpen((open) => !open)}
+						>
+							<svg.QuestionMarkCircledIcon aria-hidden="true" />
+							<span>{DESIGN_TOOLS[tool].label} help</span>
+						</button>
+						{helpOpen ? (
+							<canvas-help
+								id="design-contextual-help"
+								role="dialog"
+								aria-label="Canvas help"
+							>
+								<canvas-help-heading>
+									<strong>{DESIGN_TOOLS[tool].label} tool</strong>
+									<button
+										type="button"
+										aria-label="Close Help"
+										onClick={closeHelp}
+									>
+										<svg.Cross2Icon aria-hidden="true" />
+									</button>
+								</canvas-help-heading>
+								<p>{contextualHelp(tool, currentGroupScope !== null)}</p>
+							</canvas-help>
+						) : null}
+					</canvas-help-controls>
 				</design-canvas>
 				<canvas-rulers>
 					<ruler-corner aria-hidden="true" />
@@ -3758,11 +3855,25 @@ export function DesignApplication(props: DesignApplicationProps) {
 			</main>
 
 			<footer>
-				<span>{status}</span>
-				<span role="status" aria-live="polite" aria-atomic="true">
+				<span
+					data-screen-reader
+					role="status"
+					aria-live="polite"
+					aria-atomic="true"
+				>
+					{announcement}
+				</span>
+				<span data-footer-status title={status}>
+					{status}
+				</span>
+				<span data-footer-persistence title={persistenceLabel(persistence)}>
 					{persistenceLabel(persistence)}
 				</span>
-				<span>
+				<span data-footer-canvas>
+					{activeArtboard.width} × {activeArtboard.height} pt ·{" "}
+					{Math.round(canvasView.zoom * 100)}%
+				</span>
+				<span data-footer-counts>
 					{document.objects.length} objects · {document.swatches.length}{" "}
 					swatches
 				</span>
@@ -3771,10 +3882,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 			{paletteOpen ? (
 				<CommandPalette
 					commands={commands}
-					onCancel={() => setPaletteOpen(false)}
+					onCancel={closeCommandPalette}
 					onExecute={(command) => {
 						command.do()
-						setPaletteOpen(false)
+						closeCommandPalette()
 					}}
 					onAssign={() => {
 						setStatus("Hotbar assignment is reserved for the full workspace.")

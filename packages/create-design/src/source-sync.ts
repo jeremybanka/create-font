@@ -39,6 +39,7 @@ export type DesignExternalSourceUpdate =
 	  }>
 
 export interface DesignSourceSession {
+	readonly displayName?: string
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
 	readonly versionControl?: DesignVersionControlSession
@@ -155,7 +156,19 @@ function websocketUrl(): string {
 
 export async function connectDesignSourceSession(): Promise<DesignSourceSession> {
 	const client = createSourceRpcClient()
-	let state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+	const [snapshot, workspace] = await Promise.all([
+		client.readSnapshot(),
+		fetch(`/api/workspace`)
+			.then(async (response) => {
+				if (!response.ok) return undefined
+				const value = (await response.json()) as { name?: unknown }
+				return typeof value.name === `string` && value.name.trim().length > 0
+					? value.name
+					: undefined
+			})
+			.catch(() => undefined),
+	])
+	let state = sourceSyncStateFromSnapshot(snapshot)
 	const initial = assemble(state)
 	if (!initial.ok)
 		throw new Error(
@@ -221,6 +234,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	socket.addEventListener(`close`, () => status(`recovering`))
 
 	return {
+		...(workspace === undefined ? {} : { displayName: workspace }),
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
 		versionControl: {
