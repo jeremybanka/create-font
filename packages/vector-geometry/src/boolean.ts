@@ -15,11 +15,11 @@ import {
 } from "./tolerances.ts"
 import type { Contour } from "./types.ts"
 
-export type BooleanOperation = "difference" | "union"
+export type BooleanOperation = "difference" | "intersection" | "union" | "xor"
 
 export interface BooleanContoursOptions {
 	readonly operation: BooleanOperation
-	/** Clip filled regions used by difference. Ignored by union. */
+	/** Clip filled regions used by difference. Ignored by other operations. */
 	readonly clips?: readonly (readonly Contour[])[]
 	readonly tolerances?: Partial<GeometryTolerances>
 }
@@ -106,23 +106,45 @@ export function booleanContours(
 			)
 		return resolved
 	}
-	const subjectPaths = subjects.flatMap((region, index) =>
+	const subjectRegions = subjects.map((region, index) =>
 		resolveRegion(region, `subjects[${index}]`),
 	)
-	const clipPaths = (options.clips ?? []).flatMap((region, index) =>
-		resolveRegion(region, `clips[${index}]`),
-	)
+	const clipPaths =
+		options.operation === "difference"
+			? (options.clips ?? []).flatMap((region, index) =>
+					resolveRegion(region, `clips[${index}]`),
+				)
+			: []
 	if (options.operation === "difference" && clipPaths.length === 0)
 		throw new GeometryError(
 			"INVALID_ARGUMENT",
 			"Difference needs at least one clip contour.",
 		)
-	const solution = booleanOp(
-		options.operation === "union" ? ClipType.Union : ClipType.Difference,
-		subjectPaths,
-		options.operation === "union" ? null : clipPaths,
-		FillRule.NonZero,
-	)
+	const subjectPaths = subjectRegions.flat()
+	const solution =
+		options.operation === "intersection" || options.operation === "xor"
+			? subjectRegions
+					.slice(1)
+					.reduce(
+						(current, region) =>
+							options.operation === "intersection" && current.length === 0
+								? current
+								: booleanOp(
+										options.operation === "intersection"
+											? ClipType.Intersection
+											: ClipType.Xor,
+										current,
+										region,
+										FillRule.NonZero,
+									),
+						subjectRegions[0] ?? [],
+					)
+			: booleanOp(
+					options.operation === "union" ? ClipType.Union : ClipType.Difference,
+					subjectPaths,
+					options.operation === "union" ? null : clipPaths,
+					FillRule.NonZero,
+				)
 	const contours = solution.flatMap((path) =>
 		path.length < 3
 			? []

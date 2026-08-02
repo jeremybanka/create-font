@@ -1364,6 +1364,16 @@ export function DesignApplication(props: DesignApplicationProps) {
 						"Pathfinder: Subtract Front",
 						"Subtract selected front fills from the backmost filled object.",
 					],
+					[
+						"pathfinder-intersect",
+						"Pathfinder: Intersect",
+						"Keep only regions shared by every selected filled object.",
+					],
+					[
+						"pathfinder-exclude",
+						"Pathfinder: Exclude",
+						"Keep regions covered by an odd number of selected filled objects.",
+					],
 				] as const
 			).map(([id, displayName, description]) => {
 				const eligibility = designPathCommandEligibility(id, pathCommandContext)

@@ -59,8 +59,10 @@ intersections are line intersections over those flattened spans and inherit the
 configured flattening error.
 
 `booleanContours` resolves each authored contour group independently with
-even-odd fill semantics, then combines those regions with integer Unite or
-Difference topology. This two-stage contract preserves compound holes without
+even-odd fill semantics, then combines those regions with integer Unite,
+Difference, Intersection, or pairwise Xor topology. Intersection retains
+coverage shared by every region, while Xor retains odd object coverage. This
+two-stage contract preserves compound holes without
 turning overlap between separate objects into XOR. Coordinates are quantized to
 at least a `1e-6` grid (or the caller's larger normalization tolerance), unsafe
 integer ranges and empty operands fail before returning output, and results use

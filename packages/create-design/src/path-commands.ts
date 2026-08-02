@@ -35,6 +35,8 @@ export type DesignPathCommand =
 	| "join"
 	| "make-compound"
 	| "normalize-winding"
+	| "pathfinder-exclude"
+	| "pathfinder-intersect"
 	| "pathfinder-subtract-front"
 	| "pathfinder-unite"
 	| "release-compound"
@@ -250,7 +252,12 @@ export function designPathCommandEligibility(
 	command: DesignPathCommand,
 	context: DesignPathCommandContext,
 ): DesignPathCommandEligibility {
-	if (command === "pathfinder-unite" || command === "pathfinder-subtract-front")
+	if (
+		command === "pathfinder-unite" ||
+		command === "pathfinder-subtract-front" ||
+		command === "pathfinder-intersect" ||
+		command === "pathfinder-exclude"
+	)
 		return pathfinderEligibility(context)
 	if (command === "make-compound") return compoundEligibility(context)
 	if (command === "release-compound") return releaseEligibility(context)
@@ -1133,21 +1140,55 @@ function pathfinderContour(
 	}
 }
 
+type DesignPathfinderCommand = Extract<
+	DesignPathCommand,
+	| "pathfinder-exclude"
+	| "pathfinder-intersect"
+	| "pathfinder-subtract-front"
+	| "pathfinder-unite"
+>
+
+function pathfinderLabel(command: DesignPathfinderCommand): string {
+	switch (command) {
+		case "pathfinder-unite":
+			return "Unite"
+		case "pathfinder-subtract-front":
+			return "Subtract Front"
+		case "pathfinder-intersect":
+			return "Intersect"
+		case "pathfinder-exclude":
+			return "Exclude"
+	}
+}
+
+function pathfinderSuccessMessage(
+	command: DesignPathfinderCommand,
+	objectCount: number,
+): string {
+	switch (command) {
+		case "pathfinder-unite":
+			return `United ${objectCount} filled objects.`
+		case "pathfinder-subtract-front":
+			return `Subtracted ${objectCount - 1} front object${objectCount === 2 ? "" : "s"}.`
+		case "pathfinder-intersect":
+			return `Intersected ${objectCount} filled objects.`
+		case "pathfinder-exclude":
+			return `Excluded even coverage across ${objectCount} filled objects.`
+	}
+}
+
 function applyPathfinder(
-	command: Extract<
-		DesignPathCommand,
-		"pathfinder-subtract-front" | "pathfinder-unite"
-	>,
+	command: DesignPathfinderCommand,
 	context: DesignPathCommandContext,
 	tolerance: number,
 	nextId: () => string,
 ): DesignPathCommandResult {
 	const selectedIds = new Set(context.objectSelection)
-	const entries = context.document.objects.flatMap((object, index) =>
-		selectedIds.has(object.id) ? [{ object, index }] : [],
+	const entries = context.document.objects.filter((object) =>
+		selectedIds.has(object.id),
 	)
-	const unite = command === "pathfinder-unite"
-	const survivor = unite ? entries.at(-1) : entries[0]
+	const subtract = command === "pathfinder-subtract-front"
+	const survivor = subtract ? entries[0] : entries.at(-1)
 	if (survivor === undefined)
 		return {
 			ok: false,
@@ -1155,23 +1196,32 @@ function applyPathfinder(
 		}
 	const inputFlatness = tolerance / 4
 	const fittingTolerance = tolerance - inputFlatness
-	const regions = entries.map(({ object }) =>
+	const regions = entries.map((object) =>
 		projectDesignObjectContours(object).map((contour) => ({
 			closed: true as const,
 			points: flattenDesignContour(contour, inputFlatness),
 		})),
 	)
 	try {
-		const resolved = unite
-			? booleanContours(regions, {
-					operation: "union",
-					tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
-				})
-			: booleanContours([regions[0] ?? []], {
-					operation: "difference",
-					clips: regions.slice(1),
-					tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
-				})
+		let resolved: ReturnType<typeof booleanContours>
+		if (subtract) {
+			resolved = booleanContours([regions[0] ?? []], {
+				operation: "difference",
+				clips: regions.slice(1),
+				tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+			})
+		} else {
+			const operation =
+				command === "pathfinder-unite"
+					? "union"
+					: command === "pathfinder-intersect"
+						? "intersection"
+						: "xor"
+			resolved = booleanContours(regions, {
+				operation,
+				tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+			})
+		}
 		const contours = resolved.map((contour) =>
 			pathfinderContour(
 				{ closed: true, points: contour.points },
@@ -1183,10 +1233,8 @@ function applyPathfinder(
 			contours.length === 0
 				? undefined
 				: {
-						...survivor.object,
-						name: unite
-							? `Unite ${survivor.object.name}`
-							: `Subtract ${survivor.object.name}`,
+						...survivor,
+						name: `${pathfinderLabel(command)} ${survivor.name}`,
 						geometry: { kind: "path", contours },
 						transform: IDENTITY_DESIGN_TRANSFORM,
 					}
@@ -1195,7 +1243,7 @@ function applyPathfinder(
 			document: {
 				...context.document,
 				objects: context.document.objects.flatMap((object) =>
-					object.id === survivor.object.id
+					object.id === survivor.id
 						? result === undefined
 							? []
 							: [result]
@@ -1208,10 +1256,8 @@ function applyPathfinder(
 			directSelection: [],
 			message:
 				result === undefined
-					? "Subtract Front produced an empty filled region."
-					: unite
-						? `United ${entries.length} filled objects.`
-						: `Subtracted ${entries.length - 1} front object${entries.length === 2 ? "" : "s"}.`,
+					? `${pathfinderLabel(command)} produced an empty filled region.`
+					: pathfinderSuccessMessage(command, entries.length),
 		}
 	} catch (error) {
 		return {
@@ -1253,7 +1299,12 @@ export function applyDesignPathCommand(
 			error: "Pathfinder tolerance must be finite and positive.",
 		}
 	const nextId = options.nextId ?? (() => crypto.randomUUID())
-	if (command === "pathfinder-unite" || command === "pathfinder-subtract-front")
+	if (
+		command === "pathfinder-unite" ||
+		command === "pathfinder-subtract-front" ||
+		command === "pathfinder-intersect" ||
+		command === "pathfinder-exclude"
+	)
 		return applyPathfinder(command, context, pathfinderTolerance, nextId)
 	if (command === "join")
 		return joinSelectedEndpoints(context, cleanupTolerance)

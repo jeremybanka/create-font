@@ -10,7 +10,8 @@ import {
 	reduceDesignHistory,
 } from "../src/design-history.ts"
 import { nearestDesignObject } from "../src/design-canvas.ts"
-import { ellipseContour } from "../src/geometry.ts"
+import { DESIGN_VECTOR_MIME, writeDesignClipboard } from "../src/clipboard.ts"
+import { ellipseContour, objectBounds } from "../src/geometry.ts"
 import {
 	applyDesignPathCommand,
 	cleanupDesignContour,
@@ -814,4 +815,163 @@ describe("create-design path commands", () => {
 			),
 		).toBe(true)
 	})
+
+	it("intersects transformed live curves into deterministic ordinary clipboard and PDF geometry", () => {
+		const first: DesignObject = {
+			...path("first", []),
+			geometry: {
+				kind: "ellipse",
+				centerX: 20,
+				centerY: 20,
+				radiusX: 20,
+				radiusY: 15,
+			},
+			transform: { ...identity, e: 5 },
+		}
+		const topAppearance: DesignObject["appearance"] = {
+			fill: { swatchId: "ink" },
+		}
+		const second: DesignObject = {
+			...path("second", []),
+			geometry: {
+				kind: "ellipse",
+				centerX: 35,
+				centerY: 20,
+				radiusX: 20,
+				radiusY: 15,
+			},
+			appearance: topAppearance,
+		}
+		const source = documentWith(first, second)
+		const run = () => {
+			let id = 0
+			return applyDesignPathCommand(
+				"pathfinder-intersect",
+				context(source, [second.id, first.id]),
+				{ nextId: () => `intersect:${id++}` },
+			)
+		}
+		const result = run()
+		expect(result).toEqual(run())
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.objectSelection).toEqual(["second"])
+		expect(result.directSelection).toEqual([])
+		const intersected = result.document.objects[0]
+		if (intersected?.geometry.kind !== "path")
+			throw new Error("Expected ordinary path")
+		expect(intersected.transform).toEqual(identity)
+		expect(intersected.appearance).toEqual(topAppearance)
+		expect(intersected.geometry.contours).toHaveLength(1)
+		expect(
+			intersected.geometry.contours[0]?.points.some(
+				(point) => point.incoming !== undefined || point.outgoing !== undefined,
+			),
+		).toBe(true)
+		expect(objectBounds(intersected)).toMatchObject({ minX: 15, maxX: 45 })
+		expect(
+			nearestDesignObject([intersected], { x: 30, y: 20 }, 1)?.object.id,
+		).toBe("second")
+		expect(pdfObjectContentStream(intersected, source.swatches[0])).toContain(
+			"f*",
+		)
+		const clipboard = new Map<string, string>()
+		expect(
+			writeDesignClipboard(
+				{ setData: (format, value) => clipboard.set(format, value) },
+				result.document,
+				result.objectSelection,
+			),
+		).toBe(1)
+		expect(
+			JSON.parse(clipboard.get(DESIGN_VECTOR_MIME) ?? "null").objects[0]
+				.geometry.kind,
+		).toBe("path")
+	})
+
+	it("excludes even coverage across nested, holed, disjoint, and transformed fills", () => {
+		const outer = rectangle("outer", 0, 0, 20, 20)
+		const hole = rectangle("hole", 5, 5, 15, 15)
+		const donut = path("donut", [outer, hole])
+		const fillHole = path("fill-hole", [rectangle("fill", 5, 5, 15, 15)])
+		const topAppearance: DesignObject["appearance"] = {
+			fill: { swatchId: "ink" },
+			stroke: {
+				swatchId: "ink",
+				width: 1,
+				cap: "butt",
+				join: "miter",
+				miterLimit: 4,
+				dashArray: [],
+				dashOffset: 0,
+			},
+		}
+		const island = path("island", [rectangle("island-box", 0, 0, 5, 5)], {
+			transform: { ...identity, e: 30 },
+			appearance: topAppearance,
+		})
+		const source = documentWith(donut, fillHole, island)
+		let id = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-exclude",
+			context(source, [island.id, donut.id, fillHole.id]),
+			{ nextId: () => `exclude:${id++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects.map(({ id }) => id)).toEqual(["island"])
+		const excluded = result.document.objects[0]
+		if (excluded?.geometry.kind !== "path") throw new Error("Expected path")
+		expect(excluded.geometry.contours).toHaveLength(2)
+		expect(excluded.appearance).toEqual(topAppearance)
+		expect(excluded.transform).toEqual(identity)
+		expect(objectBounds(excluded)).toMatchObject({ minX: 0, maxX: 35 })
+		expect(
+			nearestDesignObject([excluded], { x: 10, y: 10 }, 1)?.object.id,
+		).toBe("island")
+		expect(nearestDesignObject([excluded], { x: 32, y: 2 }, 1)?.object.id).toBe(
+			"island",
+		)
+		expect(pdfObjectContentStream(excluded, source.swatches[0])).toContain("f*")
+
+		const committed = reduceDesignHistory(createDesignHistory(source), {
+			type: "commit",
+			document: result.document,
+		})
+		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
+			source,
+		)
+	})
+
+	it.each([
+		[
+			"pathfinder-intersect" as const,
+			rectangle("left", 0, 0, 5, 5),
+			rectangle("right", 10, 0, 15, 5),
+		],
+		[
+			"pathfinder-exclude" as const,
+			rectangle("same-a", 0, 0, 5, 5),
+			rectangle("same-b", 0, 0, 5, 5),
+		],
+	])(
+		"commits an explicit empty %s result atomically",
+		(command, first, second) => {
+			const source = documentWith(
+				path("first", [first]),
+				path("second", [second]),
+			)
+			const result = applyDesignPathCommand(
+				command,
+				context(source, ["first", "second"]),
+				{ nextId: () => "unused" },
+			)
+			expect(result.ok).toBe(true)
+			if (!result.ok) return
+			expect(result.document.objects).toEqual([])
+			expect(result.objectSelection).toEqual([])
+			expect(result.directSelection).toEqual([])
+			expect(result.message).toMatch(/empty/iu)
+		},
+	)
 })
