@@ -90,11 +90,13 @@ jobs:
 
   node-design-application:
     name: Node · Design application
+    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
       - run: node scripts/node-test-shards.ts design-application
 
   node-create-font-application:
