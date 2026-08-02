@@ -1,4 +1,10 @@
 import { exportPdf, type PdfExportTarget } from "./pdf.ts"
+import {
+	exportPreflightAllowsOutput,
+	type ExportPreflightPreferences,
+	type ExportPreflightResult,
+} from "./export-preflight.ts"
+import { preflightPdfExport } from "./pdf-preflight.ts"
 import type { DesignDocument } from "./types.ts"
 
 export interface PdfDownloadEnvironment {
@@ -36,12 +42,22 @@ export function createPdfDownloadManager(
 			disposed = true
 			generation++
 		},
+		preflight(
+			document: DesignDocument,
+			target: PdfExportTarget,
+			preferences: ExportPreflightPreferences = {},
+		): ExportPreflightResult {
+			return preflightPdfExport(document, target, preferences)
+		},
 		async request(
 			document: DesignDocument,
 			target: PdfExportTarget,
+			preferences: ExportPreflightPreferences = {},
 		): Promise<boolean> {
 			if (disposed) return false
 			const currentGeneration = ++generation
+			const preflight = preflightPdfExport(document, target, preferences)
+			if (!exportPreflightAllowsOutput(preflight)) return false
 			let bytes: Uint8Array
 			try {
 				bytes = await serialize(document, target)

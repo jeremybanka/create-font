@@ -34,6 +34,12 @@ import type {
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
 import { resolvePdfArtboards, type PdfExportRequest } from "./pdf.ts"
+import { preflightPdfExport } from "./pdf-preflight.ts"
+import {
+	ARTWORK_OUTSIDE_ARTBOARDS_LINT,
+	type ExportDiagnostic,
+	type ExportPreflightPreferences,
+} from "./export-preflight.ts"
 import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
@@ -419,6 +425,7 @@ function DesignExportTile({
 	const [rangeStartId, setRangeStartId] = useState(context.activeArtboard.id)
 	const [rangeEndId, setRangeEndId] = useState(context.activeArtboard.id)
 	const [includeBleed, setIncludeBleed] = useState(false)
+	const [checkOutsideArtwork, setCheckOutsideArtwork] = useState(false)
 	const selectedIds = useMemo(() => {
 		const valid = context.document.artboards
 			.filter(({ id }) => selectedArtboardIds.includes(id))
@@ -460,6 +467,59 @@ function DesignExportTile({
 		startId,
 	])
 	const pageCount = resolvePdfArtboards(context.document, target).length
+	const preflightPreferences = useMemo<ExportPreflightPreferences>(
+		() => ({
+			enabledLints: checkOutsideArtwork ? [ARTWORK_OUTSIDE_ARTBOARDS_LINT] : [],
+		}),
+		[checkOutsideArtwork],
+	)
+	const preflight = useMemo(
+		() => preflightPdfExport(context.document, target, preflightPreferences),
+		[context.document, preflightPreferences, target],
+	)
+	const diagnosticGroups = useMemo(() => {
+		const groups = new Map<
+			string,
+			Readonly<{ label: string; diagnostics: ExportDiagnostic[] }>
+		>()
+		groups.set("document", { label: "Document", diagnostics: [] })
+		for (const artboard of context.document.artboards)
+			groups.set(artboard.id, {
+				label: artboard.name,
+				diagnostics: [],
+			})
+		for (const diagnostic of preflight.diagnostics) {
+			const artboard = context.document.artboards.find(
+				({ id }) => id === diagnostic.artboardId,
+			)
+			const key = artboard?.id ?? "document"
+			const group = groups.get(key) ?? {
+				label: artboard?.name ?? "Document",
+				diagnostics: [],
+			}
+			group.diagnostics.push(diagnostic)
+			groups.set(key, group)
+		}
+		return [...groups.entries()].filter(
+			([, { diagnostics }]) => diagnostics.length > 0,
+		)
+	}, [context.document.artboards, preflight.diagnostics])
+	const followDiagnostic = (diagnostic: ExportDiagnostic): void => {
+		const action = diagnostic.action
+		if (action?.kind === "select-entity" && action.entityKind === "object") {
+			const object = context.document.objects.find(
+				({ id }) => id === action.entityId,
+			)
+			if (object !== undefined) context.selectObject(object)
+		}
+		if (action?.kind === "activate-artboard") {
+			const artboard = context.document.artboards.find(
+				({ id }) => id === action.artboardId,
+			)
+			if (artboard !== undefined) context.activateArtboard(artboard, true)
+		}
+	}
+	const canExport = preflight.decision === "ready"
 	return (
 		<design-export-tile>
 			<strong>Portable Document Format</strong>
@@ -543,7 +603,74 @@ function DesignExportTile({
 				/>
 				<span>Include authored bleed</span>
 			</label>
-			<button type="button" onClick={() => context.exportDocument(target)}>
+			<label data-outside-artwork-lint>
+				<input
+					type="checkbox"
+					checked={checkOutsideArtwork}
+					onChange={(event) =>
+						setCheckOutsideArtwork(event.currentTarget.checked)
+					}
+				/>
+				<span>Check artwork outside exported artboards</span>
+			</label>
+			{preflight.diagnostics.length === 0 ? null : (
+				<details
+					aria-live="polite"
+					data-export-preflight
+					data-decision={preflight.decision}
+					open={preflight.decision === "blocked"}
+				>
+					<summary>
+						<strong>Preflight</strong>
+						<span>
+							{preflight.summary.errors} errors · {preflight.summary.warnings}{" "}
+							warnings · {preflight.summary.infos} notices
+						</span>
+					</summary>
+					{diagnosticGroups.map(([key, group]) => (
+						<section key={key} aria-label={`${group.label} diagnostics`}>
+							<strong>{group.label}</strong>
+							<ul>
+								{group.diagnostics.map((diagnostic, index) => (
+									<li
+										key={`${diagnostic.code}:${diagnostic.entityId ?? diagnostic.artboardId ?? index}`}
+										data-severity={diagnostic.severity}
+									>
+										<span>
+											<strong>{diagnostic.severity}</strong>{" "}
+											{diagnostic.message}
+										</span>
+										{diagnostic.action?.kind === "select-entity" &&
+										diagnostic.action.entityKind === "object" ? (
+											<button
+												type="button"
+												onClick={() => followDiagnostic(diagnostic)}
+											>
+												Select object
+											</button>
+										) : diagnostic.action?.kind === "activate-artboard" &&
+										  context.document.artboards.some(
+												({ id }) => id === diagnostic.artboardId,
+										  ) ? (
+											<button
+												type="button"
+												onClick={() => followDiagnostic(diagnostic)}
+											>
+												Show artboard
+											</button>
+										) : null}
+									</li>
+								))}
+							</ul>
+						</section>
+					))}
+				</details>
+			)}
+			<button
+				type="button"
+				disabled={!canExport}
+				onClick={() => context.exportDocument(target, preflightPreferences)}
+			>
 				Export {pageCount} page{pageCount === 1 ? "" : "s"} as PDF
 			</button>
 			<label data-live-preview>
@@ -555,7 +682,11 @@ function DesignExportTile({
 				<span>Live PDF proof</span>
 			</label>
 			{previewEnabled ? (
-				<PdfPreview document={context.document} target={target} />
+				<PdfPreview
+					document={context.document}
+					target={target}
+					preflightPreferences={preflightPreferences}
+				/>
 			) : null}
 		</design-export-tile>
 	)

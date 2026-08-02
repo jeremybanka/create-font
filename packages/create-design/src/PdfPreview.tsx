@@ -11,6 +11,7 @@ import {
 } from "./live-pdf-compilation.ts"
 import css from "./PdfPreview.module.css"
 import { activeDesignArtboard } from "./artboards.ts"
+import type { ExportPreflightPreferences } from "./export-preflight.ts"
 import type { PdfExportTarget } from "./pdf.ts"
 import type { DesignArtboard, DesignDocument } from "./types.ts"
 
@@ -18,9 +19,11 @@ export function PdfPreview({
 	document,
 	artboard,
 	target = artboard ?? activeDesignArtboard(document),
+	preflightPreferences,
 }: {
 	readonly document: DesignDocument
 	readonly artboard?: DesignArtboard
+	readonly preflightPreferences?: ExportPreflightPreferences
 	readonly target?: PdfExportTarget
 }) {
 	const compiler = useMemo(() => createLivePdfCompiler(), [])
@@ -56,13 +59,14 @@ export function PdfPreview({
 		}
 	}, [compiler, manager])
 	useEffect(() => {
-		compiler.request(document, target)
+		compiler.request(document, target, preflightPreferences)
 	}, [
 		compiler,
 		document.artboards,
 		document.objects,
 		document.swatches,
 		document.title,
+		preflightPreferences,
 		target,
 	])
 	useEffect(() => {
@@ -94,6 +98,14 @@ export function PdfPreview({
 						}
 					: null
 	const timings = preview.active?.timings
+	const readyWarnings =
+		compilation.status === "ready"
+			? compilation.artifact.preflight.summary.warnings
+			: 0
+	const readyNotices =
+		compilation.status === "ready"
+			? compilation.artifact.preflight.summary.infos
+			: 0
 	const status =
 		diagnostic === null
 			? preview.status === "loading"
@@ -104,9 +116,11 @@ export function PdfPreview({
 					? preview.active === null
 						? "Compiling PDF proof…"
 						: "Updating PDF proof…"
-					: timings === undefined
-						? "PDF proof pending"
-						: `Live PDF · ${timings.total.toFixed(1)} ms`
+					: readyWarnings + readyNotices > 0
+						? `PDF ready · ${readyWarnings} warnings · ${readyNotices} notices`
+						: timings === undefined
+							? "PDF proof pending"
+							: `Live PDF · ${timings.total.toFixed(1)} ms`
 			: `${diagnostic.stage}: ${diagnostic.message}`
 
 	return (

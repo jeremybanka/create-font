@@ -1,17 +1,28 @@
 import { PdfValidationError, serializePdf } from "mondrian.pdf"
 
 import {
+	exportPreflightAllowsOutput,
+	type ExportPreflightPreferences,
+	type ExportPreflightResult,
+} from "./export-preflight.ts"
+import {
 	createPdfProjectionGraph,
 	type PdfDocumentProjection,
 	type PdfExportTarget,
 	type PdfProjectionGraph,
 } from "./pdf.ts"
+import { preflightPdfExport } from "./pdf-preflight.ts"
 import type { DesignDocument } from "./types.ts"
 
 export type LivePdfDiagnostic = Readonly<{
 	code: string
 	message: string
-	stage: "projection" | "validation" | "serialization" | "activation"
+	stage:
+		| "preflight"
+		| "projection"
+		| "validation"
+		| "serialization"
+		| "activation"
 }>
 
 export type LivePdfTimings = Readonly<{
@@ -24,6 +35,7 @@ export type LivePdfTimings = Readonly<{
 export type LivePdfArtifact = Readonly<{
 	bytes: Uint8Array
 	generation: number
+	preflight: ExportPreflightResult
 	requestedAt: number
 	revision: number
 	timings: LivePdfTimings
@@ -49,6 +61,7 @@ export type LivePdfCompilationState =
 			diagnostics: readonly LivePdfDiagnostic[]
 			generation: number
 			lastGood: LivePdfArtifact | null
+			preflight?: ExportPreflightResult
 			revision: number
 	  }>
 
@@ -129,12 +142,33 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 	const compile = (
 		document: DesignDocument,
 		target: PdfExportTarget | undefined,
+		preferences: ExportPreflightPreferences,
 		currentGeneration: number,
 		currentRevision: number,
 		requestedAt: number,
 	): void => {
 		cancelScheduled = null
 		if (!running || currentGeneration !== generation) return
+		const effectiveTarget = target ?? document.artboards[0]
+		if (effectiveTarget === undefined) return
+		const preflight = preflightPdfExport(document, effectiveTarget, preferences)
+		if (!exportPreflightAllowsOutput(preflight)) {
+			publish(
+				Object.freeze({
+					status: "failed",
+					diagnostics: Object.freeze(
+						preflight.diagnostics.map(({ code, message }) =>
+							Object.freeze({ code, message, stage: "preflight" as const }),
+						),
+					),
+					generation: currentGeneration,
+					lastGood: lastGood(),
+					preflight,
+					revision: currentRevision,
+				}),
+			)
+			return
+		}
 		const startedAt = now()
 		let projection: PdfDocumentProjection
 		try {
@@ -149,7 +183,12 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 		}
 		const projectedAt = now()
 		const previous = lastGood()
-		if (projection === lastProjection && previous !== null) {
+		if (
+			projection === lastProjection &&
+			previous !== null &&
+			JSON.stringify(preflight.diagnostics) ===
+				JSON.stringify(previous.preflight.diagnostics)
+		) {
 			publish(
 				Object.freeze({
 					status: "ready",
@@ -170,6 +209,7 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 					const artifact = Object.freeze({
 						bytes,
 						generation: currentGeneration,
+						preflight,
 						requestedAt,
 						revision: currentRevision,
 						timings: Object.freeze({
@@ -202,7 +242,11 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 
 	return {
 		getState: (): LivePdfCompilationState => state,
-		request(document: DesignDocument, target?: PdfExportTarget): void {
+		request(
+			document: DesignDocument,
+			target?: PdfExportTarget,
+			preferences: ExportPreflightPreferences = {},
+		): void {
 			if (!running) return
 			const currentGeneration = ++generation
 			const currentRevision = ++revision
@@ -220,6 +264,7 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 				compile(
 					document,
 					target,
+					preferences,
 					currentGeneration,
 					currentRevision,
 					requestedAt,

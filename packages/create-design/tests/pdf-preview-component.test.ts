@@ -28,6 +28,7 @@ describe("PDF preview tile", () => {
 			],
 		}
 		const exportDocument = vi.fn()
+		const selectObject = vi.fn()
 		const context: DesignTileContext = {
 			activateArtboard: vi.fn(),
 			activeArtboard: document.artboards[0]!,
@@ -64,7 +65,7 @@ describe("PDF preview tile", () => {
 			expandStrokeSelection: vi.fn(),
 			exportDocument,
 			focusCanvas: vi.fn(),
-			selectObject: vi.fn(),
+			selectObject,
 			selectSwatch: vi.fn(),
 			selectTool: vi.fn(),
 			selectedObject: null,
@@ -98,10 +99,13 @@ describe("PDF preview tile", () => {
 		})
 		expect(host.querySelector("button")?.textContent).toContain("2 pages")
 		act(() => host.querySelector<HTMLButtonElement>("button")!.click())
-		expect(exportDocument).toHaveBeenCalledWith({
-			includeBleed: false,
-			scope: { kind: "all" },
-		})
+		expect(exportDocument).toHaveBeenCalledWith(
+			{
+				includeBleed: false,
+				scope: { kind: "all" },
+			},
+			{ enabledLints: [] },
+		)
 		const checkbox = host.querySelector<HTMLInputElement>(
 			"[data-live-preview] input[type=checkbox]",
 		)!
@@ -116,6 +120,73 @@ describe("PDF preview tile", () => {
 			checkbox.dispatchEvent(new Event("change", { bubbles: true }))
 		})
 		expect(host.querySelector("pdf-preview")).toBeNull()
+
+		const outsideObject = {
+			...document.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: document.artboards[0]!.width - 10,
+				y: 20,
+				width: 30,
+				height: 20,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const warningContext = {
+			...context,
+			document: { ...document, objects: [outsideObject] },
+		}
+		act(() =>
+			render(
+				h(DesignTileContent, { context: warningContext, kind: "export" }),
+				host,
+			),
+		)
+		const warningScope = host.querySelector<HTMLSelectElement>(
+			"[data-export-scope]",
+		)!
+		act(() => {
+			warningScope.value = "active"
+			warningScope.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(host.querySelector("[data-export-preflight]")).toBeNull()
+		const lint = host.querySelector<HTMLInputElement>(
+			"[data-outside-artwork-lint] input",
+		)!
+		act(() => {
+			lint.checked = true
+			lint.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		const preflight = host.querySelector<HTMLDetailsElement>(
+			"[data-export-preflight]",
+		)!
+		expect(preflight.getAttribute("data-decision")).toBe("ready")
+		expect(preflight.open).toBe(false)
+		expect(preflight.textContent).toContain(
+			"extends outside the requested artboards",
+		)
+		expect(preflight.querySelector("section")?.getAttribute("aria-label")).toBe(
+			`${document.artboards[0]!.name} diagnostics`,
+		)
+		const selectButton = [...preflight.querySelectorAll("button")].find(
+			(button) => button.textContent === "Select object",
+		)!
+		act(() => selectButton.click())
+		expect(selectObject).toHaveBeenCalledWith(outsideObject)
+		const exportButton = [...host.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Export 1 page"),
+		)!
+		expect(exportButton.disabled).toBe(false)
+		act(() => exportButton.click())
+		expect(exportDocument).toHaveBeenLastCalledWith(
+			{
+				includeBleed: false,
+				scope: { kind: "active", artboardId: document.artboards[0]!.id },
+			},
+			{
+				enabledLints: ["common.artwork-outside-requested-artboards"],
+			},
+		)
 		act(() => render(null, host))
 	})
 })

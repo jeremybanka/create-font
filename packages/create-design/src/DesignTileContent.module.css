@@ -278,12 +278,72 @@ design-tile-content.class {
 		}
 
 		> label[data-live-preview],
-		> label[data-include-bleed] {
+		> label[data-include-bleed],
+		> label[data-outside-artwork-lint] {
 			display: flex;
 			align-items: center;
 			gap: 6px;
 			color: var(--ink-muted);
 			cursor: pointer;
+		}
+
+		> details[data-export-preflight] {
+			display: grid;
+			gap: 6px;
+			padding: 7px;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: color-mix(in srgb, var(--paper) 92%, var(--accent));
+
+			> summary {
+				display: flex;
+				align-items: baseline;
+				justify-content: space-between;
+				gap: 6px;
+
+				> span {
+					font-size: 8px;
+					color: var(--ink-muted);
+				}
+			}
+
+			> section {
+				display: grid;
+				gap: 4px;
+
+				> ul {
+					display: grid;
+					gap: 4px;
+					margin: 0;
+					padding: 0;
+					list-style: none;
+
+					> li {
+						display: grid;
+						gap: 4px;
+						padding: 5px;
+						border-inline-start: 2px solid var(--line);
+						background: var(--paper);
+
+						&[data-severity="error"] {
+							border-inline-start-color: #c45b4f;
+						}
+
+						&[data-severity="warning"] {
+							border-inline-start-color: var(--accent);
+						}
+
+						> span > strong {
+							text-transform: capitalize;
+						}
+
+						> button {
+							justify-self: start;
+							padding: 3px 5px;
+						}
+					}
+				}
+			}
 		}
 	}
 

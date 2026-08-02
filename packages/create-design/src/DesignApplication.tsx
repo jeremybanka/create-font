@@ -157,6 +157,10 @@ import {
 } from "./design-vector-adapter.ts"
 import { createPdfDownloadManager } from "./pdf-download.ts"
 import type { PdfExportTarget } from "./pdf.ts"
+import {
+	exportPreflightAllowsOutput,
+	type ExportPreflightPreferences,
+} from "./export-preflight.ts"
 import type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
@@ -965,9 +969,26 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 
 	const exportDocument = useCallback(
-		(target: PdfExportTarget = activeArtboard): void => {
+		(
+			target: PdfExportTarget = activeArtboard,
+			preferences: ExportPreflightPreferences = {},
+		): void => {
+			const preflight = pdfDownloadManager.preflight(
+				document,
+				target,
+				preferences,
+			)
+			if (!exportPreflightAllowsOutput(preflight)) {
+				// A refused request still supersedes any older async serialization.
+				void pdfDownloadManager.request(document, target, preferences)
+				openTile("export")
+				setStatus(
+					`PDF export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
+				)
+				return
+			}
 			setStatus(`Preparing ${document.title}.pdf…`)
-			void pdfDownloadManager.request(document, target).then(
+			void pdfDownloadManager.request(document, target, preferences).then(
 				(downloaded) => {
 					if (downloaded)
 						setStatus(
@@ -980,7 +1001,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 					),
 			)
 		},
-		[activeArtboard, document, pdfDownloadManager],
+		[activeArtboard, document, openTile, pdfDownloadManager],
 	)
 
 	const setObjectProperty = (

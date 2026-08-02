@@ -18,6 +18,7 @@ import type {
 } from "./design-version-control.ts"
 import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
 import type { PdfExportTarget } from "./pdf.ts"
+import type { ExportPreflightPreferences } from "./export-preflight.ts"
 import type {
 	DesignArtboard,
 	DesignDocument,
@@ -68,7 +69,10 @@ export interface DesignTileContext {
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
 	readonly expandStrokeSelection: () => void
-	readonly exportDocument: (target?: PdfExportTarget) => void
+	readonly exportDocument: (
+		target?: PdfExportTarget,
+		preferences?: ExportPreflightPreferences,
+	) => void
 	readonly focusCanvas: () => void
 	readonly reviewSourceChange?: (change: DesignSourceReviewChange) => void
 	readonly selectObject: (object: DesignObject, additive?: boolean) => void

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { createInitialDocument } from "../src/document.ts"
 import { createLivePdfCompiler } from "../src/live-pdf-compilation.ts"
+import { ARTWORK_OUTSIDE_ARTBOARDS_LINT } from "../src/export-preflight.ts"
 import { createPdfProjectionGraph } from "../src/pdf.ts"
 
 function scheduler() {
@@ -227,5 +228,40 @@ describe("live PDF compilation", () => {
 			generation: 2,
 			revision: 2,
 		})
+	})
+
+	it("renders through advisory diagnostics and retains the preflight result", async () => {
+		const queue = scheduler()
+		const serialize = vi.fn(() => new Uint8Array([1]))
+		const compiler = createLivePdfCompiler({
+			schedule: queue.schedule,
+			serialize,
+		})
+		const initial = createInitialDocument()
+		const document = {
+			...initial,
+			objects: initial.objects.slice(0, 1).map((object) => ({
+				...object,
+				transform: { ...object.transform, e: object.transform.e + 2_000 },
+			})),
+		}
+		const target = { scope: { kind: "all" as const } }
+		compiler.start()
+		compiler.request(document, target, {
+			enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
+		})
+		queue.work[0]?.run()
+		await flush()
+		expect(compiler.getState()).toMatchObject({
+			status: "ready",
+			artifact: {
+				preflight: {
+					decision: "ready",
+					target: "pdf",
+					summary: { errors: 0, warnings: 0, infos: 1 },
+				},
+			},
+		})
+		expect(serialize).toHaveBeenCalledTimes(1)
 	})
 })
