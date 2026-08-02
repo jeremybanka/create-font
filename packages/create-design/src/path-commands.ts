@@ -3,19 +3,27 @@ import {
 	contourOrientation,
 	fitCubicContour,
 	flattenCubic,
+	partitionContours,
+	pointOnSegment,
+	resolveFilledContours,
 	selfIntersections,
 	windingNumber,
+	type BooleanOperationSignal,
 	type Cubic,
+	type PartitionContoursProgress,
 } from "@create-art/vector-geometry"
+import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
 	directSelectionKey,
 	type DesignDirectSelectionTarget,
 } from "./design-selection.ts"
 import {
+	designObjectFillRule,
 	IDENTITY_DESIGN_TRANSFORM,
 	projectDesignObjectContours,
 } from "./geometry.ts"
+import { replaceDesignHierarchySelection } from "./design-hierarchy.ts"
 import type {
 	DesignContour,
 	DesignDocument,
@@ -35,9 +43,14 @@ export type DesignPathCommand =
 	| "join"
 	| "make-compound"
 	| "normalize-winding"
+	| "pathfinder-crop"
+	| "pathfinder-divide"
 	| "pathfinder-exclude"
 	| "pathfinder-intersect"
+	| "pathfinder-merge"
+	| "pathfinder-outline"
 	| "pathfinder-subtract-front"
+	| "pathfinder-trim"
 	| "pathfinder-unite"
 	| "release-compound"
 	| "reverse"
@@ -47,6 +60,8 @@ export interface DesignPathCommandContext {
 	readonly document: DesignDocument
 	readonly objectSelection: readonly string[]
 	readonly directSelection: readonly DesignDirectSelectionTarget[]
+	/** Active structural editing scope; null means the root scene. */
+	readonly scopeGroupId: string | null
 }
 
 export type DesignPathCommandEligibility =
@@ -66,6 +81,8 @@ export type DesignPathCommandResult =
 export interface DesignPathCommandOptions {
 	readonly cleanupTolerance?: number
 	readonly pathfinderTolerance?: number
+	readonly pathfinderSignal?: BooleanOperationSignal
+	readonly onPathfinderProgress?: (progress: PartitionContoursProgress) => void
 	readonly simplifyTolerance?: number
 	readonly nextId?: () => string
 }
@@ -161,13 +178,23 @@ function releaseEligibility(
 }
 
 function pathfinderEligibility(
+	command: DesignPathCommand,
 	context: DesignPathCommandContext,
 ): DesignPathCommandEligibility {
-	if (context.objectSelection.length < 2)
-		return reject("Select at least two filled objects for Pathfinder.")
+	const minimum = command === "pathfinder-outline" ? 1 : 2
+	if (context.objectSelection.length < minimum)
+		return reject(
+			minimum === 1
+				? "Select at least one filled object for Pathfinder Outline."
+				: "Select at least two filled objects for Pathfinder.",
+		)
 	const selected = new Set(context.objectSelection)
-	if (selected.size < 2)
-		return reject("Select at least two distinct filled objects for Pathfinder.")
+	if (selected.size < minimum)
+		return reject(
+			minimum === 1
+				? "Select at least one filled object for Pathfinder Outline."
+				: "Select at least two distinct filled objects for Pathfinder.",
+		)
 	const objects = context.document.objects.filter((object) =>
 		selected.has(object.id),
 	)
@@ -256,9 +283,14 @@ export function designPathCommandEligibility(
 		command === "pathfinder-unite" ||
 		command === "pathfinder-subtract-front" ||
 		command === "pathfinder-intersect" ||
-		command === "pathfinder-exclude"
+		command === "pathfinder-exclude" ||
+		command === "pathfinder-divide" ||
+		command === "pathfinder-trim" ||
+		command === "pathfinder-merge" ||
+		command === "pathfinder-crop" ||
+		command === "pathfinder-outline"
 	)
-		return pathfinderEligibility(context)
+		return pathfinderEligibility(command, context)
 	if (command === "make-compound") return compoundEligibility(context)
 	if (command === "release-compound") return releaseEligibility(context)
 	if (command === "join") return joinEligibility(context)
@@ -321,7 +353,7 @@ function replaceSelectedContours(
 		)
 		return contours.every((contour, index) => contour === sourceContours[index])
 			? object
-			: { ...object, geometry: { kind: "path" as const, contours } }
+			: { ...object, geometry: { ...object.geometry, contours } }
 	})
 	return objects.every(
 		(object, index) => object === context.document.objects[index],
@@ -417,12 +449,15 @@ function joinEndpointsAcrossObjects(
 	const removed = survivor === firstObject ? secondObject : firstObject
 	const updated: DesignObject = {
 		...survivor,
-		geometry: { kind: "path", contours: [joined] },
+		geometry: {
+			kind: "path",
+			fillRule: designObjectFillRule(survivor),
+			contours: [joined],
+		},
 		transform: IDENTITY_DESIGN_TRANSFORM,
 	}
-	return {
-		ok: true,
-		document: {
+	const document = replaceDesignHierarchySelection(
+		{
 			...context.document,
 			objects: context.document.objects.flatMap((object) =>
 				object.id === removed.id
@@ -430,6 +465,18 @@ function joinEndpointsAcrossObjects(
 					: [object.id === updated.id ? updated : object],
 			),
 		},
+		[firstObject.id, secondObject.id],
+		[updated.id],
+		context.scopeGroupId,
+	)
+	if (document === null)
+		return {
+			ok: false,
+			error: "Joining paths requires complete sibling objects or groups.",
+		}
+	return {
+		ok: true,
+		document,
 		objectSelection: [updated.id],
 		directSelection: [
 			{ kind: "contour", objectId: updated.id, contourId: joined.id },
@@ -496,7 +543,7 @@ function joinSelectedEndpoints(
 	const updated: DesignObject = {
 		...object,
 		geometry: {
-			kind: "path",
+			...object.geometry,
 			contours: object.geometry.contours.flatMap((contour, index) =>
 				index === removeIndex ? [] : [index === keepIndex ? joined : contour],
 			),
@@ -1025,23 +1072,21 @@ function normalizeSelectedWinding(
 			] as const
 		}),
 	)
-	return {
-		...context.document,
-		objects: context.document.objects.map((object) =>
-			object.geometry.kind !== "path"
-				? object
-				: {
-						...object,
-						geometry: {
-							kind: "path" as const,
-							contours: object.geometry.contours.map(
-								(contour) =>
-									byKey.get(`${object.id}\0${contour.id}`) ?? contour,
-							),
-						},
-					},
-		),
-	}
+	const objects = context.document.objects.map((object) => {
+		if (object.geometry.kind !== "path") return object
+		const sourceContours = object.geometry.contours
+		const contours = sourceContours.map(
+			(contour) => byKey.get(`${object.id}\0${contour.id}`) ?? contour,
+		)
+		return contours.every((contour, index) => contour === sourceContours[index])
+			? object
+			: { ...object, geometry: { ...object.geometry, contours } }
+	})
+	return objects.every(
+		(object, index) => object === context.document.objects[index],
+	)
+		? context.document
+		: { ...context.document, objects }
 }
 
 function makeCompound(
@@ -1060,12 +1105,11 @@ function makeCompound(
 	const compound: DesignObject = {
 		...survivor.object,
 		name: `Compound ${survivor.object.name}`,
-		geometry: { kind: "path", contours },
+		geometry: { kind: "path", fillRule: "evenodd", contours },
 		transform: IDENTITY_DESIGN_TRANSFORM,
 	}
-	return {
-		ok: true,
-		document: {
+	const document = replaceDesignHierarchySelection(
+		{
 			...context.document,
 			objects: context.document.objects.flatMap((object) =>
 				object.id === compound.id
@@ -1075,6 +1119,18 @@ function makeCompound(
 						: [object],
 			),
 		},
+		context.objectSelection,
+		[compound.id],
+		context.scopeGroupId,
+	)
+	if (document === null)
+		return {
+			ok: false,
+			error: "Compound paths require complete sibling objects or groups.",
+		}
+	return {
+		ok: true,
+		document,
 		objectSelection: [compound.id],
 		directSelection: [],
 		message: `Made a compound path from ${entries.length} objects.`,
@@ -1096,12 +1152,15 @@ function releaseCompound(
 			...object,
 			id: contourIndex === 0 ? object.id : `object:${nextId()}`,
 			name: `${object.name} ${contourIndex + 1}`,
-			geometry: { kind: "path", contours: [contour] },
+			geometry: {
+				kind: "path",
+				fillRule: designObjectFillRule(object),
+				contours: [contour],
+			},
 		}),
 	)
-	return {
-		ok: true,
-		document: {
+	const document = replaceDesignHierarchySelection(
+		{
 			...context.document,
 			objects: [
 				...context.document.objects.slice(0, index),
@@ -1109,6 +1168,15 @@ function releaseCompound(
 				...context.document.objects.slice(index + 1),
 			],
 		},
+		context.objectSelection,
+		released.map(({ id }) => id),
+		context.scopeGroupId,
+	)
+	if (document === null)
+		return { ok: false, error: "The compound path hierarchy is unavailable." }
+	return {
+		ok: true,
+		document,
 		objectSelection: released.map(({ id }) => id),
 		directSelection: [],
 		message: `Released ${released.length} paths from the compound path.`,
@@ -1146,6 +1214,15 @@ type DesignPathfinderCommand = Extract<
 	| "pathfinder-intersect"
 	| "pathfinder-subtract-front"
 	| "pathfinder-unite"
+>
+
+type DesignPartitionPathfinderCommand = Extract<
+	DesignPathCommand,
+	| "pathfinder-crop"
+	| "pathfinder-divide"
+	| "pathfinder-merge"
+	| "pathfinder-outline"
+	| "pathfinder-trim"
 >
 
 function pathfinderLabel(command: DesignPathfinderCommand): string {
@@ -1196,13 +1273,19 @@ function applyPathfinder(
 		}
 	const inputFlatness = tolerance / 4
 	const fittingTolerance = tolerance - inputFlatness
-	const regions = entries.map((object) =>
-		projectDesignObjectContours(object).map((contour) => ({
-			closed: true as const,
-			points: flattenDesignContour(contour, inputFlatness),
-		})),
-	)
 	try {
+		const regions = entries.map((object) =>
+			resolveFilledContours(
+				projectDesignObjectContours(object).map((contour) => ({
+					closed: true,
+					points: flattenDesignContour(contour, inputFlatness),
+				})),
+				{
+					fillRule: designObjectFillRule(object),
+					tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+				},
+			),
+		)
 		let resolved: ReturnType<typeof booleanContours>
 		if (subtract) {
 			resolved = booleanContours([regions[0] ?? []], {
@@ -1235,12 +1318,11 @@ function applyPathfinder(
 				: {
 						...survivor,
 						name: `${pathfinderLabel(command)} ${survivor.name}`,
-						geometry: { kind: "path", contours },
+						geometry: { kind: "path", fillRule: "evenodd", contours },
 						transform: IDENTITY_DESIGN_TRANSFORM,
 					}
-		return {
-			ok: true,
-			document: {
+		const document = replaceDesignHierarchySelection(
+			{
 				...context.document,
 				objects: context.document.objects.flatMap((object) =>
 					object.id === survivor.id
@@ -1252,6 +1334,18 @@ function applyPathfinder(
 							: [object],
 				),
 			},
+			context.objectSelection,
+			result === undefined ? [] : [result.id],
+			context.scopeGroupId,
+		)
+		if (document === null)
+			return {
+				ok: false,
+				error: "Pathfinder requires complete sibling objects or groups.",
+			}
+		return {
+			ok: true,
+			document,
 			objectSelection: result === undefined ? [] : [result.id],
 			directSelection: [],
 			message:
@@ -1266,6 +1360,421 @@ function applyPathfinder(
 				error instanceof Error
 					? error.message
 					: "Pathfinder could not resolve the selected fills.",
+		}
+	}
+}
+
+type PathfinderEntry = Readonly<{
+	object: DesignObject
+}>
+
+type OrderedPathfinderObject = Readonly<{
+	object: DesignObject
+	sourceIndex: number
+	geometryOrder: number
+}>
+
+function pathfinderEntries(
+	context: DesignPathCommandContext,
+): readonly PathfinderEntry[] {
+	const selectedIds = new Set(context.objectSelection)
+	return context.document.objects.flatMap((object) =>
+		selectedIds.has(object.id) ? [{ object }] : [],
+	)
+}
+
+function pathfinderRegions(
+	entries: readonly PathfinderEntry[],
+	inputFlatness: number,
+): readonly (readonly Readonly<{
+	readonly closed: boolean
+	readonly points: readonly Readonly<{ x: number; y: number }>[]
+}>[])[] {
+	return entries.map(({ object }) =>
+		resolveFilledContours(
+			projectDesignObjectContours(object).map((contour) => ({
+				closed: true,
+				points: flattenDesignContour(contour, inputFlatness),
+			})),
+			{
+				fillRule: designObjectFillRule(object),
+				tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+			},
+		),
+	)
+}
+
+function filledAppearance(object: DesignObject): DesignObject["appearance"] {
+	return object.appearance.fill === undefined
+		? {}
+		: { fill: object.appearance.fill }
+}
+
+function freshFilledPathfinderObject(
+	source: DesignObject,
+	label: string,
+	contours: readonly Readonly<{
+		closed: boolean
+		points: readonly Readonly<{ x: number; y: number }>[]
+	}>[],
+	fitTolerance: number,
+	appearance: DesignObject["appearance"],
+	nextId: () => string,
+): DesignObject {
+	const id = `object:${nextId()}`
+	return {
+		...source,
+		id,
+		name: `${label} ${source.name}`,
+		geometry: {
+			kind: "path",
+			fillRule: "evenodd",
+			contours: contours.map((contour) =>
+				pathfinderContour(
+					{ closed: true, points: contour.points },
+					fitTolerance,
+					nextId,
+				),
+			),
+		},
+		transform: IDENTITY_DESIGN_TRANSFORM,
+		appearance,
+	}
+}
+
+function installPartitionPathfinderResult(
+	context: DesignPathCommandContext,
+	ordered: readonly OrderedPathfinderObject[],
+	message: string,
+): DesignPathCommandResult {
+	const replacements = ordered
+		.toSorted(
+			(left, right) =>
+				left.sourceIndex - right.sourceIndex ||
+				left.geometryOrder - right.geometryOrder,
+		)
+		.map(({ object }) => object)
+	const selectedIds = new Set(context.objectSelection)
+	const insertionIndex = context.document.objects.findLastIndex((object) =>
+		selectedIds.has(object.id),
+	)
+	const document = replaceDesignHierarchySelection(
+		{
+			...context.document,
+			objects: context.document.objects.flatMap((object, index) =>
+				index === insertionIndex
+					? replacements
+					: selectedIds.has(object.id)
+						? []
+						: [object],
+			),
+		},
+		context.objectSelection,
+		replacements.map(({ id }) => id),
+		context.scopeGroupId,
+	)
+	if (document === null)
+		return {
+			ok: false,
+			error: "Pathfinder requires complete sibling objects or groups.",
+		}
+	return {
+		ok: true,
+		document,
+		objectSelection: replacements.map(({ id }) => id),
+		directSelection: [],
+		message,
+	}
+}
+
+function partitionLabel(command: DesignPartitionPathfinderCommand): string {
+	switch (command) {
+		case "pathfinder-divide":
+			return "Divide"
+		case "pathfinder-trim":
+			return "Trim"
+		case "pathfinder-merge":
+			return "Merge"
+		case "pathfinder-crop":
+			return "Crop"
+		case "pathfinder-outline":
+			return "Outline"
+	}
+}
+
+function partitionSuccessMessage(
+	command: DesignPartitionPathfinderCommand,
+	pieceCount: number,
+): string {
+	const label = partitionLabel(command)
+	return pieceCount === 0
+		? `${label} produced an empty result.`
+		: `${label} produced ${pieceCount} editable path${pieceCount === 1 ? "" : "s"}.`
+}
+
+function topContributor(
+	contributors: readonly number[],
+	maximum = Number.POSITIVE_INFINITY,
+): number | undefined {
+	return contributors.findLast((index) => index < maximum)
+}
+
+type PathfinderPartition = ReturnType<typeof partitionContours>[number]
+
+function filledPartitionObjects(
+	command: "pathfinder-crop" | "pathfinder-divide" | "pathfinder-trim",
+	partitions: readonly PathfinderPartition[],
+	entries: readonly PathfinderEntry[],
+	fitTolerance: number,
+	nextId: () => string,
+): readonly OrderedPathfinderObject[] {
+	const maskIndex = entries.length - 1
+	return partitions.flatMap((partition, geometryOrder) => {
+		const sourceIndex =
+			command === "pathfinder-crop"
+				? partition.contributors.includes(maskIndex)
+					? topContributor(partition.contributors, maskIndex)
+					: undefined
+				: topContributor(partition.contributors)
+		if (sourceIndex === undefined) return []
+		const source = entries[sourceIndex]?.object
+		if (source === undefined) return []
+		return [
+			{
+				object: freshFilledPathfinderObject(
+					source,
+					partitionLabel(command),
+					partition.contours,
+					fitTolerance,
+					command === "pathfinder-divide"
+						? source.appearance
+						: filledAppearance(source),
+					nextId,
+				),
+				sourceIndex,
+				geometryOrder,
+			},
+		]
+	})
+}
+
+function mergedPartitionObjects(
+	partitions: readonly PathfinderPartition[],
+	entries: readonly PathfinderEntry[],
+	fitTolerance: number,
+	nextId: () => string,
+): readonly OrderedPathfinderObject[] {
+	const groups = new Map<
+		string,
+		{
+			pieces: PathfinderPartition[]
+			sourceIndexes: Set<number>
+		}
+	>()
+	for (const partition of partitions) {
+		const sourceIndex = topContributor(partition.contributors)
+		const source =
+			sourceIndex === undefined ? undefined : entries[sourceIndex]?.object
+		const swatchId = source?.appearance.fill?.swatchId
+		if (sourceIndex === undefined || swatchId === undefined) continue
+		const group = groups.get(swatchId) ?? {
+			pieces: [],
+			sourceIndexes: new Set<number>(),
+		}
+		group.pieces.push(partition)
+		group.sourceIndexes.add(sourceIndex)
+		groups.set(swatchId, group)
+	}
+	let geometryOrder = 0
+	return [...groups.entries()].flatMap(([swatchId, group]) => {
+		const sourceIndex = Math.max(...group.sourceIndexes)
+		const source = entries[sourceIndex]?.object
+		if (source === undefined) return []
+		const united = booleanContours(
+			group.pieces.map(({ contours }) => contours),
+			{
+				operation: "union",
+				tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+			},
+		)
+		return partitionContours([united], {
+			tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+		}).map(({ contours }) => ({
+			object: freshFilledPathfinderObject(
+				source,
+				"Merge",
+				contours,
+				fitTolerance,
+				{ fill: { swatchId } },
+				nextId,
+			),
+			sourceIndex,
+			geometryOrder: geometryOrder++,
+		}))
+	})
+}
+
+type OutlineSegment = {
+	readonly start: Readonly<{ x: number; y: number }>
+	readonly end: Readonly<{ x: number; y: number }>
+	readonly contributors: readonly number[]
+}
+
+function comparePathfinderPoints(
+	left: Readonly<{ x: number; y: number }>,
+	right: Readonly<{ x: number; y: number }>,
+): number {
+	return left.x - right.x || left.y - right.y
+}
+
+function outlineSegments(
+	partitions: readonly PathfinderPartition[],
+): readonly OutlineSegment[] {
+	const raw: OutlineSegment[] = []
+	for (const partition of partitions)
+		for (const contour of partition.contours)
+			for (const [index, point] of contour.points.entries()) {
+				const next = contour.points[(index + 1) % contour.points.length]
+				if (next === undefined) continue
+				const [start, end] =
+					comparePathfinderPoints(point, next) <= 0
+						? [point, next]
+						: [next, point]
+				raw.push({ start, end, contributors: partition.contributors })
+			}
+	const points = new Map<string, Readonly<{ x: number; y: number }>>()
+	for (const segment of raw)
+		for (const point of [segment.start, segment.end])
+			points.set(`${point.x},${point.y}`, point)
+	const segments = new Map<string, OutlineSegment>()
+	for (const segment of raw) {
+		const noded = [...points.values()]
+			.filter((point) =>
+				pointOnSegment(point, segment.start, segment.end, {
+					distance: DEFAULT_PATH_CLEANUP_TOLERANCE,
+				}),
+			)
+			.toSorted(comparePathfinderPoints)
+		for (let index = 0; index + 1 < noded.length; index += 1) {
+			const start = noded[index]
+			const end = noded[index + 1]
+			if (start === undefined || end === undefined) continue
+			const key = `${start.x},${start.y}\0${end.x},${end.y}`
+			const previous = segments.get(key)
+			segments.set(key, {
+				start,
+				end,
+				contributors: [
+					...new Set([
+						...(previous?.contributors ?? []),
+						...segment.contributors,
+					]),
+				].toSorted((left, right) => left - right),
+			})
+		}
+	}
+	return [...segments.values()].toSorted(
+		(left, right) =>
+			comparePathfinderPoints(left.start, right.start) ||
+			comparePathfinderPoints(left.end, right.end),
+	)
+}
+
+function outlinePartitionObjects(
+	partitions: readonly PathfinderPartition[],
+	entries: readonly PathfinderEntry[],
+	nextId: () => string,
+): readonly OrderedPathfinderObject[] {
+	return outlineSegments(partitions).flatMap((segment, geometryOrder) => {
+		const sourceIndex = topContributor(segment.contributors)
+		const source =
+			sourceIndex === undefined ? undefined : entries[sourceIndex]?.object
+		const swatchId = source?.appearance.fill?.swatchId
+		if (
+			sourceIndex === undefined ||
+			source === undefined ||
+			swatchId === undefined
+		)
+			return []
+		const id = `object:${nextId()}`
+		const contourId = `contour:${nextId()}`
+		const object: DesignObject = {
+			...source,
+			id,
+			name: `Outline ${source.name}`,
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: contourId,
+						closed: false,
+						points: [segment.start, segment.end].map((point) => ({
+							...point,
+							id: `point:${nextId()}`,
+						})),
+					},
+				],
+			},
+			transform: IDENTITY_DESIGN_TRANSFORM,
+			appearance: {
+				stroke: source.appearance.stroke ?? {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId,
+					width: 1,
+				},
+			},
+		}
+		return [{ object, sourceIndex, geometryOrder }]
+	})
+}
+
+function applyPartitionPathfinder(
+	command: DesignPartitionPathfinderCommand,
+	context: DesignPathCommandContext,
+	tolerance: number,
+	nextId: () => string,
+	options: DesignPathCommandOptions,
+): DesignPathCommandResult {
+	const entries = pathfinderEntries(context)
+	const inputFlatness = tolerance / 4
+	const fittingTolerance = tolerance - inputFlatness
+	try {
+		const partitions = partitionContours(
+			pathfinderRegions(entries, inputFlatness),
+			{
+				tolerances: { normalization: DEFAULT_PATH_CLEANUP_TOLERANCE },
+				...(options.pathfinderSignal === undefined
+					? {}
+					: { signal: options.pathfinderSignal }),
+				...(options.onPathfinderProgress === undefined
+					? {}
+					: { onProgress: options.onPathfinderProgress }),
+			},
+		)
+		const objects =
+			command === "pathfinder-merge"
+				? mergedPartitionObjects(partitions, entries, fittingTolerance, nextId)
+				: command === "pathfinder-outline"
+					? outlinePartitionObjects(partitions, entries, nextId)
+					: filledPartitionObjects(
+							command,
+							partitions,
+							entries,
+							fittingTolerance,
+							nextId,
+						)
+		return installPartitionPathfinderResult(
+			context,
+			objects,
+			partitionSuccessMessage(command, objects.length),
+		)
+	} catch (error) {
+		return {
+			ok: false,
+			error:
+				error instanceof Error
+					? error.message
+					: "Pathfinder could not partition the selected fills.",
 		}
 	}
 }
@@ -1306,6 +1815,20 @@ export function applyDesignPathCommand(
 		command === "pathfinder-exclude"
 	)
 		return applyPathfinder(command, context, pathfinderTolerance, nextId)
+	if (
+		command === "pathfinder-divide" ||
+		command === "pathfinder-trim" ||
+		command === "pathfinder-merge" ||
+		command === "pathfinder-crop" ||
+		command === "pathfinder-outline"
+	)
+		return applyPartitionPathfinder(
+			command,
+			context,
+			pathfinderTolerance,
+			nextId,
+			options,
+		)
 	if (command === "join")
 		return joinSelectedEndpoints(context, cleanupTolerance)
 	if (command === "make-compound") return makeCompound(context)

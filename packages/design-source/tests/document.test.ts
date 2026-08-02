@@ -430,6 +430,110 @@ describe("complete design document codec", () => {
 		})
 	})
 
+	it("round-trips explicit path fill rules and rejects unknown rules", () => {
+		const migrated = decodeDesignDocument(canonicalV1Fixture())
+		if (!migrated.ok) throw new Error("Expected migration to succeed.")
+		const path = migrated.value.objects[1]
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected path fixture.")
+		const document = {
+			...migrated.value,
+			objects: [
+				migrated.value.objects[0]!,
+				{
+					...path,
+					geometry: { ...path.geometry, fillRule: "nonzero" as const },
+				},
+			],
+		}
+		expect(parseDesignDocumentText(JSON.stringify(document))).toEqual({
+			ok: true,
+			value: document,
+		})
+		expect(
+			validateDesignDocument({
+				...document,
+				objects: [
+					document.objects[0],
+					{
+						...path,
+						geometry: { ...path.geometry, fillRule: "winding" },
+					},
+				],
+			}),
+		).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "document.schema",
+					path: "$.objects[1].geometry.fillRule",
+				}),
+			]),
+		})
+	})
+
+	it("rejects fill rules authored before the v5 contract", () => {
+		const canonical = canonicalV1Fixture()
+		const current = decodeDesignDocument(canonical)
+		if (!current.ok) throw new Error("Expected migration to succeed.")
+		const addFillRule = <Object extends { geometry: { kind: string } }>(
+			object: Object,
+		) =>
+			object.geometry.kind === "path"
+				? {
+						...object,
+						geometry: { ...object.geometry, fillRule: "nonzero" },
+					}
+				: object
+		const versionThreeObjects = current.value.objects.map((object) => ({
+			...addFillRule(object),
+			appearance: {
+				...object.appearance,
+				...(object.appearance.stroke === undefined
+					? {}
+					: {
+							stroke: {
+								swatchId: object.appearance.stroke.swatchId,
+								width: object.appearance.stroke.width,
+							},
+						}),
+			},
+		}))
+		const historical = [
+			{
+				...canonical,
+				version: 2,
+				objects: canonical.objects.map(addFillRule),
+			},
+			{
+				format: current.value.format,
+				version: 3,
+				title: current.value.title,
+				page: { x: 0, y: 0, width: 841.89, height: 595.28 },
+				swatches: current.value.swatches,
+				objects: versionThreeObjects,
+				guides: current.value.guides,
+			},
+			{
+				format: current.value.format,
+				version: 4,
+				title: current.value.title,
+				page: { x: 0, y: 0, width: 841.89, height: 595.28 },
+				swatches: current.value.swatches,
+				objects: current.value.objects.map(addFillRule),
+				guides: current.value.guides,
+			},
+		]
+		for (const document of historical) {
+			expect(decodeDesignDocument(document)).toMatchObject({
+				ok: false,
+				errors: expect.arrayContaining([
+					expect.objectContaining({ code: "document.schema" }),
+				]),
+			})
+		}
+	})
+
 	it.each([
 		[
 			"malformed page",

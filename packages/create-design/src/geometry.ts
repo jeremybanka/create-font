@@ -7,11 +7,21 @@ import {
 
 import type {
 	DesignContour,
+	DesignFillRule,
 	DesignGeometry,
 	DesignObject,
 	DesignPoint,
 	DesignTransform,
 } from "./types.ts"
+
+/** Resolves the authored path rule while retaining legacy even-odd rendering. */
+export function designObjectFillRule(
+	object: Pick<DesignObject, "geometry">,
+): DesignFillRule {
+	return object.geometry.kind === "path"
+		? (object.geometry.fillRule ?? "evenodd")
+		: "evenodd"
+}
 
 export type { Bounds } from "@create-art/vector-geometry"
 
@@ -301,7 +311,14 @@ export function rotateObject(
 export function bakeDesignObject(object: DesignObject): DesignObject {
 	return {
 		...object,
-		geometry: { kind: "path", contours: projectDesignObjectContours(object) },
+		geometry: {
+			kind: "path",
+			...(object.geometry.kind === "path" &&
+			object.geometry.fillRule !== undefined
+				? { fillRule: object.geometry.fillRule }
+				: {}),
+			contours: projectDesignObjectContours(object),
+		},
 		transform: IDENTITY_DESIGN_TRANSFORM,
 	}
 }

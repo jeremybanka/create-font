@@ -586,3 +586,72 @@ export function stackDesignSelection(
 		selection,
 	}
 }
+
+function descendantGroupIds(
+	child: DesignSceneChild,
+	groups: ReadonlyMap<string, DesignGroup>,
+): readonly string[] {
+	if (child.kind === "object") return []
+	const group = groups.get(child.id)
+	return [
+		child.id,
+		...(group?.children.flatMap((candidate) =>
+			descendantGroupIds(candidate, groups),
+		) ?? []),
+	]
+}
+
+/**
+ * Replaces complete sibling hierarchy units at their topmost paint position.
+ * Selected groups are consumed as units, so no dangling group references or
+ * unrelated sibling rewrites survive topology commands such as Compound Path.
+ */
+export function replaceDesignHierarchySelection(
+	document: DesignDocument,
+	selection: readonly string[],
+	replacementIds: readonly string[],
+	scopeGroupId: string | null = null,
+): DesignDocument | null {
+	if (document.scene === undefined || document.groups === undefined)
+		return scopeGroupId === null ? document : null
+	const hierarchy = normalized(document)
+	const groups = groupMap(hierarchy.groups)
+	const selected = new Set(selection)
+	const parent = parentForScope(document, scopeGroupId)
+	if (parent === null) return null
+	const units = selectedUnits(parent, selected, groups)
+	if (
+		units.length === 0 ||
+		new Set(units.flatMap((unit) => descendantIds(unit, groups))).size !==
+			selected.size
+	)
+		return null
+	const unitKeys = new Set(units.map((unit) => `${unit.kind}:${unit.id}`))
+	const last = parent.children.findLastIndex((child) =>
+		unitKeys.has(`${child.kind}:${child.id}`),
+	)
+	const insertion = parent.children
+		.slice(0, last + 1)
+		.filter((child) => !unitKeys.has(`${child.kind}:${child.id}`)).length
+	const children = parent.children.filter(
+		(child) => !unitKeys.has(`${child.kind}:${child.id}`),
+	)
+	children.splice(
+		insertion,
+		0,
+		...replacementIds.map((id) => ({ kind: "object" as const, id })),
+	)
+	const removedGroups = new Set(
+		units.flatMap((unit) => descendantGroupIds(unit, groups)),
+	)
+	const remainingGroups = hierarchy.groups.filter(
+		(group) => !removedGroups.has(group.id),
+	)
+	const replaced = replaceParent(
+		hierarchy.scene,
+		remainingGroups,
+		parent.id,
+		children,
+	)
+	return installHierarchy(document, replaced.scene, replaced.groups)
+}

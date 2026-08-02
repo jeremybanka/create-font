@@ -1,8 +1,10 @@
 import {
 	contourOrientation,
 	flattenCubic,
+	pointOnSegment,
 	selfIntersections,
 } from "@create-art/vector-geometry"
+import { validateDesignDocument } from "@create-design/source"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -67,7 +69,13 @@ const context = (
 	document: DesignDocument,
 	objectSelection: readonly string[],
 	directSelection: DesignPathCommandContext["directSelection"] = [],
-): DesignPathCommandContext => ({ document, objectSelection, directSelection })
+	scopeGroupId: string | null = null,
+): DesignPathCommandContext => ({
+	document,
+	objectSelection,
+	directSelection,
+	scopeGroupId,
+})
 
 const line = (id: string, startX: number, endX: number): DesignContour =>
 	contour(id, [
@@ -235,6 +243,80 @@ describe("create-design path commands", () => {
 		expect(acrossGeometry.contours[0]?.points.map(({ x }) => x)).toEqual([
 			100, 110, 130,
 		])
+
+		const grouped: DesignDocument = {
+			...separate,
+			artboards: separate.artboards.map((artboard) => ({
+				...artboard,
+				id: "artboard:test",
+			})),
+			swatches: separate.swatches.map((swatch) => ({
+				...swatch,
+				id: "swatch:ink",
+			})),
+			objects: separate.objects.map((object) => ({
+				...object,
+				id: `object:${object.id}`,
+				appearance: { fill: { swatchId: "swatch:ink" } },
+			})),
+			scene: [{ kind: "group", id: "group:joined" }],
+			groups: [
+				{
+					id: "group:joined",
+					name: "Joined paths",
+					children: [
+						{ kind: "object", id: "object:left" },
+						{ kind: "object", id: "object:right" },
+					],
+				},
+			],
+		}
+		// Use the same document-space endpoint pair against grouped siblings.
+		const groupedEndpoints = [
+			{
+				kind: "node" as const,
+				objectId: "object:left",
+				contourId: "left-line",
+				pointId: "left-line:b",
+			},
+			{
+				kind: "node" as const,
+				objectId: "object:right",
+				contourId: "right-line",
+				pointId: "right-line:b",
+			},
+		]
+		const joinedOuter = applyDesignPathCommand(
+			"join",
+			context(grouped, ["object:left", "object:right"], groupedEndpoints),
+		)
+		expect(joinedOuter.ok).toBe(true)
+		if (!joinedOuter.ok) return
+		expect(joinedOuter.document.scene).toEqual([
+			{ kind: "object", id: "object:right" },
+		])
+		expect(joinedOuter.document.groups).toEqual([])
+		const joinedGroup = applyDesignPathCommand(
+			"join",
+			context(
+				grouped,
+				["object:left", "object:right"],
+				groupedEndpoints,
+				"group:joined",
+			),
+		)
+		expect(joinedGroup.ok).toBe(true)
+		if (!joinedGroup.ok) return
+		expect(joinedGroup.document.scene).toEqual([
+			{ kind: "group", id: "group:joined" },
+		])
+		expect(joinedGroup.document.groups?.[0]?.children).toEqual([
+			{ kind: "object", id: "object:right" },
+		])
+		expect(validateDesignDocument(joinedGroup.document)).toEqual({
+			ok: true,
+			value: joinedGroup.document,
+		})
 	})
 
 	it("simplifies duplicate and redundant samples within its documented tolerance", () => {
@@ -557,6 +639,7 @@ describe("create-design path commands", () => {
 			"outer",
 			"hole",
 		])
+		expect(compound.geometry.fillRule).toBe("evenodd")
 		expect(contourOrientation(compound.geometry.contours[0]!.points)).toBe(
 			"counter-clockwise",
 		)
@@ -583,6 +666,85 @@ describe("create-design path commands", () => {
 			"object:release:0",
 		])
 		expect(released.objectSelection).toEqual(["top", "object:release:0"])
+		expect(
+			released.document.objects.map((object) =>
+				object.geometry.kind === "path" ? object.geometry.fillRule : undefined,
+			),
+		).toEqual([undefined, "evenodd", "evenodd"])
+	})
+
+	it("replaces grouped compounds and released contours without dangling hierarchy", () => {
+		const first = path("first", [rectangle("first-box", 0, 0, 20, 20)])
+		const second = path("second", [rectangle("second-box", 5, 5, 15, 15)])
+		const front = path("front", [rectangle("front-box", 30, 0, 40, 10)])
+		const grouped: DesignDocument = {
+			...documentWith(first, second, front),
+			scene: [
+				{ kind: "group", id: "group:compound-source" },
+				{ kind: "object", id: front.id },
+			],
+			groups: [
+				{
+					id: "group:compound-source",
+					name: "Compound source",
+					children: [
+						{ kind: "object", id: first.id },
+						{ kind: "object", id: second.id },
+					],
+				},
+			],
+		}
+		const made = applyDesignPathCommand(
+			"make-compound",
+			context(grouped, [first.id, second.id]),
+		)
+		expect(made.ok).toBe(true)
+		if (!made.ok) return
+		expect(made.document.scene).toEqual([
+			{ kind: "object", id: second.id },
+			{ kind: "object", id: front.id },
+		])
+		expect(made.document.groups).toEqual([])
+		expect(made.document.objects.map(({ id }) => id)).toEqual([
+			second.id,
+			front.id,
+		])
+		const madeInside = applyDesignPathCommand(
+			"make-compound",
+			context(grouped, [first.id, second.id], [], "group:compound-source"),
+		)
+		expect(madeInside.ok).toBe(true)
+		if (!madeInside.ok) return
+		expect(madeInside.document.scene).toEqual([
+			{ kind: "group", id: "group:compound-source" },
+			{ kind: "object", id: front.id },
+		])
+		expect(madeInside.document.groups?.[0]?.children).toEqual([
+			{ kind: "object", id: second.id },
+		])
+		expect(madeInside.document.objects.map(({ id }) => id)).toEqual([
+			second.id,
+			front.id,
+		])
+
+		let sequence = 0
+		const released = applyDesignPathCommand(
+			"release-compound",
+			context(made.document, [second.id]),
+			{ nextId: () => `hierarchy:${sequence++}` },
+		)
+		expect(released.ok).toBe(true)
+		if (!released.ok) return
+		expect(released.document.scene).toEqual([
+			{ kind: "object", id: second.id },
+			{ kind: "object", id: "object:hierarchy:0" },
+			{ kind: "object", id: front.id },
+		])
+		expect(released.document.objects.map(({ id }) => id)).toEqual([
+			second.id,
+			"object:hierarchy:0",
+			front.id,
+		])
 	})
 
 	it("normalizes holes only when explicitly requested and undo restores exact topology", () => {
@@ -636,6 +798,93 @@ describe("create-design path commands", () => {
 		})
 		const undone = reduceDesignHistory(committed, { type: "undo" })
 		expect(undone.present).toEqual(source)
+	})
+
+	it("preserves nonzero fill semantics through contour editing commands", () => {
+		const nonzeroPath = (id: string, contours: readonly DesignContour[]) =>
+			path(id, contours, {
+				geometry: { kind: "path", fillRule: "nonzero", contours },
+			})
+		const reverseContour = rectangle("reverse-box", 0, 0, 20, 20)
+		const closeContour = contour("close-shape", [
+			{ id: "close:a", x: 0, y: 0 },
+			{ id: "close:b", x: 20, y: 0 },
+			{ id: "close:c", x: 0, y: 20 },
+		])
+		const simplifyContour = contour("simplify-shape", [
+			{ id: "simplify:a", x: 0, y: 0 },
+			{ id: "simplify:duplicate", x: 0, y: 0 },
+			{ id: "simplify:b", x: 20, y: 0 },
+			{ id: "simplify:c", x: 0, y: 20 },
+		])
+		const outer = rectangle("normalize-outer", 0, 0, 20, 20)
+		const inner = rectangle("normalize-inner", 5, 5, 15, 15)
+		const fixtures = [
+			{
+				command: "reverse" as const,
+				object: nonzeroPath("reverse-rule", [reverseContour]),
+				directSelection: [
+					{
+						kind: "contour" as const,
+						objectId: "reverse-rule",
+						contourId: reverseContour.id,
+					},
+				],
+			},
+			{
+				command: "close" as const,
+				object: nonzeroPath("close-rule", [closeContour]),
+				directSelection: [
+					{
+						kind: "contour" as const,
+						objectId: "close-rule",
+						contourId: closeContour.id,
+					},
+				],
+			},
+			{
+				command: "simplify" as const,
+				object: nonzeroPath("simplify-rule", [simplifyContour]),
+				directSelection: [
+					{
+						kind: "contour" as const,
+						objectId: "simplify-rule",
+						contourId: simplifyContour.id,
+					},
+				],
+			},
+			{
+				command: "normalize-winding" as const,
+				object: nonzeroPath("normalize-rule", [outer, inner]),
+				directSelection: [
+					{
+						kind: "contour" as const,
+						objectId: "normalize-rule",
+						contourId: inner.id,
+					},
+				],
+			},
+		]
+		for (const fixture of fixtures) {
+			const unrelated = nonzeroPath("unrelated-rule", [
+				rectangle("unrelated-box", 30, 0, 40, 10),
+			])
+			const source = documentWith(fixture.object, unrelated)
+			const result = applyDesignPathCommand(
+				fixture.command,
+				context(source, [fixture.object.id], fixture.directSelection),
+			)
+			expect(result.ok).toBe(true)
+			if (!result.ok) continue
+			const edited = result.document.objects[0]
+			expect(
+				edited?.geometry.kind === "path" ? edited.geometry.fillRule : undefined,
+			).toBe("nonzero")
+			expect(result.document.objects[1]).toBe(unrelated)
+			expect(pdfObjectContentStream(edited!, source.swatches[0])).toMatch(
+				/\nf$/u,
+			)
+		}
 	})
 
 	it("reports useful Pathfinder ineligibility without mutating mixed selections", () => {
@@ -937,6 +1186,408 @@ describe("create-design path commands", () => {
 		const committed = reduceDesignHistory(createDesignHistory(source), {
 			type: "commit",
 			document: result.document,
+		})
+		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
+			source,
+		)
+	})
+
+	it("divides coverage into fresh deterministic pieces under the topmost complete appearance", () => {
+		const bottomAppearance: DesignObject["appearance"] = {
+			fill: { swatchId: "ink" },
+			stroke: {
+				swatchId: "ink",
+				width: 2,
+				cap: "round",
+				join: "round",
+				miterLimit: 4,
+				dashArray: [],
+				dashOffset: 0,
+			},
+		}
+		const topAppearance: DesignObject["appearance"] = {
+			fill: { swatchId: "ink" },
+			stroke: {
+				swatchId: "ink",
+				width: 4,
+				cap: "square",
+				join: "bevel",
+				miterLimit: 5,
+				dashArray: [2, 1],
+				dashOffset: 0.5,
+			},
+		}
+		const bottom = path("bottom", [rectangle("bottom-box", 0, 0, 10, 10)], {
+			appearance: bottomAppearance,
+		})
+		const top = path("top", [rectangle("top-box", 5, 0, 15, 10)], {
+			appearance: topAppearance,
+		})
+		const source = documentWith(bottom, top)
+		const run = () => {
+			let sequence = 0
+			return applyDesignPathCommand(
+				"pathfinder-divide",
+				context(source, [top.id, bottom.id]),
+				{ nextId: () => `divide:${sequence++}` },
+			)
+		}
+		const result = run()
+		expect(result).toEqual(run())
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects).toHaveLength(3)
+		expect(result.document.objects.map(({ appearance }) => appearance)).toEqual(
+			[bottomAppearance, topAppearance, topAppearance],
+		)
+		expect(
+			result.document.objects.map((object) => {
+				const bounds = objectBounds(object)
+				return [bounds?.minX, bounds?.maxX]
+			}),
+		).toEqual([
+			[0, 5],
+			[5, 10],
+			[10, 15],
+		])
+		expect(
+			result.document.objects.every(
+				({ id }) => id !== "bottom" && id !== "top",
+			),
+		).toBe(true)
+		expect(new Set(result.objectSelection).size).toBe(3)
+		expect(
+			result.document.objects.every(
+				(object) =>
+					object.geometry.kind === "path" &&
+					object.geometry.contours.every((output) =>
+						output.points.every(
+							(point) =>
+								!point.id.includes("bottom") && !point.id.includes("top"),
+						),
+					),
+			),
+		).toBe(true)
+	})
+
+	it("divides coincident and tangent boundaries without zero-area duplicates", () => {
+		const run = (second: DesignContour) => {
+			let sequence = 0
+			return applyDesignPathCommand(
+				"pathfinder-divide",
+				context(
+					documentWith(
+						path("first", [rectangle("first-box", 0, 0, 10, 10)]),
+						path("second", [second]),
+					),
+					["first", "second"],
+				),
+				{ nextId: () => `boundary:${sequence++}` },
+			)
+		}
+		const coincident = run(rectangle("same", 0, 0, 10, 10))
+		expect(coincident.ok && coincident.document.objects).toHaveLength(1)
+		const tangent = run(rectangle("tangent", 10, 0, 20, 10))
+		expect(tangent.ok && tangent.document.objects).toHaveLength(2)
+	})
+
+	it("trims hidden coverage into fill-only pieces and merges same-fill components", () => {
+		const stroke = {
+			swatchId: "ink",
+			width: 3,
+			cap: "round" as const,
+			join: "round" as const,
+			miterLimit: 4,
+			dashArray: [],
+			dashOffset: 0,
+		}
+		const bottom = path("bottom", [rectangle("bottom-box", 0, 0, 10, 10)], {
+			appearance: { fill: { swatchId: "ink" }, stroke },
+		})
+		const top = path("top", [rectangle("top-box", 5, 0, 15, 10)], {
+			appearance: { fill: { swatchId: "ink" }, stroke },
+		})
+		const red = path("red", [rectangle("red-box", 20, 0, 30, 10)], {
+			appearance: { fill: { swatchId: "red" }, stroke },
+		})
+		const source: DesignDocument = {
+			...documentWith(bottom, top, red),
+			swatches: [
+				...documentWith().swatches,
+				{ id: "red", name: "Red", source: { space: "rgb", r: 1, g: 0, b: 0 } },
+			],
+		}
+		let trimId = 0
+		const trimmed = applyDesignPathCommand(
+			"pathfinder-trim",
+			context(source, [bottom.id, top.id, red.id]),
+			{ nextId: () => `trim:${trimId++}` },
+		)
+		expect(trimmed.ok).toBe(true)
+		if (!trimmed.ok) return
+		expect(trimmed.document.objects).toHaveLength(4)
+		expect(
+			trimmed.document.objects.every(
+				({ appearance }) => appearance.stroke === undefined,
+			),
+		).toBe(true)
+
+		let mergeId = 0
+		const merged = applyDesignPathCommand(
+			"pathfinder-merge",
+			context(source, [bottom.id, top.id, red.id]),
+			{ nextId: () => `merge:${mergeId++}` },
+		)
+		expect(merged.ok).toBe(true)
+		if (!merged.ok) return
+		expect(merged.document.objects).toHaveLength(2)
+		expect(
+			merged.document.objects.map((object) => ({
+				fill: object.appearance.fill?.swatchId,
+				stroke: object.appearance.stroke,
+				bounds: objectBounds(object),
+			})),
+		).toMatchObject([
+			{ fill: "ink", stroke: undefined, bounds: { minX: 0, maxX: 15 } },
+			{ fill: "red", stroke: undefined, bounds: { minX: 20, maxX: 30 } },
+		])
+	})
+
+	it("crops underlying visible fills with the topmost mask and deletes mask-only area", () => {
+		const bottom = path("bottom", [rectangle("bottom-box", 0, 0, 20, 10)])
+		const middle = path("middle", [rectangle("middle-box", 5, 0, 15, 10)])
+		const mask = path("mask", [rectangle("mask-box", 10, 0, 25, 10)])
+		let sequence = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-crop",
+			context(documentWith(bottom, middle, mask), [
+				mask.id,
+				bottom.id,
+				middle.id,
+			]),
+			{ nextId: () => `crop:${sequence++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects).toHaveLength(2)
+		expect(
+			result.document.objects.map((object) => {
+				const bounds = objectBounds(object)
+				return [bounds?.minX, bounds?.maxX]
+			}),
+		).toEqual([
+			[15, 20],
+			[10, 15],
+		])
+		expect(
+			result.document.objects.every(
+				({ appearance }) => appearance.stroke === undefined,
+			),
+		).toBe(true)
+		expect(result.document.objects.some(({ id }) => id === mask.id)).toBe(false)
+	})
+
+	it("outlines every unique noded boundary once as a fresh editable open path", () => {
+		const bottom = path("bottom", [rectangle("bottom-box", 0, 0, 10, 10)])
+		const topStroke = {
+			swatchId: "ink",
+			width: 3,
+			cap: "round" as const,
+			join: "bevel" as const,
+			miterLimit: 4,
+			dashArray: [1, 2],
+			dashOffset: 0,
+		}
+		const top = path("top", [rectangle("top-box", 5, 0, 15, 10)], {
+			appearance: { fill: { swatchId: "ink" }, stroke: topStroke },
+		})
+		let sequence = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-outline",
+			context(documentWith(bottom, top), [bottom.id, top.id]),
+			{ nextId: () => `outline:${sequence++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects).toHaveLength(10)
+		expect(
+			result.document.objects.every(
+				(object) =>
+					object.appearance.fill === undefined &&
+					object.geometry.kind === "path" &&
+					object.geometry.contours.length === 1 &&
+					object.geometry.contours[0]?.closed === false &&
+					object.geometry.contours[0].points.length === 2,
+			),
+		).toBe(true)
+		expect(
+			result.document.objects.some(
+				({ appearance }) => appearance.stroke?.width === 1,
+			),
+		).toBe(true)
+		expect(
+			result.document.objects.some(
+				({ appearance }) => appearance.stroke?.width === topStroke.width,
+			),
+		).toBe(true)
+	})
+
+	it("nodes T-junctions before deduplicating Outline segments", () => {
+		const base = path("base", [rectangle("base-box", 0, 0, 20, 20)])
+		const crossing = path("crossing", [
+			rectangle("crossing-box", 5, -5, 15, 10),
+		])
+		let sequence = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-outline",
+			context(documentWith(base, crossing), [base.id, crossing.id]),
+			{ nextId: () => `junction:${sequence++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const segments = result.document.objects.flatMap((object) =>
+			object.geometry.kind === "path"
+				? object.geometry.contours.flatMap((output) => {
+						const [start, end] = output.points
+						return start === undefined || end === undefined
+							? []
+							: [{ start, end }]
+					})
+				: [],
+		)
+		const keys = segments.map(
+			({ start, end }) => `${start.x},${start.y}:${end.x},${end.y}`,
+		)
+		expect(new Set(keys).size).toBe(keys.length)
+		for (const segment of segments)
+			for (const candidate of segments.flatMap(({ start, end }) => [
+				start,
+				end,
+			])) {
+				const isEndpoint =
+					(candidate.x === segment.start.x &&
+						candidate.y === segment.start.y) ||
+					(candidate.x === segment.end.x && candidate.y === segment.end.y)
+				if (!isEndpoint)
+					expect(pointOnSegment(candidate, segment.start, segment.end)).toBe(
+						false,
+					)
+			}
+	})
+
+	it("preserves authored fill rules and passes progress and cancellation through partition commands", () => {
+		const outer = rectangle("outer", 0, 0, 20, 20)
+		const nested = rectangle("nested", 5, 5, 15, 15)
+		const nonzero = path("nonzero", [outer, nested], {
+			geometry: {
+				kind: "path",
+				fillRule: "nonzero",
+				contours: [outer, nested],
+			},
+		})
+		const evenodd = path("evenodd", [outer, nested], {
+			geometry: {
+				kind: "path",
+				fillRule: "evenodd",
+				contours: [outer, nested],
+			},
+		})
+		const outlineCount = (object: DesignObject) => {
+			let sequence = 0
+			const result = applyDesignPathCommand(
+				"pathfinder-outline",
+				context(documentWith(object), [object.id]),
+				{ nextId: () => `fill-rule:${sequence++}` },
+			)
+			return result.ok ? result.document.objects.length : -1
+		}
+		expect(outlineCount(nonzero)).toBe(4)
+		expect(outlineCount(evenodd)).toBe(8)
+
+		const progress: number[] = []
+		let sequence = 0
+		const completed = applyDesignPathCommand(
+			"pathfinder-divide",
+			context(
+				documentWith(
+					nonzero,
+					path("other", [rectangle("other-box", 10, 0, 30, 20)]),
+				),
+				["nonzero", "other"],
+			),
+			{
+				nextId: () => `progress:${sequence++}`,
+				onPathfinderProgress: ({ completedRegions }) =>
+					progress.push(completedRegions),
+			},
+		)
+		expect(completed.ok).toBe(true)
+		expect(progress).toEqual([0, 1, 2])
+
+		const cancelled = applyDesignPathCommand(
+			"pathfinder-divide",
+			context(documentWith(nonzero, evenodd), [nonzero.id, evenodd.id]),
+			{ pathfinderSignal: { aborted: true } },
+		)
+		expect(cancelled).toEqual({
+			ok: false,
+			error: "Boolean partition was aborted.",
+		})
+	})
+
+	it("replaces complete hierarchy units atomically and undo restores every Pathfinder source", () => {
+		const first = path("first", [rectangle("first-box", 0, 0, 10, 10)])
+		const second = path("second", [rectangle("second-box", 5, 0, 15, 10)])
+		const front = path("front", [rectangle("front-box", 30, 0, 40, 10)])
+		const source: DesignDocument = {
+			...documentWith(first, second, front),
+			scene: [
+				{ kind: "group", id: "group:pathfinder" },
+				{ kind: "object", id: front.id },
+			],
+			groups: [
+				{
+					id: "group:pathfinder",
+					name: "Pathfinder",
+					children: [
+						{ kind: "object", id: first.id },
+						{ kind: "object", id: second.id },
+					],
+				},
+			],
+		}
+		let sequence = 0
+		const divided = applyDesignPathCommand(
+			"pathfinder-divide",
+			context(source, [first.id, second.id]),
+			{ nextId: () => `hierarchy-divide:${sequence++}` },
+		)
+		expect(divided.ok).toBe(true)
+		if (!divided.ok) return
+		expect(divided.document.groups).toEqual([])
+		expect(divided.document.scene?.at(-1)).toEqual({
+			kind: "object",
+			id: front.id,
+		})
+		expect(divided.document.scene?.slice(0, -1)).toEqual(
+			divided.objectSelection.map((id) => ({ kind: "object", id })),
+		)
+		sequence = 0
+		const dividedInside = applyDesignPathCommand(
+			"pathfinder-divide",
+			context(source, [first.id, second.id], [], "group:pathfinder"),
+			{ nextId: () => `hierarchy-divide-inner:${sequence++}` },
+		)
+		expect(dividedInside.ok).toBe(true)
+		if (!dividedInside.ok) return
+		expect(dividedInside.document.scene).toEqual(source.scene)
+		expect(dividedInside.document.groups?.[0]?.children).toEqual(
+			dividedInside.objectSelection.map((id) => ({ kind: "object", id })),
+		)
+		expect(dividedInside.document.objects.at(-1)?.id).toBe(front.id)
+		const committed = reduceDesignHistory(createDesignHistory(source), {
+			type: "commit",
+			document: divided.document,
 		})
 		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
 			source,

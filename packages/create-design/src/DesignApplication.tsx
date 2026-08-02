@@ -157,6 +157,7 @@ import {
 import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
+	designObjectFillRule,
 	rotateObject,
 	scaleObject,
 	translateObject,
@@ -170,6 +171,16 @@ import {
 	designPathCommandEligibility,
 	type DesignPathCommand,
 } from "./path-commands.ts"
+import {
+	createPathfinderWorkerClient,
+	type PathfinderWorkerClient,
+	type PathfinderWorkerTask,
+} from "./pathfinder-worker-client.ts"
+import {
+	isDesignPartitionPathfinderCommand,
+	type DesignPartitionPathfinderCommand,
+	type PathfinderWorkerProgress,
+} from "./pathfinder-worker-protocol.ts"
 import {
 	expandDesignStroke,
 	strokeExpansionEligibility,
@@ -481,11 +492,53 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 export type DesignApplicationProps = Readonly<{
 	children?: ComponentChildren
 	initialDocument?: DesignDocument
+	pathfinderWorkerClient?: PathfinderWorkerClient
 	sourceSession?: DesignSourceSession
 }>
 
+type ActivePathfinderOperation = Readonly<{
+	cancellationRequested: boolean
+	command: DesignPartitionPathfinderCommand
+	label: string
+	progress: PathfinderWorkerProgress | null
+}>
+
+function pathfinderOperationLabel(
+	command: DesignPartitionPathfinderCommand,
+): string {
+	switch (command) {
+		case "pathfinder-divide":
+			return "Divide"
+		case "pathfinder-trim":
+			return "Trim"
+		case "pathfinder-merge":
+			return "Merge"
+		case "pathfinder-crop":
+			return "Crop"
+		case "pathfinder-outline":
+			return "Outline"
+	}
+}
+
+const sameStringSelection = (
+	left: readonly string[],
+	right: readonly string[],
+): boolean =>
+	left.length === right.length &&
+	left.every((value, index) => value === right[index])
+
+const sameDirectSelection = (
+	left: readonly DesignDirectSelectionTarget[],
+	right: readonly DesignDirectSelectionTarget[],
+): boolean =>
+	left.length === right.length &&
+	left.every(
+		(value, index) =>
+			directSelectionKey(value) === directSelectionKey(right[index]!),
+	)
+
 export function DesignApplication(props: DesignApplicationProps) {
-	const { initialDocument, sourceSession } = props
+	const { initialDocument, pathfinderWorkerClient, sourceSession } = props
 	const canvasTheme = useDesignCanvasTheme()
 	const [initialLoad] = useState(() => initialDesignLoad(initialDocument))
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
@@ -553,6 +606,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [status, setStatus] = useState(
 		`Ready — draw a shape or press ${MOD_KEY_LABEL}+Shift+P for commands.`,
 	)
+	const [activePathfinder, setActivePathfinder] =
+		useState<ActivePathfinderOperation | null>(null)
 	const [announcement, setAnnouncement] = useState(() =>
 		persistenceLabel(persistence),
 	)
@@ -595,15 +650,36 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const previewObjectsRef = useRef<readonly DesignObject[]>([])
 	const previewArtboardDocumentRef = useRef<DesignDocument | null>(null)
 	const documentRef = useRef(document)
+	const selectionRef = useRef(selection)
+	const directSelectionRef = useRef(directSelection)
+	const currentGroupScopeRef = useRef<string | null>(null)
 	const persistenceRef = useRef(persistence)
 	const announcedPersistenceStatusRef = useRef(persistence.status)
 	const serializedDocumentRef = useRef(JSON.stringify(document))
 	const preserveInvalidStorageRef = useRef(initialLoad.preserveInvalidStorage)
 	const saveDocumentsRef = useRef(new Map<number, DesignDocument>())
+	const pathfinderTaskRef = useRef<Readonly<{
+		generation: number
+		sourceDocument: DesignDocument
+		task: PathfinderWorkerTask
+	}> | null>(null)
+	const pathfinderGenerationRef = useRef(0)
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
 	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
+	const pathfinderClient = useMemo(
+		() => pathfinderWorkerClient ?? createPathfinderWorkerClient(),
+		[pathfinderWorkerClient],
+	)
 	useEffect(() => () => pdfDownloadManager.dispose(), [pdfDownloadManager])
+	useEffect(
+		() => () => {
+			pathfinderGenerationRef.current += 1
+			pathfinderTaskRef.current?.task.cancel()
+			pathfinderTaskRef.current = null
+		},
+		[],
+	)
 	useEffect(() => {
 		if (announcedPersistenceStatusRef.current === persistence.status) return
 		announcedPersistenceStatusRef.current = persistence.status
@@ -636,9 +712,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 		return `${Date.now().toString(36)}:${sequence.current.toString(36)}`
 	}, [])
 	documentRef.current = document
+	selectionRef.current = selection
+	directSelectionRef.current = directSelection
 	persistenceRef.current = persistence
 	const activeArtboard = activeDesignArtboard(document, activeArtboardId)
 	const currentGroupScope = groupScope.at(-1) ?? null
+	currentGroupScopeRef.current = currentGroupScope
 	const selectedUnit = designSelectionUnitForIds(
 		document,
 		selection,
@@ -731,6 +810,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		document,
 		objectSelection: selection,
 		directSelection,
+		scopeGroupId: currentGroupScope,
 	}
 	const baseScale = designBaseScale(canvasViewport, activeArtboard)
 	const viewOptions = useMemo(
@@ -1153,17 +1233,128 @@ export function DesignApplication(props: DesignApplicationProps) {
 		)
 	}, [commit, document, nextId, selection])
 
-	const executePathCommand = useCallback(
-		(command: DesignPathCommand): void => {
-			const result = applyDesignPathCommand(
+	const executePartitionPathfinder = useCallback(
+		(command: DesignPartitionPathfinderCommand): void => {
+			if (pathfinderTaskRef.current !== null) {
+				setStatus(
+					"Cancel the active Pathfinder operation before starting another.",
+				)
+				return
+			}
+			const sourceDocument = document
+			const sourceScopeGroupId = currentGroupScope
+			const label = pathfinderOperationLabel(command)
+			const generation = ++pathfinderGenerationRef.current
+			setActivePathfinder({
+				cancellationRequested: false,
 				command,
-				{
-					document,
+				label,
+				progress: null,
+			})
+			setStatus(`${label}: preparing off-thread geometry…`)
+			let task: PathfinderWorkerTask
+			try {
+				task = pathfinderClient.run(
+					{
+						command,
+						context: pathCommandContext,
+						idSeed: nextId(),
+					},
+					(progress) => {
+						if (generation !== pathfinderGenerationRef.current) return
+						setActivePathfinder((current) =>
+							current?.command !== command ? current : { ...current, progress },
+						)
+						setStatus(
+							progress.phase === "materializing"
+								? `${label}: materializing from ${progress.pieceCount} partition pieces…`
+								: `${label}: partitioning ${progress.completedRegions} of ${progress.totalRegions} regions · ${progress.pieceCount} pieces…`,
+						)
+					},
+				)
+			} catch (error) {
+				setActivePathfinder(null)
+				setStatus(
+					error instanceof Error
+						? error.message
+						: "Pathfinder worker could not start.",
+				)
+				return
+			}
+			pathfinderTaskRef.current = { generation, sourceDocument, task }
+			void task.result.then((outcome) => {
+				if (generation !== pathfinderGenerationRef.current) return
+				pathfinderTaskRef.current = null
+				setActivePathfinder(null)
+				if (outcome.status === "cancelled") {
+					setStatus(`${label} was cancelled; the document was not changed.`)
+					return
+				}
+				if (outcome.status === "failed") {
+					setStatus(outcome.error)
+					return
+				}
+				if (
+					documentRef.current !== sourceDocument ||
+					!sameStringSelection(selectionRef.current, selection) ||
+					!sameDirectSelection(directSelectionRef.current, directSelection) ||
+					currentGroupScopeRef.current !== sourceScopeGroupId
+				) {
+					setStatus(
+						`${label} finished, but its result was discarded because the document, selection, or editing scope changed.`,
+					)
+					return
+				}
+				const result = outcome.result
+				if (!result.ok) {
+					setStatus(result.error)
+					return
+				}
+				pathCommandSelectionsRef.current.set(sourceDocument, {
 					objectSelection: selection,
 					directSelection,
-				},
-				{ nextId },
-			)
+				})
+				pathCommandSelectionsRef.current.set(result.document, {
+					objectSelection: result.objectSelection,
+					directSelection: result.directSelection,
+				})
+				commit(result.document)
+				setSelection(result.objectSelection)
+				setDirectSelection(result.directSelection)
+				setStatus(result.message)
+			})
+		},
+		[
+			commit,
+			currentGroupScope,
+			directSelection,
+			document,
+			nextId,
+			pathCommandContext,
+			pathfinderClient,
+			selection,
+		],
+	)
+
+	const cancelPartitionPathfinder = useCallback((): void => {
+		const active = pathfinderTaskRef.current
+		if (active === null) return
+		active.task.cancel()
+		setActivePathfinder((current) =>
+			current === null ? null : { ...current, cancellationRequested: true },
+		)
+		setStatus("Cancelling Pathfinder; the document remains unchanged…")
+	}, [])
+
+	const executePathCommand = useCallback(
+		(command: DesignPathCommand): void => {
+			if (isDesignPartitionPathfinderCommand(command)) {
+				executePartitionPathfinder(command)
+				return
+			}
+			const result = applyDesignPathCommand(command, pathCommandContext, {
+				nextId,
+			})
 			if (!result.ok) {
 				setStatus(result.error)
 				return
@@ -1181,7 +1372,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setDirectSelection(result.directSelection)
 			setStatus(result.message)
 		},
-		[commit, directSelection, document, nextId, selection],
+		[
+			commit,
+			directSelection,
+			document,
+			executePartitionPathfinder,
+			nextId,
+			pathCommandContext,
+			selection,
+		],
 	)
 
 	const navigateDesignHistory = useCallback(
@@ -1749,19 +1948,48 @@ export function DesignApplication(props: DesignApplicationProps) {
 						"Pathfinder: Exclude",
 						"Keep regions covered by an odd number of selected filled objects.",
 					],
+					[
+						"pathfinder-divide",
+						"Pathfinder: Divide",
+						"Split selected fills into independently selectable coverage pieces.",
+					],
+					[
+						"pathfinder-trim",
+						"Pathfinder: Trim",
+						"Keep topmost visible fill pieces and remove their strokes.",
+					],
+					[
+						"pathfinder-merge",
+						"Pathfinder: Merge",
+						"Trim hidden coverage and unite visible pieces with the same fill.",
+					],
+					[
+						"pathfinder-crop",
+						"Pathfinder: Crop",
+						"Use the topmost selected fill as a mask for the artwork below it.",
+					],
+					[
+						"pathfinder-outline",
+						"Pathfinder: Outline",
+						"Convert unique selected-region boundaries into editable open paths.",
+					],
 				] as const
 			).map(([id, displayName, description]) => {
 				const eligibility = designPathCommandEligibility(id, pathCommandContext)
+				const workerBusy =
+					activePathfinder !== null && isDesignPartitionPathfinderCommand(id)
 				return {
 					id,
 					displayName,
 					category: "Path",
 					description,
 					icon: "HobbyKnifeIcon" as const,
-					disabled: !eligibility.eligible,
-					...(eligibility.eligible
-						? {}
-						: { disabledReason: eligibility.reason }),
+					disabled: workerBusy || !eligibility.eligible,
+					...(workerBusy
+						? { disabledReason: "A Pathfinder operation is already running." }
+						: eligibility.eligible
+							? {}
+							: { disabledReason: eligibility.reason }),
 					do: () => executePathCommand(id),
 				}
 			}),
@@ -1893,6 +2121,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			),
 		],
 		[
+			activePathfinder,
 			alignSelection,
 			deleteSelection,
 			duplicateSelection,
@@ -3540,7 +3769,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 															dash: [...strokeStyle.dashArray],
 															dashOffset: strokeStyle.dashOffset,
 														})}
-												fillRule="evenodd"
+												fillRule={designObjectFillRule(object)}
 												selected={
 													selectedGroup === null &&
 													selection.includes(object.id)
@@ -3875,7 +4104,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 				/>
 			</main>
 
-			<footer>
+			<footer
+				data-pathfinder-active={activePathfinder === null ? undefined : true}
+			>
 				<span
 					data-screen-reader
 					role="status"
@@ -3887,6 +4118,34 @@ export function DesignApplication(props: DesignApplicationProps) {
 				<span data-footer-status title={status}>
 					{status}
 				</span>
+				{activePathfinder === null ? null : (
+					<span
+						data-pathfinder-progress
+						data-phase={activePathfinder.progress?.phase ?? "preparing"}
+					>
+						<span>
+							{activePathfinder.label}:{" "}
+							{activePathfinder.cancellationRequested
+								? "cancelling"
+								: (activePathfinder.progress?.phase ?? "preparing")}
+						</span>
+						{activePathfinder.progress === null ? null : (
+							<progress
+								aria-label={`${activePathfinder.label} Pathfinder progress`}
+								value={activePathfinder.progress.completedRegions}
+								max={Math.max(1, activePathfinder.progress.totalRegions)}
+							/>
+						)}
+						<button
+							type="button"
+							aria-label={`Cancel ${activePathfinder.label}`}
+							disabled={activePathfinder.cancellationRequested}
+							onClick={cancelPartitionPathfinder}
+						>
+							Cancel
+						</button>
+					</span>
+				)}
 				<span data-footer-persistence title={persistenceLabel(persistence)}>
 					{persistenceLabel(persistence)}
 				</span>

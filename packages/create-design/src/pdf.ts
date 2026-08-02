@@ -20,7 +20,10 @@ import {
 import { resolvedCmyk, resolvedRgb } from "./color.ts"
 import { activeDesignArtboard } from "./artboards.ts"
 import { documentToPdfTransform } from "./coordinates.ts"
-import { projectDesignObjectContours } from "./geometry.ts"
+import {
+	designObjectFillRule,
+	projectDesignObjectContours,
+} from "./geometry.ts"
 import type {
 	DesignContour,
 	DesignArtboard,
@@ -125,9 +128,13 @@ export function pdfObjectContentStream(
 	}
 	commands.push(
 		fill !== undefined && paintedStroke !== undefined
-			? "B*"
+			? designObjectFillRule(object) === "evenodd"
+				? "B*"
+				: "B"
 			: fill !== undefined
-				? "f*"
+				? designObjectFillRule(object) === "evenodd"
+					? "f*"
+					: "f"
 				: "S",
 	)
 	return commands.join("\n")

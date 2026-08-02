@@ -39,9 +39,13 @@ export interface DesignContour {
 	readonly points: readonly DesignPoint[]
 }
 
+export type DesignFillRule = "nonzero" | "evenodd"
+
 export type DesignGeometry =
 	| Readonly<{
 			readonly kind: "path"
+			/** Fill containment semantics. Legacy paths without this field are even-odd. */
+			readonly fillRule?: DesignFillRule
 			readonly contours: readonly DesignContour[]
 	  }>
 	| Readonly<{

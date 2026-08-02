@@ -66,6 +66,7 @@ const fixture = (): DesignDocument => ({
 			locked: true,
 			geometry: {
 				kind: "path",
+				fillRule: "nonzero",
 				contours: [
 					{
 						id: "contour:ink",
