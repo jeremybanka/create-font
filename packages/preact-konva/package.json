@@ -35,7 +35,7 @@
 	},
 	"dependencies": {
 		"konva": "10.3.0",
-		"preact": "10.29.7"
+		"preact": "10.29.8"
 	},
 	"devDependencies": {
 		"vitest": "4.1.10"
