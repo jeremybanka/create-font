@@ -11,6 +11,7 @@ import {
 	type DesignApplicationProps,
 } from "../src/DesignApplication.tsx"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
+import { groupDesignSelection } from "../src/design-hierarchy.ts"
 import { objectBounds } from "../src/geometry.ts"
 import {
 	DESIGN_RECOVERY_STORAGE_KEY,
@@ -133,6 +134,192 @@ describe("create-design shared vector scene", () => {
 		expect(stage.height()).toBe(720)
 		expect(stage.find(".design-paper")).toHaveLength(1)
 		expect(stage.find(".design-object").length).toBeGreaterThan(0)
+	})
+
+	it("enters nested groups on the mounted double-click sequence without moving them", async () => {
+		const base = createInitialDocument()
+		const first = base.objects[0]!
+		const third = {
+			...first,
+			id: "object:third",
+			name: "Third object",
+			transform: { ...first.transform, e: first.transform.e + 360 },
+		}
+		const expanded = {
+			...base,
+			objects: [...base.objects, third],
+			scene: [...base.objects, third].map(({ id }) => ({
+				kind: "object" as const,
+				id,
+			})),
+		}
+		const inner = groupDesignSelection(
+			expanded,
+			base.objects.map(({ id }) => id),
+			() => "inner",
+		)
+		if (inner === null) throw new Error("Inner fixture group was not created.")
+		const outer = groupDesignSelection(
+			inner.document,
+			[...inner.selection, third.id],
+			() => "outer",
+		)
+		if (outer === null) throw new Error("Outer fixture group was not created.")
+		const source = outer.document
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const persistedSource = storage.get(DESIGN_STORAGE_KEY)
+		if (persistedSource === undefined)
+			throw new Error("Initial grouped document was not persisted.")
+		const canvas = stage.container().querySelector("canvas")
+		if (canvas === null) throw new Error("Design canvas was not found.")
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		let pointer = { x: 260, y: 220 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const objectNode = (id: string) => {
+			const node = stage
+				.find(".design-object")
+				.find((candidate: { name(): string }) => candidate.name().includes(id))
+			if (node === undefined) throw new Error(`${id} was not rendered.`)
+			return node
+		}
+		const firePointer = (
+			id: string,
+			type: "pointerdown" | "pointermove" | "pointerup",
+			next: { x: number; y: number },
+		) => {
+			pointer = next
+			objectNode(id).fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: next.x,
+						clientY: next.y,
+						isPrimary: true,
+						pointerId: 17,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		const click = async (id: string, at = pointer) => {
+			await act(async () => {
+				firePointer(id, "pointerdown", at)
+				firePointer(id, "pointerup", at)
+				objectNode(id).fire(
+					"click",
+					{ evt: new MouseEvent("click", { bubbles: true, detail: 1 }) },
+					true,
+				)
+				await Promise.resolve()
+			})
+		}
+		const finishDoubleClick = async (id: string, at = pointer) => {
+			await act(async () => {
+				firePointer(id, "pointerdown", { x: at.x + 1, y: at.y + 1 })
+				firePointer(id, "pointermove", { x: at.x + 3, y: at.y + 2 })
+				firePointer(id, "pointerup", { x: at.x + 3, y: at.y + 2 })
+				objectNode(id).fire(
+					"click",
+					{ evt: new MouseEvent("click", { bubbles: true, detail: 2 }) },
+					true,
+				)
+				objectNode(id).fire(
+					"dblclick",
+					{ evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }) },
+					true,
+				)
+				await Promise.resolve()
+			})
+		}
+		const doubleClick = async (id: string, at = pointer) => {
+			await click(id, at)
+			await finishDoubleClick(id, at)
+		}
+		const groupLabel = () =>
+			stage.findOne(".design-group-selection-label")?.text() ?? null
+		const hint = () => document.querySelector("canvas-hint")?.textContent
+
+		await doubleClick(first.id)
+		expect(groupLabel()).toBe("Group 1 · 2 objects")
+		expect(hint()).toContain("Editing group contents")
+		expect(document.querySelector("footer > span")?.textContent).toContain(
+			"Editing inside Group 2",
+		)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedSource)
+
+		await click(third.id, { x: 620, y: 220 })
+		expect(groupLabel()).toBe(null)
+		await click(first.id, { x: 260, y: 220 })
+		expect(groupLabel()).toBe("Group 1 · 2 objects")
+
+		await finishDoubleClick(first.id, { x: 260, y: 220 })
+		expect(groupLabel()).toBe(null)
+		expect(document.querySelector("footer > span")?.textContent).toContain(
+			"Editing inside Group 1",
+		)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedSource)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedSource)
+
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		expect(groupLabel()).toBe("Group 1 · 2 objects")
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		expect(groupLabel()).toBe("Group 2 · 3 objects")
+		expect(hint()).toContain("Double-click a group")
+
+		const before = source.objects.map(({ transform }) => ({
+			x: transform.e,
+			y: transform.f,
+		}))
+		await act(async () => {
+			firePointer(first.id, "pointerdown", { x: 260, y: 220 })
+			firePointer(first.id, "pointermove", { x: 300, y: 245 })
+			firePointer(first.id, "pointerup", { x: 300, y: 245 })
+			await Promise.resolve()
+		})
+		const moved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		const deltas = moved.objects.map(({ transform }, index) => ({
+			x: transform.e - before[index]!.x,
+			y: transform.f - before[index]!.y,
+		}))
+		expect(deltas[0]?.x).not.toBe(0)
+		expect(deltas.every((delta) => delta.x === deltas[0]!.x)).toBe(true)
+		expect(deltas.every((delta) => delta.y === deltas[0]!.y)).toBe(true)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
 	})
 
 	function sourceSession(

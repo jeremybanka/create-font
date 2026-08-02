@@ -13,6 +13,7 @@ import {
 	projectDesignObjectContours,
 	translateObject,
 } from "./geometry.ts"
+import { duplicateDesignHierarchySelection } from "./design-hierarchy.ts"
 import {
 	documentToInterchangePoint,
 	documentToInterchangeVector,
@@ -116,12 +117,29 @@ export function duplicateDesignObjects(
 	selection: readonly string[]
 }> | null {
 	const selectedIds = new Set(objectIds)
-	const duplicates = document.objects
-		.filter((object) => selectedIds.has(object.id))
-		.map((object) => cloneDesignObject(object, nextId, deltaX, deltaY))
+	const sources = document.objects.filter((object) =>
+		selectedIds.has(object.id),
+	)
+	const duplicates = sources.map((object) =>
+		cloneDesignObject(object, nextId, deltaX, deltaY),
+	)
 	if (duplicates.length === 0) return null
+	const idMap = new Map(
+		sources.map((object, index) => [object.id, duplicates[index]!.id] as const),
+	)
+	const withDuplicates = {
+		...document,
+		objects: [...document.objects, ...duplicates],
+	}
+	const hierarchy = duplicateDesignHierarchySelection(
+		withDuplicates,
+		objectIds,
+		idMap,
+		nextId,
+	)
+	if (hierarchy !== null) return hierarchy
 	return {
-		document: { ...document, objects: [...document.objects, ...duplicates] },
+		document: withDuplicates,
 		selection: duplicates.map((object) => object.id),
 	}
 }

@@ -34,6 +34,7 @@ import {
 	Line,
 	Rect,
 	Stage,
+	Text,
 } from "@create-font/preact-konva"
 import { DownloadIcon } from "@radix-ui/react-icons"
 import {
@@ -109,6 +110,19 @@ import {
 	updateDesignGuide,
 } from "./design-guides.ts"
 import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
+import {
+	appendDesignHierarchyObjects,
+	designGroupSelectionUnit,
+	designSelectInteraction,
+	designSelectionUnitAtObject,
+	designSelectionUnitForIds,
+	groupDesignSelection,
+	normalizeDesignSelection,
+	replaceDesignHierarchyObject,
+	stackDesignSelection,
+	ungroupDesignSelection,
+	type DesignStackCommand,
+} from "./design-hierarchy.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import {
 	directSelectionDescription,
@@ -119,7 +133,6 @@ import {
 	selectableObjectIds,
 	selectionBounds as combinedSelectionBounds,
 	toggleDirectSelection,
-	toggleObjectSelection,
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
 } from "./design-selection.ts"
@@ -254,6 +267,24 @@ type DesignObjectGesture = Extract<
 	CanvasGesture,
 	{ readonly kind: "move" | "transform" }
 >
+
+const GROUP_DOUBLE_CLICK_MS = 500
+const GROUP_DOUBLE_CLICK_SLOP_PIXELS = 8
+const GROUP_DRAG_THRESHOLD_PIXELS = 4
+
+interface GroupClickCandidate {
+	readonly groupId: string
+	readonly screen: CanvasPoint
+	readonly timeStamp: number
+}
+
+interface GroupPointerPress {
+	readonly pointerId: number
+	readonly groupId: string
+	readonly startScreen: CanvasPoint
+	readonly secondClick: boolean
+	dragged: boolean
+}
 
 interface DesignGestureObjectPreview {
 	readonly objects: readonly DesignObject[]
@@ -453,6 +484,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	)
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
+	const [groupScope, setGroupScope] = useState<readonly string[]>([])
 	const [activeArtboardId, setActiveArtboardId] = useState(
 		() => activeDesignArtboard(initialLoad.document).id,
 	)
@@ -513,6 +545,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}> | null>(null)
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
+	const groupClickCandidateRef = useRef<GroupClickCandidate | null>(null)
+	const groupPointerPressRef = useRef<GroupPointerPress | null>(null)
+	const pendingGroupEntryRef = useRef<string | null>(null)
 	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
 	const previewObjectsRef = useRef<readonly DesignObject[]>([])
 	const previewArtboardDocumentRef = useRef<DesignDocument | null>(null)
@@ -536,10 +571,32 @@ export function DesignApplication(props: DesignApplicationProps) {
 	documentRef.current = document
 	persistenceRef.current = persistence
 	const activeArtboard = activeDesignArtboard(document, activeArtboardId)
+	const currentGroupScope = groupScope.at(-1) ?? null
+	const selectedUnit = designSelectionUnitForIds(
+		document,
+		selection,
+		currentGroupScope,
+	)
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
-	const selectedObject = selectedObjects[0] ?? null
+	const selectedObject =
+		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
+	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
+	const selectedLockedObject = selectedObjects.find((object) => object.locked)
+	const selectionDescription =
+		selectedGroup === null
+			? selection.length === 0
+				? "No objects selected."
+				: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`
+			: `${selectedGroup.name}, group with ${selectedGroup.objectIds.length} object${selectedGroup.objectIds.length === 1 ? "" : "s"}, selected${selectedLockedObject === undefined ? "" : "; contains locked artwork"}.`
+	useEffect(() => {
+		setGroupScope((current) => {
+			const validIds = new Set(document.groups?.map(({ id }) => id) ?? [])
+			const valid = current.filter((id) => validIds.has(id))
+			return valid.length === current.length ? current : valid
+		})
+	}, [document.groups])
 	const authoredAppearance = validDesignAppearance(
 		currentAppearance,
 		document.swatches,
@@ -819,14 +876,31 @@ export function DesignApplication(props: DesignApplicationProps) {
 		(nextTool: DesignTool): void => {
 			cancelCanvasGesture()
 			if (nextTool !== "direct") setDirectSelection([])
+			if (nextTool === "select" || nextTool === "transform")
+				setSelection((current) =>
+					normalizeDesignSelection(document, current, currentGroupScope),
+				)
+			if (
+				nextTool !== "select" &&
+				nextTool !== "transform" &&
+				nextTool !== "direct"
+			)
+				setGroupScope([])
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
 		},
-		[cancelCanvasGesture],
+		[cancelCanvasGesture, currentGroupScope, document],
 	)
 
 	const deleteSelection = useCallback((): void => {
 		if (selection.length === 0) return
+		const locked = document.objects.find(
+			(object) => selection.includes(object.id) && object.locked,
+		)
+		if (locked !== undefined) {
+			setStatus(`Unlock ${locked.name} before deleting the complete selection.`)
+			return
+		}
 		if (
 			commitVectorIntent({
 				kind: "delete",
@@ -834,7 +908,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 			})
 		)
 			setStatus("Deleted selection.")
-	}, [commitVectorIntent, selection])
+	}, [commitVectorIntent, document.objects, selection])
 
 	const duplicateSelection = useCallback((): void => {
 		const result = duplicateDesignObjects(document, selection, nextId)
@@ -843,9 +917,47 @@ export function DesignApplication(props: DesignApplicationProps) {
 		setSelection(result.selection)
 		setDirectSelection([])
 		setStatus(
-			`Duplicated ${result.selection.length} object${result.selection.length === 1 ? "" : "s"} with offset.`,
+			`Duplicated ${selectedGroup?.name ?? `${result.selection.length} object${result.selection.length === 1 ? "" : "s"}`} with offset.`,
 		)
+	}, [commit, document, nextId, selectedGroup?.name, selection])
+
+	const groupSelection = useCallback((): void => {
+		const result = groupDesignSelection(document, selection, nextId)
+		if (result === null) {
+			setStatus("Select at least two sibling objects to group.")
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus("Grouped selection.")
 	}, [commit, document, nextId, selection])
+
+	const ungroupSelection = useCallback((): void => {
+		const result = ungroupDesignSelection(document, selection)
+		if (result === null) {
+			setStatus("Select every object in one group to ungroup it.")
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus("Ungrouped selection.")
+	}, [commit, document, selection])
+
+	const stackSelection = useCallback(
+		(command: DesignStackCommand): void => {
+			const result = stackDesignSelection(document, selection, command)
+			if (result === null) {
+				setStatus("The selection is already at that stacking position.")
+				return
+			}
+			commit(result.document)
+			setSelection(result.selection)
+			setStatus("Changed selection stacking order.")
+		},
+		[commit, document, selection],
+	)
 
 	const expandSelection = useCallback((): void => {
 		const eligibility = shapeExpansionEligibility(document, selection)
@@ -882,14 +994,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setStatus("The selected object is unavailable.")
 			return
 		}
-		commit({
-			...document,
-			objects: [
-				...document.objects.slice(0, index),
-				...result.objects,
-				...document.objects.slice(index + 1),
-			],
-		})
+		commit(
+			replaceDesignHierarchyObject(
+				{
+					...document,
+					objects: [
+						...document.objects.slice(0, index),
+						...result.objects,
+						...document.objects.slice(index + 1),
+					],
+				},
+				eligibility.object.id,
+				result.objects.map((object) => object.id),
+			),
+		)
 		setSelection([result.selectedObjectId])
 		setDirectSelection([])
 		setStatus(
@@ -955,7 +1073,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				cancelCanvasGesture()
 				return
 			}
-			commit({ ...document, objects: [...document.objects, object] })
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+				),
+			)
 			setSelection([object.id])
 			penPointsRef.current = []
 			setPenPoints([])
@@ -1211,7 +1334,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 					(candidate) => candidate.id === change.id,
 				)
 				if (object === undefined) return
-				setSelection([object.id])
+				setSelection(
+					normalizeDesignSelection(document, [object.id], currentGroupScope),
+				)
 				selectTool("select")
 				requestAnimationFrame(() => artboardWrapRef.current?.focus())
 				setStatus(`Reviewing ${object.name}.`)
@@ -1263,9 +1388,24 @@ export function DesignApplication(props: DesignApplicationProps) {
 		reorderArtboard,
 		reviewSourceChange,
 		selectObject: (object, additive = false) => {
-			setSelection((current) =>
-				toggleObjectSelection(current, object.id, additive),
+			const unit = designSelectionUnitAtObject(
+				document,
+				object.id,
+				currentGroupScope,
 			)
+			if (unit === null) return
+			setSelection((current) => {
+				const unitIds = new Set(unit.objectIds)
+				const complete = unit.objectIds.every((id) => current.includes(id))
+				if (!additive) return unit.objectIds
+				return complete
+					? current.filter((id) => !unitIds.has(id))
+					: normalizeDesignSelection(
+							document,
+							[...current, ...unit.objectIds],
+							currentGroupScope,
+						)
+			})
 			setDirectSelection([])
 		},
 		selectSwatch: (swatch) => setSelectedSwatchId(swatch.id),
@@ -1347,6 +1487,46 @@ export function DesignApplication(props: DesignApplicationProps) {
 				shortcut: "⌘ E",
 				do: exportDocument,
 			},
+			{
+				id: "group-selection",
+				displayName: "Group",
+				category: "Object",
+				description:
+					"Group selected sibling objects without changing their appearance.",
+				icon: "Link1Icon",
+				shortcut: "⌘ G",
+				disabled: selection.length < 2,
+				disabledReason: "Select at least two objects.",
+				do: groupSelection,
+			},
+			{
+				id: "ungroup-selection",
+				displayName: "Ungroup",
+				category: "Object",
+				description: "Release the selected group's children in place.",
+				icon: "LinkBreak1Icon",
+				shortcut: "⇧⌘ G",
+				disabled: selection.length === 0,
+				disabledReason: "Select a complete group first.",
+				do: ungroupSelection,
+			},
+			...(
+				[
+					["forward", "Bring Forward"],
+					["backward", "Send Backward"],
+					["front", "Bring to Front"],
+					["back", "Send to Back"],
+				] as const
+			).map(([command, displayName]) => ({
+				id: `stack-${command}`,
+				displayName,
+				category: "Object",
+				description: "Change the selected object or group's stacking order.",
+				icon: "ShuffleIcon" as const,
+				disabled: selection.length === 0,
+				disabledReason: "Select an object first.",
+				do: () => stackSelection(command),
+			})),
 			{
 				id: "expand-shape",
 				displayName: "Expand Shape",
@@ -1469,7 +1649,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 				shortcut: "⌘ A",
 				disabled: selectableObjectIds(document.objects).length === 0,
 				do: () => {
-					const objectIds = selectableObjectIds(document.objects)
+					const objectIds = normalizeDesignSelection(
+						document,
+						selectableObjectIds(document.objects),
+						currentGroupScope,
+					)
 					setSelection(objectIds)
 					setDirectSelection(
 						tool === "direct"
@@ -1537,6 +1721,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[
 			deleteSelection,
 			duplicateSelection,
+			groupSelection,
 			expandSelection,
 			expandStrokeSelection,
 			executePathCommand,
@@ -1550,10 +1735,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 			selection.length,
 			selection,
 			directSelection,
+			stackSelection,
 			strokeEligibility,
 			selectedObject?.id,
 			selectedSwatchId,
 			tool,
+			ungroupSelection,
 			document,
 		],
 	)
@@ -1797,7 +1984,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 			const mod = event.metaKey || event.ctrlKey
 			if (mod && event.key.toLowerCase() === "a") {
 				event.preventDefault()
-				const objectIds = selectableObjectIds(document.objects)
+				const objectIds = normalizeDesignSelection(
+					document,
+					selectableObjectIds(document.objects),
+					currentGroupScope,
+				)
 				setSelection(objectIds)
 				if (tool === "direct")
 					setDirectSelection(
@@ -1824,6 +2015,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				duplicateSelection()
 				return
 			}
+			if (mod && event.key.toLowerCase() === "g") {
+				event.preventDefault()
+				if (event.shiftKey) ungroupSelection()
+				else groupSelection()
+				return
+			}
 			if (mod && event.key.toLowerCase() === "z") {
 				event.preventDefault()
 				navigateDesignHistory(event.shiftKey ? "redo" : "undo")
@@ -1836,6 +2033,21 @@ export function DesignApplication(props: DesignApplicationProps) {
 			}
 			if (event.key === "Escape") {
 				cancelCanvasGesture()
+				const exitedGroupId = groupScope.at(-1)
+				if (exitedGroupId !== undefined) {
+					const parentScope = groupScope.at(-2) ?? null
+					const group = designGroupSelectionUnit(document, exitedGroupId)
+					const descendantId = group?.objectIds[0]
+					const unit =
+						descendantId === undefined
+							? null
+							: designSelectionUnitAtObject(document, descendantId, parentScope)
+					setGroupScope((current) => current.slice(0, -1))
+					setSelection(unit?.objectIds ?? [])
+					setDirectSelection([])
+					setStatus(`Exited ${group?.name ?? "group"}; group selected.`)
+					return
+				}
 				setSelection([])
 				setDirectSelection([])
 				setSelectedGuideId(null)
@@ -1863,16 +2075,23 @@ export function DesignApplication(props: DesignApplicationProps) {
 				const next =
 					tool === "direct"
 						? translateDirectSelection(document, directSelection, delta)
-						: {
-								...document,
-								objects: document.objects.map((object) =>
-									selection.includes(object.id) &&
-									!object.locked &&
-									!object.hidden
-										? translateObject(object, delta.x, delta.y)
-										: object,
-								),
-							}
+						: selectedLockedObject !== undefined
+							? document
+							: {
+									...document,
+									objects: document.objects.map((object) =>
+										selection.includes(object.id) && !object.locked
+											? translateObject(object, delta.x, delta.y)
+											: object,
+									),
+								}
+				if (selectedLockedObject !== undefined && tool !== "direct") {
+					event.preventDefault()
+					setStatus(
+						`Unlock ${selectedLockedObject.name} before nudging the complete selection.`,
+					)
+					return
+				}
 				if (
 					next !== document &&
 					(selection.length > 0 || directSelection.length > 0)
@@ -1925,6 +2144,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}, [
 		deleteSelection,
 		duplicateSelection,
+		groupSelection,
 		commit,
 		deleteArtboard,
 		cancelCanvasGesture,
@@ -1941,6 +2161,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selection,
 		snapSettings,
 		tool,
+		ungroupSelection,
 		worldScale,
 	])
 
@@ -2091,25 +2312,94 @@ export function DesignApplication(props: DesignApplicationProps) {
 		event: KonvaEventObject<PointerEvent>,
 		object: DesignObject,
 	): void => {
-		if (object.locked || (tool !== "select" && tool !== "transform")) return
-		event.cancelBubble = true
-		const additive = gestureModifiers(event.evt).additive
-		const nextSelection = toggleObjectSelection(selection, object.id, additive)
-		setSelection(nextSelection)
-		setDirectSelection([])
-		if (additive) return
-		const movingIds = selection.includes(object.id) ? selection : [object.id]
-		const originals = document.objects.filter(
-			(candidate) =>
-				movingIds.includes(candidate.id) &&
-				!candidate.locked &&
-				!candidate.hidden,
+		if (tool !== "select" && tool !== "transform") return
+		const interaction = designSelectInteraction(
+			document,
+			selection,
+			object.id,
+			currentGroupScope,
+			gestureModifiers(event.evt).additive,
 		)
+		if (interaction === null) return
+		const { unit } = interaction
+		event.cancelBubble = true
+		if (unit.kind === "group") {
+			const screen = gesturePointer(event).screen
+			const candidate = groupClickCandidateRef.current
+			const elapsed =
+				candidate === null
+					? Number.POSITIVE_INFINITY
+					: event.evt.timeStamp - candidate.timeStamp
+			const secondClick =
+				candidate?.groupId === unit.id &&
+				elapsed >= 0 &&
+				elapsed <= GROUP_DOUBLE_CLICK_MS &&
+				Math.hypot(
+					screen.x - candidate.screen.x,
+					screen.y - candidate.screen.y,
+				) <= GROUP_DOUBLE_CLICK_SLOP_PIXELS
+			groupPointerPressRef.current = {
+				pointerId: event.evt.pointerId,
+				groupId: unit.id,
+				startScreen: screen,
+				secondClick,
+				dragged: false,
+			}
+			if (secondClick) groupClickCandidateRef.current = null
+			else {
+				groupClickCandidateRef.current = null
+				pendingGroupEntryRef.current = null
+			}
+		} else {
+			groupClickCandidateRef.current = null
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = null
+		}
+		const additive = gestureModifiers(event.evt).additive
+		setSelection(interaction.selection)
+		setDirectSelection([])
+		setStatus(
+			unit.kind === "group"
+				? `${unit.name} selected as one group. Double-click to edit its contents.`
+				: `${unit.name} selected.`,
+		)
+		if (additive) return
+		const originals = interaction.objects
+		const locked = interaction.lockedObject
+		if (locked !== null) {
+			setStatus(
+				`Selected ${unit.name}, but ${locked.name} is locked; unlock it to move the complete unit.`,
+			)
+			return
+		}
 		beginVectorGesture(
 			event,
 			{ tool: "select", targetId: object.id },
 			originals,
 		)
+	}
+
+	const enterObjectGroup = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+		object: DesignObject,
+	): void => {
+		if (tool !== "select" && tool !== "transform") return
+		const unit = designSelectionUnitAtObject(
+			document,
+			object.id,
+			currentGroupScope,
+		)
+		if (unit?.kind !== "group" || pendingGroupEntryRef.current !== unit.id)
+			return
+		event.cancelBubble = true
+		pendingGroupEntryRef.current = null
+		groupClickCandidateRef.current = null
+		groupPointerPressRef.current = null
+		const child = designSelectionUnitAtObject(document, object.id, unit.id)
+		setGroupScope((current) => [...current, unit.id])
+		setSelection(child?.objectIds ?? unit.objectIds)
+		setDirectSelection([])
+		setStatus(`Editing inside ${unit.name}. Press Escape to select the group.`)
 	}
 
 	const startDirectGesture = (
@@ -2375,6 +2665,27 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setGuidePreview({ id: gesture.id, value })
 			return
 		}
+		const groupPress = groupPointerPressRef.current
+		if (groupPress?.pointerId === event.evt.pointerId) {
+			const screen = event.target.getStage()?.getPointerPosition() ?? {
+				x: event.evt.offsetX,
+				y: event.evt.offsetY,
+			}
+			const threshold = groupPress.secondClick
+				? GROUP_DOUBLE_CLICK_SLOP_PIXELS
+				: GROUP_DRAG_THRESHOLD_PIXELS
+			if (
+				Math.hypot(
+					screen.x - groupPress.startScreen.x,
+					screen.y - groupPress.startScreen.y,
+				) >= threshold
+			) {
+				groupPress.dragged = true
+				groupClickCandidateRef.current = null
+				pendingGroupEntryRef.current = null
+			}
+			if (groupPress.secondClick && !groupPress.dragged) return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -2404,7 +2715,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
-		if (gesture === null) return
+		const groupPress = groupPointerPressRef.current
+		if (gesture === null) {
+			if (groupPress?.pointerId !== event.evt.pointerId) return
+			if (groupPress.secondClick)
+				pendingGroupEntryRef.current = groupPress.groupId
+			else
+				groupClickCandidateRef.current = {
+					groupId: groupPress.groupId,
+					screen: groupPress.startScreen,
+					timeStamp: event.evt.timeStamp,
+				}
+			groupPointerPressRef.current = null
+			return
+		}
 		if (gesture.kind === "pan") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -2464,6 +2788,21 @@ export function DesignApplication(props: DesignApplicationProps) {
 			)
 			return
 		}
+		if (
+			groupPress?.pointerId === event.evt.pointerId &&
+			groupPress.secondClick &&
+			!groupPress.dragged
+		) {
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			gestureRef.current = null
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = groupPress.groupId
+			previewObjectsRef.current = []
+			setPreviewObjects([])
+			setGesturePreview(null)
+			setActiveSnapGuides([])
+			return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -2516,7 +2855,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				transform: IDENTITY_DESIGN_TRANSFORM,
 				appearance: authoredAppearance,
 			}
-			commit({ ...document, objects: [...document.objects, object] })
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+				),
+			)
 			setSelection([object.id])
 			setStatus(`Created ${object.name}.`)
 			return
@@ -2541,15 +2885,27 @@ export function DesignApplication(props: DesignApplicationProps) {
 				})
 				return
 			}
-			const ids = marqueeObjectIds(document.objects, intent.bounds)
+			const ids = normalizeDesignSelection(
+				document,
+				marqueeObjectIds(document.objects, intent.bounds),
+				currentGroupScope,
+			)
 			setSelection((current) =>
-				intent.additive ? [...new Set([...current, ...ids])] : ids,
+				intent.additive
+					? normalizeDesignSelection(
+							document,
+							[...current, ...ids],
+							currentGroupScope,
+						)
+					: ids,
 			)
 			setDirectSelection([])
 			return
 		}
-		const committedPreviews = previewObjectsRef.current
+		const committedPreviews =
+			transition.intent === null ? [] : previewObjectsRef.current
 		previewObjectsRef.current = []
+		setPreviewObjects([])
 		if (committedPreviews.length > 0) {
 			const byId = new Map(
 				committedPreviews.map((object) => [object.id, object]),
@@ -2560,7 +2916,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 					(object) => byId.get(object.id) ?? object,
 				),
 			})
-			setPreviewObjects([])
+			setStatus(
+				selectedGroup === null
+					? "Moved selection."
+					: `Moved ${selectedGroup.name} as one group.`,
+			)
+		}
+		if (groupPress?.pointerId === event.evt.pointerId) {
+			if (!groupPress.dragged && !groupPress.secondClick)
+				groupClickCandidateRef.current = {
+					groupId: groupPress.groupId,
+					screen: groupPress.startScreen,
+					timeStamp: event.evt.timeStamp,
+				}
+			groupPointerPressRef.current = null
 		}
 	}
 	const cancelPointer = useCallback(
@@ -2575,6 +2944,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = null
 			if (
 				gesture.kind !== "pan" &&
 				gesture.kind !== "direct" &&
@@ -2625,11 +2996,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 		handle: VectorTransformHandle,
 		event: KonvaEventObject<PointerEvent>,
 	): void => {
-		if (
-			selectedObjects.length === 0 ||
-			selectedObjects.some((object) => object.locked || object.hidden)
-		)
+		if (selectedObjects.length === 0) return
+		const locked = selectedObjects.find((object) => object.locked)
+		if (locked !== undefined) {
+			setStatus(
+				`Unlock ${locked.name} before transforming the complete selection.`,
+			)
 			return
+		}
 		const bounds = combinedSelectionBounds(selectedObjects)
 		if (bounds === null) return
 		event.cancelBubble = true
@@ -2842,9 +3216,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 						>
 							{tool === "direct"
 								? directSelectionDescription(directSelection)
-								: selection.length === 0
-									? "No objects selected."
-									: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`}
+								: selectionDescription}
 						</span>
 						<ruler-corner aria-hidden="true" />
 						<ruler-horizontal
@@ -3024,9 +3396,15 @@ export function DesignApplication(props: DesignApplicationProps) {
 															dashOffset: strokeStyle.dashOffset,
 														})}
 												fillRule="evenodd"
-												selected={selection.includes(object.id)}
+												selected={
+													selectedGroup === null &&
+													selection.includes(object.id)
+												}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
+												}
+												onDoubleClick={(event) =>
+													enterObjectGroup(event, object)
 												}
 												onPointerEnter={(event) => {
 													if (
@@ -3241,15 +3619,28 @@ export function DesignApplication(props: DesignApplicationProps) {
 										/>
 									) : null}
 									{selectionBounds === null ? null : (
-										<VectorSelectionBounds
-											bounds={selectionBounds}
-											inverseScale={1 / worldScale}
-											color="#e17352"
-											rotation={tool === "transform"}
-											{...(tool === "transform"
-												? { onHandlePointerDown: startScale }
-												: { handles: [], listening: false })}
-										/>
+										<>
+											<VectorSelectionBounds
+												bounds={selectionBounds}
+												inverseScale={1 / worldScale}
+												color="#e17352"
+												rotation={tool === "transform"}
+												{...(tool === "transform"
+													? { onHandlePointerDown: startScale }
+													: { handles: [], listening: false })}
+											/>
+											{selectedGroup === null ? null : (
+												<Text
+													name="design-group-selection-label"
+													x={selectionBounds.minX}
+													y={selectionBounds.minY - 20 / worldScale}
+													text={`${selectedGroup.name} · ${selectedGroup.objectIds.length} objects`}
+													fontSize={12 / worldScale}
+													fill="#e17352"
+													listening={false}
+												/>
+											)}
+										</>
 									)}
 								</Group>
 							</Layer>
@@ -3260,7 +3651,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 							? "Click for corners · Drag for curves · Click start to close · Enter finishes open · Esc cancels"
 							: tool === "rect" || tool === "ellipse"
 								? "Drag to draw · Shift constrains · Alt draws from center"
-								: "Drag objects to move · F shows transform handles"}
+								: currentGroupScope === null
+									? "Drag objects to move · Double-click a group to edit contents · F shows transform handles"
+									: "Editing group contents · Double-click nested groups · Escape exits group"}
 					</canvas-hint>
 				</design-canvas>
 				<TilingWorkspace

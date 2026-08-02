@@ -541,26 +541,50 @@ describe("create-design directory source", () => {
 		expect(assembleDesignDocument(files)).toMatchObject({ ok: true })
 	})
 
-	it("reserves groups and fonts for later versions", () => {
-		const files = mutable(split(fixture()))
-		unit(files, designSourcePaths.groupIndex).entries = [
-			{ id: "group:future", path: "scene/groups/future.json" },
-		]
-		files["scene/groups/future.json"] = {
-			format: "create-design.group",
-			version: 1,
-			id: "group:future",
-			name: "Future group",
-			children: [],
+	it("splits and assembles nested structural groups", () => {
+		const document = fixture()
+		const grouped: DesignDocument = {
+			...document,
+			scene: [{ kind: "group", id: "group:artwork" }],
+			groups: [
+				{
+					id: "group:artwork",
+					name: "Artwork",
+					children: document.objects.map(({ id }) => ({
+						kind: "object",
+						id,
+					})),
+				},
+			],
 		}
-		const result = assembleDesignDocument(files)
-		expect(result).toMatchObject({
+		const files = split(grouped)
+		expect(unit(files, designSourcePaths.groupIndex).entries).toHaveLength(1)
+		expect(assemble(files)).toEqual(grouped)
+	})
+
+	it("keeps groups unavailable to legacy source version 1", () => {
+		const document = fixture()
+		const files = mutable(
+			split({
+				...document,
+				scene: [{ kind: "group", id: "group:artwork" }],
+				groups: [
+					{
+						id: "group:artwork",
+						name: "Artwork",
+						children: document.objects.map(({ id }) => ({
+							kind: "object",
+							id,
+						})),
+					},
+				],
+			}),
+		)
+		unit(files, designSourcePaths.project).sourceVersion = 1
+		expect(assembleDesignDocument(files)).toMatchObject({
 			ok: false,
 			errors: expect.arrayContaining([
-				expect.objectContaining({
-					code: "directory.unsupported",
-					unitPath: designSourcePaths.groupIndex,
-				}),
+				expect.objectContaining({ code: "directory.unsupported" }),
 			]),
 		})
 	})

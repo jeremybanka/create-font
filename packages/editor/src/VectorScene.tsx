@@ -42,15 +42,23 @@ export function VectorContourPath({
 	readonly listening?: boolean
 	readonly selected?: boolean
 	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void
+	readonly onDoubleClick?: (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	) => void
 	readonly onPointerEnter?: (event: KonvaEventObject<PointerEvent>) => void
 	readonly onPointerLeave?: (event: KonvaEventObject<PointerEvent>) => void
 }) {
+	const { onDoubleClick, ...pathProps } = props
 	return (
 		<Path
-			{...props}
+			{...pathProps}
 			name={`vector-contour-path ${name}`}
 			data={vectorObjectPath(object)}
-			{...(selected && props.stroke === undefined ? { stroke: "#e17352" } : {})}
+			{...(selected && pathProps.stroke === undefined
+				? { stroke: "#e17352" }
+				: {})}
+			onDblClick={(event) => onDoubleClick?.(event)}
+			onDblTap={(event) => onDoubleClick?.(event)}
 		/>
 	)
 }

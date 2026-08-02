@@ -110,6 +110,18 @@ export interface DesignObject {
 	readonly locked?: boolean
 }
 
+export type DesignSceneChild = Readonly<
+	| { readonly kind: "object"; readonly id: string }
+	| { readonly kind: "group"; readonly id: string }
+>
+
+/** A structural container; paint and geometry remain owned by its children. */
+export interface DesignGroup {
+	readonly id: string
+	readonly name: string
+	readonly children: readonly DesignSceneChild[]
+}
+
 export interface DesignGuide {
 	readonly id: string
 	readonly axis: "x" | "y"
@@ -150,6 +162,10 @@ export interface DesignDocument {
 	readonly artboards: readonly DesignArtboard[]
 	readonly swatches: readonly DesignSwatch[]
 	readonly objects: readonly DesignObject[]
+	/** Root scene order. Omitted only by legacy version-5 documents. */
+	readonly scene?: readonly DesignSceneChild[]
+	/** Structural groups referenced by `scene` and other groups. */
+	readonly groups?: readonly DesignGroup[]
 	readonly guides: readonly DesignGuide[]
 }
 
