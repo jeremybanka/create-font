@@ -555,7 +555,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 	const [announcement, setAnnouncement] = useState(() =>
 		persistenceLabel(persistence),
 	)
-	useEffect(() => setAnnouncement(status), [status])
+	const announcedStatusRef = useRef(status)
+	useEffect(() => {
+		if (announcedStatusRef.current === status) return
+		announcedStatusRef.current = status
+		setAnnouncement(status)
+	}, [status])
 	const [previewObjects, setPreviewObjects] = useState<readonly DesignObject[]>(
 		[],
 	)

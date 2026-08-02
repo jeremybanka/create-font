@@ -439,6 +439,9 @@ describe("create-design shared vector scene", () => {
 		expect(
 			document.querySelector('footer [role="status"]')?.textContent,
 		).toContain("has not been saved")
+		expect(
+			document.querySelector("footer [data-footer-status]")?.textContent,
+		).toContain("Ready")
 		const recover = [...document.querySelectorAll("button")].find(
 			(button) => button.textContent?.trim() === "Recover draft",
 		)
@@ -482,6 +485,9 @@ describe("create-design shared vector scene", () => {
 		expect(
 			document.querySelector('footer [role="status"]')?.textContent,
 		).toContain("source:one")
+		expect(
+			document.querySelector("footer [data-footer-status]")?.textContent,
+		).toContain("Ready")
 		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
 		expect(session.save).not.toHaveBeenCalled()
 		const event = new Event("beforeunload", { cancelable: true })
