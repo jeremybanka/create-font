@@ -2,6 +2,7 @@
 	"name": "@create-design/source",
 	"version": "0.2.0",
 	"description": "Deterministic source formats for create-design documents",
+	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",

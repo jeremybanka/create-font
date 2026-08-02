@@ -2,6 +2,7 @@
 	"name": "@create-font/font-service",
 	"version": "0.0.0",
 	"description": "Runtime-portable deterministic OpenType shaping, metrics, and outline service",
+	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",

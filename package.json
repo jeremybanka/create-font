@@ -1,6 +1,7 @@
 {
 	"name": "create-font-workspace",
 	"private": true,
+	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"scripts": {
 		"build": "pnpm -r build",

@@ -1,0 +1,80 @@
+create-font licensing map
+=========================
+
+Copyright 2026 Jeremy Banka
+
+This repository deliberately uses different licenses at different product
+boundaries. The license that applies to a file is determined by the most
+specific entry below.
+
+GNU Affero General Public License, version 3 or later
+-----------------------------------------------------
+
+The create-font and create-design applications, the create-font editor UI, and
+the repository-level application tooling are licensed under the GNU Affero
+General Public License, version 3 or later (SPDX: AGPL-3.0-or-later):
+
+- packages/create-font/**
+- packages/create-design/**
+- packages/editor/**
+- scripts/**
+- repository files not assigned another license below
+
+The full license is in LICENSES/AGPL-3.0-or-later.txt. The additional output
+permission in LICENSES/OUTPUT-EXCEPTION.txt applies to the AGPL-covered
+software.
+
+Mozilla Public License, version 2.0
+-----------------------------------
+
+Reusable libraries, public integration surfaces, and their Rust
+implementations are licensed under the Mozilla Public License, version 2.0
+(SPDX: MPL-2.0):
+
+- crates/**
+- packages/design-source/**
+- packages/dprint-plugin-fea/**
+- packages/fea-rs-wasm/**
+- packages/font-service/**
+- packages/font-source/**
+- packages/preact-konva/**
+- packages/server/**
+- packages/source-format/**
+- packages/source-rpc/**
+- packages/states/**
+- packages/target/**
+- packages/vector-geometry/**
+
+The full license is in LICENSES/MPL-2.0.txt.
+
+Creative Commons Attribution 4.0 International
+-----------------------------------------------
+
+The root README, documentation under docs/**, the workbench-poster example under
+designs/workbench-poster/**, and its attribution notice at
+designs/workbench-poster.ATTRIBUTION.md are licensed under the Creative Commons
+Attribution 4.0 International license (SPDX: CC-BY-4.0).
+
+The full license is in LICENSES/CC-BY-4.0.txt.
+
+SIL Open Font License, version 1.1
+----------------------------------
+
+The Workbench Sans example font, including its source under
+fonts/workbench-sans/** and its notice at fonts/workbench-sans.OFL.txt, is
+licensed under the SIL Open Font License, version 1.1 (SPDX: OFL-1.1). No
+Reserved Font Name is declared.
+
+The full license and font-specific copyright notice are in
+fonts/workbench-sans.OFL.txt.
+
+Third-party material
+--------------------
+
+Dependencies and other third-party material retain their own copyright and
+license terms. Nothing in this repository's licenses grants rights that its
+copyright holders do not possess.
+
+The standard license texts in LICENSES/** and their package- or
+directory-local copies are reproduced under the terms supplied by their
+respective license stewards; this licensing map does not relicense those texts.
