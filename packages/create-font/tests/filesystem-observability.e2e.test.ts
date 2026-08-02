@@ -107,22 +107,84 @@ function inputForLabel(host: HTMLElement, text: string): HTMLInputElement {
 	return input
 }
 
-async function eventually(
-	assertion: () => void | Promise<void>,
-	timeout = 8_000,
-): Promise<void> {
-	const started = performance.now()
-	let failure: unknown
-	while (performance.now() - started < timeout) {
-		try {
-			await assertion()
-			return
-		} catch (error) {
-			failure = error
-			await new Promise((resolveDelay) => setTimeout(resolveDelay, 25))
-		}
+type PendingCondition = {
+	assertion: () => void | Promise<void>
+	lastFailure: unknown
+	running: boolean
+	rerun: boolean
+	timer: ReturnType<typeof setTimeout>
+	resolve: () => void
+	reject: (error: unknown) => void
+}
+
+function conditionWaiter() {
+	const pending = new Set<PendingCondition>()
+	let terminalFailure: unknown
+
+	const settle = (condition: PendingCondition): void => {
+		clearTimeout(condition.timer)
+		pending.delete(condition)
 	}
-	throw failure
+	const evaluate = async (condition: PendingCondition): Promise<void> => {
+		if (!pending.has(condition)) return
+		if (condition.running) {
+			condition.rerun = true
+			return
+		}
+		condition.running = true
+		do {
+			condition.rerun = false
+			try {
+				await condition.assertion()
+				settle(condition)
+				condition.resolve()
+				return
+			} catch (error) {
+				condition.lastFailure = error
+			}
+		} while (condition.rerun)
+		condition.running = false
+	}
+
+	return {
+		fail(error: unknown): void {
+			terminalFailure = error
+			for (const condition of pending) {
+				settle(condition)
+				condition.reject(error)
+			}
+		},
+		notify(): void {
+			for (const condition of pending) void evaluate(condition)
+		},
+		wait(
+			label: string,
+			assertion: () => void | Promise<void>,
+			timeout = 8_000,
+		): Promise<void> {
+			if (terminalFailure !== undefined) return Promise.reject(terminalFailure)
+			return new Promise((resolveCondition, rejectCondition) => {
+				const condition = {
+					assertion,
+					lastFailure: undefined,
+					reject: rejectCondition,
+					rerun: false,
+					resolve: resolveCondition,
+					running: false,
+					timer: setTimeout(() => {
+						pending.delete(condition)
+						rejectCondition(
+							new Error(`Timed out after ${timeout}ms waiting for ${label}.`, {
+								cause: condition.lastFailure,
+							}),
+						)
+					}, timeout),
+				} satisfies PendingCondition
+				pending.add(condition)
+				void evaluate(condition)
+			})
+		},
+	}
 }
 
 describe(`create-font filesystem observability`, () => {
@@ -163,6 +225,7 @@ describe(`create-font filesystem observability`, () => {
 		const localOperations = new Set<string>()
 		let asynchronousFailure: unknown
 		let tail: Promise<void> = Promise.resolve()
+		const conditions = conditionWaiter()
 		let mounted: MountedEditor | undefined
 		const options = (): EditorBrowserOptions => ({
 			onSourceChange: save,
@@ -171,9 +234,13 @@ describe(`create-font filesystem observability`, () => {
 		})
 		const enqueue = (operation: () => Promise<void>): Promise<void> => {
 			const result = tail.then(operation, operation)
-			tail = result.catch((error: unknown) => {
-				asynchronousFailure = error
-			})
+			tail = result.then(
+				() => conditions.notify(),
+				(error: unknown) => {
+					asynchronousFailure = error
+					conditions.fail(error)
+				},
+			)
 			return result
 		}
 		const save = (nextSource: typeof editorSource): Promise<void> =>
@@ -241,7 +308,7 @@ describe(`create-font filesystem observability`, () => {
 				familyInput.value = editedFamily
 				familyInput.dispatchEvent(new Event(`input`, { bubbles: true }))
 			})
-			await eventually(async () => {
+			await conditions.wait(`cycle ${cycle} editor save`, async () => {
 				if (asynchronousFailure !== undefined) throw asynchronousFailure
 				expect(await readFile(namesPath, `utf8`)).toContain(editedFamily)
 				expect(familyInput.value).toBe(editedFamily)
@@ -250,12 +317,13 @@ describe(`create-font filesystem observability`, () => {
 			expect(await readFile(namesPath, `utf8`)).not.toBe(originalText)
 
 			await execFileAsync(`git`, [`restore`, `names.json`], { cwd: root })
-			await eventually(() => {
+			await conditions.wait(`cycle ${cycle} git restore`, () => {
 				if (asynchronousFailure !== undefined) throw asynchronousFailure
 				expect(familyInput.value).toBe(originalFamily)
 				expect(projectName.textContent).toBe(originalFamily)
 			})
 		}
+		await tail
 		expect(await readFile(namesPath, `utf8`)).toBe(originalText)
 	})
 
@@ -313,11 +381,16 @@ describe(`create-font filesystem observability`, () => {
 		const localOperations = new Set<string>()
 		let asynchronousFailure: unknown
 		let tail: Promise<void> = Promise.resolve()
+		const conditions = conditionWaiter()
 		const enqueue = (operation: () => Promise<void>): Promise<void> => {
 			const result = tail.then(operation, operation)
-			tail = result.catch((error: unknown) => {
-				asynchronousFailure = error
-			})
+			tail = result.then(
+				() => conditions.notify(),
+				(error: unknown) => {
+					asynchronousFailure = error
+					conditions.fail(error)
+				},
+			)
 			return result
 		}
 		const save = (nextSource: typeof editorSource): Promise<void> =>
@@ -412,7 +485,7 @@ describe(`create-font filesystem observability`, () => {
 				new KeyboardEvent(`keydown`, { bubbles: true, key: `Delete` }),
 			)
 		})
-		await eventually(async () => {
+		await conditions.wait(`glyph edit persistence`, async () => {
 			if (asynchronousFailure !== undefined) throw asynchronousFailure
 			expect(
 				workspace.font.silo.getState(workspace.ui.activeLayer)?.contours,
@@ -427,7 +500,7 @@ describe(`create-font filesystem observability`, () => {
 		})
 
 		await execFileAsync(`git`, [`stash`, `push`, `--quiet`], { cwd: root })
-		await eventually(() => {
+		await conditions.wait(`git stash restoration`, () => {
 			if (asynchronousFailure !== undefined) throw asynchronousFailure
 			expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBe(
 				oGlyphId,
@@ -440,5 +513,6 @@ describe(`create-font filesystem observability`, () => {
 				originalOutlinePath,
 			)
 		})
+		await tail
 	})
 })
