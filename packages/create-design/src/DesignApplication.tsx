@@ -264,6 +264,24 @@ type DesignObjectGesture = Extract<
 	{ readonly kind: "move" | "transform" }
 >
 
+const GROUP_DOUBLE_CLICK_MS = 500
+const GROUP_DOUBLE_CLICK_SLOP_PIXELS = 8
+const GROUP_DRAG_THRESHOLD_PIXELS = 4
+
+interface GroupClickCandidate {
+	readonly groupId: string
+	readonly screen: CanvasPoint
+	readonly timeStamp: number
+}
+
+interface GroupPointerPress {
+	readonly pointerId: number
+	readonly groupId: string
+	readonly startScreen: CanvasPoint
+	readonly secondClick: boolean
+	dragged: boolean
+}
+
 interface DesignGestureObjectPreview {
 	readonly objects: readonly DesignObject[]
 	readonly snap: {
@@ -523,6 +541,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}> | null>(null)
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
+	const groupClickCandidateRef = useRef<GroupClickCandidate | null>(null)
+	const groupPointerPressRef = useRef<GroupPointerPress | null>(null)
+	const pendingGroupEntryRef = useRef<string | null>(null)
 	const penPointsRef = useRef<readonly DesignPenPoint[]>([])
 	const previewObjectsRef = useRef<readonly DesignObject[]>([])
 	const previewArtboardDocumentRef = useRef<DesignDocument | null>(null)
@@ -2271,15 +2292,37 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (interaction === null) return
 		const { unit } = interaction
 		event.cancelBubble = true
-		if (event.evt.detail === 2 && unit.kind === "group") {
-			const child = designSelectionUnitAtObject(document, object.id, unit.id)
-			setGroupScope((current) => [...current, unit.id])
-			setSelection(child?.objectIds ?? unit.objectIds)
-			setDirectSelection([])
-			setStatus(
-				`Editing inside ${unit.name}. Press Escape to select the group.`,
-			)
-			return
+		if (unit.kind === "group") {
+			const screen = gesturePointer(event).screen
+			const candidate = groupClickCandidateRef.current
+			const elapsed =
+				candidate === null
+					? Number.POSITIVE_INFINITY
+					: event.evt.timeStamp - candidate.timeStamp
+			const secondClick =
+				candidate?.groupId === unit.id &&
+				elapsed >= 0 &&
+				elapsed <= GROUP_DOUBLE_CLICK_MS &&
+				Math.hypot(
+					screen.x - candidate.screen.x,
+					screen.y - candidate.screen.y,
+				) <= GROUP_DOUBLE_CLICK_SLOP_PIXELS
+			groupPointerPressRef.current = {
+				pointerId: event.evt.pointerId,
+				groupId: unit.id,
+				startScreen: screen,
+				secondClick,
+				dragged: false,
+			}
+			if (secondClick) groupClickCandidateRef.current = null
+			else {
+				groupClickCandidateRef.current = null
+				pendingGroupEntryRef.current = null
+			}
+		} else {
+			groupClickCandidateRef.current = null
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = null
 		}
 		const additive = gestureModifiers(event.evt).additive
 		setSelection(interaction.selection)
@@ -2303,6 +2346,29 @@ export function DesignApplication(props: DesignApplicationProps) {
 			{ tool: "select", targetId: object.id },
 			originals,
 		)
+	}
+
+	const enterObjectGroup = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+		object: DesignObject,
+	): void => {
+		if (tool !== "select" && tool !== "transform") return
+		const unit = designSelectionUnitAtObject(
+			document,
+			object.id,
+			currentGroupScope,
+		)
+		if (unit?.kind !== "group" || pendingGroupEntryRef.current !== unit.id)
+			return
+		event.cancelBubble = true
+		pendingGroupEntryRef.current = null
+		groupClickCandidateRef.current = null
+		groupPointerPressRef.current = null
+		const child = designSelectionUnitAtObject(document, object.id, unit.id)
+		setGroupScope((current) => [...current, unit.id])
+		setSelection(child?.objectIds ?? unit.objectIds)
+		setDirectSelection([])
+		setStatus(`Editing inside ${unit.name}. Press Escape to select the group.`)
 	}
 
 	const startDirectGesture = (
@@ -2568,6 +2634,27 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setGuidePreview({ id: gesture.id, value })
 			return
 		}
+		const groupPress = groupPointerPressRef.current
+		if (groupPress?.pointerId === event.evt.pointerId) {
+			const screen = event.target.getStage()?.getPointerPosition() ?? {
+				x: event.evt.offsetX,
+				y: event.evt.offsetY,
+			}
+			const threshold = groupPress.secondClick
+				? GROUP_DOUBLE_CLICK_SLOP_PIXELS
+				: GROUP_DRAG_THRESHOLD_PIXELS
+			if (
+				Math.hypot(
+					screen.x - groupPress.startScreen.x,
+					screen.y - groupPress.startScreen.y,
+				) >= threshold
+			) {
+				groupPress.dragged = true
+				groupClickCandidateRef.current = null
+				pendingGroupEntryRef.current = null
+			}
+			if (groupPress.secondClick && !groupPress.dragged) return
+		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		const transition = reduceVectorGesture(
 			gesture.state,
@@ -2597,7 +2684,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
-		if (gesture === null) return
+		const groupPress = groupPointerPressRef.current
+		if (gesture === null) {
+			if (groupPress?.pointerId !== event.evt.pointerId) return
+			if (groupPress.secondClick)
+				pendingGroupEntryRef.current = groupPress.groupId
+			else
+				groupClickCandidateRef.current = {
+					groupId: groupPress.groupId,
+					screen: groupPress.startScreen,
+					timeStamp: event.evt.timeStamp,
+				}
+			groupPointerPressRef.current = null
+			return
+		}
 		if (gesture.kind === "pan") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -2655,6 +2755,21 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setStatus(
 				`Moved ${gesture.axis === "x" ? "vertical" : "horizontal"} guide to ${Number(gesture.value.toFixed(2))} pt.`,
 			)
+			return
+		}
+		if (
+			groupPress?.pointerId === event.evt.pointerId &&
+			groupPress.secondClick &&
+			!groupPress.dragged
+		) {
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			gestureRef.current = null
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = groupPress.groupId
+			previewObjectsRef.current = []
+			setPreviewObjects([])
+			setGesturePreview(null)
+			setActiveSnapGuides([])
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
@@ -2756,8 +2871,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 			setDirectSelection([])
 			return
 		}
-		const committedPreviews = previewObjectsRef.current
+		const committedPreviews =
+			transition.intent === null ? [] : previewObjectsRef.current
 		previewObjectsRef.current = []
+		setPreviewObjects([])
 		if (committedPreviews.length > 0) {
 			const byId = new Map(
 				committedPreviews.map((object) => [object.id, object]),
@@ -2768,12 +2885,20 @@ export function DesignApplication(props: DesignApplicationProps) {
 					(object) => byId.get(object.id) ?? object,
 				),
 			})
-			setPreviewObjects([])
 			setStatus(
 				selectedGroup === null
 					? "Moved selection."
 					: `Moved ${selectedGroup.name} as one group.`,
 			)
+		}
+		if (groupPress?.pointerId === event.evt.pointerId) {
+			if (!groupPress.dragged && !groupPress.secondClick)
+				groupClickCandidateRef.current = {
+					groupId: groupPress.groupId,
+					screen: groupPress.startScreen,
+					timeStamp: event.evt.timeStamp,
+				}
+			groupPointerPressRef.current = null
 		}
 	}
 	const cancelPointer = useCallback(
@@ -2788,6 +2913,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
+			groupPointerPressRef.current = null
+			pendingGroupEntryRef.current = null
 			if (
 				gesture.kind !== "pan" &&
 				gesture.kind !== "direct" &&
@@ -3244,6 +3371,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 												}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
+												}
+												onDoubleClick={(event) =>
+													enterObjectGroup(event, object)
 												}
 												onPointerEnter={(event) => {
 													if (
