@@ -37,7 +37,7 @@ export async function createDesignServerApp(
 				ok: true as const,
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
-			.get(`/workspace`, () => ({ name: basename(root), root }))
+			.get(`/workspace`, () => ({ name: basename(root) }))
 			.use(
 				createSourceRpc({
 					adapter,

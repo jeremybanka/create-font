@@ -21,7 +21,6 @@ describe(`create-design workspace RPC`, () => {
 		expect(workspace.status).toBe(200)
 		expect(await workspace.json()).toEqual({
 			name: root.split(`/`).at(-1),
-			root,
 		})
 
 		const response = await app.handle(
