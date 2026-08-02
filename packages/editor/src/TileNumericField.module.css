@@ -1,0 +1,29 @@
+tile-numeric-field.class {
+	display: grid;
+	min-width: 0;
+	gap: 3px;
+
+	> label {
+		display: grid;
+		min-width: 0;
+		gap: 3px;
+
+		> span {
+			font: 600 var(--tile-label-font-size, 8px) / 1.2 var(--ui-font);
+			color: var(--ink-muted);
+		}
+	}
+
+	> small {
+		font: 450 7px/1.35 var(--ui-font);
+		color: var(--ink-faint);
+
+		&[data-error] {
+			color: var(--danger, #d5786d);
+		}
+	}
+
+	&[data-disabled] {
+		opacity: 0.56;
+	}
+}

@@ -13,14 +13,19 @@ import {
 
 export interface NumericInputProps {
 	readonly "aria-label": string
+	readonly "aria-describedby"?: string
 	readonly appearance?: "roomy" | "strong"
 	readonly value: number
+	readonly id?: string
 	readonly min?: number
 	readonly max?: number
 	readonly step?: NumericStep
 	/** The unmodified Arrow key increment. */
 	readonly arrowStep?: number
 	readonly disabled?: boolean
+	readonly readOnly?: boolean
+	/** Restore the controlled value after emitting a relative/delta commit. */
+	readonly resetAfterCommit?: boolean
 	readonly onCommit: (value: number) => void
 }
 
@@ -65,7 +70,7 @@ export function NumericInput(props: NumericInputProps) {
 			return false
 		}
 		editing.current = false
-		setDraft(result.normalized)
+		setDraft(props.resetAfterCommit ? committedText : result.normalized)
 		setError(null)
 		setAnnouncement(null)
 		if (result.value !== props.value) props.onCommit(result.value)
@@ -75,25 +80,34 @@ export function NumericInput(props: NumericInputProps) {
 	return (
 		<numeric-input className={css.class} data-appearance={props.appearance}>
 			<input
+				id={props.id}
 				type="text"
 				role="spinbutton"
 				inputMode="decimal"
 				spellcheck={false}
 				disabled={props.disabled}
+				readOnly={props.readOnly}
 				aria-label={props["aria-label"]}
+				aria-readonly={props.readOnly || undefined}
 				aria-valuemin={Number.isFinite(min) ? min : undefined}
 				aria-valuemax={Number.isFinite(max) ? max : undefined}
 				aria-valuenow={props.value}
 				aria-valuetext={draft}
 				aria-invalid={error === null ? undefined : true}
 				aria-errormessage={error === null ? undefined : errorId}
-				aria-describedby={announcement === null ? undefined : errorId}
+				aria-describedby={
+					[props["aria-describedby"], announcement === null ? null : errorId]
+						.filter(Boolean)
+						.join(" ") || undefined
+				}
 				value={draft}
 				onFocus={() => {
+					if (props.readOnly) return
 					editing.current = true
 					setAnnouncement(null)
 				}}
 				onInput={(event) => {
+					if (props.readOnly) return
 					const nextDraft = event.currentTarget.value
 					setDraft(nextDraft)
 					if (error !== null) {
@@ -104,6 +118,7 @@ export function NumericInput(props: NumericInputProps) {
 				}}
 				onBlur={() => commit("blur")}
 				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+					if (props.readOnly) return
 					if (event.key === "ArrowUp" || event.key === "ArrowDown") {
 						event.preventDefault()
 						const value = stepNumericInput(
@@ -116,7 +131,11 @@ export function NumericInput(props: NumericInputProps) {
 							step,
 							props.arrowStep,
 						)
-						setDraft(formatNumericInput(value))
+						setDraft(
+							props.resetAfterCommit
+								? committedText
+								: formatNumericInput(value),
+						)
 						setError(null)
 						setAnnouncement(null)
 						if (value !== props.value) props.onCommit(value)

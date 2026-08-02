@@ -80,6 +80,8 @@ export interface DesignTileContext {
 		maxX: number
 		maxY: number
 	}> | null
+	readonly selectionArrangementUnitCount?: number
+	readonly selectionTransformDisabledReason?: string | null
 	readonly transformSelection: (
 		input: Readonly<{
 			x?: number

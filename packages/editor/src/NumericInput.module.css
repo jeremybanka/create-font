@@ -5,6 +5,7 @@ numeric-input.class {
 		box-sizing: border-box;
 		width: 100%;
 		min-width: 0;
+		height: var(--tile-field-height, auto);
 		padding: 6px;
 		border: 1px solid var(--line);
 		border-radius: 5px;
@@ -12,6 +13,25 @@ numeric-input.class {
 		font: 570 10px/1 var(--ui-font);
 		font-variant-numeric: tabular-nums;
 		color: var(--ink);
+
+		&:hover:not(:disabled, :read-only) {
+			border-color: var(--line-strong);
+		}
+
+		&:focus-visible {
+			outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+			outline-offset: 1px;
+		}
+
+		&:disabled,
+		&:read-only {
+			background: color-mix(in srgb, var(--paper) 78%, var(--line));
+			color: var(--ink-muted);
+		}
+
+		&:disabled {
+			opacity: 0.56;
+		}
 	}
 
 	&[data-appearance="strong"] > input {

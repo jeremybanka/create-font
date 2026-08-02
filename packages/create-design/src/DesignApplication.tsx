@@ -126,6 +126,7 @@ import {
 	appendDesignHierarchyObjects,
 	designGroupSelectionUnit,
 	designSelectInteraction,
+	designSelectionUnits,
 	designSelectionUnitAtObject,
 	designSelectionUnitForIds,
 	groupDesignSelection,
@@ -650,6 +651,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
 	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
 	const selectedLockedObject = selectedObjects.find((object) => object.locked)
+	const selectionArrangementUnitCount = designSelectionUnits(
+		document,
+		selection,
+	).length
+	const selectedTransformUnavailableObject = selectedObjects.find(
+		(object) => object.locked || object.hidden,
+	)
+	const selectionTransformDisabledReason =
+		selectedTransformUnavailableObject === undefined
+			? null
+			: `${selectedTransformUnavailableObject.hidden ? "Show" : "Unlock"} ${selectedTransformUnavailableObject.name} before transforming the selection.`
 	const selectionDescription =
 		selectedGroup === null
 			? selection.length === 0
@@ -1540,6 +1552,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 		selectedObjectCount: selectedObjects.length,
 		selectedObjectIds: selection,
 		selectionBounds: combinedSelectionBounds(selectedObjects),
+		selectionArrangementUnitCount,
+		selectionTransformDisabledReason,
 		directSelectionSummary: directSelectionDescription(directSelection),
 		selectedSwatch,
 		selectedSwatchId,

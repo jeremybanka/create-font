@@ -95,6 +95,18 @@ implement SSH or synchronize a second checkout. See the repository
 [architecture](../../docs/architecture.md) and
 [roadmap](../../docs/roadmap.md#3-workspace-server-and-browser-persistence).
 
+## Shared tile controls
+
+`@create-font/editor/shared` exposes product-neutral tile controls for sibling
+applications: `TileButton`, `TileButtonGroup`, `TileTextField`, `TileSelect`,
+`TileCheckbox`, `TileNumericField`, and the lower-level `NumericInput`.
+Applications keep tile layout and domain workflows locally, and compose these
+controls for consistent focus, disabled, pressed, invalid, danger, compact,
+light/dark, and forced-color states. Prefer `TileNumericField` for labeled
+values: it keeps a draft until Enter or blur, accepts arithmetic, cancels with
+Escape, and uses Arrow/Shift-Arrow/platform-modifier stepping without exposing
+partial or invalid values to application state.
+
 ## Interaction
 
 - Type directly into the multiline canvas and adjust every variation-axis
