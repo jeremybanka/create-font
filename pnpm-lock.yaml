@@ -105,8 +105,8 @@ importers:
         specifier: 8.65.0
         version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       atom.io:
-        specifier: 0.50.1
-        version: 0.50.1(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+        specifier: 0.50.2
+        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
       eslint:
         specifier: 10.8.0
         version: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
@@ -252,8 +252,8 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       atom.io:
-        specifier: 0.50.1
-        version: 0.50.1(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+        specifier: 0.50.2
+        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
       eslint:
         specifier: 10.8.0
         version: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
@@ -408,8 +408,8 @@ importers:
         specifier: workspace:*
         version: link:../target
       atom.io:
-        specifier: 0.50.1
-        version: 0.50.1(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+        specifier: 0.50.2
+        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
     devDependencies:
       '@typescript-eslint/parser':
         specifier: 8.65.0
@@ -2154,6 +2154,41 @@ packages:
 
   atom.io@0.50.1:
     resolution: {integrity: sha512-yEYoDsTRpk/+SNOlWJgrNf5onPxGoYKFseVIrcEaWJ6JSLOV7h20y24ccNbc4uR10tqKxzo7BCPRlFNZDzHPwA==}
+    peerDependencies:
+      '@floating-ui/react': '>=0.25.0'
+      '@floating-ui/react-dom': '>=2.0.0'
+      '@testing-library/react': '>=14.0.0'
+      '@typescript-eslint/parser': '>=8.0.0'
+      eslint: '>=9.0.0'
+      happy-dom: '>=17.4.4'
+      motion: '>=11.0.0'
+      socket.io: '>=4.0.0'
+      socket.io-client: '>=4.0.0'
+      solid-js: ^1.9.0
+    peerDependenciesMeta:
+      '@floating-ui/react':
+        optional: true
+      '@floating-ui/react-dom':
+        optional: true
+      '@testing-library/react':
+        optional: true
+      '@typescript-eslint/parser':
+        optional: true
+      eslint:
+        optional: true
+      happy-dom:
+        optional: true
+      motion:
+        optional: true
+      socket.io:
+        optional: true
+      socket.io-client:
+        optional: true
+      solid-js:
+        optional: true
+
+  atom.io@0.50.2:
+    resolution: {integrity: sha512-lIoM/wQDSgOVk23e/VbP5c9Pc3GEnuUyFeLUWhYLITT2PtVCXIZ8Yp/SRM4/NNGAJXmeQxfJxKTHlWxnZoaYiQ==}
     peerDependencies:
       '@floating-ui/react': '>=0.25.0'
       '@floating-ui/react-dom': '>=2.0.0'
@@ -5590,6 +5625,12 @@ snapshots:
   asynckit@0.4.0: {}
 
   atom.io@0.50.1(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1):
+    optionalDependencies:
+      '@typescript-eslint/parser': 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
+      eslint: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
+      happy-dom: 20.11.1
+
+  atom.io@0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1):
     optionalDependencies:
       '@typescript-eslint/parser': 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
       eslint: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
