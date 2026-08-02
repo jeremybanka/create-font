@@ -74,6 +74,7 @@ import {
 } from "./clipboard.ts"
 import { swatchCss } from "./color.ts"
 import { canvasToDocumentPoint } from "./coordinates.ts"
+import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
@@ -463,6 +464,7 @@ export type DesignApplicationProps = Readonly<{
 
 export function DesignApplication(props: DesignApplicationProps) {
 	const { initialDocument, sourceSession } = props
+	const canvasTheme = useDesignCanvasTheme()
 	const [initialLoad] = useState(() => initialDesignLoad(initialDocument))
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
 	const [history, dispatch] = useReducer(
@@ -3303,43 +3305,6 @@ export function DesignApplication(props: DesignApplicationProps) {
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
 						</span>
-						<ruler-corner aria-hidden="true" />
-						<ruler-horizontal
-							role="button"
-							tabIndex={0}
-							aria-label="Horizontal ruler; click to create a vertical guide"
-							onPointerDown={(event: PointerEvent) =>
-								createGuideFromRuler("x", event)
-							}
-						>
-							{horizontalRulerTicks.map((tick) => (
-								<i
-									key={tick.value}
-									data-major={tick.major || undefined}
-									style={{ left: canvasView.x + tick.value * worldScale - 20 }}
-								>
-									{tick.major ? Number(tick.value.toFixed(2)) : ""}
-								</i>
-							))}
-						</ruler-horizontal>
-						<ruler-vertical
-							role="button"
-							tabIndex={0}
-							aria-label="Vertical ruler; click to create a horizontal guide"
-							onPointerDown={(event: PointerEvent) =>
-								createGuideFromRuler("y", event)
-							}
-						>
-							{verticalRulerTicks.map((tick) => (
-								<i
-									key={tick.value}
-									data-major={tick.major || undefined}
-									style={{ top: canvasView.y + tick.value * worldScale - 20 }}
-								>
-									{tick.major ? Number(tick.value.toFixed(2)) : ""}
-								</i>
-							))}
-						</ruler-vertical>
 						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
@@ -3386,14 +3351,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 											width={artboard.width}
 											height={artboard.height}
 											fill="#fff"
-											shadowColor="#000"
+											shadowColor={canvasTheme.artboardShadow}
 											shadowBlur={24 / worldScale}
-											shadowOpacity={0.36}
+											shadowOpacity={canvasTheme.artboardShadowOpacity}
 											shadowOffsetY={9 / worldScale}
 											stroke={
 												artboard.id === canvasActiveArtboardId
-													? "#e17352"
-													: "#8e8c85"
+													? canvasTheme.selection
+													: canvasTheme.artboardOutline
 											}
 											strokeWidth={
 												(artboard.id === canvasActiveArtboardId ? 2 : 1) /
@@ -3434,8 +3399,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 													y={y - 4 / worldScale}
 													width={8 / worldScale}
 													height={8 / worldScale}
-													fill="#fff"
-													stroke="#e17352"
+													fill={canvasTheme.handleFill}
+													stroke={canvasTheme.selection}
 													strokeWidth={1 / worldScale}
 													listening={false}
 												/>
@@ -3547,7 +3512,9 @@ export function DesignApplication(props: DesignApplicationProps) {
 															]
 												}
 												stroke={
-													selectedGuideId === guide.id ? "#e17352" : "#36a8e0"
+													selectedGuideId === guide.id
+														? canvasTheme.selection
+														: canvasTheme.guide
 												}
 												strokeWidth={1 / worldScale}
 												{...(guide.locked
@@ -3609,7 +3576,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 																key={`${object.id}:${node.id}`}
 																node={node}
 																inverseScale={1 / worldScale}
-																color="#e17352"
+																color={canvasTheme.selection}
 																listening
 																nodeHitRadius={9 / worldScale}
 																handleHitRadius={{
@@ -3651,7 +3618,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 										<VectorShapePreview
 											preview={gesturePreview}
 											inverseScale={1 / worldScale}
-											color="#e17352"
+											color={canvasTheme.selection}
 											{...(previewSwatch === undefined
 												? {}
 												: { fill: swatchCss(previewSwatch) })}
@@ -3662,7 +3629,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 											preview={gesturePreview}
 											preceding={penPoints}
 											inverseScale={1 / worldScale}
-											color="#e17352"
+											color={canvasTheme.selection}
 										/>
 									) : penPoints.length === 0 ? null : (
 										<VectorPenPreview
@@ -3687,19 +3654,19 @@ export function DesignApplication(props: DesignApplicationProps) {
 											}}
 											preceding={penPoints.slice(0, -1)}
 											inverseScale={1 / worldScale}
-											color="#e17352"
+											color={canvasTheme.selection}
 										/>
 									)}
 									<VectorSnapGuides
 										guides={activeSnapGuides}
 										inverseScale={1 / worldScale}
-										color="#36a8e0"
+										color={canvasTheme.guide}
 									/>
 									{gesturePreview?.kind === "select-marquee" ? (
 										<VectorSelectionBounds
 											bounds={gesturePreview.bounds}
 											inverseScale={1 / worldScale}
-											color="#e17352"
+											color={canvasTheme.selection}
 											handles={[]}
 										/>
 									) : null}
@@ -3708,7 +3675,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 											<VectorSelectionBounds
 												bounds={selectionBounds}
 												inverseScale={1 / worldScale}
-												color="#e17352"
+												color={canvasTheme.selection}
 												rotation={tool === "transform"}
 												{...(tool === "transform"
 													? { onHandlePointerDown: startScale }
@@ -3721,7 +3688,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 													y={selectionBounds.minY - 20 / worldScale}
 													text={`${selectedGroup.name} · ${selectedGroup.objectIds.length} objects`}
 													fontSize={12 / worldScale}
-													fill="#e17352"
+													fill={canvasTheme.selection}
 													listening={false}
 												/>
 											)}
@@ -3741,6 +3708,45 @@ export function DesignApplication(props: DesignApplicationProps) {
 									: "Editing group contents · Double-click nested groups · Escape exits group"}
 					</canvas-hint>
 				</design-canvas>
+				<canvas-rulers>
+					<ruler-corner aria-hidden="true" />
+					<ruler-horizontal
+						role="button"
+						tabIndex={0}
+						aria-label="Horizontal ruler; click to create a vertical guide"
+						onPointerDown={(event: PointerEvent) =>
+							createGuideFromRuler("x", event)
+						}
+					>
+						{horizontalRulerTicks.map((tick) => (
+							<i
+								key={tick.value}
+								data-major={tick.major || undefined}
+								style={{ left: canvasView.x + tick.value * worldScale - 20 }}
+							>
+								{tick.major ? Number(tick.value.toFixed(2)) : ""}
+							</i>
+						))}
+					</ruler-horizontal>
+					<ruler-vertical
+						role="button"
+						tabIndex={0}
+						aria-label="Vertical ruler; click to create a horizontal guide"
+						onPointerDown={(event: PointerEvent) =>
+							createGuideFromRuler("y", event)
+						}
+					>
+						{verticalRulerTicks.map((tick) => (
+							<i
+								key={tick.value}
+								data-major={tick.major || undefined}
+								style={{ top: canvasView.y + tick.value * worldScale - 20 }}
+							>
+								{tick.major ? Number(tick.value.toFixed(2)) : ""}
+							</i>
+						))}
+					</ruler-vertical>
+				</canvas-rulers>
 				<TilingWorkspace
 					context={designTileContext}
 					registry={DESIGN_TILE_REGISTRY}

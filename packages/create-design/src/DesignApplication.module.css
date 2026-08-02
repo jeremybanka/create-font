@@ -8,7 +8,21 @@
 		sans-serif;
 	font-family: var(--ui-font);
 	font-synthesis: none;
-	color-scheme: dark;
+	color-scheme: light dark;
+	--design-canvas-surface: #111210;
+	--design-canvas-grid-line: rgb(255 255 255 / 2%);
+	--design-canvas-ruler-surface: rgb(32 33 30 / 92%);
+	--design-canvas-ruler-line: #3e3f39;
+	--design-canvas-ruler-ink: #8e8c85;
+	--design-canvas-hud-surface: #171815;
+	--design-canvas-hud-line: #272824;
+	--design-canvas-hud-ink: #8e8c85;
+	--design-canvas-artboard-outline: #8e8c85;
+	--design-canvas-artboard-shadow: #000;
+	--design-canvas-artboard-shadow-opacity: 0.36;
+	--design-canvas-guide: #36a8e0;
+	--design-canvas-selection: #e17352;
+	--design-canvas-handle-fill: #fff;
 }
 
 :global(*) {
@@ -33,6 +47,35 @@
 }
 
 design-application.class {
+	/* Named cross-sibling layers: stage < tiles < rulers < management < alerts. */
+	--workspace-layer-stage: 0;
+	--workspace-layer-tiles: 4;
+	--workspace-layer-rulers: 6;
+	--workspace-layer-management: 8;
+	--workspace-layer-alert: 20;
+	--design-canvas-meta-size: 25px;
+	--design-canvas-hint-size: 25px;
+	--design-ruler-size: 20px;
+	--design-workspace-gap: 12px;
+	--design-workspace-safe-block-start: calc(
+		var(--design-canvas-meta-size, 0px) + var(--design-ruler-size) +
+			var(--design-workspace-gap)
+	);
+	--design-workspace-safe-block-end: calc(
+		var(--design-canvas-hint-size, 0px) + var(--design-workspace-gap)
+	);
+	--design-workspace-safe-inline-start: calc(
+		var(--design-ruler-size) + var(--design-workspace-gap)
+	);
+	--design-workspace-safe-inline-end: var(--design-workspace-gap);
+	--tile-lane-inset-block-start: var(--design-workspace-safe-block-start);
+	--tile-lane-inset-block-end: var(--design-workspace-safe-block-end);
+	--tile-lane-inset-inline-start: var(--design-workspace-safe-inline-start);
+	--tile-lane-inset-inline-end: var(--design-workspace-safe-inline-end);
+	--tile-overlay-inset-block-start: var(--design-workspace-safe-block-start);
+	--tile-overlay-inset-block-end: var(--design-workspace-safe-block-end);
+	--tiling-workspace-z-index: var(--workspace-layer-tiles);
+	--tiling-workspace-management-z-index: var(--workspace-layer-management);
 	--paper: #1b1c19;
 	--panel: #171815;
 	--hover: #292a26;
@@ -43,7 +86,7 @@ design-application.class {
 	--ink-muted: #aaa79f;
 	--ink-faint: #75746d;
 	--accent: #e17352;
-	--canvas-surface: #111210;
+	--canvas-surface: var(--design-canvas-surface);
 	--surface-header: #20211e;
 	--shadow-subtle: rgb(0 0 0 / 32%);
 	display: grid;
@@ -188,7 +231,7 @@ design-application.class {
 			position: absolute;
 			top: 12px;
 			left: 50%;
-			z-index: 20;
+			z-index: var(--workspace-layer-alert);
 			display: grid;
 			gap: 8px;
 			width: min(620px, calc(100% - 24px));
@@ -239,16 +282,25 @@ design-application.class {
 		> design-canvas {
 			position: relative;
 			display: grid;
-			grid-template-rows: 25px minmax(0, 1fr) 25px;
+			grid-template-rows:
+				var(--design-canvas-meta-size) minmax(0, 1fr)
+				var(--design-canvas-hint-size);
 			min-width: 0;
 			min-height: 0;
 			overflow: hidden;
 			background:
-				linear-gradient(45deg, rgb(255 255 255 / 2%) 25%, transparent 25%) 0 0 /
-				16px 16px,
-				linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 2%) 75%) 0 0 /
-				16px 16px,
-				#111210;
+				linear-gradient(
+					45deg,
+					var(--design-canvas-grid-line) 25%,
+					transparent 25%
+				) 0 0 / 16px 16px,
+				linear-gradient(
+				45deg,
+				transparent 75%,
+				var(--design-canvas-grid-line) 75%
+			) 0 0 / 16px 16px,
+				var(--design-canvas-surface);
+			z-index: var(--workspace-layer-stage);
 
 			> canvas-meta,
 			> canvas-hint {
@@ -256,15 +308,15 @@ design-application.class {
 				align-items: center;
 				justify-content: space-between;
 				padding: 0 9px;
-				border-bottom: 1px solid #272824;
-				background: #171815;
+				border-bottom: 1px solid var(--design-canvas-hud-line);
+				background: var(--design-canvas-hud-surface);
 				font-size: 8px;
-				color: #8e8c85;
+				color: var(--design-canvas-hud-ink);
 			}
 
 			> canvas-hint {
 				justify-content: center;
-				border-top: 1px solid #272824;
+				border-top: 1px solid var(--design-canvas-hud-line);
 				border-bottom: 0;
 			}
 
@@ -276,85 +328,92 @@ design-application.class {
 				overflow: hidden;
 				touch-action: none;
 
-				> ruler-corner,
-				> ruler-horizontal,
-				> ruler-vertical {
-					position: absolute;
-					z-index: 5;
-					display: block;
-					background: color-mix(
-						in srgb,
-						var(--surface-header) 92%,
-						transparent
-					);
-					color: var(--ink-faint);
-					font-size: 7px;
-					user-select: none;
-				}
-
-				> ruler-corner {
-					top: 0;
-					left: 0;
-					width: 20px;
-					height: 20px;
-					border-right: 1px solid var(--line-strong);
-					border-bottom: 1px solid var(--line-strong);
-				}
-
-				> ruler-horizontal {
-					top: 0;
-					right: 0;
-					left: 20px;
-					height: 20px;
-					overflow: hidden;
-					border-bottom: 1px solid var(--line-strong);
-					cursor: crosshair;
-
-					> i {
-						position: absolute;
-						bottom: 0;
-						width: 1px;
-						height: 4px;
-						border-left: 1px solid currentcolor;
-						font-style: normal;
-
-						&[data-major] {
-							height: 9px;
-							padding: 0 0 0 2px;
-						}
-					}
-				}
-
-				> ruler-vertical {
-					top: 20px;
-					bottom: 0;
-					left: 0;
-					width: 20px;
-					overflow: hidden;
-					border-right: 1px solid var(--line-strong);
-					cursor: crosshair;
-
-					> i {
-						position: absolute;
-						right: 0;
-						width: 4px;
-						height: 1px;
-						border-top: 1px solid currentcolor;
-						font-style: normal;
-						writing-mode: vertical-rl;
-
-						&[data-major] {
-							width: 9px;
-							padding-top: 2px;
-						}
-					}
-				}
-
 				> div {
 					display: block;
 					width: 100%;
 					height: 100%;
 					touch-action: none;
+				}
+			}
+		}
+
+		> canvas-rulers {
+			position: absolute;
+			top: var(--design-canvas-meta-size, 0px);
+			right: 0;
+			bottom: var(--design-canvas-hint-size, 0px);
+			left: 0;
+			display: block;
+			pointer-events: none;
+			z-index: var(--workspace-layer-rulers);
+
+			> ruler-corner,
+			> ruler-horizontal,
+			> ruler-vertical {
+				position: absolute;
+				display: block;
+				background: var(--design-canvas-ruler-surface);
+				color: var(--design-canvas-ruler-ink);
+				font-size: 7px;
+				pointer-events: auto;
+				user-select: none;
+			}
+
+			> ruler-corner {
+				top: 0;
+				left: 0;
+				width: var(--design-ruler-size);
+				height: var(--design-ruler-size);
+				border-right: 1px solid var(--design-canvas-ruler-line);
+				border-bottom: 1px solid var(--design-canvas-ruler-line);
+			}
+
+			> ruler-horizontal {
+				top: 0;
+				right: 0;
+				left: var(--design-ruler-size);
+				height: var(--design-ruler-size);
+				overflow: hidden;
+				border-bottom: 1px solid var(--design-canvas-ruler-line);
+				cursor: crosshair;
+
+				> i {
+					position: absolute;
+					bottom: 0;
+					width: 1px;
+					height: 4px;
+					border-left: 1px solid currentcolor;
+					font-style: normal;
+
+					&[data-major] {
+						height: 9px;
+						padding: 0 0 0 2px;
+					}
+				}
+			}
+
+			> ruler-vertical {
+				top: var(--design-ruler-size);
+				bottom: 0;
+				left: 0;
+				width: var(--design-ruler-size);
+				overflow: hidden;
+				border-right: 1px solid var(--design-canvas-ruler-line);
+				cursor: crosshair;
+
+				> i {
+					position: absolute;
+					right: 0;
+					width: 4px;
+					height: 1px;
+					border-top: 1px solid currentcolor;
+					font-style: normal;
+					writing-mode: vertical-rl;
+
+					&[data-major] {
+						width: 9px;
+						padding-top: 2px;
+					}
 				}
 			}
 		}
@@ -374,6 +433,23 @@ design-application.class {
 }
 
 @media (prefers-color-scheme: light) {
+	:global(:root) {
+		--design-canvas-surface: #d9dad6;
+		--design-canvas-grid-line: rgb(28 27 23 / 4%);
+		--design-canvas-ruler-surface: rgb(232 230 223 / 94%);
+		--design-canvas-ruler-line: #aaa69d;
+		--design-canvas-ruler-ink: #66635d;
+		--design-canvas-hud-surface: #e8e6df;
+		--design-canvas-hud-line: #c5c1b7;
+		--design-canvas-hud-ink: #69665f;
+		--design-canvas-artboard-outline: #706d65;
+		--design-canvas-artboard-shadow: #3d3b36;
+		--design-canvas-artboard-shadow-opacity: 0.2;
+		--design-canvas-guide: #0577aa;
+		--design-canvas-selection: #ce5d3d;
+		--design-canvas-handle-fill: #fff;
+	}
+
 	design-application.class {
 		--paper: #f1f0eb;
 		--panel: #ebeae5;
@@ -388,6 +464,28 @@ design-application.class {
 		--surface-header: #e8e6df;
 		--shadow-subtle: rgb(38 35 29 / 9%);
 		color-scheme: light;
+	}
+}
+
+@media (forced-colors: active) {
+	:global(:root) {
+		--design-canvas-surface: Canvas;
+		--design-canvas-grid-line: CanvasText;
+		--design-canvas-ruler-surface: Canvas;
+		--design-canvas-ruler-line: CanvasText;
+		--design-canvas-ruler-ink: CanvasText;
+		--design-canvas-hud-surface: Canvas;
+		--design-canvas-hud-line: CanvasText;
+		--design-canvas-hud-ink: CanvasText;
+		--design-canvas-artboard-outline: CanvasText;
+		--design-canvas-artboard-shadow: CanvasText;
+		--design-canvas-guide: LinkText;
+		--design-canvas-selection: Highlight;
+		--design-canvas-handle-fill: Canvas;
+	}
+
+	design-application.class > main > canvas-rulers {
+		forced-color-adjust: none;
 	}
 }
 
