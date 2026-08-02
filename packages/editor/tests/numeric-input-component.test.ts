@@ -148,6 +148,30 @@ describe("NumericInput", () => {
 		expect(document.activeElement).not.toBe(input)
 	})
 
+	it("restores a controlled delta value after each commit", () => {
+		const { input, onCommit } = mount({ value: 0, resetAfterCommit: true })
+		focus(input)
+		type(input, "45")
+		key(input, "Enter")
+		expect(onCommit).toHaveBeenCalledWith(45)
+		expect(input.value).toBe("0")
+
+		focus(input)
+		key(input, "ArrowUp")
+		expect(onCommit).toHaveBeenLastCalledWith(1)
+		expect(input.value).toBe("0")
+	})
+
+	it("supports a non-editable, focusable read-only state", () => {
+		const { input, onCommit } = mount({ readOnly: true })
+		focus(input)
+		type(input, "22")
+		key(input, "ArrowUp")
+		expect(input.readOnly).toBe(true)
+		expect(input.getAttribute("aria-readonly")).toBe("true")
+		expect(onCommit).not.toHaveBeenCalled()
+	})
+
 	it("steps valid expressions and falls back from invalid drafts", () => {
 		const { input, onCommit } = mount({ max: 1_000 })
 		focus(input)

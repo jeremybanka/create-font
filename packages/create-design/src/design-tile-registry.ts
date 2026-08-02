@@ -4,6 +4,7 @@ import {
 	parseTilingLayout,
 	serializeTilingLayout,
 	type TileRegistration,
+	type TilingLayout,
 } from "@create-font/editor/shared"
 import { h } from "preact"
 
@@ -41,6 +42,8 @@ export type DesignTileKind =
 	| "tools"
 	| "export"
 	| "object"
+	| "transform"
+	| "arrange"
 	| "appearance"
 
 export interface DesignTileContext {
@@ -80,6 +83,8 @@ export interface DesignTileContext {
 		maxX: number
 		maxY: number
 	}> | null
+	readonly selectionArrangementUnitCount?: number
+	readonly selectionTransformDisabledReason?: string | null
 	readonly transformSelection: (
 		input: Readonly<{
 			x?: number
@@ -196,6 +201,21 @@ const registrations = [
 		render: ({ context }) => h(DesignTileContent, { context, kind: "object" }),
 	},
 	{
+		kind: "transform",
+		name: "Transform",
+		description: "Position, size, and rotate the current selection.",
+		defaultPlacement: { column: 4 },
+		render: ({ context }) =>
+			h(DesignTileContent, { context, kind: "transform" }),
+	},
+	{
+		kind: "arrange",
+		name: "Arrange",
+		description: "Align and distribute the current selection.",
+		defaultPlacement: { column: 4 },
+		render: ({ context }) => h(DesignTileContent, { context, kind: "arrange" }),
+	},
+	{
 		kind: "appearance",
 		name: "Appearance",
 		description:
@@ -218,12 +238,43 @@ export const DEFAULT_DESIGN_TILING_LAYOUT =
 	createRegistryDefaultLayout(DESIGN_TILE_REGISTRY)
 export const LEGACY_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v2"
-export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v3"
+export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
+	"create-design:tiling-workspace:v3"
+export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v4"
+
+function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
+	const kinds = new Set(
+		layout.columns.flatMap((column) => column.tiles.map((tile) => tile.kind)),
+	)
+	if (!kinds.has("object")) return layout
+	let inserted = false
+	return {
+		...layout,
+		columns: layout.columns.map((column) => ({
+			...column,
+			tiles: column.tiles.flatMap((tile) => {
+				if (inserted || tile.kind !== "object") return [tile]
+				inserted = true
+				return [
+					tile,
+					...(kinds.has("transform")
+						? []
+						: [
+								{ id: "transform:migrated-v4", kind: "transform", fill: false },
+							]),
+					...(kinds.has("arrange")
+						? []
+						: [{ id: "arrange:migrated-v4", kind: "arrange", fill: false }]),
+				]
+			}),
+		})),
+	}
+}
 
 /**
- * Preserve customized v2 layouts without injecting the new tile. The new
- * tile is default-placed only for new workspaces, while migrated workspaces
- * can open it from the command palette or tile pool without an injected panel.
+ * Preserve customized layouts while splitting controls out of a visible Object
+ * tile. Workspaces that deliberately removed Object keep the new inspectors in
+ * the tile pool instead of having panels injected back into their layout.
  */
 export function migrateDesignTilingStorage(
 	storage: Pick<Storage, "getItem" | "setItem">,
@@ -231,11 +282,14 @@ export function migrateDesignTilingStorage(
 	for (const suffix of ["saved:v1", "draft:v1"] as const) {
 		const destination = `${DESIGN_TILING_STORAGE_KEY}:${suffix}`
 		if (storage.getItem(destination) !== null) continue
-		const legacy = storage.getItem(
-			`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`,
-		)
+		const legacy =
+			storage.getItem(`${PREVIOUS_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
+			storage.getItem(`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`)
 		const layout = parseTilingLayout(legacy)
 		if (layout !== null)
-			storage.setItem(destination, serializeTilingLayout(layout))
+			storage.setItem(
+				destination,
+				serializeTilingLayout(splitObjectInspectorTiles(layout)),
+			)
 	}
 }

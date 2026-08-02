@@ -86,6 +86,7 @@ design-application.class {
 	--ink-muted: #aaa79f;
 	--ink-faint: #75746d;
 	--accent: #e17352;
+	--danger: #d5786d;
 	--canvas-surface: var(--design-canvas-surface);
 	--surface-header: #20211e;
 	--shadow-subtle: rgb(0 0 0 / 32%);

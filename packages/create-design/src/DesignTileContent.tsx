@@ -1,10 +1,28 @@
 import {
+	AlignBottomIcon,
+	AlignCenterHorizontallyIcon,
+	AlignCenterVerticallyIcon,
+	AlignLeftIcon,
+	AlignRightIcon,
+	AlignTopIcon,
 	EyeClosedIcon,
 	EyeOpenIcon,
+	Link1Icon,
+	LinkBreak1Icon,
 	LockClosedIcon,
 	LockOpen1Icon,
+	SpaceBetweenHorizontallyIcon,
+	SpaceBetweenVerticallyIcon,
 	TrashIcon,
 } from "@radix-ui/react-icons"
+import {
+	TileButton,
+	TileButtonGroup,
+	TileNumericField,
+	TileSelect,
+	TileTextField,
+} from "@create-font/editor/shared"
+import type { JSX } from "preact"
 import { useMemo, useState } from "preact/hooks"
 import type {
 	AppearancePaintTarget,
@@ -48,16 +66,27 @@ import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
+	DesignObject,
 	DesignStroke,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
 
 const svg = {
+	AlignBottom: AlignBottomIcon,
+	AlignCenterHorizontally: AlignCenterHorizontallyIcon,
+	AlignCenterVertically: AlignCenterVerticallyIcon,
+	AlignLeft: AlignLeftIcon,
+	AlignRight: AlignRightIcon,
+	AlignTop: AlignTopIcon,
 	EyeClosed: EyeClosedIcon,
 	EyeOpen: EyeOpenIcon,
+	Link: Link1Icon,
+	LinkBreak: LinkBreak1Icon,
 	LockClosed: LockClosedIcon,
 	LockOpen: LockOpen1Icon,
+	SpaceBetweenHorizontally: SpaceBetweenHorizontallyIcon,
+	SpaceBetweenVertically: SpaceBetweenVerticallyIcon,
 	Trash: TrashIcon,
 }
 
@@ -705,19 +734,117 @@ function DesignExportTile({
 	)
 }
 
-function DesignObjectTile({
+const TRANSFORM_ORIGINS = [
+	{ id: "top-left", label: "Top left" },
+	{ id: "top", label: "Top center" },
+	{ id: "top-right", label: "Top right" },
+	{ id: "left", label: "Center left" },
+	{ id: "center", label: "Center" },
+	{ id: "right", label: "Center right" },
+	{ id: "bottom-left", label: "Bottom left" },
+	{ id: "bottom", label: "Bottom center" },
+	{ id: "bottom-right", label: "Bottom right" },
+] as const satisfies readonly Readonly<{
+	id: DesignTransformOrigin
+	label: string
+}>[]
+
+function inspectorNumber(value: number): number {
+	const rounded = Math.round(value * 1_000) / 1_000
+	return Object.is(rounded, -0) ? 0 : rounded
+}
+
+function TransformOriginPicker({
+	disabled = false,
+	onChange,
+	value,
+}: Readonly<{
+	disabled?: boolean
+	onChange: (origin: DesignTransformOrigin) => void
+	value: DesignTransformOrigin
+}>) {
+	const selectIndex = (index: number, grid?: HTMLElement | null): void => {
+		const origin = TRANSFORM_ORIGINS[index]
+		if (origin === undefined) return
+		onChange(origin.id)
+		grid?.querySelectorAll<HTMLButtonElement>("button")[index]?.focus()
+	}
+	const navigate = (
+		event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+		index: number,
+	): void => {
+		const row = Math.floor(index / 3)
+		const column = index % 3
+		const next =
+			event.key === "Home"
+				? 0
+				: event.key === "End"
+					? TRANSFORM_ORIGINS.length - 1
+					: event.key === "ArrowLeft"
+						? row * 3 + Math.max(0, column - 1)
+						: event.key === "ArrowRight"
+							? row * 3 + Math.min(2, column + 1)
+							: event.key === "ArrowUp"
+								? Math.max(0, row - 1) * 3 + column
+								: event.key === "ArrowDown"
+									? Math.min(2, row + 1) * 3 + column
+									: null
+		if (next === null) return
+		event.preventDefault()
+		selectIndex(next, event.currentTarget.closest("transform-origin-grid"))
+	}
+	return (
+		<transform-origin-picker>
+			<span>Origin</span>
+			<transform-origin-grid
+				role="radiogroup"
+				aria-label="Transform origin"
+				aria-disabled={disabled || undefined}
+			>
+				{TRANSFORM_ORIGINS.map((origin, index) => (
+					<button
+						key={origin.id}
+						type="button"
+						disabled={disabled}
+						role="radio"
+						aria-label={origin.label}
+						aria-checked={origin.id === value}
+						title={origin.label}
+						tabIndex={!disabled && origin.id === value ? 0 : -1}
+						onClick={() => selectIndex(index)}
+						onKeyDown={(event) => navigate(event, index)}
+					>
+						<span aria-hidden="true" />
+					</button>
+				))}
+			</transform-origin-grid>
+			<small aria-live="polite">
+				{TRANSFORM_ORIGINS.find(({ id }) => id === value)?.label}
+			</small>
+		</transform-origin-picker>
+	)
+}
+
+function selectionCountLabel(context: DesignTileContext): string {
+	return context.selectedObjectCount === 0
+		? "No selection"
+		: context.selectedObjectCount === 1
+			? "1 selected"
+			: `${context.selectedObjectCount} selected`
+}
+
+function DesignTransformTile({
 	context,
 }: {
 	readonly context: DesignTileContext
 }) {
-	const object = context.selectedObject
-	const bounds = object === null ? null : exactObjectBounds(object)
-	const visibleBounds = object === null ? null : visibleObjectBounds(object)
 	const [origin, setOrigin] = useState<DesignTransformOrigin>("center")
-	const [alignmentTarget, setAlignmentTarget] =
-		useState<DesignAlignmentTarget>("selection")
 	const [constrainProportions, setConstrainProportions] = useState(false)
 	const selectionBounds = context.selectionBounds
+	const transformDisabledReason =
+		selectionBounds === null
+			? "Select one or more objects to transform."
+			: (context.selectionTransformDisabledReason ?? null)
 	const originX =
 		selectionBounds === null
 			? 0
@@ -734,366 +861,511 @@ function DesignObjectTile({
 				: origin.startsWith("bottom") || origin === "bottom"
 					? selectionBounds.maxY
 					: (selectionBounds.minY + selectionBounds.maxY) / 2
+	const width =
+		selectionBounds === null ? 0 : selectionBounds.maxX - selectionBounds.minX
+	const height =
+		selectionBounds === null ? 0 : selectionBounds.maxY - selectionBounds.minY
+	const displayedOriginX = inspectorNumber(originX)
+	const displayedOriginY = inspectorNumber(originY)
+	const displayedWidth = inspectorNumber(width)
+	const displayedHeight = inspectorNumber(height)
+	const degenerate = width === 0 || height === 0
+	const constrainDisabledReason =
+		transformDisabledReason ??
+		(degenerate
+			? "A zero-width or zero-height selection has no proportion to preserve."
+			: null)
 	return (
-		<design-object-tile>
-			{selectionBounds === null ? null : (
-				<selection-transform-editor>
-					<strong>Selection transform</strong>
-					<label data-field>
-						<span>Origin</span>
-						<select
-							aria-label="Transform origin"
-							value={origin}
-							onChange={(event) =>
-								setOrigin(event.currentTarget.value as DesignTransformOrigin)
-							}
-						>
-							{[
-								"top-left",
-								"top",
-								"top-right",
-								"left",
-								"center",
-								"right",
-								"bottom-left",
-								"bottom",
-								"bottom-right",
-							].map((value) => (
-								<option value={value}>{value}</option>
-							))}
-						</select>
-					</label>
-					<shape-number-grid>
-						<ShapeNumberInput
-							label="Selection X"
-							value={originX}
-							onChange={(x) => context.transformSelection({ origin, x })}
-						/>
-						<ShapeNumberInput
-							label="Selection Y"
-							value={originY}
-							onChange={(y) => context.transformSelection({ origin, y })}
-						/>
-						<ShapeNumberInput
-							label="Selection width"
-							min={0}
-							value={selectionBounds.maxX - selectionBounds.minX}
-							onChange={(width) =>
-								context.transformSelection({
-									origin,
-									width,
-									constrainProportions,
-								})
-							}
-						/>
-						<ShapeNumberInput
-							label="Selection height"
-							min={0}
-							value={selectionBounds.maxY - selectionBounds.minY}
-							onChange={(height) =>
-								context.transformSelection({
-									origin,
-									height,
-									constrainProportions,
-								})
-							}
-						/>
-						<ShapeNumberInput
+		<design-transform-tile>
+			<selection-transform-editor aria-label="Selection transform">
+				<transform-editor-heading>
+					<strong>Selection</strong>
+					<span>{selectionCountLabel(context)}</span>
+				</transform-editor-heading>
+				<transform-disabled-reason
+					role="note"
+					data-active={transformDisabledReason !== null || undefined}
+				>
+					{transformDisabledReason ??
+						"Position, size, and rotation apply to the complete selection."}
+				</transform-disabled-reason>
+				<TransformOriginPicker
+					value={origin}
+					disabled={transformDisabledReason !== null}
+					onChange={setOrigin}
+				/>
+				<transform-number-grid>
+					<TileNumericField
+						label="Selection X"
+						value={displayedOriginX}
+						step="any"
+						arrowStep={1}
+						disabled={transformDisabledReason !== null}
+						onCommit={(x) => context.transformSelection({ origin, x })}
+					/>
+					<TileNumericField
+						label="Selection Y"
+						value={displayedOriginY}
+						step="any"
+						arrowStep={1}
+						disabled={transformDisabledReason !== null}
+						onCommit={(y) => context.transformSelection({ origin, y })}
+					/>
+					<TileNumericField
+						label="Selection width"
+						min={0}
+						value={displayedWidth}
+						step="any"
+						arrowStep={1}
+						disabled={transformDisabledReason !== null}
+						onCommit={(nextWidth) =>
+							context.transformSelection({
+								origin,
+								width: nextWidth,
+								constrainProportions,
+							})
+						}
+					/>
+					<TileNumericField
+						label="Selection height"
+						min={0}
+						value={displayedHeight}
+						step="any"
+						arrowStep={1}
+						disabled={transformDisabledReason !== null}
+						onCommit={(nextHeight) =>
+							context.transformSelection({
+								origin,
+								height: nextHeight,
+								constrainProportions,
+							})
+						}
+					/>
+					<transform-rotation-field>
+						<TileNumericField
 							label="Rotate by degrees"
 							value={0}
-							onChange={(rotation) =>
+							step="any"
+							arrowStep={1}
+							resetAfterCommit
+							disabled={transformDisabledReason !== null}
+							onCommit={(rotation) =>
 								context.transformSelection({ origin, rotation })
 							}
 						/>
-					</shape-number-grid>
-					<label data-field>
-						<input
-							type="checkbox"
-							checked={constrainProportions}
-							onChange={(event) =>
-								setConstrainProportions(event.currentTarget.checked)
-							}
-						/>
-						<span>Constrain proportions</span>
-					</label>
-					<label data-field>
-						<span>Align to</span>
-						<select
-							value={alignmentTarget}
-							onChange={(event) =>
-								setAlignmentTarget(
-									event.currentTarget.value as DesignAlignmentTarget,
+					</transform-rotation-field>
+				</transform-number-grid>
+				<TileButton
+					aria-label="Constrain proportions"
+					aria-pressed={constrainProportions}
+					disabled={constrainDisabledReason !== null}
+					style={{ justifyContent: "flex-start", width: "100%" }}
+					title={constrainDisabledReason ?? "Preserve width-to-height ratio"}
+					onClick={() => setConstrainProportions((current) => !current)}
+				>
+					{constrainProportions ? <svg.Link /> : <svg.LinkBreak />}
+					Constrain proportions
+				</TileButton>
+			</selection-transform-editor>
+		</design-transform-tile>
+	)
+}
+
+function DesignArrangeTile({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const [alignmentTarget, setAlignmentTarget] =
+		useState<DesignAlignmentTarget>("selection")
+	const transformDisabledReason =
+		context.selectionBounds === null
+			? "Select one or more objects to arrange."
+			: (context.selectionTransformDisabledReason ?? null)
+	const arrangementUnitCount =
+		context.selectionArrangementUnitCount ?? context.selectedObjectCount
+	const alignmentDisabledReason =
+		transformDisabledReason ??
+		(alignmentTarget === "artboard"
+			? null
+			: arrangementUnitCount < 2
+				? `Select at least two objects to align to the ${alignmentTarget === "key-object" ? "key object" : "selection"}.`
+				: null)
+	const distributionDisabledReason =
+		transformDisabledReason ??
+		(arrangementUnitCount < 3
+			? "Select at least three objects to distribute them."
+			: null)
+	return (
+		<design-arrange-tile>
+			<selection-arrangement-controls aria-label="Selection arrangement">
+				<arrangement-heading>
+					<strong>Selection</strong>
+					<span>{selectionCountLabel(context)}</span>
+				</arrangement-heading>
+				<TileSelect
+					label="Align to"
+					value={alignmentTarget}
+					disabled={transformDisabledReason !== null}
+					onChange={(event) =>
+						setAlignmentTarget(
+							event.currentTarget.value as DesignAlignmentTarget,
+						)
+					}
+				>
+					<option value="selection">Selection</option>
+					<option value="key-object">Key object</option>
+					<option value="artboard">Active artboard</option>
+				</TileSelect>
+				<TileButtonGroup aria-label="Align selection" compact>
+					{(
+						[
+							["left", svg.AlignLeft],
+							["center", svg.AlignCenterHorizontally],
+							["right", svg.AlignRight],
+							["top", svg.AlignTop],
+							["middle", svg.AlignCenterVertically],
+							["bottom", svg.AlignBottom],
+						] as const
+					).map(([alignment, Icon]) => (
+						<TileButton
+							key={alignment}
+							compact
+							iconOnly
+							aria-label={`Align ${alignment}`}
+							title={alignmentDisabledReason ?? `Align ${alignment}`}
+							disabled={alignmentDisabledReason !== null}
+							onClick={() =>
+								context.alignSelection(
+									alignment,
+									alignmentTarget,
+									context.selectedObjectIds.at(-1),
 								)
 							}
 						>
-							<option value="selection">Selection</option>
-							<option value="key-object">Key object</option>
-							<option value="artboard">Active artboard</option>
-						</select>
-					</label>
-					<alignment-controls role="group" aria-label="Align selection">
-						{(
-							["left", "center", "right", "top", "middle", "bottom"] as const
-						).map((alignment) => (
-							<button
-								type="button"
-								onClick={() =>
-									context.alignSelection(
-										alignment,
-										alignmentTarget,
-										context.selectedObjectIds.at(-1),
-									)
-								}
-							>
-								{alignment}
-							</button>
-						))}
-					</alignment-controls>
-					<distribution-controls role="group" aria-label="Distribute selection">
-						<button
-							type="button"
-							onClick={() => context.distributeSelection("x")}
-						>
-							Distribute horizontal
-						</button>
-						<button
-							type="button"
-							onClick={() => context.distributeSelection("y")}
-						>
-							Distribute vertical
-						</button>
-					</distribution-controls>
-				</selection-transform-editor>
-			)}
-			{context.tool === "direct" && context.selectedObjectCount > 0 ? (
-				<p role="status">Direct selection: {context.directSelectionSummary}</p>
-			) : context.selectedObjectCount > 1 ? (
-				<p role="status">
-					{context.selectedObjectCount} objects selected. Appearance and
-					transforms apply to the complete selection.
-				</p>
-			) : object === null ? (
-				<p>Select an object to inspect it.</p>
-			) : (
-				<>
-					<label data-field>
-						<span>Name</span>
-						<input
-							value={object.name}
-							onChange={(event) =>
-								context.setObjectProperty(object, {
-									name: event.currentTarget.value,
-								})
-							}
+							<Icon />
+						</TileButton>
+					))}
+				</TileButtonGroup>
+				<TileButtonGroup aria-label="Distribute selection" compact>
+					<TileButton
+						compact
+						aria-label="Distribute horizontally"
+						title={distributionDisabledReason ?? "Distribute horizontally"}
+						disabled={distributionDisabledReason !== null}
+						onClick={() => context.distributeSelection("x")}
+					>
+						<svg.SpaceBetweenHorizontally /> Horizontal
+					</TileButton>
+					<TileButton
+						compact
+						aria-label="Distribute vertically"
+						title={distributionDisabledReason ?? "Distribute vertically"}
+						disabled={distributionDisabledReason !== null}
+						onClick={() => context.distributeSelection("y")}
+					>
+						<svg.SpaceBetweenVertically /> Vertical
+					</TileButton>
+				</TileButtonGroup>
+				<arrangement-help data-kind="alignment">
+					{alignmentDisabledReason ??
+						"Choose an edge or center to align the selection."}
+				</arrangement-help>
+				<arrangement-help data-kind="distribution">
+					{distributionDisabledReason ??
+						"Distribute three or more objects with equal spacing."}
+				</arrangement-help>
+			</selection-arrangement-controls>
+		</design-arrange-tile>
+	)
+}
+
+type ObjectGeometryField = Readonly<{
+	disabled: boolean
+	label: string
+	onChange?: (value: number) => void
+	value: number
+}>
+
+function objectGeometryFields(
+	context: DesignTileContext,
+	object: DesignObject | null,
+): readonly ObjectGeometryField[] {
+	if (object?.geometry.kind === "rectangle") {
+		const geometry = object.geometry
+		return [
+			{
+				disabled: false,
+				label: "Local X",
+				value: geometry.x,
+				onChange: (x) => context.setObjectGeometry(object, { ...geometry, x }),
+			},
+			{
+				disabled: false,
+				label: "Local Y",
+				value: geometry.y,
+				onChange: (y) => context.setObjectGeometry(object, { ...geometry, y }),
+			},
+			{
+				disabled: false,
+				label: "Width",
+				value: geometry.width,
+				onChange: (width) =>
+					context.setObjectGeometry(object, { ...geometry, width }),
+			},
+			{
+				disabled: false,
+				label: "Height",
+				value: geometry.height,
+				onChange: (height) =>
+					context.setObjectGeometry(object, { ...geometry, height }),
+			},
+		]
+	}
+	if (object?.geometry.kind === "ellipse") {
+		const geometry = object.geometry
+		return [
+			{
+				disabled: false,
+				label: "Center X",
+				value: geometry.centerX,
+				onChange: (centerX) =>
+					context.setObjectGeometry(object, { ...geometry, centerX }),
+			},
+			{
+				disabled: false,
+				label: "Center Y",
+				value: geometry.centerY,
+				onChange: (centerY) =>
+					context.setObjectGeometry(object, { ...geometry, centerY }),
+			},
+			{
+				disabled: false,
+				label: "Radius X",
+				value: geometry.radiusX,
+				onChange: (radiusX) =>
+					context.setObjectGeometry(object, { ...geometry, radiusX }),
+			},
+			{
+				disabled: false,
+				label: "Radius Y",
+				value: geometry.radiusY,
+				onChange: (radiusY) =>
+					context.setObjectGeometry(object, { ...geometry, radiusY }),
+			},
+		]
+	}
+	return ["Local X", "Local Y", "Width", "Height"].map((label) => ({
+		disabled: true,
+		label,
+		value: 0,
+	}))
+}
+
+function objectSelectionSummary(
+	context: DesignTileContext,
+	object: DesignObject | null,
+): string {
+	if (context.tool === "direct" && context.selectedObjectCount > 0)
+		return `Direct selection: ${context.directSelectionSummary}`
+	if (context.selectedObjectCount > 1)
+		return `${context.selectedObjectCount} objects selected. Select one object to edit its properties.`
+	if (object === null) return "Select one object to inspect its properties."
+	return `${object.name} is selected.`
+}
+
+function DesignObjectTile({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const object = context.selectedObject
+	const bounds = object === null ? null : exactObjectBounds(object)
+	const visibleBounds = object === null ? null : visibleObjectBounds(object)
+	const geometryFields = objectGeometryFields(context, object)
+	const geometryLabel =
+		object?.geometry.kind === "rectangle"
+			? "Live rectangle"
+			: object?.geometry.kind === "ellipse"
+				? "Live ellipse"
+				: object?.geometry.kind === "path"
+					? "Path geometry"
+					: "Object geometry"
+	return (
+		<design-object-tile>
+			<object-selection-summary role="status">
+				{objectSelectionSummary(context, object)}
+			</object-selection-summary>
+			<TileTextField
+				label="Name"
+				value={object?.name ?? ""}
+				placeholder="No single object selected"
+				disabled={object === null}
+				onChange={(event) =>
+					object === null
+						? undefined
+						: context.setObjectProperty(object, {
+								name: event.currentTarget.value,
+							})
+				}
+			/>
+			<object-geometry-editor>
+				<strong>{geometryLabel}</strong>
+				<shape-number-grid>
+					{geometryFields.map((field) => (
+						<ShapeNumberInput
+							key={field.label}
+							label={field.label}
+							value={field.value}
+							disabled={field.disabled}
+							{...(field.label === "Width" ||
+							field.label === "Height" ||
+							field.label.startsWith("Radius")
+								? { min: 0 }
+								: {})}
+							{...(field.onChange === undefined
+								? {}
+								: { onChange: field.onChange })}
 						/>
-					</label>
-					<object-geometry-editor>
-						<strong>
-							{object.geometry.kind === "rectangle"
-								? "Live rectangle"
-								: object.geometry.kind === "ellipse"
-									? "Live ellipse"
-									: "Path geometry"}
-						</strong>
-						{object.geometry.kind === "rectangle" ? (
-							<shape-number-grid>
-								<ShapeNumberInput
-									label="Local X"
-									value={object.geometry.x}
-									onChange={(x) => {
-										if (object.geometry.kind !== "rectangle") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											x,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Local Y"
-									value={object.geometry.y}
-									onChange={(y) => {
-										if (object.geometry.kind !== "rectangle") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											y,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Width"
-									value={object.geometry.width}
-									min={0}
-									onChange={(width) => {
-										if (object.geometry.kind !== "rectangle") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											width,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Height"
-									value={object.geometry.height}
-									min={0}
-									onChange={(height) => {
-										if (object.geometry.kind !== "rectangle") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											height,
-										})
-									}}
-								/>
-							</shape-number-grid>
-						) : object.geometry.kind === "ellipse" ? (
-							<shape-number-grid>
-								<ShapeNumberInput
-									label="Center X"
-									value={object.geometry.centerX}
-									onChange={(centerX) => {
-										if (object.geometry.kind !== "ellipse") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											centerX,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Center Y"
-									value={object.geometry.centerY}
-									onChange={(centerY) => {
-										if (object.geometry.kind !== "ellipse") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											centerY,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Radius X"
-									value={object.geometry.radiusX}
-									min={0}
-									onChange={(radiusX) => {
-										if (object.geometry.kind !== "ellipse") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											radiusX,
-										})
-									}}
-								/>
-								<ShapeNumberInput
-									label="Radius Y"
-									value={object.geometry.radiusY}
-									min={0}
-									onChange={(radiusY) => {
-										if (object.geometry.kind !== "ellipse") return
-										context.setObjectGeometry(object, {
-											...object.geometry,
-											radiusY,
-										})
-									}}
-								/>
-							</shape-number-grid>
-						) : null}
-						<strong>Geometric document bounds</strong>
-						{bounds === null ? (
-							<span>No drawable bounds.</span>
-						) : (
-							<shape-number-grid>
-								<ShapeNumberInput label="Bounds X" value={bounds.x} />
-								<ShapeNumberInput label="Bounds Y" value={bounds.y} />
-								<ShapeNumberInput label="Bounds width" value={bounds.width} />
-								<ShapeNumberInput label="Bounds height" value={bounds.height} />
-							</shape-number-grid>
-						)}
-						<strong>Visible document bounds</strong>
-						{visibleBounds === null ? (
-							<span>No painted bounds.</span>
-						) : (
-							<shape-number-grid>
-								<ShapeNumberInput
-									label="Visible X"
-									value={visibleBounds.minX}
-								/>
-								<ShapeNumberInput
-									label="Visible Y"
-									value={visibleBounds.minY}
-								/>
-								<ShapeNumberInput
-									label="Visible width"
-									value={visibleBounds.maxX - visibleBounds.minX}
-								/>
-								<ShapeNumberInput
-									label="Visible height"
-									value={visibleBounds.maxY - visibleBounds.minY}
-								/>
-							</shape-number-grid>
-						)}
-					</object-geometry-editor>
-					<button
-						type="button"
-						data-expand-shape
-						disabled={context.expansionDisabledReason !== null}
-						aria-describedby="expand-shape-eligibility"
-						onClick={context.expandSelection}
-					>
-						Expand Shape
-					</button>
-					<p id="expand-shape-eligibility">
-						{context.expansionDisabledReason ??
-							"Converts this live shape to ordinary editable cubic path geometry."}
-					</p>
-					<button
-						type="button"
-						data-expand-stroke
-						disabled={context.strokeExpansionDisabledReason !== null}
-						aria-describedby="expand-stroke-eligibility"
-						onClick={context.expandStrokeSelection}
-					>
-						Expand Stroke
-					</button>
-					<p id="expand-stroke-eligibility">
-						{context.strokeExpansionDisabledReason ??
-							"Converts the visible stroke to ordinary editable filled contours."}
-					</p>
-					<design-object-actions>
-						<button
-							type="button"
-							onClick={() =>
-								context.setObjectProperty(object, {
+					))}
+				</shape-number-grid>
+				<object-geometry-help>
+					{object?.geometry.kind === "path"
+						? "Edit path coordinates with Direct Selection."
+						: object === null
+							? "Select one object to edit exact geometry."
+							: "Live geometry remains editable until expanded."}
+				</object-geometry-help>
+				<strong>Geometric document bounds</strong>
+				<shape-number-grid>
+					<ShapeNumberInput
+						disabled={bounds === null}
+						label="Bounds X"
+						value={bounds?.x ?? 0}
+					/>
+					<ShapeNumberInput
+						disabled={bounds === null}
+						label="Bounds Y"
+						value={bounds?.y ?? 0}
+					/>
+					<ShapeNumberInput
+						disabled={bounds === null}
+						label="Bounds width"
+						value={bounds?.width ?? 0}
+					/>
+					<ShapeNumberInput
+						disabled={bounds === null}
+						label="Bounds height"
+						value={bounds?.height ?? 0}
+					/>
+				</shape-number-grid>
+				<strong>Visible document bounds</strong>
+				<shape-number-grid>
+					<ShapeNumberInput
+						disabled={visibleBounds === null}
+						label="Visible X"
+						value={visibleBounds?.minX ?? 0}
+					/>
+					<ShapeNumberInput
+						disabled={visibleBounds === null}
+						label="Visible Y"
+						value={visibleBounds?.minY ?? 0}
+					/>
+					<ShapeNumberInput
+						disabled={visibleBounds === null}
+						label="Visible width"
+						value={
+							visibleBounds === null
+								? 0
+								: visibleBounds.maxX - visibleBounds.minX
+						}
+					/>
+					<ShapeNumberInput
+						disabled={visibleBounds === null}
+						label="Visible height"
+						value={
+							visibleBounds === null
+								? 0
+								: visibleBounds.maxY - visibleBounds.minY
+						}
+					/>
+				</shape-number-grid>
+			</object-geometry-editor>
+			<button
+				type="button"
+				data-expand-shape
+				disabled={context.expansionDisabledReason !== null}
+				aria-describedby="expand-shape-eligibility"
+				onClick={context.expandSelection}
+			>
+				Expand Shape
+			</button>
+			<p id="expand-shape-eligibility">
+				{context.expansionDisabledReason ??
+					"Converts this live shape to ordinary editable cubic path geometry."}
+			</p>
+			<button
+				type="button"
+				data-expand-stroke
+				disabled={context.strokeExpansionDisabledReason !== null}
+				aria-describedby="expand-stroke-eligibility"
+				onClick={context.expandStrokeSelection}
+			>
+				Expand Stroke
+			</button>
+			<p id="expand-stroke-eligibility">
+				{context.strokeExpansionDisabledReason ??
+					"Converts the visible stroke to ordinary editable filled contours."}
+			</p>
+			<design-object-actions>
+				<TileButton
+					aria-pressed={object?.hidden ?? false}
+					disabled={object === null}
+					onClick={() =>
+						object === null
+							? undefined
+							: context.setObjectProperty(object, {
 									hidden: !object.hidden,
 								})
-							}
-						>
-							{object.hidden ? <svg.EyeClosed /> : <svg.EyeOpen />}
-							{object.hidden ? "Hidden" : "Visible"}
-						</button>
-						<button
-							type="button"
-							onClick={() =>
-								context.setObjectProperty(object, {
+					}
+				>
+					{object?.hidden ? <svg.EyeClosed /> : <svg.EyeOpen />}
+					{object?.hidden ? "Hidden" : "Visible"}
+				</TileButton>
+				<TileButton
+					aria-pressed={object?.locked ?? false}
+					disabled={object === null}
+					onClick={() =>
+						object === null
+							? undefined
+							: context.setObjectProperty(object, {
 									locked: !object.locked,
 								})
-							}
-						>
-							{object.locked ? <svg.LockClosed /> : <svg.LockOpen />}
-							{object.locked ? "Locked" : "Unlocked"}
-						</button>
-					</design-object-actions>
-					<button type="button" data-danger onClick={context.deleteSelection}>
-						<svg.Trash /> Delete object
-					</button>
-				</>
-			)}
+					}
+				>
+					{object?.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+					{object?.locked ? "Locked" : "Unlocked"}
+				</TileButton>
+			</design-object-actions>
+			<TileButton
+				tone="danger"
+				disabled={context.selectedObjectCount === 0}
+				onClick={context.deleteSelection}
+			>
+				<svg.Trash /> Delete selection
+			</TileButton>
 		</design-object-tile>
 	)
 }
 
 function ShapeNumberInput({
+	disabled = false,
 	label,
 	min,
 	onChange,
 	value,
 }: {
+	readonly disabled?: boolean
 	readonly label: string
 	readonly min?: number
 	readonly onChange?: (value: number) => void
@@ -1106,8 +1378,9 @@ function ShapeNumberInput({
 				<input
 					type="number"
 					value={value}
+					disabled={disabled}
 					{...(min === undefined ? {} : { min })}
-					readOnly={onChange === undefined}
+					readOnly={disabled || onChange === undefined}
 					onInput={
 						onChange === undefined
 							? undefined
@@ -1579,6 +1852,10 @@ export function DesignTileContent({
 				<DesignExportTile context={context} />
 			) : kind === "object" ? (
 				<DesignObjectTile context={context} />
+			) : kind === "transform" ? (
+				<DesignTransformTile context={context} />
+			) : kind === "arrange" ? (
+				<DesignArrangeTile context={context} />
 			) : (
 				<DesignAppearanceTile context={context} />
 			)}

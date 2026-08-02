@@ -1,0 +1,62 @@
+tile-text-field.class {
+	display: grid;
+	min-width: 0;
+	gap: 3px;
+
+	> label {
+		display: grid;
+		min-width: 0;
+		gap: 3px;
+
+		> span {
+			font: 600 var(--tile-label-font-size, 8px) / 1.2 var(--ui-font);
+			color: var(--ink-muted);
+		}
+
+		> input {
+			width: 100%;
+			min-width: 0;
+			height: var(--tile-field-height, 27px);
+			padding: 5px 7px;
+			border: 1px solid var(--line);
+			border-radius: var(--tile-control-radius, 5px);
+			background: var(--paper);
+			font: 520 var(--tile-control-font-size, 9px) / 1.2 var(--ui-font);
+			color: var(--ink);
+
+			&:hover:not(:disabled) {
+				border-color: var(--line-strong);
+			}
+
+			&:focus-visible {
+				outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+				outline-offset: 1px;
+			}
+
+			&[aria-invalid="true"] {
+				border-color: var(--danger, #c45b4f);
+			}
+		}
+	}
+
+	> small {
+		font: 450 7px/1.35 var(--ui-font);
+		color: var(--ink-faint);
+
+		&[data-error] {
+			color: var(--danger, #d5786d);
+		}
+	}
+
+	&[data-disabled] {
+		opacity: 0.56;
+	}
+}
+
+@media (forced-colors: active) {
+	tile-text-field.class > label > input {
+		border-color: ButtonText;
+		background: Canvas;
+		color: CanvasText;
+	}
+}

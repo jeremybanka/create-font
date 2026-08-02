@@ -1,0 +1,10 @@
+tile-button-group.class {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(25px, 1fr));
+	gap: 3px;
+	min-width: 0;
+
+	&[data-compact] {
+		gap: 2px;
+	}
+}
