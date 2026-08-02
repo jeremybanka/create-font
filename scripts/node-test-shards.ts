@@ -31,11 +31,18 @@ type ShardCommand = PackageTests | PackageScript | WorkspaceCommand
 const workspaceRoot = fileURLToPath(new URL(`..`, import.meta.url))
 
 const shards = {
-	"create-font-application": [
+	"create-font-interfaces": [
 		{
 			kind: `package-script`,
 			package: `create-font`,
-			script: `test:unit`,
+			script: `test:unit-interfaces`,
+		},
+	],
+	"create-font-source-pipeline": [
+		{
+			kind: `package-script`,
+			package: `create-font`,
+			script: `test:unit-source-pipeline`,
 		},
 	],
 	"design-application": [
@@ -161,7 +168,12 @@ function verifyShards(): void {
 	for (const manifest of manifests.values()) {
 		if (manifest.scripts?.test === undefined) continue
 		if (manifest.name === `create-font`) {
-			for (const script of [`test:unit`, `test:e2e`, `test:node-server`]) {
+			for (const script of [
+				`test:unit-interfaces`,
+				`test:unit-source-pipeline`,
+				`test:e2e`,
+				`test:node-server`,
+			]) {
 				expectedSurfaces.add(`${manifest.name}:${script}`)
 			}
 			continue

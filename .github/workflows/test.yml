@@ -108,8 +108,8 @@ jobs:
       - uses: ./.github/actions/download-node-artifacts
       - run: node scripts/node-test-shards.ts design-application
 
-  node-create-font-application:
-    name: Node · Create Font application
+  node-create-font-interfaces:
+    name: Node · Create Font interfaces
     needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -117,7 +117,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/download-node-artifacts
-      - run: node scripts/node-test-shards.ts create-font-application
+      - run: node scripts/node-test-shards.ts create-font-interfaces
+
+  node-create-font-source-pipeline:
+    name: Node · Create Font source pipeline
+    needs: node-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
+      - run: node scripts/node-test-shards.ts create-font-source-pipeline
 
   node-filesystem-integration:
     name: Node · Filesystem integration
