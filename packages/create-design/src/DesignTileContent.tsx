@@ -31,6 +31,10 @@ import type {
 	DesignTileContext,
 	DesignTileKind,
 } from "./design-tile-registry.ts"
+import type {
+	DesignAlignmentTarget,
+	DesignTransformOrigin,
+} from "./design-arrangement.ts"
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
 import { resolvePdfArtboards, type PdfExportRequest } from "./pdf.ts"
@@ -700,8 +704,158 @@ function DesignObjectTile({
 	const object = context.selectedObject
 	const bounds = object === null ? null : exactObjectBounds(object)
 	const visibleBounds = object === null ? null : visibleObjectBounds(object)
+	const [origin, setOrigin] = useState<DesignTransformOrigin>("center")
+	const [alignmentTarget, setAlignmentTarget] =
+		useState<DesignAlignmentTarget>("selection")
+	const [constrainProportions, setConstrainProportions] = useState(false)
+	const selectionBounds = context.selectionBounds
+	const originX =
+		selectionBounds === null
+			? 0
+			: origin.endsWith("left") || origin === "left"
+				? selectionBounds.minX
+				: origin.endsWith("right") || origin === "right"
+					? selectionBounds.maxX
+					: (selectionBounds.minX + selectionBounds.maxX) / 2
+	const originY =
+		selectionBounds === null
+			? 0
+			: origin.startsWith("top") || origin === "top"
+				? selectionBounds.minY
+				: origin.startsWith("bottom") || origin === "bottom"
+					? selectionBounds.maxY
+					: (selectionBounds.minY + selectionBounds.maxY) / 2
 	return (
 		<design-object-tile>
+			{selectionBounds === null ? null : (
+				<selection-transform-editor>
+					<strong>Selection transform</strong>
+					<label data-field>
+						<span>Origin</span>
+						<select
+							aria-label="Transform origin"
+							value={origin}
+							onChange={(event) =>
+								setOrigin(event.currentTarget.value as DesignTransformOrigin)
+							}
+						>
+							{[
+								"top-left",
+								"top",
+								"top-right",
+								"left",
+								"center",
+								"right",
+								"bottom-left",
+								"bottom",
+								"bottom-right",
+							].map((value) => (
+								<option value={value}>{value}</option>
+							))}
+						</select>
+					</label>
+					<shape-number-grid>
+						<ShapeNumberInput
+							label="Selection X"
+							value={originX}
+							onChange={(x) => context.transformSelection({ origin, x })}
+						/>
+						<ShapeNumberInput
+							label="Selection Y"
+							value={originY}
+							onChange={(y) => context.transformSelection({ origin, y })}
+						/>
+						<ShapeNumberInput
+							label="Selection width"
+							min={0}
+							value={selectionBounds.maxX - selectionBounds.minX}
+							onChange={(width) =>
+								context.transformSelection({
+									origin,
+									width,
+									constrainProportions,
+								})
+							}
+						/>
+						<ShapeNumberInput
+							label="Selection height"
+							min={0}
+							value={selectionBounds.maxY - selectionBounds.minY}
+							onChange={(height) =>
+								context.transformSelection({
+									origin,
+									height,
+									constrainProportions,
+								})
+							}
+						/>
+						<ShapeNumberInput
+							label="Rotate by degrees"
+							value={0}
+							onChange={(rotation) =>
+								context.transformSelection({ origin, rotation })
+							}
+						/>
+					</shape-number-grid>
+					<label data-field>
+						<input
+							type="checkbox"
+							checked={constrainProportions}
+							onChange={(event) =>
+								setConstrainProportions(event.currentTarget.checked)
+							}
+						/>
+						<span>Constrain proportions</span>
+					</label>
+					<label data-field>
+						<span>Align to</span>
+						<select
+							value={alignmentTarget}
+							onChange={(event) =>
+								setAlignmentTarget(
+									event.currentTarget.value as DesignAlignmentTarget,
+								)
+							}
+						>
+							<option value="selection">Selection</option>
+							<option value="key-object">Key object</option>
+							<option value="artboard">Active artboard</option>
+						</select>
+					</label>
+					<alignment-controls role="group" aria-label="Align selection">
+						{(
+							["left", "center", "right", "top", "middle", "bottom"] as const
+						).map((alignment) => (
+							<button
+								type="button"
+								onClick={() =>
+									context.alignSelection(
+										alignment,
+										alignmentTarget,
+										context.selectedObjectIds.at(-1),
+									)
+								}
+							>
+								{alignment}
+							</button>
+						))}
+					</alignment-controls>
+					<distribution-controls role="group" aria-label="Distribute selection">
+						<button
+							type="button"
+							onClick={() => context.distributeSelection("x")}
+						>
+							Distribute horizontal
+						</button>
+						<button
+							type="button"
+							onClick={() => context.distributeSelection("y")}
+						>
+							Distribute vertical
+						</button>
+					</distribution-controls>
+				</selection-transform-editor>
+			)}
 			{context.tool === "direct" && context.selectedObjectCount > 0 ? (
 				<p role="status">Direct selection: {context.directSelectionSummary}</p>
 			) : context.selectedObjectCount > 1 ? (

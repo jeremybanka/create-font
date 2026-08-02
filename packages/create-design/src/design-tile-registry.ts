@@ -20,6 +20,11 @@ import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
 import type { PdfExportTarget } from "./pdf.ts"
 import type { ExportPreflightPreferences } from "./export-preflight.ts"
 import type {
+	DesignAlignment,
+	DesignAlignmentTarget,
+	DesignTransformOrigin,
+} from "./design-arrangement.ts"
+import type {
 	DesignArtboard,
 	DesignDocument,
 	DesignObject,
@@ -61,6 +66,29 @@ export interface DesignTileContext {
 	) => void
 	readonly applyStrokeProperties: (
 		properties: Partial<Omit<DesignStroke, "swatchId">>,
+	) => void
+	readonly alignSelection: (
+		alignment: DesignAlignment,
+		target: DesignAlignmentTarget,
+		keyObjectId?: string,
+	) => void
+	readonly distributeSelection: (axis: "x" | "y") => void
+	readonly selectionBounds: Readonly<{
+		minX: number
+		minY: number
+		maxX: number
+		maxY: number
+	}> | null
+	readonly transformSelection: (
+		input: Readonly<{
+			x?: number
+			y?: number
+			width?: number
+			height?: number
+			rotation?: number
+			origin: DesignTransformOrigin
+			constrainProportions?: boolean
+		}>,
 	) => void
 	readonly canReviewSourceChange?: (change: DesignSourceReviewChange) => boolean
 	readonly deleteSelection: () => void

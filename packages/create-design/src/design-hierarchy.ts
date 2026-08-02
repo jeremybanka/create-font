@@ -331,6 +331,31 @@ function selectedUnits(
 	})
 }
 
+/** Resolves selected sibling objects or complete groups into transform units. */
+export function designSelectionUnits(
+	document: DesignDocument,
+	selection: readonly string[],
+): readonly (readonly string[])[] {
+	const hierarchy = normalized(document)
+	const groups = groupMap(hierarchy.groups)
+	const selected = new Set(selection)
+	const parent = parents(hierarchy.scene, hierarchy.groups).find(
+		(candidate) => {
+			const units = selectedUnits(candidate, selected, groups)
+			return (
+				units.length > 0 &&
+				new Set(units.flatMap((unit) => descendantIds(unit, groups))).size ===
+					selected.size
+			)
+		},
+	)
+	return parent === undefined
+		? selection.map((id) => [id])
+		: selectedUnits(parent, selected, groups).map((unit) =>
+				descendantIds(unit, groups),
+			)
+}
+
 function replaceParent(
 	scene: readonly DesignSceneChild[],
 	groups: readonly DesignGroup[],
