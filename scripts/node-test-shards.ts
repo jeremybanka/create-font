@@ -92,14 +92,14 @@ const shards = {
 			],
 		},
 	],
-	"state-and-editor": [
-		{ kind: `package-tests`, packages: [`@create-font/states`] },
+	editor: [
 		{
 			kind: `package-script`,
 			package: `@create-font/editor`,
 			script: `test:coverage`,
 		},
 	],
+	"state-model": [{ kind: `package-tests`, packages: [`@create-font/states`] }],
 } as const satisfies Readonly<Record<string, readonly ShardCommand[]>>
 
 type ShardName = keyof typeof shards
