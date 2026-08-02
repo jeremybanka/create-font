@@ -10,6 +10,8 @@ design-tile-content.class {
 	> design-tools-tile,
 	> design-export-tile,
 	> design-object-tile,
+	> design-transform-tile,
+	> design-arrange-tile,
 	> design-appearance-tile {
 		display: grid;
 		align-content: start;
@@ -388,161 +390,197 @@ design-tile-content.class {
 		}
 	}
 
-	> design-object-tile {
+	> design-object-tile,
+	> design-transform-tile,
+	> design-arrange-tile {
 		--tile-control-font-size: 8px;
 		--tile-label-font-size: 7px;
 		--tile-field-height: 26px;
+	}
 
-		> p {
-			margin: 0;
-			padding: 9px;
-			text-align: center;
-			line-height: 1.5;
-			color: var(--ink-faint);
-		}
+	> design-transform-tile > selection-transform-editor {
+		display: grid;
+		gap: 8px;
 
-		> selection-transform-editor {
-			display: grid;
+		> transform-editor-heading {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
 			gap: 8px;
-			padding: 8px;
-			border: 1px solid var(--line);
-			border-radius: 7px;
-			background: color-mix(in srgb, var(--panel) 74%, var(--paper));
 
-			> transform-editor-heading {
-				display: flex;
-				align-items: baseline;
-				justify-content: space-between;
-				gap: 8px;
-
-				> strong {
-					font-size: 9px;
-					color: var(--ink);
-				}
-
-				> span {
-					font-size: 7px;
-					color: var(--ink-faint);
-				}
+			> strong {
+				font-size: 9px;
+				color: var(--ink);
 			}
 
-			> transform-disabled-reason {
-				display: block;
-				padding: 6px;
-				border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
-				border-radius: 5px;
-				background: color-mix(in srgb, var(--danger) 7%, var(--paper));
+			> span {
 				font-size: 7px;
-				line-height: 1.35;
+				color: var(--ink-faint);
+			}
+		}
+
+		> transform-disabled-reason {
+			display: flex;
+			align-items: center;
+			height: 31px;
+			padding: 6px;
+			overflow: hidden;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: color-mix(in srgb, var(--panel) 74%, var(--paper));
+			font-size: 7px;
+			line-height: 1.35;
+			color: var(--ink-faint);
+
+			&[data-active] {
+				border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+				background: color-mix(in srgb, var(--danger) 7%, var(--paper));
+				color: var(--ink-muted);
+			}
+		}
+
+		> transform-origin-picker {
+			display: grid;
+			grid-template-columns: minmax(48px, 1fr) 79px;
+			align-items: center;
+			gap: 6px;
+
+			> span {
+				align-self: start;
+				padding-top: 2px;
+				font-size: 7px;
+				font-weight: 600;
 				color: var(--ink-muted);
 			}
 
-			> transform-origin-picker {
+			> transform-origin-grid {
 				display: grid;
-				grid-template-columns: minmax(48px, 1fr) 79px;
-				align-items: center;
-				gap: 6px;
+				grid-template-columns: repeat(3, 25px);
+				gap: 2px;
 
-				> span {
-					align-self: start;
-					padding-top: 2px;
-					font-size: 7px;
-					font-weight: 600;
-					color: var(--ink-muted);
-				}
-
-				> transform-origin-grid {
+				> button {
+					position: relative;
 					display: grid;
-					grid-template-columns: repeat(3, 25px);
-					gap: 2px;
+					place-items: center;
+					min-width: 25px;
+					height: 25px;
+					padding: 4px;
+					border: 1px solid var(--line);
+					border-radius: 5px;
+					background: var(--paper);
+					color: var(--ink-muted);
+					cursor: pointer;
 
-					> button {
-						position: relative;
-						display: grid;
-						place-items: center;
-						min-width: 25px;
-						height: 25px;
-						padding: 4px;
-						border: 1px solid var(--line);
-						border-radius: 5px;
-						background: var(--paper);
-						color: var(--ink-muted);
-						cursor: pointer;
+					&:hover:not(:disabled) {
+						border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+						background: var(--hover);
+					}
 
-						&:hover:not(:disabled) {
-							border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-							background: var(--hover);
-						}
+					&:focus-visible {
+						outline: 2px solid
+							color-mix(in srgb, var(--accent) 78%, transparent);
+						outline-offset: 1px;
+					}
 
-						&:focus-visible {
-							outline: 2px solid
-								color-mix(in srgb, var(--accent) 78%, transparent);
-							outline-offset: 1px;
-						}
+					&:disabled {
+						opacity: 0.5;
+						cursor: not-allowed;
+					}
 
-						&:disabled {
-							opacity: 0.5;
-							cursor: not-allowed;
-						}
+					&[aria-checked="true"] {
+						border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+						background: var(--selected);
+					}
 
-						&[aria-checked="true"] {
-							border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
-							background: var(--selected);
-						}
+					> span {
+						width: 5px;
+						height: 5px;
+						border: 1px solid currentcolor;
+						border-radius: 50%;
+						background: transparent;
+					}
 
-						> span {
-							width: 5px;
-							height: 5px;
-							border: 1px solid currentcolor;
-							border-radius: 50%;
-							background: transparent;
-						}
-
-						&[aria-checked="true"] > span {
-							border-color: var(--accent);
-							background: var(--accent);
-							box-shadow: 0 0 0 2px
-								color-mix(in srgb, var(--accent) 18%, transparent);
-						}
+					&[aria-checked="true"] > span {
+						border-color: var(--accent);
+						background: var(--accent);
+						box-shadow: 0 0 0 2px
+							color-mix(in srgb, var(--accent) 18%, transparent);
 					}
 				}
-
-				> small {
-					grid-column: 1 / -1;
-					text-align: right;
-					font-size: 7px;
-					color: var(--ink-faint);
-				}
 			}
 
-			> transform-number-grid {
-				display: grid;
-				grid-template-columns: repeat(2, minmax(62px, 1fr));
-				gap: 5px;
+			> small {
+				grid-column: 1 / -1;
+				text-align: right;
+				font-size: 7px;
+				color: var(--ink-faint);
+			}
+		}
 
-				> transform-rotation-field {
-					display: block;
-					grid-column: 1 / -1;
-				}
+		> transform-number-grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(62px, 1fr));
+			gap: 5px;
+
+			> transform-rotation-field {
+				display: block;
+				grid-column: 1 / -1;
+			}
+		}
+	}
+
+	> design-arrange-tile > selection-arrangement-controls {
+		display: grid;
+		gap: 7px;
+
+		> arrangement-heading {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 8px;
+
+			> strong {
+				font-size: 9px;
+				color: var(--ink);
 			}
 
-			> selection-arrangement-controls {
-				display: grid;
-				gap: 5px;
-				padding-top: 7px;
-				border-top: 1px solid var(--line);
-
-				> strong {
-					font-size: 8px;
-					color: var(--ink-muted);
-				}
-
-				> small {
-					font-size: 7px;
-					line-height: 1.35;
-					color: var(--ink-faint);
-				}
+			> span {
+				font-size: 7px;
+				color: var(--ink-faint);
 			}
+		}
+
+		> arrangement-help {
+			display: block;
+			height: 20px;
+			overflow: hidden;
+			font-size: 7px;
+			line-height: 1.4;
+			color: var(--ink-faint);
+		}
+	}
+
+	> design-object-tile {
+		> object-selection-summary {
+			display: flex;
+			align-items: center;
+			height: 31px;
+			padding: 6px;
+			overflow: hidden;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: color-mix(in srgb, var(--panel) 74%, var(--paper));
+			font-size: 7px;
+			line-height: 1.35;
+			color: var(--ink-faint);
+		}
+
+		> p {
+			margin: 0;
+			height: 32px;
+			overflow: hidden;
+			line-height: 1.5;
+			color: var(--ink-faint);
 		}
 
 		> object-geometry-editor {
@@ -550,10 +588,18 @@ design-tile-content.class {
 			gap: 6px;
 			padding-block: 3px;
 
-			> strong,
-			> span {
+			> strong {
 				font-size: 8px;
 				color: var(--ink-muted);
+			}
+
+			> object-geometry-help {
+				display: block;
+				height: 20px;
+				overflow: hidden;
+				font-size: 7px;
+				line-height: 1.4;
+				color: var(--ink-faint);
 			}
 
 			> shape-number-grid {
@@ -589,7 +635,8 @@ design-tile-content.class {
 			}
 		}
 
-		> button[data-expand-shape] {
+		> button[data-expand-shape],
+		> button[data-expand-stroke] {
 			padding: 7px;
 			border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
 			border-radius: 4px;
@@ -604,7 +651,8 @@ design-tile-content.class {
 			}
 		}
 
-		> button[data-expand-shape] + p {
+		> button[data-expand-shape] + p,
+		> button[data-expand-stroke] + p {
 			padding: 0;
 			text-align: left;
 			font-size: 7px;

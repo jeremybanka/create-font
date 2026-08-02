@@ -659,9 +659,11 @@ export function DesignApplication(props: DesignApplicationProps) {
 		(object) => object.locked || object.hidden,
 	)
 	const selectionTransformDisabledReason =
-		selectedTransformUnavailableObject === undefined
-			? null
-			: `${selectedTransformUnavailableObject.hidden ? "Show" : "Unlock"} ${selectedTransformUnavailableObject.name} before transforming the selection.`
+		selectedObjects.length === 0
+			? "Select one or more objects to transform or arrange."
+			: selectedTransformUnavailableObject === undefined
+				? null
+				: `${selectedTransformUnavailableObject.hidden ? "Show" : "Unlock"} ${selectedTransformUnavailableObject.name} before transforming the selection.`
 	const selectionDescription =
 		selectedGroup === null
 			? selection.length === 0
