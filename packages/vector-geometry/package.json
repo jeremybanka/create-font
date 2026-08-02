@@ -2,6 +2,7 @@
 	"name": "@create-art/vector-geometry",
 	"version": "0.0.1",
 	"description": "Deterministic, application-neutral vector geometry primitives",
+	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",

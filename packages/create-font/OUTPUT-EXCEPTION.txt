@@ -1,0 +1,26 @@
+create-art Output Additional Permission
+=======================================
+
+As an additional permission under section 7 of the GNU Affero General Public
+License, version 3, the copyright holders grant you permission to use,
+reproduce, modify, and distribute under terms of your choice:
+
+1. fonts, artwork, PDFs, project data, source manifests, and other assets
+   created by running the covered software; and
+2. files emitted by the covered software's initializers or scaffolders during
+   their ordinary operation.
+
+This permission applies even where such output incorporates default values or
+template material emitted by the covered software during its ordinary
+operation. No generated output is required to use the GNU Affero General Public
+License solely because it was produced by the covered software.
+
+This permission does not extend to:
+
+- source code copied from the covered software other than material
+  automatically emitted in ordinary generated output;
+- independent software libraries, plugins, or extensions that link to or
+  incorporate the covered software;
+- third-party inputs or dependencies; or
+- the example font, artwork, and documentation checked into this repository,
+  which have the licenses identified in the repository's LICENSE file.

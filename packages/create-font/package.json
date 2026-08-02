@@ -2,6 +2,7 @@
 	"name": "create-font",
 	"version": "0.3.14",
 	"description": "Repository-local CLI and browser server for create-font font projects",
+	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
@@ -17,7 +18,8 @@
 		"dist",
 		"src",
 		"tsconfig.json",
-		"README.md"
+		"README.md",
+		"OUTPUT-EXCEPTION.txt"
 	],
 	"exports": {
 		".": {

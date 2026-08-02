@@ -2,6 +2,7 @@
 	"name": "@create-font/editor",
 	"version": "0.7.10",
 	"description": "Interactive variable-font editor for the create-font state model",
+	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
@@ -13,7 +14,8 @@
 	},
 	"files": [
 		"dist",
-		"src/browser-api.ts"
+		"src/browser-api.ts",
+		"OUTPUT-EXCEPTION.txt"
 	],
 	"exports": {
 		".": {

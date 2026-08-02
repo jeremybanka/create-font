@@ -2,6 +2,7 @@
 	"name": "@create-font/states",
 	"version": "0.6.7",
 	"description": "Atom.io state and compilation model for variable-font editors",
+	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",

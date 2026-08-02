@@ -60,6 +60,66 @@ These packages are the current implementation layers. The `create-font`
 application composes the reusable server boundary with the browser entry that
 imports `EditorApplicationRoot` from `@create-font/editor`.
 
+## License policy
+
+The project draws a deliberate line between **using our public building blocks**
+and **shipping a modified version of our applications**. The exact file-level
+terms are in [`LICENSE`](LICENSE); this section is their plain-English summary.
+
+### Your work remains yours
+
+Fonts, artwork, PDFs, project data, and other assets you create with create-font
+or create-design are yours. You may use and license them for open or proprietary
+projects, including commercial projects. The same permission covers ordinary
+project files emitted by the initializers and scaffolders.
+
+That permission does not relicense third-party inputs, the checked-in example
+projects, or software copied into a plugin or extension. It also does not turn an
+independent software extension into an “output”; the library and application
+boundaries below still apply.
+
+### Proprietary consumers are welcome at the library boundary
+
+The reusable npm packages and Rust crates are licensed under
+[MPL-2.0](LICENSES/MPL-2.0.txt). This is file-level copyleft: proprietary code
+may import, link, compile, or bundle these libraries without becoming open
+source. If you distribute changes to files from one of these libraries, those
+changed files remain available under MPL, but your new and independent files may
+use any license.
+
+For example, a proprietary palette-generation library may target the
+create-design palette format and may import `@create-design/source` for its
+schemas and codecs. Its novel palette code does not become MPL-covered merely
+because it consumes that package. Independently implementing one of the
+documented source formats does not require using any repository code at all.
+
+All currently published packages use MPL-2.0 except the three application
+packages named below. Package manifests and package-local `LICENSE` files state
+the boundary explicitly, including for transitive workspace dependencies.
+
+### Application forks stay public
+
+`create-font`, `create-design`, and `@create-font/editor` are licensed under
+[AGPL-3.0-or-later](LICENSES/AGPL-3.0-or-later.txt), with an
+[additional output permission](LICENSES/OUTPUT-EXCEPTION.txt). You may use,
+study, modify, redistribute, and sell them. If you distribute a modified
+application, its corresponding source stays available under the AGPL. If you
+operate a modified application for users over a network, those users must be
+offered its corresponding source as well.
+
+Private changes used only within one person or organization do not have to be
+published. A genuinely independent application built against the MPL libraries
+may also remain proprietary; copying or modifying the AGPL application code is
+the boundary that makes a work an application fork.
+
+### Documentation and checked-in examples
+
+The root README, `docs/`, and `designs/workbench-poster/` use
+[CC-BY-4.0](LICENSES/CC-BY-4.0.txt). The Workbench Sans example source under
+`fonts/workbench-sans/` uses [OFL-1.1](fonts/workbench-sans.OFL.txt), without a
+Reserved Font Name. These licenses apply only to the repository's checked-in
+material, not to work created by users.
+
 The workspace toolchain pins Node and pnpm through `mise.toml`. Bun is optional
 and is exercised only by its compatibility CI job. Run the complete development
 stack from the workspace root:
