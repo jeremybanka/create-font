@@ -1,12 +1,30 @@
 tiling-workspace.class {
 	--tile-column-width: clamp(200px, 17vw, 248px);
 	--tile-column-gap: 12px;
+	/*
+	 * Application-owned safe areas. Defaults preserve create-font's original
+	 * 12px lanes; hosts with persistent canvas chrome can reserve its rails
+	 * without adding an invisible pointer surface.
+	 */
+	--tile-management-lane-inset-block-end: calc(
+		var(--tile-lane-inset-block-end, 12px) + 46px
+	);
+	--tile-compact-management-lane-inset-block-end: calc(
+		var(--tile-lane-inset-block-end, 12px) + 200px
+	);
 	position: absolute;
 	inset: 0;
 	display: block;
 	overflow: hidden;
 	pointer-events: none;
-	z-index: 4;
+	z-index: var(--tiling-workspace-z-index, 4);
+
+	&[data-management="true"] {
+		z-index: var(
+			--tiling-workspace-management-z-index,
+			var(--tiling-workspace-z-index, 4)
+		);
+	}
 
 	> management-backdrop {
 		position: absolute;
@@ -19,8 +37,8 @@ tiling-workspace.class {
 
 	> tile-lane {
 		position: absolute;
-		top: 12px;
-		bottom: 12px;
+		top: var(--tile-lane-inset-block-start, 12px);
+		bottom: var(--tile-lane-inset-block-end, 12px);
 		display: block;
 		width: var(--tile-column-width);
 		overflow: hidden;
@@ -28,11 +46,11 @@ tiling-workspace.class {
 		z-index: 2;
 
 		&[data-side="left"] {
-			left: 12px;
+			left: var(--tile-lane-inset-inline-start, 12px);
 		}
 
 		&[data-side="right"] {
-			right: 12px;
+			right: var(--tile-lane-inset-inline-end, 12px);
 		}
 
 		&[data-slots="2"] {
@@ -417,7 +435,11 @@ tiling-workspace.class {
 		gap: 10px;
 		width: min(390px, calc(100% - 520px));
 		min-width: 320px;
-		max-height: calc(100% - 124px);
+		max-height: calc(
+			100% - var(--tile-overlay-inset-block-start, 12px) -
+				var(--tile-overlay-inset-block-end, 12px) -
+				100px
+		);
 		padding: 12px;
 		border: 1px solid var(--line-strong);
 		border-radius: 14px;
@@ -555,12 +577,16 @@ tiling-workspace.class {
 
 	> tile-help {
 		position: absolute;
-		bottom: 62px;
+		bottom: calc(var(--tile-overlay-inset-block-end, 12px) + 50px);
 		left: 50%;
 		display: grid;
 		gap: 11px;
 		width: min(520px, calc(100% - 32px));
-		max-height: calc(100% - 88px);
+		max-height: calc(
+			100% - var(--tile-overlay-inset-block-start, 12px) -
+				var(--tile-overlay-inset-block-end, 12px) -
+				64px
+		);
 		padding: 13px;
 		border: 1px solid var(--line-strong);
 		border-radius: 12px;
@@ -642,7 +668,7 @@ tiling-workspace.class {
 
 	> management-hud {
 		position: absolute;
-		bottom: 12px;
+		bottom: var(--tile-overlay-inset-block-end, 12px);
 		left: 50%;
 		display: grid;
 		grid-template-columns: auto minmax(240px, 1fr) auto;
@@ -756,7 +782,10 @@ tiling-workspace.class {
 
 	> mode-entry {
 		position: absolute;
-		top: 10px;
+		top: var(
+			--tile-mode-entry-inset-block-start,
+			var(--tile-overlay-inset-block-start, 10px)
+		);
 		left: 50%;
 		display: block;
 		pointer-events: auto;
@@ -798,7 +827,7 @@ tiling-workspace.class {
 
 	&[data-management="true"] {
 		> tile-lane {
-			bottom: 58px;
+			bottom: var(--tile-management-lane-inset-block-end);
 		}
 
 		> tile-lane > tile-track > tile-column > column-scroll > tile-stack > workspace-tile {
@@ -842,7 +871,7 @@ tiling-workspace.class {
 		> tile-pool {
 			top: auto;
 			right: 12px;
-			bottom: 66px;
+			bottom: calc(var(--tile-overlay-inset-block-end, 12px) + 54px);
 			left: 12px;
 			width: auto;
 			min-width: 0;
@@ -850,7 +879,7 @@ tiling-workspace.class {
 		}
 
 		> tile-lane {
-			bottom: 212px;
+			bottom: var(--tile-compact-management-lane-inset-block-end);
 		}
 
 		> management-hud {
