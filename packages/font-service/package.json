@@ -1,0 +1,45 @@
+{
+	"name": "@create-font/font-service",
+	"version": "0.0.0",
+	"description": "Runtime-portable deterministic OpenType shaping, metrics, and outline service",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/font-service"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"README.md",
+		"src"
+	],
+	"scripts": {
+		"build": "vp pack",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"harfbuzzjs": "1.5.0"
+	},
+	"devDependencies": {
+		"@create-font/target": "workspace:*",
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

@@ -291,6 +291,19 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/font-service:
+    dependencies:
+      harfbuzzjs:
+        specifier: 1.5.0
+        version: 1.5.0
+    devDependencies:
+      '@create-font/target':
+        specifier: workspace:*
+        version: link:../target
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/font-source:
     dependencies:
       '@create-art/source-format':
@@ -2714,6 +2727,9 @@ packages:
   happy-dom@20.11.1:
     resolution: {integrity: sha512-XSt8tMzbW9ymE7687xztkO1ckR7qJNQ3LywY9vlYGhGi3zXrGBHuUo2Cl1ztZaICW+1eAGdkLbj6iwVqDT33kg==}
     engines: {node: '>=20.0.0'}
+
+  harfbuzzjs@1.5.0:
+    resolution: {integrity: sha512-IYrYhWlY6BqSJlzhYbc2sxuFaJQXGpl74+1060SBDnYLt1gyyyUWM9LUbn8c/IWedmFW7Jgi9l+uI5cj0GN+qA==}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -6157,6 +6173,8 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  harfbuzzjs@1.5.0: {}
 
   has-flag@4.0.0: {}
 
