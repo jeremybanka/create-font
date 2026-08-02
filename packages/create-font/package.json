@@ -46,7 +46,9 @@
 		"test": "pnpm run test:unit && pnpm run test:e2e && pnpm run test:node-server",
 		"test:bun-server": "node ./scripts/build-development.ts && bun --conditions=development ./tests/runtime-server-smoke.ts",
 		"test:e2e": "vp test --config ./vitest.e2e.config.ts",
-		"test:unit": "node ./scripts/build-development.ts && vp test",
+		"test:unit": "pnpm run test:unit-interfaces && pnpm run test:unit-source-pipeline",
+		"test:unit-interfaces": "node ./scripts/build-development.ts && vp test --exclude ./tests/build.test.ts --exclude ./tests/source-service.test.ts",
+		"test:unit-source-pipeline": "vp test ./tests/build.test.ts ./tests/source-service.test.ts",
 		"test:node-server": "node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {
