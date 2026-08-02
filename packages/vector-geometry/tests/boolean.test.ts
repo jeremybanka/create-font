@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import {
 	booleanContours,
 	GeometryError,
+	partitionContours,
+	resolveFilledContours,
 	signedArea,
 	type Contour,
 } from "../src/index.ts"
@@ -165,5 +167,106 @@ describe("filled-region Boolean operations", () => {
 				{ operation: "union" },
 			),
 		).toThrowError(/filled region/iu)
+	})
+
+	it("partitions overlapping fills into canonical connected coverage pieces", () => {
+		const result = partitionContours([
+			[rectangle(0, 0, 10, 10)],
+			[rectangle(5, 0, 15, 10)],
+		])
+		expect(result).toEqual([
+			{ contours: [rectangle(0, 0, 5, 10)], contributors: [0] },
+			{ contours: [rectangle(5, 0, 10, 10)], contributors: [0, 1] },
+			{ contours: [rectangle(10, 0, 15, 10)], contributors: [1] },
+		])
+	})
+
+	it("resolves authored even-odd and nonzero compound fills explicitly", () => {
+		const nested = [rectangle(0, 0, 20, 20), rectangle(5, 5, 15, 15)]
+		expect(resolveFilledContours(nested)).toHaveLength(2)
+		expect(resolveFilledContours(nested, { fillRule: "nonzero" })).toEqual([
+			rectangle(0, 0, 20, 20),
+		])
+		expect(
+			resolveFilledContours(
+				[nested[0]!, { ...nested[1]!, points: nested[1]!.points.toReversed() }],
+				{ fillRule: "nonzero" },
+			),
+		).toHaveLength(2)
+	})
+
+	it("preserves compound holes while separating disconnected components", () => {
+		const outer = rectangle(0, 0, 30, 30)
+		const hole = rectangle(5, 5, 15, 15)
+		const result = partitionContours([
+			[outer, hole],
+			[rectangle(5, 5, 15, 15)],
+			[rectangle(40, 0, 50, 10)],
+		])
+		expect(result).toHaveLength(3)
+		expect(result.map(({ contributors }) => contributors)).toEqual([
+			[0],
+			[1],
+			[2],
+		])
+		expect(result[0]?.contours).toHaveLength(2)
+		expect(
+			result[0]?.contours.map(({ points }) => Math.sign(signedArea(points))),
+		).toEqual([1, -1])
+	})
+
+	it("deduplicates coincident boundaries and discards tangent zero-area faces", () => {
+		expect(
+			partitionContours([[rectangle(0, 0, 10, 10)], [rectangle(0, 0, 10, 10)]]),
+		).toEqual([
+			{
+				contours: [rectangle(0, 0, 10, 10)],
+				contributors: [0, 1],
+			},
+		])
+		expect(
+			partitionContours([
+				[rectangle(0, 0, 10, 10)],
+				[rectangle(10, 0, 20, 10)],
+			]),
+		).toEqual([
+			{ contours: [rectangle(0, 0, 10, 10)], contributors: [0] },
+			{ contours: [rectangle(10, 0, 20, 10)], contributors: [1] },
+		])
+	})
+
+	it("reports deterministic progress and can be interrupted between region passes", () => {
+		const progress: number[] = []
+		const completed = partitionContours(
+			Array.from({ length: 12 }, (_, index) => [
+				rectangle(index * 5, 0, index * 5 + 10, 10),
+			]),
+			{
+				onProgress: ({ completedRegions }) => progress.push(completedRegions),
+			},
+		)
+		expect(progress).toEqual(Array.from({ length: 13 }, (_, index) => index))
+		expect(completed.length).toBeGreaterThan(12)
+
+		let processed = 0
+		const signal = {
+			get aborted() {
+				return processed >= 2
+			},
+		}
+		expect(() =>
+			partitionContours(
+				Array.from({ length: 100 }, (_, index) => [
+					rectangle(index, 0, index + 2, 2),
+				]),
+				{
+					signal,
+					onProgress: ({ completedRegions }) => {
+						processed = completedRegions
+					},
+				},
+			),
+		).toThrowError(/aborted/iu)
+		expect(processed).toBe(2)
 	})
 })

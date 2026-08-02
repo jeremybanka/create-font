@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+	bakeDesignObject,
 	ellipseContour,
 	normalizedBounds,
 	objectBounds,
@@ -78,6 +79,39 @@ describe("design geometry", () => {
 		expect(rotated.transform.b).toBeCloseTo(2)
 		expect(rotated.transform.c).toBeCloseTo(-3)
 		expect(rotated.transform.d).toBeCloseTo(0)
+	})
+
+	it("preserves an explicit path fill rule while baking transforms", () => {
+		const object: DesignObject = {
+			id: "object:nonzero",
+			name: "Nonzero path",
+			geometry: {
+				kind: "path",
+				fillRule: "nonzero",
+				contours: [
+					{
+						id: "contour:nonzero",
+						closed: true,
+						points: [
+							{ id: "point:nonzero:0", x: 0, y: 0 },
+							{ id: "point:nonzero:1", x: 10, y: 0 },
+							{ id: "point:nonzero:2", x: 10, y: 10 },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 12, f: 8 },
+			appearance: { fill: { swatchId: "swatch:test" } },
+		}
+		const baked = bakeDesignObject(object)
+		expect(baked.geometry).toMatchObject({
+			kind: "path",
+			fillRule: "nonzero",
+		})
+		expect(baked.transform).toEqual({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 })
+		expect(projectDesignObjectContours(baked)).toEqual(
+			projectDesignObjectContours(object),
+		)
 	})
 
 	it("includes Pen handle endpoints in transform bounds", () => {

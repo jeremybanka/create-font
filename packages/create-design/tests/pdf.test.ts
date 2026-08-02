@@ -7,6 +7,7 @@ import {
 	createPdfIr,
 	createPdfProjectionGraph,
 	exportPdf,
+	pdfObjectContentStream,
 	pdfContentStream,
 	resolvePdfArtboards,
 } from "../src/pdf.ts"
@@ -157,6 +158,41 @@ describe("PDF export", () => {
 		expect(content).toContain(" k")
 		expect(content).toContain(" c")
 		expect(content).toContain("f*")
+	})
+
+	it("uses the authored path fill rule for PDF paint operators", () => {
+		const document = createInitialDocument()
+		const source = document.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				fillRule: "nonzero" as const,
+				contours: [
+					{
+						id: "contour:rule",
+						closed: true,
+						points: [
+							{ id: "point:rule:0", x: 0, y: 0 },
+							{ id: "point:rule:1", x: 10, y: 0 },
+							{ id: "point:rule:2", x: 10, y: 10 },
+						],
+					},
+				],
+			},
+		}
+		const swatch = document.swatches[0]
+		if (swatch === undefined) throw new Error("Expected swatch fixture.")
+		expect(pdfObjectContentStream(object, swatch)).toMatch(/\nf$/u)
+		expect(
+			pdfObjectContentStream(
+				{
+					...object,
+					geometry: { ...object.geometry, fillRule: "evenodd" },
+				},
+				swatch,
+			),
+		).toMatch(/\nf\*$/u)
 	})
 
 	it("builds a valid mondrian.pdf object graph", () => {

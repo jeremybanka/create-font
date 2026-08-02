@@ -85,10 +85,23 @@ export const previousContourSchema = contourSchema.extend({
 export const pathGeometrySchema = z
 	.object({
 		kind: z.literal("path"),
+		fillRule: z.enum(["nonzero", "evenodd"]).optional(),
 		contours: z.array(contourSchema),
 	})
 	.strict()
-export const previousPathGeometrySchema = pathGeometrySchema.extend({
+const legacyPathGeometrySchema = z
+	.object({
+		kind: z.literal("path"),
+		contours: z.array(contourSchema),
+	})
+	.strict()
+export const previousPathGeometrySchema = z
+	.object({
+		kind: z.literal("path"),
+		contours: z.array(previousContourSchema),
+	})
+	.strict()
+export const compatiblePathGeometrySchema = pathGeometrySchema.extend({
 	contours: z.array(previousContourSchema),
 })
 export const rectangleGeometrySchema = z
@@ -116,6 +129,16 @@ export const geometrySchema = z.discriminatedUnion("kind", [
 ])
 export const previousGeometrySchema = z.discriminatedUnion("kind", [
 	previousPathGeometrySchema,
+	rectangleGeometrySchema,
+	ellipseGeometrySchema,
+])
+export const compatibleGeometrySchema = z.discriminatedUnion("kind", [
+	compatiblePathGeometrySchema,
+	rectangleGeometrySchema,
+	ellipseGeometrySchema,
+])
+const legacyGeometrySchema = z.discriminatedUnion("kind", [
+	legacyPathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
 ])
@@ -180,7 +203,7 @@ const previousDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
 		name: z.string(),
-		geometry: geometrySchema,
+		geometry: legacyGeometrySchema,
 		transform: transformSchema,
 		appearance: previousAppearanceSchema,
 		hidden: z.boolean().optional(),
@@ -189,6 +212,9 @@ const previousDesignObjectSchema = z
 	.strict()
 const versionTwoDesignObjectSchema = previousDesignObjectSchema.extend({
 	geometry: previousGeometrySchema,
+})
+const versionFourDesignObjectSchema = designObjectSchema.extend({
+	geometry: legacyGeometrySchema,
 })
 export const legacyDesignObjectSchema = z
 	.object({
@@ -324,7 +350,7 @@ export const previousDesignDocumentSchema = z
 		title: z.string(),
 		page: pageSchema,
 		swatches: z.array(swatchSchema),
-		objects: z.array(designObjectSchema),
+		objects: z.array(versionFourDesignObjectSchema),
 		guides: z.array(guideSchema),
 	})
 	.strict()
@@ -615,6 +641,9 @@ export function stabilizeDesignObjectIdentities(
 		appearance,
 		geometry: {
 			kind: "path",
+			...(object.geometry.fillRule === undefined
+				? {}
+				: { fillRule: object.geometry.fillRule }),
 			contours: object.geometry.contours.map((contour, contourIndex) => {
 				const contourId =
 					contour.id ??

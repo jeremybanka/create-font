@@ -65,7 +65,9 @@ multi-selection work in #254 and global multi-artboard/output work in #283.
 The second directory version matches the current application model: ordered
 artboards, one layer, authored path/rectangle/ellipse geometry,
 independent affine object transforms, optional fill/stroke appearance, one
-palette, and empty group, asset, and font inventories.
+palette, structural groups, and empty asset and font inventories. Path geometry
+may persist an explicit `nonzero` or `evenodd` fill rule; omitted legacy rules
+retain the original even-odd rendering behavior.
 
 ```text
 create-design.json
@@ -96,7 +98,8 @@ Each fact has one owner:
 - the ordered artboard inventory owns output order and maps each stable ID to
   an independent unit that owns its name, global rectangle, and optional
   bleed/safe-area metadata;
-- the sole layer unit owns object stacking order;
+- the sole layer unit owns root stacking order;
+- each group unit owns its ordered object or nested-group children;
 - the object inventory maps stable object IDs to stable source paths; and
 - each object unit owns one complete object.
 
@@ -104,9 +107,11 @@ Object inventory order has no scene meaning. Renaming or editing an object
 therefore changes only its object unit, while reordering changes only the layer
 unit. IDs, display names, source paths, and stacking order are independent.
 
-Groups, embedded fonts, and multiple layers already have explicit inventories,
-but source version two requires them to be empty or singular where the current
-`DesignDocument` cannot faithfully represent them.
+Structural groups, embedded fonts, and multiple layers have explicit
+inventories. Groups are active and may nest; every object and group must have
+exactly one structural parent. Source version two still requires one layer and
+an empty font inventory where the current `DesignDocument` has no faithful
+model.
 Asset inventory entries are active: each records a stable ID, safe path, media
 type, byte length, and SHA-256 digest. Asset bytes remain outside the JSON
 directory codec and are transferred atomically through

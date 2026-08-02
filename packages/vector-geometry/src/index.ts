@@ -1,7 +1,15 @@
 export {
 	booleanContours,
+	partitionContours,
+	resolveFilledContours,
+	type BooleanFillRule,
+	type BooleanOperationSignal,
 	type BooleanContoursOptions,
 	type BooleanOperation,
+	type ContourPartition,
+	type PartitionContoursOptions,
+	type PartitionContoursProgress,
+	type ResolveFilledContoursOptions,
 } from "./boolean.ts"
 export {
 	contourOrientation,

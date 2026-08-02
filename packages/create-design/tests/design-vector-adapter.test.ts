@@ -192,6 +192,55 @@ describe("design object vector adapter", () => {
 		)
 	})
 
+	it("preserves an authored nonzero rule through direct-selection replacement", () => {
+		const document = createInitialDocument()
+		const source = document.objects[0]
+		if (source === undefined)
+			throw new Error("Design fixture object is missing.")
+		const authored = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				fillRule: "nonzero" as const,
+				contours: projectDesignObjectContours(source),
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const authoredDocument = {
+			...document,
+			objects: document.objects.map((object) =>
+				object.id === authored.id ? authored : object,
+			),
+		}
+		const vector = projectDesignVectorObject(authoredDocument, authored)
+		const replacement = {
+			...vector,
+			contours: vector.contours.map((contour, contourIndex) => ({
+				...contour,
+				nodes: contour.nodes.map((node, nodeIndex) =>
+					contourIndex === 0 && nodeIndex === 0
+						? { ...node, x: node.x + 7 }
+						: node,
+				),
+			})),
+		}
+		const result = designVectorAdapter.apply(authoredDocument, [authored.id], {
+			kind: "replace-object",
+			object: replacement,
+		})
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const edited = result.document.objects[0]
+		expect(
+			edited?.geometry.kind === "path" ? edited.geometry.fillRule : undefined,
+		).toBe("nonzero")
+		expect(
+			edited?.geometry.kind === "path"
+				? edited.geometry.contours[0]?.points[0]?.x
+				: undefined,
+		).toBe(projectDesignObjectContours(source)[0]!.points[0]!.x + 7)
+	})
+
 	it("round-trips neutral clipboard geometry, IDs, and authored fill atomically", () => {
 		const document = createInitialDocument()
 		const source = document.objects[0]

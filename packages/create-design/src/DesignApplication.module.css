@@ -550,6 +550,41 @@ design-application.class {
 		> span[data-footer-persistence] {
 			color: var(--ink-muted);
 		}
+
+		&[data-pathfinder-active] {
+			grid-template-columns:
+				minmax(80px, 1fr) minmax(160px, auto) auto auto
+				auto;
+		}
+
+		> span[data-pathfinder-progress] {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			overflow: visible;
+
+			> span {
+				max-width: 92px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			> progress {
+				width: 64px;
+				height: 5px;
+			}
+
+			> button {
+				min-width: 42px;
+				height: 20px;
+				padding: 0 6px;
+				border: 1px solid var(--line-strong);
+				border-radius: 3px;
+				background: transparent;
+				color: var(--ink-muted);
+				font: inherit;
+			}
+		}
 	}
 }
 
@@ -637,7 +672,15 @@ design-application.class {
 	design-application.class > footer {
 		grid-template-columns: minmax(0, 1fr) auto auto;
 
+		&[data-pathfinder-active] {
+			grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+		}
+
 		> span[data-footer-counts] {
+			display: none;
+		}
+
+		&[data-pathfinder-active] > span[data-footer-canvas] {
 			display: none;
 		}
 	}
@@ -660,8 +703,22 @@ design-application.class {
 	design-application.class > footer {
 		grid-template-columns: minmax(0, 1fr) auto;
 
+		&[data-pathfinder-active] {
+			grid-template-columns: minmax(0, 1fr) minmax(106px, auto);
+		}
+
 		> span[data-footer-persistence] {
 			display: none;
+		}
+
+		> span[data-pathfinder-progress] {
+			> span {
+				display: none;
+			}
+
+			> progress {
+				width: 50px;
+			}
 		}
 	}
 }

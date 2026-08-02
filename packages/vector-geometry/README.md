@@ -15,7 +15,7 @@ The public boundary uses only immutable `Point`, `Cubic`, `Contour`, and
   `intersectCubicCurves`
 - `signedArea`, `contourOrientation`, and `windingNumber`
 - `normalizeContour` and `normalizeContours`
-- `booleanContours`
+- `resolveFilledContours`, `booleanContours`, and `partitionContours`
 - `offsetContour` and `boundsOfPoints`
 - `expandStroke` and `fitCubicContour`
 
@@ -68,6 +68,21 @@ at least a `1e-6` grid (or the caller's larger normalization tolerance), unsafe
 integer ranges and empty operands fail before returning output, and results use
 canonical nesting-aware winding, contour starts, and ordering. Cubic sampling
 and reconstruction remain explicit caller responsibilities.
+
+`resolveFilledContours` makes a single compound region's authored `evenodd` or
+`nonzero` fill rule explicit, returning canonical even-odd boundary contours
+that downstream Boolean operations can consume without losing that intent.
+
+`partitionContours` uses the same filled-region and integer-grid contract to
+split every authored region at every other region boundary. Each result is one
+connected, non-zero-area component (with any enclosed holes) and carries the
+ascending indexes of all source regions that cover it. This makes stacking and
+appearance policy an explicit caller concern: Divide can materialize every
+piece, while Trim, Merge, and Crop can select or regroup pieces by contributor.
+Coincident boundaries are emitted once and tangent contacts do not create
+zero-area pieces. A runtime-neutral cancellation signal is checked between
+region passes, and progress is reported initially and after each pass so large
+multi-object work can run interruptibly in a worker.
 
 `offsetContour` creates a piecewise-linear parallel offset. Positive distance is
 to the authored contour's left. It supports bevel and limited-miter joins, but

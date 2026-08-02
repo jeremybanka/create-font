@@ -159,7 +159,14 @@ export function designObjectFromVector(
 	return {
 		...current,
 		name: object.name,
-		geometry: { kind: "path", contours: designContours(object) },
+		geometry: {
+			kind: "path",
+			...(current.geometry.kind === "path" &&
+			current.geometry.fillRule !== undefined
+				? { fillRule: current.geometry.fillRule }
+				: {}),
+			contours: designContours(object),
+		},
 		transform: IDENTITY_DESIGN_TRANSFORM,
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
 		...(object.locked === undefined ? {} : { locked: object.locked }),
@@ -258,22 +265,10 @@ export const designVectorAdapter: VectorDocumentAdapter<
 				return reject(`Unknown design swatch ${fillId}.`)
 			return {
 				ok: true,
-				document: replaceAt(document, {
-					...current,
-					name: intent.object.name,
-					geometry: {
-						kind: "path",
-						contours: designContours(intent.object),
-					},
-					transform: IDENTITY_DESIGN_TRANSFORM,
-					appearance: setAppearanceFill(current.appearance, fillId),
-					...(intent.object.hidden === undefined
-						? {}
-						: { hidden: intent.object.hidden }),
-					...(intent.object.locked === undefined
-						? {}
-						: { locked: intent.object.locked }),
-				}),
+				document: replaceAt(
+					document,
+					designObjectFromVector(current, intent.object),
+				),
 				selection,
 			}
 		}

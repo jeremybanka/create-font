@@ -54,6 +54,37 @@ describe("painted design geometry", () => {
 		expect(objectFillContainsPoint(filled, { x: 9, y: 9 })).toBe(false)
 	})
 
+	it("honors authored nonzero and even-odd fill rules", () => {
+		const rectangle = (id: string, min: number, max: number) => ({
+			id,
+			closed: true,
+			points: [
+				{ id: `${id}:0`, x: min, y: min },
+				{ id: `${id}:1`, x: max, y: min },
+				{ id: `${id}:2`, x: max, y: max },
+				{ id: `${id}:3`, x: min, y: max },
+			],
+		})
+		const base: DesignObject = {
+			...path([]),
+			geometry: {
+				kind: "path",
+				fillRule: "evenodd",
+				contours: [rectangle("outer", 0, 20), rectangle("inner", 5, 15)],
+			},
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		expect(objectFillContainsPoint(base, { x: 10, y: 10 })).toBe(false)
+		const geometry = base.geometry
+		if (geometry.kind !== "path") throw new Error("Expected path fixture.")
+		expect(
+			objectFillContainsPoint(
+				{ ...base, geometry: { ...geometry, fillRule: "nonzero" } },
+				{ x: 10, y: 10 },
+			),
+		).toBe(true)
+	})
+
 	it("includes authored open-path caps in bounds and hit testing", () => {
 		const butt = path([
 			{ x: 0, y: 0 },

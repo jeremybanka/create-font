@@ -1,10 +1,12 @@
 import {
 	boundsOfPoints,
 	flattenCubic,
+	windingNumber,
 	type StrokeJoin,
 } from "@create-art/vector-geometry"
 
 import {
+	designObjectFillRule,
 	objectBounds,
 	projectDesignObjectContours,
 	type Bounds,
@@ -402,21 +404,21 @@ function contourStrokeDistance(
 	return distance
 }
 
-function contourContainsPoint(contour: DesignContour, point: Point): boolean {
-	if (contour.points.length < 3) return false
-	const polygon = flattenDesignContour(contour)
-	return polygonContainsPoint(polygon, point)
-}
-
 export function objectFillContainsPoint(
 	object: DesignObject,
 	point: Point,
 ): boolean {
 	if (object.appearance.fill === undefined) return false
-	return projectDesignObjectContours(object).reduce(
-		(inside, contour) => contourContainsPoint(contour, point) !== inside,
-		false,
-	)
+	let totalWinding = 0
+	for (const contour of projectDesignObjectContours(object)) {
+		if (contour.points.length < 3) continue
+		const result = windingNumber(point, flattenDesignContour(contour))
+		if (result.classification === "boundary") return true
+		totalWinding += result.winding
+	}
+	return designObjectFillRule(object) === "evenodd"
+		? Math.abs(totalWinding) % 2 === 1
+		: totalWinding !== 0
 }
 
 export function objectStrokeDistance(

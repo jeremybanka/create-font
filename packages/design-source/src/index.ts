@@ -85,6 +85,7 @@ export type {
 	DesignContour,
 	DesignDocument,
 	DesignFill,
+	DesignFillRule,
 	DesignGeometry,
 	DesignGuide,
 	DesignGroup,

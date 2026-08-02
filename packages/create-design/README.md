@@ -37,6 +37,13 @@ handles, segments, or whole contours; modifier clicks and marquee extend the
 control selection, arrow keys nudge it, and each gesture commits atomically.
 Native selection inside text fields remains owned by the browser.
 
+Group and Ungroup create and release structural containers without baking child
+geometry, transforms, appearances, visibility, or locks. Normal selection and
+stacking treat a group as one rigid unit; double-clicking enters a nested group
+scope. Bring Forward, Send Backward, Bring to Front, and Send to Back reorder
+only the selected sibling units, and every hierarchy command is one history
+entry.
+
 The canonical document plane is global, point-based, and Y-down. Ordered named
 artboards are positioned rectangles in that plane, not parents of ordinary
 objects. Artwork can cross several artboards or sit outside all of them. The
@@ -97,19 +104,22 @@ surviving point and segment-endpoint identities. Joining uses the same
 coincidence tolerance and otherwise adds an ordinary straight bridge. Making a
 compound path bakes the selected closed paths into the topmost selected
 object's coordinate space and appearance without silently changing contour
-winding. Canvas and PDF both use
-even-odd filling, so nested counterforms agree before and after the separate,
-explicit winding-normalization command. Every successful command is committed
+winding. It authors an explicit even-odd fill rule; ordinary paths may instead
+author nonzero winding. Canvas hit testing, canvas paint, and PDF lowering all
+use that same persisted rule, so nested counterforms agree before and after the
+separate winding-normalization command. Every successful command is committed
 as one immutable history entry.
 
-The initial four Pathfinder commands operate on actual even-odd filled regions,
-not bounding boxes or stroke centerlines. All use a
-`0.05` document-unit construction budget: `0.0125` for adaptive cubic sampling
-and `0.0375` for deterministic cubic reconstruction after integer topology
-resolution on a `1e-6` document-unit grid. Unite combines all selected fills.
+Pathfinder commands operate on actual authored filled regions, not bounding
+boxes or stroke centerlines. Explicit even-odd and nonzero compound fill rules
+are resolved before topology work. Filled outputs use a `0.05` document-unit
+construction budget: `0.0125` for adaptive cubic sampling and `0.0375` for
+deterministic cubic reconstruction after integer topology resolution on a
+`1e-6` document-unit grid. Outline uses the same sampling and topology grid but
+keeps its noded straight segments directly rather than refitting them. Unite combines all selected fills.
 Intersect retains only regions shared by every selected object. Exclude retains
 regions covered by an odd number of selected objects, after each object's own
-even-odd compound fill has been resolved independently. Unite, Intersect, and
+authored compound fill has been resolved independently. Unite, Intersect, and
 Exclude produce one ordinary compound path at the topmost selected object's
 stack position and inherit that object's complete appearance. Subtract Front treats the
 backmost selected fill as the subject, subtracts every selected object above it,
@@ -122,6 +132,44 @@ sole selection. Any mathematically empty operation commits the source deletion
 with an empty selection. Canvas, bounds, hit testing, clipboard, and PDF consume the same
 ordinary even-odd path output.
 
+Divide, Trim, Merge, Crop, and Outline share a deterministic coverage
+partition. The partition emits connected non-zero-area faces in canonical
+geometry order, associates every face with its source coverage, emits
+coincident boundaries once, and ignores tangent zero-area intersections. A
+progress callback reports each source-region pass, and callers may interrupt
+between passes. All five commands bake affine transforms, replace complete
+sibling objects or groups at the topmost selected hierarchy position, allocate
+fresh object, contour, and point identities, select every result, and commit as
+one undoable history entry. Results are ordered by source paint position and
+then canonical geometry. An empty result deletes the selected sources and
+leaves an empty selection.
+
+The application runs those five partition-based commands in a dedicated module
+worker. The footer streams partition and materialization progress and exposes a
+Cancel action that terminates the worker, including during synchronous result
+materialization, without committing history. A completed result is committed
+only when the document, object selection, direct selection, and active group
+editing scope still match the worker request; otherwise the stale result is
+discarded.
+
+Divide materializes every face independently with the complete appearance of
+its topmost covering source, including stroke. Trim also materializes every
+topmost visible face independently but retains only its fill. Merge starts from
+those fill-only visible faces, unions faces with the same fill swatch, and emits
+one object per connected merged component at that swatch's topmost participant.
+Crop treats the topmost selected fill strictly as a mask: the mask contributes
+no appearance or output of its own, mask-only area is discarded, and underlying
+visible faces retain only the fill of their topmost non-mask source.
+
+Outline has an intentionally explicit editable-path contract. It nodes every
+selected filled boundary at partition intersections, canonicalizes each
+undirected straight segment, and emits that segment exactly once as an open
+two-anchor path. Each segment uses the authored stroke of its topmost adjacent
+source when one exists; otherwise it receives a one-unit solid stroke in that
+source's fill swatch. Outline output has no fill. Keeping the noded segments
+separate avoids ambiguous branching and makes every shared or exterior
+boundary directly selectable.
+
 The versioned repository source boundary lives in
 [`@create-design/source`](../design-source/README.md). Its second directory
 format splits document metadata, palette, ordered artboards, layer ordering,
@@ -129,9 +177,9 @@ and each design object into independently validated units. Artboard order lives
 only in its inventory while each artboard's stable ID, name, global bounds,
 bleed, and safe-area metadata live in its own unit. Object IDs, display names,
 source paths, and stacking order remain independent so ordinary edits produce
-narrow Git diffs. Group, asset, and font inventories reserve future source
-boundaries without duplicating facts the current document model cannot yet
-represent.
+narrow Git diffs. Structural groups have their own units and recursively
+reference ordered object or group children. Asset and font inventories reserve
+their separate source boundaries.
 
 The repository's [`designs/workbench-poster`](../../designs/workbench-poster)
 project is a complete source-format example and the default development

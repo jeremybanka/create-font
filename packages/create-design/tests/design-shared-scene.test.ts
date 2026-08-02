@@ -13,6 +13,14 @@ import {
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { groupDesignSelection } from "../src/design-hierarchy.ts"
 import { objectBounds } from "../src/geometry.ts"
+import type {
+	PathfinderWorkerClient,
+	PathfinderWorkerOutcome,
+} from "../src/pathfinder-worker-client.ts"
+import type {
+	PathfinderWorkerProgress,
+	PathfinderWorkerRequest,
+} from "../src/pathfinder-worker-protocol.ts"
 import {
 	DESIGN_RECOVERY_STORAGE_KEY,
 	type DesignRecoveryDraft,
@@ -32,6 +40,36 @@ const { default: Konva } = await import(
 )
 
 const hosts: HTMLElement[] = []
+
+type DeferredPathfinderRun = {
+	readonly cancel: ReturnType<typeof vi.fn>
+	readonly input: Omit<PathfinderWorkerRequest, "id">
+	readonly onProgress: (progress: PathfinderWorkerProgress) => void
+	readonly resolve: (outcome: PathfinderWorkerOutcome) => void
+}
+
+class DeferredPathfinderWorkerClient implements PathfinderWorkerClient {
+	readonly runs: DeferredPathfinderRun[] = []
+
+	run(
+		input: Omit<PathfinderWorkerRequest, "id">,
+		onProgress: (progress: PathfinderWorkerProgress) => void,
+	) {
+		let settled = false
+		let resolveOutcome!: (outcome: PathfinderWorkerOutcome) => void
+		const result = new Promise<PathfinderWorkerOutcome>((resolve) => {
+			resolveOutcome = resolve
+		})
+		const resolve = (outcome: PathfinderWorkerOutcome): void => {
+			if (settled) return
+			settled = true
+			resolveOutcome(outcome)
+		}
+		const cancel = vi.fn(() => resolve({ status: "cancelled" }))
+		this.runs.push({ cancel, input, onProgress, resolve })
+		return { cancel, result }
+	}
+}
 
 afterEach(() => {
 	for (const host of hosts) {
@@ -113,6 +151,38 @@ function mountDesign(
 }
 
 describe("create-design shared vector scene", () => {
+	it("passes the authored fill rule to the canvas path", () => {
+		const document = createInitialDocument()
+		const first = document.objects[0]!
+		const initialDocument: DesignDocument = {
+			...document,
+			objects: document.objects.map((object) =>
+				object.id === first.id
+					? {
+							...object,
+							geometry: {
+								kind: "path",
+								fillRule: "nonzero",
+								contours: [
+									{
+										id: "contour:fill-rule",
+										closed: true,
+										points: [
+											{ id: "point:fill-rule:0", x: 0, y: 0 },
+											{ id: "point:fill-rule:1", x: 20, y: 0 },
+											{ id: "point:fill-rule:2", x: 20, y: 20 },
+										],
+									},
+								],
+							},
+						}
+					: object,
+			),
+		}
+		const stage = mountDesign({ initialDocument })
+		expect(stage.findOne(".design-object").fillRule()).toBe("nonzero")
+	})
+
 	it("waits for a positive viewport before rendering the existing scene", () => {
 		const stageCount = Konva.stages.length
 		const stage = mountDesign({}, new Map(), {
@@ -209,6 +279,152 @@ describe("create-design shared vector scene", () => {
 		expect(document.activeElement).toBe(help)
 	})
 
+	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {
+		const base = createInitialDocument()
+		const template = base.objects[0]!
+		const initialDocument: DesignDocument = {
+			...base,
+			objects: Array.from({ length: 24 }, (_, index) => ({
+				...template,
+				id: `object:large:${index}`,
+				name: `Large piece ${index + 1}`,
+				transform: {
+					...template.transform,
+					e: (index % 6) * 12,
+					f: Math.floor(index / 6) * 12,
+				},
+			})),
+		}
+		const worker = new DeferredPathfinderWorkerClient()
+		mountDesign({ initialDocument, pathfinderWorkerClient: worker })
+
+		const selectAll = async (): Promise<void> => {
+			await act(async () => {
+				window.dispatchEvent(
+					new KeyboardEvent("keydown", {
+						bubbles: true,
+						ctrlKey: true,
+						key: "a",
+					}),
+				)
+				await Promise.resolve()
+			})
+		}
+		const openDivide = async (): Promise<void> => {
+			const opener = document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Open Command Palette"]',
+			)
+			if (opener === null) throw new Error("Command center was not found.")
+			act(() => opener.click())
+			const search = document.querySelector<HTMLInputElement>(
+				'input[aria-label="Search commands"]',
+			)
+			if (search === null) throw new Error("Command search was not found.")
+			await act(async () => {
+				search.value = "Pathfinder: Divide"
+				search.dispatchEvent(new InputEvent("input", { bubbles: true }))
+				await Promise.resolve()
+			})
+		}
+		const executeDivide = async (): Promise<void> => {
+			await openDivide()
+			const option = document.getElementById("command-pathfinder-divide")
+			if (!(option instanceof HTMLButtonElement))
+				throw new Error("Divide command was not found.")
+			await act(async () => {
+				option.click()
+				await Promise.resolve()
+			})
+		}
+
+		await selectAll()
+		await executeDivide()
+		expect(worker.runs).toHaveLength(1)
+		expect(worker.runs[0]?.input.context.scopeGroupId).toBeNull()
+		await act(async () => {
+			worker.runs[0]?.onProgress({
+				completedRegions: 8,
+				phase: "partitioning",
+				pieceCount: 31,
+				totalRegions: 24,
+			})
+			await Promise.resolve()
+		})
+		const progress = document.querySelector<HTMLElement>(
+			"footer [data-pathfinder-progress]",
+		)
+		expect(progress?.textContent).toContain("Divide: partitioning")
+		expect(progress?.querySelector("progress")?.value).toBe(8)
+
+		await openDivide()
+		expect(
+			document
+				.getElementById("command-pathfinder-divide")
+				?.getAttribute("aria-disabled"),
+		).toBe("true")
+		const search = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (search === null) throw new Error("Command search was not found.")
+		act(() => {
+			search.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+		})
+		const cancel = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Cancel Divide"]',
+		)
+		if (cancel === null) throw new Error("Pathfinder cancel was not found.")
+		await act(async () => {
+			cancel.click()
+			await Promise.resolve()
+		})
+		expect(worker.runs[0]?.cancel).toHaveBeenCalledOnce()
+		expect(
+			document.querySelector("[data-footer-counts]")?.textContent,
+		).toContain("24 objects")
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("document was not changed")
+
+		await executeDivide()
+		expect(worker.runs).toHaveLength(2)
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title field was not found.")
+		await act(async () => {
+			title.value = "Edited while Pathfinder runs"
+			title.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const staleDocument = {
+			...worker.runs[1]!.input.context.document,
+			objects: [],
+			title: "Stale worker result",
+		}
+		await act(async () => {
+			worker.runs[1]?.resolve({
+				result: {
+					directSelection: [],
+					document: staleDocument,
+					message: "Divided stale paths.",
+					objectSelection: [],
+					ok: true,
+				},
+				status: "completed",
+			})
+			await Promise.resolve()
+		})
+		expect(title.value).toBe("Edited while Pathfinder runs")
+		expect(
+			document.querySelector("[data-footer-counts]")?.textContent,
+		).toContain("24 objects")
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("result was discarded")
+	})
+
 	it("enters nested groups on the mounted double-click sequence without moving them", async () => {
 		const base = createInitialDocument()
 		const first = base.objects[0]!
@@ -240,7 +456,11 @@ describe("create-design shared vector scene", () => {
 		if (outer === null) throw new Error("Outer fixture group was not created.")
 		const source = outer.document
 		const storage = new Map<string, string>()
-		const stage = mountDesign({ initialDocument: source }, storage)
+		const worker = new DeferredPathfinderWorkerClient()
+		const stage = mountDesign(
+			{ initialDocument: source, pathfinderWorkerClient: worker },
+			storage,
+		)
 		const persistedSource = storage.get(DESIGN_STORAGE_KEY)
 		if (persistedSource === undefined)
 			throw new Error("Initial grouped document was not persisted.")
@@ -344,6 +564,63 @@ describe("create-design shared vector scene", () => {
 			"Editing inside Group 1",
 		)
 		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedSource)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					ctrlKey: true,
+					key: "a",
+				}),
+			)
+			await Promise.resolve()
+		})
+
+		const commandCenter = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Command Palette"]',
+		)
+		if (commandCenter === null) throw new Error("Command center was not found.")
+		act(() => commandCenter.click())
+		const commandSearch = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (commandSearch === null) throw new Error("Command search was not found.")
+		await act(async () => {
+			commandSearch.value = "Pathfinder: Divide"
+			commandSearch.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const divide = document.getElementById("command-pathfinder-divide")
+		if (!(divide instanceof HTMLButtonElement))
+			throw new Error("Divide command was not found.")
+		await act(async () => {
+			divide.click()
+			await Promise.resolve()
+		})
+		expect(worker.runs[0]?.input.context.scopeGroupId).toBe("group:inner")
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		expect(groupLabel()).toBe("Group 1 · 2 objects")
+		await act(async () => {
+			worker.runs[0]?.resolve({
+				result: {
+					directSelection: [],
+					document: { ...source, objects: [] },
+					message: "Divided stale scope.",
+					objectSelection: [],
+					ok: true,
+				},
+				status: "completed",
+			})
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("editing scope changed")
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedSource)
+		await doubleClick(first.id)
+		expect(groupLabel()).toBe(null)
 		await act(async () => {
 			window.dispatchEvent(
 				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
