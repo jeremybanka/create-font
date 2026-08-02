@@ -43,7 +43,7 @@
 	"scripts": {
 		"build": "node ./scripts/build.ts",
 		"dev": "node ./scripts/dev.ts",
-		"test": "node ./scripts/build-development.ts && vp test && pnpm run test:node-server",
+		"test": "node ./scripts/build-development.ts && vp test && vp test --config ./vitest.e2e.config.ts && pnpm run test:node-server",
 		"test:bun-server": "node ./scripts/build-development.ts && bun --conditions=development ./tests/runtime-server-smoke.ts",
 		"test:node-server": "node --conditions=development --test ./tests/node-server.node.ts"
 	},
