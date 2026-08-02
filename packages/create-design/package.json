@@ -59,7 +59,7 @@
 		"eslint": "10.8.0",
 		"happy-dom": "20.11.1",
 		"jiti": "2.7.0",
-		"lasertag": "0.6.7",
+		"lasertag": "0.7.0",
 		"react": "npm:@preact/compat@18.3.2",
 		"react-dom": "npm:@preact/compat@18.3.2",
 		"vite": "8.2.0",
