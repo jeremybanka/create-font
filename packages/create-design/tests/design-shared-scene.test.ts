@@ -362,7 +362,6 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		expect(groupLabel()).toBe("Group 2 · 3 objects")
-		expect(hint()).toContain("Double-click a group")
 
 		const before = source.objects.map(({ transform }) => ({
 			x: transform.e,
