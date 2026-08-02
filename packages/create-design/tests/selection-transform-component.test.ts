@@ -129,7 +129,9 @@ describe("Selection Transform editor", () => {
 			},
 		})
 		act(() =>
-			host.querySelector<HTMLButtonElement>('button[aria-label="Top left"]')?.click(),
+			host
+				.querySelector<HTMLButtonElement>('button[aria-label="Top left"]')
+				?.click(),
 		)
 		expect(input(host, "Selection X").value).toBe("0")
 		expect(input(host, "Selection Y").value).toBe("20.123")
@@ -172,9 +174,7 @@ describe("Selection Transform editor", () => {
 		expect(host.textContent).toContain(
 			"Unlock Locked rectangle before transforming the selection.",
 		)
-		expect(
-			host.querySelectorAll("transform-disabled-reason"),
-		).toHaveLength(1)
+		expect(host.querySelectorAll("transform-disabled-reason")).toHaveLength(1)
 	})
 
 	it("treats a selected group as one arrangement unit", () => {
