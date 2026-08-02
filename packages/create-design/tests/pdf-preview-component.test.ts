@@ -40,6 +40,7 @@ describe("PDF preview tile", () => {
 			reorderArtboard: vi.fn(),
 			setArtboardProperty: vi.fn(),
 			setMoveArtworkWithArtboard: vi.fn(),
+			setDocumentTitle: vi.fn(),
 			addSwatch: vi.fn(),
 			appearanceDisabledReason: null,
 			appearanceSummary: {

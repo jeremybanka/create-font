@@ -311,7 +311,16 @@ function DesignCanvasTile({
 	] as const satisfies readonly (readonly [DesignSnapCategory, string])[]
 	return (
 		<design-canvas-tile>
-			<strong>{context.document.title}</strong>
+			<label data-field>
+				<span>Document title</span>
+				<input
+					aria-label="Document title"
+					value={context.document.title}
+					onInput={(event) =>
+						context.setDocumentTitle(event.currentTarget.value)
+					}
+				/>
+			</label>
 			<span>
 				{context.activeArtboard.width} × {context.activeArtboard.height} pt ·{" "}
 				{Math.round(context.zoom * 100)}%

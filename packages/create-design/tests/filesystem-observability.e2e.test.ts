@@ -236,7 +236,9 @@ describe(`create-design filesystem observability`, () => {
 				host,
 			),
 		)
-		const titleInput = host.querySelector<HTMLInputElement>(`header input`)
+		const titleInput = host.querySelector<HTMLInputElement>(
+			`design-canvas-tile input[aria-label="Document title"]`,
+		)
 		if (titleInput === null) throw new Error(`Document title input is missing.`)
 
 		for (let cycle = 1; cycle <= 3; cycle += 1) {

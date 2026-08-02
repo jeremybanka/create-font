@@ -56,6 +56,7 @@ export interface DesignTileContext {
 		property: Partial<Omit<DesignArtboard, "id">>,
 	) => void
 	readonly setMoveArtworkWithArtboard: (enabled: boolean) => void
+	readonly setDocumentTitle: (title: string) => void
 	readonly addSwatch: () => void
 	readonly appearanceDisabledReason: string | null
 	readonly appearanceSummary: DesignAppearanceSummary
