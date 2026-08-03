@@ -11,6 +11,7 @@ import type {
 	EditorBrowserOptions,
 	MountedEditor,
 } from "@create-font/editor/browser"
+import { StoreProvider } from "atom.io/react"
 import { act, h, render } from "../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -25,7 +26,6 @@ import { createFileSystemSourceService } from "../src/source-service.ts"
 import { mountEditor } from "../../../packages/create-font/editor/src/browser.ts"
 import { createEditorWorkspace } from "../../../packages/create-font/editor/src/editor-workspace.ts"
 import { GlyphCanvas } from "../../../packages/create-font/editor/src/GlyphCanvas.tsx"
-import { EditorStateContext } from "../../../packages/create-font/editor/src/state-hooks.ts"
 
 const execFileAsync = promisify(execFile)
 const requireFromRenderer = createRequire(
@@ -460,8 +460,8 @@ describe(`create-font filesystem observability`, () => {
 		hosts.push(host)
 		await act(async () => {
 			render(
-				h(EditorStateContext.Provider, {
-					value: workspace.font.silo,
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
 					children: h(GlyphCanvas, { workspace }),
 				}),
 				host,
