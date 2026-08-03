@@ -10,8 +10,7 @@ import {
 	type SourceSyncState,
 } from "@create-art/source-rpc"
 import { assembleDesignDocument } from "@create-design/source"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { DesignApplication } from "../../../packages/create-design/editor/src/DesignApplication.tsx"

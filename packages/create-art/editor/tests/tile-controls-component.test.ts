@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
-import { h, render } from "preact"
 import { afterEach, describe, expect, it, vi } from "vitest"
+
+import { h, render } from "../../../../scripts/react-test-render.ts"
 
 import { TileButton } from "../src/TileButton.tsx"
 import { TileCheckbox } from "../src/TileCheckbox.tsx"
@@ -31,9 +32,18 @@ describe("shared tile controls", () => {
 		const element = host()
 		render(
 			h("div", {}, [
-				h(TileButton, { children: "Action", "aria-pressed": true }),
-				h(TileButton, { children: "Save", tone: "primary" }),
-				h(TileButton, { children: "Delete", tone: "danger", disabled: true }),
+				h(TileButton, {
+					children: "Action",
+					key: "action",
+					"aria-pressed": true,
+				}),
+				h(TileButton, { children: "Save", key: "save", tone: "primary" }),
+				h(TileButton, {
+					children: "Delete",
+					key: "delete",
+					tone: "danger",
+					disabled: true,
+				}),
 			]),
 			element,
 		)
@@ -50,17 +60,26 @@ describe("shared tile controls", () => {
 			h("div", {}, [
 				h(TileTextField, {
 					description: "Shown in the layer list.",
+					key: "name",
 					label: "Name",
+					readOnly: true,
 					value: "Rectangle",
 				}),
 				h(
 					TileSelect,
-					{ error: "Choose a target.", label: "Target", value: "selection" },
+					{
+						error: "Choose a target.",
+						key: "target",
+						label: "Target",
+						onChange: () => {},
+						value: "selection",
+					},
 					h("option", { value: "selection" }, "Selection"),
 				),
 				h(TileCheckbox, {
 					checked: true,
 					disabled: true,
+					key: "constrain",
 					label: "Constrain",
 				}),
 			]),

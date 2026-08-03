@@ -162,9 +162,9 @@ describe(`filesystem font source service`, () => {
 		const source = await createFileSystemSourceService(projectRoot)
 		await expect(
 			source.readComparison?.({ baseRef: `--help` }),
-		).rejects.toMatchObject<Partial<SourceVersionControlError>>({
+		).rejects.toMatchObject({
 			code: `source.invalid_ref`,
-		})
+		} satisfies Partial<SourceVersionControlError>)
 	})
 
 	it(`commits exactly nominated units and leaves other working changes intact`, async () => {

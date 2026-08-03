@@ -1,4 +1,4 @@
-import { h } from "preact"
+import { createElement } from "react"
 
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
 import { CompatibilityTile } from "./CompatibilityTile.tsx"
@@ -45,7 +45,7 @@ const registrations = [
 		defaultFill: true,
 		defaultPlacement: { column: 2, fill: true },
 		render: ({ context }) =>
-			h(VersionControlTile, {
+			createElement(VersionControlTile, {
 				diffView: context.diffView,
 				onDiffViewChange: context.onDiffViewChange,
 				onReviewGlyph: context.onReviewGlyph,
@@ -59,20 +59,23 @@ const registrations = [
 		name: "Masters & instances",
 		description: "Navigate font masters and named instances.",
 		defaultPlacement: { column: 1, fill: true },
-		render: ({ context }) => h(FontNavigator, { workspace: context.workspace }),
+		render: ({ context }) =>
+			createElement(FontNavigator, { workspace: context.workspace }),
 	},
 	{
 		kind: "canvas-toolbar",
 		name: "Canvas toolbar",
 		description: "Control design-space coordinates and the canvas viewport.",
 		defaultPlacement: { column: 3 },
-		render: ({ context }) => h(CanvasToolbar, { workspace: context.workspace }),
+		render: ({ context }) =>
+			createElement(CanvasToolbar, { workspace: context.workspace }),
 	},
 	{
 		kind: "kerning",
 		name: "Kerning",
 		description: "Inspect and edit the glyph pair at the text cursor.",
-		render: ({ context }) => h(KerningTile, { workspace: context.workspace }),
+		render: ({ context }) =>
+			createElement(KerningTile, { workspace: context.workspace }),
 	},
 	{
 		kind: "preview",
@@ -80,14 +83,17 @@ const registrations = [
 		description: "Proof custom text, samples, and variation settings.",
 		defaultFill: true,
 		render: ({ context, tile }) =>
-			h(PreviewTile, { workspace: context.workspace, tileId: tile.id }),
+			createElement(PreviewTile, {
+				workspace: context.workspace,
+				tileId: tile.id,
+			}),
 	},
 	{
 		kind: "compatibility",
 		name: "Master compatibility",
 		description: "Compare master topology, offset overlays, and reorder paths.",
 		render: ({ context }) =>
-			h(CompatibilityTile, { workspace: context.workspace }),
+			createElement(CompatibilityTile, { workspace: context.workspace }),
 	},
 	{
 		kind: "glyph-attributes",
@@ -95,14 +101,14 @@ const registrations = [
 		description: "Inspect glyph metrics, selection, and preview state.",
 		defaultPlacement: { column: 4 },
 		render: ({ context }) =>
-			h(GlyphInspector, { workspace: context.workspace }),
+			createElement(GlyphInspector, { workspace: context.workspace }),
 	},
 	{
 		kind: "selection-dimensions",
 		name: "Selection dimensions",
 		description: "Inspect and transform a selection from nine origins.",
 		render: ({ context }) =>
-			h(SelectionDimensions, { workspace: context.workspace }),
+			createElement(SelectionDimensions, { workspace: context.workspace }),
 	},
 ] as const satisfies readonly TileRegistration<FontTileKind, FontTileContext>[]
 

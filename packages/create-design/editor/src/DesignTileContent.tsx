@@ -1,3 +1,4 @@
+import type * as React from "react"
 import {
 	AlignBottomIcon,
 	AlignCenterHorizontallyIcon,
@@ -22,8 +23,7 @@ import {
 	TileSelect,
 	TileTextField,
 } from "@create-art/editor"
-import type { JSX } from "preact"
-import { useMemo, useState } from "preact/hooks"
+import { useMemo, useState } from "react"
 import type {
 	AppearancePaintTarget,
 	AppearancePaintValue,
@@ -770,7 +770,7 @@ function TransformOriginPicker({
 		grid?.querySelectorAll<HTMLButtonElement>("button")[index]?.focus()
 	}
 	const navigate = (
-		event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+		event: React.KeyboardEvent<HTMLButtonElement>,
 		index: number,
 	): void => {
 		const row = Math.floor(index / 3)
@@ -1511,6 +1511,7 @@ function SwatchEditor({
 			<color-space-tabs role="group" aria-label="Source color space">
 				{(["rgb", "cmyk"] as const).map((space) => (
 					<button
+						key={space}
 						type="button"
 						aria-pressed={source.space === space}
 						onClick={() => {

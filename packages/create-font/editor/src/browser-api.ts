@@ -23,4 +23,9 @@ export type MountedEditor = Readonly<{
 	unmount: () => void
 }>
 
+export declare function mountEditor(
+	host: HTMLElement,
+	options: EditorBrowserOptions,
+): MountedEditor
+
 export type { EditorFontSource }

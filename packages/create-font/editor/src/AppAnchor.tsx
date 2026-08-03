@@ -1,10 +1,10 @@
-import type { JSX } from "preact"
+import type * as React from "react"
 
 import css from "./AppAnchor.module.css"
 import type { Pathname } from "./routing.ts"
 
 export type AppAnchorProps = Omit<
-	JSX.HTMLAttributes<HTMLAnchorElement>,
+	React.HTMLAttributes<HTMLAnchorElement>,
 	"href"
 > & {
 	readonly href: Pathname

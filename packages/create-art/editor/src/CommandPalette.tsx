@@ -4,8 +4,8 @@ import {
 	EnterIcon,
 	MagnifyingGlassIcon,
 } from "@radix-ui/react-icons"
-import type { JSX } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
+import type * as React from "react"
+import { useEffect, useRef, useState } from "react"
 
 import {
 	filterPaletteCommands,
@@ -71,7 +71,7 @@ export function CommandPalette({
 		onExecute(command)
 	}
 	const handleKeyDown = (
-		event: JSX.TargetedKeyboardEvent<HTMLInputElement>,
+		event: React.KeyboardEvent<HTMLInputElement>,
 	): void => {
 		if (assignmentCommand !== null) {
 			event.preventDefault()
@@ -115,7 +115,7 @@ export function CommandPalette({
 	return (
 		<command-palette
 			className={css.class}
-			onMouseDown={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
+			onMouseDown={(event: React.MouseEvent<HTMLElement>) => {
 				if (event.target === event.currentTarget) onCancel()
 			}}
 		>
@@ -136,7 +136,7 @@ export function CommandPalette({
 						}
 						value={query}
 						placeholder="Type a command"
-						autocomplete="off"
+						autoComplete="off"
 						onInput={(event) => updateQuery(event.currentTarget.value)}
 						onKeyDown={handleKeyDown}
 					/>

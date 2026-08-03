@@ -1,4 +1,15 @@
 export { CommandPalette } from "./CommandPalette.tsx"
+export {
+	Circle,
+	Group,
+	Layer,
+	Line,
+	Path,
+	Rect,
+	Stage,
+	Text,
+	type KonvaEventObject,
+} from "./canvas-renderer.ts"
 export * from "./numeric-input.ts"
 export * from "./tiling-workspace.ts"
 export { EditorIcon, type EditorIconName } from "./EditorIcon.tsx"

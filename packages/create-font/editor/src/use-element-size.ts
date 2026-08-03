@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "preact/hooks"
+import { useLayoutEffect, useRef, useState } from "react"
 
 export interface ElementSize {
 	readonly width: number

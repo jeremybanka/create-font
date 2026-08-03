@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { SourceChangeGroup } from "@create-art/source-rpc"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { DesignVersionControlTile } from "../src/DesignVersionControlTile.tsx"

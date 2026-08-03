@@ -1,4 +1,4 @@
-import type { ComponentChild } from "preact"
+import type { ReactNode } from "react"
 
 import type { EditorIconName } from "./EditorIcon.tsx"
 import type {
@@ -28,7 +28,7 @@ export interface TileRegistration<Kind extends string, Context> {
 	readonly kind: Kind
 	readonly name: string
 	readonly description: string
-	readonly render: (props: TileRenderProps<Context, Kind>) => ComponentChild
+	readonly render: (props: TileRenderProps<Context, Kind>) => ReactNode
 	readonly available?: (context: Context) => boolean
 	readonly defaultFill?: boolean
 	readonly defaultPlacement?: TileDefaultPlacement

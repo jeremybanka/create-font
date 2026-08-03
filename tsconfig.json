@@ -12,9 +12,6 @@
 		"noUncheckedIndexedAccess": true,
 		"paths": {
 			"@create-art/editor": ["./packages/create-art/editor/src/index.ts"],
-			"@create-art/preact-konva": [
-				"./packages/create-art/preact-konva/src/index.ts"
-			],
 			"@create-design/editor/browser": [
 				"./packages/create-design/editor/src/browser.ts"
 			],
@@ -36,7 +33,6 @@
 		"apps/create-design",
 		"apps/create-font",
 		"packages/create-art/editor",
-		"packages/create-art/preact-konva",
 		"packages/create-design/editor",
 		"packages/create-font/editor"
 	]

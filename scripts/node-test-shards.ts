@@ -84,7 +84,6 @@ const shards = {
 				`@create-design/model`,
 				`@create-design/pdf`,
 				`@create-font/font-service`,
-				`@create-art/preact-konva`,
 				`@create-font/server`,
 				`@create-font/target`,
 			],

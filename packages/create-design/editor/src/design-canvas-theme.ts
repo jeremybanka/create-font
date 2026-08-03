@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks"
+import { useEffect, useState } from "react"
 
 export interface DesignCanvasTheme {
 	readonly artboardOutline: string

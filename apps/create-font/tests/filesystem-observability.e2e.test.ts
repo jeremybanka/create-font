@@ -11,8 +11,7 @@ import type {
 	EditorBrowserOptions,
 	MountedEditor,
 } from "@create-font/editor/browser"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
@@ -30,7 +29,7 @@ import { EditorStateContext } from "../../../packages/create-font/editor/src/sta
 
 const execFileAsync = promisify(execFile)
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../packages/create-art/preact-konva/package.json`,
+	`${process.cwd()}/../../packages/create-art/editor/package.json`,
 )
 const { default: Konva } = await import(
 	requireFromRenderer.resolve(`konva/lib/Core`)

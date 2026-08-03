@@ -1,4 +1,4 @@
-import { h } from "preact"
+import { createElement as h } from "react"
 import { describe, expect, it } from "vitest"
 
 import {

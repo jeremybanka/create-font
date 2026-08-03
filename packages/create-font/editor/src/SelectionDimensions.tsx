@@ -1,5 +1,5 @@
-import type { JSX } from "preact"
-import { useId, useState } from "preact/hooks"
+import type * as React from "react"
+import { useId, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { EditorIcon } from "@create-art/editor"
@@ -102,7 +102,7 @@ export function SelectionDimensions({ workspace }: SelectionDimensionsProps) {
 		if (scale !== null) commit(scaleSelectionControls(controls, scale))
 	}
 	const movePickerFocus = (
-		event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+		event: React.KeyboardEvent<HTMLButtonElement>,
 	): void => {
 		const index = SELECTION_ORIGINS.indexOf(origin)
 		const row = Math.floor(index / 3)

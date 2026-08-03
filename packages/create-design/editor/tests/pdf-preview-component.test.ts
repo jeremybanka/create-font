@@ -1,8 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { describe, expect, it, vi } from "vitest"
 
 import { DesignTileContent } from "../src/DesignTileContent.tsx"
@@ -116,13 +115,11 @@ describe("PDF preview tile", () => {
 		)!
 		expect(host.querySelector("pdf-preview")).toBeNull()
 		act(() => {
-			checkbox.checked = true
-			checkbox.dispatchEvent(new Event("change", { bubbles: true }))
+			checkbox.click()
 		})
 		expect(host.querySelector("pdf-preview")).not.toBeNull()
 		act(() => {
-			checkbox.checked = false
-			checkbox.dispatchEvent(new Event("change", { bubbles: true }))
+			checkbox.click()
 		})
 		expect(host.querySelector("pdf-preview")).toBeNull()
 
@@ -159,8 +156,7 @@ describe("PDF preview tile", () => {
 			"[data-outside-artwork-lint] input",
 		)!
 		act(() => {
-			lint.checked = true
-			lint.dispatchEvent(new Event("change", { bubbles: true }))
+			lint.click()
 		})
 		const preflight = host.querySelector<HTMLDetailsElement>(
 			"[data-export-preflight]",

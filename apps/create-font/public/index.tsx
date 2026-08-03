@@ -14,7 +14,7 @@ import {
 	assembleEditorFontSource,
 	initializeFeaParser,
 } from "@create-font/source/browser"
-import { render } from "preact"
+import { createRoot, type Root } from "react-dom/client"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
 import {
@@ -115,6 +115,10 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 		| undefined
 	const phaseDuration = (name: string): number | undefined =>
 		timeline.phases.find((phase) => phase.name === name)?.duration
+	const bootstrapRendered = timeline.milestones[`bootstrap-rendered`]
+	const editorUsable = timeline.milestones[`editor-usable`]
+	const sourceMessageReceived = timeline.milestones[`source-message-received`]
+	const sourceSnapshotRpc = phaseDuration(`source-snapshot-rpc`)
 	return {
 		longTasks: Object.freeze([...longTasks]),
 		...(navigation === undefined
@@ -136,14 +140,14 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 		session: `direct-server`,
 		status: startupProfileStatus,
 		summary: {
-			bootstrapRendered: timeline.milestones[`bootstrap-rendered`],
-			editorUsable: timeline.milestones[`editor-usable`],
+			...(bootstrapRendered === undefined ? {} : { bootstrapRendered }),
+			...(editorUsable === undefined ? {} : { editorUsable }),
 			mainThreadTotalBlockingTime: longTasks.reduce(
 				(total, task) => total + Math.max(0, task.duration - 50),
 				0,
 			),
-			sourceMessageReceived: timeline.milestones[`source-message-received`],
-			sourceSnapshotRpc: phaseDuration(`source-snapshot-rpc`),
+			...(sourceMessageReceived === undefined ? {} : { sourceMessageReceived }),
+			...(sourceSnapshotRpc === undefined ? {} : { sourceSnapshotRpc }),
 		},
 		timeline,
 	}
@@ -152,6 +156,7 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
+let bootstrapRoot: Root | null = createRoot(applicationMount)
 const sourceSyncWorker = createSourceSyncWorkerClient()
 let sourceState: SourceSyncState | null = null
 let saveQueue = Promise.resolve()
@@ -195,9 +200,8 @@ function retrySource(): void {
 function renderBootstrap(): void {
 	const finish = startupTimeline.startPhase(`bootstrap-render`)
 	document.title = bootstrapDocumentTitle(bootstrapState)
-	render(
+	bootstrapRoot?.render(
 		<BootstrapScreen state={bootstrapState} onAction={retrySource} />,
-		applicationMount,
 	)
 	finish()
 	startupTimeline.mark(`bootstrap-rendered`)
@@ -257,8 +261,11 @@ function editorComparison(
 function versionControlOptions(): NonNullable<
 	EditorBrowserOptions["versionControl"]
 > {
+	const { comparison, error, loading } = versionControlState
 	return {
-		...versionControlState,
+		...(comparison === undefined ? {} : { comparison }),
+		...(error === undefined ? {} : { error }),
+		loading,
 		onCompare: loadComparison,
 		onCommit: commitSourceUnits,
 	}
@@ -388,9 +395,10 @@ async function showSource(
 		versionControl: versionControlOptions(),
 	}
 	if (mountedEditor === null) {
-		// The bootstrap and editor artifacts intentionally own separate Preact
+		// The bootstrap and editor artifacts intentionally own separate React
 		// renderers. Fully unmount bootstrap before handing the host over.
-		render(null, applicationMount)
+		bootstrapRoot?.unmount()
+		bootstrapRoot = null
 		mountedEditor = editorModule.mountEditor(applicationMount, options)
 	} else {
 		mountedEditor.update(options)
@@ -468,7 +476,9 @@ function writeResultFromResponse(
 		)
 	}
 	if (`code` in response.data) {
-		throw new Error(response.data.message)
+		throw new Error(
+			responseErrorMessage(response.data, `Write font source failed.`),
+		)
 	}
 	return response.data as WriteSourceUnitsResult
 }

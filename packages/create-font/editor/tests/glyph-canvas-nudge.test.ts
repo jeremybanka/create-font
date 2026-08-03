@@ -2,8 +2,7 @@
 
 import { createRequire } from "node:module"
 import type { PointId } from "@create-font/states"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
@@ -12,7 +11,7 @@ import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../create-art/preact-konva/package.json`,
+	`${process.cwd()}/../../create-art/editor/package.json`,
 )
 const { default: Konva } = await import(
 	requireFromRenderer.resolve("konva/lib/Core")

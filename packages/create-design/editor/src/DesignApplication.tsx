@@ -35,7 +35,7 @@ import {
 	Rect,
 	Stage,
 	Text,
-} from "@create-art/preact-konva"
+} from "@create-art/editor"
 import {
 	Cross2Icon,
 	MagnifyingGlassIcon,
@@ -49,8 +49,8 @@ import {
 	useReducer,
 	useRef,
 	useState,
-} from "preact/hooks"
-import type { ComponentChildren, ComponentProps } from "preact"
+} from "react"
+import type { ReactNode, ComponentProps } from "react"
 
 import {
 	defaultDesignAppearance,
@@ -238,7 +238,13 @@ function MeasuredStage({
 	height,
 	...props
 }: ComponentProps<typeof Stage>) {
-	if (!(width > 0) || !(height > 0)) return null
+	if (
+		width === undefined ||
+		height === undefined ||
+		!(width > 0) ||
+		!(height > 0)
+	)
+		return null
 	return <Stage {...props} width={width} height={height} />
 }
 /* eslint-enable lasertag/render-tag-with-own-name */
@@ -490,7 +496,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 }
 
 export type DesignApplicationProps = Readonly<{
-	children?: ComponentChildren
+	children?: ReactNode
 	initialDocument?: DesignDocument
 	pathfinderWorkerClient?: PathfinderWorkerClient
 	sourceSession?: DesignSourceSession
@@ -4061,9 +4067,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 						role="button"
 						tabIndex={0}
 						aria-label="Horizontal ruler; click to create a vertical guide"
-						onPointerDown={(event: PointerEvent) =>
-							createGuideFromRuler("x", event)
-						}
+						onPointerDown={(event) => createGuideFromRuler("x", event)}
 					>
 						{horizontalRulerTicks.map((tick) => (
 							<i
@@ -4079,9 +4083,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 						role="button"
 						tabIndex={0}
 						aria-label="Vertical ruler; click to create a horizontal guide"
-						onPointerDown={(event: PointerEvent) =>
-							createGuideFromRuler("y", event)
-						}
+						onPointerDown={(event) => createGuideFromRuler("y", event)}
 					>
 						{verticalRulerTicks.map((tick) => (
 							<i

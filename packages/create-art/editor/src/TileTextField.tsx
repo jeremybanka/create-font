@@ -1,16 +1,17 @@
-import type { ComponentChildren, JSX } from "preact"
-import { useId } from "preact/hooks"
+import type * as React from "react"
+import type { ReactNode } from "react"
+import { useId } from "react"
 
 import css from "./TileTextField.module.css"
 
 export type TileTextFieldProps = Omit<
-	JSX.InputHTMLAttributes<HTMLInputElement>,
+	React.InputHTMLAttributes<HTMLInputElement>,
 	"children" | "label" | "size"
 > &
 	Readonly<{
-		description?: ComponentChildren
-		error?: ComponentChildren
-		label: ComponentChildren
+		description?: ReactNode
+		error?: ReactNode
+		label: ReactNode
 	}>
 
 export function TileTextField({
@@ -29,7 +30,7 @@ export function TileTextField({
 			className={css.class}
 			data-disabled={disabled || undefined}
 		>
-			<label for={id}>
+			<label htmlFor={id}>
 				<span>{label}</span>
 				<input
 					{...inputProps}

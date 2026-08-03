@@ -8,6 +8,7 @@ const outdir = resolve(packageRoot, "dist/browser")
 await rm(resolve(packageRoot, "dist"), { force: true, recursive: true })
 await build({
 	configFile: false,
+	define: { "process.env.NODE_ENV": JSON.stringify("production") },
 	build: {
 		emptyOutDir: true,
 		lib: {

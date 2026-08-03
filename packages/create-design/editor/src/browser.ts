@@ -1,4 +1,5 @@
-import { h, render } from "preact"
+import { createElement } from "react"
+import { createRoot } from "react-dom/client"
 
 import type {
 	DesignEditorBrowserOptions,
@@ -16,10 +17,11 @@ export function mountDesignEditor(
 	} catch {
 		// Layout persistence is best-effort in restricted browser contexts.
 	}
+	const root = createRoot(host)
 	let mounted = true
 	const update = (nextOptions: DesignEditorBrowserOptions): void => {
 		if (!mounted) throw new Error("Cannot update an unmounted design editor.")
-		render(h(DesignApplication, nextOptions), host)
+		root.render(createElement(DesignApplication, nextOptions))
 	}
 	update(options)
 	return {
@@ -27,7 +29,7 @@ export function mountDesignEditor(
 		unmount() {
 			if (!mounted) return
 			mounted = false
-			render(null, host)
+			root.unmount()
 		},
 	}
 }
