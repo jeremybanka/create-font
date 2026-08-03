@@ -12,7 +12,7 @@ import { EditorStateContext } from "../src/state-hooks.ts"
 import type { EditorVersionControl } from "../src/version-control.ts"
 
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../create-art/preact-konva/package.json`,
+	`${process.cwd()}/../../preact-konva/package.json`,
 )
 const Konva = (await import(requireFromRenderer.resolve("konva/lib/Core")))
 	.default

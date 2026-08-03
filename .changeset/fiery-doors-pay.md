@@ -6,7 +6,7 @@
 "@create-font/editor": patch
 "@create-font/fea-rs-wasm": patch
 "@create-font/font-service": patch
-"@create-art/preact-konva": patch
+"preact-konva": patch
 "@create-font/server": patch
 "@create-font/source": patch
 "@create-font/states": patch

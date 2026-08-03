@@ -6,7 +6,7 @@ import {
 	Line,
 	Path,
 	Rect,
-} from "@create-art/preact-konva"
+} from "preact-konva"
 
 import type {
 	VectorGesturePreview,

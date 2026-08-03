@@ -30,7 +30,7 @@ import { EditorStateContext } from "../../../packages/create-font/editor/src/sta
 
 const execFileAsync = promisify(execFile)
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../packages/create-art/preact-konva/package.json`,
+	`${process.cwd()}/../../packages/preact-konva/package.json`,
 )
 const { default: Konva } = await import(
 	requireFromRenderer.resolve(`konva/lib/Core`)

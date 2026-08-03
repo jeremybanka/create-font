@@ -42,7 +42,7 @@ implementations are licensed under the Mozilla Public License, version 2.0
 - packages/create-font/fea-rs-wasm/**
 - packages/create-font/font-service/**
 - packages/create-font/source/**
-- packages/create-art/preact-konva/**
+- packages/preact-konva/**
 - packages/create-font/server/**
 - packages/create-art/source-format/**
 - packages/create-art/source-rpc/**

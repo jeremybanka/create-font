@@ -201,15 +201,15 @@ importers:
 
   packages/create-art/editor:
     dependencies:
-      '@create-art/preact-konva':
-        specifier: workspace:*
-        version: link:../preact-konva
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(@preact/compat@18.3.2(preact@10.29.8))
       preact:
         specifier: 10.29.8
         version: 10.29.8
+      preact-konva:
+        specifier: workspace:*
+        version: link:../../preact-konva
     devDependencies:
       '@types/node':
         specifier: 25.9.5
@@ -232,19 +232,6 @@ importers:
       vite-plus:
         specifier: 0.2.7
         version: 0.2.7(@types/node@25.9.5)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(jiti@2.7.0)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/create-art/preact-konva:
-    dependencies:
-      konva:
-        specifier: 10.3.0
-        version: 10.3.0
-      preact:
-        specifier: 10.29.8
-        version: 10.29.8
-    devDependencies:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
@@ -299,9 +286,6 @@ importers:
       '@create-art/editor':
         specifier: workspace:*
         version: link:../../create-art/editor
-      '@create-art/preact-konva':
-        specifier: workspace:*
-        version: link:../../create-art/preact-konva
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../../create-art/source-rpc
@@ -323,6 +307,9 @@ importers:
       preact:
         specifier: 10.29.8
         version: 10.29.8
+      preact-konva:
+        specifier: workspace:*
+        version: link:../../preact-konva
     devDependencies:
       '@types/node':
         specifier: 25.9.5
@@ -421,9 +408,6 @@ importers:
         specifier: workspace:*
         version: link:../target
     devDependencies:
-      '@create-art/preact-konva':
-        specifier: workspace:*
-        version: link:../../create-art/preact-konva
       '@floating-ui/dom':
         specifier: ^1.8.0
         version: 1.8.0
@@ -457,6 +441,9 @@ importers:
       preact:
         specifier: 10.29.8
         version: 10.29.8
+      preact-konva:
+        specifier: workspace:*
+        version: link:../../preact-konva
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(preact@10.29.8)'
@@ -574,6 +561,19 @@ importers:
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/dprint-plugin-fea:
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/preact-konva:
+    dependencies:
+      konva:
+        specifier: 10.3.0
+        version: 10.3.0
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8
     devDependencies:
       vitest:
         specifier: 4.1.10

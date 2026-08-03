@@ -44,7 +44,7 @@
 		"@create-font/target": "workspace:*"
 	},
 	"devDependencies": {
-		"@create-art/preact-konva": "workspace:*",
+		"preact-konva": "workspace:*",
 		"@floating-ui/dom": "^1.8.0",
 		"@radix-ui/react-icons": "^1.3.2",
 		"@typescript-eslint/parser": "8.65.0",

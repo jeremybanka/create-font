@@ -45,7 +45,8 @@ the complete toolchain.
 
 Applications live under `apps/`. Namespaced libraries use
 `packages/<npm-scope>/<package-name>`, so filesystem and npm ownership match
-directly. Unscoped tooling packages remain directly under `packages/`.
+directly. Unscoped tooling and framework-integration packages remain directly
+under `packages/`.
 
 - [`create-design`](apps/create-design/README.md) provides the design CLI,
   source workspace server, and application composition.
@@ -73,7 +74,7 @@ directly. Unscoped tooling packages remain directly under `packages/`.
   editor built directly on that state graph.
 - [`@create-art/editor`](packages/create-art/editor/README.md) owns product-neutral editor
   controls, tiling, canvas, vector interaction, and source review foundations.
-- [`@create-art/preact-konva`](packages/create-art/preact-konva) provides the shared Preact
+- [`preact-konva`](packages/preact-konva) provides the shared Preact
   bindings used by both product editors' Konva scenes.
 
 These packages are the current implementation layers. Each application

@@ -24,7 +24,7 @@ import {
 	Rect,
 	Stage,
 	Text,
-} from "@create-art/preact-konva"
+} from "preact-konva"
 import type { JSX } from "preact"
 import {
 	useEffect,

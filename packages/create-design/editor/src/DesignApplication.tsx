@@ -35,7 +35,7 @@ import {
 	Rect,
 	Stage,
 	Text,
-} from "@create-art/preact-konva"
+} from "preact-konva"
 import {
 	Cross2Icon,
 	MagnifyingGlassIcon,

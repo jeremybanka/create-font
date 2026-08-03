@@ -17,7 +17,7 @@ import {
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../create-art/preact-konva/package.json`,
+	`${process.cwd()}/../../preact-konva/package.json`,
 )
 await import(requireFromRenderer.resolve("konva/lib/Core"))
 
