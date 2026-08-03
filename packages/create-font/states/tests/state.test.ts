@@ -331,6 +331,36 @@ describe("font editor state", () => {
 		).toEqual(history)
 	})
 
+	it("does not revise or record unchanged horizontal metrics", () => {
+		const editor = loaded("state/unchanged-horizontal-metrics")
+		const layer = editor.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((candidate) => candidate.masterId === blackMasterId)
+		if (layer === undefined) throw new Error("Fixture layer is missing.")
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const history = editor.silo.inspectTimeline(
+			editor.glyphHistoryTimelines,
+			oGlyphId,
+		)
+
+		editor.silo.runTransaction(editor.transactions.setHorizontalMetrics)({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			advanceWidth: layer.advanceWidth,
+		})
+
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual(history)
+		expect(
+			editor.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((candidate) => candidate.masterId === blackMasterId)
+				?.advanceWidth,
+		).toBe(layer.advanceWidth)
+	})
+
 	it("changes node behavior only in the requested master", () => {
 		const editor = loaded("state/mode-master")
 		const black = firstPoint(editor, blackMasterId)

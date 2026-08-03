@@ -4438,8 +4438,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					"Advance width must be an integer from 0 through 65535.",
 				)
 			}
-			set(
-				advanceWidthValueAtoms,
+			writeAdvanceWidth(
+				get,
+				set,
 				[input.masterId, input.glyphId],
 				input.advanceWidth,
 			)
