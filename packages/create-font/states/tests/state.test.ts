@@ -308,8 +308,9 @@ describe("font editor state", () => {
 			},
 		)
 
-		editor.actions.load(replacement, ({ set }) => {
-			set(externalAtom, "co-written")
+		editor.actions.load(replacement, {
+			atom: externalAtom,
+			value: "co-written",
 		})
 		unsubscribe()
 
@@ -325,8 +326,8 @@ describe("font editor state", () => {
 		])
 	})
 
-	it("rolls back a failed load reconciliation without clearing histories", () => {
-		const editor = loaded("state/failed-reconciled-load")
+	it("rejects thenable load co-writes without clearing histories", async () => {
+		const editor = loaded("state/thenable-load-co-write")
 		const externalAtom = editor.silo.atom<string>({
 			key: "reconciledSource",
 			default: "before",
@@ -344,15 +345,91 @@ describe("font editor state", () => {
 		})
 		const revision = editor.silo.getState(editor.atoms.documentRevision)
 		const source = editor.read.editorSource()
+		const rejectedPromise = Promise.reject(
+			new Error("Async reconciliation failed."),
+		)
 
 		expect(() =>
-			editor.actions.load(makeGeometricOEditorFont(), ({ set }) => {
-				set(externalAtom, "should roll back")
-				throw new Error("Reconciliation failed.")
+			editor.actions.load(makeGeometricOEditorFont(), {
+				atom: externalAtom,
+				// Exercise the runtime boundary that protects JavaScript and casts;
+				// the public conditional type rejects promise-like values.
+				value: rejectedPromise as never,
 			}),
-		).toThrow("Reconciliation failed.")
+		).toThrow("A font-load co-write value cannot be promise-like.")
+		// Yield through the rejection-reporting turn. Vitest would report an
+		// unhandled error here if load had not consumed the rejected promise.
+		await new Promise<void>((resolve) => {
+			setImmediate(resolve)
+		})
 
 		expect(editor.silo.getState(externalAtom)).toBe("before")
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		expect(editor.read.editorSource()).toBe(source)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 1, length: 1 })
+		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+	})
+
+	it("rejects core atoms and family members as load co-write targets", () => {
+		const editor = loaded("state/core-load-co-write")
+		const point = firstPoint(editor, blackMasterId)
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 23, y: point.y }],
+		})
+		editor.actions.setKerningPair({
+			left: oGlyphId,
+			right: oGlyphId,
+			value: -20,
+		})
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const source = editor.read.editorSource()
+		const replacement = makeGeometricOEditorFont()
+
+		expect(() =>
+			editor.actions.load(replacement, {
+				// Atom tokens are serializable, so a copied core token must not bypass
+				// the ownership check merely because its object identity changed.
+				atom: { ...editor.atoms.documentRevision },
+				value: revision + 100,
+			}),
+		).toThrow("A font-load co-write requires a caller-owned plain atom.")
+		expect(() =>
+			editor.actions.load(replacement, {
+				atom: editor.atoms.metadata,
+				value: replacement.metadata,
+			}),
+		).toThrow("A font-load co-write requires a caller-owned plain atom.")
+		const axisAtom = editor.silo.findState(
+			editor.atoms.axis,
+			replacement.axes[0]?.id ?? "axis:missing",
+		)
+		expect(() =>
+			editor.actions.load(replacement, { atom: axisAtom, value: null }),
+		).toThrow("A font-load co-write requires a caller-owned plain atom.")
+		const invalidToken = (token: unknown) =>
+			token as typeof editor.atoms.documentRevision
+		expect(() =>
+			editor.actions.load(replacement, {
+				// The public type rejects families; retain a runtime guard for JS/casts.
+				atom: invalidToken(editor.atoms.axis),
+				value: revision,
+			}),
+		).toThrow("A font-load co-write requires a caller-owned plain atom.")
+		expect(() =>
+			editor.actions.load(replacement, {
+				// The public type rejects selectors; retain a runtime guard for JS/casts.
+				atom: invalidToken(editor.selectors.editorSource),
+				value: revision,
+			}),
+		).toThrow("A font-load co-write requires a caller-owned plain atom.")
+
 		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
 		expect(editor.read.editorSource()).toBe(source)
 		expect(

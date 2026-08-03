@@ -1,6 +1,7 @@
 import {
 	type ActorToolkit,
 	type ReaderToolkit,
+	type RegularAtomToken,
 	scopeFamily,
 	Silo,
 	type TransactionOptions,
@@ -733,16 +734,15 @@ export interface CreateFontEditorStateOptions {
 	readonly isProduction?: boolean
 }
 
-/** The transaction-bound capability exposed while reconciling a font load. */
-export interface FontLoadWriter {
-	readonly set: WriterToolkit["set"]
-}
-
 /**
- * Co-writes caller-owned atoms in the same commit as a whole-document load.
- * Throwing aborts the replacement and every co-write.
+ * Co-writes one caller-owned plain atom in the same commit as a
+ * whole-document load. Promise-like values are deliberately excluded because
+ * atom.io transactions are synchronous.
  */
-export type FontLoadReconcile = (writer: FontLoadWriter) => void
+export interface FontLoadCoWrite<Value> {
+	readonly atom: RegularAtomToken<Value>
+	readonly value: Value extends PromiseLike<unknown> ? never : Value
+}
 
 function resultWithWarnings<Value>(
 	result: ProjectionResult<Value>,
@@ -1385,6 +1385,69 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "cmapGlyph",
 		default: null,
 	})
+	const coreOwnedAtomTokens = new Set<RegularAtomToken<unknown>>([
+		metadataAtom,
+		namesAtom,
+		metricsAtom,
+		styleAtom,
+		documentRevisionAtom,
+		axisIdsAtom,
+		masterIdsAtom,
+		defaultMasterIdAtom,
+		instanceIdsAtom,
+		glyphIdsAtom,
+		featureSubstitutionsAtom,
+		cmapCodePointsAtom,
+		kerningAtom,
+	])
+	const coreOwnedAtomKeys = new Set(
+		[...coreOwnedAtomTokens].map((atom) => atom.key),
+	)
+	const coreOwnedAtomFamilyKeys = new Set([
+		axisAtoms.key,
+		masterAtoms.key,
+		masterCoordinateAtoms.key,
+		masterSupportStartAtoms.key,
+		masterSupportEndAtoms.key,
+		instanceAtoms.key,
+		instanceCoordinateAtoms.key,
+		glyphAtoms.key,
+		glyphEditorAtoms.key,
+		glyphContourIdsAtoms.key,
+		contourPointIdsAtoms.key,
+		contourClosedAtoms.key,
+		pointAtoms.key,
+		glyphLayerMasterIdsAtoms.key,
+		advanceWidthValueAtoms.key,
+		pointPositionValueAtoms.key,
+		incomingHandleXAtoms.key,
+		incomingHandleYAtoms.key,
+		outgoingHandleXAtoms.key,
+		outgoingHandleYAtoms.key,
+		cmapGlyphAtoms.key,
+	])
+	const assertCallerOwnedLoadAtom = (atom: RegularAtomToken<unknown>): void => {
+		if (
+			atom.type !== "atom" ||
+			coreOwnedAtomTokens.has(atom) ||
+			coreOwnedAtomKeys.has(atom.key) ||
+			(atom.family !== undefined &&
+				coreOwnedAtomFamilyKeys.has(atom.family.key))
+		) {
+			throw new TypeError(
+				"A font-load co-write requires a caller-owned plain atom.",
+			)
+		}
+	}
+	const isThenable = (value: unknown): value is PromiseLike<unknown> => {
+		if (
+			(typeof value !== "object" || value === null) &&
+			typeof value !== "function"
+		) {
+			return false
+		}
+		return typeof Reflect.get(value, "then") === "function"
+	}
 	const glyphHistoryTimelines = silo.timelineFamily<GlyphId>({
 		key: "glyphHistory",
 		scope: [
@@ -4141,10 +4204,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	)
 
 	const replaceFontTransaction = revisionedTransaction<
-		(source: EditorFontSource, reconcile?: FontLoadReconcile) => void
+		(source: EditorFontSource, coWrite?: FontLoadCoWrite<unknown>) => void
 	>({
 		key: "replaceFont",
-		do: ({ get, set }, source, reconcile) => {
+		do: ({ get, set }, source, coWrite) => {
 			validateEditorSourceStructure(source)
 
 			const oldAxisIds = get(axisIdsAtom)
@@ -4383,7 +4446,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			for (const entry of source.cmap) {
 				set(cmapGlyphAtoms, entry.codePoint, entry.glyphId)
 			}
-			reconcile?.(Object.freeze({ set }))
+			if (coWrite !== undefined) {
+				assertCallerOwnedLoadAtom(coWrite.atom)
+				if (isThenable(coWrite.value)) {
+					// Attach a rejection handler before aborting so accidental promises do
+					// not become unhandled rejections after the synchronous transaction.
+					void Promise.resolve(coWrite.value).catch(() => undefined)
+					throw new TypeError(
+						"A font-load co-write value cannot be promise-like.",
+					)
+				}
+				set(coWrite.atom, coWrite.value)
+			}
 		},
 	})
 
@@ -7902,9 +7976,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
 			},
 			markDocumentChanged,
-			load(source: EditorFontSource, reconcile?: FontLoadReconcile): void {
+			load<Value>(
+				source: EditorFontSource,
+				coWrite?: FontLoadCoWrite<Value>,
+			): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)
-				runReplaceFont(source, reconcile)
+				runReplaceFont(source, coWrite)
 				const nextGlyphIds = silo.getState(glyphIdsAtom)
 				const nextGlyphIdSet = new Set(nextGlyphIds)
 				for (const glyphId of previousGlyphIds) {
