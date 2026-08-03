@@ -153,6 +153,27 @@ describe("font editor state", () => {
 		unsubscribeMetric()
 	})
 
+	it("preserves writable selector-family geometry facades", () => {
+		const editor = loaded("state/geometry-facades")
+		const point = firstPoint(editor, blackMasterId)
+		const pointKey = [blackMasterId, oGlyphId, point.id] as const
+		const layerKey = [blackMasterId, oGlyphId] as const
+		const nextPosition = { x: point.x + 3, y: point.y - 4 }
+
+		expect(editor.atoms.advanceWidth.type).toBe("writable_pure_selector_family")
+		expect(editor.atoms.pointPosition.type).toBe(
+			"writable_pure_selector_family",
+		)
+		editor.silo.setState(editor.atoms.pointPosition, pointKey, nextPosition)
+		editor.silo.setState(editor.atoms.advanceWidth, layerKey, 777)
+
+		expect(editor.silo.getState(editor.atoms.pointPosition, pointKey)).toBe(
+			nextPosition,
+		)
+		expect(Object.isFrozen(nextPosition)).toBe(true)
+		expect(editor.silo.getState(editor.atoms.advanceWidth, layerKey)).toBe(777)
+	})
+
 	it("advances revision inside direct core transactions", () => {
 		const editor = loaded("state/direct-transaction-revision")
 		const point = firstPoint(editor, blackMasterId)
@@ -220,6 +241,94 @@ describe("font editor state", () => {
 		)
 		expect(restoredFirst).toEqual(first)
 		expect(restoredSecond).toEqual(second)
+	})
+
+	it("clears glyph and kerning histories after whole-document replacement", () => {
+		const editor = loaded("state/replacement-history")
+		const point = firstPoint(editor, blackMasterId)
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 23, y: point.y }],
+		})
+		editor.actions.setKerningPair({
+			left: oGlyphId,
+			right: oGlyphId,
+			value: -20,
+		})
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 1, length: 1 })
+		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+
+		editor.actions.load(makeGeometricOEditorFont())
+		const replacementPoint = firstPoint(editor, blackMasterId)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 0, length: 0 })
+		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
+			at: 0,
+			length: 0,
+		})
+
+		editor.undo(oGlyphId)
+		editor.actions.undoKerning()
+		expect(firstPoint(editor, blackMasterId)).toEqual(replacementPoint)
+		expect(editor.silo.getState(editor.atoms.kerning)).toEqual([])
+	})
+
+	it("does not revise or record explicit no-op transactions", () => {
+		const editor = loaded("state/explicit-noops")
+		const glyph = editor.read.editorGlyphSource(oGlyphId)
+		const layer = glyph?.layers.find(
+			(candidate) => candidate.masterId === blackMasterId,
+		)
+		const contour = layer?.contours[0]
+		const first = contour?.points[0]
+		if (layer === undefined || contour === undefined || first === undefined) {
+			throw new Error("Fixture contour is missing.")
+		}
+		const singleContourId = "contour:single-noop" as const
+		const singlePointId = "point:single-noop" as const
+		editor.actions.createContour({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			contourId: singleContourId,
+			point: { id: singlePointId, mode: "hard" },
+			coordinates: [{ masterId: blackMasterId, x: 10, y: 20 }],
+		})
+		editor.clearHistory(oGlyphId)
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const history = editor.silo.inspectTimeline(
+			editor.glyphHistoryTimelines,
+			oGlyphId,
+		)
+
+		editor.silo.runTransaction(editor.transactions.reverseContour)({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			contourId: singleContourId,
+		})
+		editor.silo.runTransaction(editor.transactions.makeNodeFirst)({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			contourId: contour.id,
+			pointId: first.id,
+		})
+		editor.silo.runTransaction(editor.transactions.reorderContour)({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			contourId: contour.id,
+			toIndex: layer.contours.indexOf(contour),
+		})
+
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual(history)
 	})
 
 	it("changes node behavior only in the requested master", () => {

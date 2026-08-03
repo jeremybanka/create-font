@@ -84,6 +84,13 @@ inside the same atomic commit, so direct transaction callers cannot leave those
 projections stale. Imperative atom writes outside core transactions must call
 `markDocumentChanged` after completing their logical edit.
 
+Whole-document replacement is deliberately available through `actions.load`
+rather than the public transaction collection. Loading clears each surviving
+glyph history, disposes histories for removed glyphs, and clears kerning history
+after the atomic state replacement. A raw transaction cannot perform that
+timeline lifecycle safely, so consumers that previously ran
+`transactions.replaceFont` should call `actions.load` instead.
+
 ### Remote source cache
 
 `createRemoteFontSourceState` is the RPC-facing companion to the hot editor
