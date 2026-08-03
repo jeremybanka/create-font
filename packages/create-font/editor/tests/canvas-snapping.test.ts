@@ -88,6 +88,14 @@ describe("canvas snapping", () => {
 		expect(position).toEqual({ x: 10, y: 20 })
 		expect(drag.lastRawDelta).toBeNull()
 		expect(drag.joinCandidate).toBeNull()
+
+		position = { x: 80, y: 90 }
+		drag.lastRawDelta = { x: 70, y: 70 }
+		drag.joinCandidate = { pointId: "point:target" }
+		finalizeGroupDragPreview(drag, false)
+		expect(position).toEqual({ x: 80, y: 90 })
+		expect(drag.lastRawDelta).toBeNull()
+		expect(drag.joinCandidate).toBeNull()
 	})
 
 	it.each([
@@ -510,6 +518,9 @@ describe("canvas snapping", () => {
 			-707.1067811865474, -707.1067811865474, 707.1067811865474,
 			707.1067811865474,
 		])
+		expect(
+			projectionGuidePoints({ ...snap, neighbor: snap.origin }, 1_000),
+		).toEqual([0, 0, 0, 0])
 	})
 
 	it("snaps group edges and centers independently", () => {

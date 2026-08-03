@@ -34,7 +34,6 @@ jobs:
         run: >-
           tar -czf "$RUNNER_TEMP/node-package-artifacts.tgz"
           apps/*/dist
-          packages/*/dist
           packages/*/*/dist
           packages/dprint-plugin-fea/plugin.wasm
           packages/dprint-plugin-fea/manifest.json
@@ -48,11 +47,13 @@ jobs:
 
   node-shared-foundations:
     name: Foundations
+    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
       - run: node scripts/node-test-shards.ts shared-foundations
 
   node-feature-syntax-core:
@@ -92,11 +93,13 @@ jobs:
 
   node-editor:
     name: Editor
+    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-artifacts
       - run: node scripts/node-test-shards.ts editor
 
   node-design-application:

@@ -158,6 +158,18 @@ describe("canvas hit testing", () => {
 		expect(nearestEditorSegmentHit(contours, { x: 50, y: 12.5 }, 2)).toBeNull()
 	})
 
+	it("rejects invalid screen metrics and ignores contours without segments", () => {
+		expect(nearestEditorSegmentHit(contours, { x: 50, y: 0 }, 0)).toBeNull()
+		expect(nearestEditorSegmentHit(contours, { x: 50, y: 0 }, 1, -1)).toBeNull()
+		expect(
+			nearestEditorSegmentHit(
+				[{ id: contourId("empty"), closed: false, nodes: [] }],
+				{ x: 0, y: 0 },
+				1,
+			),
+		).toBeNull()
+	})
+
 	it("uses contour IDs instead of render order to break path ties", () => {
 		const line = (id: string, y: number): EditorCanvasContour => ({
 			id: contourId(id),

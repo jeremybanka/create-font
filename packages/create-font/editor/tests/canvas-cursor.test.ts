@@ -16,6 +16,7 @@ describe("transform handle cursors", () => {
 		expect(transformHandleCursor("north-east")).toBe("nesw-resize")
 		expect(transformHandleCursor("south-west")).toBe("nesw-resize")
 		expect(transformHandleCursor("inside")).toBe("default")
+		expect(transformHandleCursor("rotation")).toBe("grab")
 	})
 
 	it("re-exports the shared tool cursor through a transform-safe binding", () => {
