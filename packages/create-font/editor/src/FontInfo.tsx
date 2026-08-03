@@ -4,10 +4,10 @@ import {
 	type EditorFontSource,
 	type VerticalAlignmentMetricId,
 } from "@create-font/states"
+import { useO } from "atom.io/react"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontInfo.module.css"
 import { NumericInput } from "@create-art/editor"
-import { useO } from "./state-hooks.ts"
 
 export interface FontInfoProps {
 	readonly workspace: EditorWorkspace

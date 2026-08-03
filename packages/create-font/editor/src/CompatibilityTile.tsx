@@ -1,11 +1,11 @@
 import type { ContourId, EditorLayerNode, MasterId } from "@create-font/states"
+import { useI, useO } from "atom.io/react"
 import type * as React from "react"
 import { useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { editorContourToPath } from "./geometry.ts"
 import { contourSelectionTargets, selectionKey } from "./outline-selection.ts"
-import { useI, useO } from "./state-hooks.ts"
 import { compatibilityPathColor } from "./visual-debug.ts"
 import css from "./CompatibilityTile.module.css"
 

@@ -135,6 +135,7 @@ describe("editor tools and hotkeys", () => {
 
 	it("reverses open paths and remaps handle selection through history", () => {
 		const reverseContour = vi.fn()
+		const markDocumentChanged = vi.fn()
 		const setState = vi.fn()
 		const selectionToken = Symbol("selection")
 		const context = {
@@ -164,7 +165,7 @@ describe("editor tools and hotkeys", () => {
 			},
 			workspace: {
 				font: {
-					actions: { reverseContour },
+					actions: { markDocumentChanged, reverseContour },
 					silo: { setState },
 				},
 				ui: { selection: selectionToken },
@@ -202,6 +203,7 @@ describe("editor tools and hotkeys", () => {
 			selection: [{ kind: "handle", pointId: "point:a", handle: "incoming" }],
 		})
 		expect(redo).toHaveBeenCalledOnce()
+		expect(markDocumentChanged).toHaveBeenCalledTimes(2)
 		expect(setState).toHaveBeenLastCalledWith(selectionToken, [
 			{ kind: "handle", pointId: "point:a", handle: "outgoing" },
 		])
@@ -395,9 +397,10 @@ describe("editor tools and hotkeys", () => {
 	it("delegates history commands to the controls returned by useTL", () => {
 		const undo = vi.fn()
 		const redo = vi.fn()
+		const markDocumentChanged = vi.fn()
 		const context = {
 			activeGlyphId: "unused",
-			workspace: null,
+			workspace: { font: { actions: { markDocumentChanged } } },
 			history: { at: 1, length: 2, undo, redo, clear: vi.fn() },
 		} as unknown as Parameters<(typeof TOOLS)["UNDO"]["do"]>[0]
 
@@ -406,6 +409,7 @@ describe("editor tools and hotkeys", () => {
 
 		expect(undo).toHaveBeenCalledOnce()
 		expect(redo).toHaveBeenCalledOnce()
+		expect(markDocumentChanged).toHaveBeenCalledTimes(2)
 	})
 
 	it("prefers user-agent client hints and falls back to navigator.platform", () => {

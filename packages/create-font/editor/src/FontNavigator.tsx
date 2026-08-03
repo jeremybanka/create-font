@@ -1,6 +1,7 @@
+import { useO } from "atom.io/react"
+
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
-import { useO } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
 	readonly workspace: EditorWorkspace

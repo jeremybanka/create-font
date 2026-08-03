@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
-import { StoreProvider, useO } from "atom.io/react"
+import { StoreProvider, useO, useTL } from "atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
+import { useMemo } from "react"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { useOptionalTL } from "../src/state-hooks.ts"
 
 const hosts: HTMLElement[] = []
 
@@ -69,13 +69,22 @@ describe("atom.io React integration", () => {
 		)
 		const memberCount = workspace.font.silo.store.timelines.size
 
-		function Harness() {
-			useOptionalTL(
-				workspace.font.silo,
-				workspace.font.glyphHistoryTimelines,
-				null,
-				workspace.inactiveGlyphTimeline,
+		function Harness({
+			activeGlyphId,
+		}: {
+			readonly activeGlyphId: typeof oGlyphId | null
+		}) {
+			const activeGlyphTimeline = useMemo(
+				() =>
+					activeGlyphId === null
+						? workspace.inactiveGlyphTimeline
+						: workspace.font.silo.findTimeline(
+								workspace.font.glyphHistoryTimelines,
+								activeGlyphId,
+							),
+				[activeGlyphId, workspace],
 			)
+			useTL(activeGlyphTimeline)
 			return null
 		}
 		const host = document.createElement("div")
@@ -85,7 +94,7 @@ describe("atom.io React integration", () => {
 			render(
 				h(StoreProvider, {
 					store: workspace.font.silo.store,
-					children: h(Harness, {}),
+					children: h(Harness, { activeGlyphId: null }),
 				}),
 				host,
 			),

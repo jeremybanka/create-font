@@ -1,5 +1,6 @@
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useO, useTL } from "atom.io/react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
 	assignPaletteCommandToHotbar,
@@ -39,7 +40,6 @@ import {
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
-import { useO, useOptionalTL, useTimeline } from "./state-hooks.ts"
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,
@@ -100,17 +100,18 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
-	const glyphHistory = useOptionalTL(
-		workspace.font.silo,
-		workspace.font.glyphHistoryTimelines,
-		activeGlyphId,
-		workspace.inactiveGlyphTimeline,
-		workspace.font.actions.markDocumentChanged,
+	const activeGlyphTimeline = useMemo(
+		() =>
+			activeGlyphId === null
+				? workspace.inactiveGlyphTimeline
+				: workspace.font.silo.findTimeline(
+						workspace.font.glyphHistoryTimelines,
+						activeGlyphId,
+					),
+		[activeGlyphId, workspace],
 	)
-	const kerningHistory = useTimeline(
-		workspace.font.kerningTimeline,
-		workspace.font.actions.markDocumentChanged,
-	)
+	const glyphHistory = useTL(activeGlyphTimeline)
+	const kerningHistory = useTL(workspace.font.kerningTimeline)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
 	const history = activeKerningPair === null ? glyphHistory : kerningHistory
 	const toolContext: ToolContext = {

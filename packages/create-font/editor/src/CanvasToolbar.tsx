@@ -1,10 +1,10 @@
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
+import { useI, useO } from "atom.io/react"
 import { useId } from "react"
 
 import { zoomCanvasView } from "./canvas-view.ts"
 import css from "./CanvasToolbar.module.css"
 import type { EditorWorkspace } from "./editor-workspace.ts"
-import { useI, useO } from "./state-hooks.ts"
 
 const svg = {
 	DotsHorizontal: DotsHorizontalIcon,

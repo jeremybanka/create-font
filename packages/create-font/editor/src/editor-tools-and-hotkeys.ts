@@ -1,4 +1,5 @@
 import type { GlyphId, MasterId } from "@create-font/states"
+import type { TimelineMeta } from "atom.io/react"
 import { useEffect } from "react"
 
 import type { EditorIconName } from "@create-art/editor"
@@ -16,7 +17,6 @@ import {
 	scaleSelectionControls,
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
-import type { TimelineMeta } from "./state-hooks.ts"
 
 type Alphabetical =
 	| "a"
@@ -407,6 +407,7 @@ export const TOOLS = {
 		do: (context) => {
 			const remap = directionChangeAt(context, context.history.at)
 			context.history.undo()
+			context.workspace.font.actions.markDocumentChanged()
 			if (remap) remapSelectionHandles(context)
 		},
 	},
@@ -421,6 +422,7 @@ export const TOOLS = {
 		do: (context) => {
 			const remap = directionChangeAt(context, context.history.at + 1)
 			context.history.redo()
+			context.workspace.font.actions.markDocumentChanged()
 			if (remap) remapSelectionHandles(context)
 		},
 	},
