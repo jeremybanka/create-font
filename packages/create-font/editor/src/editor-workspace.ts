@@ -234,10 +234,11 @@ export function createEditorWorkspace(
 			activeTool: "select",
 			selectedRuleIds: Object.freeze([]),
 			previewCoordinates: Object.freeze(
-				Object.fromEntries(document.axes.map((axis) => [axis.id, axis.default])),
+				Object.fromEntries(
+					document.axes.map((axis) => [axis.id, axis.default]),
+				),
 			),
-			pathname:
-				typeof window === "undefined" ? "/" : window.location.pathname,
+			pathname: typeof window === "undefined" ? "/" : window.location.pathname,
 		}),
 	})
 	const selectedGlyphIdSelector = font.silo.selector<GlyphId | null>({
@@ -261,7 +262,9 @@ export function createEditorWorkspace(
 			set(interactionAtom, { ...get(interactionAtom), comparisonMasterId })
 		},
 	})
-	const selectionSelector = font.silo.selector<readonly EditorSelectionTarget[]>({
+	const selectionSelector = font.silo.selector<
+		readonly EditorSelectionTarget[]
+	>({
 		key: "selection",
 		get: ({ get }) => get(interactionAtom).selection,
 		set: ({ get, set }, selection) => {
@@ -309,13 +312,15 @@ export function createEditorWorkspace(
 			})
 		},
 	})
-	const textSelectionRangeSelector = font.silo.selector<TextareaSelectionRange>({
-		key: "textSelectionRange",
-		get: ({ get }) => get(interactionAtom).textSelectionRange,
-		set: ({ get, set }, textSelectionRange) => {
-			set(interactionAtom, { ...get(interactionAtom), textSelectionRange })
+	const textSelectionRangeSelector = font.silo.selector<TextareaSelectionRange>(
+		{
+			key: "textSelectionRange",
+			get: ({ get }) => get(interactionAtom).textSelectionRange,
+			set: ({ get, set }, textSelectionRange) => {
+				set(interactionAtom, { ...get(interactionAtom), textSelectionRange })
+			},
 		},
-	})
+	)
 	const editingTextIndexSelector = font.silo.selector<number | null>({
 		key: "editingTextIndex",
 		get: ({ get }) => get(interactionAtom).editingTextIndex,
@@ -330,7 +335,10 @@ export function createEditorWorkspace(
 			set(interactionAtom, { ...get(interactionAtom), activeTool })
 		},
 	})
-	const previewCoordinateSelectors = font.silo.selectorFamily<number | null, AxisId>({
+	const previewCoordinateSelectors = font.silo.selectorFamily<
+		number | null,
+		AxisId
+	>({
 		key: "previewCoordinate",
 		get:
 			(axisId) =>
@@ -792,8 +800,10 @@ export function createEditorWorkspace(
 	const activeGlyphIdSelector = font.silo.selector<GlyphId | null>({
 		key: "activeGlyphId",
 		get: ({ get }) => {
-			if (get(editingTextIndexSelector) !== null) return get(selectedGlyphIdSelector)
-			if (get(routeNameSelector) !== "canvas") return get(selectedGlyphIdSelector)
+			if (get(editingTextIndexSelector) !== null)
+				return get(selectedGlyphIdSelector)
+			if (get(routeNameSelector) !== "canvas")
+				return get(selectedGlyphIdSelector)
 			const caretIndex = get(caretIndexSelector)
 			// Glyph geometry changes can invalidate the preview projection without
 			// changing which glyph contains the caret. Subscribe only to inputs that
@@ -823,8 +833,8 @@ export function createEditorWorkspace(
 			return nextGlyph?.glyphId ?? null
 		},
 	})
-	const activeGlyphSourceSelector = font.silo.selector<EditorGlyphSource | null>(
-		{
+	const activeGlyphSourceSelector =
+		font.silo.selector<EditorGlyphSource | null>({
 			key: "activeGlyphSource",
 			get: ({ get }) => {
 				const glyphId = get(activeGlyphIdSelector)
@@ -832,22 +842,20 @@ export function createEditorWorkspace(
 					? null
 					: get(font.selectors.editorGlyphSource, glyphId)
 			},
-		},
-	)
-	const activeGlyphCompatibilitySelector = font.silo.selector<
-		GlyphCompatibility | null
-	>({
-		key: "activeGlyphCompatibility",
-		get: ({ get }) => {
-			const glyphId = get(activeGlyphIdSelector)
-			if (glyphId === null) return null
-			return get(font.selectors.glyphCompatibility, [
-				get(comparisonMasterIdSelector),
-				get(activeMasterIdSelector),
-				glyphId,
-			])
-		},
-	})
+		})
+	const activeGlyphCompatibilitySelector =
+		font.silo.selector<GlyphCompatibility | null>({
+			key: "activeGlyphCompatibility",
+			get: ({ get }) => {
+				const glyphId = get(activeGlyphIdSelector)
+				if (glyphId === null) return null
+				return get(font.selectors.glyphCompatibility, [
+					get(comparisonMasterIdSelector),
+					get(activeMasterIdSelector),
+					glyphId,
+				])
+			},
+		})
 	const activeKerningPairSelector = font.silo.selector<Readonly<{
 		left: GlyphId
 		right: GlyphId
@@ -1076,7 +1084,9 @@ export function createEditorWorkspace(
 		if (currentDocument === null) return
 		const master = currentDocument.masters.find((item) => item.id === masterId)
 		if (master === undefined) return
-		const currentComparisonMasterId = font.silo.getState(comparisonMasterIdSelector)
+		const currentComparisonMasterId = font.silo.getState(
+			comparisonMasterIdSelector,
+		)
 		const comparisonMasterId =
 			currentComparisonMasterId === masterId
 				? masterId === currentDocument.defaultMasterId

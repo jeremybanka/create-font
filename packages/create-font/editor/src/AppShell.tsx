@@ -39,11 +39,7 @@ import {
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
-import {
-	useO,
-	useOptionalTL,
-	useTimeline,
-} from "./state-hooks.ts"
+import { useO, useOptionalTL, useTimeline } from "./state-hooks.ts"
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,

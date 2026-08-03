@@ -159,7 +159,8 @@ function makeDisjointReplacementFont(): EditorFontSource {
 		defaultMasterId: replacementDefaultMasterId,
 		masters: source.masters.map((master) => {
 			const id = masterIdByOld.get(master.id)
-			if (id === undefined) throw new Error("Fixture master mapping is missing.")
+			if (id === undefined)
+				throw new Error("Fixture master mapping is missing.")
 			return master.kind === "default"
 				? { ...master, id }
 				: {
@@ -195,7 +196,8 @@ function makeDisjointReplacementFont(): EditorFontSource {
 		}),
 		cmap: source.cmap.map((entry) => {
 			const glyphId = glyphIdByOld.get(entry.glyphId)
-			if (glyphId === undefined) throw new Error("Fixture cmap mapping is missing.")
+			if (glyphId === undefined)
+				throw new Error("Fixture cmap mapping is missing.")
 			return { ...entry, glyphId }
 		}),
 		kerning: (source.kerning ?? []).map((pair) => {
@@ -274,10 +276,10 @@ describe("editor workspace", () => {
 		)
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		workspace.font.silo.setState(workspace.ui.editingTextIndex, 2)
-		const point = workspace.font
-			.read.editorGlyphSource(oGlyphId)
-			?.layers.find((layer) => layer.masterId === blackMasterId)
-			?.contours[0]?.points[0]
+		const point = workspace.font.read
+			.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === blackMasterId)?.contours[0]
+			?.points[0]
 		if (point === undefined) throw new Error("Fixture point is missing.")
 		const removedGlyphTimeline = workspace.font.silo.findTimeline(
 			workspace.font.glyphHistoryTimelines,
@@ -308,7 +310,9 @@ describe("editor workspace", () => {
 
 		const readSnapshot = () => ({
 			glyphIds: workspace.font.silo.getState(workspace.font.atoms.glyphIds),
-			selectedGlyphId: workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+			selectedGlyphId: workspace.font.silo.getState(
+				workspace.ui.selectedGlyphId,
+			),
 			activeMasterId: workspace.font.silo.getState(workspace.ui.activeMasterId),
 			comparisonMasterId: workspace.font.silo.getState(
 				workspace.ui.comparisonMasterId,
@@ -382,10 +386,7 @@ describe("editor workspace", () => {
 			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
 		).toEqual({ at: 0, length: 0 })
 		expect(
-			workspace.font.silo.getState(
-				workspace.ui.previewCoordinate,
-				staleAxisId,
-			),
+			workspace.font.silo.getState(workspace.ui.previewCoordinate, staleAxisId),
 		).toBeNull()
 	})
 

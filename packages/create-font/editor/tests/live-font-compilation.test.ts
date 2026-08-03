@@ -101,9 +101,9 @@ describe("live font compilation", () => {
 		try {
 			const workspace = createEditorWorkspace()
 			const release = workspace.liveFont.retain()
-			expect(workspace.font.silo.getState(workspace.liveFont.compilation)).toMatchObject(
-				{ status: "compiling", generation: 1 },
-			)
+			expect(
+				workspace.font.silo.getState(workspace.liveFont.compilation),
+			).toMatchObject({ status: "compiling", generation: 1 })
 
 			workspace.dispose()
 			workspace.dispose()

@@ -1,8 +1,4 @@
-import type {
-	Silo,
-	TimelineFamilyToken,
-	TimelineToken,
-} from "atom.io"
+import type { Silo, TimelineFamilyToken, TimelineToken } from "atom.io"
 import type { Canonical } from "atom.io/foundations/canonical"
 import { useI, useO, useTL as useAtomTimeline } from "atom.io/react"
 import { useMemo } from "react"
@@ -83,14 +79,15 @@ export function useOptionalTL<K extends Canonical>(
 	onChange?: () => void,
 ): TimelineMeta {
 	const token = useMemo(
-		() =>
-			key === null ? inactiveTimeline : silo.findTimeline(family, key),
+		() => (key === null ? inactiveTimeline : silo.findTimeline(family, key)),
 		[family, inactiveTimeline, key, silo],
 	)
 	const timeline = useAtomTimeline(token)
 	return useMemo(
 		() =>
-			key === null ? EMPTY_TIMELINE : withChangeNotification(timeline, onChange),
+			key === null
+				? EMPTY_TIMELINE
+				: withChangeNotification(timeline, onChange),
 		[key, onChange, timeline],
 	)
 }
