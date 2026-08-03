@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/server",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"description": "Elysia workspace RPC contracts and Eden client for create-font",
 	"license": "MPL-2.0",
 	"repository": {

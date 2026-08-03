@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/source-rpc",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Revisioned JSON source workspace contracts, RPC, and synchronization primitives",
 	"license": "MPL-2.0",
 	"repository": {

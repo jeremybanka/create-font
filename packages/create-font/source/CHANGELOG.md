@@ -1,5 +1,16 @@
 # @create-font/source
 
+## 0.2.8
+
+### Patch Changes
+
+- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
+- Updated dependencies [8188be2]
+- Updated dependencies [c852f02]
+  - @create-font/fea-rs-wasm@0.1.2
+  - @create-art/source-format@0.1.2
+  - @create-font/states@0.6.8
+
 ## 0.2.7
 
 ### Patch Changes

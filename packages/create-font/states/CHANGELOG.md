@@ -1,5 +1,19 @@
 # @create-font/states
 
+## 0.6.8
+
+### Patch Changes
+
+- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
+- Updated dependencies [8ed890a]
+- Updated dependencies [c852f02]
+- Updated dependencies [151d54a]
+- Updated dependencies [3cbad6c]
+- Updated dependencies [7471aca]
+  - @create-art/vector-geometry@0.0.2
+  - @create-font/server@0.2.3
+  - @create-font/target@0.0.3
+
 ## 0.6.7
 
 ### Patch Changes

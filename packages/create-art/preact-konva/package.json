@@ -1,8 +1,13 @@
 {
 	"name": "@create-art/preact-konva",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Small, native Preact bindings for the Konva scene graph",
-	"keywords": ["canvas", "konva", "preact", "renderer"],
+	"keywords": [
+		"canvas",
+		"konva",
+		"preact",
+		"renderer"
+	],
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",

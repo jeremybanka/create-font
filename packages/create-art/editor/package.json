@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/editor",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Shared editor controls, tiling, canvas, and vector interaction foundations for create-art applications",
 	"license": "AGPL-3.0-or-later",
 	"repository": {
@@ -9,8 +9,14 @@
 		"directory": "packages/create-art/editor"
 	},
 	"type": "module",
-	"publishConfig": { "access": "public" },
-	"files": ["dist", "src", "OUTPUT-EXCEPTION.txt"],
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"src",
+		"OUTPUT-EXCEPTION.txt"
+	],
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -39,5 +45,7 @@
 		"vite-plus": "0.2.7",
 		"vitest": "4.1.10"
 	},
-	"engines": { "node": "26.5.1" }
+	"engines": {
+		"node": "26.5.1"
+	}
 }
