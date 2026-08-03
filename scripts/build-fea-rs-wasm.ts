@@ -11,7 +11,12 @@ const targetDirectory = join(
 	"wasm32-unknown-unknown",
 	"release",
 )
-const packageDirectory = join(workspaceRoot, "packages", "fea-rs-wasm")
+const packageDirectory = join(
+	workspaceRoot,
+	"packages",
+	"create-font",
+	"fea-rs-wasm",
+)
 const distributionDirectory = join(packageDirectory, "dist")
 const bindingsName = "create_font_fea_rs_wasm"
 const packageManifest = JSON.parse(
