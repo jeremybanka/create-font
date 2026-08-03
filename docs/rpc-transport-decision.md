@@ -16,9 +16,9 @@ migration cost.
 
 The production workspace boundary currently contains:
 
-- 11 Elysia routes in `packages/server/src/rpc.ts`: three general HTTP
+- 11 Elysia routes in `packages/create-font/server/src/rpc.ts`: three general HTTP
   operations, seven source HTTP operations, and one source-event WebSocket;
-- one 11-line Eden client factory in `packages/server/src/client.ts`; and
+- one 11-line Eden client factory in `packages/create-font/server/src/client.ts`; and
 - seven typed Eden call sites in the 640-line browser bootstrap.
 
 The runtime smoke test executes the shipped contract under Node and Bun. It
@@ -28,7 +28,7 @@ delivers the next event to both clients.
 
 ## tRPC prototype
 
-`packages/server/tests/trpc-prototype.test.ts` is an executable, test-only tRPC
+`packages/create-font/server/tests/trpc-prototype.test.ts` is an executable, test-only tRPC
 11 prototype using its standalone Node HTTP adapter and SSE subscriptions. Its
 166 lines include the router, server lifecycle, raw HTTP/SSE clients, and test
 harness. It demonstrates:

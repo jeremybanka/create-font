@@ -226,9 +226,10 @@ suite under Node, and the development supervisor uses Node child processes.
 The supported Node and Bun boundaries are documented in
 [runtime portability](runtime-portability.md), and the retained RPC transport is
 documented in [the transport decision](rpc-transport-decision.md).
-The private `@create-font/editor` package exports its Preact application root,
-which the `create-font` browser entry serves through Vite during development
-and compiled assets in production. The application discovers
+The `@create-font/editor` package owns the font-specific Preact application,
+while `@create-art/editor` owns editor foundations shared with create-design.
+The `create-font` browser entry serves the font editor through Vite during
+development and compiled assets in production. The application discovers
 `fonts/*/create-font.json`, serves
 the selected project through a filesystem-backed source service, hydrates the
 browser from individual source units, and persists coordinated edits through

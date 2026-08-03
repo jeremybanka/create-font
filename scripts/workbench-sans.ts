@@ -6,12 +6,12 @@ import type {
 	EditorGlyphSource,
 	GlyphId,
 	MasterId,
-} from "../packages/states/src/index.ts"
+} from "../packages/create-font/states/src/index.ts"
 import {
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitEditorFontSource,
-} from "../packages/font-source/src/index.ts"
+} from "../packages/create-font/source/src/index.ts"
 
 type Coordinate = Readonly<{ x: number; y: number }>
 type Stroke = readonly [Coordinate, Coordinate]

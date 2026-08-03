@@ -1,0 +1,38 @@
+{
+	"name": "@create-design/pdf",
+	"version": "0.1.0",
+	"description": "Headless PDF projection, preflight, and serialization for create-design documents",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-design/pdf"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"publishConfig": { "access": "public" },
+	"files": ["dist", "src", "README.md"],
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"profile": "node ./scripts/profile-pdf-compilation.ts",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"@create-design/model": "workspace:*",
+		"@create-design/source": "workspace:*",
+		"mondrian.pdf": "0.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "25.9.5",
+		"vitest": "4.1.10"
+	},
+	"engines": { "node": ">=22.0.0" }
+}

@@ -1,0 +1,50 @@
+{
+	"name": "@create-art/preact-konva",
+	"version": "0.1.1",
+	"description": "Small, native Preact bindings for the Konva scene graph",
+	"keywords": ["canvas", "konva", "preact", "renderer"],
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-art/preact-konva"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"README.md",
+		"src"
+	],
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"dev": "vp pack --watch --no-clean",
+		"test": "vp test"
+	},
+	"peerDependencies": {
+		"konva": "^10.3.0",
+		"preact": "^10.29.0"
+	},
+	"devDependencies": {
+		"konva": "10.3.0",
+		"preact": "10.29.8",
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

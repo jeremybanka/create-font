@@ -1,4 +1,8 @@
-# create-font
+# create-font workspace
+
+This repository contains the sibling create-font and create-design products,
+along with the create-art libraries they share. The repository name predates
+create-design and still reflects its create-font origin.
 
 create-font is a source-oriented font toolchain with a browser-based visual editor.
 It is intended to be installed in a font repository as an npm dev dependency,
@@ -31,7 +35,13 @@ a sandboxed module format such as WebAssembly.
 
 Canonical design data follows the same source-oriented model below
 `designs/<project>/`. The checked-in `designs/workbench-poster` project is the
-geometric poster served by create-design during development.
+geometric poster served by create-design during development. Its headless PDF
+export uses the same projection and preflight as the browser:
+
+```sh
+create-design export designs/workbench-poster \
+  --output artifacts/workbench-poster.pdf
+```
 
 See [the architecture](docs/architecture.md) for the durable system boundaries
 and [the roadmap](docs/roadmap.md) for the path from the current libraries to
@@ -39,26 +49,43 @@ the complete toolchain.
 
 ## Packages
 
-- [`create-font`](packages/create-font/README.md) provides the `create-font`
+Applications live under `apps/`. Namespaced libraries use
+`packages/<npm-scope>/<package-name>`, so filesystem and npm ownership match
+directly. Unscoped tooling and framework-integration packages remain directly
+under `packages/`.
+
+- [`create-design`](apps/create-design/README.md) provides the design CLI,
+  source workspace server, and application composition.
+- [`@create-design/editor`](packages/create-design/editor/README.md) owns the
+  create-design browser editor and document interaction model.
+- [`@create-design/model`](packages/create-design/model/README.md) owns headless
+  design geometry, color, artboard, and coordinate operations.
+- [`@create-design/pdf`](packages/create-design/pdf/README.md) owns PDF
+  projection, preflight, incremental compilation, and serialization.
+- [`create-font`](apps/create-font/README.md) provides the `create-font`
   initializer, the repository-local `font` CLI, and the Elysia workspace
   application.
-- [`@create-font/server`](packages/server/README.md) owns the reusable workspace
+- [`@create-font/server`](packages/create-font/server/README.md) owns the reusable workspace
   RPC contract, Elysia routes, and Eden client typing.
-- [`@create-font/target`](packages/target/README.md) is the validated, logical-SFNT
+- [`@create-font/target`](packages/create-font/target/README.md) is the validated, logical-SFNT
   compilation target.
-- [`@create-font/states`](packages/states/README.md) is the atom.io editor model
+- [`@create-font/states`](packages/create-font/states/README.md) is the atom.io editor model
   that incrementally projects into that IR and hydrates remote source units.
-- [`@create-font/source`](packages/font-source/README.md) defines the versioned JSON
+- [`@create-font/source`](packages/create-font/source/README.md) defines the versioned JSON
   directory contract, per-file Zod schemas, and deterministic codecs.
-- [`@create-art/source-format`](packages/source-format/README.md) publishes the
+- [`@create-art/source-format`](packages/create-art/source-format/README.md) publishes the
   pinned canonical formatter and dprint policy shared by generators,
   application writes, editor commands, and CI.
-- [`@create-font/editor`](packages/editor/README.md) is the Preact and Konva font
+- [`@create-font/editor`](packages/create-font/editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
+- [`@create-art/editor`](packages/create-art/editor/README.md) owns product-neutral editor
+  controls, tiling, canvas, vector interaction, and source review foundations.
+- [`@create-art/preact-konva`](packages/create-art/preact-konva) provides the shared Preact
+  bindings used by both product editors' Konva scenes.
 
-These packages are the current implementation layers. The `create-font`
-application composes the reusable server boundary with the browser entry that
-imports `EditorApplicationRoot` from `@create-font/editor`.
+These packages are the current implementation layers. Each application
+composes its source workspace server with the browser entry supplied by its
+product editor. Headless libraries never import an editor package.
 
 ## License policy
 
@@ -93,13 +120,14 @@ schemas and codecs. Its novel palette code does not become MPL-covered merely
 because it consumes that package. Independently implementing one of the
 documented source formats does not require using any repository code at all.
 
-All currently published packages use MPL-2.0 except the three application
+All currently published packages use MPL-2.0 except the application and editor
 packages named below. Package manifests and package-local `LICENSE` files state
 the boundary explicitly, including for transitive workspace dependencies.
 
 ### Application forks stay public
 
-`create-font`, `create-design`, and `@create-font/editor` are licensed under
+`create-font`, `create-design`, `@create-art/editor`, `@create-design/editor`,
+and `@create-font/editor` are licensed under
 [AGPL-3.0-or-later](LICENSES/AGPL-3.0-or-later.txt), with an
 [additional output permission](LICENSES/OUTPUT-EXCEPTION.txt). You may use,
 study, modify, redistribute, and sell them. If you distribute a modified

@@ -1,0 +1,49 @@
+{
+	"name": "@create-font/fea-rs-wasm",
+	"version": "0.1.1",
+	"description": "WebAssembly bindings for fea-rs and the create-font Adobe Feature File formatter",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-font/fea-rs-wasm"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"browser": "./dist/web/create_font_fea_rs_wasm.js",
+			"node": "./dist/node/create_font_fea_rs_wasm.js",
+			"types": "./dist/web/create_font_fea_rs_wasm.d.ts",
+			"default": "./dist/web/create_font_fea_rs_wasm.js"
+		},
+		"./web": {
+			"types": "./dist/web/create_font_fea_rs_wasm.d.ts",
+			"default": "./dist/web/create_font_fea_rs_wasm.js"
+		},
+		"./node": {
+			"types": "./dist/node/create_font_fea_rs_wasm.d.ts",
+			"default": "./dist/node/create_font_fea_rs_wasm.js"
+		},
+		"./manifest.json": "./dist/create-font-fea-rs-wasm.json",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "node ../../../scripts/build-fea-rs-wasm.ts",
+		"benchmark": "node ../../../scripts/benchmark-fea-rs-wasm.ts",
+		"test": "vp test"
+	},
+	"devDependencies": {
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

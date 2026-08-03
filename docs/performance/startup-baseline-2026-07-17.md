@@ -88,7 +88,7 @@ The reproducible profiler ran directly against `fonts/workbench-sans`, outside
 HTTP and the browser:
 
 ```sh
-bun packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
+bun apps/create-font/scripts/profile-source-service.ts fonts/workbench-sans
 ```
 
 It observed exactly 208 complete project loads: one during service
@@ -128,7 +128,7 @@ assembly, validation, cross-thread cloning, assets, or main rendering:
    `Promise.all`, but their resource durations form a near-linear staircase and
    consume about 92% of cold p50 time.
 2. `createFileSystemSourceService()` in
-   `packages/create-font/src/source-service.ts` sends every `readUnit` through one
+   `apps/create-font/src/source-service.ts` sends every `readUnit` through one
    `withLock` queue and calls `loadProject()` for that unit.
 3. `loadProjectDirectory()` walks, reads, parses, and assembles the complete
    project. The initial browser load therefore performs a full 206-file project
