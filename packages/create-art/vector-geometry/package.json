@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/vector-geometry",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "Deterministic, application-neutral vector geometry primitives",
 	"license": "MPL-2.0",
 	"repository": {

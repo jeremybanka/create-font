@@ -1,5 +1,11 @@
 # @create-font/target
 
+## 0.0.3
+
+### Patch Changes
+
+- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
+
 ## 0.0.2
 
 ### Patch Changes

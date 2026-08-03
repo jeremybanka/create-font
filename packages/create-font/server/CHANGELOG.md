@@ -1,5 +1,13 @@
 # @create-font/server
 
+## 0.2.3
+
+### Patch Changes
+
+- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
+- Updated dependencies [c852f02]
+  - @create-art/source-rpc@0.1.2
+
 ## 0.2.2
 
 ### Patch Changes

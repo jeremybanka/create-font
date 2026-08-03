@@ -1,6 +1,6 @@
-# @create-font/fea-rs-wasm
+# @create-art/editor
 
-## 0.1.2
+## 0.1.1
 
 ### Patch Changes
 
@@ -11,10 +11,6 @@
   canonical document initialization in the source package and extract headless
   design-model and PDF packages for browser and CLI consumers. Keep the
   fea-rs-wasm build and benchmark scripts runnable from their scoped directory.
-- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
-
-## 0.1.1
-
-### Patch Changes
-
-- 1856b23: Add WebAssembly bindings for the upstream fea-rs concrete syntax tree and the create-font Adobe Feature File formatter for Node and browsers.
+- Updated dependencies [8188be2]
+- Updated dependencies [c852f02]
+  - @create-art/preact-konva@0.2.0

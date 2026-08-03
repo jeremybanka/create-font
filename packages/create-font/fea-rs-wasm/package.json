@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/fea-rs-wasm",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "WebAssembly bindings for fea-rs and the create-font Adobe Feature File formatter",
 	"license": "MPL-2.0",
 	"repository": {

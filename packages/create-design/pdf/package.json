@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/pdf",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Headless PDF projection, preflight, and serialization for create-design documents",
 	"license": "MPL-2.0",
 	"repository": {
@@ -10,8 +10,14 @@
 	},
 	"type": "module",
 	"sideEffects": false,
-	"publishConfig": { "access": "public" },
-	"files": ["dist", "src", "README.md"],
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"src",
+		"README.md"
+	],
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -34,5 +40,7 @@
 		"@types/node": "25.9.5",
 		"vitest": "4.1.10"
 	},
-	"engines": { "node": ">=22.0.0" }
+	"engines": {
+		"node": ">=22.0.0"
+	}
 }

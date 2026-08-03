@@ -1,5 +1,32 @@
 # create-font
 
+## 0.3.15
+
+### Patch Changes
+
+- 8188be2: Separate the create-design browser editor from its CLI and server package,
+  move shared editor foundations under create-art ownership, and make font-owned
+  package directories explicit throughout the workspace. Move the product-neutral
+  Preact Konva bindings into the product-neutral `@create-art` scope. Put
+  canonical document initialization in the source package and extract headless
+  design-model and PDF packages for browser and CLI consumers. Keep the
+  fea-rs-wasm build and benchmark scripts runnable from their scoped directory.
+- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
+- Updated dependencies [7205533]
+- Updated dependencies [8188be2]
+- Updated dependencies [7390b70]
+- Updated dependencies [c852f02]
+- Updated dependencies [efd3b76]
+- Updated dependencies [dd3321b]
+  - @create-font/editor@0.8.0
+  - @create-font/fea-rs-wasm@0.1.2
+  - @create-art/source-format@0.1.2
+  - @create-art/source-rpc@0.1.2
+  - @create-font/server@0.2.3
+  - @create-font/source@0.2.8
+  - @create-font/states@0.6.8
+  - @create-font/target@0.0.3
+
 ## 0.3.14
 
 ### Patch Changes
