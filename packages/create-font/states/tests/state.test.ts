@@ -280,6 +280,90 @@ describe("font editor state", () => {
 		expect(editor.silo.getState(editor.atoms.kerning)).toEqual([])
 	})
 
+	it("publishes reconciled state coherently at one revision boundary", () => {
+		const editor = loaded("state/reconciled-load")
+		const externalAtom = editor.silo.atom<string>({
+			key: "reconciledSource",
+			default: "before",
+		})
+		const source = makeGeometricOEditorFont()
+		const replacement = {
+			...source,
+			names: { ...source.names, family: "Coherent Replacement" },
+		}
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const observations: {
+			readonly revision: number
+			readonly family: string | undefined
+			readonly external: string
+		}[] = []
+		const unsubscribe = editor.silo.subscribe(
+			editor.atoms.documentRevision,
+			() => {
+				observations.push({
+					revision: editor.silo.getState(editor.atoms.documentRevision),
+					family: editor.read.editorSource()?.names.family,
+					external: editor.silo.getState(externalAtom),
+				})
+			},
+		)
+
+		editor.actions.load(replacement, ({ set }) => {
+			set(externalAtom, "co-written")
+		})
+		unsubscribe()
+
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(
+			revision + 1,
+		)
+		expect(observations).toEqual([
+			{
+				revision: revision + 1,
+				family: "Coherent Replacement",
+				external: "co-written",
+			},
+		])
+	})
+
+	it("rolls back a failed load reconciliation without clearing histories", () => {
+		const editor = loaded("state/failed-reconciled-load")
+		const externalAtom = editor.silo.atom<string>({
+			key: "reconciledSource",
+			default: "before",
+		})
+		const point = firstPoint(editor, blackMasterId)
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 23, y: point.y }],
+		})
+		editor.actions.setKerningPair({
+			left: oGlyphId,
+			right: oGlyphId,
+			value: -20,
+		})
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const source = editor.read.editorSource()
+
+		expect(() =>
+			editor.actions.load(makeGeometricOEditorFont(), ({ set }) => {
+				set(externalAtom, "should roll back")
+				throw new Error("Reconciliation failed.")
+			}),
+		).toThrow("Reconciliation failed.")
+
+		expect(editor.silo.getState(externalAtom)).toBe("before")
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		expect(editor.read.editorSource()).toBe(source)
+		expect(
+			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 1, length: 1 })
+		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+	})
+
 	it("does not revise or record explicit no-op transactions", () => {
 		const editor = loaded("state/explicit-noops")
 		const glyph = editor.read.editorGlyphSource(oGlyphId)

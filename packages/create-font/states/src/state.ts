@@ -733,6 +733,17 @@ export interface CreateFontEditorStateOptions {
 	readonly isProduction?: boolean
 }
 
+/** The transaction-bound capability exposed while reconciling a font load. */
+export interface FontLoadWriter {
+	readonly set: WriterToolkit["set"]
+}
+
+/**
+ * Co-writes caller-owned atoms in the same commit as a whole-document load.
+ * Throwing aborts the replacement and every co-write.
+ */
+export type FontLoadReconcile = (writer: FontLoadWriter) => void
+
 function resultWithWarnings<Value>(
 	result: ProjectionResult<Value>,
 	warnings: readonly ProjectionWarning[],
@@ -4130,10 +4141,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	)
 
 	const replaceFontTransaction = revisionedTransaction<
-		(source: EditorFontSource) => void
+		(source: EditorFontSource, reconcile?: FontLoadReconcile) => void
 	>({
 		key: "replaceFont",
-		do: ({ get, set }, source) => {
+		do: ({ get, set }, source, reconcile) => {
 			validateEditorSourceStructure(source)
 
 			const oldAxisIds = get(axisIdsAtom)
@@ -4372,6 +4383,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			for (const entry of source.cmap) {
 				set(cmapGlyphAtoms, entry.codePoint, entry.glyphId)
 			}
+			reconcile?.(Object.freeze({ set }))
 		},
 	})
 
@@ -7890,9 +7902,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
 			},
 			markDocumentChanged,
-			load(source: EditorFontSource): void {
+			load(source: EditorFontSource, reconcile?: FontLoadReconcile): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)
-				runReplaceFont(source)
+				runReplaceFont(source, reconcile)
 				const nextGlyphIds = silo.getState(glyphIdsAtom)
 				const nextGlyphIdSet = new Set(nextGlyphIds)
 				for (const glyphId of previousGlyphIds) {

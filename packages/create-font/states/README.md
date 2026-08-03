@@ -91,6 +91,13 @@ after the atomic state replacement. A raw transaction cannot perform that
 timeline lifecycle safely, so consumers that previously ran
 `transactions.replaceFont` should call `actions.load` instead.
 
+`actions.load(source, reconcile?)` also accepts an optional reconciliation
+callback for caller-owned atoms. The callback receives only a transaction-bound
+`set` capability, runs after the validated replacement writes and before the
+single document-revision write, and commits atomically with the new source. If
+it throws, the font replacement and its co-writes roll back and histories remain
+untouched; timeline cleanup still occurs only after a successful commit.
+
 ### Remote source cache
 
 `createRemoteFontSourceState` is the RPC-facing companion to the hot editor
