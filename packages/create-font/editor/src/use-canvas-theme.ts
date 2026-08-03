@@ -1,4 +1,4 @@
-import { useMemo } from "preact/hooks"
+import { useMemo } from "react"
 
 import { useInferredColorPreference } from "./inferred-color-preference.ts"
 

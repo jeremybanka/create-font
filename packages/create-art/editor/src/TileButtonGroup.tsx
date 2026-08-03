@@ -1,4 +1,4 @@
-import type { ComponentChildren } from "preact"
+import type { ReactNode } from "react"
 
 import css from "./TileButtonGroup.module.css"
 
@@ -8,7 +8,7 @@ export function TileButtonGroup({
 	compact = false,
 }: Readonly<{
 	"aria-label": string
-	children: ComponentChildren
+	children: ReactNode
 	compact?: boolean
 }>) {
 	return (

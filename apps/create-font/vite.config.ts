@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import preact from "@preact/preset-vite"
+import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite-plus"
 
 import { DEFAULT_DEV_PORT } from "../../scripts/dev-ports.ts"
@@ -14,7 +14,7 @@ if (!Number.isInteger(backendPort) || backendPort < 1 || backendPort > 65_535) {
 const backend = `http://127.0.0.1:${backendPort}`
 
 export default defineConfig({
-	plugins: [preact()],
+	plugins: [react()],
 	resolve: {
 		alias: {
 			"@create-font/editor/browser": resolve(
@@ -22,7 +22,6 @@ export default defineConfig({
 				`../../packages/create-font/editor/src/browser.ts`,
 			),
 		},
-		conditions: [`development`],
 	},
 	define: {
 		__CREATE_FONT_DEVELOPMENT__: `true`,

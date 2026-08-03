@@ -1,15 +1,16 @@
-import type { ComponentChildren, JSX } from "preact"
-import { useId } from "preact/hooks"
+import type * as React from "react"
+import type { ReactNode } from "react"
+import { useId } from "react"
 
 import css from "./TileCheckbox.module.css"
 
 export type TileCheckboxProps = Omit<
-	JSX.InputHTMLAttributes<HTMLInputElement>,
+	React.InputHTMLAttributes<HTMLInputElement>,
 	"children" | "label" | "size" | "type"
 > &
 	Readonly<{
-		description?: ComponentChildren
-		label: ComponentChildren
+		description?: ReactNode
+		label: ReactNode
 	}>
 
 export function TileCheckbox({
@@ -24,7 +25,7 @@ export function TileCheckbox({
 	const descriptionId = `${id}-description`
 	return (
 		<tile-checkbox className={css.class} data-disabled={disabled || undefined}>
-			<label for={id}>
+			<label htmlFor={id}>
 				<input
 					{...inputProps}
 					id={id}

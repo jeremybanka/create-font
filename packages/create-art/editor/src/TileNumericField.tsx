@@ -1,16 +1,16 @@
-import type { ComponentChildren } from "preact"
-import { useId } from "preact/hooks"
+import type { ReactNode } from "react"
+import { useId } from "react"
 
 import { NumericInput, type NumericInputProps } from "./NumericInput.tsx"
 import css from "./TileNumericField.module.css"
 
 export type TileNumericFieldProps = Omit<NumericInputProps, "aria-label"> &
 	Readonly<{
-		description?: ComponentChildren
+		description?: ReactNode
 		disabled?: boolean
-		error?: ComponentChildren
+		error?: ReactNode
 		id?: string
-		label: ComponentChildren
+		label: ReactNode
 	}>
 
 export function TileNumericField({
@@ -29,7 +29,7 @@ export function TileNumericField({
 			className={css.class}
 			data-disabled={disabled || undefined}
 		>
-			<label for={id}>
+			<label htmlFor={id}>
 				<span>{label}</span>
 				<NumericInput
 					{...numericProps}

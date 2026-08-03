@@ -19,7 +19,7 @@ describe(`Browser artifact boundary`, () => {
 		expect(javascript).not.toContain(`createEditorWorkspace`)
 	})
 
-	it(`builds the editor as a Preact-owned browser artifact`, async () => {
+	it(`builds the editor as a React-owned browser artifact`, async () => {
 		const browserRoot = resolve(
 			import.meta.dirname,
 			`../../../packages/create-font/editor/dist/browser`,
@@ -29,8 +29,10 @@ describe(`Browser artifact boundary`, () => {
 			readFile(resolve(browserRoot, `editor.js.map`), `utf8`),
 			readFile(resolve(browserRoot, `editor.css`), `utf8`),
 		])
-		expect(javascript).not.toContain(`/react/cjs/react.`)
-		expect(sourceMap).toContain(`/preact/compat/`)
+		expect(sourceMap).toContain(`/react/`)
+		expect(sourceMap).toContain(`/react-dom/`)
+		expect(sourceMap).toContain(`/react-konva/`)
+		expect(sourceMap).not.toContain(`/preact/`)
 		expect(javascript).toContain(`mountEditor`)
 		expect(styles).toContain(`editor-application-root`)
 	})

@@ -1,7 +1,7 @@
 # @create-font/editor
 
 `@create-font/editor` is the first browser client for the create-font font state
-model. It exports the Preact `EditorApplicationRoot` consumed by the public
+model. It exports the React `EditorApplicationRoot` consumed by the public
 `create-font` application package. The Glyphs-style workspace centers on one
 multiline text canvas. The same glyph occurrence that participates in the live
 variable layout becomes the outline editor in place, alongside glyph navigation,
@@ -15,7 +15,7 @@ other character in the preview visibly exercises `.notdef`.
 
 ## Stack
 
-- The application shell and all DOM UI are Preact. Vite compiles the browser
+- The application shell and all DOM UI are React. Vite compiles the browser
   entry, TypeScript, JSX, global CSS, and CSS Modules for published assets and
   serves the same workspace sources during development.
 - `@create-font/states` owns all editable font facts, its isolated atom.io Silo,
@@ -24,11 +24,9 @@ other character in the preview visibly exercises `.notdef`.
 - A small set of UI atoms lives in that same Silo: active glyph and master,
   multiline text, caret and editing occurrence, axis coordinates, node
   selection, and node visibility.
-- `react-konva` renders the unified canvas inside a real React 18 island
-  mounted with `react-dom/client`. Plain props and declarative Konva shape
-  descriptors are the only values that cross from Preact. This separation is
-  required because react-konva's private reconciler cannot run on Preact
-  compatibility internals.
+- `react-konva` renders the unified canvas through the narrow renderer surface
+  owned by `@create-art/editor`. That boundary registers only the Konva shapes
+  shared by the product editors and preserves their full-size Stage host.
 - Lasertag supplies the structural CSS Modules convention and validation. Each
   exported component owns one sibling stylesheet and a matching custom root;
   its complete seven-rule ESLint plugin and CSS reachability check run in CI.
@@ -52,8 +50,7 @@ Axes, names, and metrics are exposed through the workspace document structure;
 the glyph list and cmap can grow through the add-glyph dialog. Components
 subscribe only to narrow atoms and selectors. An edit to `.notdef`, for
 example, does not invalidate an `O` preview. A tiny Preact-native adapter
-observes the custom Silo through its public get, set, and subscribe methods;
-React is never mixed into the DOM UI.
+observes the custom Silo through its public get, set, and subscribe methods.
 
 Toolbar and keyboard history controls select the active glyph from the
 workspace's timeline family and call the custom Silo's `undo()` and `redo()`
@@ -74,7 +71,7 @@ pnpm --filter @create-font/editor build
 The editor is not a self-starting application. Its package build publishes
 `dist/browser/editor.js` and `editor.css`. The `@create-font/editor/browser`
 entry exposes `mountEditor`, `update`, and `unmount` through an imperative
-boundary so this artifact owns its Preact renderer. `create-font` serves and
+boundary so this artifact owns its React root. `create-font` serves and
 dynamically imports these files from its installed production dependency.
 
 The initial slice intentionally has no inert save or export affordances. The UI

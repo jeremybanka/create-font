@@ -10,13 +10,8 @@ import {
 	PlusIcon,
 	QuestionMarkCircledIcon,
 } from "@radix-ui/react-icons"
-import {
-	useCallback,
-	useEffect,
-	useReducer,
-	useRef,
-	useState,
-} from "preact/hooks"
+import type * as React from "react"
+import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 
 import css from "./TilingWorkspace.module.css"
 import {
@@ -429,7 +424,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 	}, [activeLeft, activeRight, selectedColumn, viewportWidth])
 
 	const scrollColumnFromPointer = (
-		event: PointerEvent,
+		event: React.PointerEvent<HTMLElement>,
 		columnId: TileColumnId,
 		grabOffset: number,
 	): void => {
@@ -452,7 +447,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 	}
 
 	const scrollColumnFromKeyboard = (
-		event: KeyboardEvent,
+		event: React.KeyboardEvent<HTMLElement>,
 		columnId: TileColumnId,
 	): void => {
 		const scroll = scrollRefs.current.get(columnId)
@@ -892,15 +887,17 @@ export function TilingWorkspace<Kind extends string, Context>({
 					(columnClearance[column.id] ?? 0) > 0 ? "true" : "false"
 				}
 				data-overflow={columnOverflow[column.id] ?? "fit"}
-				style={{
-					"--tile-column-clearance": `${columnClearance[column.id] ?? 0}px`,
-				}}
+				style={
+					{
+						"--tile-column-clearance": `${columnClearance[column.id] ?? 0}px`,
+					} as React.CSSProperties
+				}
 				onClick={() => management && selectColumn(column.id)}
-				onDragOver={(event: DragEvent) => {
+				onDragOver={(event: React.DragEvent<HTMLElement>) => {
 					if (!management) return
 					event.preventDefault()
 				}}
-				onDrop={(event: DragEvent) => {
+				onDrop={(event: React.DragEvent<HTMLElement>) => {
 					event.preventDefault()
 					event.stopPropagation()
 					dropPayload(column.id)
@@ -959,10 +956,10 @@ export function TilingWorkspace<Kind extends string, Context>({
 						aria-controls={`tile-column-scroll-${column.id}`}
 						aria-orientation="vertical"
 						aria-valuemin={0}
-						onKeyDown={(event: KeyboardEvent) =>
+						onKeyDown={(event: React.KeyboardEvent<HTMLElement>) =>
 							scrollColumnFromKeyboard(event, column.id)
 						}
-						onPointerDown={(event: PointerEvent) => {
+						onPointerDown={(event: React.PointerEvent<HTMLElement>) => {
 							const target = event.currentTarget
 							if (target instanceof HTMLElement) {
 								const thumb = target.firstElementChild
@@ -983,7 +980,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 								scrollColumnFromPointer(event, column.id, grabOffset)
 							}
 						}}
-						onPointerMove={(event: PointerEvent) => {
+						onPointerMove={(event: React.PointerEvent<HTMLElement>) => {
 							const target = event.currentTarget
 							const drag = scrollbarDrag.current
 							if (
@@ -995,12 +992,12 @@ export function TilingWorkspace<Kind extends string, Context>({
 								scrollColumnFromPointer(event, column.id, drag.grabOffset)
 							}
 						}}
-						onPointerUp={(event: PointerEvent) => {
+						onPointerUp={(event: React.PointerEvent<HTMLElement>) => {
 							if (scrollbarDrag.current?.pointerId === event.pointerId) {
 								scrollbarDrag.current = null
 							}
 						}}
-						onPointerCancel={(event: PointerEvent) => {
+						onPointerCancel={(event: React.PointerEvent<HTMLElement>) => {
 							if (scrollbarDrag.current?.pointerId === event.pointerId) {
 								scrollbarDrag.current = null
 							}
@@ -1024,13 +1021,13 @@ export function TilingWorkspace<Kind extends string, Context>({
 			}
 			data-fill={tile.fill ? "true" : "false"}
 			draggable={management}
-			onClick={(event: MouseEvent) => {
+			onClick={(event: React.MouseEvent<HTMLElement>) => {
 				if (!management) return
 				event.stopPropagation()
 				selectColumn(column.id)
 				setSelectedTileId(tile.id)
 			}}
-			onDragStart={(event: DragEvent) => {
+			onDragStart={(event: React.DragEvent<HTMLElement>) => {
 				dragPayload.current = { type: "tile", tileId: tile.id }
 				setDragging(true)
 				if (event.dataTransfer !== null)
@@ -1040,12 +1037,12 @@ export function TilingWorkspace<Kind extends string, Context>({
 				dragPayload.current = null
 				setDragging(false)
 			}}
-			onDragOver={(event: DragEvent) => {
+			onDragOver={(event: React.DragEvent<HTMLElement>) => {
 				if (!management) return
 				event.preventDefault()
 				event.stopPropagation()
 			}}
-			onDrop={(event: DragEvent) => {
+			onDrop={(event: React.DragEvent<HTMLElement>) => {
 				event.preventDefault()
 				event.stopPropagation()
 				dropPayload(column.id, tile.id)

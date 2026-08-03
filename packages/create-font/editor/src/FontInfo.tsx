@@ -189,7 +189,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 								<input
 									type="checkbox"
 									checked={style.bold}
-									onInput={(event) =>
+									onChange={(event) =>
 										setStyle("bold", event.currentTarget.checked)
 									}
 								/>
@@ -199,7 +199,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 								<input
 									type="checkbox"
 									checked={style.italic}
-									onInput={(event) =>
+									onChange={(event) =>
 										setStyle("italic", event.currentTarget.checked)
 									}
 								/>
@@ -209,7 +209,7 @@ export function FontInfo({ workspace }: FontInfoProps) {
 								<input
 									type="checkbox"
 									checked={style.oblique}
-									onInput={(event) =>
+									onChange={(event) =>
 										setStyle("oblique", event.currentTarget.checked)
 									}
 								/>

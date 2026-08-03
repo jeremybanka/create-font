@@ -7,7 +7,7 @@ import {
 	type SourceComparison,
 } from "@create-art/source-rpc"
 import type { SourceReviewController } from "@create-art/editor"
-import { useEffect, useMemo, useState } from "preact/hooks"
+import { useEffect, useMemo, useState } from "react"
 
 export type DesignSourceReviewChange = SourceChangeGroup
 export type DesignSourceReviewController =

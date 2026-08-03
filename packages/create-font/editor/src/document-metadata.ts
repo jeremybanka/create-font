@@ -1,5 +1,5 @@
 import type { EditorFontSource } from "@create-font/states"
-import { useEffect } from "preact/hooks"
+import { useEffect } from "react"
 
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
 import {

@@ -1,2 +1,2 @@
 import "lasertag/css-modules"
-import "lasertag/preact-jsx"
+import "lasertag/react-jsx"

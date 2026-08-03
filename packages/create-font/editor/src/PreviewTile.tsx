@@ -1,5 +1,5 @@
 import type { EditorAxisSource } from "@create-font/states"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useEffect, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
@@ -203,12 +203,13 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 								max={axis.max}
 								step="1"
 								value={coordinates[axis.id] ?? axis.default}
-								onInput={(event) =>
+								onInput={(event) => {
+									const value = Number(event.currentTarget.value)
 									setCoordinates((current) => ({
 										...current,
-										[axis.id]: Number(event.currentTarget.value),
+										[axis.id]: value,
 									}))
-								}
+								}}
 							/>
 							<output>{coordinates[axis.id] ?? axis.default}</output>
 						</label>

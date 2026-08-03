@@ -1,3 +1,4 @@
+import type * as React from "react"
 import type {
 	ContourId,
 	EditorHandleKind,
@@ -24,15 +25,8 @@ import {
 	Rect,
 	Stage,
 	Text,
-} from "@create-art/preact-konva"
-import type { JSX } from "preact"
-import {
-	useEffect,
-	useLayoutEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "preact/hooks"
+} from "@create-art/editor"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import {
 	finalizeGroupDragPreview,
@@ -3672,10 +3666,10 @@ export function GlyphCanvas({
 			aria-describedby="canvas-instructions"
 			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+X Control+X Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
-			onContextMenu={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
+			onContextMenu={(event: React.MouseEvent<HTMLElement>) => {
 				if (cancelDirectDrag()) event.preventDefault()
 			}}
-			onCopy={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+			onCopy={(event: React.ClipboardEvent<HTMLElement>) => {
 				if (
 					editingTextIndex === null ||
 					activeGlyphId === null ||
@@ -3741,7 +3735,7 @@ export function GlyphCanvas({
 					`Copied ${pointCount} outline node${pointCount === 1 ? "" : "s"}.`,
 				)
 			}}
-			onCut={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+			onCut={(event: React.ClipboardEvent<HTMLElement>) => {
 				if (
 					editingTextIndex === null ||
 					activeGlyphId === null ||
@@ -3825,7 +3819,7 @@ export function GlyphCanvas({
 					`Cut ${pointCount} outline node${pointCount === 1 ? "" : "s"}.`,
 				)
 			}}
-			onPaste={(event: JSX.TargetedClipboardEvent<HTMLElement>) => {
+			onPaste={(event: React.ClipboardEvent<HTMLElement>) => {
 				if (momentaryPreview) {
 					event.preventDefault()
 					return
@@ -3920,7 +3914,7 @@ export function GlyphCanvas({
 					`Pasted ${paste.value.selectedPointIds.length} outline node${paste.value.selectedPointIds.length === 1 ? "" : "s"}.`,
 				)
 			}}
-			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+			onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
 				if (momentaryPreview) {
 					event.preventDefault()
 					return
@@ -4003,7 +3997,7 @@ export function GlyphCanvas({
 					event.target instanceof HTMLButtonElement
 				)
 					return
-				if (event.isComposing) return
+				if (event.nativeEvent.isComposing) return
 				if (
 					editingTextIndex !== null &&
 					(event.metaKey || event.ctrlKey) &&
@@ -4175,9 +4169,9 @@ export function GlyphCanvas({
 				ref={textareaRef}
 				value={text}
 				disabled={disabled}
-				spellcheck={false}
+				spellCheck={false}
 				aria-label="Text canvas contents"
-				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLTextAreaElement>) => {
+				onKeyDown={(event: React.KeyboardEvent<HTMLTextAreaElement>) => {
 					if (
 						event.altKey &&
 						(event.key === "ArrowLeft" || event.key === "ArrowRight")
@@ -4239,7 +4233,7 @@ export function GlyphCanvas({
 						movement.selectionStart === movement.selectionEnd,
 					)
 				}}
-				onInput={(event: JSX.TargetedInputEvent<HTMLTextAreaElement>) => {
+				onInput={(event: React.FormEvent<HTMLTextAreaElement>) => {
 					const textarea = event.currentTarget
 					const range = normalizedTextareaSelection(textarea)
 					preferredCaretXRef.current = null
@@ -4248,7 +4242,7 @@ export function GlyphCanvas({
 					setTextSelectionRange(range)
 					setTextSelectionCollapsed(range.selectionStart === range.selectionEnd)
 				}}
-				onSelect={(event: JSX.TargetedEvent<HTMLTextAreaElement, Event>) => {
+				onSelect={(event: React.SyntheticEvent<HTMLTextAreaElement, Event>) => {
 					const textarea = event.currentTarget
 					const range = normalizedTextareaSelection(textarea)
 					setCaretIndex(activeTextareaSelectionIndex(textarea))

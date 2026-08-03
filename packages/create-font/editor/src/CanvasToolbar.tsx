@@ -1,5 +1,5 @@
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
-import { useId } from "preact/hooks"
+import { useId } from "react"
 
 import { zoomCanvasView } from "./canvas-view.ts"
 import css from "./CanvasToolbar.module.css"

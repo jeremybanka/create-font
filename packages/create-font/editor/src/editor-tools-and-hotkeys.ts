@@ -1,5 +1,5 @@
 import type { GlyphId, MasterId } from "@create-font/states"
-import { useEffect } from "preact/hooks"
+import { useEffect } from "react"
 
 import type { EditorIconName } from "@create-art/editor"
 import type {

@@ -1,5 +1,5 @@
 import type { EditorFontSource } from "@create-font/states"
-import { useEffect, useRef, useState } from "preact/hooks"
+import { useEffect, useRef, useState } from "react"
 
 import { AppShell } from "./AppShell.tsx"
 import { startBrowserLiveFont } from "./browser-font-face.ts"

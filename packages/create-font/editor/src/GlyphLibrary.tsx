@@ -3,8 +3,8 @@ import {
 	MagnifyingGlassIcon,
 	PlusIcon,
 } from "@radix-ui/react-icons"
-import type { JSX } from "preact"
-import { useEffect, useRef, useState } from "preact/hooks"
+import type * as React from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphLibrary.module.css"
@@ -125,7 +125,7 @@ export function GlyphLibrary({
 			{addingGlyphs ? (
 				<dialog-backdrop
 					role="presentation"
-					onMouseDown={(event: JSX.TargetedMouseEvent<HTMLElement>) => {
+					onMouseDown={(event: React.MouseEvent<HTMLElement>) => {
 						if (event.target === event.currentTarget) closeAddGlyphs()
 					}}
 				>
@@ -146,7 +146,7 @@ export function GlyphLibrary({
 							</TooltipButton>
 						</dialog-heading>
 						<form
-							onSubmit={(event: JSX.TargetedSubmitEvent<HTMLFormElement>) => {
+							onSubmit={(event: React.FormEvent<HTMLFormElement>) => {
 								event.preventDefault()
 								const names = glyphNames.trim().split(/\s+/).filter(Boolean)
 								if (names.length === 0) return
@@ -154,13 +154,13 @@ export function GlyphLibrary({
 								closeAddGlyphs()
 							}}
 						>
-							<label for="new-glyph-names">Glyph names</label>
+							<label htmlFor="new-glyph-names">Glyph names</label>
 							<input
 								ref={inputRef}
 								id="new-glyph-names"
 								value={glyphNames}
 								placeholder="B C Aacute"
-								autocomplete="off"
+								autoComplete="off"
 								onInput={(event) => setGlyphNames(event.currentTarget.value)}
 							/>
 							<small>Separate glyph names with spaces.</small>

@@ -12,4 +12,9 @@ export type MountedDesignEditor = Readonly<{
 	unmount: () => void
 }>
 
+export declare function mountDesignEditor(
+	host: HTMLElement,
+	options?: DesignEditorBrowserOptions,
+): MountedDesignEditor
+
 export type { DesignDocument, DesignSourceSession }

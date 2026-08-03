@@ -6,14 +6,9 @@ import {
 	shift,
 	type Placement,
 } from "@floating-ui/dom"
-import type { JSX, Ref } from "preact"
-import {
-	useEffect,
-	useId,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "preact/hooks"
+import type * as React from "react"
+import type { Ref } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 
 import {
 	ariaKeyShortcut,
@@ -31,7 +26,7 @@ import {
 const TOOLTIP_OPEN_DELAY = 480
 
 type TooltipButtonProps = Omit<
-	JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+	React.ButtonHTMLAttributes<HTMLButtonElement>,
 	"aria-label" | "disabled" | "title"
 > &
 	Readonly<{
@@ -150,7 +145,7 @@ export function TooltipButton({
 			onBlur={() => {
 				if (explainedDisabled) dispatch("blur")
 			}}
-			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) => {
+			onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
 				if (!explainedDisabled || event.key !== "Escape") return
 				dispatch("escape")
 				setVisible(false)

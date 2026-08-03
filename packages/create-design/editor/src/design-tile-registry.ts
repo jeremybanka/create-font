@@ -6,7 +6,7 @@ import {
 	type TileRegistration,
 	type TilingLayout,
 } from "@create-art/editor"
-import { h } from "preact"
+import { createElement } from "react"
 
 import { DesignTileContent } from "./DesignTileContent.tsx"
 import type {
@@ -153,14 +153,15 @@ const registrations = [
 		defaultFill: true,
 		defaultPlacement: { column: 2, fill: true },
 		render: ({ context }) =>
-			h(DesignTileContent, { context, kind: "version-control" }),
+			createElement(DesignTileContent, { context, kind: "version-control" }),
 	},
 	{
 		kind: "pages",
 		name: "Pages",
 		description: "Navigate the document artboards.",
 		defaultPlacement: { column: 1 },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "pages" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "pages" }),
 	},
 	{
 		kind: "layers",
@@ -168,14 +169,16 @@ const registrations = [
 		description: "Select vector objects in stacking order.",
 		defaultFill: true,
 		defaultPlacement: { column: 1, fill: true },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "layers" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "layers" }),
 	},
 	{
 		kind: "canvas",
 		name: "Canvas",
 		description: "Focus the active artboard and inspect page dimensions.",
 		defaultPlacement: { column: 2 },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "canvas" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "canvas" }),
 	},
 	{
 		kind: "export",
@@ -183,7 +186,8 @@ const registrations = [
 		description: "Export the active artboard as an editable vector PDF.",
 		defaultFill: true,
 		defaultPlacement: { column: 2, fill: true },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "export" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "export" }),
 	},
 	{
 		kind: "tools",
@@ -191,14 +195,16 @@ const registrations = [
 		description: "Choose a vector drawing or transformation tool.",
 		defaultFill: true,
 		defaultPlacement: { column: 3, fill: true },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "tools" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "tools" }),
 	},
 	{
 		kind: "object",
 		name: "Object",
 		description: "Inspect and edit the selected vector object.",
 		defaultPlacement: { column: 4 },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "object" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "object" }),
 	},
 	{
 		kind: "transform",
@@ -206,14 +212,15 @@ const registrations = [
 		description: "Position, size, and rotate the current selection.",
 		defaultPlacement: { column: 4 },
 		render: ({ context }) =>
-			h(DesignTileContent, { context, kind: "transform" }),
+			createElement(DesignTileContent, { context, kind: "transform" }),
 	},
 	{
 		kind: "arrange",
 		name: "Arrange",
 		description: "Align and distribute the current selection.",
 		defaultPlacement: { column: 4 },
-		render: ({ context }) => h(DesignTileContent, { context, kind: "arrange" }),
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "arrange" }),
 	},
 	{
 		kind: "appearance",
@@ -223,7 +230,7 @@ const registrations = [
 		defaultFill: true,
 		defaultPlacement: { column: 4, fill: true },
 		render: ({ context }) =>
-			h(DesignTileContent, { context, kind: "appearance" }),
+			createElement(DesignTileContent, { context, kind: "appearance" }),
 	},
 ] as const satisfies readonly TileRegistration<
 	DesignTileKind,

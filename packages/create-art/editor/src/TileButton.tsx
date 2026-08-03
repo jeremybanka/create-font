@@ -1,11 +1,11 @@
-import type { JSX } from "preact"
+import type * as React from "react"
 
 import css from "./TileButton.module.css"
 
 export type TileButtonTone = "default" | "primary" | "danger"
 
 export type TileButtonProps = Omit<
-	JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+	React.ButtonHTMLAttributes<HTMLButtonElement>,
 	"size"
 > &
 	Readonly<{

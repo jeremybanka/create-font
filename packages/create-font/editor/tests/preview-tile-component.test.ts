@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { PreviewTile } from "../src/PreviewTile.tsx"
@@ -43,8 +42,16 @@ function mountTwo() {
 			h(EditorStateContext.Provider, {
 				value: workspace.font.silo,
 				children: h("div", {}, [
-					h(PreviewTile, { workspace, tileId: "preview:first" }),
-					h(PreviewTile, { workspace, tileId: "preview:second" }),
+					h(PreviewTile, {
+						key: "first",
+						workspace,
+						tileId: "preview:first",
+					}),
+					h(PreviewTile, {
+						key: "second",
+						workspace,
+						tileId: "preview:second",
+					}),
 				]),
 			}),
 			host,

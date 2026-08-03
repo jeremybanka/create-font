@@ -1,5 +1,6 @@
 import { PlusIcon } from "@radix-ui/react-icons"
-import { useEffect, useRef } from "preact/hooks"
+import type * as React from "react"
+import { useEffect, useRef } from "react"
 
 import {
 	assignHotbarSlot,
@@ -68,7 +69,10 @@ export function ActionHotbar({
 		return () => window.removeEventListener("keydown", handleKeyDown)
 	}, [commands, enabled])
 
-	const dropIntoSlot = (event: DragEvent, slotIndex: number): void => {
+	const dropIntoSlot = (
+		event: React.DragEvent<HTMLElement>,
+		slotIndex: number,
+	): void => {
 		event.preventDefault()
 		const commandId = event.dataTransfer?.getData(HOTBAR_COMMAND_MIME) ?? ""
 		if (commandId.length > 0) {
@@ -96,16 +100,16 @@ export function ActionHotbar({
 						key={key}
 						data-empty={command === undefined ? "true" : "false"}
 						draggable={command !== undefined}
-						onContextMenu={(event: MouseEvent) => {
+						onContextMenu={(event: React.MouseEvent<HTMLElement>) => {
 							event.preventDefault()
 							onSlotsChange(assignHotbarSlot(slots, index, null))
 						}}
-						onDragStart={(event: DragEvent) => {
+						onDragStart={(event: React.DragEvent<HTMLElement>) => {
 							if (command === undefined || event.dataTransfer === null) return
 							event.dataTransfer.effectAllowed = "move"
 							event.dataTransfer.setData(HOTBAR_SLOT_MIME, String(index))
 						}}
-						onDragOver={(event: DragEvent) => {
+						onDragOver={(event: React.DragEvent<HTMLElement>) => {
 							event.preventDefault()
 							if (event.dataTransfer !== null) {
 								event.dataTransfer.dropEffect =
@@ -114,7 +118,9 @@ export function ActionHotbar({
 										: "move"
 							}
 						}}
-						onDrop={(event: DragEvent) => dropIntoSlot(event, index)}
+						onDrop={(event: React.DragEvent<HTMLElement>) =>
+							dropIntoSlot(event, index)
+						}
 					>
 						{command === undefined ? (
 							<TooltipButton

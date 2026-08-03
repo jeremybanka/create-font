@@ -1,6 +1,6 @@
 import { CheckIcon, Cross2Icon } from "@radix-ui/react-icons"
-import type { ComponentChildren } from "preact"
-import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks"
+import type { ReactNode } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import css from "./SourceReviewSurface.module.css"
 import {
@@ -21,9 +21,9 @@ export interface SourceReviewSurfaceProps<
 	Change extends SourceReviewChange = SourceReviewChange,
 > {
 	readonly controller?: SourceReviewController<Change>
-	readonly renderChange?: (change: Change) => ComponentChildren
+	readonly renderChange?: (change: Change) => ReactNode
 	readonly review?: SourceReviewAdapter<Change>
-	readonly visualComparison?: ComponentChildren
+	readonly visualComparison?: ReactNode
 }
 
 /**

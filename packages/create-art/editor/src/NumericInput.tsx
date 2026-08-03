@@ -1,5 +1,5 @@
-import type { JSX } from "preact"
-import { useEffect, useId, useRef, useState } from "preact/hooks"
+import type * as React from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import css from "./NumericInput.module.css"
 import { IS_MAC_LIKE } from "./platform.ts"
@@ -84,7 +84,7 @@ export function NumericInput(props: NumericInputProps) {
 				type="text"
 				role="spinbutton"
 				inputMode="decimal"
-				spellcheck={false}
+				spellCheck={false}
 				disabled={props.disabled}
 				readOnly={props.readOnly}
 				aria-label={props["aria-label"]}
@@ -117,7 +117,7 @@ export function NumericInput(props: NumericInputProps) {
 					}
 				}}
 				onBlur={() => commit("blur")}
-				onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+				onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
 					if (props.readOnly) return
 					if (event.key === "ArrowUp" || event.key === "ArrowDown") {
 						event.preventDefault()

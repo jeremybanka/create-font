@@ -8,13 +8,8 @@ import type {
 	WritableToken,
 } from "atom.io"
 import type { Canonical } from "atom.io/foundations/canonical"
-import { createContext } from "preact"
-import {
-	useCallback,
-	useContext,
-	useMemo,
-	useSyncExternalStore,
-} from "preact/compat"
+import { createContext } from "react"
+import { useCallback, useContext, useMemo, useSyncExternalStore } from "react"
 
 import { subscribeToSettledState } from "./settled-subscription.ts"
 

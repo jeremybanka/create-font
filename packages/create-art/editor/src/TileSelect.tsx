@@ -1,16 +1,17 @@
-import type { ComponentChildren, JSX } from "preact"
-import { useId } from "preact/hooks"
+import type * as React from "react"
+import type { ReactNode } from "react"
+import { useId } from "react"
 
 import css from "./TileSelect.module.css"
 
 export type TileSelectProps = Omit<
-	JSX.SelectHTMLAttributes<HTMLSelectElement>,
+	React.SelectHTMLAttributes<HTMLSelectElement>,
 	"label" | "size"
 > &
 	Readonly<{
-		description?: ComponentChildren
-		error?: ComponentChildren
-		label: ComponentChildren
+		description?: ReactNode
+		error?: ReactNode
+		label: ReactNode
 	}>
 
 export function TileSelect({
@@ -27,7 +28,7 @@ export function TileSelect({
 	const descriptionId = `${id}-description`
 	return (
 		<tile-select className={css.class} data-disabled={disabled || undefined}>
-			<label for={id}>
+			<label htmlFor={id}>
 				<span>{label}</span>
 				<select
 					{...selectProps}

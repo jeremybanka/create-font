@@ -8,6 +8,7 @@ const outdir = resolve(packageRoot, "dist")
 await rm(outdir, { force: true, recursive: true })
 await build({
 	configFile: false,
+	define: { "process.env.NODE_ENV": JSON.stringify("production") },
 	build: {
 		emptyOutDir: true,
 		lib: {
@@ -18,6 +19,10 @@ await build({
 		},
 		minify: true,
 		outDir: outdir,
+		rollupOptions: {
+			external:
+				/^(?:@radix-ui\/react-icons|konva|react|react-dom|react-konva)(?:\/|$)/,
+		},
 		sourcemap: true,
 	},
 })

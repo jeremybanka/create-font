@@ -76,12 +76,12 @@ under `packages/`.
 - [`@create-art/source-format`](packages/create-art/source-format/README.md) publishes the
   pinned canonical formatter and dprint policy shared by generators,
   application writes, editor commands, and CI.
-- [`@create-font/editor`](packages/create-font/editor/README.md) is the Preact and Konva font
+- [`@create-font/editor`](packages/create-font/editor/README.md) is the React and Konva font
   editor built directly on that state graph.
 - [`@create-art/editor`](packages/create-art/editor/README.md) owns product-neutral editor
   controls, tiling, canvas, vector interaction, and source review foundations.
-- [`@create-art/preact-konva`](packages/create-art/preact-konva) provides the shared Preact
-  bindings used by both product editors' Konva scenes.
+  `@create-art/editor` also owns the narrow `react-konva` surface used by both
+  product editors' Konva scenes.
 
 These packages are the current implementation layers. Each application
 composes its source workspace server with the browser entry supplied by its

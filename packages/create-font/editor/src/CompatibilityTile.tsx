@@ -1,6 +1,6 @@
 import type { ContourId, EditorLayerNode, MasterId } from "@create-font/states"
-import type { JSX } from "preact"
-import { useMemo, useRef, useState } from "preact/hooks"
+import type * as React from "react"
+import { useMemo, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { editorContourToPath } from "./geometry.ts"
@@ -105,7 +105,7 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 			className={css.class}
 			role="region"
 			aria-label="Master compatibility and path order"
-			onKeyDown={(event: JSX.TargetedKeyboardEvent<HTMLElement>) =>
+			onKeyDown={(event: React.KeyboardEvent<HTMLElement>) =>
 				event.stopPropagation()
 			}
 		>
@@ -287,7 +287,7 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 														: "none"
 												}
 												stroke={compatibilityPathColor(pathIndex)}
-												vector-effect="non-scaling-stroke"
+												vectorEffect="non-scaling-stroke"
 											/>
 										</g>
 									</svg>

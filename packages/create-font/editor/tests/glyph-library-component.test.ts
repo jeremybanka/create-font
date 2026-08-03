@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ContourId, EditorFontSource, PointId } from "@create-font/states"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it } from "vitest"
 
 import { blackMasterId, makeDemoFont, oGlyphId } from "../src/demo-font.ts"
