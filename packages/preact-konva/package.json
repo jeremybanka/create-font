@@ -2,6 +2,7 @@
 	"name": "preact-konva",
 	"version": "0.1.1",
 	"description": "Small, native Preact bindings for the Konva scene graph",
+	"keywords": ["canvas", "konva", "preact", "renderer"],
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
@@ -18,6 +19,7 @@
 		"dist/*.d.mts.map",
 		"dist/*.mjs",
 		"dist/*.mjs.map",
+		"README.md",
 		"src"
 	],
 	"exports": {
@@ -33,11 +35,13 @@
 		"dev": "vp pack --watch --no-clean",
 		"test": "vp test"
 	},
-	"dependencies": {
-		"konva": "10.3.0",
-		"preact": "10.29.8"
+	"peerDependencies": {
+		"konva": "^10.3.0",
+		"preact": "^10.29.0"
 	},
 	"devDependencies": {
+		"konva": "10.3.0",
+		"preact": "10.29.8",
 		"vitest": "4.1.10"
 	},
 	"engines": {
