@@ -405,10 +405,6 @@ export function createEditorWorkspace(
 		documentRevision: font.atoms.documentRevision,
 		compilation: font.read.livePreviewCompilation,
 	})
-	const inactiveGlyphTimeline = font.silo.timeline({
-		key: "inactiveGlyph",
-		scope: [],
-	})
 	const pathnameSelector = font.silo.selector<string>({
 		key: "pathname",
 		get: ({ get }) => get(interactionAtom).pathname,
@@ -1198,7 +1194,6 @@ export function createEditorWorkspace(
 			request: liveFontCompiler.request,
 			dispose: liveFontCompiler.dispose,
 		},
-		inactiveGlyphTimeline,
 		document,
 		ui: {
 			selectedGlyphId: selectedGlyphIdSelector,

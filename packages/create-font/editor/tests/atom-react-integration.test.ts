@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
+import type { GlyphId } from "@create-font/states"
 import { StoreProvider, useO, useTL } from "atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { useMemo } from "react"
 import { afterEach, describe, expect, it } from "vitest"
 
+import { AppShell } from "../src/AppShell.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 
@@ -48,44 +49,21 @@ describe("atom.io React integration", () => {
 		expect(snapshots).not.toContainEqual([oGlyphId, "pen"])
 	})
 
-	it("does not recreate a disposed timeline for a null family key", () => {
+	it("unmounts glyph history without recreating a disposed family member", () => {
 		const workspace = createEditorWorkspace()
 		const removedTimeline = workspace.font.silo.findTimeline(
 			workspace.font.glyphHistoryTimelines,
 			oGlyphId,
 		)
-		const source = workspace.font.read.editorSource()
-		if (source === null) throw new Error("Fixture source is missing.")
-		workspace.actions.replaceSource({
-			...source,
-			glyphs: source.glyphs.filter((glyph) => glyph.id !== oGlyphId),
-			cmap: source.cmap.filter((entry) => entry.glyphId !== oGlyphId),
-			kerning: (source.kerning ?? []).filter(
-				(pair) => pair.left !== oGlyphId && pair.right !== oGlyphId,
-			),
-		})
-		expect(workspace.font.silo.store.timelines.has(removedTimeline.key)).toBe(
-			false,
-		)
-		const memberCount = workspace.font.silo.store.timelines.size
-
-		function Harness({
-			activeGlyphId,
-		}: {
-			readonly activeGlyphId: typeof oGlyphId | null
-		}) {
-			const activeGlyphTimeline = useMemo(
-				() =>
-					activeGlyphId === null
-						? workspace.inactiveGlyphTimeline
-						: workspace.font.silo.findTimeline(
-								workspace.font.glyphHistoryTimelines,
-								activeGlyphId,
-							),
-				[activeGlyphId, workspace],
-			)
-			useTL(activeGlyphTimeline)
+		function GlyphHistory({ glyphId }: { readonly glyphId: GlyphId }) {
+			useTL(workspace.font.glyphHistoryTimelines, glyphId)
 			return null
+		}
+		function Harness() {
+			const activeGlyphId = useO(workspace.ui.activeGlyphId)
+			return activeGlyphId === null
+				? null
+				: h(GlyphHistory, { glyphId: activeGlyphId })
 		}
 		const host = document.createElement("div")
 		document.body.append(host)
@@ -94,15 +72,65 @@ describe("atom.io React integration", () => {
 			render(
 				h(StoreProvider, {
 					store: workspace.font.silo.store,
-					children: h(Harness, { activeGlyphId: null }),
+					children: h(Harness, {}),
 				}),
 				host,
 			),
 		)
 
-		expect(workspace.font.silo.store.timelines.size).toBe(memberCount)
+		const source = workspace.font.read.editorSource()
+		if (source === null) throw new Error("Fixture source is missing.")
+		act(() =>
+			workspace.actions.replaceSource({
+				...source,
+				glyphs: source.glyphs.filter((glyph) => glyph.id !== oGlyphId),
+				cmap: source.cmap.filter((entry) => entry.glyphId !== oGlyphId),
+				kerning: (source.kerning ?? []).filter(
+					(pair) => pair.left !== oGlyphId && pair.right !== oGlyphId,
+				),
+			}),
+		)
 		expect(workspace.font.silo.store.timelines.has(removedTimeline.key)).toBe(
 			false,
 		)
+	})
+
+	it("preserves shell-local state when active glyph history disappears", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.navigate("/glyphs")
+		const host = document.createElement("div")
+		document.body.append(host)
+		hosts.push(host)
+		act(() =>
+			render(
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
+					children: h(AppShell, { workspace }),
+				}),
+				host,
+			),
+		)
+		const openCommands = host.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Command Palette"]',
+		)
+		if (openCommands === null) throw new Error("Command button is missing.")
+		act(() => openCommands.click())
+		expect(host.querySelector("command-palette")).not.toBeNull()
+
+		const source = workspace.font.read.editorSource()
+		if (source === null) throw new Error("Fixture source is missing.")
+		act(() =>
+			workspace.actions.replaceSource({
+				...source,
+				glyphs: source.glyphs.filter((glyph) => glyph.id !== oGlyphId),
+				cmap: source.cmap.filter((entry) => entry.glyphId !== oGlyphId),
+				kerning: (source.kerning ?? []).filter(
+					(pair) => pair.left !== oGlyphId && pair.right !== oGlyphId,
+				),
+			}),
+		)
+
+		expect(workspace.font.silo.getState(workspace.ui.activeGlyphId)).toBeNull()
+		expect(host.querySelector("command-palette")).not.toBeNull()
 	})
 })
