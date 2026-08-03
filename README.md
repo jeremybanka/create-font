@@ -35,7 +35,13 @@ a sandboxed module format such as WebAssembly.
 
 Canonical design data follows the same source-oriented model below
 `designs/<project>/`. The checked-in `designs/workbench-poster` project is the
-geometric poster served by create-design during development.
+geometric poster served by create-design during development. Its headless PDF
+export uses the same projection and preflight as the browser:
+
+```sh
+create-design export designs/workbench-poster \
+  --output artifacts/workbench-poster.pdf
+```
 
 See [the architecture](docs/architecture.md) for the durable system boundaries
 and [the roadmap](docs/roadmap.md) for the path from the current libraries to

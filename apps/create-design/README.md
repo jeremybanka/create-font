@@ -15,8 +15,35 @@ The first output target is the headless
 [`@create-design/pdf`](../../packages/create-design/pdf/README.md) package,
 which uses `mondrian.pdf`'s validated object IR. RGB-authored fills and strokes
 are emitted with PDF RGB operators and CMYK-authored paints with native PDF
-CMYK operators. The browser editor and future CLI export command consume the
-same projection, preflight, and serialization API.
+CMYK operators. The browser editor and CLI export command consume the same
+projection, preflight, and serialization API.
+
+## Headless PDF export
+
+Export every artboard in document order from a validated source project:
+
+```sh
+create-design export designs/workbench-poster \
+  --output artifacts/workbench-poster.pdf
+```
+
+Select particular artboards by stable ID and include their authored bleed:
+
+```sh
+create-design export designs/workbench-poster \
+  --output artifacts/workbench-cover.pdf \
+  --artboards artboard:cover,artboard:back \
+  --include-bleed
+```
+
+The output path must end in `.pdf` and remain outside the source project. This
+keeps generated files from becoming invalid unknown source units. The exporter
+creates missing output directories, runs the same preflight as the browser,
+and publishes the completed PDF atomically. Existing files are preserved by
+default; pass `--force` to atomically replace one. Blocking diagnostics and
+invalid source exit with status 1 without publishing partial output. Advisory
+preflight notices are written to stderr while a successful export still exits
+with status 0. Run `create-design export --help` for the complete option list.
 
 Design objects keep three authored concerns separate:
 
