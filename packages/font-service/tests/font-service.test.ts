@@ -12,7 +12,7 @@ import {
 	projectTextForExport,
 	type FontIdentityDescriptor,
 } from "../src/index.ts"
-import { makeGeometricOFont } from "../../target/tests/fixtures/geometric-o.ts"
+import { makeGeometricOFont } from "../../font-target/tests/fixtures/geometric-o.ts"
 
 const descriptor = (revision: string | number = 1): FontIdentityDescriptor => ({
 	source: "test:generated",

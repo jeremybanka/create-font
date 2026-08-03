@@ -18,7 +18,7 @@ import type {
 } from "@create-art/source-rpc"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { createInitialDocument } from "../src/document.ts"
+import { createInitialDocument } from "@create-design/editor/model"
 import { createDesignSourceService } from "../src/source-service.ts"
 import { createDesignSourceVersionControl } from "../src/version-control.ts"
 

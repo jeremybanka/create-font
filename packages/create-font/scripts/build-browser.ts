@@ -25,7 +25,7 @@ export async function buildBrowserApplication(
 					alias: {
 						"@create-font/editor/browser": resolve(
 							packageRoot,
-							`../editor/src/browser.ts`,
+							`../font-editor/src/browser.ts`,
 						),
 					},
 					conditions: [`development`],

@@ -24,8 +24,7 @@ import {
 	type DesignSourceDirectoryFiles,
 	type DesignSourceUnitKind,
 } from "@create-design/source"
-
-import { createInitialDocument } from "./document.ts"
+import { createInitialDocument } from "@create-design/editor/model"
 
 function issues(errors: readonly DesignSourceDiagnostic[]) {
 	return errors.map(({ code, message, path, unitPath }) => ({

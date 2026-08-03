@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { makeGeometricOEditorFont } from "../../states/tests/fixtures/geometric-o.ts"
+import { makeGeometricOEditorFont } from "../../font-states/tests/fixtures/geometric-o.ts"
 import { decodeEditorFontSource, encodeEditorFontSource } from "../src/index.ts"
 
 function legacyV4File() {

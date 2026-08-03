@@ -1,4 +1,8 @@
-# create-font
+# create-font workspace
+
+This repository contains the sibling create-font and create-design products,
+along with the create-art libraries they share. The repository name predates
+create-design and still reflects its create-font origin.
 
 create-font is a source-oriented font toolchain with a browser-based visual editor.
 It is intended to be installed in a font repository as an npm dev dependency,
@@ -39,26 +43,37 @@ the complete toolchain.
 
 ## Packages
 
+The workspace uses directory prefixes to make product ownership explicit.
+Unprefixed package directories are reserved for packages shared across the
+create-art product family or named after an external format or technology.
+
+- [`create-design`](packages/create-design/README.md) provides the design CLI,
+  source workspace server, and application composition.
+- [`@create-design/editor`](packages/design-editor/README.md) owns the
+  create-design browser editor and document interaction model.
 - [`create-font`](packages/create-font/README.md) provides the `create-font`
   initializer, the repository-local `font` CLI, and the Elysia workspace
   application.
-- [`@create-font/server`](packages/server/README.md) owns the reusable workspace
+- [`@create-font/server`](packages/font-server/README.md) owns the reusable workspace
   RPC contract, Elysia routes, and Eden client typing.
-- [`@create-font/target`](packages/target/README.md) is the validated, logical-SFNT
+- [`@create-font/target`](packages/font-target/README.md) is the validated, logical-SFNT
   compilation target.
-- [`@create-font/states`](packages/states/README.md) is the atom.io editor model
+- [`@create-font/states`](packages/font-states/README.md) is the atom.io editor model
   that incrementally projects into that IR and hydrates remote source units.
 - [`@create-font/source`](packages/font-source/README.md) defines the versioned JSON
   directory contract, per-file Zod schemas, and deterministic codecs.
 - [`@create-art/source-format`](packages/source-format/README.md) publishes the
   pinned canonical formatter and dprint policy shared by generators,
   application writes, editor commands, and CI.
-- [`@create-font/editor`](packages/editor/README.md) is the Preact and Konva font
+- [`@create-font/editor`](packages/font-editor/README.md) is the Preact and Konva font
   editor built directly on that state graph.
+- [`@create-art/editor`](packages/editor/README.md) owns product-neutral editor
+  controls, tiling, canvas, vector interaction, and source review foundations.
+- [`@create-art/preact-konva`](packages/preact-konva) provides the shared Preact
+  bindings used by both product editors' Konva scenes.
 
-These packages are the current implementation layers. The `create-font`
-application composes the reusable server boundary with the browser entry that
-imports `EditorApplicationRoot` from `@create-font/editor`.
+These packages are the current implementation layers. Each application composes
+its source workspace server with the browser entry supplied by its product editor.
 
 ## License policy
 
@@ -93,13 +108,14 @@ schemas and codecs. Its novel palette code does not become MPL-covered merely
 because it consumes that package. Independently implementing one of the
 documented source formats does not require using any repository code at all.
 
-All currently published packages use MPL-2.0 except the three application
+All currently published packages use MPL-2.0 except the application and editor
 packages named below. Package manifests and package-local `LICENSE` files state
 the boundary explicitly, including for transitive workspace dependencies.
 
 ### Application forks stay public
 
-`create-font`, `create-design`, and `@create-font/editor` are licensed under
+`create-font`, `create-design`, `@create-art/editor`, `@create-design/editor`,
+and `@create-font/editor` are licensed under
 [AGPL-3.0-or-later](LICENSES/AGPL-3.0-or-later.txt), with an
 [additional output permission](LICENSES/OUTPUT-EXCEPTION.txt). You may use,
 study, modify, redistribute, and sell them. If you distribute a modified

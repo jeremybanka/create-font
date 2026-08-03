@@ -4,7 +4,7 @@ import { assembleDesignDocument } from "@create-design/source"
 import { validatePdf } from "mondrian.pdf"
 import { describe, expect, it } from "vitest"
 
-import { createPdfIr, exportPdf } from "../src/pdf.ts"
+import { createPdfIr, exportPdf } from "../../design-editor/src/pdf.ts"
 import { createDesignSourceService } from "../src/source-service.ts"
 
 describe("Workbench Poster", () => {

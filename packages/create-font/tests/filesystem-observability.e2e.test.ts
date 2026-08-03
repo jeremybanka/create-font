@@ -23,10 +23,10 @@ import {
 	type SourceSyncState,
 } from "../public/source-sync.ts"
 import { createFileSystemSourceService } from "../src/source-service.ts"
-import { mountEditor } from "../../editor/src/browser.ts"
-import { createEditorWorkspace } from "../../editor/src/editor-workspace.ts"
-import { GlyphCanvas } from "../../editor/src/GlyphCanvas.tsx"
-import { EditorStateContext } from "../../editor/src/state-hooks.ts"
+import { mountEditor } from "../../font-editor/src/browser.ts"
+import { createEditorWorkspace } from "../../font-editor/src/editor-workspace.ts"
+import { GlyphCanvas } from "../../font-editor/src/GlyphCanvas.tsx"
+import { EditorStateContext } from "../../font-editor/src/state-hooks.ts"
 
 const execFileAsync = promisify(execFile)
 const requireFromRenderer = createRequire(

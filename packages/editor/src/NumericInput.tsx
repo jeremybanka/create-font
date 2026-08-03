@@ -2,7 +2,7 @@ import type { JSX } from "preact"
 import { useEffect, useId, useRef, useState } from "preact/hooks"
 
 import css from "./NumericInput.module.css"
-import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
+import { IS_MAC_LIKE } from "./platform.ts"
 import { keyboardStepMultiplier } from "./keyboard-step.ts"
 import {
 	formatNumericInput,

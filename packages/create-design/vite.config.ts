@@ -17,11 +17,15 @@ export default defineConfig({
 	plugins: [preact()],
 	resolve: {
 		alias: {
-			"@create-font/editor/shared": resolve(
+			"@create-art/editor": resolve(
 				import.meta.dirname,
-				`../editor/src/shared.ts`,
+				`../editor/src/index.ts`,
 			),
-			"@create-font/preact-konva": resolve(
+			"@create-design/editor/browser": resolve(
+				import.meta.dirname,
+				`../design-editor/src/browser.ts`,
+			),
+			"@create-art/preact-konva": resolve(
 				import.meta.dirname,
 				`../preact-konva/src/index.ts`,
 			),

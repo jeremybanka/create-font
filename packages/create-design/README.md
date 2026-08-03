@@ -5,6 +5,11 @@
 allocation logic, uses the same Bézier point representation, and exchanges
 vectors with `create-font` through its versioned outline clipboard format.
 
+The package owns the CLI, filesystem-backed source service, and workspace
+server. The browser application and design interaction model live in
+[`@create-design/editor`](../design-editor/README.md), while product-neutral
+editor foundations live in [`@create-art/editor`](../editor/README.md).
+
 The first output target is PDF through `mondrian.pdf`'s validated object IR.
 RGB-authored fills and strokes are emitted with PDF RGB operators and
 CMYK-authored paints with native PDF CMYK operators.

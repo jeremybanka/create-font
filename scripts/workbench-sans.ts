@@ -6,7 +6,7 @@ import type {
 	EditorGlyphSource,
 	GlyphId,
 	MasterId,
-} from "../packages/states/src/index.ts"
+} from "../packages/font-states/src/index.ts"
 import {
 	formatSourceUnit,
 	sourceUnitKindForPath,

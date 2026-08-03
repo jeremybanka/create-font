@@ -3,36 +3,18 @@ import { resolve } from "node:path"
 
 import { build } from "vite"
 
-const packageRoot = resolve(import.meta.dirname, `..`)
-const outdir = resolve(packageRoot, `dist/browser`)
-
-await rm(resolve(packageRoot, `dist`), { force: true, recursive: true })
-
+const packageRoot = resolve(import.meta.dirname, "..")
+const outdir = resolve(packageRoot, "dist")
+await rm(outdir, { force: true, recursive: true })
 await build({
 	configFile: false,
 	build: {
 		emptyOutDir: true,
 		lib: {
-			cssFileName: `editor`,
-			entry: resolve(packageRoot, `src/browser.ts`),
-			fileName: `editor`,
-			formats: [`es`],
-		},
-		minify: true,
-		outDir: outdir,
-		sourcemap: true,
-	},
-})
-
-await build({
-	configFile: false,
-	build: {
-		emptyOutDir: false,
-		lib: {
-			cssFileName: `shared`,
-			entry: resolve(packageRoot, `src/shared.ts`),
-			fileName: `shared`,
-			formats: [`es`],
+			cssFileName: "editor",
+			entry: resolve(packageRoot, "src/index.ts"),
+			fileName: "editor",
+			formats: ["es"],
 		},
 		minify: true,
 		outDir: outdir,

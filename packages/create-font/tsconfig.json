@@ -10,8 +10,8 @@
 		"types": ["node"]
 	},
 	"include": [
-		"../editor/css.d.ts",
-		"../editor/lasertag.d.ts",
+		"../font-editor/css.d.ts",
+		"../font-editor/lasertag.d.ts",
 		"public",
 		"scripts",
 		"src",

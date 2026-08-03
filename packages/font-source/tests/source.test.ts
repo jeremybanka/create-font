@@ -1,8 +1,8 @@
 import { describe, expect, expectTypeOf, test } from "vitest"
 
-import { createFontEditorState } from "../../states/src/state.ts"
-import type { EditorFontSource } from "../../states/src/types.ts"
-import { makeGeometricOEditorFont } from "../../states/tests/fixtures/geometric-o.ts"
+import { createFontEditorState } from "../../font-states/src/state.ts"
+import type { EditorFontSource } from "../../font-states/src/types.ts"
+import { makeGeometricOEditorFont } from "../../font-states/tests/fixtures/geometric-o.ts"
 import {
 	assembleEditorFontSource as assembleBrowserEditorFontSource,
 	splitEditorFontSource as splitBrowserEditorFontSource,

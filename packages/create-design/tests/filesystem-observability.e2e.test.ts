@@ -14,14 +14,14 @@ import { h, render } from "preact"
 import { act } from "preact/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { DesignApplication } from "../src/DesignApplication.tsx"
+import { DesignApplication } from "../../design-editor/src/DesignApplication.tsx"
 import { createDesignSourceService } from "../src/source-service.ts"
 import {
 	designSourceTransaction,
 	type DesignExternalSourceUpdate,
 	type DesignSourceSession,
 } from "../src/source-sync.ts"
-import type { DesignDocument } from "../src/types.ts"
+import type { DesignDocument } from "@create-design/source"
 
 const hosts: HTMLElement[] = []
 const roots: string[] = []

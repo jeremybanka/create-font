@@ -61,36 +61,21 @@ importers:
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../source-rpc
-      '@create-art/vector-geometry':
+      '@create-design/editor':
         specifier: workspace:*
-        version: link:../vector-geometry
+        version: link:../design-editor
       '@create-design/source':
         specifier: workspace:*
         version: link:../design-source
-      '@create-font/editor':
-        specifier: workspace:*
-        version: link:../editor
-      '@create-font/preact-konva':
-        specifier: workspace:*
-        version: link:../preact-konva
       '@elysia/node':
         specifier: 1.4.6
         version: 1.4.6(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
       '@elysia/static':
         specifier: 1.4.11
         version: 1.4.11(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
-      '@radix-ui/react-icons':
-        specifier: ^1.3.2
-        version: 1.3.2(@preact/compat@18.3.2(preact@10.29.8))
       elysia:
         specifier: 1.4.29
         version: 1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
-      mondrian.pdf:
-        specifier: 0.0.0
-        version: 0.0.0
-      preact:
-        specifier: 10.29.8
-        version: 10.29.8
     devDependencies:
       '@preact/preset-vite':
         specifier: 2.10.6
@@ -119,6 +104,12 @@ importers:
       lasertag:
         specifier: 0.7.0
         version: 0.7.0(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)(preact@10.29.8)(supports-color@7.2.0)
+      mondrian.pdf:
+        specifier: 0.0.0
+        version: 0.0.0
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8
       react:
         specifier: npm:@preact/compat@18.3.2
         version: '@preact/compat@18.3.2(preact@10.29.8)'
@@ -145,22 +136,22 @@ importers:
         version: link:../source-rpc
       '@create-font/editor':
         specifier: workspace:*
-        version: link:../editor
+        version: link:../font-editor
       '@create-font/fea-rs-wasm':
         specifier: workspace:*
-        version: link:../fea-rs-wasm
+        version: link:../font-fea-rs-wasm
       '@create-font/server':
         specifier: workspace:*
-        version: link:../server
+        version: link:../font-server
       '@create-font/source':
         specifier: workspace:*
         version: link:../font-source
       '@create-font/states':
         specifier: workspace:*
-        version: link:../states
+        version: link:../font-states
       '@create-font/target':
         specifier: workspace:*
-        version: link:../target
+        version: link:../font-target
       '@elysia/node':
         specifier: 1.4.6
         version: 1.4.6(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
@@ -205,6 +196,73 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/design-editor:
+    dependencies:
+      '@create-art/editor':
+        specifier: workspace:*
+        version: link:../editor
+      '@create-art/preact-konva':
+        specifier: workspace:*
+        version: link:../preact-konva
+      '@create-art/source-rpc':
+        specifier: workspace:*
+        version: link:../source-rpc
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../vector-geometry
+      '@create-design/source':
+        specifier: workspace:*
+        version: link:../design-source
+      '@radix-ui/react-icons':
+        specifier: ^1.3.2
+        version: 1.3.2(@preact/compat@18.3.2(preact@10.29.8))
+      mondrian.pdf:
+        specifier: 0.0.0
+        version: 0.0.0
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
+      '@typescript-eslint/parser':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
+      '@typescript-eslint/utils':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+      atom.io:
+        specifier: 0.50.2
+        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+      eslint:
+        specifier: 10.8.0
+        version: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
+      happy-dom:
+        specifier: 20.11.1
+        version: 20.11.1
+      jiti:
+        specifier: 2.7.0
+        version: 2.7.0
+      lasertag:
+        specifier: 0.7.0
+        version: 0.7.0(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)(preact@10.29.8)(supports-color@7.2.0)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(preact@10.29.8)'
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(preact@10.29.8)'
+      vite:
+        specifier: 8.2.0
+        version: 8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0)
+      vite-plus:
+        specifier: 0.2.7
+        version: 0.2.7(@types/node@25.9.5)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(jiti@2.7.0)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/design-source:
     dependencies:
       '@create-art/source-format':
@@ -226,14 +284,54 @@ importers:
 
   packages/editor:
     dependencies:
+      '@create-art/preact-konva':
+        specifier: workspace:*
+        version: link:../preact-konva
+      '@radix-ui/react-icons':
+        specifier: ^1.3.2
+        version: 1.3.2(@preact/compat@18.3.2(preact@10.29.8))
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
+      happy-dom:
+        specifier: 20.11.1
+        version: 20.11.1
+      lasertag:
+        specifier: 0.7.0
+        version: 0.7.0(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)(preact@10.29.8)(supports-color@7.2.0)
+      react:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(preact@10.29.8)'
+      react-dom:
+        specifier: npm:@preact/compat@18.3.2
+        version: '@preact/compat@18.3.2(preact@10.29.8)'
+      vite:
+        specifier: 8.2.0
+        version: 8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0)
+      vite-plus:
+        specifier: 0.2.7
+        version: 0.2.7(@types/node@25.9.5)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(jiti@2.7.0)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/font-editor:
+    dependencies:
+      '@create-art/editor':
+        specifier: workspace:*
+        version: link:../editor
       '@create-font/states':
         specifier: workspace:*
-        version: link:../states
+        version: link:../font-states
       '@create-font/target':
         specifier: workspace:*
-        version: link:../target
+        version: link:../font-target
     devDependencies:
-      '@create-font/preact-konva':
+      '@create-art/preact-konva':
         specifier: workspace:*
         version: link:../preact-konva
       '@floating-ui/dom':
@@ -285,58 +383,13 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/fea-rs-wasm:
+  packages/font-fea-rs-wasm:
     devDependencies:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/font-service:
-    dependencies:
-      harfbuzzjs:
-        specifier: 1.5.0
-        version: 1.5.0
-    devDependencies:
-      '@create-font/target':
-        specifier: workspace:*
-        version: link:../target
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/font-source:
-    dependencies:
-      '@create-art/source-format':
-        specifier: workspace:*
-        version: link:../source-format
-      '@create-font/fea-rs-wasm':
-        specifier: workspace:*
-        version: link:../fea-rs-wasm
-      '@create-font/states':
-        specifier: workspace:*
-        version: link:../states
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-    devDependencies:
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/preact-konva:
-    dependencies:
-      konva:
-        specifier: 10.3.0
-        version: 10.3.0
-      preact:
-        specifier: 10.29.8
-        version: 10.29.8
-    devDependencies:
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/server:
+  packages/font-server:
     dependencies:
       '@create-art/source-rpc':
         specifier: workspace:*
@@ -360,6 +413,88 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
+
+  packages/font-service:
+    dependencies:
+      harfbuzzjs:
+        specifier: 1.5.0
+        version: 1.5.0
+    devDependencies:
+      '@create-font/target':
+        specifier: workspace:*
+        version: link:../font-target
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/font-source:
+    dependencies:
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:../source-format
+      '@create-font/fea-rs-wasm':
+        specifier: workspace:*
+        version: link:../font-fea-rs-wasm
+      '@create-font/states':
+        specifier: workspace:*
+        version: link:../font-states
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/font-states:
+    dependencies:
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../vector-geometry
+      '@create-font/server':
+        specifier: workspace:*
+        version: link:../font-server
+      '@create-font/target':
+        specifier: workspace:*
+        version: link:../font-target
+      atom.io:
+        specifier: 0.50.2
+        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
+    devDependencies:
+      '@typescript-eslint/parser':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
+      '@typescript-eslint/utils':
+        specifier: 8.65.0
+        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+      eslint:
+        specifier: 10.8.0
+        version: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
+      jiti:
+        specifier: 2.7.0
+        version: 2.7.0
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/font-target:
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/preact-konva:
+    dependencies:
+      konva:
+        specifier: 10.3.0
+        version: 10.3.0
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8
+    devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/source-format:
     dependencies:
@@ -392,43 +527,6 @@ importers:
       '@types/node':
         specifier: 25.9.5
         version: 25.9.5
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/states:
-    dependencies:
-      '@create-art/vector-geometry':
-        specifier: workspace:*
-        version: link:../vector-geometry
-      '@create-font/server':
-        specifier: workspace:*
-        version: link:../server
-      '@create-font/target':
-        specifier: workspace:*
-        version: link:../target
-      atom.io:
-        specifier: 0.50.2
-        version: 0.50.2(@typescript-eslint/parser@8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.1)
-    devDependencies:
-      '@typescript-eslint/parser':
-        specifier: 8.65.0
-        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
-      '@typescript-eslint/utils':
-        specifier: 8.65.0
-        version: 8.65.0(eslint@10.8.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
-      eslint:
-        specifier: 10.8.0
-        version: 10.8.0(jiti@2.7.0)(supports-color@7.2.0)
-      jiti:
-        specifier: 2.7.0
-        version: 2.7.0
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/target:
-    devDependencies:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))

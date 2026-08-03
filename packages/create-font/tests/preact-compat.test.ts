@@ -22,7 +22,7 @@ describe(`Browser artifact boundary`, () => {
 	it(`builds the editor as a Preact-owned browser artifact`, async () => {
 		const browserRoot = resolve(
 			import.meta.dirname,
-			`../../editor/dist/browser`,
+			`../../font-editor/dist/browser`,
 		)
 		const [javascript, sourceMap, styles] = await Promise.all([
 			readFile(resolve(browserRoot, `editor.js`), `utf8`),

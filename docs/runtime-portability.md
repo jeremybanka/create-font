@@ -12,7 +12,7 @@ The workspace is divided into four dependency classes:
 | Class                  | Current boundary                                                               | Portability plan                                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Installed runtime      | `packages/create-font/src`                                                     | Use Node-compatible and Web-standard APIs. Process execution goes through the injectable `RuntimeAdapter`. |
-| Browser build          | `packages/create-font/scripts/build.ts` and `packages/editor/scripts/build.ts` | Vite builds application pages, the editor artifact, and published library entrypoints under Node.          |
+| Browser build          | `packages/create-font/scripts/build.ts` and `packages/font-editor/scripts/build.ts` | Vite builds application pages, the editor artifact, and published library entrypoints under Node.          |
 | Tests                  | `packages/create-font/tests`                                                   | Vitest runs the behavioral suite under Node; a shared runtime smoke script also runs under Bun.            |
 | Repository development | `packages/create-font/scripts/dev.ts` and package scripts                      | Node supervises the watched Elysia backend and Vite development server.                                    |
 

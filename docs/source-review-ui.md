@@ -7,7 +7,7 @@ selective commits became product-neutral in `@create-art/source-rpc`.
 
 Share a **source review surface**, not a universal Version Control tile.
 
-The shared boundary in `@create-font/editor/shared` owns:
+The shared boundary in `@create-art/editor` owns:
 
 - UI-facing comparison endpoints and semantic change rows;
 - comparison loading, unavailable, empty, and error presentation;

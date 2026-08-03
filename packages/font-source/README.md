@@ -1,7 +1,7 @@
 # @create-font/source
 
 `@create-font/source` is the deterministic file boundary for
-[`@create-font/states`](../states/README.md). It defines both:
+[`@create-font/states`](../font-states/README.md). It defines both:
 
 - a complete-document codec for interchange, migrations, and in-memory
   backends;

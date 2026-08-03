@@ -1,0 +1,53 @@
+{
+	"name": "@create-font/states",
+	"version": "0.6.7",
+	"description": "Atom.io state and compilation model for variable-font editors",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/font-states"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"check:eslint": "eslint \"src/**/*.ts\"",
+		"dev": "vp pack --watch --no-clean",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"@create-art/vector-geometry": "workspace:*",
+		"@create-font/server": "workspace:*",
+		"@create-font/target": "workspace:*",
+		"atom.io": "0.50.2"
+	},
+	"devDependencies": {
+		"@typescript-eslint/parser": "8.65.0",
+		"@typescript-eslint/utils": "8.65.0",
+		"eslint": "10.8.0",
+		"jiti": "2.7.0",
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

@@ -15,7 +15,7 @@ import { basename, resolve } from "node:path"
 import { promisify } from "node:util"
 
 const workspaceRoot = resolve(import.meta.dirname, `../../..`)
-const packageDirectories = [`packages/create-font`, `packages/editor`] as const
+const packageDirectories = [`packages/create-font`, `packages/font-editor`] as const
 
 let fixtureRoot = ``
 const execFileAsync = promisify(execFile)
@@ -160,7 +160,7 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 		}
 		const editorPackage = JSON.parse(
 			await readFile(
-				resolve(workspaceRoot, `packages/editor/package.json`),
+				resolve(workspaceRoot, `packages/font-editor/package.json`),
 				`utf8`,
 			),
 		) as { version: string }

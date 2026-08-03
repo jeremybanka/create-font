@@ -78,10 +78,11 @@ const shards = {
 		{
 			kind: `package-tests`,
 			packages: [
+				`@create-art/editor`,
 				`@create-art/source-rpc`,
 				`@create-art/vector-geometry`,
 				`@create-font/font-service`,
-				`@create-font/preact-konva`,
+				`@create-art/preact-konva`,
 				`@create-font/server`,
 				`@create-font/target`,
 			],
@@ -100,6 +101,10 @@ const shards = {
 		},
 	],
 	editor: [
+		{
+			kind: `package-tests`,
+			packages: [`@create-design/editor`],
+		},
 		{
 			kind: `package-script`,
 			package: `@create-font/editor`,

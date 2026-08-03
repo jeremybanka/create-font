@@ -1,0 +1,68 @@
+{
+	"name": "@create-font/editor",
+	"version": "0.7.10",
+	"description": "Interactive variable-font editor for the create-font state model",
+	"license": "AGPL-3.0-or-later",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/font-editor"
+	},
+	"type": "module",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"src/browser-api.ts",
+		"OUTPUT-EXCEPTION.txt"
+	],
+	"exports": {
+		".": {
+			"types": "./src/browser-api.ts",
+			"browser": "./dist/browser/editor.js",
+			"import": "./dist/browser/editor.js"
+		},
+		"./browser": {
+			"types": "./src/browser-api.ts",
+			"browser": "./dist/browser/editor.js",
+			"import": "./dist/browser/editor.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
+		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
+		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
+		"profile:live-font": "node --conditions=development ./scripts/profile-live-compilation.ts",
+		"test": "vp test",
+		"test:coverage": "vp test run --coverage"
+	},
+	"dependencies": {
+		"@create-art/editor": "workspace:*",
+		"@create-font/states": "workspace:*",
+		"@create-font/target": "workspace:*"
+	},
+	"devDependencies": {
+		"@create-art/preact-konva": "workspace:*",
+		"@floating-ui/dom": "^1.8.0",
+		"@radix-ui/react-icons": "^1.3.2",
+		"@typescript-eslint/parser": "8.65.0",
+		"@typescript-eslint/utils": "8.65.0",
+		"@vitest/coverage-v8": "4.1.10",
+		"atom.io": "0.50.2",
+		"eslint": "10.8.0",
+		"happy-dom": "20.11.1",
+		"jiti": "2.7.0",
+		"lasertag": "0.7.0",
+		"preact": "10.29.8",
+		"react": "npm:@preact/compat@18.3.2",
+		"react-dom": "npm:@preact/compat@18.3.2",
+		"treetrunks": "0.1.8",
+		"vite": "8.2.0",
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": "26.5.1"
+	}
+}

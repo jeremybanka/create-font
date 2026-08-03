@@ -15,41 +15,18 @@ import {
 	sourceUnitKindForPath,
 	splitDesignDocument,
 	type DesignDocument,
-	type DesignSourceDiagnostic,
 } from "@create-design/source"
-import type { DesignVersionControlSession } from "./design-version-control.ts"
+import type {
+	DesignExternalSourceUpdate,
+	DesignSourceSession,
+	DesignSourceStatus,
+} from "@create-design/editor/source-session"
 
-export type DesignSourceStatus =
-	| `connected`
-	| `saving`
-	| `saved`
-	| `recovering`
-	| `conflict`
-
-export type DesignExternalSourceUpdate =
-	| Readonly<{
-			ok: true
-			document: DesignDocument
-			revision: string
-	  }>
-	| Readonly<{
-			ok: false
-			diagnostics: readonly DesignSourceDiagnostic[]
-			revision: string
-	  }>
-
-export interface DesignSourceSession {
-	readonly displayName?: string
-	readonly initialDocument: DesignDocument
-	readonly initialRevision: string
-	readonly versionControl?: DesignVersionControlSession
-	reload(): Promise<DesignExternalSourceUpdate>
-	save(document: DesignDocument): Promise<Readonly<{ revision: string }>>
-	subscribeDocument(
-		listener: (update: DesignExternalSourceUpdate) => void,
-	): () => void
-	subscribeStatus(listener: (status: DesignSourceStatus) => void): () => void
-}
+export type {
+	DesignExternalSourceUpdate,
+	DesignSourceSession,
+	DesignSourceStatus,
+} from "@create-design/editor/source-session"
 
 function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
 	const result = assembleDesignDocument(

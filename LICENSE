@@ -10,13 +10,16 @@ specific entry below.
 GNU Affero General Public License, version 3 or later
 -----------------------------------------------------
 
-The create-font and create-design applications, the create-font editor UI, and
-the repository-level application tooling are licensed under the GNU Affero
-General Public License, version 3 or later (SPDX: AGPL-3.0-or-later):
+The create-font and create-design applications, their editor UIs, the shared
+create-art editor foundations, and the repository-level application tooling are
+licensed under the GNU Affero General Public License, version 3 or later
+(SPDX: AGPL-3.0-or-later):
 
 - packages/create-font/**
 - packages/create-design/**
 - packages/editor/**
+- packages/design-editor/**
+- packages/font-editor/**
 - scripts/**
 - repository files not assigned another license below
 
@@ -34,15 +37,15 @@ implementations are licensed under the Mozilla Public License, version 2.0
 - crates/**
 - packages/design-source/**
 - packages/dprint-plugin-fea/**
-- packages/fea-rs-wasm/**
+- packages/font-fea-rs-wasm/**
 - packages/font-service/**
 - packages/font-source/**
 - packages/preact-konva/**
-- packages/server/**
+- packages/font-server/**
 - packages/source-format/**
 - packages/source-rpc/**
-- packages/states/**
-- packages/target/**
+- packages/font-states/**
+- packages/font-target/**
 - packages/vector-geometry/**
 
 The full license is in LICENSES/MPL-2.0.txt.

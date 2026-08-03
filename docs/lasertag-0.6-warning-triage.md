@@ -154,8 +154,8 @@ analysis-only wrappers:
 - Editor tests: 48 files and 392 tests passed.
 - ESLint, dprint, `git diff --check`, and the full Lasertag check passed.
 - The repository-wide VP check completed with zero errors and four unrelated
-  warnings in `packages/states/src/state.ts` and
-  `packages/editor/tests/pen-gesture.test.ts`.
+  warnings in `packages/font-states/src/state.ts` and
+  `packages/font-editor/tests/pen-gesture.test.ts`.
 - An agentic Playwright pass exercised the normal tiling workspace and tile
   management at 1440×1000 and 390×844. Both viewports retained exact document
   width with no horizontal overflow; the narrow management sheet and its exit,

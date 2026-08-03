@@ -19,7 +19,7 @@ export default defineConfig({
 		alias: {
 			"@create-font/editor/browser": resolve(
 				import.meta.dirname,
-				`../editor/src/browser.ts`,
+				`../font-editor/src/browser.ts`,
 			),
 		},
 		conditions: [`development`],

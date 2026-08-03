@@ -4,7 +4,7 @@ documents:
     description: A CLI for discovering and curating agent-readable documentation in agents.yaml.
   - path: ./node_modules/vite-plus/AGENTS.md
     description: The Unified Toolchain for the Web
-  - path: ./packages/editor/node_modules/lasertag/AGENTS.md
+  - path: ./packages/font-editor/node_modules/lasertag/AGENTS.md
     description: zero-runtime structural css for jsx with css modules
-  - path: ./packages/states/node_modules/atom.io/AGENTS.md
+  - path: ./packages/font-states/node_modules/atom.io/AGENTS.md
     description: Versatile state engine for TypeScript applications.

@@ -1,0 +1,42 @@
+{
+	"name": "@create-font/target",
+	"version": "0.0.2",
+	"description": "A rigorously validated logical SFNT compilation target for OpenType variable TrueType fonts",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/font-target"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"scripts": {
+		"build": "vp pack",
+		"dev": "vp pack --watch --no-clean",
+		"test": "vp test"
+	},
+	"devDependencies": {
+		"vitest": "4.1.10"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

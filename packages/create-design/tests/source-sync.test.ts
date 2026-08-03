@@ -9,7 +9,7 @@ import {
 } from "@create-design/source"
 import { describe, expect, test } from "vitest"
 
-import { createInitialDocument } from "../src/document.ts"
+import { createInitialDocument } from "@create-design/editor/model"
 import { designSourceTransaction } from "../src/source-sync.ts"
 
 function initialState(document = createInitialDocument()) {

@@ -11,7 +11,7 @@
 	},
 	"include": [
 		"../editor/css.d.ts",
-		"../editor/lasertag.d.ts",
+		"../design-editor/lasertag.d.ts",
 		"public",
 		"scripts",
 		"src",

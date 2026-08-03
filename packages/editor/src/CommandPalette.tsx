@@ -16,10 +16,10 @@ import {
 	HOTBAR_COMMAND_MIME,
 	HOTBAR_KEYS,
 	hotbarSlotIndexForKeyboardEvent,
-} from "./action-hotbar.ts"
+} from "./command-assignment.ts"
 import css from "./CommandPalette.module.css"
 import { EditorIcon } from "./EditorIcon.tsx"
-import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./editor-tools-and-hotkeys.ts"
+import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./platform.ts"
 
 const svg = {
 	ArrowDown: ArrowDownIcon,

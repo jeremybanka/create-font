@@ -7,15 +7,8 @@
 		"lib": ["DOM", "DOM.Iterable", "ES2024"],
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
-		"types": []
+		"types": ["node"]
 	},
-	"include": [
-		"css.d.ts",
-		"eslint.config.ts",
-		"lasertag.d.ts",
-		"src",
-		"tests",
-		"vitest.config.ts"
-	],
+	"include": ["css.d.ts", "lasertag.d.ts", "src", "tests"],
 	"exclude": []
 }
