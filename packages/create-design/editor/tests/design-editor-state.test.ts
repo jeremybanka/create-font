@@ -18,46 +18,75 @@ describe("create-design atom.io state", () => {
 		const left = stateFor("Left")
 		const right = stateFor("Right")
 		left.actions.commitDocument({
-			...left.silo.getState(left.states.documentAtom),
+			...left.silo.getState(left.states.documentSelector),
 			title: "Changed",
 		})
 
-		expect(left.silo.getState(left.states.documentAtom).title).toBe("Changed")
-		expect(right.silo.getState(right.states.documentAtom).title).toBe("Right")
-		expect(
-			right.silo.inspectTimeline(right.timelines.documentTimeline),
-		).toEqual({
-			at: 0,
-			length: 0,
+		expect(left.silo.getState(left.states.documentSelector).title).toBe(
+			"Changed",
+		)
+		expect(right.silo.getState(right.states.documentSelector).title).toBe(
+			"Right",
+		)
+		expect(right.silo.getState(right.states.historyMetaSelector)).toEqual({
+			canUndo: false,
+			canRedo: false,
+			pastLength: 0,
+			futureLength: 0,
 		})
 	})
 
 	it("commits, undoes, redoes, and clears history on reset", () => {
 		const state = stateFor("Initial")
-		const initial = state.silo.getState(state.states.documentAtom)
+		const initial = state.silo.getState(state.states.documentSelector)
 		const edited = { ...initial, title: "Edited" }
 		state.actions.commitDocument(edited)
 
-		expect(
-			state.silo.inspectTimeline(state.timelines.documentTimeline),
-		).toEqual({
-			at: 1,
-			length: 1,
+		expect(state.silo.getState(state.states.historyMetaSelector)).toEqual({
+			canUndo: true,
+			canRedo: false,
+			pastLength: 1,
+			futureLength: 0,
 		})
-		state.silo.undo(state.timelines.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(initial)
-		state.silo.redo(state.timelines.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(edited)
+		expect(state.actions.navigateDocumentHistory("undo")).toBe(initial)
+		expect(state.silo.getState(state.states.documentSelector)).toBe(initial)
+		expect(state.actions.navigateDocumentHistory("redo")).toBe(edited)
+		expect(state.silo.getState(state.states.documentSelector)).toBe(edited)
 
 		const replacement = { ...initial, title: "External" }
 		state.actions.resetDocument(replacement)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(replacement)
-		expect(
-			state.silo.inspectTimeline(state.timelines.documentTimeline),
-		).toEqual({
-			at: 0,
-			length: 0,
+		expect(state.silo.getState(state.states.documentSelector)).toBe(replacement)
+		expect(state.silo.getState(state.states.historyMetaSelector)).toEqual({
+			canUndo: false,
+			canRedo: false,
+			pastLength: 0,
+			futureLength: 0,
 		})
+	})
+
+	it("retains at most 100 past documents and invalidates redo on commit", () => {
+		const state = stateFor("0")
+		for (let index = 1; index <= 101; index += 1) {
+			state.actions.commitDocument({
+				...state.silo.getState(state.states.documentSelector),
+				title: String(index),
+			})
+		}
+		expect(state.silo.getState(state.states.historyAtom).past).toHaveLength(100)
+
+		for (let index = 0; index < 100; index += 1)
+			expect(state.actions.navigateDocumentHistory("undo")).not.toBeNull()
+		expect(state.silo.getState(state.states.documentSelector).title).toBe("1")
+		expect(state.actions.navigateDocumentHistory("undo")).toBeNull()
+
+		state.actions.navigateDocumentHistory("redo")
+		state.actions.commitDocument({
+			...state.silo.getState(state.states.documentSelector),
+			title: "Replacement",
+		})
+		expect(state.silo.getState(state.states.historyMetaSelector).canRedo).toBe(
+			false,
+		)
 	})
 
 	it("loads an external document and persistence revision atomically", () => {
@@ -67,14 +96,14 @@ describe("create-design atom.io state", () => {
 			state.states.snapshotSelector,
 			() => {
 				observed(
-					state.silo.getState(state.states.documentAtom).title,
+					state.silo.getState(state.states.documentSelector).title,
 					state.silo.getState(state.states.persistenceAtom).durableRevision,
 				)
 			},
 		)
 		state.actions.loadExternalDocument({
 			document: {
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title: "External",
 			},
 			durableRevision: "revision-2",

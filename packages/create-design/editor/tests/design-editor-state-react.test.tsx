@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
-import { StoreProvider, useO, useTL } from "atom.io/react"
-import { h, render } from "preact"
-import { act } from "preact/test-utils"
+import { StoreProvider, useO } from "atom.io/react"
+import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
@@ -20,15 +19,14 @@ afterEach(() => {
 })
 
 function StateOutput({ state }: Readonly<{ state: DesignEditorState }>) {
-	const document = useO(state.states.documentAtom)
-	const history = useTL(state.timelines.documentTimeline)
+	const snapshot = useO(state.states.snapshotSelector)
 	return h(
 		"output",
 		{
-			"data-at": history.at,
-			"data-length": history.length,
+			"data-past": snapshot.history.pastLength,
+			"data-future": snapshot.history.futureLength,
 		},
-		document.title,
+		snapshot.document.title,
 	)
 }
 
@@ -53,13 +51,20 @@ describe("create-design atom.io React bindings", () => {
 
 		act(() =>
 			state.actions.commitDocument({
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title: "Observed",
 			}),
 		)
 
 		expect(host.querySelector("output")?.textContent).toBe("Observed")
-		expect(host.querySelector("output")?.getAttribute("data-at")).toBe("1")
-		expect(host.querySelector("output")?.getAttribute("data-length")).toBe("1")
+		expect(host.querySelector("output")?.getAttribute("data-past")).toBe("1")
+		expect(host.querySelector("output")?.getAttribute("data-future")).toBe("0")
+
+		act(() => {
+			state.actions.navigateDocumentHistory("undo")
+		})
+		expect(host.querySelector("output")?.textContent).toBe("Initial")
+		expect(host.querySelector("output")?.getAttribute("data-past")).toBe("0")
+		expect(host.querySelector("output")?.getAttribute("data-future")).toBe("1")
 	})
 })

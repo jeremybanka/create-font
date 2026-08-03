@@ -50,7 +50,7 @@ import {
 	useState,
 } from "react"
 import type { ReactNode, ComponentProps } from "react"
-import { StoreProvider, useO, useTL } from "atom.io/react"
+import { StoreProvider, useO } from "atom.io/react"
 
 import {
 	defaultDesignAppearance,
@@ -605,8 +605,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasTheme = useDesignCanvasTheme()
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
-	const { document, persistence } = useO(editorState.states.snapshotSelector)
-	const documentHistory = useTL(editorState.timelines.documentTimeline)
+	const { document, history, persistence } = useO(
+		editorState.states.snapshotSelector,
+	)
 	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
@@ -1430,19 +1431,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const navigateDesignHistory = useCallback(
 		(type: "redo" | "undo"): void => {
-			if (
-				(type === "undo" && documentHistory.at === 0) ||
-				(type === "redo" && documentHistory.at === documentHistory.length)
-			)
-				return
-			documentHistory[type]()
-			const target = editorState.silo.getState(editorState.states.documentAtom)
+			const target = editorState.actions.navigateDocumentHistory(type)
+			if (target === null) return
 			const recorded = pathCommandSelectionsRef.current.get(target)
 			if (recorded === undefined) return
 			setSelection(recorded.objectSelection)
 			setDirectSelection(recorded.directSelection)
 		},
-		[documentHistory, editorState],
+		[editorState],
 	)
 
 	const finishPen = useCallback(
@@ -2150,7 +2146,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				category: "Edit",
 				icon: "DoubleArrowLeftIcon",
 				shortcut: "⌘ Z",
-				disabled: documentHistory.at === 0,
+				disabled: !history.canUndo,
 				do: () => navigateDesignHistory("undo"),
 			},
 			{
@@ -2159,7 +2155,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				category: "Edit",
 				icon: "DoubleArrowRightIcon",
 				shortcut: "⇧⌘ Z",
-				disabled: documentHistory.at === documentHistory.length,
+				disabled: !history.canRedo,
 				do: () => navigateDesignHistory("redo"),
 			},
 			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
@@ -2181,8 +2177,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			executePathCommand,
 			expansionEligibility,
 			exportDocument,
-			documentHistory.at,
-			documentHistory.length,
+			history.canRedo,
+			history.canUndo,
 			navigateDesignHistory,
 			openTile,
 			selectTool,
