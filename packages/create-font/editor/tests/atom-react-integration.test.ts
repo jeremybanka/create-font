@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { GlyphId } from "@create-font/states"
+import { Silo } from "atom.io"
 import { StoreProvider, useO, useTL } from "atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it } from "vitest"
@@ -20,6 +21,82 @@ afterEach(() => {
 })
 
 describe("atom.io React integration", () => {
+	it("owns independently established interaction facts in granular atoms", () => {
+		const workspace = createEditorWorkspace()
+		const factTokens = [
+			workspace.ui.selectedGlyphId,
+			workspace.ui.activeMasterId,
+			workspace.ui.comparisonMasterId,
+			workspace.ui.selection,
+			workspace.ui.previewText,
+			workspace.ui.caretIndex,
+			workspace.ui.textSelectionCollapsed,
+			workspace.ui.textSelectionRange,
+			workspace.ui.editingTextIndex,
+			workspace.ui.activeTool,
+			workspace.ui.selectedRuleIds,
+			workspace.ui.pathname,
+		]
+
+		expect(factTokens.every((token) => token.type === "atom")).toBe(true)
+		expect(new Set(factTokens.map((token) => token.key)).size).toBe(
+			factTokens.length,
+		)
+		expect(workspace.ui.previewCoordinate.type).toBe("atom_family")
+		expect(workspace.ui.activeGlyphId.type).toBe("readonly_pure_selector")
+		expect(workspace.font.silo.store.atoms.has("interaction")).toBe(false)
+		if (false) {
+			workspace.font.actions.load(workspace.document, [
+				// @ts-expect-error A co-write value must match its atom's value type.
+				{
+					atom: workspace.ui.previewText,
+					value: 42,
+				},
+			])
+		}
+	})
+
+	it("renders a transaction over separate atoms as one settled snapshot", () => {
+		const silo = new Silo({
+			name: "separate-atom-react-transaction",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const firstAtom = silo.atom({ key: "first", default: "old first" })
+		const secondAtom = silo.atom({ key: "second", default: "old second" })
+		const updateTransaction = silo.transaction<() => void>({
+			key: "updateBoth",
+			do: ({ set }) => {
+				set(firstAtom, "new first")
+				set(secondAtom, "new second")
+			},
+		})
+		const snapshots: Array<readonly [string, string]> = []
+		function Harness() {
+			snapshots.push([useO(firstAtom), useO(secondAtom)])
+			return null
+		}
+		const host = document.createElement("div")
+		document.body.append(host)
+		hosts.push(host)
+		act(() =>
+			render(
+				h(StoreProvider, {
+					store: silo.store,
+					children: h(Harness, {}),
+				}),
+				host,
+			),
+		)
+
+		act(() => silo.runTransaction(updateTransaction)())
+
+		expect(snapshots).toEqual([
+			["old first", "old second"],
+			["new first", "new second"],
+		])
+	})
+
 	it("renders coordinated workspace transactions as settled state", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")

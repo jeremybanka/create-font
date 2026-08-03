@@ -2,4 +2,4 @@
 "@create-font/editor": patch
 ---
 
-Use atom.io transactions and standard React bindings for coordinated editor UI state, and clean up browser navigation listeners when an editor unmounts.
+Store independently established editor interaction facts in granular atom.io atoms, coordinate multi-fact commands and source reconciliation with transactions, use standard React bindings, and clean up browser navigation listeners when an editor unmounts.

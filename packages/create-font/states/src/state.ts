@@ -734,15 +734,37 @@ export interface CreateFontEditorStateOptions {
 	readonly isProduction?: boolean
 }
 
-/**
- * Co-writes one caller-owned plain atom in the same commit as a
- * whole-document load. Promise-like values are deliberately excluded because
- * atom.io transactions are synchronous.
- */
+/** A caller-owned plain atom/value pair committed with a whole-document load. */
 export interface FontLoadCoWrite<Value> {
 	readonly atom: RegularAtomToken<Value>
 	readonly value: Value extends PromiseLike<unknown> ? never : Value
 }
+
+interface FontLoadCoWriteCandidate {
+	readonly atom: RegularAtomToken<unknown>
+	readonly value: unknown
+}
+
+/**
+ * Validates a heterogeneous tuple of caller-owned atom/value pairs without
+ * widening away each pair's value association.
+ */
+export type FontLoadCoWrites<
+	Candidates extends readonly FontLoadCoWriteCandidate[],
+> = {
+	readonly [Index in keyof Candidates]: Candidates[Index] extends {
+		readonly atom: RegularAtomToken<infer Value>
+		readonly value: infer ActualValue
+	}
+		? [Value] extends [PromiseLike<unknown>]
+			? never
+			: [ActualValue] extends [Value]
+				? FontLoadCoWrite<Value>
+				: never
+		: never
+}
+
+type ErasedFontLoadCoWrites = readonly FontLoadCoWrite<unknown>[]
 
 function resultWithWarnings<Value>(
 	result: ProjectionResult<Value>,
@@ -4204,11 +4226,22 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	)
 
 	const replaceFontTransaction = revisionedTransaction<
-		(source: EditorFontSource, coWrite?: FontLoadCoWrite<unknown>) => void
+		(source: EditorFontSource, coWrites?: ErasedFontLoadCoWrites) => void
 	>({
 		key: "replaceFont",
-		do: ({ get, set }, source, coWrite) => {
+		do: ({ get, set }, source, coWrites) => {
 			validateEditorSourceStructure(source)
+			for (const coWrite of coWrites ?? []) {
+				assertCallerOwnedLoadAtom(coWrite.atom)
+				if (isThenable(coWrite.value)) {
+					// Attach a rejection handler before aborting so accidental promises do
+					// not become unhandled rejections after the synchronous transaction.
+					void Promise.resolve(coWrite.value).catch(() => undefined)
+					throw new TypeError(
+						"A font-load co-write value cannot be promise-like.",
+					)
+				}
+			}
 
 			const oldAxisIds = get(axisIdsAtom)
 			const oldMasterIds = get(masterIdsAtom)
@@ -4446,16 +4479,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			for (const entry of source.cmap) {
 				set(cmapGlyphAtoms, entry.codePoint, entry.glyphId)
 			}
-			if (coWrite !== undefined) {
-				assertCallerOwnedLoadAtom(coWrite.atom)
-				if (isThenable(coWrite.value)) {
-					// Attach a rejection handler before aborting so accidental promises do
-					// not become unhandled rejections after the synchronous transaction.
-					void Promise.resolve(coWrite.value).catch(() => undefined)
-					throw new TypeError(
-						"A font-load co-write value cannot be promise-like.",
-					)
-				}
+			for (const coWrite of coWrites ?? []) {
 				set(coWrite.atom, coWrite.value)
 			}
 		},
@@ -7976,12 +8000,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
 			},
 			markDocumentChanged,
-			load<Value>(
+			load<const CoWrites extends readonly FontLoadCoWriteCandidate[]>(
 				source: EditorFontSource,
-				coWrite?: FontLoadCoWrite<Value>,
+				coWrites?: CoWrites & FontLoadCoWrites<CoWrites>,
 			): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)
-				runReplaceFont(source, coWrite)
+				runReplaceFont(source, coWrites)
 				const nextGlyphIds = silo.getState(glyphIdsAtom)
 				const nextGlyphIdSet = new Set(nextGlyphIds)
 				for (const glyphId of previousGlyphIds) {

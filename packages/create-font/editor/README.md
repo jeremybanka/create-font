@@ -57,10 +57,15 @@ has its own component, while the no-history branch invokes no timeline hook.
 Editor-owned revision bookkeeping stays at the undo and redo command
 boundaries.
 
-Fields that form one interaction snapshot—selection, active masters, edit mode,
-preview coordinates, and routing—are writable selectors over one composite
-atom. Coordinated commands and source replacement therefore publish one
-coherent snapshot even to synchronous imperative subscribers.
+Each independently established interaction fact owns a narrow atom: selected
+glyph, active and comparison masters, outline and rule selections, preview text,
+caret and textarea selection, edit occurrence, active tool, and pathname.
+Variation-axis preview coordinates use an atom family keyed by axis ID.
+Selectors remain only for values derived from those facts, such as route,
+active glyph, preview location, and active kerning pair. Coordinated commands
+write the relevant atoms in atom.io transactions. Whole-source replacement
+passes a validated tuple of those atom values into the font load transaction,
+so document and interaction reconciliation share one rollback boundary.
 
 Toolbar and keyboard history controls select the active glyph from the
 workspace's timeline family with atom.io's `useTL`. Switching glyphs switches

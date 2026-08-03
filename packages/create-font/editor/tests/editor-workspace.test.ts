@@ -212,26 +212,18 @@ function makeDisjointReplacementFont(): EditorFontSource {
 }
 
 describe("editor workspace", () => {
-	it("gives synchronous atom.io subscribers one coherent UI transition", () => {
+	it("commits coordinated UI transition facts to their final values", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		workspace.font.silo.setState(workspace.ui.editingTextIndex, 3)
-		const snapshots: Array<readonly [string | null, string, number | null]> = []
-		const unsubscribe = workspace.font.silo.subscribe(
-			workspace.ui.selectedGlyphId,
-			() => {
-				snapshots.push([
-					workspace.font.silo.getState(workspace.ui.selectedGlyphId),
-					workspace.font.silo.getState(workspace.ui.activeTool),
-					workspace.font.silo.getState(workspace.ui.editingTextIndex),
-				])
-			},
-		)
 
 		workspace.actions.selectGlyph(oGlyphId)
-		unsubscribe()
 
-		expect(snapshots).toEqual([[oGlyphId, "select", null]])
+		expect([
+			workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+			workspace.font.silo.getState(workspace.ui.activeTool),
+			workspace.font.silo.getState(workspace.ui.editingTextIndex),
+		]).toEqual([oGlyphId, "select", null])
 	})
 
 	it("commits master, comparison, and preview location together", () => {
@@ -265,15 +257,9 @@ describe("editor workspace", () => {
 		) {
 			throw new Error("Replacement fixture is incomplete.")
 		}
-		const staleAxisId = "axis:stale" as AxisId
 		workspace.actions.selectGlyph(oGlyphId)
 		workspace.actions.selectMaster(blackMasterId)
 		workspace.actions.setPreviewCoordinate(weightAxisId, 900)
-		workspace.font.silo.setState(
-			workspace.ui.previewCoordinate,
-			staleAxisId,
-			123,
-		)
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		workspace.font.silo.setState(workspace.ui.editingTextIndex, 2)
 		const point = workspace.font.read
@@ -323,17 +309,12 @@ describe("editor workspace", () => {
 				workspace.ui.editingTextIndex,
 			),
 		})
-		const uiSnapshots: ReturnType<typeof readSnapshot>[] = []
 		const revisionSnapshots: Array<{
 			readonly revision: number
 			readonly snapshot: ReturnType<typeof readSnapshot>
 			readonly glyphHistoryPresent: boolean
 			readonly kerningHistory: { readonly at: number; readonly length: number }
 		}> = []
-		const unsubscribeUi = workspace.font.silo.subscribe(
-			workspace.ui.selectedGlyphId,
-			() => uiSnapshots.push(readSnapshot()),
-		)
 		const unsubscribeRevision = workspace.font.silo.subscribe(
 			workspace.font.atoms.documentRevision,
 			() =>
@@ -352,7 +333,6 @@ describe("editor workspace", () => {
 		)
 
 		workspace.actions.replaceSource(replacement)
-		unsubscribeUi()
 		unsubscribeRevision()
 
 		const expected = {
@@ -367,7 +347,6 @@ describe("editor workspace", () => {
 			activeTool: "select",
 			editingTextIndex: null,
 		}
-		expect(uiSnapshots).toEqual([expected])
 		expect(revisionSnapshots).toEqual([
 			{
 				revision: revisionBeforeReplacement + 1,
@@ -385,9 +364,39 @@ describe("editor workspace", () => {
 		expect(
 			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
 		).toEqual({ at: 0, length: 0 })
+		expect(readSnapshot()).toEqual(expected)
+	})
+
+	it("tombstones preview coordinate atoms for removed source axes", () => {
+		const workspace = createEditorWorkspace()
+		const source = workspace.font.read.editorSource()
+		if (source === null) throw new Error("Fixture source is missing.")
+		workspace.actions.setPreviewCoordinate(weightAxisId, 900)
+		const replacement: EditorFontSource = {
+			...source,
+			axes: [],
+			masters: source.masters.map((master) =>
+				master.kind === "default"
+					? master
+					: { ...master, location: {}, support: { kind: "non-intermediate" } },
+			),
+			instances: source.instances.map((instance) => ({
+				...instance,
+				coordinates: {},
+			})),
+		}
+
+		workspace.actions.replaceSource(replacement)
+
 		expect(
-			workspace.font.silo.getState(workspace.ui.previewCoordinate, staleAxisId),
+			workspace.font.silo.getState(
+				workspace.ui.previewCoordinate,
+				weightAxisId,
+			),
 		).toBeNull()
+		expect(workspace.font.silo.getState(workspace.ui.previewLocation)).toEqual(
+			{},
+		)
 	})
 
 	it("applies feature substitutions to canvas clusters only while enabled", () => {

@@ -4,6 +4,7 @@ import {
 	type ContourId,
 	type EditorFontSource,
 	type EditorGlyphSource,
+	type FontLoadCoWrite,
 	type EditorLayerNode,
 	type EditorLocationSource,
 	type GlyphCompatibility,
@@ -12,6 +13,7 @@ import {
 	type MasterId,
 	type RuleId,
 } from "@create-font/states"
+import type { RegularAtomToken } from "atom.io"
 
 import { makeDemoFont } from "./demo-font.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
@@ -108,74 +110,11 @@ type MasterSelection = Readonly<{
 	previewCoordinates: Readonly<Record<string, number | null>>
 }>
 
-type EditorInteractionState = Readonly<{
-	selectedGlyphId: GlyphId | null
-	activeMasterId: MasterId
-	comparisonMasterId: MasterId
-	selection: readonly EditorSelectionTarget[]
-	previewText: string
-	caretIndex: number
-	textSelectionCollapsed: boolean
-	textSelectionRange: TextareaSelectionRange
-	editingTextIndex: number | null
-	activeTool: EditorToolId
-	selectedRuleIds: readonly RuleId[]
-	previewCoordinates: Readonly<Record<string, number | null>>
-	pathname: string
-}>
-
-function reconcileInteractionForSource(
-	interaction: EditorInteractionState,
-	source: EditorFontSource,
-): EditorInteractionState {
-	const firstGlyphId = source.glyphs[0]?.id
-	const firstMasterId = source.masters[0]?.id
-	if (firstGlyphId === undefined || firstMasterId === undefined) {
-		throw new TypeError(
-			"The editor requires at least one glyph and one master.",
-		)
-	}
-	const masterIds = new Set(source.masters.map((master) => master.id))
-	const defaultMasterId = masterIds.has(source.defaultMasterId)
-		? source.defaultMasterId
-		: firstMasterId
-	const activeMasterId = masterIds.has(interaction.activeMasterId)
-		? interaction.activeMasterId
-		: defaultMasterId
-	const comparisonMasterId =
-		masterIds.has(interaction.comparisonMasterId) &&
-		interaction.comparisonMasterId !== activeMasterId
-			? interaction.comparisonMasterId
-			: (source.masters.find((master) => master.id !== activeMasterId)?.id ??
-				activeMasterId)
-	const previewCoordinates = Object.freeze(
-		Object.fromEntries(
-			source.axes.map((axis) => {
-				const current = interaction.previewCoordinates[axis.id]
-				const value =
-					typeof current === "number" && Number.isFinite(current)
-						? current
-						: axis.default
-				return [axis.id, Math.min(axis.max, Math.max(axis.min, value))]
-			}),
-		),
-	)
-	const selectedGlyphIsValid = source.glyphs.some(
-		(glyph) => glyph.id === interaction.selectedGlyphId,
-	)
-	return Object.freeze({
-		...interaction,
-		selectedGlyphId: selectedGlyphIsValid ? interaction.selectedGlyphId : null,
-		activeMasterId,
-		comparisonMasterId,
-		selection: Object.freeze([]),
-		editingTextIndex: selectedGlyphIsValid
-			? interaction.editingTextIndex
-			: null,
-		activeTool: selectedGlyphIsValid ? interaction.activeTool : "select",
-		selectedRuleIds: Object.freeze([]),
-		previewCoordinates,
-	})
+function loadCoWrite<Value>(
+	atom: RegularAtomToken<Value>,
+	value: Value extends PromiseLike<unknown> ? never : Value,
+): FontLoadCoWrite<Value> {
+	return { atom, value }
 }
 
 function validationStatus(
@@ -212,71 +151,27 @@ export function createEditorWorkspace(
 			"The editor requires at least one glyph and one master.",
 		)
 	}
-	const interactionAtom = font.silo.atom<EditorInteractionState>({
-		key: "interaction",
-		default: Object.freeze({
-			selectedGlyphId: null,
-			activeMasterId: document.defaultMasterId,
-			comparisonMasterId:
-				document.masters.find(
-					(master) => master.id !== document.defaultMasterId,
-				)?.id ?? document.defaultMasterId,
-			selection: Object.freeze([]),
-			previewText: "AHO\nnon",
-			caretIndex: 0,
-			textSelectionCollapsed: true,
-			textSelectionRange: Object.freeze({
-				selectionStart: 0,
-				selectionEnd: 0,
-				selectionDirection: "none",
-			}),
-			editingTextIndex: null,
-			activeTool: "select",
-			selectedRuleIds: Object.freeze([]),
-			previewCoordinates: Object.freeze(
-				Object.fromEntries(
-					document.axes.map((axis) => [axis.id, axis.default]),
-				),
-			),
-			pathname: typeof window === "undefined" ? "/" : window.location.pathname,
-		}),
-	})
-	const selectedGlyphIdSelector = font.silo.selector<GlyphId | null>({
+	const selectedGlyphIdAtom = font.silo.atom<GlyphId | null>({
 		key: "selectedGlyphId",
-		get: ({ get }) => get(interactionAtom).selectedGlyphId,
-		set: ({ get, set }, selectedGlyphId) => {
-			set(interactionAtom, { ...get(interactionAtom), selectedGlyphId })
-		},
+		default: null,
 	})
-	const activeMasterIdSelector = font.silo.selector<MasterId>({
+	const activeMasterIdAtom = font.silo.atom<MasterId>({
 		key: "activeMasterId",
-		get: ({ get }) => get(interactionAtom).activeMasterId,
-		set: ({ get, set }, activeMasterId) => {
-			set(interactionAtom, { ...get(interactionAtom), activeMasterId })
-		},
+		default: document.defaultMasterId,
 	})
-	const comparisonMasterIdSelector = font.silo.selector<MasterId>({
+	const comparisonMasterIdAtom = font.silo.atom<MasterId>({
 		key: "comparisonMasterId",
-		get: ({ get }) => get(interactionAtom).comparisonMasterId,
-		set: ({ get, set }, comparisonMasterId) => {
-			set(interactionAtom, { ...get(interactionAtom), comparisonMasterId })
-		},
+		default:
+			document.masters.find((master) => master.id !== document.defaultMasterId)
+				?.id ?? document.defaultMasterId,
 	})
-	const selectionSelector = font.silo.selector<
-		readonly EditorSelectionTarget[]
-	>({
+	const selectionAtom = font.silo.atom<readonly EditorSelectionTarget[]>({
 		key: "selection",
-		get: ({ get }) => get(interactionAtom).selection,
-		set: ({ get, set }, selection) => {
-			set(interactionAtom, { ...get(interactionAtom), selection })
-		},
+		default: Object.freeze([]),
 	})
-	const previewTextSelector = font.silo.selector<string>({
+	const previewTextAtom = font.silo.atom<string>({
 		key: "previewText",
-		get: ({ get }) => get(interactionAtom).previewText,
-		set: ({ get, set }, previewText) => {
-			set(interactionAtom, { ...get(interactionAtom), previewText })
-		},
+		default: "AHO\nnon",
 	})
 	const featureSubstitutionsAtom = font.silo.atom<
 		readonly EditorFeatureSubstitution[]
@@ -295,67 +190,34 @@ export function createEditorWorkspace(
 			to: rule.to as GlyphId,
 		})),
 	)
-	const caretIndexSelector = font.silo.selector<number>({
+	const caretIndexAtom = font.silo.atom<number>({
 		key: "caretIndex",
-		get: ({ get }) => get(interactionAtom).caretIndex,
-		set: ({ get, set }, caretIndex) => {
-			set(interactionAtom, { ...get(interactionAtom), caretIndex })
-		},
+		default: 0,
 	})
-	const textSelectionCollapsedSelector = font.silo.selector<boolean>({
+	const textSelectionCollapsedAtom = font.silo.atom<boolean>({
 		key: "textSelectionCollapsed",
-		get: ({ get }) => get(interactionAtom).textSelectionCollapsed,
-		set: ({ get, set }, textSelectionCollapsed) => {
-			set(interactionAtom, {
-				...get(interactionAtom),
-				textSelectionCollapsed,
-			})
-		},
+		default: true,
 	})
-	const textSelectionRangeSelector = font.silo.selector<TextareaSelectionRange>(
-		{
-			key: "textSelectionRange",
-			get: ({ get }) => get(interactionAtom).textSelectionRange,
-			set: ({ get, set }, textSelectionRange) => {
-				set(interactionAtom, { ...get(interactionAtom), textSelectionRange })
-			},
-		},
-	)
-	const editingTextIndexSelector = font.silo.selector<number | null>({
+	const textSelectionRangeAtom = font.silo.atom<TextareaSelectionRange>({
+		key: "textSelectionRange",
+		default: Object.freeze({
+			selectionStart: 0,
+			selectionEnd: 0,
+			selectionDirection: "none",
+		}),
+	})
+	const editingTextIndexAtom = font.silo.atom<number | null>({
 		key: "editingTextIndex",
-		get: ({ get }) => get(interactionAtom).editingTextIndex,
-		set: ({ get, set }, editingTextIndex) => {
-			set(interactionAtom, { ...get(interactionAtom), editingTextIndex })
-		},
+		default: null,
 	})
-	const activeToolSelector = font.silo.selector<EditorToolId>({
+	const activeToolAtom = font.silo.atom<EditorToolId>({
 		key: "activeTool",
-		get: ({ get }) => get(interactionAtom).activeTool,
-		set: ({ get, set }, activeTool) => {
-			set(interactionAtom, { ...get(interactionAtom), activeTool })
-		},
+		default: "select",
 	})
-	const previewCoordinateSelectors = font.silo.selectorFamily<
-		number | null,
-		AxisId
-	>({
+	const previewCoordinateAtoms = font.silo.atomFamily<number | null, AxisId>({
 		key: "previewCoordinate",
-		get:
-			(axisId) =>
-			({ get }) =>
-				get(interactionAtom).previewCoordinates[axisId] ?? null,
-		set:
-			(axisId) =>
-			({ get, set }, value) => {
-				const interaction = get(interactionAtom)
-				set(interactionAtom, {
-					...interaction,
-					previewCoordinates: Object.freeze({
-						...interaction.previewCoordinates,
-						[axisId]: value,
-					}),
-				})
-			},
+		default: (axisId) =>
+			document.axes.find((axis) => axis.id === axisId)?.default ?? null,
 	})
 	const showNodesAtom = font.silo.atom<boolean>({
 		key: "showNodes",
@@ -365,12 +227,9 @@ export function createEditorWorkspace(
 		key: "showMeasures",
 		default: true,
 	})
-	const selectedRuleIdsSelector = font.silo.selector<readonly RuleId[]>({
+	const selectedRuleIdsAtom = font.silo.atom<readonly RuleId[]>({
 		key: "selectedRuleIds",
-		get: ({ get }) => get(interactionAtom).selectedRuleIds,
-		set: ({ get, set }, selectedRuleIds) => {
-			set(interactionAtom, { ...get(interactionAtom), selectedRuleIds })
-		},
+		default: Object.freeze([]),
 	})
 	const constrainProportionsAtom = font.silo.atom<boolean>({
 		key: "constrainProportions",
@@ -405,17 +264,14 @@ export function createEditorWorkspace(
 		documentRevision: font.atoms.documentRevision,
 		compilation: font.read.livePreviewCompilation,
 	})
-	const pathnameSelector = font.silo.selector<string>({
+	const pathnameAtom = font.silo.atom<string>({
 		key: "pathname",
-		get: ({ get }) => get(interactionAtom).pathname,
-		set: ({ get, set }, pathname) => {
-			set(interactionAtom, { ...get(interactionAtom), pathname })
-		},
+		default: typeof window === "undefined" ? "/" : window.location.pathname,
 	})
 	const routeSelector = font.silo.selector<Route | 404>({
 		key: "route",
 		get: ({ get }) => {
-			const path = get(pathnameSelector).split(`/`).slice(1).filter(Boolean)
+			const path = get(pathnameAtom).split(`/`).slice(1).filter(Boolean)
 			return isRoute(path) ? path : 404
 		},
 	})
@@ -432,97 +288,78 @@ export function createEditorWorkspace(
 		(previewCoordinates: Readonly<Record<string, number | null>>) => void
 	>({
 		key: "setLocation",
-		do: ({ get, set }, previewCoordinates) => {
-			set(interactionAtom, {
-				...get(interactionAtom),
-				previewCoordinates,
-			})
+		do: ({ set }, previewCoordinates) => {
+			for (const [axisId, value] of Object.entries(previewCoordinates)) {
+				set(previewCoordinateAtoms, axisId as AxisId, value)
+			}
 		},
 	})
 	const selectMasterTransaction = font.silo.transaction<
 		(selection: MasterSelection) => void
 	>({
 		key: "selectMaster",
-		do: ({ get, set }, selection) => {
-			set(interactionAtom, {
-				...get(interactionAtom),
-				activeMasterId: selection.masterId,
-				comparisonMasterId: selection.comparisonMasterId,
-				selection: Object.freeze([]),
-				previewCoordinates: selection.previewCoordinates,
-			})
+		do: ({ set }, selection) => {
+			set(activeMasterIdAtom, selection.masterId)
+			set(comparisonMasterIdAtom, selection.comparisonMasterId)
+			set(selectionAtom, Object.freeze([]))
+			for (const [axisId, value] of Object.entries(
+				selection.previewCoordinates,
+			)) {
+				set(previewCoordinateAtoms, axisId as AxisId, value)
+			}
 		},
 	})
 	const transitionEditorUiTransaction = font.silo.transaction<
 		(transition: EditorUiTransition) => void
 	>({
 		key: "transitionEditorUi",
-		do: ({ get, set }, transition) => {
-			const interaction = get(interactionAtom)
+		do: ({ set }, transition) => {
 			switch (transition.kind) {
 				case "select-glyph":
-					set(interactionAtom, {
-						...interaction,
-						selectedGlyphId: transition.glyphId,
-						selection: Object.freeze([]),
-						selectedRuleIds: Object.freeze([]),
-						editingTextIndex: null,
-						activeTool: "select",
-					})
+					set(selectedGlyphIdAtom, transition.glyphId)
+					set(selectionAtom, Object.freeze([]))
+					set(selectedRuleIdsAtom, Object.freeze([]))
+					set(editingTextIndexAtom, null)
+					set(activeToolAtom, "select")
 					return
 				case "review-glyph":
-					set(interactionAtom, {
-						...interaction,
-						selectedGlyphId: transition.glyphId,
-						selection: Object.freeze([]),
-						selectedRuleIds: Object.freeze([]),
-						activeTool: "select",
-						...(transition.character === undefined
-							? { editingTextIndex: null }
-							: {
-									previewText: transition.character,
-									caretIndex: 0,
-									editingTextIndex: 0,
-								}),
-						pathname: "/",
-					})
+					set(selectedGlyphIdAtom, transition.glyphId)
+					set(selectionAtom, Object.freeze([]))
+					set(selectedRuleIdsAtom, Object.freeze([]))
+					set(activeToolAtom, "select")
+					if (transition.character === undefined) {
+						set(editingTextIndexAtom, null)
+					} else {
+						set(previewTextAtom, transition.character)
+						set(caretIndexAtom, 0)
+						set(editingTextIndexAtom, 0)
+					}
+					set(pathnameAtom, "/")
 					return
 				case "enter-glyph-edit":
-					set(interactionAtom, {
-						...interaction,
-						selectedGlyphId: transition.glyphId,
-						editingTextIndex: transition.textStart,
-						selection: Object.freeze([]),
-						selectedRuleIds: Object.freeze([]),
-						activeTool: "select",
-					})
+					set(selectedGlyphIdAtom, transition.glyphId)
+					set(editingTextIndexAtom, transition.textStart)
+					set(selectionAtom, Object.freeze([]))
+					set(selectedRuleIdsAtom, Object.freeze([]))
+					set(activeToolAtom, "select")
 					return
 				case "exit-glyph-edit":
-					set(interactionAtom, {
-						...interaction,
-						editingTextIndex: null,
-						selection: Object.freeze([]),
-						selectedRuleIds: Object.freeze([]),
-						activeTool: "select",
-					})
+					set(editingTextIndexAtom, null)
+					set(selectionAtom, Object.freeze([]))
+					set(selectedRuleIdsAtom, Object.freeze([]))
+					set(activeToolAtom, "select")
 					return
 				case "select-tool":
-					set(interactionAtom, {
-						...interaction,
-						activeTool: transition.tool,
-						...(transition.tool === "select" || transition.tool === "rule"
-							? {}
-							: { selectedRuleIds: Object.freeze([]) }),
-					})
+					set(activeToolAtom, transition.tool)
+					if (transition.tool !== "select" && transition.tool !== "rule") {
+						set(selectedRuleIdsAtom, Object.freeze([]))
+					}
 					return
 				case "select-added-glyph":
-					set(interactionAtom, {
-						...interaction,
-						selectedGlyphId: transition.glyphId,
-						editingTextIndex: null,
-						selection: Object.freeze([]),
-						activeTool: "select",
-					})
+					set(selectedGlyphIdAtom, transition.glyphId)
+					set(editingTextIndexAtom, null)
+					set(selectionAtom, Object.freeze([]))
+					set(activeToolAtom, "select")
 			}
 		},
 	})
@@ -544,7 +381,7 @@ export function createEditorWorkspace(
 				Object.fromEntries(
 					axes.map((axis) => [
 						axis.id,
-						get(previewCoordinateSelectors, axis.id) ?? axis.default,
+						get(previewCoordinateAtoms, axis.id) ?? axis.default,
 					]),
 				),
 			)
@@ -565,7 +402,7 @@ export function createEditorWorkspace(
 			// directly. Tracking every point/handle selector makes atom.io retrace the
 			// entire glyph graph for each atom created by a Pen transaction.
 			get(font.atoms.documentRevision)
-			const activeMasterId = get(activeMasterIdSelector)
+			const activeMasterId = get(activeMasterIdAtom)
 			const metrics = font.silo.getState(font.atoms.metrics) ?? document.metrics
 			const metadata = font.silo.getState(font.atoms.metadata)
 			const unitsPerEm = metadata?.unitsPerEm ?? document.metadata.unitsPerEm
@@ -591,7 +428,7 @@ export function createEditorWorkspace(
 				]
 			})
 			const location = get(previewLocationSelector)
-			const previewText = get(previewTextSelector)
+			const previewText = get(previewTextAtom)
 			const characters = [...previewText]
 			const codePoints = new Set(
 				characters.flatMap((character) => {
@@ -796,15 +633,13 @@ export function createEditorWorkspace(
 	const activeGlyphIdSelector = font.silo.selector<GlyphId | null>({
 		key: "activeGlyphId",
 		get: ({ get }) => {
-			if (get(editingTextIndexSelector) !== null)
-				return get(selectedGlyphIdSelector)
-			if (get(routeNameSelector) !== "canvas")
-				return get(selectedGlyphIdSelector)
-			const caretIndex = get(caretIndexSelector)
+			if (get(editingTextIndexAtom) !== null) return get(selectedGlyphIdAtom)
+			if (get(routeNameSelector) !== "canvas") return get(selectedGlyphIdAtom)
+			const caretIndex = get(caretIndexAtom)
 			// Glyph geometry changes can invalidate the preview projection without
 			// changing which glyph contains the caret. Subscribe only to inputs that
 			// can change run membership, then read the cached projection directly.
-			for (const character of get(previewTextSelector)) {
+			for (const character of get(previewTextAtom)) {
 				const codePoint = character.codePointAt(0)
 				if (codePoint !== undefined) get(font.atoms.cmapGlyph, codePoint)
 			}
@@ -846,8 +681,8 @@ export function createEditorWorkspace(
 				const glyphId = get(activeGlyphIdSelector)
 				if (glyphId === null) return null
 				return get(font.selectors.glyphCompatibility, [
-					get(comparisonMasterIdSelector),
-					get(activeMasterIdSelector),
+					get(comparisonMasterIdAtom),
+					get(activeMasterIdAtom),
 					glyphId,
 				])
 			},
@@ -859,9 +694,9 @@ export function createEditorWorkspace(
 	}> | null>({
 		key: "activeKerningPair",
 		get: ({ get }) => {
-			if (get(editingTextIndexSelector) !== null) return null
-			if (!get(textSelectionCollapsedSelector)) return null
-			const caret = get(caretIndexSelector)
+			if (get(editingTextIndexAtom) !== null) return null
+			if (!get(textSelectionCollapsedAtom)) return null
+			const caret = get(caretIndexAtom)
 			const glyphs = get(previewRunSelector).filter(
 				(item): item is PreviewRunGlyph => item.kind === "glyph",
 			)
@@ -889,7 +724,7 @@ export function createEditorWorkspace(
 		key: "activeLayer",
 		get: ({ get }) => {
 			get(font.atoms.documentRevision)
-			const masterId = get(activeMasterIdSelector)
+			const masterId = get(activeMasterIdAtom)
 			const glyphId = get(activeGlyphIdSelector)
 			if (glyphId === null) return null
 			const editorGlyph = font.silo.getState(
@@ -1060,6 +895,72 @@ export function createEditorWorkspace(
 			})
 		},
 	})
+	const loadReconciledSource = (nextSource: EditorFontSource): void => {
+		const previousAxisIds = font.silo.getState(font.atoms.axisIds)
+		const firstMasterId = nextSource.masters[0]?.id
+		if (nextSource.glyphs[0] === undefined || firstMasterId === undefined) {
+			throw new TypeError(
+				"The editor requires at least one glyph and one master.",
+			)
+		}
+		const masterIds = new Set(nextSource.masters.map((master) => master.id))
+		const defaultMasterId = masterIds.has(nextSource.defaultMasterId)
+			? nextSource.defaultMasterId
+			: firstMasterId
+		const currentMasterId = font.silo.getState(activeMasterIdAtom)
+		const activeMasterId = masterIds.has(currentMasterId)
+			? currentMasterId
+			: defaultMasterId
+		const currentComparisonMasterId = font.silo.getState(comparisonMasterIdAtom)
+		const comparisonMasterId =
+			masterIds.has(currentComparisonMasterId) &&
+			currentComparisonMasterId !== activeMasterId
+				? currentComparisonMasterId
+				: (nextSource.masters.find((master) => master.id !== activeMasterId)
+						?.id ?? activeMasterId)
+		const currentGlyphId = font.silo.getState(selectedGlyphIdAtom)
+		const selectedGlyphIsValid = nextSource.glyphs.some(
+			(glyph) => glyph.id === currentGlyphId,
+		)
+		const coWrites = [
+			loadCoWrite(
+				selectedGlyphIdAtom,
+				selectedGlyphIsValid ? currentGlyphId : null,
+			),
+			loadCoWrite(activeMasterIdAtom, activeMasterId),
+			loadCoWrite(comparisonMasterIdAtom, comparisonMasterId),
+			loadCoWrite(selectionAtom, Object.freeze([])),
+			loadCoWrite(
+				editingTextIndexAtom,
+				selectedGlyphIsValid ? font.silo.getState(editingTextIndexAtom) : null,
+			),
+			loadCoWrite(
+				activeToolAtom,
+				selectedGlyphIsValid ? font.silo.getState(activeToolAtom) : "select",
+			),
+			loadCoWrite(selectedRuleIdsAtom, Object.freeze([])),
+			...previousAxisIds
+				.filter((axisId) => !nextSource.axes.some((axis) => axis.id === axisId))
+				.map((axisId) =>
+					loadCoWrite(
+						font.silo.findState(previewCoordinateAtoms, axisId),
+						null,
+					),
+				),
+			...nextSource.axes.map((axis) => {
+				const current = font.silo.getState(previewCoordinateAtoms, axis.id)
+				const value =
+					typeof current === "number" && Number.isFinite(current)
+						? current
+						: axis.default
+				return loadCoWrite(
+					font.silo.findState(previewCoordinateAtoms, axis.id),
+					Math.min(axis.max, Math.max(axis.min, value)),
+				)
+			}),
+		]
+		font.actions.load(nextSource, coWrites)
+	}
 
 	const setLocation = (location: EditorLocationSource): void => {
 		const currentDocument = font.read.editorSource()
@@ -1080,9 +981,7 @@ export function createEditorWorkspace(
 		if (currentDocument === null) return
 		const master = currentDocument.masters.find((item) => item.id === masterId)
 		if (master === undefined) return
-		const currentComparisonMasterId = font.silo.getState(
-			comparisonMasterIdSelector,
-		)
+		const currentComparisonMasterId = font.silo.getState(comparisonMasterIdAtom)
 		const comparisonMasterId =
 			currentComparisonMasterId === masterId
 				? masterId === currentDocument.defaultMasterId
@@ -1112,7 +1011,7 @@ export function createEditorWorkspace(
 	const cycleMaster = (direction: -1 | 1): void => {
 		const currentDocument = font.read.editorSource()
 		if (currentDocument === null || currentDocument.masters.length < 2) return
-		const currentMasterId = font.silo.getState(activeMasterIdSelector)
+		const currentMasterId = font.silo.getState(activeMasterIdAtom)
 		const currentIndex = currentDocument.masters.findIndex(
 			(master) => master.id === currentMasterId,
 		)
@@ -1136,7 +1035,7 @@ export function createEditorWorkspace(
 			return () => {}
 		}
 		const syncFromBrowser = (): void => {
-			font.silo.setState(pathnameSelector, window.location.pathname)
+			font.silo.setState(pathnameAtom, window.location.pathname)
 		}
 		const navigateFromClick = (event: MouseEvent): void => {
 			if (
@@ -1158,7 +1057,7 @@ export function createEditorWorkspace(
 			if (url.origin !== window.location.origin) return
 			event.preventDefault()
 			history.pushState(null, ``, `${url.pathname}${url.search}${url.hash}`)
-			font.silo.setState(pathnameSelector, url.pathname)
+			font.silo.setState(pathnameAtom, url.pathname)
 		}
 		globalThis.document.addEventListener(`click`, navigateFromClick)
 		window.addEventListener(`popstate`, syncFromBrowser)
@@ -1196,32 +1095,32 @@ export function createEditorWorkspace(
 		},
 		document,
 		ui: {
-			selectedGlyphId: selectedGlyphIdSelector,
+			selectedGlyphId: selectedGlyphIdAtom,
 			activeGlyphId: activeGlyphIdSelector,
 			activeGlyphSource: activeGlyphSourceSelector,
 			activeGlyphCompatibility: activeGlyphCompatibilitySelector,
-			activeMasterId: activeMasterIdSelector,
-			comparisonMasterId: comparisonMasterIdSelector,
-			selection: selectionSelector,
-			previewText: previewTextSelector,
+			activeMasterId: activeMasterIdAtom,
+			comparisonMasterId: comparisonMasterIdAtom,
+			selection: selectionAtom,
+			previewText: previewTextAtom,
 			fontFeaturesEnabled: fontFeaturesEnabledAtom,
-			caretIndex: caretIndexSelector,
-			textSelectionCollapsed: textSelectionCollapsedSelector,
-			textSelectionRange: textSelectionRangeSelector,
-			editingTextIndex: editingTextIndexSelector,
-			activeTool: activeToolSelector,
-			previewCoordinate: previewCoordinateSelectors,
+			caretIndex: caretIndexAtom,
+			textSelectionCollapsed: textSelectionCollapsedAtom,
+			textSelectionRange: textSelectionRangeAtom,
+			editingTextIndex: editingTextIndexAtom,
+			activeTool: activeToolAtom,
+			previewCoordinate: previewCoordinateAtoms,
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
 			showMeasures: showMeasuresAtom,
-			selectedRuleIds: selectedRuleIdsSelector,
+			selectedRuleIds: selectedRuleIdsAtom,
 			constrainProportions: constrainProportionsAtom,
 			canvasView: canvasViewAtom,
 			canvasViewport: canvasViewportAtom,
 			visualDebug: visualDebugAtom,
 			compatibilityGhostOffset: compatibilityGhostOffsetAtom,
 			validation: validationAtom,
-			pathname: pathnameSelector,
+			pathname: pathnameAtom,
 			route: routeSelector,
 			routeName: routeNameSelector,
 			activeLayer: activeLayerSelector,
@@ -1279,7 +1178,7 @@ export function createEditorWorkspace(
 				if (typeof window !== "undefined") {
 					history.pushState(null, ``, pathname)
 				}
-				font.silo.setState(pathnameSelector, pathname)
+				font.silo.setState(pathnameAtom, pathname)
 			},
 			selectGlyph(glyphId: GlyphId): void {
 				const currentDocument = font.read.editorSource()
@@ -1383,9 +1282,9 @@ export function createEditorWorkspace(
 				const currentDocument = font.read.editorSource()
 				if (
 					currentDocument?.masters.some((master) => master.id === masterId) &&
-					masterId !== font.silo.getState(activeMasterIdSelector)
+					masterId !== font.silo.getState(activeMasterIdAtom)
 				) {
-					font.silo.setState(comparisonMasterIdSelector, masterId)
+					font.silo.setState(comparisonMasterIdAtom, masterId)
 				}
 			},
 			selectInstance(instanceId: InstanceId): void {
@@ -1401,20 +1300,13 @@ export function createEditorWorkspace(
 					?.axes.find((item) => item.id === axisId)
 				if (axis === undefined || !Number.isFinite(value)) return
 				font.silo.setState(
-					previewCoordinateSelectors,
+					previewCoordinateAtoms,
 					axisId,
 					Math.min(axis.max, Math.max(axis.min, value)),
 				)
 			},
 			replaceSource(source: EditorFontSource): void {
-				const nextInteraction = reconcileInteractionForSource(
-					font.silo.getState(interactionAtom),
-					source,
-				)
-				font.actions.load(source, {
-					atom: interactionAtom,
-					value: nextInteraction,
-				})
+				loadReconciledSource(source)
 			},
 		},
 	}
