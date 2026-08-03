@@ -19,9 +19,23 @@ export function mountDesignEditor(
 	}
 	const root = createRoot(host)
 	let mounted = true
+	let graphRevision = 0
+	let previousOptions: DesignEditorBrowserOptions | undefined
 	const update = (nextOptions: DesignEditorBrowserOptions): void => {
 		if (!mounted) throw new Error("Cannot update an unmounted design editor.")
-		root.render(createElement(DesignApplication, nextOptions))
+		if (
+			previousOptions !== undefined &&
+			(previousOptions.initialDocument !== nextOptions.initialDocument ||
+				previousOptions.sourceSession !== nextOptions.sourceSession)
+		)
+			graphRevision += 1
+		previousOptions = nextOptions
+		root.render(
+			createElement(DesignApplication, {
+				...nextOptions,
+				key: `design-editor:${graphRevision}`,
+			}),
+		)
 	}
 	update(options)
 	return {

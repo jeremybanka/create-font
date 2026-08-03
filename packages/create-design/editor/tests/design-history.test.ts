@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest"
 
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createDesignPenObject } from "../src/design-pen.ts"
 import { createInitialDocument, parseDesignDocument } from "../src/document.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
+import type { DesignDocument } from "../src/types.ts"
 
 describe("design Pen timeline", () => {
+	const stateFor = (document: DesignDocument) =>
+		createDesignEditorState({
+			document,
+			persistence: createDesignPersistenceState(null),
+			name: "pen-history-test",
+		})
+
 	const completedPenDocument = () => {
 		const document = createInitialDocument()
 		const object = createDesignPenObject({
@@ -32,36 +38,35 @@ describe("design Pen timeline", () => {
 
 	it("commits a completed contour as one atomic undo/redo operation", () => {
 		const initial = createInitialDocument()
-		const committed = reduceDesignHistory(createDesignHistory(initial), {
-			type: "commit",
-			document: completedPenDocument(),
-		})
-		expect(committed.past).toHaveLength(1)
-		expect(committed.present.objects).toHaveLength(initial.objects.length + 1)
+		const state = stateFor(initial)
+		state.actions.commitDocument(completedPenDocument())
+		expect(state.silo.getState(state.states.historyAtom).past).toHaveLength(1)
+		expect(
+			state.silo.getState(state.states.documentSelector).objects,
+		).toHaveLength(initial.objects.length + 1)
 
-		const undone = reduceDesignHistory(committed, { type: "undo" })
-		expect(undone.present.objects).toHaveLength(initial.objects.length)
-		expect(undone.future).toHaveLength(1)
+		state.actions.navigateDocumentHistory("undo")
+		expect(
+			state.silo.getState(state.states.documentSelector).objects,
+		).toHaveLength(initial.objects.length)
+		expect(state.silo.getState(state.states.historyAtom).future).toHaveLength(1)
 
-		const redone = reduceDesignHistory(undone, { type: "redo" })
-		expect(redone.present.objects.at(-1)?.id).toBe("object:pen")
-		expect(redone.past).toHaveLength(1)
+		state.actions.navigateDocumentHistory("redo")
+		expect(
+			state.silo.getState(state.states.documentSelector).objects.at(-1)?.id,
+		).toBe("object:pen")
+		expect(state.silo.getState(state.states.historyAtom).past).toHaveLength(1)
 	})
 
 	it("invalidates redo after a different commit", () => {
 		const initial = createInitialDocument()
-		const committed = reduceDesignHistory(createDesignHistory(initial), {
-			type: "commit",
-			document: completedPenDocument(),
-		})
-		const undone = reduceDesignHistory(committed, { type: "undo" })
+		const state = stateFor(initial)
+		state.actions.commitDocument(completedPenDocument())
+		state.actions.navigateDocumentHistory("undo")
 		const replacement = { ...initial, title: "Replacement" }
-		const changed = reduceDesignHistory(undone, {
-			type: "commit",
-			document: replacement,
-		})
-		expect(changed.future).toEqual([])
-		expect(reduceDesignHistory(changed, { type: "redo" })).toBe(changed)
+		state.actions.commitDocument(replacement)
+		expect(state.silo.getState(state.states.historyAtom).future).toEqual([])
+		expect(state.actions.navigateDocumentHistory("redo")).toBeNull()
 	})
 
 	it("round-trips completed Pen nodes and handles through persistence", () => {

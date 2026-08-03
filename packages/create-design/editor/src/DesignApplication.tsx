@@ -46,11 +46,11 @@ import {
 	useEffect,
 	useLayoutEffect,
 	useMemo,
-	useReducer,
 	useRef,
 	useState,
 } from "react"
 import type { ReactNode, ComponentProps } from "react"
+import { StoreProvider, useO } from "atom.io/react"
 
 import {
 	defaultDesignAppearance,
@@ -114,7 +114,10 @@ import {
 	designRulerTicks,
 	updateDesignGuide,
 } from "./design-guides.ts"
-import { createDesignHistory, reduceDesignHistory } from "./design-history.ts"
+import {
+	createDesignEditorState,
+	type DesignEditorState,
+} from "./design-editor-state.ts"
 import {
 	alignDesignObjects,
 	distributeDesignObjects,
@@ -410,10 +413,9 @@ function designSnapGuides(
 	]
 }
 
-function initialDesignLoad(initialDocument?: DesignDocument): Readonly<{
-	document: DesignDocument
-	preserveInvalidStorage: boolean
-}> {
+function initialDesignLoad(
+	initialDocument?: DesignDocument,
+): InitialDesignLoad {
 	if (initialDocument !== undefined)
 		return { document: initialDocument, preserveInvalidStorage: false }
 	const storage = browserLocalStorage()
@@ -431,6 +433,26 @@ function initialDesignLoad(initialDocument?: DesignDocument): Readonly<{
 		document: createInitialDocument(),
 		preserveInvalidStorage: false,
 	}
+}
+
+function initialDesignPersistence(
+	initialDocument: DesignDocument | undefined,
+	sourceSession: DesignSourceSession | undefined,
+): DesignPersistenceState {
+	const state = createDesignPersistenceState(
+		sourceSession?.initialRevision ?? null,
+	)
+	if (sourceSession === undefined) return state
+	const storage = browserLocalStorage()
+	if (storage === null) return state
+	const draft = readDesignRecoveryDraft(storage)
+	if (draft === null) return state
+	const durableDocument = initialDocument ?? createInitialDocument()
+	if (!isDesignRecoveryDraftNewer(draft, durableDocument)) {
+		clearDesignRecoveryDraft(storage)
+		return state
+	}
+	return reduceDesignPersistence(state, { type: "recovery-found", draft })
 }
 
 function browserLocalStorage(): Storage | null {
@@ -502,6 +524,11 @@ export type DesignApplicationProps = Readonly<{
 	sourceSession?: DesignSourceSession
 }>
 
+type InitialDesignLoad = Readonly<{
+	document: DesignDocument
+	preserveInvalidStorage: boolean
+}>
+
 type ActivePathfinderOperation = Readonly<{
 	cancellationRequested: boolean
 	command: DesignPartitionPathfinderCommand
@@ -544,34 +571,44 @@ const sameDirectSelection = (
 	)
 
 export function DesignApplication(props: DesignApplicationProps) {
-	const { initialDocument, pathfinderWorkerClient, sourceSession } = props
+	const [initialLoad] = useState(() => initialDesignLoad(props.initialDocument))
+	const [editorState] = useState(() =>
+		createDesignEditorState({
+			document: initialLoad.document,
+			persistence: initialDesignPersistence(
+				props.initialDocument,
+				props.sourceSession,
+			),
+		}),
+	)
+	return (
+		// The provider is an implementation wrapper; the child owns the custom root.
+		// eslint-disable-next-line lasertag/render-tag-with-own-name
+		<StoreProvider store={editorState.silo.store}>
+			<DesignApplicationContent
+				{...props}
+				editorState={editorState}
+				initialLoad={initialLoad}
+			/>
+		</StoreProvider>
+	)
+}
+
+type DesignApplicationContentProps = DesignApplicationProps &
+	Readonly<{
+		editorState: DesignEditorState
+		initialLoad: InitialDesignLoad
+	}>
+
+function DesignApplicationContent(props: DesignApplicationContentProps) {
+	const { pathfinderWorkerClient, sourceSession } = props
 	const canvasTheme = useDesignCanvasTheme()
-	const [initialLoad] = useState(() => initialDesignLoad(initialDocument))
+	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
-	const [history, dispatch] = useReducer(
-		reduceDesignHistory,
-		initialLoad.document,
-		createDesignHistory,
+	const { document, history, persistence } = useO(
+		editorState.states.snapshotSelector,
 	)
-	const document = history.present
-	const [persistence, dispatchPersistence] = useReducer(
-		reduceDesignPersistence,
-		sourceSession?.initialRevision ?? null,
-		(durableRevision) => {
-			const state = createDesignPersistenceState(durableRevision)
-			if (sourceSession === undefined) return state
-			const storage = browserLocalStorage()
-			if (storage === null) return state
-			const draft = readDesignRecoveryDraft(storage)
-			if (draft === null) return state
-			const durableDocument = initialDocument ?? createInitialDocument()
-			if (!isDesignRecoveryDraftNewer(draft, durableDocument)) {
-				clearDesignRecoveryDraft(storage)
-				return state
-			}
-			return reduceDesignPersistence(state, { type: "recovery-found", draft })
-		},
-	)
+	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
 	const [groupScope, setGroupScope] = useState<readonly string[]>([])
@@ -859,9 +896,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 		[],
 	)
 
-	const commit = useCallback((next: DesignDocument): void => {
-		dispatch({ type: "commit", document: next })
-	}, [])
+	const commit = useCallback(
+		(next: DesignDocument): void => {
+			editorState.actions.commitDocument(next)
+		},
+		[editorState],
+	)
 	const activateArtboard = useCallback(
 		(artboard: DesignArtboard, focus = false): void => {
 			setActiveArtboardId(artboard.id)
@@ -1391,15 +1431,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 
 	const navigateDesignHistory = useCallback(
 		(type: "redo" | "undo"): void => {
-			const target = type === "undo" ? history.past.at(-1) : history.future[0]
-			if (target === undefined) return
-			dispatch({ type })
+			const target = editorState.actions.navigateDocumentHistory(type)
+			if (target === null) return
 			const recorded = pathCommandSelectionsRef.current.get(target)
 			if (recorded === undefined) return
 			setSelection(recorded.objectSelection)
 			setDirectSelection(recorded.directSelection)
 		},
-		[history.future, history.past],
+		[editorState],
 	)
 
 	const finishPen = useCallback(
@@ -2107,7 +2146,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				category: "Edit",
 				icon: "DoubleArrowLeftIcon",
 				shortcut: "⌘ Z",
-				disabled: history.past.length === 0,
+				disabled: !history.canUndo,
 				do: () => navigateDesignHistory("undo"),
 			},
 			{
@@ -2116,7 +2155,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				category: "Edit",
 				icon: "DoubleArrowRightIcon",
 				shortcut: "⇧⌘ Z",
-				disabled: history.future.length === 0,
+				disabled: !history.canRedo,
 				do: () => navigateDesignHistory("redo"),
 			},
 			...tileRegistryCommands(DESIGN_TILE_REGISTRY, designTileContext).map(
@@ -2138,8 +2177,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 			executePathCommand,
 			expansionEligibility,
 			exportDocument,
-			history.future.length,
-			history.past.length,
+			history.canRedo,
+			history.canUndo,
 			navigateDesignHistory,
 			openTile,
 			selectTool,
@@ -2161,7 +2200,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 		if (serialized === serializedDocumentRef.current) {
 			if (sourceSession === undefined && !preserveInvalidStorageRef.current)
 				browserLocalStorage()?.setItem(DESIGN_STORAGE_KEY, serialized)
-			window.document.title = `${history.present.title} — create-design`
+			window.document.title = `${document.title} — create-design`
 			return
 		}
 		serializedDocumentRef.current = serialized
@@ -2180,17 +2219,17 @@ export function DesignApplication(props: DesignApplicationProps) {
 				document,
 				updatedAt: Date.now(),
 			}
-			dispatchPersistence({ type: "edit", recoveryDraft })
+			updatePersistence({ type: "edit", recoveryDraft })
 			const storage = browserLocalStorage()
 			if (storage !== null) writeDesignRecoveryDraft(storage, recoveryDraft)
 		}
-		window.document.title = `${history.present.title} — create-design`
-	}, [document, history.present.title, sourceSession])
+		window.document.title = `${document.title} — create-design`
+	}, [document, sourceSession, updatePersistence])
 
 	useEffect(() => {
 		if (sourceSession === undefined || persistence.status !== "dirty") return
-		dispatchPersistence({ type: "queue" })
-	}, [persistence.status, sourceSession])
+		updatePersistence({ type: "queue" })
+	}, [persistence.status, sourceSession, updatePersistence])
 
 	useEffect(() => {
 		if (
@@ -2202,10 +2241,10 @@ export function DesignApplication(props: DesignApplicationProps) {
 		const revision = persistence.queuedRevision
 		const pendingDocument =
 			saveDocumentsRef.current.get(revision) ?? documentRef.current
-		dispatchPersistence({ type: "save-started", revision })
+		updatePersistence({ type: "save-started", revision })
 		void sourceSession.save(pendingDocument).then(
 			(result) => {
-				dispatchPersistence({
+				updatePersistence({
 					type: "save-succeeded",
 					revision,
 					durableRevision: result.revision,
@@ -2213,7 +2252,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 				saveDocumentsRef.current.delete(revision)
 			},
 			(error: unknown) => {
-				dispatchPersistence({
+				updatePersistence({
 					type: "save-failed",
 					revision,
 					message:
@@ -2221,7 +2260,12 @@ export function DesignApplication(props: DesignApplicationProps) {
 				})
 			},
 		)
-	}, [persistence.queuedRevision, persistence.status, sourceSession])
+	}, [
+		persistence.queuedRevision,
+		persistence.status,
+		sourceSession,
+		updatePersistence,
+	])
 
 	useEffect(() => {
 		if (sourceSession === undefined) return
@@ -2252,33 +2296,32 @@ export function DesignApplication(props: DesignApplicationProps) {
 			force = false,
 		): void => {
 			if (!update.ok) {
-				dispatchPersistence({
+				updatePersistence({
 					type: "external-invalid",
 					diagnostics: update.diagnostics,
 				})
 				return
 			}
 			if (!force && persistenceNeedsUnloadWarning(persistenceRef.current)) {
-				dispatchPersistence({
+				updatePersistence({
 					type: "external-conflict",
 					message: "Source changed on disk while local work was pending.",
 				})
 				return
 			}
 			serializedDocumentRef.current = JSON.stringify(update.document)
-			dispatch({ type: "reset", document: update.document })
+			editorState.actions.loadExternalDocument({
+				document: update.document,
+				durableRevision: update.revision,
+			})
 			setSelection([])
 			const storage = browserLocalStorage()
 			if (storage !== null) clearDesignRecoveryDraft(storage)
-			dispatchPersistence({
-				type: "external-loaded",
-				durableRevision: update.revision,
-			})
 		}
 		return sourceSession.subscribeDocument((update) =>
 			applyExternalUpdate(update),
 		)
-	}, [sourceSession])
+	}, [editorState, sourceSession, updatePersistence])
 
 	useEffect(() => {
 		if (
@@ -3472,15 +3515,14 @@ export function DesignApplication(props: DesignApplicationProps) {
 		const revision = persistence.localRevision + 1
 		serializedDocumentRef.current = JSON.stringify(draft.document)
 		saveDocumentsRef.current.set(revision, draft.document)
-		dispatch({ type: "reset", document: draft.document })
+		editorState.actions.recoverDocument(draft.document)
 		setSelection([])
-		dispatchPersistence({ type: "recover-draft" })
 	}
 	const discardDraft = (): void => {
 		const storage = browserLocalStorage()
 		if (storage !== null) clearDesignRecoveryDraft(storage)
 		if (sourceSession === undefined)
-			dispatchPersistence({ type: "discard-draft" })
+			updatePersistence({ type: "discard-draft" })
 		else void reloadExternal()
 	}
 	const reloadExternal = async (): Promise<void> => {
@@ -3488,23 +3530,22 @@ export function DesignApplication(props: DesignApplicationProps) {
 		try {
 			const update = await sourceSession.reload()
 			if (!update.ok) {
-				dispatchPersistence({
+				updatePersistence({
 					type: "external-invalid",
 					diagnostics: update.diagnostics,
 				})
 				return
 			}
 			serializedDocumentRef.current = JSON.stringify(update.document)
-			dispatch({ type: "reset", document: update.document })
+			editorState.actions.loadExternalDocument({
+				document: update.document,
+				durableRevision: update.revision,
+			})
 			setSelection([])
 			const storage = browserLocalStorage()
 			if (storage !== null) clearDesignRecoveryDraft(storage)
-			dispatchPersistence({
-				type: "external-loaded",
-				durableRevision: update.revision,
-			})
 		} catch (error) {
-			dispatchPersistence({
+			updatePersistence({
 				type: "external-conflict",
 				message:
 					error instanceof Error
@@ -3527,6 +3568,8 @@ export function DesignApplication(props: DesignApplicationProps) {
 	}
 
 	return (
+		// This internal provider child intentionally renders the public component root.
+		// eslint-disable-next-line lasertag/render-tag-with-own-name
 		<design-application className={css.class}>
 			<header>
 				<brand-lockup>
@@ -3602,7 +3645,7 @@ export function DesignApplication(props: DesignApplicationProps) {
 							{persistence.status !== "conflicted" ? null : (
 								<button
 									type="button"
-									onClick={() => dispatchPersistence({ type: "retry" })}
+									onClick={() => updatePersistence({ type: "retry" })}
 								>
 									Retry save
 								</button>

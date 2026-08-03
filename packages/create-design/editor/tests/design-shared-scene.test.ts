@@ -9,6 +9,7 @@ import {
 	DesignApplication,
 	type DesignApplicationProps,
 } from "../src/DesignApplication.tsx"
+import { mountDesignEditor } from "../src/browser.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { groupDesignSelection } from "../src/design-hierarchy.ts"
 import { objectBounds } from "@create-design/model"
@@ -80,8 +81,7 @@ afterEach(() => {
 	vi.unstubAllGlobals()
 })
 
-function mountDesign(
-	props: DesignApplicationProps = {},
+function prepareDesignDom(
 	storage = new Map<string, string>(),
 	resize?: {
 		readonly deferred: true
@@ -142,6 +142,18 @@ function mountDesign(
 	const host = document.createElement("section")
 	document.body.append(host)
 	hosts.push(host)
+	return host
+}
+
+function mountDesign(
+	props: DesignApplicationProps = {},
+	storage = new Map<string, string>(),
+	resize?: {
+		readonly deferred: true
+		readonly capture: (callback: ResizeObserverCallback) => void
+	},
+) {
+	const host = prepareDesignDom(storage, resize)
 	act(() => render(h(DesignApplication, props), host))
 	const stage = Konva.stages.at(-1)
 	if (resize !== undefined) return stage
@@ -686,6 +698,67 @@ describe("create-design shared vector scene", () => {
 			...overrides,
 		}
 	}
+
+	it("remounts the state graph when browser options switch source sessions", async () => {
+		const first = createInitialDocument()
+		const documentA: DesignDocument = {
+			...first,
+			title: "Document A",
+			objects: first.objects.map((object, index) =>
+				index === 0 ? { ...object, name: "Object from A" } : object,
+			),
+		}
+		const second = createInitialDocument()
+		const documentB: DesignDocument = {
+			...second,
+			title: "Document B",
+			objects: second.objects.map((object, index) =>
+				index === 0 ? { ...object, name: "Object from B" } : object,
+			),
+		}
+		const saveA = vi.fn(async () => ({ revision: "a:two" }))
+		const saveB = vi.fn(async () => ({ revision: "b:two" }))
+		const sessionA = sourceSession({ initialDocument: documentA, save: saveA })
+		const sessionB = sourceSession({ initialDocument: documentB, save: saveB })
+		const host = prepareDesignDom()
+		let mounted!: ReturnType<typeof mountDesignEditor>
+		act(() => {
+			mounted = mountDesignEditor(host, {
+				initialDocument: documentA,
+				sourceSession: sessionA,
+			})
+		})
+
+		act(() => {
+			mounted.update({
+				initialDocument: documentB,
+				sourceSession: sessionB,
+			})
+		})
+		const title = host.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title was not found.")
+		expect(title.value).toBe("Document B")
+		act(() => {
+			title.value = "Edited B"
+			title.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+
+		await act(async () => {
+			await vi.waitFor(() => expect(saveB).toHaveBeenCalledOnce())
+		})
+		expect(saveA).not.toHaveBeenCalled()
+		expect(saveB).toHaveBeenCalledWith(
+			expect.objectContaining({
+				title: "Edited B",
+				objects: expect.arrayContaining([
+					expect.objectContaining({ name: "Object from B" }),
+				]),
+			}),
+		)
+		act(() => mounted.unmount())
+	})
 
 	it("leaves invalid persisted input untouched until the user edits", () => {
 		const invalid = JSON.stringify({
