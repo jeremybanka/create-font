@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "preact/test-utils"
+import { act } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { makeDemoFont } from "../src/demo-font.ts"
