@@ -25,9 +25,9 @@ export default defineConfig({
 				import.meta.dirname,
 				`../../packages/create-design/editor/src/browser.ts`,
 			),
-			"preact-konva": resolve(
+			"@create-art/preact-konva": resolve(
 				import.meta.dirname,
-				`../../packages/preact-konva/src/index.ts`,
+				`../../packages/create-art/preact-konva/src/index.ts`,
 			),
 		},
 		conditions: [`development`],

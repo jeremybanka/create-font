@@ -1,4 +1,4 @@
-# preact-konva
+# @create-art/preact-konva
 
 ## 0.1.1
 

@@ -74,7 +74,7 @@ under `packages/`.
   editor built directly on that state graph.
 - [`@create-art/editor`](packages/create-art/editor/README.md) owns product-neutral editor
   controls, tiling, canvas, vector interaction, and source review foundations.
-- [`preact-konva`](packages/preact-konva) provides the shared Preact
+- [`@create-art/preact-konva`](packages/create-art/preact-konva) provides the shared Preact
   bindings used by both product editors' Konva scenes.
 
 These packages are the current implementation layers. Each application

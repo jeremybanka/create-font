@@ -12,7 +12,7 @@ import { selectionKey } from "../src/outline-selection.ts"
 import { EditorStateContext } from "../src/state-hooks.ts"
 
 const requireFromRenderer = createRequire(
-	`${process.cwd()}/../../preact-konva/package.json`,
+	`${process.cwd()}/../../create-art/preact-konva/package.json`,
 )
 const { default: Konva } = await import(
 	requireFromRenderer.resolve("konva/lib/Core")

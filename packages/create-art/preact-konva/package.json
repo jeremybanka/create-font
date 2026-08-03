@@ -1,5 +1,5 @@
 {
-	"name": "preact-konva",
+	"name": "@create-art/preact-konva",
 	"version": "0.1.1",
 	"description": "Small, native Preact bindings for the Konva scene graph",
 	"keywords": ["canvas", "konva", "preact", "renderer"],
@@ -7,7 +7,7 @@
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
-		"directory": "packages/preact-konva"
+		"directory": "packages/create-art/preact-konva"
 	},
 	"type": "module",
 	"sideEffects": false,

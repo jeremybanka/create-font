@@ -1,8 +1,8 @@
-# preact-konva
+# @create-art/preact-konva
 
 Small, native Preact bindings for the Konva scene graph.
 
-`preact-konva` provides a deliberately narrow declarative layer for interactive
+`@create-art/preact-konva` provides a deliberately narrow declarative layer for interactive
 browser canvases. It creates ordinary Konva nodes, applies changed properties,
 keeps JSX child order synchronized with Konva z-order, manages event listeners,
 and exposes the underlying nodes through refs.
@@ -10,7 +10,7 @@ and exposes the underlying nodes through refs.
 ## Install
 
 ```sh
-npm install preact-konva preact konva
+npm install @create-art/preact-konva preact konva
 ```
 
 Both Preact and Konva are peer dependencies so the application and adapter use
@@ -21,7 +21,7 @@ the same framework and scene-graph instances.
 ```tsx
 import { useRef } from "preact/hooks"
 import type Konva from "konva"
-import { Circle, Layer, Stage } from "preact-konva"
+import { Circle, Layer, Stage } from "@create-art/preact-konva"
 
 export function Canvas() {
 	const circle = useRef<Konva.Circle>(null)
@@ -58,7 +58,7 @@ The package currently exports typed components for:
 
 It also exports `KonvaEventObject` and the component/event prop types. Konva
 properties and `onMouseDown`/`onPointerMove`-style event props are forwarded to
-their nodes. Container children must be `preact-konva` components; shape
+their nodes. Container children must be `@create-art/preact-konva` components; shape
 components cannot contain children.
 
 The `Stage` component owns its browser host and therefore does not support
