@@ -1,7 +1,7 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphInspector.module.css"
 import { NumericInput } from "@create-art/editor"
-import { useO, useOptionalOF } from "./state-hooks.ts"
+import { useO } from "./state-hooks.ts"
 
 export interface GlyphInspectorProps {
 	readonly workspace: EditorWorkspace
@@ -10,11 +10,7 @@ export interface GlyphInspectorProps {
 export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-		workspace.initialGlyphId,
-	)
+	const glyph = useO(workspace.ui.activeGlyphSource)
 	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const selection = useO(workspace.ui.selection)
 	const selectedPointId = selection.at(-1)?.pointId

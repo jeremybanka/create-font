@@ -1,4 +1,9 @@
-import type { EditorFontSource } from "@create-font/states"
+import type {
+	AxisId,
+	EditorFontSource,
+	GlyphId,
+	MasterId,
+} from "@create-font/states"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -114,20 +119,117 @@ function makeOneMasterFont(): EditorFontSource {
 	}
 }
 
+function makeDisjointReplacementFont(): EditorFontSource {
+	const source = makeDemoFont()
+	const masterIdByOld = new Map<MasterId, MasterId>(
+		source.masters.map((master, index) => [
+			master.id,
+			`master:replacement-${index}` as MasterId,
+		]),
+	)
+	const glyphIdByOld = new Map<GlyphId, GlyphId>(
+		source.glyphs.map((glyph, index) => [
+			glyph.id,
+			`glyph:replacement-${index}` as GlyphId,
+		]),
+	)
+	const replacementDefaultMasterId = masterIdByOld.get(source.defaultMasterId)
+	const replacementWidthAxisId = "axis:replacement-width" as AxisId
+	if (replacementDefaultMasterId === undefined) {
+		throw new Error("Fixture default master is missing.")
+	}
+	return {
+		...source,
+		axes: [
+			...source.axes.map((axis) => ({
+				...axis,
+				min: 400,
+				default: 500,
+				max: 600,
+			})),
+			{
+				id: replacementWidthAxisId,
+				tag: "wdth",
+				name: "Width",
+				min: 50,
+				default: 100,
+				max: 200,
+			},
+		],
+		defaultMasterId: replacementDefaultMasterId,
+		masters: source.masters.map((master) => {
+			const id = masterIdByOld.get(master.id)
+			if (id === undefined) throw new Error("Fixture master mapping is missing.")
+			return master.kind === "default"
+				? { ...master, id }
+				: {
+						...master,
+						id,
+						location: {
+							[weightAxisId]: 600,
+							[replacementWidthAxisId]: 100,
+						},
+					}
+		}),
+		instances: source.instances.map((instance) => ({
+			...instance,
+			coordinates: {
+				[weightAxisId]: 500,
+				[replacementWidthAxisId]: 100,
+			},
+		})),
+		glyphs: source.glyphs.map((glyph) => {
+			const id = glyphIdByOld.get(glyph.id)
+			if (id === undefined) throw new Error("Fixture glyph mapping is missing.")
+			return {
+				...glyph,
+				id,
+				layers: glyph.layers.map((layer) => {
+					const masterId = masterIdByOld.get(layer.masterId)
+					if (masterId === undefined) {
+						throw new Error("Fixture layer master mapping is missing.")
+					}
+					return { ...layer, masterId }
+				}),
+			}
+		}),
+		cmap: source.cmap.map((entry) => {
+			const glyphId = glyphIdByOld.get(entry.glyphId)
+			if (glyphId === undefined) throw new Error("Fixture cmap mapping is missing.")
+			return { ...entry, glyphId }
+		}),
+		kerning: (source.kerning ?? []).map((pair) => {
+			const left = glyphIdByOld.get(pair.left)
+			const right = glyphIdByOld.get(pair.right)
+			if (left === undefined || right === undefined) {
+				throw new Error("Fixture kerning mapping is missing.")
+			}
+			return { ...pair, left, right }
+		}),
+	}
+}
+
 describe("editor workspace", () => {
-	it("commits coordinated glyph selection state in one action", () => {
+	it("gives synchronous atom.io subscribers one coherent UI transition", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		workspace.font.silo.setState(workspace.ui.editingTextIndex, 3)
+		const snapshots: Array<readonly [string | null, string, number | null]> = []
+		const unsubscribe = workspace.font.silo.subscribe(
+			workspace.ui.selectedGlyphId,
+			() => {
+				snapshots.push([
+					workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+					workspace.font.silo.getState(workspace.ui.activeTool),
+					workspace.font.silo.getState(workspace.ui.editingTextIndex),
+				])
+			},
+		)
 
 		workspace.actions.selectGlyph(oGlyphId)
+		unsubscribe()
 
-		expect(workspace.font.silo.getState(workspace.ui.selectedGlyphId)).toBe(
-			oGlyphId,
-		)
-		expect(workspace.font.silo.getState(workspace.ui.activeTool)).toBe("select")
-		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBeNull()
-		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
+		expect(snapshots).toEqual([[oGlyphId, "select", null]])
 	})
 
 	it("commits master, comparison, and preview location together", () => {
@@ -144,6 +246,83 @@ describe("editor workspace", () => {
 		expect(
 			workspace.font.silo.getState(workspace.ui.previewLocation)[weightAxisId],
 		).toBe(900)
+	})
+
+	it("atomically reconciles disjoint source ids, masters, and axis ranges", () => {
+		const workspace = createEditorWorkspace()
+		const replacement = makeDisjointReplacementFont()
+		const replacementComparisonMasterId = replacement.masters.find(
+			(master) => master.id !== replacement.defaultMasterId,
+		)?.id
+		const replacementWidthAxisId = replacement.axes.find(
+			(axis) => axis.tag === "wdth",
+		)?.id
+		if (
+			replacementComparisonMasterId === undefined ||
+			replacementWidthAxisId === undefined
+		) {
+			throw new Error("Replacement fixture is incomplete.")
+		}
+		const staleAxisId = "axis:stale" as AxisId
+		workspace.actions.selectGlyph(oGlyphId)
+		workspace.actions.selectMaster(blackMasterId)
+		workspace.actions.setPreviewCoordinate(weightAxisId, 900)
+		workspace.font.silo.setState(
+			workspace.ui.previewCoordinate,
+			staleAxisId,
+			123,
+		)
+		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
+		workspace.font.silo.setState(workspace.ui.editingTextIndex, 2)
+
+		const readSnapshot = () => ({
+			glyphIds: workspace.font.silo.getState(workspace.font.atoms.glyphIds),
+			selectedGlyphId: workspace.font.silo.getState(workspace.ui.selectedGlyphId),
+			activeMasterId: workspace.font.silo.getState(workspace.ui.activeMasterId),
+			comparisonMasterId: workspace.font.silo.getState(
+				workspace.ui.comparisonMasterId,
+			),
+			location: workspace.font.silo.getState(workspace.ui.previewLocation),
+			activeTool: workspace.font.silo.getState(workspace.ui.activeTool),
+			editingTextIndex: workspace.font.silo.getState(
+				workspace.ui.editingTextIndex,
+			),
+		})
+		const uiSnapshots: ReturnType<typeof readSnapshot>[] = []
+		const revisionSnapshots: ReturnType<typeof readSnapshot>[] = []
+		const unsubscribeUi = workspace.font.silo.subscribe(
+			workspace.ui.selectedGlyphId,
+			() => uiSnapshots.push(readSnapshot()),
+		)
+		const unsubscribeRevision = workspace.font.silo.subscribe(
+			workspace.font.atoms.documentRevision,
+			() => revisionSnapshots.push(readSnapshot()),
+		)
+
+		workspace.actions.replaceSource(replacement)
+		unsubscribeUi()
+		unsubscribeRevision()
+
+		const expected = {
+			glyphIds: replacement.glyphs.map((glyph) => glyph.id),
+			selectedGlyphId: null,
+			activeMasterId: replacement.defaultMasterId,
+			comparisonMasterId: replacementComparisonMasterId,
+			location: {
+				[weightAxisId]: 600,
+				[replacementWidthAxisId]: 100,
+			},
+			activeTool: "select",
+			editingTextIndex: null,
+		}
+		expect(uiSnapshots).toEqual([expected])
+		expect(revisionSnapshots).toEqual([expected])
+		expect(
+			workspace.font.silo.getState(
+				workspace.ui.previewCoordinate,
+				staleAxisId,
+			),
+		).toBeNull()
 	})
 
 	it("applies feature substitutions to canvas clusters only while enabled", () => {

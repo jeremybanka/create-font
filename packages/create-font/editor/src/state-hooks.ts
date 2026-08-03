@@ -1,27 +1,13 @@
 import type {
-	ReadableFamilyToken,
+	Silo,
 	TimelineFamilyToken,
 	TimelineToken,
-	ViewOf,
 } from "atom.io"
 import type { Canonical } from "atom.io/foundations/canonical"
 import { useI, useO, useTL as useAtomTimeline } from "atom.io/react"
 import { useMemo } from "react"
 
 export { useI, useO }
-
-/**
- * Observe a family through atom.io's standard hook without allocating an
- * invalid family member while the application key is absent.
- */
-export function useOptionalOF<T, K extends Canonical>(
-	family: ReadableFamilyToken<T, K>,
-	key: K | null,
-	fallbackKey: K,
-): ViewOf<T> | null {
-	const value = useO(family, key ?? fallbackKey)
-	return key === null ? null : value
-}
 
 export type TimelineMeta = Readonly<{
 	at: number
@@ -86,16 +72,22 @@ export function useTimeline(
 }
 
 /**
- * Keep hook order stable for an optional timeline key by observing a known
- * family member as the inert fallback.
+ * Keep hook order stable for an optional family key by observing a standalone
+ * inert timeline. No family member is found or recreated while the key is null.
  */
 export function useOptionalTL<K extends Canonical>(
+	silo: Silo,
 	family: TimelineFamilyToken<K, any>,
 	key: K | null,
-	fallbackKey: K,
+	inactiveTimeline: TimelineToken<any>,
 	onChange?: () => void,
 ): TimelineMeta {
-	const timeline = useAtomTimeline(family, key ?? fallbackKey)
+	const token = useMemo(
+		() =>
+			key === null ? inactiveTimeline : silo.findTimeline(family, key),
+		[family, inactiveTimeline, key, silo],
+	)
+	const timeline = useAtomTimeline(token)
 	return useMemo(
 		() =>
 			key === null ? EMPTY_TIMELINE : withChangeNotification(timeline, onChange),

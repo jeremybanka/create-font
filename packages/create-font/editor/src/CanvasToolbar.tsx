@@ -4,7 +4,7 @@ import { useId } from "react"
 import { zoomCanvasView } from "./canvas-view.ts"
 import css from "./CanvasToolbar.module.css"
 import type { EditorWorkspace } from "./editor-workspace.ts"
-import { useI, useO, useOptionalOF } from "./state-hooks.ts"
+import { useI, useO } from "./state-hooks.ts"
 
 const svg = {
 	DotsHorizontal: DotsHorizontalIcon,
@@ -22,11 +22,7 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 	const activeTool = useO(workspace.ui.activeTool)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-		workspace.initialGlyphId,
-	)
+	const glyph = useO(workspace.ui.activeGlyphSource)
 	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
 	const location = useO(workspace.ui.previewLocation)

@@ -51,8 +51,13 @@ the glyph list and cmap can grow through the add-glyph dialog. Components
 subscribe only to narrow atoms and selectors. An edit to `.notdef`, for
 example, does not invalidate an `O` preview. The editor supplies its Silo to
 atom.io's standard `StoreProvider` and uses its standard hooks directly in the
-React UI. Small local helpers only compose those hooks for nullable family keys
-and post-history revision bookkeeping.
+React UI. Small local helpers only compose timeline hooks for nullable active
+histories and post-history revision bookkeeping without materializing a
+fallback family member.
+Fields that form one interaction snapshot—selection, active masters, edit mode,
+preview coordinates, and routing—are writable selectors over one composite
+atom. Coordinated commands and source replacement therefore publish one
+coherent snapshot even to synchronous imperative subscribers.
 
 Toolbar and keyboard history controls select the active glyph from the
 workspace's timeline family with atom.io's `useTL`. Switching glyphs switches

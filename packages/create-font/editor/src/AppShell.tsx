@@ -41,7 +41,6 @@ import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
 import {
 	useO,
-	useOptionalOF,
 	useOptionalTL,
 	useTimeline,
 } from "./state-hooks.ts"
@@ -92,11 +91,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const masterIds = useO(workspace.font.atoms.masterIds)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-		workspace.initialGlyphId,
-	)
+	const glyph = useO(workspace.ui.activeGlyphSource)
 	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const names = useO(workspace.font.atoms.names) ?? workspace.document.names
 	const validation = useO(workspace.ui.validation)
@@ -110,9 +105,10 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const glyphHistory = useOptionalTL(
+		workspace.font.silo,
 		workspace.font.glyphHistoryTimelines,
 		activeGlyphId,
-		workspace.initialGlyphId,
+		workspace.inactiveGlyphTimeline,
 		workspace.font.actions.markDocumentChanged,
 	)
 	const kerningHistory = useTimeline(
