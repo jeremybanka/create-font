@@ -17,6 +17,10 @@ export default defineConfig({
 	plugins: [react()],
 	resolve: {
 		alias: {
+			"@create-art/editor": resolve(
+				import.meta.dirname,
+				`../../packages/create-art/editor/src/index.ts`,
+			),
 			"@create-font/editor/browser": resolve(
 				import.meta.dirname,
 				`../../packages/create-font/editor/src/browser.ts`,
