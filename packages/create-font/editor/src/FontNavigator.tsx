@@ -1,6 +1,6 @@
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./FontNavigator.module.css"
-import { useO, useOF } from "./state-hooks.ts"
+import { useO } from "./state-hooks.ts"
 
 export interface FontNavigatorProps {
 	readonly workspace: EditorWorkspace
@@ -60,7 +60,7 @@ function MasterNavigationItem({
 	readonly masterId: Parameters<EditorWorkspace["actions"]["selectMaster"]>[0]
 	readonly active: boolean
 }) {
-	const master = useOF(workspace.font.selectors.editorMasterSource, masterId)
+	const master = useO(workspace.font.selectors.editorMasterSource, masterId)
 	return (
 		<master-navigation-item>
 			{master === null ? null : (
@@ -89,7 +89,7 @@ function InstanceNavigationItem({
 		EditorWorkspace["actions"]["selectInstance"]
 	>[0]
 }) {
-	const instance = useOF(
+	const instance = useO(
 		workspace.font.selectors.editorInstanceSource,
 		instanceId,
 	)

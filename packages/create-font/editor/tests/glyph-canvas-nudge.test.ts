@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
@@ -80,8 +80,8 @@ function mountWithSelectedNodes(count = 2, hard = false) {
 	hosts.push(host)
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(GlyphCanvas, { workspace }),
 			}),
 			host,

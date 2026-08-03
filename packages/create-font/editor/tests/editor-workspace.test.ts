@@ -1,5 +1,4 @@
 import type { EditorFontSource } from "@create-font/states"
-import { Silo } from "atom.io"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -20,7 +19,6 @@ import {
 	createEditorWorkspace,
 	type EditorWorkspace,
 } from "../src/editor-workspace.ts"
-import { subscribeToSettledState } from "../src/settled-subscription.ts"
 import {
 	combinedEditorPathPreview,
 	editorContourPaintPaths,
@@ -117,6 +115,37 @@ function makeOneMasterFont(): EditorFontSource {
 }
 
 describe("editor workspace", () => {
+	it("commits coordinated glyph selection state in one action", () => {
+		const workspace = createEditorWorkspace()
+		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
+		workspace.font.silo.setState(workspace.ui.editingTextIndex, 3)
+
+		workspace.actions.selectGlyph(oGlyphId)
+
+		expect(workspace.font.silo.getState(workspace.ui.selectedGlyphId)).toBe(
+			oGlyphId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.activeTool)).toBe("select")
+		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBeNull()
+		expect(workspace.font.silo.getState(workspace.ui.selection)).toEqual([])
+	})
+
+	it("commits master, comparison, and preview location together", () => {
+		const workspace = createEditorWorkspace()
+
+		workspace.actions.selectMaster(blackMasterId)
+
+		expect(workspace.font.silo.getState(workspace.ui.activeMasterId)).toBe(
+			blackMasterId,
+		)
+		expect(workspace.font.silo.getState(workspace.ui.comparisonMasterId)).toBe(
+			razorMasterId,
+		)
+		expect(
+			workspace.font.silo.getState(workspace.ui.previewLocation)[weightAxisId],
+		).toBe(900)
+	})
+
 	it("applies feature substitutions to canvas clusters only while enabled", () => {
 		const source = makeDemoFont()
 		const glyphFor = (character: string) => {
@@ -368,112 +397,6 @@ describe("editor workspace", () => {
 		)
 		expect(workspace.font.silo.getState(workspace.ui.editingTextIndex)).toBe(0)
 		expect(workspace.font.silo.getState(workspace.ui.activeTool)).toBe("pen")
-	})
-
-	it("coalesces a transaction into one external-store notification", async () => {
-		const silo = new Silo({
-			name: "test/settled-selector",
-			lifespan: "ephemeral",
-			isProduction: false,
-		})
-		const firstAtom = silo.atom({ key: "first", default: 1 })
-		const secondAtom = silo.atom({ key: "second", default: 2 })
-		let computations = 0
-		const sumSelector = silo.selector({
-			key: "sum",
-			get: ({ get }) => {
-				computations += 1
-				return get(firstAtom) + get(secondAtom)
-			},
-		})
-		const setBoth = silo.runTransaction(
-			silo.transaction<() => void>({
-				key: "setBoth",
-				do: ({ set }) => {
-					set(firstAtom, 3)
-					set(secondAtom, 4)
-				},
-			}),
-		)
-		expect(silo.getState(sumSelector)).toBe(3)
-		let notifications = 0
-		const unsubscribe = subscribeToSettledState(silo, sumSelector, () => {
-			notifications += 1
-			expect(silo.getState(sumSelector)).toBe(7)
-		})
-
-		setBoth()
-		await Promise.resolve()
-		unsubscribe()
-
-		expect(notifications).toBe(1)
-		expect(computations).toBe(3)
-	})
-
-	it("shares selector work and coalesces same-turn timeline-style updates", async () => {
-		const silo = new Silo({
-			name: "test/shared-settled-selector",
-			lifespan: "ephemeral",
-			isProduction: false,
-		})
-		const firstAtom = silo.atom({ key: "first", default: 1 })
-		const secondAtom = silo.atom({ key: "second", default: 2 })
-		let computations = 0
-		const sumSelector = silo.selector({
-			key: "sum",
-			get: ({ get }) => {
-				computations += 1
-				return get(firstAtom) + get(secondAtom)
-			},
-		})
-		expect(silo.getState(sumSelector)).toBe(3)
-		let firstNotifications = 0
-		let secondNotifications = 0
-		const unsubscribeFirst = subscribeToSettledState(silo, sumSelector, () => {
-			firstNotifications += 1
-		})
-		const unsubscribeSecond = subscribeToSettledState(silo, sumSelector, () => {
-			secondNotifications += 1
-		})
-
-		silo.setState(firstAtom, 3)
-		silo.setState(secondAtom, 4)
-		await Promise.resolve()
-		unsubscribeFirst()
-		unsubscribeSecond()
-
-		expect(firstNotifications).toBe(1)
-		expect(secondNotifications).toBe(1)
-		expect(computations).toBe(3)
-	})
-
-	it("notifies external-store subscribers once after replacing a source", async () => {
-		const workspace = createEditorWorkspace()
-		const selector = workspace.font.selectors.editorSource
-		const source = workspace.font.silo.getState(selector)
-		if (source === null) throw new Error("The editor source is missing.")
-		const replacement = structuredClone(source)
-		const layer = replacement.glyphs[0]?.layers[0]
-		if (layer === undefined) throw new Error("The glyph layer is missing.")
-		Object.assign(layer, { advanceWidth: layer.advanceWidth + 1 })
-		const snapshots: Array<typeof source> = []
-		const unsubscribe = subscribeToSettledState(
-			workspace.font.silo,
-			selector,
-			() => {
-				const snapshot = workspace.font.silo.getState(selector)
-				if (snapshot !== null) snapshots.push(snapshot)
-			},
-		)
-
-		workspace.actions.replaceSource(replacement)
-		await Promise.resolve()
-		unsubscribe()
-
-		expect(snapshots).toHaveLength(1)
-		expect(snapshots[0]?.glyphs[0]?.layers[0]?.advanceWidth).toBe(
-			layer.advanceWidth,
-		)
 	})
 
 	it("loads a compiled demo font with a variable A", () => {

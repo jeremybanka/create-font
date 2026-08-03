@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const hosts: HTMLElement[] = []
 
@@ -75,8 +75,8 @@ describe("GlyphCanvas view initialization", () => {
 		hosts.push(host)
 		act(() =>
 			render(
-				h(EditorStateContext.Provider, {
-					value: workspace.font.silo,
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
 					children: h(GlyphCanvas, { workspace }),
 				}),
 				host,

@@ -10,7 +10,7 @@ import type { ContourId, PointId } from "@create-font/states"
 import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { contourSelectionTargets } from "../src/outline-selection.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
@@ -120,8 +120,8 @@ function mountSelectedContour({
 	hosts.push(host)
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(GlyphCanvas, { workspace }),
 			}),
 			host,

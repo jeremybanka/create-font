@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { blackMasterId, makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { GlyphLibrary } from "../src/GlyphLibrary.tsx"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const hosts: HTMLElement[] = []
 
@@ -55,8 +55,8 @@ function mountLibrary() {
 	const workspace = createEditorWorkspace(source)
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(GlyphLibrary, {
 					addingGlyphs: false,
 					onAddingGlyphsChange: () => {},

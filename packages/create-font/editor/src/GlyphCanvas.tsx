@@ -176,7 +176,7 @@ import {
 	isMomentaryPreviewKey,
 	shouldStartMomentaryPreview,
 } from "./momentary-preview.ts"
-import { useI, useO, useOF, useOptionalOF } from "./state-hooks.ts"
+import { useI, useO, useOptionalOF } from "./state-hooks.ts"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import {
@@ -414,6 +414,7 @@ export function GlyphCanvas({
 	const glyph = useOptionalOF(
 		workspace.font.selectors.editorGlyphSource,
 		activeGlyphId,
+		workspace.initialGlyphId,
 	)
 	const compatibilityKey = useMemo(
 		() =>
@@ -425,8 +426,9 @@ export function GlyphCanvas({
 	const compatibility = useOptionalOF(
 		workspace.font.selectors.glyphCompatibility,
 		compatibilityKey,
+		[comparisonMasterId, activeMasterId, workspace.initialGlyphId],
 	)
-	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const metrics =
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
 	const metadata =

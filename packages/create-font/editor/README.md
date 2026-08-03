@@ -49,13 +49,14 @@ editing target and restores textarea focus and the virtual caret.
 Axes, names, and metrics are exposed through the workspace document structure;
 the glyph list and cmap can grow through the add-glyph dialog. Components
 subscribe only to narrow atoms and selectors. An edit to `.notdef`, for
-example, does not invalidate an `O` preview. A tiny Preact-native adapter
-observes the custom Silo through its public get, set, and subscribe methods.
+example, does not invalidate an `O` preview. The editor supplies its Silo to
+atom.io's standard `StoreProvider` and uses its standard hooks directly in the
+React UI. Small local helpers only compose those hooks for nullable family keys
+and post-history revision bookkeeping.
 
 Toolbar and keyboard history controls select the active glyph from the
-workspace's timeline family and call the custom Silo's `undo()` and `redo()`
-methods directly. Switching glyphs switches timeline cursors without combining
-their edits.
+workspace's timeline family with atom.io's `useTL`. Switching glyphs switches
+timeline cursors without combining their edits.
 
 ## Run
 

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { KerningTile } from "../src/KerningTile.tsx"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const hosts: HTMLElement[] = []
 
@@ -29,8 +29,8 @@ describe("KerningTile", () => {
 		hosts.push(host)
 		act(() =>
 			render(
-				h(EditorStateContext.Provider, {
-					value: workspace.font.silo,
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
 					children: h(KerningTile, { workspace }),
 				}),
 				host,

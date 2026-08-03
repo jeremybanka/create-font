@@ -8,7 +8,7 @@ import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { selectionKey } from "../src/outline-selection.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
@@ -65,8 +65,8 @@ function mountMarqueeCanvas() {
 	hosts.push(host)
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(GlyphCanvas, { workspace }),
 			}),
 			host,

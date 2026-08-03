@@ -75,6 +75,7 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 	const compatibility = useOptionalOF(
 		workspace.font.selectors.glyphCompatibility,
 		compatibilityKey,
+		[comparisonMasterId, activeMasterId, workspace.initialGlyphId],
 	)
 	const contours = layer?.contours ?? []
 	const editing =

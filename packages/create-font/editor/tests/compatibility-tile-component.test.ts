@@ -7,7 +7,7 @@ import { CompatibilityTile } from "../src/CompatibilityTile.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { contourSelectionTargets } from "../src/outline-selection.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const hosts: HTMLElement[] = []
 
@@ -27,8 +27,8 @@ function mountCompatibilityTile() {
 	act(() => workspace.actions.enterGlyphEdit(2, oGlyphId))
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(CompatibilityTile, { workspace }),
 			}),
 			host,
