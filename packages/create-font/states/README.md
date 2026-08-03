@@ -70,11 +70,19 @@ required `key` namespaces every token, so two documents with the same entity
 IDs remain isolated.
 
 Independent editor facts are atoms. Ordered ID indexes are small atoms, and
-entities, coordinates, metrics, and mappings live in keyed atom families. In
-particular, layer node `x` and `y` values and each handle component are separate
-hot atoms, so dragging a node or handle does not replace an entire glyph or
-master. Notes and color labels are also separated from export-bearing atoms,
-so annotation changes do not invalidate glyph lowering.
+entities, coordinates, metrics, and mappings live in keyed atom families. Each
+layer node position is one coherent `{ x, y }` family member because callers
+observe and move both coordinates together. Advance width is a separate
+layer-keyed family, and each handle component remains an independent hot atom.
+Dragging a node or handle therefore does not replace unrelated point geometry,
+an entire glyph, or a master. Notes and color labels are also separated from
+export-bearing atoms, so annotation changes do not invalidate glyph lowering.
+
+The expensive aggregate source selectors intentionally depend on a shallow
+document revision edge. Every exported core transaction advances that revision
+inside the same atomic commit, so direct transaction callers cannot leave those
+projections stale. Imperative atom writes outside core transactions must call
+`markDocumentChanged` after completing their logical edit.
 
 ### Remote source cache
 

@@ -99,6 +99,129 @@ describe("font editor state", () => {
 		expect(firstPoint(editor, razorMasterId)).toEqual(razor)
 	})
 
+	it("keeps point and metric subscriptions isolated by coherent state boundary", () => {
+		const editor = loaded("state/geometry-boundaries")
+		const [movedPoint, unaffectedPoint] = firstContourPoints(
+			editor,
+			blackMasterId,
+		)
+		if (movedPoint === undefined || unaffectedPoint === undefined) {
+			throw new Error("Fixture points are missing.")
+		}
+		let movedNotifications = 0
+		let unaffectedNotifications = 0
+		let metricNotifications = 0
+		const movedPosition = editor.silo.findState(editor.atoms.pointPosition, [
+			blackMasterId,
+			oGlyphId,
+			movedPoint.id,
+		])
+		const unaffectedPosition = editor.silo.findState(
+			editor.atoms.pointPosition,
+			[blackMasterId, oGlyphId, unaffectedPoint.id],
+		)
+		const advanceWidth = editor.silo.findState(editor.atoms.advanceWidth, [
+			blackMasterId,
+			oGlyphId,
+		])
+		const unsubscribeMoved = editor.silo.subscribe(movedPosition, () => {
+			movedNotifications++
+		})
+		const unsubscribeUnaffected = editor.silo.subscribe(
+			unaffectedPosition,
+			() => {
+				unaffectedNotifications++
+			},
+		)
+		const unsubscribeMetric = editor.silo.subscribe(advanceWidth, () => {
+			metricNotifications++
+		})
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{ pointId: movedPoint.id, x: movedPoint.x + 7, y: movedPoint.y - 3 },
+			],
+		})
+
+		expect(movedNotifications).toBe(1)
+		expect(unaffectedNotifications).toBe(0)
+		expect(metricNotifications).toBe(0)
+		unsubscribeMoved()
+		unsubscribeUnaffected()
+		unsubscribeMetric()
+	})
+
+	it("advances revision inside direct core transactions", () => {
+		const editor = loaded("state/direct-transaction-revision")
+		const point = firstPoint(editor, blackMasterId)
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const sourceBefore = editor.read.editorSource()
+		const runMovePoints = editor.silo.runTransaction(
+			editor.transactions.movePoints,
+		)
+
+		runMovePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 11, y: point.y + 2 }],
+		})
+
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(
+			revision + 1,
+		)
+		const sourceAfter = editor.read.editorSource()
+		expect(sourceAfter).not.toBe(sourceBefore)
+		expect(firstPoint(editor, blackMasterId)).toEqual(
+			expect.objectContaining({ x: point.x + 11, y: point.y + 2 }),
+		)
+	})
+
+	it("rolls revision back when a direct core transaction fails", () => {
+		const editor = loaded("state/failed-transaction-revision")
+		const point = firstPoint(editor, blackMasterId)
+		const revision = editor.silo.getState(editor.atoms.documentRevision)
+		const runMovePoints = editor.silo.runTransaction(
+			editor.transactions.movePoints,
+		)
+
+		expect(() =>
+			runMovePoints({
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				points: [{ pointId: point.id, x: Number.NaN, y: point.y }],
+			}),
+		).toThrow("Point coordinates must be finite numbers.")
+		expect(editor.silo.getState(editor.atoms.documentRevision)).toBe(revision)
+		expect(firstPoint(editor, blackMasterId)).toEqual(point)
+	})
+
+	it("undoes a multi-point transaction as one glyph-history entry", () => {
+		const editor = loaded("state/multi-point-history")
+		const [first, second] = firstContourPoints(editor, blackMasterId)
+		if (first === undefined || second === undefined) {
+			throw new Error("Fixture points are missing.")
+		}
+
+		editor.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{ pointId: first.id, x: first.x + 5, y: first.y },
+				{ pointId: second.id, x: second.x, y: second.y - 8 },
+			],
+		})
+		editor.undo(oGlyphId)
+
+		const [restoredFirst, restoredSecond] = firstContourPoints(
+			editor,
+			blackMasterId,
+		)
+		expect(restoredFirst).toEqual(first)
+		expect(restoredSecond).toEqual(second)
+	})
+
 	it("changes node behavior only in the requested master", () => {
 		const editor = loaded("state/mode-master")
 		const black = firstPoint(editor, blackMasterId)
