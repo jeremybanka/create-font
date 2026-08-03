@@ -1,0 +1,44 @@
+{
+	"name": "@create-art/source-format",
+	"version": "0.1.1",
+	"description": "Versioned dprint formatting contract for create-art source files",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-art/source-format"
+	},
+	"publishConfig": { "access": "public" },
+	"files": ["dist", "dprint.json", "README.md"],
+	"type": "module",
+	"sideEffects": false,
+	"bin": { "create-source-format": "./dist/cli.mjs" },
+	"exports": {
+		".": {
+			"development": {
+				"browser": "./src/browser.ts",
+				"node": "./src/index.ts",
+				"default": "./src/browser.ts"
+			},
+			"browser": "./dist/browser.mjs",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./browser": {
+			"development": "./src/browser.ts",
+			"types": "./dist/browser.d.mts",
+			"import": "./dist/browser.mjs"
+		},
+		"./dprint.json": "./dprint.json",
+		"./package.json": "./package.json"
+	},
+	"scripts": { "build": "vp pack", "test": "vp test" },
+	"dependencies": {
+		"@dprint/formatter": "0.5.1",
+		"@dprint/json": "0.23.0",
+		"dprint": "0.55.2",
+		"dprint-plugin-fea": "workspace:*"
+	},
+	"devDependencies": { "@types/node": "25.9.5", "vitest": "4.1.10" },
+	"engines": { "node": ">=22.0.0" }
+}

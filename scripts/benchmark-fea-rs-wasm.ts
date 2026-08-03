@@ -11,11 +11,11 @@ const fixtureUrl = new URL(
 	import.meta.url,
 )
 const moduleUrl = new URL(
-	"../packages/font-fea-rs-wasm/dist/node/create_font_fea_rs_wasm.js",
+	"../packages/create-font/fea-rs-wasm/dist/node/create_font_fea_rs_wasm.js",
 	import.meta.url,
 )
 const wasmUrl = new URL(
-	"../packages/font-fea-rs-wasm/dist/node/create_font_fea_rs_wasm_bg.wasm",
+	"../packages/create-font/fea-rs-wasm/dist/node/create_font_fea_rs_wasm_bg.wasm",
 	import.meta.url,
 )
 

@@ -5,7 +5,8 @@ Export preflight is a runtime boundary over an already validated
 conflicts, inspect recovery drafts, or make editable work invalid. Those source
 and recovery responsibilities stay separate from output authorization.
 
-`packages/create-design/src/export-preflight.ts` defines the portable contract.
+`packages/create-design/pdf/src/export-preflight.ts` defines the portable
+contract.
 Every diagnostic has a stable code, severity, target, capability, message, and
 optional entity, artboard, and action data. Results contain only ordinary frozen
 objects and arrays, so browser UI, workers, command-line integrations, and tests

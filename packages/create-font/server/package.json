@@ -1,0 +1,56 @@
+{
+	"name": "@create-font/server",
+	"version": "0.2.2",
+	"description": "Elysia workspace RPC contracts and Eden client for create-font",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-font/server"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./client": {
+			"development": "./src/client.ts",
+			"types": "./dist/client.d.mts",
+			"browser": "./dist/client.mjs",
+			"import": "./dist/client.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"dev": "vp pack --watch --no-clean",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"@create-art/source-rpc": "workspace:*",
+		"@elysiajs/eden": "1.4.9",
+		"elysia": "1.4.29"
+	},
+	"devDependencies": {
+		"@trpc/server": "11.18.0",
+		"@types/node": "25.9.5",
+		"vitest": "4.1.10",
+		"zod": "4.4.3"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

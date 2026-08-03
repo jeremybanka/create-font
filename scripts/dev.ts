@@ -34,7 +34,7 @@ await superviseDevProcesses([
 	spawn(
 		process.execPath,
 		[
-			resolve(workspaceRoot, `packages/create-font/scripts/dev.ts`),
+			resolve(workspaceRoot, `apps/create-font/scripts/dev.ts`),
 			`--port=${ports.createFontFrontend}`,
 		],
 		{ cwd: workspaceRoot, stdio: `inherit` },
@@ -42,7 +42,7 @@ await superviseDevProcesses([
 	spawn(
 		process.execPath,
 		[
-			resolve(workspaceRoot, `packages/create-design/scripts/dev.ts`),
+			resolve(workspaceRoot, `apps/create-design/scripts/dev.ts`),
 			`--port=${ports.createDesignFrontend}`,
 		],
 		{ cwd: workspaceRoot, stdio: `inherit` },

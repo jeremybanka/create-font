@@ -11,20 +11,19 @@
 		"noEmit": true,
 		"noUncheckedIndexedAccess": true,
 		"paths": {
-			"@create-art/editor": ["./packages/editor/src/index.ts"],
-			"@create-design/editor/browser": [
-				"./packages/design-editor/src/browser.ts"
+			"@create-art/editor": ["./packages/create-art/editor/src/index.ts"],
+			"@create-art/preact-konva": [
+				"./packages/create-art/preact-konva/src/index.ts"
 			],
-			"@create-design/editor/model": [
-				"./packages/design-editor/src/document.ts"
+			"@create-design/editor/browser": [
+				"./packages/create-design/editor/src/browser.ts"
 			],
 			"@create-design/editor/source-session": [
-				"./packages/design-editor/src/source-session.ts"
+				"./packages/create-design/editor/src/source-session.ts"
 			],
-			"@create-art/preact-konva": ["./packages/preact-konva/src/index.ts"],
-			"@create-font/source": ["./packages/font-source/src/index.ts"],
-			"@create-font/states": ["./packages/font-states/src/index.ts"],
-			"@create-font/target": ["./packages/font-target/src/index.ts"]
+			"@create-font/source": ["./packages/create-font/source/src/index.ts"],
+			"@create-font/states": ["./packages/create-font/states/src/index.ts"],
+			"@create-font/target": ["./packages/create-font/target/src/index.ts"]
 		},
 		"rootDir": ".",
 		"skipLibCheck": true,
@@ -34,10 +33,11 @@
 	},
 	"include": ["**/*.ts", "*.d.ts"],
 	"exclude": [
-		"packages/editor",
-		"packages/font-editor",
-		"packages/design-editor",
-		"packages/preact-konva",
-		"packages/create-font"
+		"apps/create-design",
+		"apps/create-font",
+		"packages/create-art/editor",
+		"packages/create-art/preact-konva",
+		"packages/create-design/editor",
+		"packages/create-font/editor"
 	]
 }

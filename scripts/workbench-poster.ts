@@ -8,7 +8,7 @@ import {
 	type DesignContour,
 	type DesignDocument,
 	type DesignObject,
-} from "../packages/design-source/src/index.ts"
+} from "../packages/create-design/source/src/index.ts"
 
 type Bounds = Readonly<{
 	minX: number

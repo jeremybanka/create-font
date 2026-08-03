@@ -81,6 +81,8 @@ const shards = {
 				`@create-art/editor`,
 				`@create-art/source-rpc`,
 				`@create-art/vector-geometry`,
+				`@create-design/model`,
+				`@create-design/pdf`,
 				`@create-font/font-service`,
 				`@create-art/preact-konva`,
 				`@create-font/server`,
@@ -117,17 +119,29 @@ const shards = {
 type ShardName = keyof typeof shards
 
 function packageManifests(): Map<string, PackageManifest> {
-	const packagesRoot = join(workspaceRoot, `packages`)
 	const manifests = new Map<string, PackageManifest>()
-	for (const directory of readdirSync(packagesRoot, { withFileTypes: true })) {
-		if (!directory.isDirectory()) continue
+	const visit = (directory: string): void => {
+		const entries = readdirSync(directory, { withFileTypes: true })
+		const manifestEntry = entries.find(
+			(entry) => entry.isFile() && entry.name === `package.json`,
+		)
+		if (manifestEntry === undefined) {
+			for (const entry of entries) {
+				if (!entry.isDirectory() || entry.name === `node_modules`) continue
+				visit(join(directory, entry.name))
+			}
+			return
+		}
 		const manifest = JSON.parse(
-			readFileSync(join(packagesRoot, directory.name, `package.json`), `utf8`),
+			readFileSync(join(directory, manifestEntry.name), `utf8`),
 		) as PackageManifest
 		if (manifests.has(manifest.name)) {
 			throw new Error(`Duplicate workspace package name ${manifest.name}.`)
 		}
 		manifests.set(manifest.name, manifest)
+	}
+	for (const root of [`apps`, `packages`]) {
+		visit(join(workspaceRoot, root))
 	}
 	return manifests
 }

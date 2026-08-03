@@ -11,7 +11,7 @@ node scripts/workbench-poster.ts
 ```
 
 The source codec and the repository formatter share the versioned
-[`@create-art/source-format`](../packages/source-format/README.md) policy.
+[`@create-art/source-format`](../packages/create-art/source-format/README.md) policy.
 The repository `pnpm fmt` and `pnpm fmt:check` commands run its canonical
 source CLI before the general dprint pass, so regeneration, application
 writes, user formatting, and CI converge on identical bytes.

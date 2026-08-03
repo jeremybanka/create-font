@@ -29,7 +29,7 @@ the Bun version as well when measuring the optional Bun compatibility path.
 For a development profile:
 
 ```sh
-node packages/create-font/src/font-cli.ts dev workbench-sans --root=. --port=4173
+node apps/create-font/src/font-cli.ts dev workbench-sans --root=. --port=4173
 ```
 
 Use another unoccupied loopback port when 4173 is already in use. Open the URL
@@ -51,7 +51,7 @@ long-task entries are needed to explain the headline durations.
 Profile the server-side source service separately from HTTP and browser work:
 
 ```sh
-node packages/create-font/scripts/profile-source-service.ts fonts/workbench-sans
+node apps/create-font/scripts/profile-source-service.ts fonts/workbench-sans
 ```
 
 This opt-in diagnostic records why each complete project load occurred and

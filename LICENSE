@@ -15,11 +15,11 @@ create-art editor foundations, and the repository-level application tooling are
 licensed under the GNU Affero General Public License, version 3 or later
 (SPDX: AGPL-3.0-or-later):
 
-- packages/create-font/**
-- packages/create-design/**
-- packages/editor/**
-- packages/design-editor/**
-- packages/font-editor/**
+- apps/create-font/**
+- apps/create-design/**
+- packages/create-art/editor/**
+- packages/create-design/editor/**
+- packages/create-font/editor/**
 - scripts/**
 - repository files not assigned another license below
 
@@ -35,18 +35,20 @@ implementations are licensed under the Mozilla Public License, version 2.0
 (SPDX: MPL-2.0):
 
 - crates/**
-- packages/design-source/**
+- packages/create-design/source/**
+- packages/create-design/model/**
+- packages/create-design/pdf/**
 - packages/dprint-plugin-fea/**
-- packages/font-fea-rs-wasm/**
-- packages/font-service/**
-- packages/font-source/**
-- packages/preact-konva/**
-- packages/font-server/**
-- packages/source-format/**
-- packages/source-rpc/**
-- packages/font-states/**
-- packages/font-target/**
-- packages/vector-geometry/**
+- packages/create-font/fea-rs-wasm/**
+- packages/create-font/font-service/**
+- packages/create-font/source/**
+- packages/create-art/preact-konva/**
+- packages/create-font/server/**
+- packages/create-art/source-format/**
+- packages/create-art/source-rpc/**
+- packages/create-font/states/**
+- packages/create-font/target/**
+- packages/create-art/vector-geometry/**
 
 The full license is in LICENSES/MPL-2.0.txt.
 
