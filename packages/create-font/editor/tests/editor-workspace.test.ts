@@ -274,6 +274,37 @@ describe("editor workspace", () => {
 		)
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
 		workspace.font.silo.setState(workspace.ui.editingTextIndex, 2)
+		const point = workspace.font
+			.read.editorGlyphSource(oGlyphId)
+			?.layers.find((layer) => layer.masterId === blackMasterId)
+			?.contours[0]?.points[0]
+		if (point === undefined) throw new Error("Fixture point is missing.")
+		const removedGlyphTimeline = workspace.font.silo.findTimeline(
+			workspace.font.glyphHistoryTimelines,
+			oGlyphId,
+		)
+		workspace.font.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 1, y: point.y }],
+		})
+		workspace.font.actions.setKerningPair({
+			left: oGlyphId,
+			right: aGlyphId,
+			value: -123,
+		})
+		expect(
+			workspace.font.silo.inspectTimeline(
+				workspace.font.glyphHistoryTimelines,
+				oGlyphId,
+			),
+		).toEqual({ at: 1, length: 1 })
+		expect(
+			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
+		).toEqual({ at: 1, length: 1 })
+		const revisionBeforeReplacement = workspace.font.silo.getState(
+			workspace.font.atoms.documentRevision,
+		)
 
 		const readSnapshot = () => ({
 			glyphIds: workspace.font.silo.getState(workspace.font.atoms.glyphIds),
@@ -289,14 +320,31 @@ describe("editor workspace", () => {
 			),
 		})
 		const uiSnapshots: ReturnType<typeof readSnapshot>[] = []
-		const revisionSnapshots: ReturnType<typeof readSnapshot>[] = []
+		const revisionSnapshots: Array<{
+			readonly revision: number
+			readonly snapshot: ReturnType<typeof readSnapshot>
+			readonly glyphHistoryPresent: boolean
+			readonly kerningHistory: { readonly at: number; readonly length: number }
+		}> = []
 		const unsubscribeUi = workspace.font.silo.subscribe(
 			workspace.ui.selectedGlyphId,
 			() => uiSnapshots.push(readSnapshot()),
 		)
 		const unsubscribeRevision = workspace.font.silo.subscribe(
 			workspace.font.atoms.documentRevision,
-			() => revisionSnapshots.push(readSnapshot()),
+			() =>
+				revisionSnapshots.push({
+					revision: workspace.font.silo.getState(
+						workspace.font.atoms.documentRevision,
+					),
+					snapshot: readSnapshot(),
+					glyphHistoryPresent: workspace.font.silo.store.timelines.has(
+						removedGlyphTimeline.key,
+					),
+					kerningHistory: workspace.font.silo.inspectTimeline(
+						workspace.font.kerningTimeline,
+					),
+				}),
 		)
 
 		workspace.actions.replaceSource(replacement)
@@ -316,7 +364,23 @@ describe("editor workspace", () => {
 			editingTextIndex: null,
 		}
 		expect(uiSnapshots).toEqual([expected])
-		expect(revisionSnapshots).toEqual([expected])
+		expect(revisionSnapshots).toEqual([
+			{
+				revision: revisionBeforeReplacement + 1,
+				snapshot: expected,
+				glyphHistoryPresent: true,
+				kerningHistory: { at: 1, length: 1 },
+			},
+		])
+		expect(
+			workspace.font.silo.getState(workspace.font.atoms.documentRevision),
+		).toBe(revisionBeforeReplacement + 1)
+		expect(
+			workspace.font.silo.store.timelines.has(removedGlyphTimeline.key),
+		).toBe(false)
+		expect(
+			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
+		).toEqual({ at: 0, length: 0 })
 		expect(
 			workspace.font.silo.getState(
 				workspace.ui.previewCoordinate,

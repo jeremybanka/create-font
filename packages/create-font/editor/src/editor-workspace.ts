@@ -527,17 +527,6 @@ export function createEditorWorkspace(
 	const runEditorUiTransition = font.silo.runTransaction(
 		transitionEditorUiTransaction,
 	)
-	const replaceSourceTransaction = font.silo.transaction<
-		(source: EditorFontSource, interaction: EditorInteractionState) => void
-	>({
-		key: "replaceSource",
-		do: ({ get, run, set }, nextSource, nextInteraction) => {
-			run(font.transactions.replaceFont)(nextSource)
-			set(interactionAtom, nextInteraction)
-			set(font.atoms.documentRevision, get(font.atoms.documentRevision) + 1)
-		},
-	})
-	const runReplaceSource = font.silo.runTransaction(replaceSourceTransaction)
 	const previewLocationSelector = font.silo.selector<
 		Readonly<Record<string, number>>
 	>({
@@ -1413,23 +1402,14 @@ export function createEditorWorkspace(
 				)
 			},
 			replaceSource(source: EditorFontSource): void {
-				const previousGlyphIds = font.silo.getState(font.atoms.glyphIds)
 				const nextInteraction = reconcileInteractionForSource(
 					font.silo.getState(interactionAtom),
 					source,
 				)
-				runReplaceSource(source, nextInteraction)
-				const nextGlyphIds = font.silo.getState(font.atoms.glyphIds)
-				const nextGlyphIdSet = new Set(nextGlyphIds)
-				for (const glyphId of previousGlyphIds) {
-					if (!nextGlyphIdSet.has(glyphId)) {
-						font.silo.disposeTimeline(font.glyphHistoryTimelines, glyphId)
-					}
-				}
-				for (const glyphId of nextGlyphIds) {
-					font.silo.clearTimeline(font.glyphHistoryTimelines, glyphId)
-				}
-				font.silo.clearTimeline(font.kerningTimeline)
+				font.actions.load(source, {
+					atom: interactionAtom,
+					value: nextInteraction,
+				})
 			},
 		},
 	}
