@@ -11,6 +11,9 @@ await rm(outdir, { force: true, recursive: true })
 await build({
 	configFile: resolve(packageRoot, `vite.config.ts`),
 	build: {
+		// The editor is a single-route application whose production bundle is
+		// intentionally loaded as one chunk.
+		chunkSizeWarningLimit: 1_100,
 		emptyOutDir: true,
 		minify: true,
 		outDir: outdir,
