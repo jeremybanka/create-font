@@ -55,6 +55,12 @@ import type {
 } from "./design-arrangement.ts"
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
+import { SvgPreview } from "./SvgPreview.tsx"
+import {
+	preflightSvgExport,
+	type SvgDiagnostic,
+	type SvgExportTarget,
+} from "@create-design/svg"
 import { resolvePdfArtboards, type PdfExportRequest } from "@create-design/pdf"
 import { preflightPdfExport } from "@create-design/pdf"
 import {
@@ -459,6 +465,10 @@ function DesignExportTile({
 	readonly context: DesignTileContext
 }) {
 	const [previewEnabled, setPreviewEnabled] = useState(false)
+	const [svgPreviewEnabled, setSvgPreviewEnabled] = useState(false)
+	const [svgImportDiagnostics, setSvgImportDiagnostics] = useState<
+		readonly SvgDiagnostic[]
+	>([])
 	const [scope, setScope] =
 		useState<PdfExportRequest["scope"]["kind"]>("active")
 	const [selectedArtboardIds, setSelectedArtboardIds] = useState<
@@ -562,6 +572,14 @@ function DesignExportTile({
 		}
 	}
 	const canExport = preflight.decision === "ready"
+	const svgTarget = useMemo<SvgExportTarget>(
+		() => ({ artboardId: context.activeArtboard.id }),
+		[context.activeArtboard.id],
+	)
+	const svgPreflight = useMemo(
+		() => preflightSvgExport(context.document, svgTarget),
+		[context.document, svgTarget],
+	)
 	return (
 		<design-export-tile>
 			<strong>Portable Document Format</strong>
@@ -729,6 +747,76 @@ function DesignExportTile({
 					target={target}
 					preflightPreferences={preflightPreferences}
 				/>
+			) : null}
+			<hr />
+			<strong>Scalable Vector Graphics</strong>
+			<span>
+				Export or import the supported vector subset through the same headless
+				SVG pipeline used by preview and the CLI.
+			</span>
+			{svgPreflight.diagnostics.length === 0 ? null : (
+				<ul aria-label="SVG export diagnostics" data-export-preflight>
+					{svgPreflight.diagnostics.map((diagnostic, index) => (
+						<li
+							key={`${diagnostic.code}:${diagnostic.entityId ?? "document"}:${index}`}
+							data-severity={diagnostic.severity}
+						>
+							<strong>{diagnostic.severity}</strong> {diagnostic.message}
+						</li>
+					))}
+				</ul>
+			)}
+			<button
+				type="button"
+				disabled={svgPreflight.decision === "blocked"}
+				onClick={() => context.exportSvgDocument(svgTarget)}
+			>
+				Export active artboard as SVG
+			</button>
+			<label data-field>
+				<span>Import SVG into active artboard</span>
+				<input
+					type="file"
+					accept="image/svg+xml,.svg"
+					onChange={(event) => {
+						const file = event.currentTarget.files?.[0]
+						if (file === undefined) return
+						void file.text().then((source) => {
+							const result = context.importSvgDocument(source)
+							setSvgImportDiagnostics(result.diagnostics)
+						})
+						event.currentTarget.value = ""
+					}}
+				/>
+			</label>
+			{svgImportDiagnostics.length === 0 ? null : (
+				<ul
+					aria-live="polite"
+					aria-label="SVG import diagnostics"
+					data-export-preflight
+				>
+					{svgImportDiagnostics.map((diagnostic, index) => (
+						<li
+							key={`${diagnostic.code}:${index}`}
+							data-severity={diagnostic.severity}
+						>
+							<strong>{diagnostic.stage}</strong> {diagnostic.message}
+						</li>
+					))}
+				</ul>
+			)}
+			<label data-live-preview>
+				<input
+					type="checkbox"
+					checked={svgPreviewEnabled}
+					onChange={(event) =>
+						setSvgPreviewEnabled(event.currentTarget.checked)
+					}
+				/>
+				<span>Live SVG proof</span>
+			</label>
+			{svgPreviewEnabled ? (
+				<SvgPreview document={context.document} target={svgTarget} />
 			) : null}
 		</design-export-tile>
 	)

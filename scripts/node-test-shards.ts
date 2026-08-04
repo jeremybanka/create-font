@@ -83,6 +83,7 @@ const shards = {
 				`@create-art/vector-geometry`,
 				`@create-design/model`,
 				`@create-design/pdf`,
+				`@create-design/svg`,
 				`@create-font/font-service`,
 				`@create-font/server`,
 				`@create-font/target`,

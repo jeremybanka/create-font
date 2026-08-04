@@ -1,9 +1,17 @@
 # `@create-design/editor`
 
+The Export tile provides deterministic PDF and SVG downloads plus opt-in live
+proofs of both generated artifacts. SVG import maps the source `viewBox` into
+the active artboard, allocates fresh object/group/swatch identities, and commits
+the complete supported import as one undoable document transaction. Unsupported
+text, masks, filters, gradient paint, and external resources remain visible as
+diagnostics instead of being silently deleted or rasterized.
+
 The create-design browser editor. It owns canvas and selection behavior,
-browser PDF interaction, editor UI, and the browser mounting API. Headless
+browser PDF/SVG interaction, editor UI, and the browser mounting API. Headless
 document operations live in [`@create-design/model`](../model/README.md), PDF
-compilation lives in [`@create-design/pdf`](../pdf/README.md), and the canonical
+compilation lives in [`@create-design/pdf`](../pdf/README.md), SVG interchange
+lives in [`@create-design/svg`](../svg/README.md), and the canonical
 document contract lives in [`@create-design/source`](../source/README.md).
 
 The `create-design` application supplies filesystem-backed source sessions and

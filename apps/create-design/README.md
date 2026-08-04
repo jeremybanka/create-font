@@ -11,12 +11,13 @@ server. The browser application and design interaction model live in
 product-neutral editor foundations live in
 [`@create-art/editor`](../../packages/create-art/editor/README.md).
 
-The first output target is the headless
-[`@create-design/pdf`](../../packages/create-design/pdf/README.md) package,
-which uses `mondrian.pdf`'s validated object IR. RGB-authored fills and strokes
+Output targets live in the headless
+[`@create-design/pdf`](../../packages/create-design/pdf/README.md) and
+[`@create-design/svg`](../../packages/create-design/svg/README.md) packages.
+PDF uses `mondrian.pdf`'s validated object IR. RGB-authored fills and strokes
 are emitted with PDF RGB operators and CMYK-authored paints with native PDF
 CMYK operators. The browser editor and CLI export command consume the same
-projection, preflight, and serialization API.
+target-specific projection, preflight, and serialization APIs.
 
 ## Headless PDF export
 
@@ -44,6 +45,24 @@ default; pass `--force` to atomically replace one. Blocking diagnostics and
 invalid source exit with status 1 without publishing partial output. Advisory
 preflight notices are written to stderr while a successful export still exits
 with status 0. Run `create-design export --help` for the complete option list.
+
+## Headless SVG export
+
+The same command exports one artboard through the browser editor's deterministic
+`@create-design/svg` projection and serialization path when the output ends in
+`.svg`:
+
+```sh
+create-design export designs/workbench-poster \
+  --output artifacts/workbench-poster.svg \
+  --artboards artboard:page
+```
+
+Without `--artboards`, SVG export selects the first ordered artboard. Unlike
+multi-page PDF, one SVG artifact represents one artboard. CMYK-authored paint is
+converted through its deterministic RGB alternate and reported as a warning.
+SVG output must remain outside the source project and uses the same atomic,
+no-clobber publication behavior as PDF.
 
 Design objects keep three authored concerns separate:
 
@@ -221,7 +240,13 @@ The repository's [`designs/workbench-poster`](../../designs/workbench-poster)
 project is a complete source-format example and the default development
 workspace.
 
-The Export tile offers an opt-in live PDF proof rendered by the browser's PDF
+The Export tile offers opt-in live PDF and SVG proofs rendered from the actual
+generated artifacts. SVG download, preview, and CLI output share one headless
+projection and serializer. The SVG proof uses the same coalesced,
+generation-safe replacement lifecycle as PDF, keeping the last good artifact
+visible and releasing superseded object URLs.
+
+The PDF proof is rendered by the browser's PDF
 viewer. PDF lowering is memoized at object, page, and document boundaries, so
 ordinary geometry edits reuse unrelated object streams. The last successfully
 loaded proof remains visible while a replacement compiles or if an edit makes

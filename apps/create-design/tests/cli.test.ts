@@ -117,8 +117,32 @@ describe("create-design CLI", () => {
 			]),
 		).toThrow("--port is only valid for serve")
 		expect(() => parseCreateDesignCli(["export"])).toThrow(
-			"PDF export requires --output FILE",
+			"Export requires --output FILE",
 		)
+	})
+
+	test("exports one artboard through the shared headless SVG pipeline", async () => {
+		const root = await temporaryRoot()
+		const outputRoot = await temporaryRoot()
+		await initializeDesignSourceWorkspace(root, multipleArtboards())
+		const output = join(outputRoot, "second.svg")
+
+		const result = await run([
+			"export",
+			root,
+			"--output",
+			output,
+			"--artboards",
+			"artboard:second",
+		])
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout()).toContain(
+			"Exported artboard artboard:second as SVG",
+		)
+		const svg = await readFile(output, "utf8")
+		expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"')
+		expect(svg).toContain('viewBox="200 0 300 150"')
 	})
 
 	test("exports every artboard as a validated PDF by default", async () => {

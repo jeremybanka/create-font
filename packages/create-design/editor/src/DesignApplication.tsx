@@ -196,11 +196,17 @@ import {
 	projectDesignVectorObject,
 } from "./design-vector-adapter.ts"
 import { createPdfDownloadManager } from "./pdf-download.ts"
+import { createSvgDownloadManager } from "./svg-download.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import {
 	exportPreflightAllowsOutput,
 	type ExportPreflightPreferences,
 } from "@create-design/pdf"
+import {
+	importSvg,
+	type SvgExportTarget,
+	type SvgImportResult,
+} from "@create-design/svg"
 import type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
@@ -719,11 +725,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
 	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
+	const svgDownloadManager = useMemo(() => createSvgDownloadManager(), [])
 	const pathfinderClient = useMemo(
 		() => pathfinderWorkerClient ?? createPathfinderWorkerClient(),
 		[pathfinderWorkerClient],
 	)
 	useEffect(() => () => pdfDownloadManager.dispose(), [pdfDownloadManager])
+	useEffect(() => () => svgDownloadManager.dispose(), [svgDownloadManager])
 	useEffect(
 		() => () => {
 			pathfinderGenerationRef.current += 1
@@ -1525,6 +1533,56 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[activeArtboard, document, openTile, pdfDownloadManager],
 	)
+	const exportSvgDocument = useCallback(
+		(target: SvgExportTarget): void => {
+			const preflight = svgDownloadManager.preflight(document, target)
+			if (preflight.decision === "blocked") {
+				void svgDownloadManager.request(document, target)
+				openTile("export")
+				setStatus(
+					`SVG export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
+				)
+				return
+			}
+			setStatus(`Preparing ${document.title}.svg…`)
+			void svgDownloadManager.request(document, target).then(
+				(downloaded) => {
+					if (downloaded)
+						setStatus(
+							`Exported ${document.title}.svg with ${document.objects.length} vector objects.`,
+						)
+				},
+				(error) =>
+					setStatus(
+						`SVG export failed: ${error instanceof Error ? error.message : String(error)}`,
+					),
+			)
+		},
+		[document, openTile, svgDownloadManager],
+	)
+	const importSvgDocument = useCallback(
+		(source: string): SvgImportResult => {
+			const result = importSvg(source, document, {
+				artboardId: activeArtboard.id,
+				nextId,
+			})
+			if (result.ok && result.importedObjectIds.length > 0) {
+				// The complete import is one document commit and therefore one history entry.
+				commit(result.document)
+				setSelection(result.importedObjectIds)
+			}
+			const warnings = result.diagnostics.filter(
+				({ severity }) => severity === "warning",
+			).length
+			setStatus(
+				result.ok
+					? `Imported ${result.importedObjectIds.length} SVG object${result.importedObjectIds.length === 1 ? "" : "s"}${warnings === 0 ? "." : ` with ${warnings} warning${warnings === 1 ? "" : "s"}.`}`
+					: `SVG import failed: ${result.diagnostics[0]?.message ?? "No supported content was found."}`,
+			)
+			return result
+		},
+		[activeArtboard.id, commit, document, nextId],
+	)
 
 	const setObjectProperty = (
 		object: DesignObject,
@@ -1781,6 +1839,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			: expansionEligibility.reason,
 		expandStrokeSelection,
 		exportDocument,
+		exportSvgDocument,
+		importSvgDocument,
 		fitAllArtboards,
 		focusCanvas: focusActiveArtboard,
 		activeArtboard,
@@ -1921,6 +1981,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				icon: "DoubleArrowRightIcon",
 				shortcut: "⌘ E",
 				do: exportDocument,
+			},
+			{
+				id: "export-svg",
+				displayName: "Export SVG",
+				category: "File",
+				description:
+					"Export the active artboard as deterministic editable SVG.",
+				icon: "DoubleArrowRightIcon",
+				do: () => exportSvgDocument({ artboardId: activeArtboard.id }),
 			},
 			{
 				id: "group-selection",
@@ -2194,6 +2263,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			executePathCommand,
 			expansionEligibility,
 			exportDocument,
+			exportSvgDocument,
 			history.canRedo,
 			history.canUndo,
 			navigateDesignHistory,
