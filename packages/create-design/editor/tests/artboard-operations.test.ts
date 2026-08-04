@@ -106,9 +106,9 @@ describe("design artboard operations", () => {
 			length: 1,
 		})
 		state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(initial)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
 		state.silo.redo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(created)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(created)
 	})
 
 	it("navigates overlapping artboards and computes fit-all bounds", () => {

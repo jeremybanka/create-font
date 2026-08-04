@@ -549,13 +549,13 @@ describe("design stroke expansion", () => {
 			at: 1,
 			length: 1,
 		})
-		expect(state.silo.getState(state.states.documentAtom).objects[0]).toBe(
-			unrelated,
-		)
+		expect(
+			state.silo.getState(state.states.documentSelector).objects[0],
+		).toEqual(unrelated)
 		state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(before)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(before)
 		state.silo.redo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(after)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(after)
 	})
 
 	it("fails degenerate, self-crossing, and invalid inputs without allocating IDs", () => {

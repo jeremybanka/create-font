@@ -605,7 +605,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasTheme = useDesignCanvasTheme()
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
-	const { document, persistence } = useO(editorState.states.snapshotSelector)
+	const document = useO(editorState.states.documentSelector)
+	const persistence = useO(editorState.states.persistenceAtom)
 	const {
 		at: historyAt,
 		length: historyLength,
@@ -1446,7 +1447,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				if (historyAt === historyLength) return
 				redoDocument()
 			}
-			const target = editorState.silo.getState(editorState.states.documentAtom)
+			const target = editorState.silo.getState(
+				editorState.states.documentSelector,
+			)
 			const recorded = pathCommandSelectionsRef.current.get(target)
 			if (recorded === undefined) return
 			setSelection(recorded.objectSelection)

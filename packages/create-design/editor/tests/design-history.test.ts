@@ -44,14 +44,14 @@ describe("design Pen timeline", () => {
 			at: 1,
 			length: 1,
 		})
-		expect(state.silo.getState(state.states.documentAtom).objects).toHaveLength(
-			initial.objects.length + 1,
-		)
+		expect(
+			state.silo.getState(state.states.documentSelector).objects,
+		).toHaveLength(initial.objects.length + 1)
 
 		state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom).objects).toHaveLength(
-			initial.objects.length,
-		)
+		expect(
+			state.silo.getState(state.states.documentSelector).objects,
+		).toHaveLength(initial.objects.length)
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 0,
 			length: 1,
@@ -59,7 +59,7 @@ describe("design Pen timeline", () => {
 
 		state.silo.redo(state.documentTimeline)
 		expect(
-			state.silo.getState(state.states.documentAtom).objects.at(-1)?.id,
+			state.silo.getState(state.states.documentSelector).objects.at(-1)?.id,
 		).toBe("object:pen")
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 1,
@@ -78,7 +78,9 @@ describe("design Pen timeline", () => {
 			at: 1,
 			length: 1,
 		})
-		expect(state.silo.getState(state.states.documentAtom)).toBe(replacement)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			replacement,
+		)
 	})
 
 	it("round-trips completed Pen nodes and handles through persistence", () => {

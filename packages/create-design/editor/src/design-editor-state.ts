@@ -5,6 +5,7 @@ import {
 	type DesignPersistenceAction,
 	type DesignPersistenceState,
 } from "./persistence.ts"
+import { createDesignDocumentState } from "./design-document-state.ts"
 import type { DesignDocument } from "./types.ts"
 
 export const DESIGN_HISTORY_UNDO_LIMIT = 100
@@ -29,11 +30,6 @@ export type DesignExternalDocument = Readonly<{
 	durableRevision: string
 }>
 
-export type DesignEditorSnapshot = Readonly<{
-	document: DesignDocument
-	persistence: DesignPersistenceState
-}>
-
 /**
  * The canonical, independently-instantiable state graph for one design editor.
  * Browser gesture and viewport state deliberately remain component-local.
@@ -47,41 +43,30 @@ export function createDesignEditorState(
 		isProduction: process.env.NODE_ENV === "production",
 	})
 
-	const documentAtom = silo.atom<DesignDocument>({
-		key: "document",
-		default: options.document,
-	})
+	const document = createDesignDocumentState(silo, options.document)
 	const documentTimeline = silo.timeline({
 		key: "document",
-		scope: [documentAtom],
+		scope: document.scope,
 		effects: [retainLatestDesignUndoSteps],
 	})
 	const persistenceAtom = silo.atom<DesignPersistenceState>({
 		key: "persistence",
 		default: options.persistence,
 	})
-	const snapshotSelector = silo.selector<DesignEditorSnapshot>({
-		key: "snapshot",
-		get: ({ get }) => ({
-			document: get(documentAtom),
-			persistence: get(persistenceAtom),
-		}),
-	})
-
 	const commitDocumentTransaction = silo.transaction<
 		(document: DesignDocument) => void
 	>({
 		key: "commitDocument",
-		do: ({ get, set }, document) => {
-			if (document !== get(documentAtom)) set(documentAtom, document)
+		do: (tools, nextDocument) => {
+			document.writeDocument(tools, nextDocument)
 		},
 	})
 	const resetDocumentTransaction = silo.transaction<
 		(document: DesignDocument) => void
 	>({
 		key: "resetDocument",
-		do: ({ set }, document) => {
-			set(documentAtom, document)
+		do: (tools, nextDocument) => {
+			document.writeDocument(tools, nextDocument)
 		},
 	})
 	const updatePersistenceTransaction = silo.transaction<
@@ -98,11 +83,11 @@ export function createDesignEditorState(
 		(update: DesignExternalDocument) => void
 	>({
 		key: "loadExternalDocument",
-		do: ({ get, set }, update) => {
-			set(documentAtom, update.document)
-			set(
+		do: (tools, update) => {
+			document.writeDocument(tools, update.document)
+			tools.set(
 				persistenceAtom,
-				reduceDesignPersistence(get(persistenceAtom), {
+				reduceDesignPersistence(tools.get(persistenceAtom), {
 					type: "external-loaded",
 					durableRevision: update.durableRevision,
 				}),
@@ -113,11 +98,11 @@ export function createDesignEditorState(
 		(document: DesignDocument) => void
 	>({
 		key: "recoverDocument",
-		do: ({ get, set }, document) => {
-			set(documentAtom, document)
-			set(
+		do: (tools, nextDocument) => {
+			document.writeDocument(tools, nextDocument)
+			tools.set(
 				persistenceAtom,
-				reduceDesignPersistence(get(persistenceAtom), {
+				reduceDesignPersistence(tools.get(persistenceAtom), {
 					type: "recover-draft",
 				}),
 			)
@@ -139,9 +124,8 @@ export function createDesignEditorState(
 		silo,
 		documentTimeline,
 		states: {
-			documentAtom,
+			...document.states,
 			persistenceAtom,
-			snapshotSelector,
 		},
 		transactions: {
 			commitDocumentTransaction,
