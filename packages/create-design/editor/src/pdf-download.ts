@@ -1,4 +1,5 @@
 import { exportPdf, type PdfExportTarget } from "@create-design/pdf"
+import type { DesignTextService } from "@create-design/text"
 import {
 	exportPreflightAllowsOutput,
 	type ExportPreflightPreferences,
@@ -32,8 +33,18 @@ export function browserPdfDownloadEnvironment(): PdfDownloadEnvironment {
 
 export function createPdfDownloadManager(
 	environment: PdfDownloadEnvironment = browserPdfDownloadEnvironment(),
+	options: Readonly<{ textService?: DesignTextService }> = {},
 ) {
-	const serialize = environment.serialize ?? exportPdf
+	const serialize =
+		environment.serialize ??
+		((document: DesignDocument, target: PdfExportTarget) =>
+			exportPdf(
+				document,
+				target,
+				options.textService === undefined
+					? {}
+					: { textService: options.textService },
+			))
 	let generation = 0
 	let disposed = false
 
@@ -47,7 +58,12 @@ export function createPdfDownloadManager(
 			target: PdfExportTarget,
 			preferences: ExportPreflightPreferences = {},
 		): ExportPreflightResult {
-			return preflightPdfExport(document, target, preferences)
+			return preflightPdfExport(
+				document,
+				target,
+				preferences,
+				options.textService,
+			)
 		},
 		async request(
 			document: DesignDocument,
@@ -56,7 +72,12 @@ export function createPdfDownloadManager(
 		): Promise<boolean> {
 			if (disposed) return false
 			const currentGeneration = ++generation
-			const preflight = preflightPdfExport(document, target, preferences)
+			const preflight = preflightPdfExport(
+				document,
+				target,
+				preferences,
+				options.textService,
+			)
 			if (!exportPreflightAllowsOutput(preflight)) return false
 			let bytes: Uint8Array
 			try {

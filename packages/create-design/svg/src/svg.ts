@@ -71,6 +71,15 @@ export function preflightSvgExport(
 		)
 	}
 	for (const object of document.objects) {
+		if (object.geometry.kind === "text")
+			diagnostics.push(
+				diagnostic(
+					"svg.text.requires-expansion",
+					`${object.name} is editable text. Expand Text before SVG export so the chosen glyph outlines are explicit.`,
+					"error",
+					object.id,
+				),
+			)
 		for (const paint of [object.appearance.fill, object.appearance.stroke]) {
 			if (paint === undefined) continue
 			const swatch = document.swatches.find(({ id }) => id === paint.swatchId)
@@ -272,6 +281,10 @@ function serializeObject(
 		const { centerX, centerY, radiusX, radiusY } = object.geometry
 		return `${indent}<ellipse${attributes} cx="${number(centerX)}" cy="${number(centerY)}" rx="${number(radiusX)}" ry="${number(radiusY)}">\n${title}\n${indent}</ellipse>`
 	}
+	if (object.geometry.kind === "text")
+		throw new Error(
+			`Editable text ${object.id} must be expanded before SVG export.`,
+		)
 	const d = object.geometry.contours
 		.map(contourSvgPath)
 		.filter(Boolean)

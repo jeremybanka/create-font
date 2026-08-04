@@ -89,6 +89,7 @@ const VECTOR_CAPABILITIES = Object.freeze({
 	openPathStroke: "vector.open-path-stroke",
 	path: "vector.path",
 	rectangle: "vector.rectangle",
+	text: "text.outline-lowering",
 })
 
 const EPSILON = 1e-7

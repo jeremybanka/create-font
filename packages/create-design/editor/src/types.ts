@@ -17,6 +17,8 @@ export type {
 	DesignObject,
 	DesignPoint,
 	DesignStroke,
+	DesignTextGeometry,
+	DesignTextTypography,
 	DesignSceneChild,
 	DesignSwatch,
 	DesignTransform,
@@ -31,3 +33,5 @@ export type DesignTool =
 	| "pen"
 	| "rect"
 	| "ellipse"
+	| "text"
+	| "area-text"

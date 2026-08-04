@@ -123,10 +123,65 @@ export const ellipseGeometrySchema = z
 		radiusY: finiteNumberSchema.nonnegative(),
 	})
 	.strict()
+export const fontReferenceSchema = z
+	.object({
+		id: z.string().regex(/^font:.+/u),
+		family: z.string().min(1),
+		faceIndex: z.number().int().nonnegative().optional(),
+		revision: z.union([z.string(), finiteNumberSchema]).optional(),
+	})
+	.strict()
+export const textTypographySchema = z
+	.object({
+		font: fontReferenceSchema,
+		size: positiveNumberSchema,
+		leading: positiveNumberSchema,
+		tracking: finiteNumberSchema,
+		kerning: z.union([z.literal("auto"), finiteNumberSchema]),
+		alignment: z.enum(["start", "center", "end", "justify"]),
+		direction: z.enum(["auto", "ltr", "rtl", "ttb", "btt"]),
+		language: z.string().min(1).optional(),
+		script: z
+			.string()
+			.regex(/^[A-Za-z]{4}$/u)
+			.optional(),
+		variations: z
+			.record(z.string().regex(/^[\x20-\x7e]{4}$/u), finiteNumberSchema)
+			.optional(),
+	})
+	.strict()
+const textFrameInsetSchema = z
+	.object({
+		top: finiteNumberSchema.nonnegative(),
+		right: finiteNumberSchema.nonnegative(),
+		bottom: finiteNumberSchema.nonnegative(),
+		left: finiteNumberSchema.nonnegative(),
+	})
+	.strict()
+export const textGeometrySchema = z
+	.object({
+		kind: z.literal("text"),
+		mode: z.enum(["point", "area"]),
+		text: z.string(),
+		typography: textTypographySchema,
+		x: finiteNumberSchema,
+		y: finiteNumberSchema,
+		frame: z
+			.object({
+				width: positiveNumberSchema,
+				height: positiveNumberSchema,
+				inset: textFrameInsetSchema,
+				verticalAlignment: z.enum(["top", "center", "bottom"]),
+			})
+			.strict()
+			.optional(),
+	})
+	.strict()
 export const geometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
+	textGeometrySchema,
 ])
 export const previousGeometrySchema = z.discriminatedUnion("kind", [
 	previousPathGeometrySchema,
@@ -484,6 +539,22 @@ function relationalDiagnostics(
 				}
 			}
 		}
+		if (
+			object.geometry.kind === "text" &&
+			((object.geometry.mode === "area" &&
+				object.geometry.frame === undefined) ||
+				(object.geometry.mode === "point" &&
+					object.geometry.frame !== undefined))
+		)
+			errors.push(
+				diagnostic(
+					"document.schema",
+					`$.objects[${index}].geometry.frame`,
+					object.geometry.mode === "area"
+						? "Area text requires a frame."
+						: "Point text cannot have a frame.",
+				),
+			)
 	}
 	const seenBlends = new Set<string>()
 	for (const [index, blend] of (document.blends ?? []).entries()) {

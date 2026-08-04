@@ -62,6 +62,116 @@ const legacyFixture = () => ({
 	],
 })
 
+describe("editable text source", () => {
+	it("round-trips point and area text with durable font references", () => {
+		const base = {
+			format: "create-design.document" as const,
+			version: CREATE_DESIGN_DOCUMENT_VERSION,
+			title: "Type specimen",
+			artboards: [
+				{
+					id: "artboard:page",
+					name: "Page",
+					x: 0,
+					y: 0,
+					width: 400,
+					height: 300,
+				},
+			],
+			swatches: [
+				{
+					id: "swatch:black",
+					name: "Black",
+					source: { space: "rgb" as const, r: 0, g: 0, b: 0 },
+				},
+			],
+			objects: [
+				{
+					id: "object:text",
+					name: "Headline",
+					geometry: {
+						kind: "text" as const,
+						mode: "area" as const,
+						text: "مرحبا world",
+						x: 20,
+						y: 30,
+						typography: {
+							font: {
+								id: "font:specimen",
+								family: "Specimen",
+								revision: "sha256:test",
+							},
+							size: 32,
+							leading: 38,
+							tracking: 10,
+							kerning: "auto" as const,
+							alignment: "start" as const,
+							direction: "auto" as const,
+						},
+						frame: {
+							width: 220,
+							height: 90,
+							inset: { top: 4, right: 4, bottom: 4, left: 4 },
+							verticalAlignment: "top" as const,
+						},
+					},
+					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+					appearance: { fill: { swatchId: "swatch:black" } },
+				},
+			],
+			guides: [],
+		}
+		const validated = validateDesignDocument(base)
+		expect(validated).toEqual({ ok: true, value: base })
+		expect(parseDesignDocumentText(JSON.stringify(base))).toEqual(validated)
+	})
+
+	it("rejects area text without a frame and point text with one", () => {
+		const point = {
+			format: "create-design.document",
+			version: CREATE_DESIGN_DOCUMENT_VERSION,
+			title: "Invalid type",
+			artboards: [
+				{
+					id: "artboard:page",
+					name: "Page",
+					x: 0,
+					y: 0,
+					width: 100,
+					height: 100,
+				},
+			],
+			swatches: [],
+			objects: [
+				{
+					id: "object:text",
+					name: "Text",
+					geometry: {
+						kind: "text",
+						mode: "area",
+						text: "x",
+						x: 0,
+						y: 0,
+						typography: {
+							font: { id: "font:test", family: "Test" },
+							size: 12,
+							leading: 14,
+							tracking: 0,
+							kerning: "auto",
+							alignment: "start",
+							direction: "auto",
+						},
+					},
+					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+					appearance: {},
+				},
+			],
+			guides: [],
+		}
+		expect(validateDesignDocument(point)).toMatchObject({ ok: false })
+	})
+})
+
 const canonicalV1Fixture = () => ({
 	format: "create-design.document" as const,
 	version: 1 as const,

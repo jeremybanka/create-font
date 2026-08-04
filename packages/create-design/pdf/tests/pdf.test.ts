@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { validatePdf } from "mondrian.pdf"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
+import type { DesignObject, DesignSwatch } from "@create-design/source"
+import type { DesignTextLayout, DesignTextService } from "@create-design/text"
 
 import { createInitialDocument } from "@create-design/source"
 import {
@@ -507,5 +509,82 @@ describe("PDF export", () => {
 		expect(exportPdf(document)).toEqual(exportPdf(document))
 		const pdf = new TextDecoder().decode(exportPdf(document))
 		expect(pdf).toContain("/Contents [")
+	})
+
+	it("lowers live text from the exact canonical glyph contours used by canvas and expansion", () => {
+		const contour = {
+			id: "glyph:0:contour:0",
+			closed: true,
+			points: [
+				{ id: "p:0", x: 10, y: 20 },
+				{ id: "p:1", x: 30, y: 20 },
+				{ id: "p:2", x: 30, y: 40 },
+				{ id: "p:3", x: 10, y: 40 },
+			],
+		} as const
+		const text: DesignObject = {
+			id: "object:text",
+			name: "Text",
+			geometry: {
+				kind: "text",
+				mode: "point",
+				text: "A",
+				x: 10,
+				y: 40,
+				typography: {
+					font: { id: "font:test", family: "Test" },
+					size: 20,
+					leading: 24,
+					tracking: 0,
+					kerning: "auto",
+					alignment: "start",
+					direction: "ltr",
+				},
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 5, f: 6 },
+			appearance: { fill: { swatchId: "swatch:black" } },
+		}
+		const expanded: DesignObject = {
+			...text,
+			geometry: { kind: "path", fillRule: "nonzero", contours: [contour] },
+		}
+		const layout = {
+			objectId: text.id,
+			font: {
+				source: "font:test",
+				family: "Test",
+				faceIndex: 0,
+				revision: 1,
+				binaryHash: "test",
+				key: "font:test",
+			},
+			glyphs: [
+				{
+					glyphId: 1,
+					cluster: 0,
+					clusterEnd: 1,
+					lineIndex: 0,
+					x: 10,
+					y: 40,
+					advanceX: 20,
+					advanceY: 0,
+					contours: [contour],
+				},
+			],
+			lines: [],
+			diagnostics: [],
+			visibleTextEnd: 1,
+			overset: false,
+			bounds: { x: 10, y: 20, width: 20, height: 20 },
+		} satisfies DesignTextLayout
+		const service = { layout: () => layout } as unknown as DesignTextService
+		const swatch: DesignSwatch = {
+			id: "swatch:black",
+			name: "Black",
+			source: { space: "rgb", r: 0, g: 0, b: 0 },
+		}
+		expect(pdfObjectContentStream(text, swatch, undefined, service)).toBe(
+			pdfObjectContentStream(expanded, swatch),
+		)
 	})
 })

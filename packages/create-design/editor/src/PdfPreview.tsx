@@ -6,6 +6,7 @@ import {
 	type BrowserPdfPreviewState,
 } from "./browser-pdf-preview.ts"
 import {
+	createPdfProjectionGraph,
 	createLivePdfCompiler,
 	type LivePdfCompilationState,
 } from "@create-design/pdf"
@@ -14,19 +15,31 @@ import { activeDesignArtboard } from "@create-design/model"
 import type { ExportPreflightPreferences } from "@create-design/pdf"
 import type { PdfExportTarget } from "@create-design/pdf"
 import type { DesignArtboard, DesignDocument } from "./types.ts"
+import type { DesignTextService } from "@create-design/text"
 
 export function PdfPreview({
 	document,
 	artboard,
 	target = artboard ?? activeDesignArtboard(document),
 	preflightPreferences,
+	textService,
 }: {
 	readonly document: DesignDocument
 	readonly artboard?: DesignArtboard
 	readonly preflightPreferences?: ExportPreflightPreferences
 	readonly target?: PdfExportTarget
+	readonly textService?: DesignTextService
 }) {
-	const compiler = useMemo(() => createLivePdfCompiler(), [])
+	const compiler = useMemo(
+		() =>
+			createLivePdfCompiler({
+				graph: createPdfProjectionGraph(
+					textService === undefined ? {} : { textService },
+				),
+				...(textService === undefined ? {} : { textService }),
+			}),
+		[textService],
+	)
 	const manager = useMemo(() => {
 		const environment = browserPdfPreviewEnvironment()
 		return environment === null

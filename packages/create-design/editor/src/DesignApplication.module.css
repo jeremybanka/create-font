@@ -341,6 +341,33 @@ design-application.class {
 					height: 100%;
 					touch-action: none;
 				}
+
+				> text-editing-surface {
+					display: contents;
+
+					> textarea[data-design-text-editor] {
+						position: absolute;
+						z-index: 3;
+						min-width: 1px;
+						min-height: 1px;
+						padding: 0;
+						overflow: hidden;
+						border: 1px solid var(--design-canvas-selection);
+						border-radius: 0;
+						outline: 2px solid
+							color-mix(
+								in srgb,
+								var(--design-canvas-selection) 28%,
+								transparent
+							);
+						background: rgb(255 255 255 / 94%);
+						color: #111;
+						caret-color: var(--design-canvas-selection);
+						resize: none;
+						white-space: pre-wrap;
+						touch-action: auto;
+					}
+				}
 			}
 
 			> canvas-help-controls {

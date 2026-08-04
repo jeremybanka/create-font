@@ -29,6 +29,7 @@ import {
 	designObjectFillRule,
 	projectDesignObjectContours,
 } from "@create-design/model"
+import type { DesignTextService } from "@create-design/text"
 import type {
 	DesignContour,
 	DesignArtboard,
@@ -104,7 +105,31 @@ export function pdfObjectContentStream(
 	object: DesignObject,
 	fill?: DesignSwatch,
 	stroke?: DesignSwatch,
+	textService?: DesignTextService,
 ): string {
+	let projectedObject = object
+	if (object.geometry.kind === "text") {
+		const layout = textService?.layout(object)
+		if (layout === undefined || layout === null)
+			throw new Error(
+				`Text object ${object.name || object.id} requires a registered canonical text service for PDF export.`,
+			)
+		const blocking = layout.diagnostics.filter(
+			(diagnostic) => diagnostic.severity === "error",
+		)
+		if (blocking.length > 0)
+			throw new Error(
+				`Text object ${object.name || object.id} cannot be exported: ${blocking.map(({ message }) => message).join(" ")}`,
+			)
+		projectedObject = {
+			...object,
+			geometry: {
+				kind: "path",
+				fillRule: "nonzero",
+				contours: layout.glyphs.flatMap(({ contours }) => contours),
+			},
+		}
+	}
 	const authoredStroke = object.appearance.stroke
 	const paintedStroke =
 		stroke !== undefined &&
@@ -128,16 +153,16 @@ export function pdfObjectContentStream(
 					)} d`,
 				]),
 	]
-	for (const contour of projectDesignObjectContours(object)) {
+	for (const contour of projectDesignObjectContours(projectedObject)) {
 		commands.push(...contourCommands(contour))
 	}
 	commands.push(
 		fill !== undefined && paintedStroke !== undefined
-			? designObjectFillRule(object) === "evenodd"
+			? designObjectFillRule(projectedObject) === "evenodd"
 				? "B*"
 				: "B"
 			: fill !== undefined
-				? designObjectFillRule(object) === "evenodd"
+				? designObjectFillRule(projectedObject) === "evenodd"
 					? "f*"
 					: "f"
 				: "S",
@@ -215,6 +240,11 @@ function projectedBlendDocument(document: DesignDocument): DesignDocument {
 	}
 }
 
+export interface PdfProjectionOptions {
+	/** Font-backed canonical layout used to lower editable text to outlines. */
+	readonly textService?: DesignTextService
+}
+
 type ObjectCacheEntry = Readonly<{
 	appearance: DesignObject["appearance"]
 	geometry: DesignObject["geometry"]
@@ -289,7 +319,9 @@ export function resolvePdfArtboards(
  * are ordinary immutable mondrian.pdf values and can be inserted into each
  * freshly composed, fully validated document graph.
  */
-export function createPdfProjectionGraph(): PdfProjectionGraph {
+export function createPdfProjectionGraph(
+	options: PdfProjectionOptions = {},
+): PdfProjectionGraph {
 	const objects = new Map<string, ObjectCacheEntry>()
 	const pageCaches = new Map<string, PdfPageProjection>()
 	let documentCache: Readonly<{
@@ -339,7 +371,7 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 				ascii(
 					hidden || (fill === undefined && stroke === undefined)
 						? ""
-						: pdfObjectContentStream(object, fill, stroke),
+						: pdfObjectContentStream(object, fill, stroke, options.textService),
 				),
 			),
 			visible: !hidden,
@@ -536,6 +568,7 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 export function pdfContentStream(
 	document: DesignDocument,
 	artboard: DesignArtboard = activeDesignArtboard(document),
+	options: PdfProjectionOptions = {},
 ): string {
 	document = projectedBlendDocument(document)
 	const swatches = new Map(
@@ -558,7 +591,9 @@ export function pdfContentStream(
 				? undefined
 				: swatches.get(object.appearance.stroke.swatchId)
 		if (fill === undefined && stroke === undefined) continue
-		commands.push(pdfObjectContentStream(object, fill, stroke))
+		commands.push(
+			pdfObjectContentStream(object, fill, stroke, options.textService),
+		)
 	}
 	commands.push("Q")
 	return commands.join("\n")
@@ -567,13 +602,15 @@ export function pdfContentStream(
 export function createPdfIr(
 	document: DesignDocument,
 	target: PdfExportTarget = activeDesignArtboard(document),
+	options: PdfProjectionOptions = {},
 ): PdfDocument {
-	return createPdfProjectionGraph().project(document, target).document
+	return createPdfProjectionGraph(options).project(document, target).document
 }
 
 export function exportPdf(
 	document: DesignDocument,
 	target: PdfExportTarget = activeDesignArtboard(document),
+	options: PdfProjectionOptions = {},
 ): Uint8Array {
-	return serializePdf(createPdfIr(document, target))
+	return serializePdf(createPdfIr(document, target, options))
 }

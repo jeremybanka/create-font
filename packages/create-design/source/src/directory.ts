@@ -308,7 +308,7 @@ export const assetUnitPathSchema = z
 			hasSafePathSegments(path.slice("assets/".length)),
 		"Expected a safe relative path below assets/.",
 	)
-const fontUnitPathSchema = z
+export const fontUnitPathSchema = z
 	.string()
 	.refine(
 		(path) =>
@@ -379,6 +379,9 @@ export const fontIndexFileSchema = z
 					id: fontIdSchema,
 					path: fontUnitPathSchema,
 					sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+					family: z.string().min(1).optional(),
+					faceIndex: z.number().int().nonnegative().optional(),
+					revision: z.union([z.string(), finiteNumberSchema]).optional(),
 				})
 				.strict(),
 		),
@@ -986,14 +989,9 @@ export function assembleDesignDocument(
 				designSourcePaths.groupIndex,
 			),
 		)
-	if (fontIndex !== null && fontIndex.entries.length > 0)
+	if (fontIndex !== null)
 		errors.push(
-			diagnostic(
-				"directory.unsupported",
-				"$.entries",
-				"This source version reserves fonts but requires an empty inventory.",
-				designSourcePaths.fontIndex,
-			),
+			...indexedErrors(fontIndex.entries, designSourcePaths.fontIndex),
 		)
 
 	const layerEntry = layerIndex?.entries[0]
@@ -1157,7 +1155,6 @@ export function assembleDesignDocument(
 				),
 			)
 	}
-
 	if (
 		errors.length > 0 ||
 		metadata === null ||

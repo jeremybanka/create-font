@@ -10,7 +10,7 @@ import {
 } from "../src/design-tile-registry.ts"
 
 describe("create-design tile registry", () => {
-	it("registers useful design panels without importing font tile kinds", () => {
+	it("registers useful design panels including create-design typography", () => {
 		expect(DESIGN_TILE_REGISTRY.registrations.map(({ kind }) => kind)).toEqual([
 			"version-control",
 			"pages",
@@ -22,6 +22,7 @@ describe("create-design tile registry", () => {
 			"blend",
 			"transform",
 			"arrange",
+			"typography",
 			"appearance",
 		])
 		expect(
@@ -32,7 +33,7 @@ describe("create-design tile registry", () => {
 			["pages", "layers"],
 			["version-control", "canvas", "export"],
 			["tools"],
-			["object", "blend", "transform", "arrange", "appearance"],
+			["object", "blend", "transform", "arrange", "typography", "appearance"],
 		])
 	})
 
@@ -77,6 +78,7 @@ describe("create-design tile registry", () => {
 				"blend",
 				"transform",
 				"arrange",
+				"typography",
 				"appearance",
 			])
 		}

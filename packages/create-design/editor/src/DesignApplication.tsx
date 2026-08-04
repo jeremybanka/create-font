@@ -218,6 +218,10 @@ import {
 } from "./blend-operations.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import {
+	createDesignTextService,
+	type DesignTextService,
+} from "@create-design/text"
+import {
 	exportPreflightAllowsOutput,
 	type ExportPreflightPreferences,
 } from "@create-design/pdf"
@@ -247,8 +251,20 @@ import type {
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
+	DesignTextGeometry,
+	DesignTextTypography,
 	DesignTool,
 } from "./types.ts"
+import { TextEditingSurface } from "./TextEditingSurface.tsx"
+import {
+	createDesignTextObject,
+	designTextFamilyId,
+	designTextKonvaTransform,
+	estimateDesignTextLayout,
+	updateDesignAreaTextFrame,
+	updateDesignText,
+	updateDesignTextTypography,
+} from "./design-text.ts"
 
 const svg = {
 	Cross2Icon,
@@ -564,6 +580,10 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
 		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
+	if (tool === "text")
+		return "Click to insert point text · Type in the native editor · Escape exits text editing"
+	if (tool === "area-text")
+		return "Drag to create a text frame · Type in the native editor · Escape exits text editing"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
 	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
@@ -611,6 +631,7 @@ export type DesignApplicationProps = Readonly<{
 	initialDocument?: DesignDocument
 	pathfinderWorkerClient?: PathfinderWorkerClient
 	sourceSession?: DesignSourceSession
+	textService?: DesignTextService
 }>
 
 type InitialDesignLoad = Readonly<{
@@ -710,6 +731,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
 	const [selectedBlendId, setSelectedBlendId] = useState<string | null>(null)
+	const [editingTextId, setEditingTextId] = useState<string | null>(null)
+	const [textSelectionRange, setTextSelectionRange] = useState<Readonly<{
+		start: number
+		end: number
+	}> | null>(null)
 	const [groupScope, setGroupScope] = useState<readonly string[]>([])
 	const [activeArtboardId, setActiveArtboardId] = useState(
 		() => activeDesignArtboard(initialLoad.document).id,
@@ -823,7 +849,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const pathfinderGenerationRef = useRef(0)
 	const sequence = useRef(0)
 	const tileCommandSequence = useRef(0)
-	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
+	const textService = useMemo(
+		() => props.textService ?? createDesignTextService(),
+		[props.textService],
+	)
+	const [textFontRevision, setTextFontRevision] = useState(0)
+	useEffect(() => {
+		const resources = props.sourceSession?.fonts ?? []
+		for (const resource of resources)
+			textService.registerFont(resource.reference, resource.bytes)
+		if (resources.length > 0) setTextFontRevision((revision) => revision + 1)
+	}, [props.sourceSession?.fonts, textService])
+	const pdfDownloadManager = useMemo(
+		() => createPdfDownloadManager(undefined, { textService }),
+		[textService],
+	)
 	const svgDownloadManager = useMemo(() => createSvgDownloadManager(), [])
 	const pngDownloadManager = useMemo(() => createPngDownloadManager(), [])
 	const pathfinderClient = useMemo(
@@ -898,6 +938,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [selectedBlend, selectedBlendId])
 	const selectedObject =
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
+	const editingTextObject =
+		editingTextId === null
+			? null
+			: (document.objects.find(
+					(object) =>
+						object.id === editingTextId && object.geometry.kind === "text",
+				) ?? null)
 	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
 	const selectedLockedObject = selectedObjects.find((object) => object.locked)
 	const selectionArrangementUnitCount = designSelectionUnits(
@@ -954,6 +1001,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return valid.length === current.length ? current : valid
 		})
 	}, [document.objects])
+	useEffect(() => {
+		if (editingTextId !== null && editingTextObject === null) {
+			setEditingTextId(null)
+			setTextSelectionRange(null)
+		}
+	}, [editingTextId, editingTextObject])
 	const authoredAppearance = validDesignAppearance(
 		currentAppearance,
 		document.swatches,
@@ -996,6 +1049,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			: resolveDesignBlend(document, selectedBlend).diagnostics.map(
 					({ message }) => message,
 				)
+	const selectedTextObject:
+		| (DesignObject & {
+				readonly geometry: DesignTextGeometry
+		  })
+		| null =
+		selectedObject?.geometry.kind === "text"
+			? (selectedObject as DesignObject & {
+					readonly geometry: DesignTextGeometry
+				})
+			: null
+	const selectedTextLayout = useMemo(
+		() =>
+			selectedTextObject === null
+				? null
+				: textService.layout(selectedTextObject),
+		[selectedTextObject, textFontRevision, textService],
+	)
+	const selectedTextEstimate =
+		selectedTextObject === null
+			? null
+			: estimateDesignTextLayout(selectedTextObject.geometry)
+	const textOverset =
+		selectedTextLayout?.overset ?? selectedTextEstimate?.overset ?? false
+	const textExpansionDisabledReason =
+		selectedTextObject === null
+			? "Select one text object to expand it."
+			: selectedTextObject.locked
+				? `Unlock ${selectedTextObject.name} before expanding it.`
+				: null
 	const pathCommandContext = {
 		document,
 		objectSelection: selection,
@@ -1048,6 +1130,50 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			editorState.actions.commitDocument(next)
 		},
 		[editorState],
+	)
+	const beginTextEditing = useCallback((object: DesignObject): void => {
+		if (object.geometry.kind !== "text") return
+		if (object.hidden || object.locked) {
+			setStatus(
+				`${object.hidden ? "Show" : "Unlock"} ${object.name} before editing its text.`,
+			)
+			return
+		}
+		setSelection([object.id])
+		setDirectSelection([])
+		setEditingTextId(object.id)
+		setTextSelectionRange({
+			start: object.geometry.text.length,
+			end: object.geometry.text.length,
+		})
+		setStatus(`Editing ${object.name}. Escape returns to object selection.`)
+	}, [])
+	const finishTextEditing = useCallback((): void => {
+		if (editingTextId === null) return
+		setEditingTextId(null)
+		setTextSelectionRange(null)
+		setTool("select")
+		requestAnimationFrame(() => artboardWrapRef.current?.focus())
+		setStatus("Finished editing text.")
+	}, [editingTextId])
+	const setEditingText = useCallback(
+		(text: string): void => {
+			if (editingTextId === null) return
+			const object = document.objects.find(
+				(candidate) => candidate.id === editingTextId,
+			)
+			if (object?.geometry.kind !== "text" || object.geometry.text === text)
+				return
+			commit({
+				...document,
+				objects: document.objects.map((candidate) =>
+					candidate.id === object.id
+						? updateDesignText(candidate, text)
+						: candidate,
+				),
+			})
+		},
+		[commit, document, editingTextId],
 	)
 	const activateArtboard = useCallback(
 		(artboard: DesignArtboard, focus = false): void => {
@@ -1244,6 +1370,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
 			cancelCanvasGesture()
+			if (editingTextId !== null) {
+				setEditingTextId(null)
+				setTextSelectionRange(null)
+			}
 			if (nextTool !== "direct") setDirectSelection([])
 			if (nextTool === "select" || nextTool === "transform")
 				setSelection((current) =>
@@ -1258,7 +1388,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
 		},
-		[cancelCanvasGesture, currentGroupScope, document],
+		[cancelCanvasGesture, currentGroupScope, document, editingTextId],
 	)
 
 	const deleteSelection = useCallback((): void => {
@@ -1594,6 +1724,225 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			`Expanded ${selectedBlend.name} into ${result.selection.length} selected ordinary path${result.selection.length === 1 ? "" : "s"}; endpoints were retained.`,
 		)
 	}, [commit, document, nextId, selectedBlend])
+	const applyTextTypography = useCallback(
+		(properties: Partial<DesignTextTypography>): void => {
+			if (selectedTextObject === null) {
+				setStatus("Select one text object before editing typography.")
+				return
+			}
+			if (selectedTextObject.locked) {
+				setStatus(
+					`Unlock ${selectedTextObject.name} before editing typography.`,
+				)
+				return
+			}
+			const merged = {
+				...selectedTextObject.geometry.typography,
+				...properties,
+			}
+			if (
+				!Number.isFinite(merged.size) ||
+				merged.size <= 0 ||
+				!Number.isFinite(merged.leading) ||
+				merged.leading <= 0 ||
+				!Number.isFinite(merged.tracking) ||
+				(merged.kerning !== "auto" && !Number.isFinite(merged.kerning))
+			) {
+				setStatus(
+					"Type size and leading must be positive; all typography values must be finite.",
+				)
+				return
+			}
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					object.id === selectedTextObject.id
+						? updateDesignTextTypography(object, properties)
+						: object,
+				),
+			})
+			setStatus(
+				`Updated typography for the complete ${selectedTextObject.name} object.`,
+			)
+		},
+		[commit, document, selectedTextObject],
+	)
+	const setTextFontFamily = useCallback(
+		(family: string): void => {
+			const trimmed = family.trim()
+			if (trimmed.length === 0) return
+			applyTextTypography({
+				font: { id: designTextFamilyId(trimmed), family: trimmed },
+			})
+		},
+		[applyTextTypography],
+	)
+	const registerTextFont = useCallback(
+		async (file: File): Promise<void> => {
+			if (selectedTextObject === null) {
+				setStatus("Select one text object before loading its font.")
+				return
+			}
+			const family =
+				selectedTextObject.geometry.typography.font.family ||
+				file.name.replace(/\.(?:otf|ttf|woff2?)$/iu, "")
+			const requestedReference = {
+				id: designTextFamilyId(family),
+				family,
+				revision: file.lastModified || file.size,
+			}
+			const bytes = new Uint8Array(await file.arrayBuffer())
+			const reference =
+				props.sourceSession?.installFont === undefined
+					? requestedReference
+					: await props.sourceSession.installFont(
+							requestedReference,
+							bytes,
+							file.name,
+							file.type,
+						)
+			const diagnostics = textService.registerFont(reference, bytes)
+			const error = diagnostics.find(({ severity }) => severity === "error")
+			if (error !== undefined) {
+				setStatus(`Could not load ${file.name}: ${error.message}`)
+				return
+			}
+			setTextFontRevision((revision) => revision + 1)
+			applyTextTypography({ font: reference })
+			setStatus(
+				`Loaded ${family} for canonical canvas, PDF, and expansion output.`,
+			)
+		},
+		[applyTextTypography, props.sourceSession, selectedTextObject, textService],
+	)
+	const applyAreaTextFrame = useCallback(
+		(properties: Partial<NonNullable<DesignTextGeometry["frame"]>>): void => {
+			if (
+				selectedTextObject?.geometry.mode !== "area" ||
+				selectedTextObject.geometry.frame === undefined
+			)
+				return
+			const frame = { ...selectedTextObject.geometry.frame, ...properties }
+			if (
+				!Number.isFinite(frame.width) ||
+				!Number.isFinite(frame.height) ||
+				frame.width <= 0 ||
+				frame.height <= 0
+			) {
+				setStatus("Area text frame dimensions must be positive finite values.")
+				return
+			}
+			commit({
+				...document,
+				objects: document.objects.map((object) =>
+					object.id === selectedTextObject.id
+						? updateDesignAreaTextFrame(object, properties)
+						: object,
+				),
+			})
+			setStatus(
+				`Resized ${selectedTextObject.name}; source text was preserved and reflowed.`,
+			)
+		},
+		[commit, document, selectedTextObject],
+	)
+	const areaTextConversionDisabledReason =
+		selectedObject === null
+			? "Select one live rectangle to convert it to Area Type."
+			: selectedObject.locked || selectedObject.hidden
+				? `${selectedObject.hidden ? "Show" : "Unlock"} ${selectedObject.name} before converting it.`
+				: selectedObject.geometry.kind !== "rectangle"
+					? "Initial Area Type conversion supports live rectangular frames; concave and compound paths are explicitly unsupported."
+					: null
+	const convertSelectionToAreaText = useCallback((): void => {
+		if (
+			selectedObject?.geometry.kind !== "rectangle" ||
+			selectedObject.locked ||
+			selectedObject.hidden
+		) {
+			setStatus(
+				areaTextConversionDisabledReason ?? "Cannot convert this object.",
+			)
+			return
+		}
+		const rectangle = selectedObject.geometry
+		const converted = createDesignTextObject({
+			id: selectedObject.id,
+			name: `${selectedObject.name} area text`,
+			mode: "area",
+			x: rectangle.x,
+			y: rectangle.y,
+			width: rectangle.width,
+			height: rectangle.height,
+			appearance: selectedObject.appearance,
+		})
+		const object = { ...converted, transform: selectedObject.transform }
+		commit({
+			...document,
+			objects: document.objects.map((candidate) =>
+				candidate.id === selectedObject.id ? object : candidate,
+			),
+		})
+		beginTextEditing(object)
+		setStatus(
+			`Converted ${selectedObject.name} to a rectangular Area Type frame.`,
+		)
+	}, [
+		areaTextConversionDisabledReason,
+		beginTextEditing,
+		commit,
+		document,
+		selectedObject,
+	])
+	const expandTextSelection = useCallback((): void => {
+		if (selectedTextObject === null) {
+			setStatus("Select one text object to expand it.")
+			return
+		}
+		if (selectedTextObject.locked) {
+			setStatus(`Unlock ${selectedTextObject.name} before expanding it.`)
+			return
+		}
+		const expanded = textService.expand(
+			selectedTextObject,
+			`expanded:${nextId()}`,
+		)
+		if (expanded === null || expanded.objects.length === 0) {
+			setStatus(
+				"Could not expand text. Register its font and resolve every missing glyph or unavailable outline first.",
+			)
+			return
+		}
+		const index = document.objects.findIndex(
+			(object) => object.id === selectedTextObject.id,
+		)
+		if (index < 0) return
+		const replacement = replaceDesignHierarchyObject(
+			{
+				...document,
+				objects: [
+					...document.objects.slice(0, index),
+					...expanded.objects,
+					...document.objects.slice(index + 1),
+				],
+			},
+			selectedTextObject.id,
+			expanded.objects.map(({ id }) => id),
+		)
+		const grouped =
+			expanded.objects.length > 1
+				? groupDesignSelection(
+						replacement,
+						expanded.objects.map(({ id }) => id),
+						nextId,
+					)
+				: null
+		commit(grouped?.document ?? replacement)
+		setSelection(grouped?.selection ?? expanded.objects.map(({ id }) => id))
+		setEditingTextId(null)
+		setTextSelectionRange(null)
+		setStatus(`Expanded ${selectedTextObject.name} to editable glyph paths.`)
+	}, [commit, document, nextId, selectedTextObject, textService])
 
 	const executePartitionPathfinder = useCallback(
 		(command: DesignPartitionPathfinderCommand): void => {
@@ -2244,6 +2593,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			? null
 			: expansionEligibility.reason,
 		expandStrokeSelection,
+		expandTextSelection,
+		textExpansionDisabledReason,
 		exportDocument,
 		exportPngDocument,
 		exportSvgDocument,
@@ -2282,6 +2633,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedObject,
 		selectedObjectCount: selectedObjects.length,
 		selectedObjectIds: selection,
+		textSelectionRange,
+		textOverset,
+		textService,
+		beginTextEditing,
+		applyTextTypography,
+		setTextFontFamily,
+		registerTextFont,
+		applyAreaTextFrame,
+		convertSelectionToAreaText,
+		areaTextConversionDisabledReason,
 		selectionBounds:
 			selectedBlend === null
 				? combinedSelectionBounds(selectedObjects)
@@ -2493,6 +2854,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					resolveDesignBlend(document, selectedBlend).status !== "ready",
 				disabledReason: "Select a ready, unlocked live blend.",
 				do: expandBlend,
+			},
+			{
+				id: "expand-text",
+				displayName: "Expand Text",
+				category: "Object",
+				description:
+					"Convert the selected live text to grouped editable glyph paths.",
+				icon: "HobbyKnifeIcon",
+				disabled: textExpansionDisabledReason !== null,
+				...(textExpansionDisabledReason === null
+					? {}
+					: { disabledReason: textExpansionDisabledReason }),
+				do: expandTextSelection,
 			},
 			...(
 				[
@@ -3558,6 +3932,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		object: DesignObject,
 	): void => {
 		if (tool !== "select" && tool !== "transform") return
+		if (object.geometry.kind === "text") {
+			event.cancelBubble = true
+			cancelCanvasGesture()
+			beginTextEditing(object)
+			return
+		}
 		const unit = designSelectionUnitAtObject(
 			document,
 			object.id,
@@ -3750,6 +4130,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (tool === "rect" || tool === "ellipse") {
 			beginVectorGesture(event, { tool })
+			return
+		}
+		if (tool === "text") {
+			const object = createDesignTextObject({
+				id: `object:${nextId()}`,
+				name: `Point text ${document.objects.length + 1}`,
+				mode: "point",
+				x: point.x,
+				y: point.y,
+				appearance: authoredAppearance,
+			})
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+				),
+			)
+			beginTextEditing(object)
+			return
+		}
+		if (tool === "area-text") {
+			beginVectorGesture(event, { tool: "rect" })
 			return
 		}
 		if (tool === "pen") {
@@ -4009,6 +4411,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (transition.intent?.kind === "shape") {
 			const bounds = transition.intent.bounds
+			if (tool === "area-text") {
+				const object = createDesignTextObject({
+					id: `object:${nextId()}`,
+					name: `Area text ${document.objects.length + 1}`,
+					mode: "area",
+					x: bounds.minX,
+					y: bounds.minY + 24,
+					width: bounds.maxX - bounds.minX,
+					height: bounds.maxY - bounds.minY,
+					appearance: authoredAppearance,
+				})
+				commit(
+					appendDesignHierarchyObjects(
+						{ ...document, objects: [...document.objects, object] },
+						[object.id],
+					),
+				)
+				beginTextEditing(object)
+				return
+			}
 			const object: DesignObject = {
 				id: `object:${nextId()}`,
 				name: `${transition.intent.shape === "rect" ? "Rectangle" : "Ellipse"} ${document.objects.length + 1}`,
@@ -4473,7 +4895,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											? "select"
 											: tool === "artboard"
 												? "rect"
-												: tool,
+												: tool === "text"
+													? "select"
+													: tool === "area-text"
+														? "rect"
+														: tool,
 										{
 											dragging: gestureRef.current?.kind === "pan",
 										},
@@ -4576,6 +5002,148 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
 										const strokeStyle = object.appearance.stroke
+										if (object.geometry.kind === "text") {
+											if (object.hidden || editingTextId === object.id)
+												return null
+											const geometry = object.geometry
+											const canonicalLayout = textService.layout(object)
+											const canonicalObject =
+												canonicalLayout !== null &&
+												!canonicalLayout.diagnostics.some(
+													(diagnostic) => diagnostic.severity === "error",
+												)
+													? {
+															...object,
+															transform: IDENTITY_DESIGN_TRANSFORM,
+															geometry: {
+																kind: "path" as const,
+																fillRule: "nonzero" as const,
+																contours: canonicalLayout.glyphs.flatMap(
+																	({ contours }) => contours,
+																),
+															},
+														}
+													: null
+											const estimate = estimateDesignTextLayout(geometry)
+											const inset = geometry.frame?.inset ?? {
+												top: 0,
+												right: 0,
+												bottom: 0,
+												left: 0,
+											}
+											const transform = designTextKonvaTransform(
+												object.transform,
+											)
+											const textY = geometry.y - geometry.typography.size
+											const textColor =
+												fill === undefined ? "#111" : swatchCss(fill)
+											return (
+												<Group key={object.id} {...transform}>
+													{geometry.frame === undefined ? null : (
+														<Rect
+															x={geometry.x}
+															y={textY}
+															width={geometry.frame.width}
+															height={geometry.frame.height}
+															stroke={
+																selection.includes(object.id)
+																	? canvasTheme.selection
+																	: "#999"
+															}
+															strokeWidth={1 / worldScale}
+															dash={[4 / worldScale, 3 / worldScale]}
+															listening={false}
+														/>
+													)}
+													{canonicalObject === null ? (
+														<Text
+															name={`design-object ${object.id}`}
+															x={geometry.x + inset.left}
+															y={textY + inset.top}
+															text={estimate.visibleText}
+															fontFamily={geometry.typography.font.family}
+															fontSize={geometry.typography.size}
+															lineHeight={
+																geometry.typography.leading /
+																geometry.typography.size
+															}
+															letterSpacing={
+																geometry.typography.tracking / 1000
+															}
+															fill={textColor}
+															align={
+																geometry.typography.alignment === "start"
+																	? "left"
+																	: geometry.typography.alignment === "end"
+																		? "right"
+																		: geometry.typography.alignment
+															}
+															{...(geometry.frame === undefined
+																? {}
+																: {
+																		width:
+																			geometry.frame.width -
+																			inset.left -
+																			inset.right,
+																		height:
+																			geometry.frame.height -
+																			inset.top -
+																			inset.bottom,
+																		wrap: "word" as const,
+																		verticalAlign:
+																			geometry.frame.verticalAlignment,
+																	})}
+															onPointerDown={(event) =>
+																startObjectGesture(event, object)
+															}
+															onDoubleClick={(
+																event: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															) => enterObjectGroup(event, object)}
+														/>
+													) : (
+														<VectorContourPath
+															name={`design-object ${object.id}`}
+															object={projectDesignVectorObject(
+																canvasDocument,
+																canonicalObject,
+															)}
+															{...(fill === undefined
+																? {}
+																: { fill: textColor })}
+															fillEnabled={fill !== undefined}
+															onPointerDown={(event) =>
+																startObjectGesture(event, object)
+															}
+															onDoubleClick={(
+																event: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															) => enterObjectGroup(event, object)}
+														/>
+													)}
+													{!estimate.overset ||
+													geometry.frame === undefined ? null : (
+														<Text
+															name={`design-text-overset ${object.id}`}
+															x={
+																geometry.x +
+																geometry.frame.width -
+																12 / worldScale
+															}
+															y={
+																textY + geometry.frame.height - 12 / worldScale
+															}
+															text="+"
+															fontSize={12 / worldScale}
+															fill="#c62828"
+															listening={false}
+														/>
+													)}
+												</Group>
+											)
+										}
 										return object.hidden ||
 											((fill === undefined ||
 												object.appearance.fill === undefined) &&
@@ -4619,9 +5187,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														? startObjectGesture(event, object)
 														: selectBlendFromCanvas(event, derivedBlendId)
 												}
-												onDoubleClick={(event) =>
-													enterObjectGroup(event, object)
-												}
+												onDoubleClick={(
+													event: KonvaEventObject<MouseEvent | TouchEvent>,
+												) => enterObjectGroup(event, object)}
 												onPointerEnter={(event) => {
 													if (
 														object.locked ||
@@ -4647,7 +5215,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																? "select"
 																: tool === "artboard"
 																	? "rect"
-																	: tool,
+																	: tool === "text"
+																		? "select"
+																		: tool === "area-text"
+																			? "rect"
+																			: tool,
 														)
 												}}
 											/>
@@ -4876,6 +5448,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								</Group>
 							</Layer>
 						</div.Stage>
+						{editingTextObject === null ? null : (
+							<TextEditingSurface
+								object={editingTextObject}
+								view={canvasView}
+								worldScale={worldScale}
+								onChange={setEditingText}
+								onExit={finishTextEditing}
+								onSelectionChange={setTextSelectionRange}
+							/>
+						)}
 					</artboard-wrap>
 					<canvas-help-controls>
 						<button

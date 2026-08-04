@@ -12,6 +12,7 @@ import {
 	preflightPdfExport,
 } from "../src/pdf-preflight.ts"
 import type { DesignDocument, DesignObject } from "@create-design/source"
+import type { DesignTextService } from "@create-design/text"
 
 const outsideArtworkLint = {
 	enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
@@ -53,6 +54,35 @@ const openPath = (): DesignObject => ({
 	},
 })
 
+const areaText = (): DesignObject => ({
+	id: "object:text",
+	name: "Area text",
+	geometry: {
+		kind: "text",
+		mode: "area",
+		text: "Overflow remains editable",
+		x: 10,
+		y: 10,
+		typography: {
+			font: { id: "font:test", family: "Test" },
+			size: 12,
+			leading: 14,
+			tracking: 0,
+			kerning: "auto",
+			alignment: "start",
+			direction: "auto",
+		},
+		frame: {
+			width: 50,
+			height: 14,
+			inset: { top: 0, right: 0, bottom: 0, left: 0 },
+			verticalAlignment: "top",
+		},
+	},
+	transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+	appearance: { fill: { swatchId: "swatch:ink" } },
+})
+
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	format: "create-design.document",
 	version: 5,
@@ -88,6 +118,47 @@ const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 })
 
 describe("export preflight", () => {
+	it("blocks unloaded text and reports canonical area overset", () => {
+		const document = documentWith(areaText())
+		const unloaded = preflightPdfExport(document, { scope: { kind: "all" } })
+		expect(unloaded).toMatchObject({
+			decision: "blocked",
+			summary: { errors: 1, warnings: 0 },
+		})
+		expect(unloaded.diagnostics[0]).toMatchObject({
+			code: "pdf.text-service-missing",
+			entityId: "object:text",
+		})
+
+		const textService = {
+			layout: () => ({
+				objectId: "object:text",
+				diagnostics: [
+					{
+						code: "text.overset",
+						message: "12 characters are overset and remain editable.",
+						objectId: "object:text",
+						severity: "warning",
+					},
+				],
+			}),
+		} as unknown as DesignTextService
+		const overset = preflightPdfExport(
+			document,
+			{ scope: { kind: "all" } },
+			{},
+			textService,
+		)
+		expect(overset).toMatchObject({
+			decision: "ready",
+			summary: { errors: 0, warnings: 1 },
+		})
+		expect(overset.diagnostics[0]).toMatchObject({
+			code: "pdf.text.overset",
+			severity: "warning",
+		})
+	})
+
 	it("reports only artwork not covered by the union of requested artboards", () => {
 		const document = documentWith(
 			rectangle("object:inside", 10, 20),
