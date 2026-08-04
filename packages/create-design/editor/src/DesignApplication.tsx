@@ -547,7 +547,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "rect" || tool === "ellipse")
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
-		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Alt resizes from center · Use numeric Transform controls for keyboard access"
+		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
 	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`

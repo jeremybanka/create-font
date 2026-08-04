@@ -336,6 +336,91 @@ describe("shared vector gesture reducer parity", () => {
 	})
 
 	it.each([
+		["n", { x: 50, y: 0 }, { x: 71, y: -20 }],
+		["e", { x: 100, y: 40 }, { x: 130, y: 61 }],
+		["s", { x: 50, y: 80 }, { x: 71, y: 100 }],
+		["w", { x: 0, y: 40 }, { x: -30, y: 61 }],
+	] as const)(
+		"uses the active %s edge axis as the proportional Shift scale",
+		(handle, start, current) => {
+			const started = reduceVectorGesture(
+				null,
+				{
+					type: "pointer-down",
+					tool: "transform",
+					pointerId: 7,
+					pointer: pointer(start.x, start.y, { shiftKey: true }),
+					targetId: "object:a",
+					bounds: { minX: 0, minY: 0, maxX: 100, maxY: 80 },
+					handle,
+				},
+				designPolicy,
+			)
+			const moved = transition(started.state, {
+				type: "pointer-move",
+				pointerId: 7,
+				pointer: pointer(current.x, current.y, { shiftKey: true }),
+			})
+			if (moved.preview?.kind !== "transform")
+				throw new Error("Expected a transform preview.")
+			expect(moved.preview.scale.x).toBeCloseTo(moved.preview.scale.y)
+			expect(moved.preview.scale.x).not.toBe(1)
+		},
+	)
+
+	it("recomputes proportional and centered edge scaling from the original bounds as modifiers toggle", () => {
+		const started = reduceVectorGesture(
+			null,
+			{
+				type: "pointer-down",
+				tool: "transform",
+				pointerId: 7,
+				pointer: pointer(100, 40),
+				targetId: "object:a",
+				bounds: { minX: 0, minY: 0, maxX: 100, maxY: 80 },
+				handle: "e",
+			},
+			designPolicy,
+		)
+		const moved = transition(started.state, {
+			type: "pointer-move",
+			pointerId: 7,
+			pointer: pointer(130, 61),
+		})
+		expect(moved.preview).toMatchObject({
+			anchor: { x: 0, y: 40 },
+			scale: { x: 1.3, y: 1 },
+		})
+		const constrained = transition(moved.state, {
+			type: "modifiers",
+			pointerId: 7,
+			modifiers: { shiftKey: true, altKey: false, additive: true },
+		})
+		expect(constrained.preview).toMatchObject({
+			anchor: { x: 0, y: 40 },
+			scale: { x: 1.3, y: 1.3 },
+		})
+		const centered = transition(constrained.state, {
+			type: "modifiers",
+			pointerId: 7,
+			modifiers: { shiftKey: true, altKey: true, additive: true },
+		})
+		expect(centered.preview).toMatchObject({
+			anchor: { x: 50, y: 40 },
+			scale: { x: 1.6, y: 1.6 },
+		})
+		const released = transition(centered.state, {
+			type: "modifiers",
+			pointerId: 7,
+			modifiers: { shiftKey: false, altKey: false, additive: false },
+		})
+		expect(released.preview).toMatchObject({
+			anchor: { x: 0, y: 40 },
+			scale: { x: 1.3, y: 1 },
+		})
+	})
+
+	it.each([
 		["e", { minX: 10, minY: 0, maxX: 10, maxY: 80 }],
 		["w", { minX: 10, minY: 0, maxX: 10, maxY: 80 }],
 		["n", { minX: 0, minY: 20, maxX: 100, maxY: 20 }],

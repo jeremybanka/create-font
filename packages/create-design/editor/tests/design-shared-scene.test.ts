@@ -3060,7 +3060,7 @@ describe("create-design shared vector scene", () => {
 		},
 	)
 
-	it("recomputes an edge resize from the original bounds as Alt toggles", async () => {
+	it("recomputes proportional edge resizing as Shift and Alt toggle", async () => {
 		const stage = mountDesign()
 		vi.spyOn(
 			HTMLCanvasElement.prototype,
@@ -3095,6 +3095,12 @@ describe("create-design shared vector scene", () => {
 			.findOne(".transform-handle-w")
 			.getAbsolutePosition()
 		const originalEast = east.getAbsolutePosition()
+		const originalNorth = stage
+			.findOne(".transform-handle-n")
+			.getAbsolutePosition()
+		const originalSouth = stage
+			.findOne(".transform-handle-s")
+			.getAbsolutePosition()
 		let pointer = originalEast
 		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
 		await act(async () => {
@@ -3135,9 +3141,41 @@ describe("create-design shared vector scene", () => {
 		await act(async () => {
 			window.dispatchEvent(
 				new KeyboardEvent("keydown", {
+					bubbles: true,
+					key: "Shift",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		const constrainedWest = stage
+			.findOne(".transform-handle-w")
+			.getAbsolutePosition()
+		const constrainedEast = stage
+			.findOne(".transform-handle-e")
+			.getAbsolutePosition()
+		const constrainedNorth = stage
+			.findOne(".transform-handle-n")
+			.getAbsolutePosition()
+		const constrainedSouth = stage
+			.findOne(".transform-handle-s")
+			.getAbsolutePosition()
+		expect(constrainedWest).toEqual(originalWest)
+		expect(constrainedEast.x).toBe(normalEast.x)
+		expect(
+			(constrainedEast.x - constrainedWest.x) /
+				(constrainedSouth.y - constrainedNorth.y),
+		).toBeCloseTo(
+			(originalEast.x - originalWest.x) / (originalSouth.y - originalNorth.y),
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
 					altKey: true,
 					bubbles: true,
 					key: "Alt",
+					shiftKey: true,
 				}),
 			)
 			await Promise.resolve()
@@ -3153,6 +3191,20 @@ describe("create-design shared vector scene", () => {
 		)
 		expect(centeredWest.y).toBe(originalWest.y)
 		expect(centeredEast.y).toBe(originalEast.y)
+		const centeredNorth = stage
+			.findOne(".transform-handle-n")
+			.getAbsolutePosition()
+		const centeredSouth = stage
+			.findOne(".transform-handle-s")
+			.getAbsolutePosition()
+		expect((centeredNorth.y + centeredSouth.y) / 2).toBeCloseTo(
+			(originalNorth.y + originalSouth.y) / 2,
+		)
+		expect(
+			(centeredEast.x - centeredWest.x) / (centeredSouth.y - centeredNorth.y),
+		).toBeCloseTo(
+			(originalEast.x - originalWest.x) / (originalSouth.y - originalNorth.y),
+		)
 
 		await act(async () => {
 			window.dispatchEvent(
@@ -3160,6 +3212,24 @@ describe("create-design shared vector scene", () => {
 					altKey: false,
 					bubbles: true,
 					key: "Alt",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".transform-handle-w").getAbsolutePosition()).toEqual(
+			constrainedWest,
+		)
+		expect(stage.findOne(".transform-handle-e").getAbsolutePosition()).toEqual(
+			constrainedEast,
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keyup", {
+					bubbles: true,
+					key: "Shift",
+					shiftKey: false,
 				}),
 			)
 			await Promise.resolve()
@@ -3170,6 +3240,88 @@ describe("create-design shared vector scene", () => {
 		expect(stage.findOne(".transform-handle-e").getAbsolutePosition()).toEqual(
 			normalEast,
 		)
+
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					buttons: 1,
+					clientX: pointer.x,
+					clientY: pointer.y,
+					pointerId: 7,
+					pointerType: "mouse",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".transform-handle-w").getAbsolutePosition()).toEqual(
+			constrainedWest,
+		)
+		expect(stage.findOne(".transform-handle-e").getAbsolutePosition()).toEqual(
+			constrainedEast,
+		)
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					buttons: 1,
+					clientX: pointer.x,
+					clientY: pointer.y,
+					pointerId: 7,
+					pointerType: "mouse",
+					shiftKey: false,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".transform-handle-w").getAbsolutePosition()).toEqual(
+			normalWest,
+		)
+		expect(stage.findOne(".transform-handle-e").getAbsolutePosition()).toEqual(
+			normalEast,
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					key: "Shift",
+					shiftKey: true,
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					buttons: 0,
+					clientX: pointer.x,
+					clientY: pointer.y,
+					pointerId: 7,
+					pointerType: "mouse",
+					shiftKey: true,
+				}),
+			)
+			window.dispatchEvent(
+				new KeyboardEvent("keyup", {
+					bubbles: true,
+					key: "Shift",
+					shiftKey: false,
+				}),
+			)
+			await Promise.resolve()
+		})
+		const saved = localStorage.getItem(DESIGN_STORAGE_KEY)
+		if (saved === null) throw new Error("Design document was not persisted.")
+		const next = JSON.parse(saved) as DesignDocument
+		const bounds = objectBounds(
+			next.objects.find((object) => object.id === "object:coral")!,
+		)
+		if (bounds === null) throw new Error("Transformed object has no bounds.")
+		expect(bounds.minX).toBe(82)
+		expect((bounds.minY + bounds.maxY) / 2).toBe(222)
+		expect(
+			(bounds.maxX - bounds.minX) / (bounds.maxY - bounds.minY),
+		).toBeCloseTo(280 / 240)
 	})
 
 	it.each(["pointercancel", "lostpointercapture", "Escape"] as const)(
