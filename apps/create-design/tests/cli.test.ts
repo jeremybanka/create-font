@@ -145,6 +145,35 @@ describe("create-design CLI", () => {
 		expect(svg).toContain('viewBox="200 0 300 150"')
 	})
 
+	test("exports deterministic exact-size PNG batches through the headless pipeline", async () => {
+		const root = await temporaryRoot()
+		const outputRoot = await temporaryRoot()
+		await initializeDesignSourceWorkspace(root, multipleArtboards())
+		const output = join(outputRoot, "design.png")
+
+		const result = await run([
+			"export",
+			root,
+			"--output",
+			output,
+			"--scale",
+			"2",
+			"--background",
+			"#ffffff",
+		])
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout()).toContain("Exported 2 PNG images")
+		expect((await readdir(outputRoot)).sort()).toEqual([
+			"design-01-first.png",
+			"design-02-second.png",
+		])
+		const bytes = await readFile(join(outputRoot, "design-01-first.png"))
+		expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
+		const header = new DataView(bytes.buffer, bytes.byteOffset + 16, 8)
+		expect([header.getUint32(0), header.getUint32(4)]).toEqual([200, 400])
+	})
+
 	test("exports every artboard as a validated PDF by default", async () => {
 		const root = await temporaryRoot()
 		const outputRoot = await temporaryRoot()

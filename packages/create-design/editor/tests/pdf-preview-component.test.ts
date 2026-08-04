@@ -66,6 +66,7 @@ describe("PDF preview tile", () => {
 			expansionDisabledReason: "Select a live rectangle or ellipse.",
 			expandStrokeSelection: vi.fn(),
 			exportDocument,
+			exportPngDocument: vi.fn(),
 			exportSvgDocument: vi.fn(),
 			importSvgDocument: vi.fn(),
 			focusCanvas: vi.fn(),

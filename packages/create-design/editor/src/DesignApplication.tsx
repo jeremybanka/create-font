@@ -198,6 +198,8 @@ import {
 } from "./design-vector-adapter.ts"
 import { createPdfDownloadManager } from "./pdf-download.ts"
 import { createSvgDownloadManager } from "./svg-download.ts"
+import { createPngDownloadManager } from "./png-download.ts"
+import type { PngExportRequest } from "@create-design/png"
 import type { PdfExportTarget } from "@create-design/pdf"
 import {
 	exportPreflightAllowsOutput,
@@ -751,12 +753,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const tileCommandSequence = useRef(0)
 	const pdfDownloadManager = useMemo(() => createPdfDownloadManager(), [])
 	const svgDownloadManager = useMemo(() => createSvgDownloadManager(), [])
+	const pngDownloadManager = useMemo(() => createPngDownloadManager(), [])
 	const pathfinderClient = useMemo(
 		() => pathfinderWorkerClient ?? createPathfinderWorkerClient(),
 		[pathfinderWorkerClient],
 	)
 	useEffect(() => () => pdfDownloadManager.dispose(), [pdfDownloadManager])
 	useEffect(() => () => svgDownloadManager.dispose(), [svgDownloadManager])
+	useEffect(() => () => pngDownloadManager.dispose(), [pngDownloadManager])
 	useEffect(
 		() => () => {
 			pathfinderGenerationRef.current += 1
@@ -1585,6 +1589,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[document, openTile, svgDownloadManager],
 	)
+	const exportPngDocument = useCallback(
+		(request: PngExportRequest): void => {
+			const preflight = pngDownloadManager.preflight(document, request)
+			if (preflight.decision === "blocked") {
+				void pngDownloadManager.request(document, request)
+				openTile("export")
+				setStatus(
+					`PNG export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
+				)
+				return
+			}
+			setStatus(
+				`Rasterizing ${preflight.artboards.length} PNG ${preflight.artboards.length === 1 ? "image" : "images"}…`,
+			)
+			void pngDownloadManager.request(document, request).then(
+				(downloaded) => {
+					if (downloaded)
+						setStatus(
+							`Exported ${preflight.artboards.length} PNG ${preflight.artboards.length === 1 ? "image" : "images"}.`,
+						)
+				},
+				(error) =>
+					setStatus(
+						`PNG export failed: ${error instanceof Error ? error.message : String(error)}`,
+					),
+			)
+		},
+		[document, openTile, pngDownloadManager],
+	)
 	const importSvgDocument = useCallback(
 		(source: string): SvgImportResult => {
 			const result = importSvg(source, document, {
@@ -1864,6 +1897,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			: expansionEligibility.reason,
 		expandStrokeSelection,
 		exportDocument,
+		exportPngDocument,
 		exportSvgDocument,
 		importSvgDocument,
 		fitAllArtboards,
