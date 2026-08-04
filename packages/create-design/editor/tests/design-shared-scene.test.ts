@@ -3407,12 +3407,13 @@ describe("create-design shared vector scene", () => {
 				await Promise.resolve()
 			})
 			expect(storage.get(DESIGN_STORAGE_KEY)).toBe(originalStorage)
+			expect(
+				stage.findOne(".transform-handle-e").getAbsolutePosition(),
+			).toEqual(originalEast)
 			if (cancellation === "Escape")
-				expect(stage.findOne(".transform-handle-e")).toBeUndefined()
-			else
 				expect(
-					stage.findOne(".transform-handle-e").getAbsolutePosition(),
-				).toEqual(originalEast)
+					document.querySelector("[data-footer-status]")?.textContent,
+				).toBe("Canceled canvas gesture.")
 		},
 	)
 
