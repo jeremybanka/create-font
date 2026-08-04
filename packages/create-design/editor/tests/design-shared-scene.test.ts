@@ -12,7 +12,11 @@ import {
 import { mountDesignEditor } from "../src/browser.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { groupDesignSelection } from "../src/design-hierarchy.ts"
-import { createDesignTextObject } from "../src/design-text.ts"
+import {
+	createDesignTextObject,
+	designTextBrowserFontFamily,
+	designTextCssFontFamily,
+} from "../src/design-text.ts"
 import { objectBounds } from "@create-design/model"
 import type {
 	PathfinderWorkerClient,
@@ -1234,12 +1238,15 @@ describe("create-design shared vector scene", () => {
 		overrides: Partial<DesignSourceSession> = {},
 	): DesignSourceSession {
 		const initialDocument = createInitialDocument()
+		const fonts = overrides.fonts ?? []
 		return {
 			initialDocument,
 			initialRevision: "source:one",
+			fonts,
 			reload: vi.fn(async () => ({
 				ok: true as const,
 				document: initialDocument,
+				fonts,
 				revision: "source:one",
 			})),
 			save: vi.fn(async () => ({ revision: "source:two" })),
@@ -1361,15 +1368,22 @@ describe("create-design shared vector scene", () => {
 
 	it("loads a promoted workspace font into the browser and permanent combobox", async () => {
 		const faces: Array<{
+			descriptors: FontFaceDescriptors | undefined
 			family: string
 			load: ReturnType<typeof vi.fn>
 			source: ArrayBuffer
 		}> = []
 		const TestFontFace = class {
+			readonly descriptors: FontFaceDescriptors | undefined
 			readonly family: string
 			readonly source: ArrayBuffer
 			readonly load = vi.fn(async () => this)
-			constructor(family: string, source: ArrayBuffer) {
+			constructor(
+				family: string,
+				source: ArrayBuffer,
+				descriptors?: FontFaceDescriptors,
+			) {
+				this.descriptors = descriptors
 				this.family = family
 				this.source = source
 				faces.push(this)
@@ -1380,7 +1394,19 @@ describe("create-design shared vector scene", () => {
 			configurable: true,
 			value: TestFontFace,
 		})
-		const fontSet = { add: vi.fn(), delete: vi.fn(() => true) }
+		const fontSet = {
+			add: vi.fn(),
+			check: vi.fn((declaration: string, text: string) => {
+				const face = faces.at(-1)
+				return (
+					fontSet.add.mock.calls.some(([candidate]) => candidate === face) &&
+					declaration ===
+						`1px ${designTextCssFontFamily(face?.family ?? "missing")}` &&
+					text === "Hamburgefontsiv"
+				)
+			}),
+			delete: vi.fn(() => true),
+		}
 		Object.defineProperty(document, "fonts", {
 			configurable: true,
 			value: fontSet,
@@ -1399,7 +1425,7 @@ describe("create-design shared vector scene", () => {
 		const textService = {
 			registerFont: vi.fn(() => []),
 			unregisterFont: vi.fn(() => true),
-			layout: vi.fn(() => null),
+			layout: vi.fn(loadedTextLayout),
 			expand: vi.fn(() => null),
 			cacheStats: vi.fn(() => ({
 				layouts: 0,
@@ -1410,7 +1436,7 @@ describe("create-design shared vector scene", () => {
 			})),
 			clearCaches: vi.fn(),
 		}
-		mountDesign({
+		const stage = mountDesign({
 			initialDocument: session.initialDocument,
 			sourceSession: session,
 			textService,
@@ -1433,9 +1459,18 @@ describe("create-design shared vector scene", () => {
 		expect(document.fonts).toBe(fontSet)
 		expect(faces).toHaveLength(1)
 		expect(fontSet.add).toHaveBeenCalledOnce()
-		expect(faces[0]?.family).toBe("Workspace Browser")
+		const expectedFamily = designTextBrowserFontFamily(installed)
+		expect(faces[0]?.family).toBe(expectedFamily)
+		expect(faces[0]?.descriptors).toMatchObject({
+			style: "normal",
+			weight: "1 1000",
+		})
 		expect(new Uint8Array(faces[0]!.source)).toEqual(bytes)
 		expect(faces[0]?.load).toHaveBeenCalledOnce()
+		expect(fontSet.check).toHaveBeenCalledWith(
+			`1px ${designTextCssFontFamily(expectedFamily)}`,
+			"Hamburgefontsiv",
+		)
 		expect(
 			document.querySelector<HTMLInputElement>('input[role="combobox"]')?.value,
 		).toBe("Workspace Browser")
@@ -1443,12 +1478,167 @@ describe("create-design shared vector scene", () => {
 			document.querySelector<HTMLButtonElement>('button[aria-label="Type"]')
 				?.disabled,
 		).toBe(false)
+		act(() =>
+			document
+				.querySelector<HTMLButtonElement>('button[aria-label="Type"]')
+				?.click(),
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (canvas === null) throw new Error("Design canvas was not found.")
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: 360,
+					clientY: 280,
+					isPrimary: true,
+					pointerId: 88,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const textarea = document.querySelector<HTMLTextAreaElement>(
+			"textarea[data-design-text-editor]",
+		)
+		if (textarea === null) throw new Error("Native text editor was not opened.")
+		expect(textarea.style.fontFamily).toBe(expectedFamily)
+		expect(getComputedStyle(textarea).fontFamily).toBe(expectedFamily)
 		expect(document.querySelector("persistence-alert")).toBeNull()
 		const host = hosts.at(-1)
 		if (host !== undefined) act(() => render(null, host))
 		expect(fontSet.delete).toHaveBeenCalledOnce()
 		Reflect.deleteProperty(document, "fonts")
 		Reflect.deleteProperty(window, "FontFace")
+	})
+
+	it("rejects stale FontFace hydration when a newer source generation wins", async () => {
+		const pending: Array<{
+			face: FontFace
+			resolve: () => void
+		}> = []
+		const TestFontFace = class {
+			readonly family: string
+			readonly load: () => Promise<FontFace>
+			constructor(family: string) {
+				this.family = family
+				this.load = vi.fn(
+					() =>
+						new Promise<FontFace>((resolve) => {
+							pending.push({
+								face: this as unknown as FontFace,
+								resolve: () => resolve(this as unknown as FontFace),
+							})
+						}),
+				)
+			}
+		}
+		vi.stubGlobal("FontFace", TestFontFace)
+		Object.defineProperty(window, "FontFace", {
+			configurable: true,
+			value: TestFontFace,
+		})
+		const fontSet = {
+			add: vi.fn(),
+			check: vi.fn(() => true),
+			delete: vi.fn(() => true),
+		}
+		Object.defineProperty(document, "fonts", {
+			configurable: true,
+			value: fontSet,
+		})
+		const first = {
+			id: "font:generation",
+			family: "Generation One",
+			revision: "revision:one",
+		}
+		const second = {
+			...first,
+			family: "Generation Two",
+			revision: "revision:two",
+		}
+		const initial = createInitialDocument()
+		const point = createDesignTextObject({
+			id: "text:generation",
+			name: "Generation text",
+			mode: "point",
+			x: 100,
+			y: 120,
+			appearance: initial.objects[0]?.appearance ?? {},
+			text: "A",
+			typography: {
+				font: first,
+				size: 24,
+				leading: 28,
+				tracking: 0,
+				kerning: "auto",
+				alignment: "start",
+				direction: "auto",
+			},
+		})
+		const source = { ...initial, objects: [...initial.objects, point] }
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(loadedTextLayout),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		const firstSession = sourceSession({
+			initialDocument: source,
+			fonts: [{ reference: first, bytes: new Uint8Array([1]) }],
+		})
+		mountDesign({
+			initialDocument: source,
+			sourceSession: firstSession,
+			textService,
+		})
+		expect(textService.registerFont).toHaveBeenCalledWith(
+			first,
+			new Uint8Array([1]),
+		)
+		expect(document.body.textContent).not.toContain("is not loaded")
+		await vi.waitFor(() => expect(pending).toHaveLength(1))
+		const host = hosts.at(-1)
+		if (host === undefined) throw new Error("Design host was not mounted.")
+		const secondSession = sourceSession({
+			initialDocument: source,
+			fonts: [{ reference: second, bytes: new Uint8Array([2]) }],
+		})
+		await act(async () => {
+			render(
+				h(DesignApplication, {
+					initialDocument: source,
+					sourceSession: secondSession,
+					textService,
+				}),
+				host,
+			)
+			await Promise.resolve()
+		})
+		await vi.waitFor(() => expect(pending).toHaveLength(2))
+		await act(async () => {
+			pending[1]!.resolve()
+			await vi.waitFor(() => expect(fontSet.add).toHaveBeenCalledOnce())
+		})
+		await act(async () => {
+			pending[0]!.resolve()
+			await Promise.resolve()
+		})
+		expect(fontSet.add).toHaveBeenCalledOnce()
+		expect(fontSet.add).toHaveBeenCalledWith(pending[1]!.face)
+		expect(
+			document.querySelector<HTMLInputElement>('input[role="combobox"]')?.value,
+		).toBe("Generation Two")
 	})
 
 	it("selects and drags Point and Area text through their whitespace bounds", async () => {
@@ -1571,6 +1761,280 @@ describe("create-design shared vector scene", () => {
 				source,
 			)
 		}
+	})
+
+	it("edits Point and Area text from non-ink bbox space without adding history", async () => {
+		const initial = createInitialDocument()
+		const reference = {
+			id: "font:bbox-edit",
+			family: "BBox Edit",
+			revision: 1,
+		}
+		const typography = {
+			font: reference,
+			size: 24,
+			leading: 32,
+			tracking: 0,
+			kerning: "auto" as const,
+			alignment: "start" as const,
+			direction: "auto" as const,
+		}
+		const appearance = initial.objects[0]?.appearance ?? {}
+		const point = createDesignTextObject({
+			id: "text:bbox-point",
+			name: "BBox point",
+			mode: "point",
+			x: 120,
+			y: 180,
+			appearance,
+			text: "A ",
+			typography,
+		})
+		const area = createDesignTextObject({
+			id: "text:bbox-area",
+			name: "BBox area",
+			mode: "area",
+			x: 280,
+			y: 140,
+			width: 180,
+			height: 100,
+			appearance,
+			text: "A",
+			typography,
+		})
+		const locked = {
+			...point,
+			id: "text:bbox-locked",
+			name: "Locked bbox text",
+			locked: true,
+		}
+		const source = {
+			...initial,
+			objects: [...initial.objects, point, area, locked],
+		}
+		const session = sourceSession({
+			initialDocument: source,
+			fonts: [{ reference, bytes: new Uint8Array([1, 2, 3]) }],
+		})
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(loadedTextLayout),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		const stage = mountDesign({
+			initialDocument: source,
+			sourceSession: session,
+			textService,
+		})
+		const hit = (id: string) => {
+			const node = stage
+				.find(".design-text-hit")
+				.find((candidate: { name(): string }) => candidate.name().includes(id))
+			if (node === undefined) throw new Error(`${id} bbox was not rendered.`)
+			return node
+		}
+		for (const [id, eventName] of [
+			[point.id, "dblclick"],
+			[area.id, "dbltap"],
+		] as const) {
+			await act(async () => {
+				hit(id).fire(
+					eventName,
+					{
+						evt:
+							eventName === "dblclick"
+								? new MouseEvent("dblclick", {
+										bubbles: true,
+										detail: 2,
+									})
+								: new TouchEvent("touchend", { bubbles: true }),
+					},
+					true,
+				)
+				await Promise.resolve()
+			})
+			const textarea = document.querySelector<HTMLTextAreaElement>(
+				"textarea[data-design-text-editor]",
+			)
+			if (textarea === null)
+				throw new Error(`${id} did not enter text editing.`)
+			expect(document.activeElement).toBe(textarea)
+			expect(textarea.selectionStart).toBe(textarea.value.length)
+			expect(textarea.selectionEnd).toBe(textarea.value.length)
+			await act(async () => {
+				textarea.dispatchEvent(
+					new KeyboardEvent("keydown", {
+						bubbles: true,
+						key: "Escape",
+					}),
+				)
+				await Promise.resolve()
+			})
+		}
+		await act(async () => {
+			hit(locked.id).fire(
+				"dblclick",
+				{
+					evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelector("textarea[data-design-text-editor]"),
+		).toBeNull()
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Unlock Locked bbox text")
+		expect(session.save).not.toHaveBeenCalled()
+	})
+
+	it("enters a text group before bbox double-click editing its child", async () => {
+		const initial = createInitialDocument()
+		const reference = { id: "font:grouped-text", family: "Grouped Text" }
+		const point = createDesignTextObject({
+			id: "text:grouped-bbox",
+			name: "Grouped bbox text",
+			mode: "point",
+			x: 160,
+			y: 200,
+			appearance: initial.objects[0]?.appearance ?? {},
+			text: "A ",
+			typography: {
+				font: reference,
+				size: 24,
+				leading: 32,
+				tracking: 0,
+				kerning: "auto",
+				alignment: "start",
+				direction: "auto",
+			},
+		})
+		const expanded = {
+			...initial,
+			objects: [...initial.objects, point],
+			scene: [
+				...(initial.scene ??
+					initial.objects.map(({ id }) => ({ kind: "object" as const, id }))),
+				{ kind: "object" as const, id: point.id },
+			],
+		}
+		const grouped = groupDesignSelection(
+			expanded,
+			[initial.objects[0]!.id, point.id],
+			() => "text-group",
+		)
+		if (grouped === null) throw new Error("Text group fixture was not created.")
+		const session = sourceSession({
+			initialDocument: grouped.document,
+			fonts: [{ reference, bytes: new Uint8Array([1]) }],
+		})
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(loadedTextLayout),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		const stage = mountDesign({
+			initialDocument: grouped.document,
+			sourceSession: session,
+			textService,
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		let pointer = { x: 200, y: 180 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const hit = () => {
+			const node = stage
+				.find(".design-text-hit")
+				.find((candidate: { name(): string }) =>
+					candidate.name().includes(point.id),
+				)
+			if (node === undefined)
+				throw new Error("Grouped text bbox was not rendered.")
+			return node
+		}
+		const pointerEvent = (
+			type: "pointerdown" | "pointerup",
+			next: { x: number; y: number },
+		) => {
+			pointer = next
+			hit().fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: next.x,
+						clientY: next.y,
+						isPrimary: true,
+						pointerId: 73,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			pointerEvent("pointerdown", pointer)
+			pointerEvent("pointerup", pointer)
+			hit().fire(
+				"click",
+				{ evt: new MouseEvent("click", { bubbles: true, detail: 1 }) },
+				true,
+			)
+			pointerEvent("pointerdown", { x: 201, y: 181 })
+			pointerEvent("pointerup", { x: 201, y: 181 })
+			hit().fire(
+				"dblclick",
+				{ evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }) },
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelector("textarea[data-design-text-editor]"),
+		).toBeNull()
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Editing inside")
+		await act(async () => {
+			hit().fire(
+				"dblclick",
+				{ evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }) },
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelector("textarea[data-design-text-editor]"),
+		).not.toBeNull()
+		expect(session.save).not.toHaveBeenCalled()
 	})
 
 	it("authors new text with a loaded workspace font and selects its initial draft", async () => {

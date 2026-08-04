@@ -157,6 +157,7 @@ export interface DesignTileContext {
 	readonly activeTextFontId: string | null
 	readonly textToolsDisabledReason: string | null
 	readonly textService?: DesignTextService
+	readonly textFontRevision?: number
 	readonly beginTextEditing: (object: DesignObject) => void
 	readonly applyTextTypography: (
 		properties: Partial<DesignTextTypography>,

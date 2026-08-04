@@ -28,6 +28,7 @@ import { createDesignServerApp } from "../src/server.ts"
 import {
 	designSourceTransaction,
 	installDesignSourceFont,
+	loadDesignSourceFonts,
 } from "../src/source-sync.ts"
 import { createTextFontFixtureBytes } from "./fixtures/text-font.ts"
 
@@ -231,7 +232,16 @@ describe(`create-design source synchronization`, () => {
 			[`Hello world area edited`, installed.reference],
 		])
 		const textService = createDesignTextService()
-		expect(textService.registerFont(installed.reference, bytes)).toEqual([])
+		const reloadedFonts = await loadDesignSourceFonts(client, state)
+		expect(reloadedFonts).toHaveLength(1)
+		expect(reloadedFonts[0]?.reference).toEqual(installed.reference)
+		expect(reloadedFonts[0]?.bytes).toEqual(bytes)
+		expect(
+			textService.registerFont(
+				reloadedFonts[0]!.reference,
+				reloadedFonts[0]!.bytes,
+			),
+		).toEqual([])
 		const layouts = textObjects.map((object) => textService.layout(object))
 		expect(layouts.every((layout) => layout?.diagnostics.length === 0)).toBe(
 			true,

@@ -1,5 +1,6 @@
 import {
 	IDENTITY_DESIGN_TRANSFORM,
+	type DesignFontReference,
 	type DesignTextGeometry,
 	type DesignTextTypography,
 } from "@create-design/source"
@@ -186,6 +187,32 @@ export function designTextFamilyId(family: string): string {
 	return `font:${slug || "system-sans"}`
 }
 
+export function designTextBrowserFontFamily(
+	reference: DesignFontReference,
+): string {
+	const key = `${reference.id}\u0000${String(reference.revision ?? "unversioned")}`
+	let hash = 2_166_136_261
+	for (let index = 0; index < key.length; index += 1) {
+		hash ^= key.charCodeAt(index)
+		hash = Math.imul(hash, 16_777_619)
+	}
+	const slug = reference.id
+		.slice("font:".length)
+		.replaceAll(/[^a-zA-Z0-9_-]+/gu, "-")
+		.replaceAll(/^-+|-+$/gu, "")
+	return `CreateDesign-${slug || "font"}-${(hash >>> 0).toString(16).padStart(8, "0")}`
+}
+
+export function designTextCssFontFamily(family: string): string {
+	return `"${family
+		.replaceAll("\\", "\\\\")
+		.replaceAll("\0", "�")
+		.replaceAll("\n", "\\a ")
+		.replaceAll("\r", "\\d ")
+		.replaceAll("\f", "\\c ")
+		.replaceAll('"', '\\"')}"`
+}
+
 export function designTextInteractionBounds(
 	object: DesignObject & { readonly geometry: DesignTextGeometry },
 	layout: DesignTextLayout,
@@ -264,7 +291,7 @@ export function designTextOverlayStyle(
 		background: "transparent",
 		width,
 		height,
-		fontFamily: registeredFamily,
+		fontFamily: designTextCssFontFamily(registeredFamily),
 		fontVariationSettings: variations.length === 0 ? "normal" : variations,
 		fontKerning: geometry.typography.kerning === "auto" ? "auto" : "none",
 		fontSize: `${geometry.typography.size}px`,

@@ -574,7 +574,13 @@ function DesignExportTile({
 				preflightPreferences,
 				context.textService,
 			),
-		[context.document, context.textService, preflightPreferences, target],
+		[
+			context.document,
+			context.textFontRevision,
+			context.textService,
+			preflightPreferences,
+			target,
+		],
 	)
 	const diagnosticGroups = useMemo(() => {
 		const groups = new Map<

@@ -155,7 +155,12 @@ describe(`create-design filesystem observability`, () => {
 				const document = assemble(state)
 				await act(async () => {
 					for (const listener of documentListeners)
-						listener({ ok: true, document, revision: state.revision })
+						listener({
+							ok: true,
+							document,
+							fonts: [],
+							revision: state.revision,
+						})
 				})
 			}).then(completion?.resolve, completion?.reject)
 		})
@@ -171,6 +176,7 @@ describe(`create-design filesystem observability`, () => {
 				return {
 					ok: true as const,
 					document: assemble(state),
+					fonts: [],
 					revision: state.revision,
 				}
 			},

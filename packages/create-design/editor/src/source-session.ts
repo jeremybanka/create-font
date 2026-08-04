@@ -13,10 +13,16 @@ export type DesignSourceStatus =
 	| "recovering"
 	| "conflict"
 
+export type DesignSourceFontResource = Readonly<{
+	reference: DesignFontReference
+	bytes: Uint8Array
+}>
+
 export type DesignExternalSourceUpdate =
 	| Readonly<{
 			ok: true
 			document: DesignDocument
+			fonts: readonly DesignSourceFontResource[]
 			revision: string
 	  }>
 	| Readonly<{
@@ -29,10 +35,7 @@ export interface DesignSourceSession {
 	readonly displayName?: string
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
-	readonly fonts?: readonly Readonly<{
-		reference: DesignFontReference
-		bytes: Uint8Array
-	}>[]
+	readonly fonts?: readonly DesignSourceFontResource[]
 	installFont?(
 		reference: DesignFontReference,
 		bytes: Uint8Array,

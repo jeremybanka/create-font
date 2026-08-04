@@ -20,6 +20,7 @@ import {
 } from "@create-design/source"
 import type {
 	DesignExternalSourceUpdate,
+	DesignSourceFontResource,
 	DesignSourceSession,
 	DesignSourceStatus,
 } from "@create-design/editor/source-session"
@@ -43,7 +44,12 @@ function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
 			revision: state.revision,
 		}
 	}
-	return { ok: true, document: result.value, revision: state.revision }
+	return {
+		ok: true,
+		document: result.value,
+		fonts: [],
+		revision: state.revision,
+	}
 }
 
 function collectionPaths(
@@ -136,6 +142,53 @@ type DesignSourceAssetClient = Pick<
 	ReturnType<typeof createSourceRpcClient>,
 	"discardAssetStage" | "stageAsset" | "writeAssets"
 >
+
+type DesignSourceFontClient = Pick<
+	ReturnType<typeof createSourceRpcClient>,
+	"readAsset"
+>
+
+export async function loadDesignSourceFonts(
+	client: DesignSourceFontClient,
+	state: SourceSyncState,
+): Promise<readonly DesignSourceFontResource[]> {
+	const fontIndexValue = state.units.get("fonts/index.json")?.value
+	const fontIndex =
+		fontIndexValue !== undefined &&
+		typeof fontIndexValue === "object" &&
+		fontIndexValue !== null &&
+		"entries" in fontIndexValue &&
+		Array.isArray(fontIndexValue.entries)
+			? (fontIndexValue as unknown as FontIndexFile)
+			: null
+	return Promise.all(
+		(fontIndex?.entries ?? []).map(async (entry) => {
+			const content = await client.readAsset(entry.path)
+			return {
+				reference: {
+					id: entry.id,
+					family:
+						entry.family ??
+						entry.id.slice("font:".length).replaceAll(/[-_]+/gu, " "),
+					...(entry.faceIndex === undefined
+						? {}
+						: { faceIndex: entry.faceIndex }),
+					revision: entry.revision ?? content.descriptor.digest,
+				},
+				bytes: new Uint8Array(await new Response(content.bytes).arrayBuffer()),
+			}
+		}),
+	)
+}
+
+async function hydrateDesignSourceUpdate(
+	client: DesignSourceFontClient,
+	state: SourceSyncState,
+): Promise<DesignExternalSourceUpdate> {
+	const update = assemble(state)
+	if (!update.ok) return update
+	return { ...update, fonts: await loadDesignSourceFonts(client, state) }
+}
 
 function fontMediaType(extension: string): string {
 	switch (extension) {
@@ -262,7 +315,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 			.catch(() => undefined),
 	])
 	let state = sourceSyncStateFromSnapshot(snapshot)
-	const initial = assemble(state)
+	const initial = await hydrateDesignSourceUpdate(client, state)
 	if (!initial.ok)
 		throw new Error(
 			initial.diagnostics
@@ -281,6 +334,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	let externalConflict = false
 	let pendingSaves = 0
 	let tail: Promise<unknown> = Promise.resolve()
+	let sourceGeneration = 0
 	const status = (value: DesignSourceStatus): void => {
 		for (const listener of statusListeners) listener(value)
 	}
@@ -289,7 +343,10 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	): Promise<DesignExternalSourceUpdate> => {
 		status(`recovering`)
 		state = sourceSyncStateFromSnapshot(await client.readSnapshot())
-		const update = assemble(state)
+		sourceGeneration += 1
+		const generation = sourceGeneration
+		const update = await hydrateDesignSourceUpdate(client, state)
+		if (generation !== sourceGeneration) return recover(notify)
 		if (notify) {
 			for (const listener of documentListeners) listener(update)
 		}
@@ -312,47 +369,24 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 				return
 			}
 			state = result.state
+			sourceGeneration += 1
 			if (result.kind === `applied` && !isLocal && pendingSaves > 0) {
 				externalConflict = true
 				status(`conflict`)
 				return
 			}
 			if (result.kind === `applied` && !isLocal && pendingSaves === 0) {
-				const update = assemble(state)
-				for (const listener of documentListeners) listener(update)
+				const generation = sourceGeneration
+				const update = await hydrateDesignSourceUpdate(client, state)
+				if (generation === sourceGeneration)
+					for (const listener of documentListeners) listener(update)
 			}
 		})().catch(() => status(`conflict`))
 	})
 	socket.addEventListener(`open`, () => status(`connected`))
 	socket.addEventListener(`close`, () => status(`recovering`))
 
-	const fontIndexValue = state.units.get("fonts/index.json")?.value
-	const fontIndex =
-		fontIndexValue !== undefined &&
-		typeof fontIndexValue === "object" &&
-		fontIndexValue !== null &&
-		"entries" in fontIndexValue &&
-		Array.isArray(fontIndexValue.entries)
-			? (fontIndexValue as unknown as FontIndexFile)
-			: null
-	const fonts = await Promise.all(
-		(fontIndex?.entries ?? []).map(async (entry) => {
-			const content = await client.readAsset(entry.path)
-			return {
-				reference: {
-					id: entry.id,
-					family:
-						entry.family ??
-						entry.id.slice("font:".length).replaceAll(/[-_]+/gu, " "),
-					...(entry.faceIndex === undefined
-						? {}
-						: { faceIndex: entry.faceIndex }),
-					revision: entry.revision ?? content.descriptor.digest,
-				},
-				bytes: new Uint8Array(await new Response(content.bytes).arrayBuffer()),
-			}
-		}),
-	)
+	const fonts = initial.fonts
 
 	return {
 		...(workspace === undefined ? {} : { displayName: workspace }),
@@ -378,7 +412,10 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 				assets: result.assets,
 			})
 			if (applied.kind === "gap") await recover(false)
-			else state = applied.state
+			else {
+				state = applied.state
+				sourceGeneration += 1
+			}
 			return installed.reference
 		},
 		versionControl: {
@@ -421,7 +458,10 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 							units: result.units,
 						})
 						if (applied.kind === `gap`) await recover(false)
-						else state = applied.state
+						else {
+							state = applied.state
+							sourceGeneration += 1
+						}
 						status(`saved`)
 						return { revision: state.revision }
 					} catch (error) {
@@ -431,7 +471,10 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 								await client.readSnapshot(),
 							)
 							externalConflict = latest.revision !== state.revision
-							if (externalConflict) state = latest
+							if (externalConflict) {
+								state = latest
+								sourceGeneration += 1
+							}
 						} catch {
 							// A transport failure is retryable against the same durable revision.
 						}
