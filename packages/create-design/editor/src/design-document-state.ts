@@ -10,6 +10,7 @@ import type {
 	DesignAppearance,
 	DesignArtboard,
 	DesignArtboardInsets,
+	DesignBlend,
 	DesignContour,
 	DesignDocument,
 	DesignFillRule,
@@ -131,6 +132,10 @@ export function createDesignDocumentState(
 	const objectIdsAtom = silo.atom<readonly string[]>({
 		key: "objectIds",
 		default: [],
+	})
+	const blendsAtom = silo.atom<readonly DesignBlend[] | undefined>({
+		key: "blends",
+		default: undefined,
 	})
 	const sceneAtom = silo.atom<readonly DesignSceneChild[] | undefined>({
 		key: "scene",
@@ -400,6 +405,7 @@ export function createDesignDocumentState(
 				objects: get(objectIdsAtom).map((id) =>
 					required(get(objectSelectors, id), "object", id),
 				),
+				...(get(blendsAtom) === undefined ? {} : { blends: get(blendsAtom)! }),
 				...(scene === undefined ? {} : { scene }),
 				...(groupIds === undefined
 					? {}
@@ -618,6 +624,8 @@ export function createDesignDocumentState(
 				tools.set(objectLockedAtoms, object.id, object.locked)
 			writeGeometry(tools, object.id, object.geometry)
 		}
+		if (tools.get(blendsAtom) !== document.blends)
+			tools.set(blendsAtom, document.blends)
 
 		if (!sameSceneChildren(tools.get(sceneAtom), document.scene))
 			tools.set(sceneAtom, document.scene)
@@ -676,6 +684,7 @@ export function createDesignDocumentState(
 		swatchSourceAtoms,
 		swatchAlternateAtoms,
 		objectIdsAtom,
+		blendsAtom,
 		objectNameAtoms,
 		objectTransformAtoms,
 		objectAppearanceAtoms,
@@ -714,6 +723,7 @@ export function createDesignDocumentState(
 			swatchAlternateAtoms,
 			swatchSelectors,
 			objectIdsAtom,
+			blendsAtom,
 			objectNameAtoms,
 			objectTransformAtoms,
 			objectAppearanceAtoms,

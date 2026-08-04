@@ -20,6 +20,7 @@ export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
 export const finiteNumberSchema = z.number().finite()
 export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
+export const blendIdSchema = z.string().regex(/^blend:.+/u)
 export const groupIdSchema = z.string().regex(/^group:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
@@ -199,6 +200,31 @@ export const designObjectSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+export const blendPointCorrespondenceSchema = z
+	.object({
+		startPointId: pointIdSchema,
+		endPointId: pointIdSchema,
+	})
+	.strict()
+export const blendContourCorrespondenceSchema = z
+	.object({
+		startContourId: contourIdSchema,
+		endContourId: contourIdSchema,
+		points: z.array(blendPointCorrespondenceSchema),
+	})
+	.strict()
+export const designBlendSchema = z
+	.object({
+		id: blendIdSchema,
+		name: z.string(),
+		startObjectId: designObjectIdSchema,
+		endObjectId: designObjectIdSchema,
+		steps: z.number().int().min(1).max(10_000),
+		contours: z.array(blendContourCorrespondenceSchema),
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
 const previousDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
@@ -301,6 +327,7 @@ export const designDocumentSchema = z
 		artboards: z.array(artboardSchema).min(1),
 		swatches: z.array(swatchSchema),
 		objects: z.array(designObjectSchema),
+		blends: z.array(designBlendSchema).optional(),
 		scene: z.array(sceneChildSchema).optional(),
 		groups: z.array(groupSchema).optional(),
 		guides: z.array(guideSchema),
@@ -457,6 +484,18 @@ function relationalDiagnostics(
 				}
 			}
 		}
+	}
+	const seenBlends = new Set<string>()
+	for (const [index, blend] of (document.blends ?? []).entries()) {
+		if (seenBlends.has(blend.id))
+			errors.push(
+				diagnostic(
+					"directory.duplicate_id",
+					`$.blends[${index}].id`,
+					`Duplicate blend ID ${blend.id}.`,
+				),
+			)
+		seenBlends.add(blend.id)
 	}
 	if ((document.scene === undefined) !== (document.groups === undefined))
 		errors.push(
