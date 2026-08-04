@@ -680,6 +680,333 @@ describe("create-design shared vector scene", () => {
 		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
 	})
 
+	it("previews Alt/Option copy-drag live and commits it as one history entry", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const sourceObject = source.objects[0]!
+		const node = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(sourceObject.id),
+			)
+		if (node === undefined)
+			throw new Error("Source design object was not found.")
+		let pointer = { x: 260, y: 220 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: { x: number; y: number },
+			altKey: boolean,
+		): void => {
+			pointer = at
+			node.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						altKey,
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: at.x,
+						clientY: at.y,
+						isPrimary: true,
+						pointerId: 41,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+
+		await act(async () => {
+			fire("pointerdown", pointer, false)
+			fire("pointermove", { x: 330, y: 275 }, false)
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-object")).toHaveLength(source.objects.length)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { altKey: true, key: "Alt" }),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-object")).toHaveLength(source.objects.length + 1)
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }))
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-object")).toHaveLength(source.objects.length)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { altKey: true, key: "Alt" }),
+			)
+			fire("pointerup", pointer, true)
+			await Promise.resolve()
+		})
+
+		const copied = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(copied.objects).toHaveLength(source.objects.length + 1)
+		expect(copied.objects.slice(0, source.objects.length)).toEqual(
+			source.objects,
+		)
+		const duplicate = copied.objects.find(
+			(object) => !source.objects.some(({ id }) => id === object.id),
+		)
+		expect(duplicate).toBeDefined()
+		expect(duplicate?.transform.e).not.toBe(sourceObject.transform.e)
+		expect(duplicate?.transform.f).not.toBe(sourceObject.transform.f)
+		expect(
+			document.querySelector('design-layers-tile > button[aria-pressed="true"]')
+				?.textContent,
+		).toContain(sourceObject.name)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Alt/Option-drag")
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					ctrlKey: true,
+					key: "z",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}") as DesignDocument)
+				.objects,
+		).toHaveLength(source.objects.length + 1)
+
+		const help = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Help for the Select tool"]',
+		)
+		if (help === null) throw new Error("Select help was not found.")
+		act(() => help.click())
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"Alt/Option-drag to copy",
+		)
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"Ctrl+D duplicates with offset",
+		)
+	})
+
+	it("does not copy on Alt-click, Escape, or pointer cancellation and preserves ordinary drag", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const sourceObject = source.objects[0]!
+		const node = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(sourceObject.id),
+			)
+		const canvas = stage.container().querySelector("canvas")
+		if (node === undefined || canvas === null)
+			throw new Error("Design object gesture target was not found.")
+		let pointer = { x: 260, y: 220 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: { x: number; y: number },
+			altKey: boolean,
+			pointerId: number,
+		): void => {
+			pointer = at
+			node.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						altKey,
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: at.x,
+						clientY: at.y,
+						isPrimary: true,
+						pointerId,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+
+		await act(async () => {
+			fire("pointerdown", pointer, true, 51)
+			fire("pointerup", pointer, true, 51)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+
+		await act(async () => {
+			fire("pointerdown", pointer, true, 52)
+			fire("pointermove", { x: 330, y: 270 }, true, 52)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			fire("pointerup", pointer, true, 52)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+		expect(stage.find(".design-object")).toHaveLength(source.objects.length)
+		expect(
+			document.querySelector(
+				'design-layers-tile > button[aria-pressed="true"]',
+			),
+		).not.toBeNull()
+
+		await act(async () => {
+			fire("pointerdown", pointer, true, 53)
+			fire("pointermove", { x: 350, y: 300 }, true, 53)
+			canvas.dispatchEvent(
+				new PointerEvent("pointercancel", {
+					bubbles: true,
+					pointerId: 53,
+					pointerType: "mouse",
+				}),
+			)
+			fire("pointerup", pointer, true, 53)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+
+		await act(async () => {
+			fire("pointerdown", pointer, false, 54)
+			fire("pointermove", { x: 390, y: 315 }, false, 54)
+			fire("pointerup", pointer, false, 54)
+			await Promise.resolve()
+		})
+		const moved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(moved.objects).toHaveLength(source.objects.length)
+		expect(moved.objects[0]?.transform).not.toEqual(sourceObject.transform)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+	})
+
+	it("Alt/Option-drags a complete selected group with cloned hierarchy", async () => {
+		const base = createInitialDocument()
+		const grouped = groupDesignSelection(
+			base,
+			base.objects.map(({ id }) => id),
+			() => "source-group",
+		)
+		if (grouped === null) throw new Error("Group fixture was not created.")
+		const source = grouped.document
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const first = source.objects[0]!
+		const node = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(first.id),
+			)
+		if (node === undefined) throw new Error("Grouped object was not rendered.")
+		let pointer = { x: 260, y: 220 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: { x: number; y: number },
+		): void => {
+			pointer = at
+			node.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						altKey: true,
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: at.x,
+						clientY: at.y,
+						isPrimary: true,
+						pointerId: 61,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", pointer)
+			fire("pointermove", { x: 340, y: 280 })
+			fire("pointerup", pointer)
+			await Promise.resolve()
+		})
+
+		const copied = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(copied.objects).toHaveLength(source.objects.length * 2)
+		expect(copied.objects.slice(0, source.objects.length)).toEqual(
+			source.objects,
+		)
+		expect(copied.groups).toHaveLength(2)
+		expect(copied.groups?.[1]?.id).not.toBe(source.groups?.[0]?.id)
+		expect(copied.groups?.[1]?.children).toHaveLength(
+			source.groups?.[0]?.children.length ?? 0,
+		)
+		expect(stage.findOne(".design-group-selection-label")?.text()).toContain(
+			"2 objects",
+		)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+	})
+
 	function sourceSession(
 		overrides: Partial<DesignSourceSession> = {},
 	): DesignSourceSession {

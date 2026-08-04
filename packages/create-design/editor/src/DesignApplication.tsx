@@ -276,6 +276,7 @@ type CanvasGesture =
 	| {
 			readonly kind: "move"
 			readonly originals: readonly DesignObject[]
+			readonly copy: DesignMoveCopyPlan | null
 			readonly state: VectorGestureState
 	  }
 	| {
@@ -314,6 +315,12 @@ type DesignObjectGesture = Extract<
 	CanvasGesture,
 	{ readonly kind: "move" | "transform" }
 >
+
+interface DesignMoveCopyPlan {
+	readonly document: DesignDocument
+	readonly selection: readonly string[]
+	readonly originals: readonly DesignObject[]
+}
 
 const GROUP_DOUBLE_CLICK_MS = 500
 const GROUP_DOUBLE_CLICK_SLOP_PIXELS = 8
@@ -357,8 +364,25 @@ function resolveDesignGestureObject(
 			rawObjects.length === 1
 				? snapDesignObject(rawObjects[0]!, document, worldScale, snapSettings)
 				: snapDesignObjects(rawObjects, document, worldScale, snapSettings)
+		const movedObjects =
+			"object" in snapped ? [snapped.object] : snapped.objects
+		const copyObjects = gesture.copy?.originals
+		const objects =
+			gesture.state.modifiers.altKey &&
+			copyObjects !== undefined &&
+			copyObjects.length === movedObjects.length
+				? copyObjects.map((object, index) => {
+						const original = gesture.originals[index]!
+						const moved = movedObjects[index]!
+						return translateObject(
+							object,
+							moved.transform.e - original.transform.e,
+							moved.transform.f - original.transform.f,
+						)
+					})
+				: movedObjects
 		return {
-			objects: "object" in snapped ? [snapped.object] : snapped.objects,
+			objects,
 			snap: { x: snapped.x, y: snapped.y, matches: snapped.matches ?? [] },
 		}
 	}
@@ -521,7 +545,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
-	return "Drag objects to move · Double-click a group to edit contents · F shows transform handles"
+	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles`
 }
 
 export type DesignApplicationProps = Readonly<{
@@ -2496,9 +2520,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gestureRef.current = { ...gesture, state: transition.state }
 			setGesturePreview(transition.preview)
 			if (gesture.kind === "move" || gesture.kind === "transform") {
+				const nextGesture = { ...gesture, state: transition.state }
 				const resolved = resolveDesignGestureObject(
 					document,
-					gesture,
+					nextGesture,
 					transition.preview,
 					worldScale,
 					snapSettings,
@@ -2579,7 +2604,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			if (event.key === "Escape") {
+				const canceledGesture = gestureRef.current !== null
 				cancelCanvasGesture()
+				if (canceledGesture) {
+					event.preventDefault()
+					setStatus("Canceled canvas gesture.")
+					return
+				}
 				const exitedGroupId = groupScope.at(-1)
 				if (exitedGroupId !== undefined) {
 					const parentScope = groupScope.at(-2) ?? null
@@ -2836,6 +2867,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<PointerEvent>,
 		down: VectorGestureDownInput,
 		originals?: readonly DesignObject[],
+		copySelection?: readonly string[],
 	): void => {
 		const transition = reduceVectorGesture(
 			null,
@@ -2848,12 +2880,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesturePolicy,
 		)
 		if (transition.state === null) return
+		const duplicate =
+			originals === undefined || copySelection === undefined
+				? null
+				: duplicateDesignObjects(document, copySelection, nextId, 0, 0)
+		const duplicateSelection = new Set(duplicate?.selection ?? [])
+		const copy =
+			duplicate === null
+				? null
+				: {
+						document: duplicate.document,
+						selection: duplicate.selection,
+						originals: duplicate.document.objects.filter((object) =>
+							duplicateSelection.has(object.id),
+						),
+					}
 		gestureRef.current =
 			originals === undefined
 				? { kind: "vector", state: transition.state }
 				: down.tool === "transform"
 					? { kind: "transform", originals, state: transition.state }
-					: { kind: "move", originals, state: transition.state }
+					: { kind: "move", originals, copy, state: transition.state }
 		setGesturePreview(transition.preview)
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
@@ -2926,6 +2973,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			event,
 			{ tool: "select", targetId: object.id },
 			originals,
+			interaction.selection,
 		)
 	}
 
@@ -3247,12 +3295,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesturePolicy,
 		)
 		if (transition.state === null) return
-		gestureRef.current = { ...gesture, state: transition.state }
+		const nextGesture = { ...gesture, state: transition.state }
+		gestureRef.current = nextGesture
 		setGesturePreview(transition.preview)
-		if (gesture.kind !== "move" && gesture.kind !== "transform") return
+		if (nextGesture.kind !== "move" && nextGesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
 			document,
-			gesture,
+			nextGesture,
 			transition.preview,
 			worldScale,
 			snapSettings,
@@ -3452,25 +3501,56 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setDirectSelection([])
 			return
 		}
-		const committedPreviews =
-			transition.intent === null ? [] : previewObjectsRef.current
+		const finalGesture =
+			gesture.kind === "move" || gesture.kind === "transform"
+				? {
+						...gesture,
+						state: {
+							...gesture.state,
+							modifiers: gestureModifiers(event.evt),
+						},
+					}
+				: null
+		const finalResolved =
+			finalGesture === null || transition.intent === null
+				? null
+				: resolveDesignGestureObject(
+						document,
+						finalGesture,
+						transition.intent,
+						worldScale,
+						snapSettings,
+					)
+		const committedPreviews = finalResolved?.objects ?? []
 		previewObjectsRef.current = []
 		setPreviewObjects([])
 		if (committedPreviews.length > 0) {
 			const byId = new Map(
 				committedPreviews.map((object) => [object.id, object]),
 			)
+			const copyPlan =
+				finalGesture?.kind === "move" && finalGesture.state.modifiers.altKey
+					? finalGesture.copy
+					: null
+			const commitDocument = copyPlan?.document ?? document
 			commit({
-				...document,
-				objects: document.objects.map(
+				...commitDocument,
+				objects: commitDocument.objects.map(
 					(object) => byId.get(object.id) ?? object,
 				),
 			})
-			setStatus(
-				selectedGroup === null
-					? "Moved selection."
-					: `Moved ${selectedGroup.name} as one group.`,
-			)
+			if (copyPlan !== null) {
+				setSelection(copyPlan.selection)
+				setDirectSelection([])
+				setStatus(
+					`Copied ${copyPlan.selection.length} object${copyPlan.selection.length === 1 ? "" : "s"} with Alt/Option-drag.`,
+				)
+			} else
+				setStatus(
+					selectedGroup === null
+						? "Moved selection."
+						: `Moved ${selectedGroup.name} as one group.`,
+				)
 		}
 		if (groupPress?.pointerId === event.evt.pointerId) {
 			if (!groupPress.dragged && !groupPress.secondClick)
@@ -3569,7 +3649,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 	}
 
-	const canvasDocument = previewArtboardDocument ?? document
+	const copyingGesture =
+		gestureRef.current?.kind === "move" &&
+		gestureRef.current.state.modifiers.altKey &&
+		previewObjects.length > 0
+			? gestureRef.current
+			: null
+	const canvasDocument =
+		previewArtboardDocument ?? copyingGesture?.copy?.document ?? document
 	const canvasActiveArtboardId =
 		gestureRef.current?.kind === "artboard" &&
 		gestureRef.current.mode === "create"
@@ -3601,7 +3688,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectionBounds =
 		(tool === "select" || tool === "transform") && selectedObjects.length > 0
 			? combinedSelectionBounds(
-					selectedObjects.map((object) => previewById.get(object.id) ?? object),
+					copyingGesture?.copy === null || copyingGesture === null
+						? selectedObjects.map(
+								(object) => previewById.get(object.id) ?? object,
+							)
+						: copyingGesture.copy.selection.flatMap((id) => {
+								const object = previewById.get(id)
+								return object === undefined ? [] : [object]
+							}),
 				)
 			: null
 
