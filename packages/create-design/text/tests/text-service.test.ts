@@ -50,9 +50,7 @@ function fixtureBytes(): Uint8Array {
 	return serializeVariableFont(ingested.value)
 }
 
-function textObject(
-	geometry: Partial<DesignTextGeometry> = {},
-): DesignObject {
+function textObject(geometry: Partial<DesignTextGeometry> = {}): DesignObject {
 	return {
 		id: "object:text",
 		name: "Editable text",
@@ -87,7 +85,9 @@ describe("canonical create-design text", () => {
 		const second = service.layout(object)
 		expect(second).toBe(first)
 		expect(first?.glyphs.map(({ cluster }) => cluster)).toEqual([0, 1])
-		expect(first?.glyphs.every(({ contours }) => contours.length > 0)).toBe(true)
+		expect(first?.glyphs.every(({ contours }) => contours.length > 0)).toBe(
+			true,
+		)
 		expect(first?.overset).toBe(false)
 		expect(service.cacheStats().layouts).toBe(1)
 	})
@@ -114,8 +114,12 @@ describe("canonical create-design text", () => {
 			} as DesignTextGeometry,
 		})
 		expect(small?.overset).toBe(true)
-		expect(small?.visibleTextEnd).toBeLessThan(area.geometry.kind === "text" ? area.geometry.text.length : 0)
-		expect(large?.visibleTextEnd).toBe(area.geometry.kind === "text" ? area.geometry.text.length : 0)
+		expect(small?.visibleTextEnd).toBeLessThan(
+			area.geometry.kind === "text" ? area.geometry.text.length : 0,
+		)
+		expect(large?.visibleTextEnd).toBe(
+			area.geometry.kind === "text" ? area.geometry.text.length : 0,
+		)
 	})
 
 	test("expands to fresh ordinary path identities and fails before mutation for missing fonts", () => {
@@ -125,15 +129,18 @@ describe("canonical create-design text", () => {
 		service.registerFont(font, fixtureBytes())
 		const expanded = service.expand(object, "object:expanded")
 		expect(expanded?.objects).toHaveLength(2)
-		expect(expanded?.objects.every(({ geometry }) => geometry.kind === "path")).toBe(true)
-		const ids = expanded?.objects.flatMap((item) =>
-			item.geometry.kind === "path"
-				? item.geometry.contours.flatMap((contour) => [
-						contour.id,
-						...contour.points.map(({ id }) => id),
-					])
-				: [],
-		) ?? []
+		expect(
+			expanded?.objects.every(({ geometry }) => geometry.kind === "path"),
+		).toBe(true)
+		const ids =
+			expanded?.objects.flatMap((item) =>
+				item.geometry.kind === "path"
+					? item.geometry.contours.flatMap((contour) => [
+							contour.id,
+							...contour.points.map(({ id }) => id),
+						])
+					: [],
+			) ?? []
 		expect(new Set(ids).size).toBe(ids.length)
 	})
 
@@ -154,6 +161,8 @@ describe("canonical create-design text", () => {
 		)
 		expect(rtl?.glyphs.map(({ cluster }) => cluster)).toEqual([1, 0])
 		const missing = service.layout(textObject({ text: "Z" }))
-		expect(missing?.diagnostics.some(({ code }) => code === "glyph.missing")).toBe(true)
+		expect(
+			missing?.diagnostics.some(({ code }) => code === "glyph.missing"),
+		).toBe(true)
 	})
 })

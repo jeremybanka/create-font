@@ -248,7 +248,12 @@ function wrapParagraph(
 							word.end - paragraph.start,
 						),
 					}
-		const shaped = shapeRequest(fontService, font, geometry, candidate.text).value
+		const shaped = shapeRequest(
+			fontService,
+			font,
+			geometry,
+			candidate.text,
+		).value
 		if (
 			shaped !== undefined &&
 			shapedAdvance(shaped, geometry) > width &&
@@ -256,7 +261,11 @@ function wrapParagraph(
 			current.text.trim().length > 0
 		) {
 			const trimmed = current.text.trimEnd()
-			lines.push({ ...current, end: current.start + trimmed.length, text: trimmed })
+			lines.push({
+				...current,
+				end: current.start + trimmed.length,
+				text: trimmed,
+			})
 			const leftTrimmed = word.text.trimStart()
 			current = {
 				start: word.end - leftTrimmed.length,
@@ -373,14 +382,23 @@ export function createDesignTextService(): DesignTextService {
 				: Number.POSITIVE_INFINITY
 		const glyphs: DesignTextGlyph[] = []
 		const lines: DesignTextLine[] = []
-		const diagnostics: DesignTextDiagnostic[] = metrics.diagnostics.map((value) =>
-			diagnostic(object.id, value),
+		const diagnostics: DesignTextDiagnostic[] = metrics.diagnostics.map(
+			(value) => diagnostic(object.id, value),
 		)
 		let maxAdvance = 0
 		for (const [lineIndex, source] of visibleSources.entries()) {
-			const shapedResult = shapeRequest(fontService, font, geometry, source.text)
+			const shapedResult = shapeRequest(
+				fontService,
+				font,
+				geometry,
+				source.text,
+			)
 			const shaped = shapedResult.value
-			diagnostics.push(...shapedResult.diagnostics.map((value) => diagnostic(object.id, value)))
+			diagnostics.push(
+				...shapedResult.diagnostics.map((value) =>
+					diagnostic(object.id, value),
+				),
+			)
 			if (shaped === undefined) continue
 			const advance = shapedAdvance(shaped, geometry)
 			const nextText = geometry.text.slice(source.end, source.end + 2)
@@ -397,7 +415,8 @@ export function createDesignTextService(): DesignTextService {
 				advance + justifyGap * Math.max(0, shaped.glyphs.length - 1)
 			maxAdvance = Math.max(maxAdvance, renderedAdvance)
 			const alignOffset =
-				!Number.isFinite(availableWidth) || geometry.typography.alignment === "start"
+				!Number.isFinite(availableWidth) ||
+				geometry.typography.alignment === "start"
 					? 0
 					: geometry.typography.alignment === "center"
 						? (availableWidth - advance) / 2
@@ -417,7 +436,11 @@ export function createDesignTextService(): DesignTextService {
 						? {}
 						: { variations: geometry.typography.variations }),
 				})
-				diagnostics.push(...outlineResult.diagnostics.map((value) => diagnostic(object.id, value)))
+				diagnostics.push(
+					...outlineResult.diagnostics.map((value) =>
+						diagnostic(object.id, value),
+					),
+				)
 				const prefix = `${object.id}:glyph:${source.start + glyph.cluster}:${glyphIndex}`
 				glyphs.push(
 					frozen({
@@ -445,7 +468,8 @@ export function createDesignTextService(): DesignTextService {
 						(geometry.typography.tracking / 1_000) * geometry.typography.size +
 						(geometry.typography.kerning === "auto"
 							? 0
-							: (geometry.typography.kerning / 1_000) * geometry.typography.size) +
+							: (geometry.typography.kerning / 1_000) *
+								geometry.typography.size) +
 						justifyGap
 			}
 			lines.push(
@@ -478,7 +502,10 @@ export function createDesignTextService(): DesignTextService {
 			overset,
 			bounds: frozen({
 				x: geometry.x,
-				y: geometry.mode === "point" ? geometry.y - metrics.value.ascender * scale : geometry.y,
+				y:
+					geometry.mode === "point"
+						? geometry.y - metrics.value.ascender * scale
+						: geometry.y,
 				width:
 					geometry.mode === "area" && geometry.frame !== undefined
 						? geometry.frame.width
@@ -504,10 +531,13 @@ export function createDesignTextService(): DesignTextService {
 				},
 				bytes,
 			)
-			if (registered.value !== undefined) fonts.set(reference.id, registered.value.identity)
+			if (registered.value !== undefined)
+				fonts.set(reference.id, registered.value.identity)
 			layouts.clear()
 			return frozen(
-				registered.diagnostics.map((value) => diagnostic("object:font-registration", value)),
+				registered.diagnostics.map((value) =>
+					diagnostic("object:font-registration", value),
+				),
 			)
 		},
 		unregisterFont(fontId) {
@@ -552,7 +582,7 @@ export function createDesignTextService(): DesignTextService {
 								transform: object.transform,
 								appearance: object.appearance,
 							}),
-						]
+						],
 			)
 			return frozen({
 				objects: frozen(objects),
