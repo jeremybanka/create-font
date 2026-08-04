@@ -337,7 +337,7 @@ export function createDesignDocumentState(
 			(id) =>
 			({ get }) => {
 				const name = get(objectNameAtoms, id)
-				const geometry = readObjectGeometry(get, id)
+				const geometry = get(objectGeometrySelectors, id)
 				const transform = get(objectTransformAtoms, id)
 				const appearance = get(objectAppearanceAtoms, id)
 				if (
