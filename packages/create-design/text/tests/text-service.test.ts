@@ -20,6 +20,17 @@ function fixtureBytes(): Uint8Array {
 		name,
 		advanceWidth,
 	})
+	const space = {
+		...template,
+		name: "space",
+		advanceWidth: 300,
+		leftSideBearing: 0,
+		contours: [],
+		variations: template.variations.map((variation) => ({
+			...variation,
+			deltas: { ...variation.deltas, points: [] },
+		})),
+	}
 	const expanded: VariableFontSource = {
 		...source,
 		names: {
@@ -34,7 +45,7 @@ function fixtureBytes(): Uint8Array {
 			glyph("O", 1_000),
 			glyph("A", 700),
 			glyph("B", 680),
-			glyph("space", 300),
+			space,
 		],
 		cmap: [
 			{ codePoint: 0x4f, glyph: 1 },
@@ -120,6 +131,41 @@ describe("canonical create-design text", () => {
 		expect(large?.visibleTextEnd).toBe(
 			area.geometry.kind === "text" ? area.geometry.text.length : 0,
 		)
+	})
+
+	test("encloses point line boxes, advances, spacing, multiline ink, and keeps area interaction at its frame", () => {
+		const service = createDesignTextService()
+		service.registerFont(font, fixtureBytes())
+		const point = service.layout(textObject({ text: "A A\nB" }))
+		expect(point?.lines).toHaveLength(2)
+		expect(point?.logicalBounds).toMatchObject({ x: 40, y: 62, height: 48 })
+		expect(point?.logicalBounds.width).toBe(point?.lines[0]?.advance)
+		expect(point?.inkBounds).not.toBeNull()
+		expect(point?.bounds.x).toBeLessThanOrEqual(point!.inkBounds!.x)
+		expect(point!.bounds.x + point!.bounds.width).toBeGreaterThanOrEqual(
+			point!.inkBounds!.x + point!.inkBounds!.width,
+		)
+		expect(point?.bounds.y).toBeLessThanOrEqual(point!.inkBounds!.y)
+		expect(point!.bounds.y + point!.bounds.height).toBeGreaterThanOrEqual(
+			point!.inkBounds!.y + point!.inkBounds!.height,
+		)
+
+		const area = service.layout(
+			textObject({
+				mode: "area",
+				text: "AB AB AB AB",
+				frame: {
+					width: 38,
+					height: 24,
+					inset: { top: 0, right: 0, bottom: 0, left: 0 },
+					verticalAlignment: "top",
+				},
+			}),
+		)
+		expect(area?.overset).toBe(true)
+		expect(area?.logicalBounds).toEqual({ x: 40, y: 80, width: 38, height: 24 })
+		expect(area?.bounds).toEqual(area?.logicalBounds)
+		expect(area?.inkBounds).not.toBeNull()
 	})
 
 	test("expands to fresh ordinary path identities and fails before mutation for missing fonts", () => {

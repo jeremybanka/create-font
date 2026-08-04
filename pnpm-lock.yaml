@@ -493,6 +493,9 @@ importers:
 
   packages/create-design/text:
     dependencies:
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../../create-art/vector-geometry
       '@create-design/source':
         specifier: workspace:*
         version: link:../source

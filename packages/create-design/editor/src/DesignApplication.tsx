@@ -262,6 +262,7 @@ import {
 	DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
 	DESIGN_TEXT_INITIAL_DRAFT,
 	designTextFamilyId,
+	designObjectInteractionBounds,
 	designTextKonvaTransform,
 	estimateDesignTextLayout,
 	updateDesignAreaTextFrame,
@@ -871,10 +872,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const initialTextFonts = uniqueTextFonts(
 		(props.sourceSession?.fonts ?? []).map(({ reference }) => reference),
 	)
-	const [availableTextFonts, setAvailableTextFonts] =
-		useState<readonly DesignFontReference[]>(initialTextFonts)
+	const browserFontLoadingSupported =
+		typeof globalThis.FontFace !== "undefined" &&
+		globalThis.document?.fonts !== undefined
+	const [availableTextFonts, setAvailableTextFonts] = useState<
+		readonly DesignFontReference[]
+	>(browserFontLoadingSupported ? [] : initialTextFonts)
 	const [activeTextFontId, setActiveTextFontId] = useState<string | null>(
-		initialTextFonts[0]?.id ?? null,
+		browserFontLoadingSupported ? null : (initialTextFonts[0]?.id ?? null),
 	)
 	const registeredTextFontIdsRef = useRef<ReadonlySet<string>>(new Set())
 	const browserTextFontsRef = useRef(
@@ -917,14 +922,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[unregisterBrowserTextFont],
 	)
-	const registerBrowserTextFont = useCallback(
-		async (reference: DesignFontReference, bytes: Uint8Array): Promise<void> =>
-			activateBrowserTextFont(
-				reference,
-				await loadBrowserTextFont(reference, bytes),
-			),
-		[activateBrowserTextFont, loadBrowserTextFont],
-	)
 	useEffect(() => {
 		const resources = props.sourceSession?.fonts ?? []
 		let active = true
@@ -943,33 +940,49 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			textService.unregisterFont(fontId)
 			unregisterBrowserTextFont(fontId)
 		}
-		for (const resource of loadableResources)
-			void registerBrowserTextFont(resource.reference, resource.bytes).catch(
-				(error: unknown) => {
-					if (!active) return
-					setStatus(
-						`Could not load ${resource.reference.family} in the browser: ${error instanceof Error ? error.message : String(error)}`,
-					)
-				},
-			)
 		registeredTextFontIdsRef.current = nextIds
-		const references = uniqueTextFonts(
-			loadableResources.map(({ reference }) => reference),
-		)
-		setAvailableTextFonts(references)
-		setActiveTextFontId((current) =>
-			references.some(({ id }) => id === current)
-				? current
-				: (references[0]?.id ?? null),
-		)
-		if (loadableResources.length > 0)
-			setTextFontRevision((revision) => revision + 1)
+		void (async () => {
+			const readyResources = (
+				await Promise.all(
+					loadableResources.map(async (resource) => {
+						try {
+							const browserFont = await loadBrowserTextFont(
+								resource.reference,
+								resource.bytes,
+							)
+							return { resource, browserFont }
+						} catch (error) {
+							if (active)
+								setStatus(
+									`Could not load ${resource.reference.family} in the browser: ${error instanceof Error ? error.message : String(error)}`,
+								)
+							return null
+						}
+					}),
+				)
+			).filter((item) => item !== null)
+			if (!active) return
+			for (const { resource, browserFont } of readyResources)
+				activateBrowserTextFont(resource.reference, browserFont)
+			const references = uniqueTextFonts(
+				readyResources.map(({ resource }) => resource.reference),
+			)
+			setAvailableTextFonts(references)
+			setActiveTextFontId((current) =>
+				references.some(({ id }) => id === current)
+					? current
+					: (references[0]?.id ?? null),
+			)
+			if (readyResources.length > 0)
+				setTextFontRevision((revision) => revision + 1)
+		})()
 		return () => {
 			active = false
 		}
 	}, [
 		props.sourceSession?.fonts,
-		registerBrowserTextFont,
+		activateBrowserTextFont,
+		loadBrowserTextFont,
 		textService,
 		unregisterBrowserTextFont,
 	])
@@ -1058,13 +1071,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [selectedBlend, selectedBlendId])
 	const selectedObject =
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
-	const editingTextObject =
+	const editingTextObject:
+		| (DesignObject & { readonly geometry: DesignTextGeometry })
+		| null =
 		editingTextId === null
 			? null
-			: (document.objects.find(
+			: ((document.objects.find(
 					(object) =>
 						object.id === editingTextId && object.geometry.kind === "text",
-				) ?? null)
+				) as
+					| (DesignObject & { readonly geometry: DesignTextGeometry })
+					| undefined) ?? null)
+	const editingTextLayout =
+		editingTextObject === null ? null : textService.layout(editingTextObject)
+	const editingTextRegisteredFamily =
+		editingTextObject === null
+			? null
+			: (browserTextFontsRef.current.get(
+					editingTextObject.geometry.typography.font.id,
+				)?.face.family ??
+				(browserFontLoadingSupported
+					? null
+					: editingTextObject.geometry.typography.font.family))
 	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
 	const selectedLockedObject = selectedObjects.find((object) => object.locked)
 	const selectionArrangementUnitCount = designSelectionUnits(
@@ -1194,6 +1222,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				: textService.layout(selectedTextObject),
 		[selectedTextObject, textFontRevision, textService],
 	)
+	const interactionBoundsForObject = (object: DesignObject) =>
+		designObjectInteractionBounds(object, textService)
 	const selectedTextEstimate =
 		selectedTextObject === null
 			? null
@@ -2888,8 +2918,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		areaTextConversionDisabledReason,
 		selectionBounds:
 			selectedBlend === null
-				? combinedSelectionBounds(selectedObjects)
+				? combinedSelectionBounds(selectedObjects, interactionBoundsForObject)
 				: designBlendBounds(document, selectedBlend),
+		selectedObjectBounds:
+			selectedObject === null
+				? null
+				: interactionBoundsForObject(selectedObject),
 		selectionArrangementUnitCount,
 		selectionTransformDisabledReason:
 			selectedBlend === null
@@ -4456,6 +4490,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			point,
 			worldScale,
 			tool === "select" || tool === "transform" ? 12 : 0,
+			interactionBoundsForObject,
 		)
 		if (hit === null)
 			beginVectorGesture(event, { tool: "select", targetId: null })
@@ -4694,7 +4729,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					name: `Area text ${document.objects.length + 1}`,
 					mode: "area",
 					x: bounds.minX,
-					y: bounds.minY + 24,
+					y: bounds.minY,
 					width: bounds.maxX - bounds.minX,
 					height: bounds.maxY - bounds.minY,
 					appearance: authoredAppearance,
@@ -4767,7 +4802,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			const ids = normalizeDesignSelection(
 				document,
-				marqueeObjectIds(document.objects, intent.bounds),
+				marqueeObjectIds(
+					document.objects,
+					intent.bounds,
+					interactionBoundsForObject,
+				),
 				currentGroupScope,
 			)
 			setSelection((current) =>
@@ -4916,7 +4955,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			return
 		}
-		const bounds = combinedSelectionBounds(selectedObjects)
+		const bounds = combinedSelectionBounds(
+			selectedObjects,
+			interactionBoundsForObject,
+		)
 		if (bounds === null) return
 		event.cancelBubble = true
 		setTransformCursor(
@@ -4993,6 +5035,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 										const object = previewById.get(id)
 										return object === undefined ? [] : [object]
 									}),
+							interactionBoundsForObject,
 						)
 					: null
 
@@ -5316,11 +5359,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											const transform = designTextKonvaTransform(
 												object.transform,
 											)
-											const textY = geometry.y - geometry.typography.size
+											const textY =
+												geometry.mode === "point"
+													? geometry.y - geometry.typography.size
+													: geometry.y
 											const textColor =
 												fill === undefined ? "#111" : swatchCss(fill)
 											return (
 												<Group key={object.id} {...transform}>
+													{canonicalLayout === null ||
+													canonicalLayout.diagnostics.some(
+														(diagnostic) => diagnostic.severity === "error",
+													) ? null : (
+														<Rect
+															name={`design-text-hit ${object.id}`}
+															x={canonicalLayout.bounds.x}
+															y={canonicalLayout.bounds.y}
+															width={canonicalLayout.bounds.width}
+															height={canonicalLayout.bounds.height}
+															fill="rgba(0, 0, 0, 0)"
+															onPointerDown={(event) =>
+																startObjectGesture(event, object)
+															}
+															onDoubleClick={(
+																event: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															) => enterObjectGroup(event, object)}
+														/>
+													)}
 													{geometry.frame === undefined ? null : (
 														<Rect
 															x={geometry.x}
@@ -5730,9 +5797,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								</Group>
 							</Layer>
 						</div.Stage>
-						{editingTextObject === null ? null : (
+						{editingTextObject === null ||
+						editingTextLayout === null ||
+						editingTextRegisteredFamily === null ? null : (
 							<TextEditingSurface
 								object={editingTextObject}
+								layout={editingTextLayout}
+								registeredFamily={editingTextRegisteredFamily}
 								view={canvasView}
 								worldScale={worldScale}
 								onChange={setEditingText}

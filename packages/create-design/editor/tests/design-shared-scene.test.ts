@@ -12,6 +12,7 @@ import {
 import { mountDesignEditor } from "../src/browser.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { groupDesignSelection } from "../src/design-hierarchy.ts"
+import { createDesignTextObject } from "../src/design-text.ts"
 import { objectBounds } from "@create-design/model"
 import type {
 	PathfinderWorkerClient,
@@ -30,7 +31,8 @@ import type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
 } from "../src/source-session.ts"
-import type { DesignDocument } from "../src/types.ts"
+import type { DesignDocument, DesignObject } from "../src/types.ts"
+import type { DesignTextLayout } from "@create-design/text"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
@@ -40,6 +42,43 @@ const { default: Konva } = await import(
 )
 
 const hosts: HTMLElement[] = []
+
+function loadedTextLayout(object: DesignObject): DesignTextLayout | null {
+	if (object.geometry.kind !== "text") return null
+	const bounds =
+		object.geometry.mode === "area" && object.geometry.frame !== undefined
+			? {
+					x: object.geometry.x,
+					y: object.geometry.y,
+					width: object.geometry.frame.width,
+					height: object.geometry.frame.height,
+				}
+			: {
+					x: object.geometry.x,
+					y: object.geometry.y - object.geometry.typography.size,
+					width: Math.max(1, object.geometry.text.length * 12),
+					height: object.geometry.typography.leading,
+				}
+	return {
+		objectId: object.id,
+		font: {
+			binaryHash: "fixture",
+			faceIndex: 0,
+			family: object.geometry.typography.font.family,
+			key: `fixture:${object.geometry.typography.font.id}`,
+			revision: object.geometry.typography.font.revision ?? 1,
+			source: object.geometry.typography.font.id,
+		},
+		glyphs: [],
+		lines: [],
+		diagnostics: [],
+		visibleTextEnd: object.geometry.text.length,
+		overset: false,
+		logicalBounds: bounds,
+		inkBounds: null,
+		bounds,
+	}
+}
 
 type DeferredPathfinderRun = {
 	readonly cancel: ReturnType<typeof vi.fn>
@@ -1412,6 +1451,128 @@ describe("create-design shared vector scene", () => {
 		Reflect.deleteProperty(window, "FontFace")
 	})
 
+	it("selects and drags Point and Area text through their whitespace bounds", async () => {
+		const initial = createInitialDocument()
+		const reference = {
+			id: "font:interaction-fixture",
+			family: "Interaction Fixture",
+			revision: 1,
+		}
+		const appearance = initial.objects[0]?.appearance ?? {}
+		const typography = {
+			font: reference,
+			size: 24,
+			leading: 32,
+			tracking: 0,
+			kerning: "auto" as const,
+			alignment: "start" as const,
+			direction: "auto" as const,
+		}
+		const point = createDesignTextObject({
+			id: "text:point-whitespace",
+			name: "Point whitespace",
+			mode: "point",
+			x: 120,
+			y: 180,
+			appearance,
+			text: "A ",
+			typography,
+		})
+		const area = createDesignTextObject({
+			id: "text:area-whitespace",
+			name: "Area whitespace",
+			mode: "area",
+			x: 280,
+			y: 140,
+			width: 160,
+			height: 96,
+			appearance,
+			text: "A",
+			typography,
+		})
+		const source = {
+			...initial,
+			objects: [...initial.objects, point, area],
+		}
+		const storage = new Map<string, string>()
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(loadedTextLayout),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		const stage = mountDesign({ initialDocument: source, textService }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		let pointer = { x: 200, y: 180 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (
+			id: string,
+			type: "pointerdown" | "pointermove" | "pointerup",
+			next: { x: number; y: number },
+		) => {
+			pointer = next
+			const node = stage
+				.find(".design-text-hit")
+				.find((candidate: { name(): string }) => candidate.name().includes(id))
+			if (node === undefined)
+				throw new Error(`${id} text hit bounds were not rendered.`)
+			node.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: next.x,
+						clientY: next.y,
+						isPrimary: true,
+						pointerId: 42,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		for (const id of [point.id, area.id]) {
+			await act(async () => {
+				fire(id, "pointerdown", { x: 200, y: 180 })
+				fire(id, "pointermove", { x: 240, y: 205 })
+				fire(id, "pointerup", { x: 240, y: 205 })
+				await Promise.resolve()
+			})
+			const moved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const movedText = moved.objects.find((object) => object.id === id)
+			expect(movedText?.transform.e).not.toBe(0)
+			expect(movedText?.transform.f).not.toBe(0)
+			await act(async () => {
+				window.dispatchEvent(
+					new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+				)
+				await Promise.resolve()
+			})
+			expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(
+				source,
+			)
+		}
+	})
+
 	it("authors new text with a loaded workspace font and selects its initial draft", async () => {
 		const reference = {
 			id: "font:workspace-sans",
@@ -1428,7 +1589,7 @@ describe("create-design shared vector scene", () => {
 		const textService = {
 			registerFont: vi.fn(() => []),
 			unregisterFont: vi.fn(() => true),
-			layout: vi.fn(() => null),
+			layout: vi.fn(loadedTextLayout),
 			expand: vi.fn(() => null),
 			cacheStats: vi.fn(() => ({
 				layouts: 0,

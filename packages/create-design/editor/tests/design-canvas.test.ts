@@ -72,6 +72,30 @@ const strokedPath = (stroke: Partial<DesignStroke> = {}): DesignObject => ({
 	},
 })
 
+const text = (overrides: Partial<DesignObject> = {}): DesignObject => ({
+	id: "text",
+	name: "Text",
+	geometry: {
+		kind: "text",
+		mode: "point",
+		text: "A A",
+		x: 20,
+		y: 50,
+		typography: {
+			font: { id: "font:test", family: "Test" },
+			size: 20,
+			leading: 24,
+			tracking: 0,
+			kerning: "auto",
+			alignment: "start",
+			direction: "auto",
+		},
+	},
+	transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+	appearance: { fill: { swatchId: "swatch:coral" } },
+	...overrides,
+})
+
 describe("design canvas adapter", () => {
 	it("fits and centers a page in a viewport", () => {
 		const viewport = { width: 800, height: 600 }
@@ -126,6 +150,37 @@ describe("design canvas adapter", () => {
 			nearestDesignObject(document.objects, { x: 389, y: 419 }, 0.634, 12)
 				?.object.id,
 		).toBe("object:cyan")
+	})
+
+	it("hits only text interaction boxes while retaining topmost and eligibility semantics", () => {
+		const bottom = rectangle("bottom", 0, 0, 100, 100)
+		const top = text()
+		const bounds = () => ({ minX: 20, minY: 30, maxX: 80, maxY: 54 })
+		expect(
+			nearestDesignObject([bottom, top], { x: 50, y: 40 }, 1, 12, bounds)
+				?.object.id,
+		).toBe("text")
+		expect(
+			nearestDesignObject([top], { x: 81, y: 40 }, 1, 12, bounds),
+		).toBeNull()
+		expect(
+			nearestDesignObject(
+				[text({ hidden: true })],
+				{ x: 50, y: 40 },
+				1,
+				12,
+				bounds,
+			),
+		).toBeNull()
+		expect(
+			nearestDesignObject(
+				[text({ locked: true })],
+				{ x: 50, y: 40 },
+				1,
+				12,
+				bounds,
+			),
+		).toBeNull()
 	})
 
 	it("hits visible stroke bodies while excluding authored dash gaps", () => {

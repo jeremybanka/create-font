@@ -4,6 +4,7 @@ import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { TextEditingSurface } from "../src/TextEditingSurface.tsx"
+import type { DesignTextLayout } from "@create-design/text"
 import {
 	createDesignTextObject,
 	estimateDesignTextLayout,
@@ -30,6 +31,38 @@ function object(mode: "point" | "area" = "point") {
 	})
 }
 
+function layout(target = object()): DesignTextLayout {
+	if (target.geometry.kind !== "text") throw new Error("Expected text.")
+	const bounds =
+		target.geometry.mode === "area" && target.geometry.frame !== undefined
+			? {
+					x: target.geometry.x,
+					y: target.geometry.y,
+					width: target.geometry.frame.width,
+					height: target.geometry.frame.height,
+				}
+			: { x: target.geometry.x, y: 16, width: 80, height: 28 }
+	return {
+		objectId: target.id,
+		font: {
+			binaryHash: "fixture",
+			faceIndex: 0,
+			family: "Registered Fixture",
+			key: "fixture",
+			revision: 1,
+			source: "font:fixture",
+		},
+		glyphs: [],
+		lines: [],
+		diagnostics: [],
+		visibleTextEnd: target.geometry.text.length,
+		overset: false,
+		logicalBounds: bounds,
+		inkBounds: null,
+		bounds,
+	}
+}
+
 describe("editable text surface", () => {
 	it("uses a real native editor, isolates vector shortcuts, and reports selections", () => {
 		const host = document.createElement("div")
@@ -40,6 +73,8 @@ describe("editable text surface", () => {
 		render(
 			h(TextEditingSurface, {
 				object: updateDesignText(object(), "hello"),
+				layout: layout(updateDesignText(object(), "hello")),
+				registeredFamily: "Registered Fixture",
 				view: { x: 0, y: 0 },
 				worldScale: 1,
 				onChange,
@@ -78,6 +113,8 @@ describe("editable text surface", () => {
 		render(
 			h(TextEditingSurface, {
 				object: draft,
+				layout: layout(draft),
+				registeredFamily: "Registered Fixture",
 				view: { x: 0, y: 0 },
 				worldScale: 1,
 				onChange: vi.fn(),
@@ -101,6 +138,8 @@ describe("editable text surface", () => {
 		render(
 			h(TextEditingSurface, {
 				object: object(),
+				layout: layout(),
+				registeredFamily: "Registered Fixture",
 				view: { x: 0, y: 0 },
 				worldScale: 1,
 				onChange,
@@ -127,6 +166,40 @@ describe("editable text surface", () => {
 			),
 		)
 		expect(onChange).toHaveBeenLastCalledWith("漢")
+	})
+
+	it("uses the ready registered family, variation axes, and complete affine origin", () => {
+		const host = document.createElement("div")
+		hosts.push(host)
+		const base = object("area")
+		if (base.geometry.kind !== "text") throw new Error("Expected text.")
+		const target = {
+			...base,
+			geometry: {
+				...base.geometry,
+				typography: {
+					...base.geometry.typography,
+					variations: { wght: 650, wdth: 90 },
+				},
+			},
+			transform: { a: 0, b: 2, c: -3, d: 0, e: 7, f: 11 },
+		}
+		render(
+			h(TextEditingSurface, {
+				object: target,
+				layout: layout(target),
+				registeredFamily: "Registered Fixture",
+				view: { x: 5, y: 9 },
+				worldScale: 2,
+				onChange: vi.fn(),
+				onExit: vi.fn(),
+			}),
+			host,
+		)
+		const textarea = host.querySelector("textarea")!
+		expect(textarea.style.fontFamily).toBe(`"Registered Fixture"`)
+		expect(textarea.style.fontVariationSettings).toBe(`'wdth' 90, 'wght' 650`)
+		expect(textarea.style.transform).toBe("matrix(0, 4, -6, 0, -269, 143)")
 	})
 
 	it("reflows area text without changing source and persistently reports overset", () => {

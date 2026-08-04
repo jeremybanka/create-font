@@ -22,6 +22,7 @@
 	},
 	"scripts": { "build": "vp pack", "test": "vp test" },
 	"dependencies": {
+		"@create-art/vector-geometry": "workspace:*",
 		"@create-design/source": "workspace:*",
 		"@create-font/font-service": "workspace:*"
 	},

@@ -42,6 +42,13 @@ export interface DesignTextLine {
 	readonly glyphEnd: number
 }
 
+export interface DesignTextBounds {
+	readonly x: number
+	readonly y: number
+	readonly width: number
+	readonly height: number
+}
+
 export interface DesignTextLayout {
 	readonly objectId: string
 	readonly font: FontIdentity
@@ -50,12 +57,12 @@ export interface DesignTextLayout {
 	readonly diagnostics: readonly DesignTextDiagnostic[]
 	readonly visibleTextEnd: number
 	readonly overset: boolean
-	readonly bounds: Readonly<{
-		readonly x: number
-		readonly y: number
-		readonly width: number
-		readonly height: number
-	}>
+	/** Logical line box for point text or the authored frame for area text. */
+	readonly logicalBounds: DesignTextBounds
+	/** Exact projected visible glyph ink before the object transform. */
+	readonly inkBounds: DesignTextBounds | null
+	/** Point logical+ink union, or the authored area-text frame. */
+	readonly bounds: DesignTextBounds
 }
 
 export interface ExpandedText {

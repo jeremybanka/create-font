@@ -96,6 +96,19 @@ describe("design selection", () => {
 		})
 	})
 
+	it("uses authoritative per-object bounds for selection and marquee", () => {
+		const object = path()
+		const authoritative = () => ({ minX: -20, minY: -10, maxX: 120, maxY: 80 })
+		expect(selectionBounds([object], authoritative)).toEqual(authoritative())
+		expect(
+			marqueeObjectIds(
+				[object],
+				{ minX: 110, minY: 70, maxX: 130, maxY: 90 },
+				authoritative,
+			),
+		).toEqual([object.id])
+	})
+
 	it("hits nodes, handles, segments, and contours with screen-stable precedence", () => {
 		const document = documentWith(path())
 		expect(

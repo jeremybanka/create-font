@@ -143,6 +143,12 @@ export interface DesignTileContext {
 	readonly selectSwatch: (swatch: DesignSwatch) => void
 	readonly selectTool: (tool: DesignTool) => void
 	readonly selectedObject: DesignObject | null
+	readonly selectedObjectBounds?: Readonly<{
+		minX: number
+		minY: number
+		maxX: number
+		maxY: number
+	}> | null
 	readonly selectedObjectCount: number
 	readonly selectedObjectIds: readonly string[]
 	readonly textSelectionRange: Readonly<{ start: number; end: number }> | null

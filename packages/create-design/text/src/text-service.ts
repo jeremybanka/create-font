@@ -6,6 +6,7 @@ import {
 	type OutlineCommand,
 	type ShapedText,
 } from "@create-font/font-service"
+import { boundsOfPoints, cubicBounds } from "@create-art/vector-geometry"
 import type {
 	DesignContour,
 	DesignFontReference,
@@ -16,12 +17,68 @@ import type {
 
 import type {
 	DesignTextDiagnostic,
+	DesignTextBounds,
 	DesignTextGlyph,
 	DesignTextLayout,
 	DesignTextLine,
 	DesignTextService,
 	ExpandedText,
 } from "./types.ts"
+
+function unionBounds(
+	left: DesignTextBounds,
+	right: DesignTextBounds | null,
+): DesignTextBounds {
+	if (right === null) return left
+	const minX = Math.min(left.x, right.x)
+	const minY = Math.min(left.y, right.y)
+	const maxX = Math.max(left.x + left.width, right.x + right.width)
+	const maxY = Math.max(left.y + left.height, right.y + right.height)
+	return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+function glyphInkBounds(
+	glyphs: readonly DesignTextGlyph[],
+): DesignTextBounds | null {
+	const contours = glyphs.flatMap(({ contours }) => contours)
+	const points = contours.flatMap(({ points }) => points)
+	let bounds = boundsOfPoints(points)
+	for (const contour of contours) {
+		const count = contour.closed
+			? contour.points.length
+			: Math.max(0, contour.points.length - 1)
+		for (let index = 0; index < count; index += 1) {
+			const from = contour.points[index]
+			const to = contour.points[(index + 1) % contour.points.length]
+			if (from === undefined || to === undefined) continue
+			const outgoing = from.outgoing ?? { x: 0, y: 0 }
+			const incoming = to.incoming ?? { x: 0, y: 0 }
+			const segment = cubicBounds({
+				p0: from,
+				c1: { x: from.x + outgoing.x, y: from.y + outgoing.y },
+				c2: { x: to.x + incoming.x, y: to.y + incoming.y },
+				p3: to,
+			})
+			bounds =
+				bounds === null
+					? segment
+					: {
+							minX: Math.min(bounds.minX, segment.minX),
+							minY: Math.min(bounds.minY, segment.minY),
+							maxX: Math.max(bounds.maxX, segment.maxX),
+							maxY: Math.max(bounds.maxY, segment.maxY),
+						}
+		}
+	}
+	return bounds === null
+		? null
+		: {
+				x: bounds.minX,
+				y: bounds.minY,
+				width: bounds.maxX - bounds.minX,
+				height: bounds.maxY - bounds.minY,
+			}
+}
 
 const frozen = <Value>(value: Value): Readonly<Value> => Object.freeze(value)
 
@@ -310,6 +367,12 @@ export function createDesignTextService(): DesignTextService {
 		const geometry = object.geometry
 		const font = fonts.get(geometry.typography.font.id)
 		if (font === undefined) {
+			const bounds = frozen({
+				x: geometry.x,
+				y: geometry.y,
+				width: geometry.frame?.width ?? 0,
+				height: geometry.frame?.height ?? 0,
+			})
 			return frozen({
 				objectId: object.id,
 				font: frozen({
@@ -331,7 +394,9 @@ export function createDesignTextService(): DesignTextService {
 				]),
 				visibleTextEnd: 0,
 				overset: geometry.text.length > 0,
-				bounds: frozen({ x: geometry.x, y: geometry.y, width: 0, height: 0 }),
+				logicalBounds: bounds,
+				inkBounds: null,
+				bounds,
 			})
 		}
 		const key = layoutCacheKey(object, font)
@@ -492,6 +557,37 @@ export function createDesignTextService(): DesignTextService {
 					"warning",
 				),
 			)
+		const emHeight = (metrics.value.ascender - metrics.value.descender) * scale
+		const lineBoxHeight = Math.max(
+			geometry.typography.leading,
+			emHeight,
+			geometry.typography.size,
+		)
+		const halfLeading = Math.max(0, (lineBoxHeight - emHeight) / 2)
+		const logicalBounds = frozen(
+			geometry.mode === "area" && geometry.frame !== undefined
+				? {
+						x: geometry.x,
+						y: geometry.y,
+						width: geometry.frame.width,
+						height: geometry.frame.height,
+					}
+				: {
+						x: geometry.x,
+						y: geometry.y - metrics.value.ascender * scale - halfLeading,
+						width: maxAdvance,
+						height:
+							lineBoxHeight +
+							Math.max(0, visibleSources.length - 1) *
+								geometry.typography.leading,
+					},
+		)
+		const inkBounds = frozen(glyphInkBounds(glyphs))
+		const bounds = frozen(
+			geometry.mode === "area"
+				? logicalBounds
+				: unionBounds(logicalBounds, inkBounds),
+		)
 		const result = frozen({
 			objectId: object.id,
 			font,
@@ -500,21 +596,9 @@ export function createDesignTextService(): DesignTextService {
 			diagnostics: frozen(diagnostics),
 			visibleTextEnd: visibleSources.at(-1)?.end ?? 0,
 			overset,
-			bounds: frozen({
-				x: geometry.x,
-				y:
-					geometry.mode === "point"
-						? geometry.y - metrics.value.ascender * scale
-						: geometry.y,
-				width:
-					geometry.mode === "area" && geometry.frame !== undefined
-						? geometry.frame.width
-						: maxAdvance,
-				height:
-					geometry.mode === "area" && geometry.frame !== undefined
-						? geometry.frame.height
-						: Math.max(geometry.typography.size, contentHeight),
-			}),
+			logicalBounds,
+			inkBounds,
+			bounds,
 		}) satisfies DesignTextLayout
 		layouts.set(key, result)
 		return result

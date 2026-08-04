@@ -124,11 +124,24 @@ export function nearestDesignObject(
 	point: CanvasPoint,
 	worldScale: number,
 	maxDistancePixels = 12,
+	boundsForText?: (object: DesignObject) => Bounds | null,
 ): DesignObjectHit | null {
 	if (!(worldScale > 0)) return null
 	const candidates: (DesignObjectHit & { readonly index: number })[] = []
 	for (const [index, object] of objects.entries()) {
 		if (object.hidden || object.locked) continue
+		if (object.geometry.kind === "text" && boundsForText !== undefined) {
+			const bounds = boundsForText(object)
+			if (
+				bounds !== null &&
+				point.x >= bounds.minX &&
+				point.x <= bounds.maxX &&
+				point.y >= bounds.minY &&
+				point.y <= bounds.maxY
+			)
+				candidates.push({ object, distancePixels: 0, index })
+			continue
+		}
 		const strokeVisible =
 			object.appearance.stroke !== undefined &&
 			object.appearance.stroke.width > 0

@@ -1399,8 +1399,24 @@ function DesignObjectTile({
 	readonly context: DesignTileContext
 }) {
 	const object = context.selectedObject
-	const bounds = object === null ? null : exactObjectBounds(object)
-	const visibleBounds = object === null ? null : visibleObjectBounds(object)
+	const interactionBounds = context.selectedObjectBounds ?? null
+	const bounds =
+		object?.geometry.kind === "text" && interactionBounds !== null
+			? {
+					x: interactionBounds.minX,
+					y: interactionBounds.minY,
+					width: interactionBounds.maxX - interactionBounds.minX,
+					height: interactionBounds.maxY - interactionBounds.minY,
+				}
+			: object === null
+				? null
+				: exactObjectBounds(object)
+	const visibleBounds =
+		object?.geometry.kind === "text"
+			? interactionBounds
+			: object === null
+				? null
+				: visibleObjectBounds(object)
 	const geometryFields = objectGeometryFields(context, object)
 	const geometryLabel =
 		object?.geometry.kind === "rectangle"
@@ -1455,7 +1471,11 @@ function DesignObjectTile({
 							? "Select one object to edit exact geometry."
 							: "Live geometry remains editable until expanded."}
 				</object-geometry-help>
-				<strong>Geometric document bounds</strong>
+				<strong>
+					{object?.geometry.kind === "text"
+						? "Text interaction bounds"
+						: "Geometric document bounds"}
+				</strong>
 				<shape-number-grid>
 					<ShapeNumberInput
 						disabled={bounds === null}

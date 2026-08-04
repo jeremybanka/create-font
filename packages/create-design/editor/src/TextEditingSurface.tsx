@@ -2,10 +2,13 @@ import { useEffect, useRef } from "react"
 import type { CSSProperties, KeyboardEvent } from "react"
 
 import type { DesignObject } from "./types.ts"
+import type { DesignTextLayout } from "@create-design/text"
 import { designTextOverlayStyle } from "./design-text.ts"
 
 export type TextEditingSurfaceProps = Readonly<{
 	object: DesignObject
+	layout: DesignTextLayout
+	registeredFamily: string
 	view: Readonly<{ x: number; y: number }>
 	worldScale: number
 	onChange: (text: string) => void
@@ -18,6 +21,8 @@ export type TextEditingSurfaceProps = Readonly<{
 
 export function TextEditingSurface({
 	object,
+	layout,
+	registeredFamily,
 	view,
 	worldScale,
 	onChange,
@@ -67,6 +72,8 @@ export function TextEditingSurface({
 							object as DesignObject & {
 								readonly geometry: typeof object.geometry
 							},
+							layout,
+							registeredFamily,
 							view,
 							worldScale,
 						),

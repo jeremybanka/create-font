@@ -3,6 +3,12 @@ import {
 	type DesignTextGeometry,
 	type DesignTextTypography,
 } from "@create-design/source"
+import {
+	transformDesignPoint,
+	visibleObjectBounds,
+	type Bounds,
+} from "@create-design/model"
+import type { DesignTextLayout, DesignTextService } from "@create-design/text"
 
 import type { DesignAppearance, DesignObject } from "./types.ts"
 
@@ -180,8 +186,48 @@ export function designTextFamilyId(family: string): string {
 	return `font:${slug || "system-sans"}`
 }
 
+export function designTextInteractionBounds(
+	object: DesignObject & { readonly geometry: DesignTextGeometry },
+	layout: DesignTextLayout,
+): Bounds {
+	const bounds = layout.bounds
+	const points = [
+		{ id: "text-layout:0", x: bounds.x, y: bounds.y },
+		{ id: "text-layout:1", x: bounds.x + bounds.width, y: bounds.y },
+		{
+			id: "text-layout:2",
+			x: bounds.x + bounds.width,
+			y: bounds.y + bounds.height,
+		},
+		{ id: "text-layout:3", x: bounds.x, y: bounds.y + bounds.height },
+	].map((point) => transformDesignPoint(object.transform, point))
+	return {
+		minX: Math.min(...points.map(({ x }) => x)),
+		minY: Math.min(...points.map(({ y }) => y)),
+		maxX: Math.max(...points.map(({ x }) => x)),
+		maxY: Math.max(...points.map(({ y }) => y)),
+	}
+}
+
+export function designObjectInteractionBounds(
+	object: DesignObject,
+	textService: DesignTextService,
+): Bounds | null {
+	if (object.geometry.kind !== "text") return visibleObjectBounds(object)
+	const layout = textService.layout(object)
+	return layout === null ||
+		layout.diagnostics.some(({ severity }) => severity === "error")
+		? visibleObjectBounds(object)
+		: designTextInteractionBounds(
+				object as DesignObject & { readonly geometry: DesignTextGeometry },
+				layout,
+			)
+}
+
 export function designTextOverlayStyle(
 	object: DesignObject & { readonly geometry: DesignTextGeometry },
+	layout: DesignTextLayout,
+	registeredFamily: string,
 	view: Readonly<{ x: number; y: number }>,
 	worldScale: number,
 ): Readonly<Record<string, string | number>> {
@@ -194,23 +240,33 @@ export function designTextOverlayStyle(
 	}
 	const width =
 		geometry.frame === undefined
-			? Math.max(160, geometry.text.length * geometry.typography.size * 0.7)
+			? Math.max(1, layout.logicalBounds.width)
 			: Math.max(1, geometry.frame.width - inset.left - inset.right)
 	const height =
 		geometry.frame === undefined
-			? Math.max(
-					geometry.typography.leading,
-					geometry.text.split(/\r\n|\r|\n/u).length *
-						geometry.typography.leading,
-				)
+			? Math.max(1, layout.logicalBounds.height)
 			: Math.max(1, geometry.frame.height - inset.top - inset.bottom)
+	const localX =
+		geometry.frame === undefined
+			? layout.logicalBounds.x
+			: geometry.x + inset.left
+	const localY =
+		geometry.frame === undefined
+			? layout.logicalBounds.y
+			: geometry.y + inset.top
+	const variations = Object.entries(geometry.typography.variations ?? {})
+		.toSorted(([left], [right]) => left.localeCompare(right))
+		.map(([tag, value]) => `'${tag}' ${value}`)
+		.join(", ")
 	return {
 		left: 0,
 		top: 0,
 		background: "transparent",
 		width,
 		height,
-		fontFamily: geometry.typography.font.family,
+		fontFamily: registeredFamily,
+		fontVariationSettings: variations.length === 0 ? "normal" : variations,
+		fontKerning: geometry.typography.kerning === "auto" ? "auto" : "none",
 		fontSize: `${geometry.typography.size}px`,
 		lineHeight: String(geometry.typography.leading / geometry.typography.size),
 		letterSpacing: `${geometry.typography.tracking / 1000}em`,
@@ -226,7 +282,7 @@ export function designTextOverlayStyle(
 					: geometry.typography.alignment,
 		direction: geometry.typography.direction === "rtl" ? "rtl" : "ltr",
 		transformOrigin: "0 0",
-		transform: `matrix(${worldScale * transform.a}, ${worldScale * transform.b}, ${worldScale * transform.c}, ${worldScale * transform.d}, ${view.x + worldScale * (transform.e + geometry.x + inset.left)}, ${view.y + worldScale * (transform.f + geometry.y - geometry.typography.size + inset.top)})`,
+		transform: `matrix(${worldScale * transform.a}, ${worldScale * transform.b}, ${worldScale * transform.c}, ${worldScale * transform.d}, ${view.x + worldScale * (transform.e + transform.a * localX + transform.c * localY)}, ${view.y + worldScale * (transform.f + transform.b * localX + transform.d * localY)})`,
 	}
 }
 
