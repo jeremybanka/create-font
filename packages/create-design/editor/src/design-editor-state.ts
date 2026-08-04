@@ -1,16 +1,22 @@
-import { Silo } from "atom.io"
+import { Silo, type TimelineEffect } from "atom.io"
 
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-	type DesignHistory,
-} from "./design-history.ts"
 import {
 	reduceDesignPersistence,
 	type DesignPersistenceAction,
 	type DesignPersistenceState,
 } from "./persistence.ts"
 import type { DesignDocument } from "./types.ts"
+
+export const DESIGN_HISTORY_UNDO_LIMIT = 100
+
+const retainLatestDesignUndoSteps: TimelineEffect = ({
+	cullUndoSteps,
+	onRecord,
+}) => {
+	onRecord(() => {
+		cullUndoSteps(DESIGN_HISTORY_UNDO_LIMIT)
+	})
+}
 
 export type CreateDesignEditorStateOptions = Readonly<{
 	document: DesignDocument
@@ -26,17 +32,7 @@ export type DesignExternalDocument = Readonly<{
 export type DesignEditorSnapshot = Readonly<{
 	document: DesignDocument
 	persistence: DesignPersistenceState
-	history: DesignHistoryMeta
 }>
-
-export type DesignHistoryMeta = Readonly<{
-	canUndo: boolean
-	canRedo: boolean
-	pastLength: number
-	futureLength: number
-}>
-
-export type DesignHistoryDirection = "redo" | "undo"
 
 /**
  * The canonical, independently-instantiable state graph for one design editor.
@@ -51,36 +47,24 @@ export function createDesignEditorState(
 		isProduction: process.env.NODE_ENV === "production",
 	})
 
-	const historyAtom = silo.atom<DesignHistory>({
-		key: "history",
-		default: createDesignHistory(options.document),
+	const documentAtom = silo.atom<DesignDocument>({
+		key: "document",
+		default: options.document,
+	})
+	const documentTimeline = silo.timeline({
+		key: "document",
+		scope: [documentAtom],
+		effects: [retainLatestDesignUndoSteps],
 	})
 	const persistenceAtom = silo.atom<DesignPersistenceState>({
 		key: "persistence",
 		default: options.persistence,
 	})
-	const documentSelector = silo.selector<DesignDocument>({
-		key: "document",
-		get: ({ get }) => get(historyAtom).present,
-	})
-	const historyMetaSelector = silo.selector<DesignHistoryMeta>({
-		key: "historyMeta",
-		get: ({ get }) => {
-			const history = get(historyAtom)
-			return {
-				canUndo: history.past.length > 0,
-				canRedo: history.future.length > 0,
-				pastLength: history.past.length,
-				futureLength: history.future.length,
-			}
-		},
-	})
 	const snapshotSelector = silo.selector<DesignEditorSnapshot>({
 		key: "snapshot",
 		get: ({ get }) => ({
-			document: get(documentSelector),
+			document: get(documentAtom),
 			persistence: get(persistenceAtom),
-			history: get(historyMetaSelector),
 		}),
 	})
 
@@ -89,21 +73,7 @@ export function createDesignEditorState(
 	>({
 		key: "commitDocument",
 		do: ({ get, set }, document) => {
-			const current = get(historyAtom)
-			const next = reduceDesignHistory(current, { type: "commit", document })
-			if (next !== current) set(historyAtom, next)
-		},
-	})
-	const navigateDocumentHistoryTransaction = silo.transaction<
-		(direction: DesignHistoryDirection) => DesignDocument | null
-	>({
-		key: "navigateDocumentHistory",
-		do: ({ get, set }, direction) => {
-			const current = get(historyAtom)
-			const next = reduceDesignHistory(current, { type: direction })
-			if (next === current) return null
-			set(historyAtom, next)
-			return next.present
+			if (document !== get(documentAtom)) set(documentAtom, document)
 		},
 	})
 	const resetDocumentTransaction = silo.transaction<
@@ -111,7 +81,7 @@ export function createDesignEditorState(
 	>({
 		key: "resetDocument",
 		do: ({ set }, document) => {
-			set(historyAtom, createDesignHistory(document))
+			set(documentAtom, document)
 		},
 	})
 	const updatePersistenceTransaction = silo.transaction<
@@ -129,7 +99,7 @@ export function createDesignEditorState(
 	>({
 		key: "loadExternalDocument",
 		do: ({ get, set }, update) => {
-			set(historyAtom, createDesignHistory(update.document))
+			set(documentAtom, update.document)
 			set(
 				persistenceAtom,
 				reduceDesignPersistence(get(persistenceAtom), {
@@ -144,7 +114,7 @@ export function createDesignEditorState(
 	>({
 		key: "recoverDocument",
 		do: ({ get, set }, document) => {
-			set(historyAtom, createDesignHistory(document))
+			set(documentAtom, document)
 			set(
 				persistenceAtom,
 				reduceDesignPersistence(get(persistenceAtom), {
@@ -155,28 +125,26 @@ export function createDesignEditorState(
 	})
 
 	const runCommitDocument = silo.runTransaction(commitDocumentTransaction)
-	const runNavigateDocumentHistory = silo.runTransaction(
-		navigateDocumentHistoryTransaction,
-	)
 	const runResetDocument = silo.runTransaction(resetDocumentTransaction)
 	const runUpdatePersistence = silo.runTransaction(updatePersistenceTransaction)
 	const runLoadExternalDocument = silo.runTransaction(
 		loadExternalDocumentTransaction,
 	)
 	const runRecoverDocument = silo.runTransaction(recoverDocumentTransaction)
+	const rebaseDocumentHistory = (): void => {
+		silo.clearTimeline(documentTimeline)
+	}
 
 	return {
 		silo,
+		documentTimeline,
 		states: {
-			historyAtom,
+			documentAtom,
 			persistenceAtom,
-			documentSelector,
-			historyMetaSelector,
 			snapshotSelector,
 		},
 		transactions: {
 			commitDocumentTransaction,
-			navigateDocumentHistoryTransaction,
 			resetDocumentTransaction,
 			updatePersistenceTransaction,
 			loadExternalDocumentTransaction,
@@ -184,16 +152,18 @@ export function createDesignEditorState(
 		},
 		actions: {
 			commitDocument: runCommitDocument,
-			navigateDocumentHistory: runNavigateDocumentHistory,
 			resetDocument(document: DesignDocument): void {
 				runResetDocument(document)
+				rebaseDocumentHistory()
 			},
 			updatePersistence: runUpdatePersistence,
 			loadExternalDocument(update: DesignExternalDocument): void {
 				runLoadExternalDocument(update)
+				rebaseDocumentHistory()
 			},
 			recoverDocument(document: DesignDocument): void {
 				runRecoverDocument(document)
+				rebaseDocumentHistory()
 			},
 		},
 	}

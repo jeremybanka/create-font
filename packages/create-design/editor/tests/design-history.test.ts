@@ -40,33 +40,45 @@ describe("design Pen timeline", () => {
 		const initial = createInitialDocument()
 		const state = stateFor(initial)
 		state.actions.commitDocument(completedPenDocument())
-		expect(state.silo.getState(state.states.historyAtom).past).toHaveLength(1)
-		expect(
-			state.silo.getState(state.states.documentSelector).objects,
-		).toHaveLength(initial.objects.length + 1)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+		expect(state.silo.getState(state.states.documentAtom).objects).toHaveLength(
+			initial.objects.length + 1,
+		)
 
-		state.actions.navigateDocumentHistory("undo")
-		expect(
-			state.silo.getState(state.states.documentSelector).objects,
-		).toHaveLength(initial.objects.length)
-		expect(state.silo.getState(state.states.historyAtom).future).toHaveLength(1)
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom).objects).toHaveLength(
+			initial.objects.length,
+		)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 0,
+			length: 1,
+		})
 
-		state.actions.navigateDocumentHistory("redo")
+		state.silo.redo(state.documentTimeline)
 		expect(
-			state.silo.getState(state.states.documentSelector).objects.at(-1)?.id,
+			state.silo.getState(state.states.documentAtom).objects.at(-1)?.id,
 		).toBe("object:pen")
-		expect(state.silo.getState(state.states.historyAtom).past).toHaveLength(1)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
 	})
 
 	it("invalidates redo after a different commit", () => {
 		const initial = createInitialDocument()
 		const state = stateFor(initial)
 		state.actions.commitDocument(completedPenDocument())
-		state.actions.navigateDocumentHistory("undo")
+		state.silo.undo(state.documentTimeline)
 		const replacement = { ...initial, title: "Replacement" }
 		state.actions.commitDocument(replacement)
-		expect(state.silo.getState(state.states.historyAtom).future).toEqual([])
-		expect(state.actions.navigateDocumentHistory("redo")).toBeNull()
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+		expect(state.silo.getState(state.states.documentAtom)).toBe(replacement)
 	})
 
 	it("round-trips completed Pen nodes and handles through persistence", () => {

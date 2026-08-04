@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument, parseDesignDocument } from "../src/document.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
 import {
 	objectSvgPath,
 	projectDesignObjectContours,
@@ -127,20 +125,28 @@ describe("live shape expansion", () => {
 				object.id === expanded.id ? expanded : object,
 			),
 		}
-		const committed = reduceDesignHistory(createDesignHistory(document), {
-			type: "commit",
-			document: committedDocument,
+		const state = createDesignEditorState({
+			document,
+			persistence: createDesignPersistenceState(null),
+			name: "shape-expansion-history-test",
 		})
-		expect(committed.past).toHaveLength(1)
+		state.actions.commitDocument(committedDocument)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
 		expect(["object:coral"]).toContain(expanded.id)
 
-		const undone = reduceDesignHistory(committed, { type: "undo" })
-		expect(undone.present.objects[0]?.geometry.kind).toBe("rectangle")
-		const redone = reduceDesignHistory(undone, { type: "redo" })
-		expect(redone.present.objects[0]).toBe(expanded)
+		state.silo.undo(state.documentTimeline)
 		expect(
-			redone.present.objects[0]?.geometry.kind === "path"
-				? redone.present.objects[0].geometry.contours[0]?.id
+			state.silo.getState(state.states.documentAtom).objects[0]?.geometry.kind,
+		).toBe("rectangle")
+		state.silo.redo(state.documentTimeline)
+		const redone = state.silo.getState(state.states.documentAtom)
+		expect(redone.objects[0]).toBe(expanded)
+		expect(
+			redone.objects[0]?.geometry.kind === "path"
+				? redone.objects[0].geometry.contours[0]?.id
 				: undefined,
 		).toBe("contour:history:0")
 	})
