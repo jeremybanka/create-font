@@ -174,6 +174,78 @@ function clipboardEvent(
 }
 
 describe("create-design shared vector scene", () => {
+	it("creates, selects, edits, and undoes a live blend through visible controls", () => {
+		const initial = createInitialDocument()
+		const stage = mountDesign({ initialDocument: initial })
+		const layers = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button:not([data-layer-kind='blend'])",
+			),
+		]
+		expect(layers.length).toBeGreaterThanOrEqual(2)
+		act(() => {
+			layers[0]!.click()
+			layers[1]!.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			)
+		})
+		const make = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-blend-tile button",
+			),
+		].find((button) => button.textContent === "Make Blend")
+		if (make === undefined) throw new Error("Make Blend was not found.")
+		expect(make.disabled).toBe(false)
+		act(() => make.click())
+		expect(
+			document.querySelector(
+				'design-layers-tile button[data-layer-kind="blend"][aria-pressed="true"]',
+			),
+		).not.toBeNull()
+		expect(stage.find(".design-object")).toHaveLength(
+			initial.objects.length + 5,
+		)
+		const steps = document.querySelector<HTMLInputElement>(
+			'design-blend-tile input[aria-label="Specified steps"]',
+		)!
+		act(() => {
+			steps.focus()
+			steps.value = "2"
+			steps.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		act(() => {
+			steps.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+			)
+		})
+		expect(stage.find(".design-object")).toHaveLength(
+			initial.objects.length + 2,
+		)
+		act(() =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: true,
+					key: "z",
+				}),
+			),
+		)
+		expect(stage.find(".design-object")).toHaveLength(
+			initial.objects.length + 5,
+		)
+		expect(
+			document.querySelector<HTMLInputElement>(
+				'design-blend-tile input[aria-label="Specified steps"]',
+			)?.value,
+		).toBe("5")
+		expect(
+			document.querySelector(
+				'design-layers-tile button[data-layer-kind="blend"][aria-pressed="true"]',
+			),
+		).not.toBeNull()
+	})
+
 	it("passes the authored fill rule to the canvas path", () => {
 		const document = createInitialDocument()
 		const first = document.objects[0]!

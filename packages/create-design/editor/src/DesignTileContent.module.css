@@ -10,6 +10,7 @@ design-tile-content.class {
 	> design-tools-tile,
 	> design-export-tile,
 	> design-object-tile,
+	> design-blend-tile,
 	> design-transform-tile,
 	> design-arrange-tile,
 	> design-appearance-tile {
@@ -21,6 +22,68 @@ design-tile-content.class {
 		padding: 9px;
 		overflow: auto;
 		font-size: 9px;
+	}
+
+	> design-blend-tile {
+		> button,
+		> blend-editor > button,
+		> blend-editor > blend-endpoint > button {
+			padding: 6px;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: var(--paper);
+			color: var(--ink);
+			cursor: pointer;
+
+			&:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+		}
+
+		> p,
+		> blend-editor > p,
+		> blend-editor > small {
+			margin: 0;
+			line-height: 1.4;
+			color: var(--ink-faint);
+		}
+
+		[data-field] {
+			display: grid;
+			gap: 3px;
+			color: var(--ink-muted);
+
+			> input,
+			> select {
+				min-width: 0;
+				width: 100%;
+				padding: 5px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--paper);
+				color: var(--ink);
+			}
+		}
+
+		> blend-editor {
+			display: grid;
+			gap: 8px;
+
+			> blend-endpoint {
+				display: grid;
+				gap: 5px;
+				padding: 7px;
+				border: 1px solid var(--line);
+				border-radius: 5px;
+			}
+
+			> ul {
+				padding-inline-start: 18px;
+				margin: 0;
+				color: var(--danger);
+			}
+		}
 	}
 
 	> design-pages-tile button,

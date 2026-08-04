@@ -18,6 +18,30 @@ The `create-design` application supplies filesystem-backed source sessions and
 serves the built browser artifact. Neither the source service nor the headless
 model and export packages depend on this editor package.
 
+## Live blend workflow
+
+1. With Select, choose exactly two visible, unlocked, topology-compatible
+   objects (Shift-click the second object in Layers or on the canvas).
+2. Use **Make Blend** in the Blend tile or Command Palette. Five derived steps
+   appear immediately; selecting any derived step selects the live blend as one
+   unit.
+3. In the Blend tile, edit **Specified steps**, reverse either unlocked path
+   endpoint, or choose a closed contour's corresponding first point. The canvas
+   and diagnostics update live, and each committed control action is one undo
+   entry.
+4. Choose **Expand Blend** to replace the live record with fresh, selected,
+   ordinary path intermediates. Expansion deliberately retains both endpoint
+   objects and inserts the intermediates immediately before the later-painted
+   endpoint, matching live projection order.
+5. Undo once to restore the exact live blend and correspondence options. Save
+   and reload to verify the blend remains live; copy/paste a selected blend to
+   verify its endpoints and swatches receive fresh identities.
+
+The editor reports incompatible contour/point counts, direction, fill rule,
+paint, and stroke-style conditions instead of resampling or silently changing
+topology. First-point and direction controls are available only for ordinary
+unlocked path endpoints.
+
 Each mounted editor owns an ephemeral atom.io `Silo`. Authored document state is
 normalized into ID-index atoms and keyed families for artboards, swatches,
 objects, groups, guides, contours, and points. Read-only selectors compose those

@@ -61,8 +61,14 @@ import {
 	validDesignAppearance,
 	type AppearancePaintTarget,
 } from "./appearance.ts"
-import { activeDesignArtboard } from "@create-design/model"
-import { projectDesignDocumentBlends } from "@create-design/model"
+import {
+	activeDesignArtboard,
+	copyDesignBlendSelection,
+	designBlendBounds,
+	pasteDesignBlendSelection,
+	projectDesignDocumentBlends,
+	resolveDesignBlend,
+} from "@create-design/model"
 import {
 	allDesignArtboardsBounds,
 	createDesignArtboard,
@@ -200,6 +206,15 @@ import { createPdfDownloadManager } from "./pdf-download.ts"
 import { createSvgDownloadManager } from "./svg-download.ts"
 import { createPngDownloadManager } from "./png-download.ts"
 import type { PngExportRequest } from "@create-design/png"
+import {
+	DESIGN_BLEND_MIME,
+	designBlendEligibility,
+	expandDesignBlend,
+	makeDesignBlend,
+	reverseDesignBlendEndpoint,
+	setDesignBlendFirstPoint,
+	updateDesignBlend,
+} from "./blend-operations.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import {
 	exportPreflightAllowsOutput,
@@ -224,6 +239,7 @@ import {
 import type {
 	DesignAppearance,
 	DesignArtboard,
+	DesignBlend,
 	DesignDocument,
 	DesignGeometry,
 	DesignGuide,
@@ -653,6 +669,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
+	const [selectedBlendId, setSelectedBlendId] = useState<string | null>(null)
 	const [groupScope, setGroupScope] = useState<readonly string[]>([])
 	const [activeArtboardId, setActiveArtboardId] = useState(
 		() => activeDesignArtboard(initialLoad.document).id,
@@ -671,6 +688,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			Readonly<{
 				objectSelection: readonly string[]
 				directSelection: readonly DesignDirectSelectionTarget[]
+				blendId?: string
 			}>
 		>(),
 	)
@@ -680,6 +698,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			Readonly<{
 				objectSelection: readonly string[]
 				directSelection: readonly DesignDirectSelectionTarget[]
+				blendId?: string
 			}>
 		>(),
 	)
@@ -825,6 +844,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
+	const selectedBlend =
+		document.blends?.find(({ id }) => id === selectedBlendId) ?? null
+	useEffect(() => {
+		if (selection.length > 0) setSelectedBlendId(null)
+	}, [selection])
+	useEffect(() => {
+		if (selectedBlendId !== null && selectedBlend === null)
+			setSelectedBlendId(null)
+	}, [selectedBlend, selectedBlendId])
 	const selectedObject =
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
 	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
@@ -843,11 +871,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				? null
 				: `${selectedTransformUnavailableObject.hidden ? "Show" : "Unlock"} ${selectedTransformUnavailableObject.name} before transforming the selection.`
 	const selectionDescription =
-		selectedGroup === null
-			? selection.length === 0
-				? "No objects selected."
-				: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`
-			: `${selectedGroup.name}, group with ${selectedGroup.objectIds.length} object${selectedGroup.objectIds.length === 1 ? "" : "s"}, selected${selectedLockedObject === undefined ? "" : "; contains locked artwork"}.`
+		selectedBlend !== null
+			? `${selectedBlend.name}, live blend with ${selectedBlend.steps} specified step${selectedBlend.steps === 1 ? "" : "s"}, selected.`
+			: selectedGroup === null
+				? selection.length === 0
+					? "No objects selected."
+					: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`
+				: `${selectedGroup.name}, group with ${selectedGroup.objectIds.length} object${selectedGroup.objectIds.length === 1 ? "" : "s"}, selected${selectedLockedObject === undefined ? "" : "; contains locked artwork"}.`
 	const selectionAnnouncement =
 		tool === "direct"
 			? directSelectionDescription(directSelection)
@@ -916,6 +946,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		document.swatches[0]
 	const expansionEligibility = shapeExpansionEligibility(document, selection)
 	const strokeEligibility = strokeExpansionEligibility(document, selection)
+	const blendEligibility = designBlendEligibility(document, selection)
+	const blendDiagnostics =
+		selectedBlend === null
+			? []
+			: resolveDesignBlend(document, selectedBlend).diagnostics.map(
+					({ message }) => message,
+				)
 	const pathCommandContext = {
 		document,
 		objectSelection: selection,
@@ -1181,6 +1218,31 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 
 	const deleteSelection = useCallback((): void => {
+		if (selectedBlend !== null) {
+			if (selectedBlend.locked) {
+				setStatus(`Unlock ${selectedBlend.name} before deleting it.`)
+				return
+			}
+			const next = {
+				...document,
+				blends: (document.blends ?? []).filter(
+					({ id }) => id !== selectedBlend.id,
+				),
+			}
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: selectedBlend.id,
+			})
+			pathCommandSelectionsRef.current.set(next, {
+				objectSelection: [],
+				directSelection: [],
+			})
+			commit(next)
+			setSelectedBlendId(null)
+			setStatus("Deleted live blend; endpoint objects were retained.")
+			return
+		}
 		if (selection.length === 0) return
 		const locked = document.objects.find(
 			(object) => selection.includes(object.id) && object.locked,
@@ -1196,7 +1258,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 		)
 			setStatus("Deleted selection.")
-	}, [commitVectorIntent, document.objects, selection])
+	}, [commit, commitVectorIntent, document, selectedBlend, selection])
 
 	const duplicateSelection = useCallback((): void => {
 		const result = duplicateDesignObjects(document, selection, nextId)
@@ -1345,6 +1407,149 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			`Expanded ${eligibility.object.name}'s stroke to filled contours.`,
 		)
 	}, [commit, document, nextId, selection])
+
+	const makeBlend = useCallback((): void => {
+		const eligibility = designBlendEligibility(document, selection)
+		if (!eligibility.eligible) {
+			setStatus(eligibility.reason)
+			return
+		}
+		const result = makeDesignBlend(document, selection, nextId)
+		if (result === null) return
+		pathCommandSelectionsRef.current.set(document, {
+			objectSelection: selection,
+			directSelection,
+		})
+		pathCommandSelectionsRef.current.set(result.document, {
+			objectSelection: [],
+			directSelection: [],
+			blendId: result.blendId,
+		})
+		commit(result.document)
+		setSelection([])
+		setDirectSelection([])
+		setSelectedBlendId(result.blendId)
+		setStatus(
+			eligibility.warnings.length === 0
+				? "Created live blend with 5 specified steps."
+				: `Created live blend. ${eligibility.warnings.join(" ")}`,
+		)
+	}, [commit, directSelection, document, nextId, selection])
+
+	const setBlendProperty = useCallback(
+		(
+			blend: DesignBlend,
+			property: Partial<Pick<DesignBlend, "name" | "steps">>,
+		): void => {
+			const next = updateDesignBlend(document, blend.id, property)
+			if (next === null) {
+				setStatus("Specified steps must be an integer from 1 through 10000.")
+				return
+			}
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: blend.id,
+			})
+			pathCommandSelectionsRef.current.set(next, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: blend.id,
+			})
+			commit(next)
+			setStatus(
+				property.steps === undefined
+					? "Renamed live blend."
+					: `Updated live blend to ${property.steps} specified steps.`,
+			)
+		},
+		[commit, document],
+	)
+
+	const reverseBlendEndpoint = useCallback(
+		(endpoint: "start" | "end"): void => {
+			if (selectedBlend === null) return
+			const next = reverseDesignBlendEndpoint(
+				document,
+				selectedBlend.id,
+				endpoint,
+			)
+			if (next === null) {
+				setStatus("Direction editing requires an unlocked path endpoint.")
+				return
+			}
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: selectedBlend.id,
+			})
+			pathCommandSelectionsRef.current.set(next, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: selectedBlend.id,
+			})
+			commit(next)
+			setStatus(`Reversed ${endpoint} endpoint direction.`)
+		},
+		[commit, document, selectedBlend],
+	)
+
+	const setBlendFirstPoint = useCallback(
+		(endpoint: "start" | "end", contourId: string, pointId: string): void => {
+			if (selectedBlend === null) return
+			const next = setDesignBlendFirstPoint(
+				document,
+				selectedBlend.id,
+				endpoint,
+				contourId,
+				pointId,
+			)
+			if (next === null) {
+				setStatus(
+					"First-point editing requires an unlocked closed path contour.",
+				)
+				return
+			}
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: selectedBlend.id,
+			})
+			pathCommandSelectionsRef.current.set(next, {
+				objectSelection: [],
+				directSelection: [],
+				blendId: selectedBlend.id,
+			})
+			commit(next)
+			setStatus(`Updated ${endpoint} endpoint correspondence first point.`)
+		},
+		[commit, document, selectedBlend],
+	)
+
+	const expandBlend = useCallback((): void => {
+		if (selectedBlend === null) return
+		const result = expandDesignBlend(document, selectedBlend.id, nextId)
+		if (result === null) {
+			setStatus("Resolve blend diagnostics before expanding the live blend.")
+			return
+		}
+		pathCommandSelectionsRef.current.set(document, {
+			objectSelection: [],
+			directSelection: [],
+			blendId: selectedBlend.id,
+		})
+		pathCommandSelectionsRef.current.set(result.document, {
+			objectSelection: result.selection,
+			directSelection: [],
+		})
+		commit(result.document)
+		setSelectedBlendId(null)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus(
+			`Expanded ${selectedBlend.name} into ${result.selection.length} selected ordinary path${result.selection.length === 1 ? "" : "s"}; endpoints were retained.`,
+		)
+	}, [commit, document, nextId, selectedBlend])
 
 	const executePartitionPathfinder = useCallback(
 		(command: DesignPartitionPathfinderCommand): void => {
@@ -1519,6 +1724,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (recorded === undefined) return
 		setSelection(recorded.objectSelection)
 		setDirectSelection(recorded.directSelection)
+		setSelectedBlendId(recorded.blendId ?? null)
 	}, [document, historyAt])
 
 	const finishPen = useCallback(
@@ -1971,6 +2177,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		createArtboard,
 		deleteArtboard,
 		deleteSelection,
+		blendCreationDisabledReason: blendEligibility.eligible
+			? null
+			: blendEligibility.reason,
+		makeBlend,
+		selectedBlend,
+		selectBlend: (blend) => {
+			setSelection([])
+			setDirectSelection([])
+			setSelectedBlendId(blend.id)
+			setStatus(`${blend.name} selected as one live blend.`)
+		},
+		setBlendProperty,
+		reverseBlendEndpoint,
+		setBlendFirstPoint,
+		expandBlend,
+		blendDiagnosticMessages: blendDiagnostics,
 		distributeSelection,
 		document,
 		expandSelection,
@@ -1990,6 +2212,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		reorderArtboard,
 		reviewSourceChange,
 		selectObject: (object, additive = false) => {
+			setSelectedBlendId(null)
 			const unit = designSelectionUnitAtObject(
 				document,
 				object.id,
@@ -2015,9 +2238,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedObject,
 		selectedObjectCount: selectedObjects.length,
 		selectedObjectIds: selection,
-		selectionBounds: combinedSelectionBounds(selectedObjects),
+		selectionBounds:
+			selectedBlend === null
+				? combinedSelectionBounds(selectedObjects)
+				: designBlendBounds(document, selectedBlend),
 		selectionArrangementUnitCount,
-		selectionTransformDisabledReason,
+		selectionTransformDisabledReason:
+			selectedBlend === null
+				? selectionTransformDisabledReason
+				: "Edit a live blend through its endpoints or expand it before transforming.",
 		directSelectionSummary: directSelectionDescription(directSelection),
 		selectedSwatch,
 		selectedSwatchId,
@@ -2194,6 +2423,33 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					: { disabledReason: strokeEligibility.reason }),
 				do: expandStrokeSelection,
 			},
+			{
+				id: "make-blend",
+				displayName: "Make Blend",
+				category: "Object",
+				description:
+					"Create a live contour blend from exactly two compatible selected objects.",
+				icon: "Link1Icon",
+				disabled: !blendEligibility.eligible,
+				...(blendEligibility.eligible
+					? {}
+					: { disabledReason: blendEligibility.reason }),
+				do: makeBlend,
+			},
+			{
+				id: "expand-blend",
+				displayName: "Expand Blend",
+				category: "Object",
+				description:
+					"Replace the selected live blend with ordinary editable intermediate paths while retaining endpoints.",
+				icon: "HobbyKnifeIcon",
+				disabled:
+					selectedBlend === null ||
+					selectedBlend.locked === true ||
+					resolveDesignBlend(document, selectedBlend).status !== "ready",
+				disabledReason: "Select a ready, unlocked live blend.",
+				do: expandBlend,
+			},
 			...(
 				[
 					[
@@ -2319,6 +2575,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				shortcut: "⌘ A",
 				disabled: selectableObjectIds(document.objects).length === 0,
 				do: () => {
+					setSelectedBlendId(null)
 					const objectIds = normalizeDesignSelection(
 						document,
 						selectableObjectIds(document.objects),
@@ -2359,8 +2616,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				category: "Edit",
 				icon: "HobbyKnifeIcon",
 				shortcut: "⌫",
-				disabled: selection.length === 0,
-				disabledReason: "Select an object first.",
+				disabled: selection.length === 0 && selectedBlend === null,
+				disabledReason: "Select an object or live blend first.",
 				do: deleteSelection,
 			},
 			{
@@ -2397,8 +2654,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			groupSelection,
 			expandSelection,
 			expandStrokeSelection,
+			expandBlend,
 			executePathCommand,
 			expansionEligibility,
+			blendEligibility,
+			makeBlend,
 			exportDocument,
 			exportSvgDocument,
 			history.canRedo,
@@ -2412,6 +2672,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			stackSelection,
 			strokeEligibility,
 			selectedObject?.id,
+			selectedBlend,
 			selectedSwatchId,
 			tool,
 			ungroupSelection,
@@ -2751,6 +3012,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					return
 				}
 				setSelection([])
+				setSelectedBlendId(null)
 				setDirectSelection([])
 				setSelectedGuideId(null)
 				setStatus("Selection cleared.")
@@ -2891,6 +3153,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				event.clipboardData === null
 			)
 				return
+			if (selectedBlend !== null) {
+				const payload = copyDesignBlendSelection(document, [selectedBlend.id])
+				if (payload === null) return
+				event.clipboardData.setData(DESIGN_BLEND_MIME, JSON.stringify(payload))
+				event.preventDefault()
+				setStatus(`Copied ${selectedBlend.name} with both endpoints.`)
+				return
+			}
 			let count: number
 			try {
 				count = writeSelection(event.clipboardData, selection)
@@ -2973,6 +3243,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				event.clipboardData === null
 			)
 				return
+			const serializedBlend = event.clipboardData.getData(DESIGN_BLEND_MIME)
+			if (serializedBlend.length > 0) {
+				try {
+					const payload = JSON.parse(serializedBlend) as Parameters<
+						typeof pasteDesignBlendSelection
+					>[1]
+					const result = pasteDesignBlendSelection(document, payload, nextId)
+					if (result !== null) {
+						event.preventDefault()
+						commit(result.document)
+						setSelection([])
+						setDirectSelection([])
+						setSelectedBlendId(result.blendIds[0] ?? null)
+						setStatus(
+							"Pasted live blend with fresh endpoint and blend identities.",
+						)
+						return
+					}
+				} catch {
+					setStatus("The clipboard live blend payload is invalid.")
+					return
+				}
+			}
 			const nativeAddition = readDesignClipboard(
 				event.clipboardData,
 				document,
@@ -3060,6 +3353,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		historyAt,
 		nextId,
 		paletteOpen,
+		selectedBlend,
 		selection,
 	])
 
@@ -3199,6 +3493,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			originals,
 			interaction.selection,
 		)
+	}
+
+	const selectBlendFromCanvas = (
+		event: KonvaEventObject<PointerEvent>,
+		blendId: string,
+	): void => {
+		if (tool !== "select" && tool !== "transform") return
+		const blend = document.blends?.find(({ id }) => id === blendId)
+		if (blend === undefined || blend.hidden || blend.locked) return
+		event.cancelBubble = true
+		setSelection([])
+		setDirectSelection([])
+		setSelectedBlendId(blend.id)
+		setStatus(`${blend.name} selected as one live blend.`)
 	}
 
 	const enterObjectGroup = (
@@ -3900,6 +4208,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		objects: canvasAuthoredObjects,
 	})
 	const displayedObjects = canvasBlendProjection.objects
+	const derivedBlendByObjectId = new Map(
+		(canvasDocument.blends ?? []).flatMap((blend) =>
+			resolveDesignBlend(
+				{ ...canvasDocument, objects: canvasAuthoredObjects },
+				blend,
+			).objects.map((object) => [object.id, blend.id] as const),
+		),
+	)
 	const authoredCanvasObjectIds = new Set(
 		canvasAuthoredObjects.map(({ id }) => id),
 	)
@@ -3910,18 +4226,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				authoredAppearance.stroke?.swatchId),
 	)
 	const selectionBounds =
-		(tool === "select" || tool === "transform") && selectedObjects.length > 0
-			? combinedSelectionBounds(
-					copyingGesture?.copy === null || copyingGesture === null
-						? selectedObjects.map(
-								(object) => previewById.get(object.id) ?? object,
-							)
-						: copyingGesture.copy.selection.flatMap((id) => {
-								const object = previewById.get(id)
-								return object === undefined ? [] : [object]
-							}),
-				)
-			: null
+		tool !== "select" && tool !== "transform"
+			? null
+			: selectedBlend !== null
+				? designBlendBounds(canvasDocument, selectedBlend)
+				: selectedObjects.length > 0
+					? combinedSelectionBounds(
+							copyingGesture?.copy === null || copyingGesture === null
+								? selectedObjects.map(
+										(object) => previewById.get(object.id) ?? object,
+									)
+								: copyingGesture.copy.selection.flatMap((id) => {
+										const object = previewById.get(id)
+										return object === undefined ? [] : [object]
+									}),
+						)
+					: null
 
 	const recoverDraft = (): void => {
 		const draft = persistence.recoveryDraft
@@ -4195,6 +4515,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											))}
 									{displayedObjects.map((object) => {
 										const derived = !authoredCanvasObjectIds.has(object.id)
+										const derivedBlendId = derivedBlendByObjectId.get(object.id)
 										const fill = canvasBlendProjection.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.fill?.swatchId,
@@ -4236,13 +4557,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														})}
 												fillRule={designObjectFillRule(object)}
 												selected={
-													!derived &&
-													selectedGroup === null &&
-													selection.includes(object.id)
+													derived
+														? selectedBlendId === derivedBlendId
+														: selectedGroup === null &&
+															selection.includes(object.id)
 												}
-												listening={!derived}
+												listening={!derived || derivedBlendId !== undefined}
 												onPointerDown={(event) =>
-													startObjectGesture(event, object)
+													derivedBlendId === undefined
+														? startObjectGesture(event, object)
+														: selectBlendFromCanvas(event, derivedBlendId)
 												}
 												onDoubleClick={(event) =>
 													enterObjectGroup(event, object)

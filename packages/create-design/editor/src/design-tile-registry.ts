@@ -29,6 +29,7 @@ import type {
 } from "./design-arrangement.ts"
 import type {
 	DesignArtboard,
+	DesignBlend,
 	DesignDocument,
 	DesignObject,
 	DesignStroke,
@@ -44,6 +45,7 @@ export type DesignTileKind =
 	| "tools"
 	| "export"
 	| "object"
+	| "blend"
 	| "transform"
 	| "arrange"
 	| "appearance"
@@ -100,6 +102,22 @@ export interface DesignTileContext {
 	) => void
 	readonly canReviewSourceChange?: (change: DesignSourceReviewChange) => boolean
 	readonly deleteSelection: () => void
+	readonly blendCreationDisabledReason: string | null
+	readonly makeBlend: () => void
+	readonly selectedBlend: DesignBlend | null
+	readonly selectBlend: (blend: DesignBlend) => void
+	readonly setBlendProperty: (
+		blend: DesignBlend,
+		property: Partial<Pick<DesignBlend, "name" | "steps">>,
+	) => void
+	readonly reverseBlendEndpoint: (endpoint: "start" | "end") => void
+	readonly setBlendFirstPoint: (
+		endpoint: "start" | "end",
+		contourId: string,
+		pointId: string,
+	) => void
+	readonly expandBlend: () => void
+	readonly blendDiagnosticMessages: readonly string[]
 	readonly directSelectionSummary: string
 	readonly document: DesignDocument
 	readonly expandSelection: () => void
@@ -212,6 +230,14 @@ const registrations = [
 			createElement(DesignTileContent, { context, kind: "object" }),
 	},
 	{
+		kind: "blend",
+		name: "Blend",
+		description: "Create, inspect, edit, and expand live contour blends.",
+		defaultPlacement: { column: 4 },
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "blend" }),
+	},
+	{
 		kind: "transform",
 		name: "Transform",
 		description: "Position, size, and rotate the current selection.",
@@ -248,11 +274,13 @@ export const DESIGN_TILE_REGISTRY = createTileRegistry<
 >(registrations)
 export const DEFAULT_DESIGN_TILING_LAYOUT =
 	createRegistryDefaultLayout(DESIGN_TILE_REGISTRY)
-export const LEGACY_DESIGN_TILING_STORAGE_KEY =
+export const OLDEST_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v2"
-export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
+export const LEGACY_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v3"
-export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v4"
+export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
+	"create-design:tiling-workspace:v4"
+export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v5"
 
 function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
 	const kinds = new Set(
@@ -269,6 +297,9 @@ function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
 				inserted = true
 				return [
 					tile,
+					...(kinds.has("blend")
+						? []
+						: [{ id: "blend:migrated-v5", kind: "blend", fill: false }]),
 					...(kinds.has("transform")
 						? []
 						: [
@@ -296,7 +327,8 @@ export function migrateDesignTilingStorage(
 		if (storage.getItem(destination) !== null) continue
 		const legacy =
 			storage.getItem(`${PREVIOUS_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
-			storage.getItem(`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`)
+			storage.getItem(`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
+			storage.getItem(`${OLDEST_DESIGN_TILING_STORAGE_KEY}:${suffix}`)
 		const layout = parseTilingLayout(legacy)
 		if (layout !== null)
 			storage.setItem(

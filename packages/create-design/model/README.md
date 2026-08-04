@@ -30,3 +30,10 @@ endpoint makes all derived steps locked. Bounds cover the intermediate steps,
 and selection treats the blend as one unit. Native blend clipboard helpers copy
 both endpoints, correspondence, and referenced swatches, then paste fresh
 object/contour/point/blend identities as one document edit.
+
+`updateDesignBlend()`, `reverseDesignBlendEndpoint()`, and
+`setDesignBlendFirstPoint()` author deterministic live options and endpoint
+correspondence without importing the editor. `expandDesignBlend()` retains both
+ordinary endpoints, assigns fresh object/contour/point/swatch identities to the
+resolved intermediate paths, inserts them at the live projection position, and
+removes the live record as one immutable document replacement.
