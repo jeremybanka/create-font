@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/editor",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Browser-based vector design editor for create-design documents",
 	"license": "AGPL-3.0-or-later",
 	"repository": {

@@ -1,5 +1,13 @@
 # @create-design/editor
 
+## 0.2.1
+
+### Patch Changes
+
+- 0e55ec6: Normalize design documents into granular atom.io atoms and keyed families.
+- 3a29372: Restore composed geometry selectors with atom.io 0.51.1 transaction tracing.
+- 9449dda: Use atom.io timeline effects to retain the latest 100 complete design undo steps.
+
 ## 0.2.0
 
 ### Minor Changes
