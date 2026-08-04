@@ -17,7 +17,12 @@ import {
 	type PdfStream,
 } from "mondrian.pdf"
 
-import { resolvedCmyk, resolvedRgb } from "@create-design/model"
+import {
+	projectDesignDocumentBlends,
+	resolvedCmyk,
+	resolvedRgb,
+	type DesignBlendDiagnostic,
+} from "@create-design/model"
 import { activeDesignArtboard } from "@create-design/model"
 import { documentToPdfTransform } from "@create-design/model"
 import {
@@ -184,6 +189,30 @@ export interface PdfProjectionGraph {
 		document: DesignDocument,
 		target?: PdfExportTarget,
 	): PdfDocumentProjection
+}
+
+/** Raised when a live blend cannot be lowered into ordinary PDF paths. */
+export class PdfBlendProjectionError extends Error {
+	readonly diagnostics: readonly DesignBlendDiagnostic[]
+
+	constructor(diagnostics: readonly DesignBlendDiagnostic[]) {
+		super(diagnostics.map(({ message }) => message).join("\n"))
+		this.name = "PdfBlendProjectionError"
+		this.diagnostics = diagnostics
+	}
+}
+
+function projectedBlendDocument(document: DesignDocument): DesignDocument {
+	const projection = projectDesignDocumentBlends(document)
+	const errors = projection.diagnostics.filter(
+		({ severity }) => severity === "error",
+	)
+	if (errors.length > 0) throw new PdfBlendProjectionError(errors)
+	return {
+		...document,
+		objects: projection.objects,
+		swatches: projection.swatches,
+	}
 }
 
 type ObjectCacheEntry = Readonly<{
@@ -478,6 +507,7 @@ export function createPdfProjectionGraph(): PdfProjectionGraph {
 
 	return {
 		project(document, target = activeDesignArtboard(document)) {
+			document = projectedBlendDocument(document)
 			const swatches = new Map(
 				document.swatches.map((swatch) => [swatch.id, swatch]),
 			)
@@ -507,6 +537,7 @@ export function pdfContentStream(
 	document: DesignDocument,
 	artboard: DesignArtboard = activeDesignArtboard(document),
 ): string {
+	document = projectedBlendDocument(document)
 	const swatches = new Map(
 		document.swatches.map((swatch) => [swatch.id, swatch]),
 	)

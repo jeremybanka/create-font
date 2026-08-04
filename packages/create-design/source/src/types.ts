@@ -114,6 +114,35 @@ export interface DesignObject {
 	readonly locked?: boolean
 }
 
+export interface DesignBlendPointCorrespondence {
+	readonly startPointId: string
+	readonly endPointId: string
+}
+
+export interface DesignBlendContourCorrespondence {
+	readonly startContourId: string
+	readonly endContourId: string
+	readonly points: readonly DesignBlendPointCorrespondence[]
+}
+
+/**
+ * A non-destructive blend between two ordinary document objects.
+ *
+ * `steps` counts derived intermediate objects; endpoints remain ordinary
+ * objects. Correspondence is persisted so point and contour array reordering
+ * does not silently change a blend.
+ */
+export interface DesignBlend {
+	readonly id: string
+	readonly name: string
+	readonly startObjectId: string
+	readonly endObjectId: string
+	readonly steps: number
+	readonly contours: readonly DesignBlendContourCorrespondence[]
+	readonly hidden?: boolean
+	readonly locked?: boolean
+}
+
 export type DesignSceneChild = Readonly<
 	| { readonly kind: "object"; readonly id: string }
 	| { readonly kind: "group"; readonly id: string }
@@ -166,6 +195,8 @@ export interface DesignDocument {
 	readonly artboards: readonly DesignArtboard[]
 	readonly swatches: readonly DesignSwatch[]
 	readonly objects: readonly DesignObject[]
+	/** Live derived blends; intermediate geometry is never persisted as objects. */
+	readonly blends?: readonly DesignBlend[]
 	/** Root scene order. Omitted only by legacy version-5 documents. */
 	readonly scene?: readonly DesignSceneChild[]
 	/** Structural groups referenced by `scene` and other groups. */

@@ -8,6 +8,7 @@ import {
 	appearanceSchema,
 	artboardIdSchema,
 	artboardInsetsSchema,
+	designBlendSchema,
 	compatibleGeometrySchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
@@ -76,6 +77,7 @@ export const documentFileSchema = z
 		version: z.literal(1),
 		title: z.string(),
 		guides: z.array(guideSchema),
+		blends: z.array(designBlendSchema).optional(),
 	})
 	.strict()
 export const paletteFileSchema = z
@@ -701,6 +703,9 @@ export function splitDesignDocument(
 			version: 1,
 			title: validated.value.title,
 			guides: validated.value.guides.map((guide) => ({ ...guide })),
+			...(validated.value.blends === undefined
+				? {}
+				: { blends: validated.value.blends }),
 		} satisfies DocumentFile,
 		[designSourcePaths.palette]: {
 			format: "create-design.palette",
@@ -1175,6 +1180,7 @@ export function assembleDesignDocument(
 		format: CREATE_DESIGN_DOCUMENT_FORMAT,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
 		title: metadata.title,
+		...(metadata.blends === undefined ? {} : { blends: metadata.blends }),
 		artboards: artboards.map((artboard) => ({
 			id: artboard.id,
 			name: artboard.name,

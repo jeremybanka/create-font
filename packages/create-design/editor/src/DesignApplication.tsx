@@ -62,6 +62,7 @@ import {
 	type AppearancePaintTarget,
 } from "./appearance.ts"
 import { activeDesignArtboard } from "@create-design/model"
+import { projectDesignDocumentBlends } from "@create-design/model"
 import {
 	allDesignArtboardsBounds,
 	createDesignArtboard,
@@ -3510,8 +3511,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const previewById = new Map(
 		previewObjects.map((object) => [object.id, object]),
 	)
-	const displayedObjects = canvasDocument.objects.map(
+	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
+	)
+	const canvasBlendProjection = projectDesignDocumentBlends({
+		...canvasDocument,
+		objects: canvasAuthoredObjects,
+	})
+	const displayedObjects = canvasBlendProjection.objects
+	const authoredCanvasObjectIds = new Set(
+		canvasAuthoredObjects.map(({ id }) => id),
 	)
 	const previewSwatch = document.swatches.find(
 		(swatch) =>
@@ -3796,11 +3805,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												/>
 											))}
 									{displayedObjects.map((object) => {
-										const fill = document.swatches.find(
+										const derived = !authoredCanvasObjectIds.has(object.id)
+										const fill = canvasBlendProjection.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.fill?.swatchId,
 										)
-										const stroke = document.swatches.find(
+										const stroke = canvasBlendProjection.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
@@ -3837,9 +3847,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														})}
 												fillRule={designObjectFillRule(object)}
 												selected={
+													!derived &&
 													selectedGroup === null &&
 													selection.includes(object.id)
 												}
+												listening={!derived}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
 												}

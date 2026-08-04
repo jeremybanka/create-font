@@ -1,4 +1,5 @@
 export * from "./artboards.ts"
+export * from "./blends.ts"
 export * from "./color.ts"
 export * from "./coordinates.ts"
 export * from "./geometry.ts"

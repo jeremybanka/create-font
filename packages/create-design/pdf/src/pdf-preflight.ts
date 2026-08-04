@@ -11,7 +11,7 @@ import {
 	type PdfExportRequest,
 	type PdfExportTarget,
 } from "./pdf.ts"
-import type { Bounds } from "@create-design/model"
+import { projectDesignDocumentBlends, type Bounds } from "@create-design/model"
 import type { DesignArtboard, DesignDocument } from "@create-design/source"
 
 export const PDF_EXPORT_CAPABILITIES = Object.freeze([
@@ -22,6 +22,7 @@ export const PDF_EXPORT_CAPABILITIES = Object.freeze([
 	"paint.rgb",
 	"paint.stroke",
 	"vector.ellipse",
+	"vector.live-blend",
 	"vector.open-path-fill",
 	"vector.open-path-stroke",
 	"vector.path",
@@ -143,10 +144,48 @@ export function preflightPdfExport(
 	target: PdfExportTarget,
 	preferences: ExportPreflightPreferences = {},
 ): ExportPreflightResult {
-	return runExportPreflight(
-		document,
+	const blendProjection = projectDesignDocumentBlends(document)
+	const result = runExportPreflight(
+		{
+			...document,
+			objects: blendProjection.objects,
+			swatches: blendProjection.swatches,
+		},
 		target,
 		PDF_PREFLIGHT_ADAPTER,
 		preferences,
 	)
+	if (blendProjection.diagnostics.length === 0) return result
+	const blendDiagnostics = blendProjection.diagnostics.map((item) =>
+		Object.freeze({
+			action: Object.freeze({
+				kind: "select-entity" as const,
+				entityKind: "blend",
+				entityId: item.blendId,
+			}),
+			capability: "vector.live-blend",
+			code: `pdf.${item.code}`,
+			entityId: item.blendId,
+			entityKind: "blend",
+			message: item.message,
+			severity: item.severity,
+			target: "pdf",
+		}),
+	)
+	const diagnostics = Object.freeze([
+		...result.diagnostics,
+		...blendDiagnostics,
+	])
+	const summary = Object.freeze({
+		errors: diagnostics.filter(({ severity }) => severity === "error").length,
+		warnings: diagnostics.filter(({ severity }) => severity === "warning")
+			.length,
+		infos: diagnostics.filter(({ severity }) => severity === "info").length,
+	})
+	return Object.freeze({
+		...result,
+		decision: summary.errors > 0 ? "blocked" : "ready",
+		diagnostics,
+		summary,
+	})
 }

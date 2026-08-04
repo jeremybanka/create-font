@@ -94,7 +94,7 @@ fonts/
 
 Each fact has one owner:
 
-- `document.json` owns the title and guides;
+- `document.json` owns the title, guides, and live blend records;
 - `palette.json` owns ordered swatches;
 - the ordered artboard inventory owns output order and maps each stable ID to
   an independent unit that owns its name, global rectangle, and optional
@@ -134,6 +134,12 @@ artboard edit changes only that artboard unit; reordering changes only
 Authored path contours and points always carry stable `id` fields after
 assembly. Expansion and paste assign fresh identities so selection and later
 path edits never depend on array indexes.
+
+Live blend records persist a stable blend ID, two ordinary object IDs, the
+number of intermediate steps, and explicit contour/point correspondence. They
+never persist derived intermediate objects. Missing endpoints and stale
+correspondence remain schema-valid so the model can report a recoverable,
+entity-located diagnostic instead of making a project unreadable.
 
 ## Use
 
