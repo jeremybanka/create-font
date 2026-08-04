@@ -17,6 +17,8 @@ export const DEFAULT_DESIGN_TEXT_TYPOGRAPHY: DesignTextTypography =
 		direction: "auto",
 	})
 
+export const DESIGN_TEXT_INITIAL_DRAFT = "Hello world"
+
 export type CreateDesignTextObjectInput = Readonly<{
 	id: string
 	name: string
@@ -27,6 +29,7 @@ export type CreateDesignTextObjectInput = Readonly<{
 	width?: number
 	height?: number
 	typography?: DesignTextTypography
+	text?: string
 }>
 
 export function createDesignTextObject(
@@ -47,7 +50,7 @@ export function createDesignTextObject(
 		geometry: {
 			kind: "text",
 			mode: input.mode,
-			text: "",
+			text: input.text ?? "",
 			x: input.x,
 			y: input.y,
 			typography: input.typography ?? DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
@@ -204,6 +207,7 @@ export function designTextOverlayStyle(
 	return {
 		left: 0,
 		top: 0,
+		background: "transparent",
 		width,
 		height,
 		fontFamily: geometry.typography.font.family,

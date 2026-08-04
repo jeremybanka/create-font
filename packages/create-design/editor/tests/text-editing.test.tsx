@@ -71,6 +71,28 @@ describe("editable text surface", () => {
 		expect(onExit).toHaveBeenCalledOnce()
 	})
 
+	it("opens a transparent initial draft with the entire string selected", () => {
+		const host = document.createElement("div")
+		hosts.push(host)
+		const draft = updateDesignText(object(), "Hello world")
+		render(
+			h(TextEditingSurface, {
+				object: draft,
+				view: { x: 0, y: 0 },
+				worldScale: 1,
+				onChange: vi.fn(),
+				onExit: vi.fn(),
+				initialSelection: { start: 0, end: 11 },
+			}),
+			host,
+		)
+		const textarea = host.querySelector("textarea")!
+		expect(textarea.value).toBe("Hello world")
+		expect(textarea.selectionStart).toBe(0)
+		expect(textarea.selectionEnd).toBe(11)
+		expect(textarea.style.background).toBe("transparent")
+	})
+
 	it("keeps composition active until IME completion", () => {
 		const host = document.createElement("div")
 		hosts.push(host)

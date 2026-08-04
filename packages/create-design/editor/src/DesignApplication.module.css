@@ -360,7 +360,7 @@ design-application.class {
 								var(--design-canvas-selection) 28%,
 								transparent
 							);
-						background: rgb(255 255 255 / 94%);
+						background: transparent;
 						color: #111;
 						caret-color: var(--design-canvas-selection);
 						resize: none;

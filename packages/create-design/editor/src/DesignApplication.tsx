@@ -246,6 +246,7 @@ import type {
 	DesignArtboard,
 	DesignBlend,
 	DesignDocument,
+	DesignFontReference,
 	DesignGeometry,
 	DesignGuide,
 	DesignObject,
@@ -258,6 +259,8 @@ import type {
 import { TextEditingSurface } from "./TextEditingSurface.tsx"
 import {
 	createDesignTextObject,
+	DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+	DESIGN_TEXT_INITIAL_DRAFT,
 	designTextFamilyId,
 	designTextKonvaTransform,
 	estimateDesignTextLayout,
@@ -626,6 +629,18 @@ function designTransformHandleCursor(
 	}
 }
 
+function uniqueTextFonts(
+	fonts: readonly DesignFontReference[],
+): readonly DesignFontReference[] {
+	return [
+		...new Map(
+			fonts.map((font) => [font.id, Object.freeze({ ...font })]),
+		).values(),
+	].toSorted((left, right) =>
+		left.family.localeCompare(right.family, undefined, { sensitivity: "base" }),
+	)
+}
+
 export type DesignApplicationProps = Readonly<{
 	children?: ReactNode
 	initialDocument?: DesignDocument
@@ -853,11 +868,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		() => props.textService ?? createDesignTextService(),
 		[props.textService],
 	)
+	const initialTextFonts = uniqueTextFonts(
+		(props.sourceSession?.fonts ?? []).map(({ reference }) => reference),
+	)
+	const [availableTextFonts, setAvailableTextFonts] =
+		useState<readonly DesignFontReference[]>(initialTextFonts)
+	const [activeTextFontId, setActiveTextFontId] = useState<string | null>(
+		initialTextFonts[0]?.id ?? null,
+	)
+	const registeredTextFontIdsRef = useRef<ReadonlySet<string>>(new Set())
 	const [textFontRevision, setTextFontRevision] = useState(0)
 	useEffect(() => {
 		const resources = props.sourceSession?.fonts ?? []
+		const nextIds = new Set(resources.map(({ reference }) => reference.id))
+		for (const fontId of registeredTextFontIdsRef.current) {
+			if (!nextIds.has(fontId)) textService.unregisterFont(fontId)
+		}
 		for (const resource of resources)
 			textService.registerFont(resource.reference, resource.bytes)
+		registeredTextFontIdsRef.current = nextIds
+		const references = uniqueTextFonts(
+			resources.map(({ reference }) => reference),
+		)
+		setAvailableTextFonts(references)
+		setActiveTextFontId((current) =>
+			references.some(({ id }) => id === current)
+				? current
+				: (references[0]?.id ?? null),
+		)
 		if (resources.length > 0) setTextFontRevision((revision) => revision + 1)
 	}, [props.sourceSession?.fonts, textService])
 	const pdfDownloadManager = useMemo(
@@ -1059,6 +1097,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					readonly geometry: DesignTextGeometry
 				})
 			: null
+	const textToolsDisabledReason =
+		availableTextFonts.length === 0
+			? "Add an OpenType font to this workspace before using Point Type or Area Type."
+			: null
+	const activeTextFont =
+		availableTextFonts.find(({ id }) => id === activeTextFontId) ??
+		availableTextFonts[0] ??
+		null
 	const selectedTextLayout = useMemo(
 		() =>
 			selectedTextObject === null
@@ -1077,7 +1123,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			? "Select one text object to expand it."
 			: selectedTextObject.locked
 				? `Unlock ${selectedTextObject.name} before expanding it.`
-				: null
+				: availableTextFonts.some(
+							({ id }) => id === selectedTextObject.geometry.typography.font.id,
+					  )
+					? null
+					: `Load ${selectedTextObject.geometry.typography.font.family} into this workspace before expanding it.`
 	const pathCommandContext = {
 		document,
 		objectSelection: selection,
@@ -1131,23 +1181,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[editorState],
 	)
-	const beginTextEditing = useCallback((object: DesignObject): void => {
-		if (object.geometry.kind !== "text") return
-		if (object.hidden || object.locked) {
-			setStatus(
-				`${object.hidden ? "Show" : "Unlock"} ${object.name} before editing its text.`,
-			)
-			return
-		}
-		setSelection([object.id])
-		setDirectSelection([])
-		setEditingTextId(object.id)
-		setTextSelectionRange({
-			start: object.geometry.text.length,
-			end: object.geometry.text.length,
-		})
-		setStatus(`Editing ${object.name}. Escape returns to object selection.`)
-	}, [])
+	const beginTextEditing = useCallback(
+		(object: DesignObject, selectAll = false): void => {
+			if (object.geometry.kind !== "text") return
+			const geometry = object.geometry
+			if (object.hidden || object.locked) {
+				setStatus(
+					`${object.hidden ? "Show" : "Unlock"} ${object.name} before editing its text.`,
+				)
+				return
+			}
+			if (
+				!availableTextFonts.some(({ id }) => id === geometry.typography.font.id)
+			) {
+				setStatus(
+					`Load ${geometry.typography.font.family} into this workspace before editing ${object.name}.`,
+				)
+				return
+			}
+			setSelection([object.id])
+			setDirectSelection([])
+			setEditingTextId(object.id)
+			setTextSelectionRange({
+				start: selectAll ? 0 : geometry.text.length,
+				end: geometry.text.length,
+			})
+			setStatus(`Editing ${object.name}. Escape returns to object selection.`)
+		},
+		[availableTextFonts],
+	)
 	const finishTextEditing = useCallback((): void => {
 		if (editingTextId === null) return
 		setEditingTextId(null)
@@ -1369,6 +1431,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
+			if (
+				(nextTool === "text" || nextTool === "area-text") &&
+				textToolsDisabledReason !== null
+			) {
+				setStatus(textToolsDisabledReason)
+				return
+			}
 			cancelCanvasGesture()
 			if (editingTextId !== null) {
 				setEditingTextId(null)
@@ -1388,8 +1457,40 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
 		},
-		[cancelCanvasGesture, currentGroupScope, document, editingTextId],
+		[
+			cancelCanvasGesture,
+			currentGroupScope,
+			document,
+			editingTextId,
+			textToolsDisabledReason,
+		],
 	)
+	useEffect(() => {
+		if (
+			textToolsDisabledReason === null ||
+			(tool !== "text" && tool !== "area-text")
+		)
+			return
+		cancelCanvasGesture()
+		setTool("select")
+		setStatus(textToolsDisabledReason)
+	}, [cancelCanvasGesture, textToolsDisabledReason, tool])
+	useEffect(() => {
+		if (
+			editingTextObject === null ||
+			editingTextObject.geometry.kind !== "text"
+		)
+			return
+		const geometry = editingTextObject.geometry
+		if (availableTextFonts.some(({ id }) => id === geometry.typography.font.id))
+			return
+		setEditingTextId(null)
+		setTextSelectionRange(null)
+		setTool("select")
+		setStatus(
+			`Text editing stopped because ${geometry.typography.font.family} is no longer available in this workspace.`,
+		)
+	}, [availableTextFonts, editingTextObject])
 
 	const deleteSelection = useCallback((): void => {
 		if (selectedBlend !== null) {
@@ -1767,48 +1868,76 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[commit, document, selectedTextObject],
 	)
-	const setTextFontFamily = useCallback(
-		(family: string): void => {
-			const trimmed = family.trim()
-			if (trimmed.length === 0) return
-			applyTextTypography({
-				font: { id: designTextFamilyId(trimmed), family: trimmed },
-			})
+	const selectTextFont = useCallback(
+		(fontId: string): void => {
+			const font = availableTextFonts.find(({ id }) => id === fontId)
+			if (font === undefined) {
+				setStatus("Choose a font that is loaded in this workspace.")
+				return
+			}
+			setActiveTextFontId(font.id)
+			if (selectedTextObject !== null) applyTextTypography({ font })
+			else setStatus(`${font.family} will be used for new text.`)
 		},
-		[applyTextTypography],
+		[applyTextTypography, availableTextFonts, selectedTextObject],
 	)
 	const registerTextFont = useCallback(
 		async (file: File): Promise<void> => {
-			if (selectedTextObject === null) {
-				setStatus("Select one text object before loading its font.")
-				return
-			}
 			const family =
-				selectedTextObject.geometry.typography.font.family ||
-				file.name.replace(/\.(?:otf|ttf|woff2?)$/iu, "")
+				file.name.replace(/\.(?:otf|ttf|woff2?)$/iu, "").trim() || "Font"
 			const requestedReference = {
 				id: designTextFamilyId(family),
 				family,
 				revision: file.lastModified || file.size,
 			}
 			const bytes = new Uint8Array(await file.arrayBuffer())
-			const reference =
-				props.sourceSession?.installFont === undefined
-					? requestedReference
-					: await props.sourceSession.installFont(
-							requestedReference,
-							bytes,
-							file.name,
-							file.type,
-						)
-			const diagnostics = textService.registerFont(reference, bytes)
+			const wasRegistered = registeredTextFontIdsRef.current.has(
+				requestedReference.id,
+			)
+			const diagnostics = textService.registerFont(requestedReference, bytes)
 			const error = diagnostics.find(({ severity }) => severity === "error")
 			if (error !== undefined) {
 				setStatus(`Could not load ${file.name}: ${error.message}`)
 				return
 			}
+			let reference: DesignFontReference
+			try {
+				reference =
+					props.sourceSession?.installFont === undefined
+						? requestedReference
+						: await props.sourceSession.installFont(
+								requestedReference,
+								bytes,
+								file.name,
+								file.type,
+							)
+			} catch (error) {
+				if (!wasRegistered) textService.unregisterFont(requestedReference.id)
+				setStatus(
+					`Could not add ${file.name} to the workspace: ${error instanceof Error ? error.message : String(error)}`,
+				)
+				return
+			}
+			if (reference.id !== requestedReference.id)
+				textService.unregisterFont(requestedReference.id)
+			const persistedDiagnostics = textService.registerFont(reference, bytes)
+			const persistedError = persistedDiagnostics.find(
+				({ severity }) => severity === "error",
+			)
+			if (persistedError !== undefined) {
+				setStatus(`Could not load ${file.name}: ${persistedError.message}`)
+				return
+			}
+			registeredTextFontIdsRef.current = new Set([
+				...registeredTextFontIdsRef.current,
+				reference.id,
+			])
+			setAvailableTextFonts((current) =>
+				uniqueTextFonts([...current, reference]),
+			)
+			setActiveTextFontId(reference.id)
 			setTextFontRevision((revision) => revision + 1)
-			applyTextTypography({ font: reference })
+			if (selectedTextObject !== null) applyTextTypography({ font: reference })
 			setStatus(
 				`Loaded ${family} for canonical canvas, PDF, and expansion output.`,
 			)
@@ -1847,15 +1976,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[commit, document, selectedTextObject],
 	)
 	const areaTextConversionDisabledReason =
-		selectedObject === null
+		textToolsDisabledReason ??
+		(selectedObject === null
 			? "Select one live rectangle to convert it to Area Type."
 			: selectedObject.locked || selectedObject.hidden
 				? `${selectedObject.hidden ? "Show" : "Unlock"} ${selectedObject.name} before converting it.`
 				: selectedObject.geometry.kind !== "rectangle"
 					? "Initial Area Type conversion supports live rectangular frames; concave and compound paths are explicitly unsupported."
-					: null
+					: null)
 	const convertSelectionToAreaText = useCallback((): void => {
 		if (
+			activeTextFont === null ||
 			selectedObject?.geometry.kind !== "rectangle" ||
 			selectedObject.locked ||
 			selectedObject.hidden
@@ -1875,6 +2006,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			width: rectangle.width,
 			height: rectangle.height,
 			appearance: selectedObject.appearance,
+			text: DESIGN_TEXT_INITIAL_DRAFT,
+			typography: {
+				...DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+				font: activeTextFont,
+			},
 		})
 		const object = { ...converted, transform: selectedObject.transform }
 		commit({
@@ -1883,12 +2019,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				candidate.id === selectedObject.id ? object : candidate,
 			),
 		})
-		beginTextEditing(object)
+		beginTextEditing(object, true)
 		setStatus(
 			`Converted ${selectedObject.name} to a rectangular Area Type frame.`,
 		)
 	}, [
 		areaTextConversionDisabledReason,
+		activeTextFont,
 		beginTextEditing,
 		commit,
 		document,
@@ -2635,10 +2772,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedObjectIds: selection,
 		textSelectionRange,
 		textOverset,
+		availableTextFonts,
+		activeTextFontId:
+			selectedTextObject === null
+				? activeTextFontId
+				: selectedTextObject.geometry.typography.font.id,
+		textToolsDisabledReason,
 		textService,
 		beginTextEditing,
 		applyTextTypography,
-		setTextFontFamily,
+		selectTextFont,
 		registerTextFont,
 		applyAreaTextFrame,
 		convertSelectionToAreaText,
@@ -2705,16 +2848,23 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					DesignTool,
 					(typeof DESIGN_TOOLS)[DesignTool],
 				][]
-			).map(([id, definition]) => ({
-				id: `tool-${id}`,
-				displayName: definition.label,
-				category: "Tools",
-				description: `Activate the ${definition.label.toLowerCase()} tool.`,
-				icon: definition.paletteIcon,
-				shortcut: definition.key,
-				checked: tool === id,
-				do: () => selectTool(id),
-			})),
+			).map(([id, definition]) => {
+				const disabledReason =
+					id === "text" || id === "area-text" ? textToolsDisabledReason : null
+				return {
+					id: `tool-${id}`,
+					displayName: definition.label,
+					category: "Tools",
+					description: `Activate the ${definition.label.toLowerCase()} tool.`,
+					icon: definition.paletteIcon,
+					shortcut: definition.key,
+					checked: tool === id,
+					...(disabledReason === null
+						? {}
+						: { disabled: true, disabledReason }),
+					do: () => selectTool(id),
+				}
+			}),
 			...(
 				[
 					["left", "Align Left"],
@@ -3095,6 +3245,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			tool,
 			ungroupSelection,
 			document,
+			textToolsDisabledReason,
 		],
 	)
 
@@ -4133,6 +4284,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (tool === "text") {
+			if (activeTextFont === null) {
+				setStatus(
+					textToolsDisabledReason ??
+						"Choose a workspace font before creating text.",
+				)
+				return
+			}
 			const object = createDesignTextObject({
 				id: `object:${nextId()}`,
 				name: `Point text ${document.objects.length + 1}`,
@@ -4140,6 +4298,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				x: point.x,
 				y: point.y,
 				appearance: authoredAppearance,
+				text: DESIGN_TEXT_INITIAL_DRAFT,
+				typography: {
+					...DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+					font: activeTextFont,
+				},
 			})
 			commit(
 				appendDesignHierarchyObjects(
@@ -4147,10 +4310,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					[object.id],
 				),
 			)
-			beginTextEditing(object)
+			beginTextEditing(object, true)
 			return
 		}
 		if (tool === "area-text") {
+			if (activeTextFont === null) {
+				setStatus(
+					textToolsDisabledReason ??
+						"Choose a workspace font before creating text.",
+				)
+				return
+			}
 			beginVectorGesture(event, { tool: "rect" })
 			return
 		}
@@ -4412,6 +4582,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (transition.intent?.kind === "shape") {
 			const bounds = transition.intent.bounds
 			if (tool === "area-text") {
+				if (activeTextFont === null) {
+					setStatus(
+						textToolsDisabledReason ??
+							"Choose a workspace font before creating text.",
+					)
+					return
+				}
 				const object = createDesignTextObject({
 					id: `object:${nextId()}`,
 					name: `Area text ${document.objects.length + 1}`,
@@ -4421,6 +4598,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					width: bounds.maxX - bounds.minX,
 					height: bounds.maxY - bounds.minY,
 					appearance: authoredAppearance,
+					text: DESIGN_TEXT_INITIAL_DRAFT,
+					typography: {
+						...DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+						font: activeTextFont,
+					},
 				})
 				commit(
 					appendDesignHierarchyObjects(
@@ -4428,7 +4610,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						[object.id],
 					),
 				)
-				beginTextEditing(object)
+				beginTextEditing(object, true)
 				return
 			}
 			const object: DesignObject = {
@@ -5456,6 +5638,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								onChange={setEditingText}
 								onExit={finishTextEditing}
 								onSelectionChange={setTextSelectionRange}
+								{...(textSelectionRange === null
+									? {}
+									: { initialSelection: textSelectionRange })}
 							/>
 						)}
 					</artboard-wrap>

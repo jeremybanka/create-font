@@ -1,0 +1,87 @@
+design-font-combobox.class {
+	position: relative;
+	display: block;
+	min-width: 0;
+
+	> input {
+		width: 100%;
+		min-width: 0;
+		height: var(--tile-field-height, 26px);
+		padding: 5px 20px 5px 6px;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background: var(--paper);
+		font-size: var(--tile-control-font-size, 8px);
+		color: var(--ink);
+
+		&:focus-visible {
+			border-color: var(--accent);
+			outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+		}
+
+		&:disabled {
+			opacity: 0.48;
+			cursor: not-allowed;
+		}
+	}
+
+	> font-option-list[role="listbox"] {
+		position: absolute;
+		z-index: 2;
+		inset-block-start: calc(100% + 3px);
+		inset-inline: 0;
+		display: grid;
+		max-height: 132px;
+		padding: 3px;
+		overflow-y: auto;
+		border: 1px solid var(--line-strong);
+		border-radius: 5px;
+		background: var(--panel);
+		box-shadow: 0 6px 16px var(--shadow-subtle);
+
+		&[hidden] {
+			display: none;
+		}
+
+		> button {
+			display: grid;
+			gap: 1px;
+			min-width: 0;
+			padding: 5px;
+			border: 0;
+			border-radius: 3px;
+			background: transparent;
+			color: var(--ink);
+			text-align: left;
+			cursor: pointer;
+
+			&[data-active],
+			&:hover {
+				background: var(--selected);
+			}
+
+			> strong,
+			> small {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			> strong {
+				font-size: 8px;
+			}
+
+			> small {
+				font-size: 6px;
+				color: var(--ink-faint);
+			}
+		}
+
+		> p {
+			margin: 0;
+			padding: 6px;
+			font-size: 7px;
+			color: var(--ink-faint);
+		}
+	}
+}

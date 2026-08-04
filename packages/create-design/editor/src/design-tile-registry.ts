@@ -32,6 +32,7 @@ import type {
 	DesignArtboard,
 	DesignBlend,
 	DesignDocument,
+	DesignFontReference,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -146,12 +147,15 @@ export interface DesignTileContext {
 	readonly selectedObjectIds: readonly string[]
 	readonly textSelectionRange: Readonly<{ start: number; end: number }> | null
 	readonly textOverset: boolean
+	readonly availableTextFonts: readonly DesignFontReference[]
+	readonly activeTextFontId: string | null
+	readonly textToolsDisabledReason: string | null
 	readonly textService?: DesignTextService
 	readonly beginTextEditing: (object: DesignObject) => void
 	readonly applyTextTypography: (
 		properties: Partial<DesignTextTypography>,
 	) => void
-	readonly setTextFontFamily: (family: string) => void
+	readonly selectTextFont: (fontId: string) => void
 	readonly registerTextFont: (file: File) => Promise<void>
 	readonly applyAreaTextFrame: (
 		properties: Partial<NonNullable<DesignTextGeometry["frame"]>>,

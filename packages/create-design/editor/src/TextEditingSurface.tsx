@@ -13,6 +13,7 @@ export type TextEditingSurfaceProps = Readonly<{
 	onSelectionChange?: (
 		selection: Readonly<{ start: number; end: number }>,
 	) => void
+	initialSelection?: Readonly<{ start: number; end: number }>
 }>
 
 export function TextEditingSurface({
@@ -22,6 +23,7 @@ export function TextEditingSurface({
 	onChange,
 	onExit,
 	onSelectionChange,
+	initialSelection,
 }: TextEditingSurfaceProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const composingRef = useRef(false)
@@ -29,7 +31,10 @@ export function TextEditingSurface({
 		const textarea = textareaRef.current
 		if (textarea === null) return
 		textarea.focus()
-		textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+		const start = initialSelection?.start ?? textarea.value.length
+		const end = initialSelection?.end ?? textarea.value.length
+		textarea.setSelectionRange(start, end)
+		onSelectionChange?.({ start, end })
 	}, [object.id])
 	if (object.geometry.kind !== "text") return <text-editing-surface />
 	const synchronizeSelection = (): void => {

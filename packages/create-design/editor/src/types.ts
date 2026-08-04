@@ -11,6 +11,7 @@ export type {
 	DesignDocument,
 	DesignFill,
 	DesignFillRule,
+	DesignFontReference,
 	DesignGeometry,
 	DesignGuide,
 	DesignGroup,

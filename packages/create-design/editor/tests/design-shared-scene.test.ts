@@ -1208,6 +1208,172 @@ describe("create-design shared vector scene", () => {
 		}
 	}
 
+	it("keeps every Type entry point inert when the workspace has no fonts", async () => {
+		const storage = new Map<string, string>()
+		const session = sourceSession({ fonts: [] })
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		const pointType = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Type"]',
+		)
+		const areaType = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Area Type"]',
+		)
+		if (pointType === null || areaType === null)
+			throw new Error("Type tools were not found.")
+		expect(pointType.disabled).toBe(true)
+		expect(areaType.disabled).toBe(true)
+		expect(pointType.title).toContain("Add an OpenType font")
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "t" }),
+			)
+			await Promise.resolve()
+		})
+		expect(session.save).not.toHaveBeenCalled()
+		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
+		expect(document.querySelector("persistence-alert")).toBeNull()
+		expect(
+			document.querySelector("textarea[data-design-text-editor]"),
+		).toBeNull()
+		expect(
+			document.querySelector('footer [role="status"]')?.textContent,
+		).toContain("Add an OpenType font")
+
+		act(() =>
+			document
+				.querySelector<HTMLButtonElement>(
+					'button[aria-label="Open Command Palette"]',
+				)
+				?.click(),
+		)
+		const search = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (search === null) throw new Error("Command search was not found.")
+		act(() => {
+			search.value = "Type"
+			search.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		expect(
+			document
+				.getElementById("command-tool-text")
+				?.getAttribute("aria-disabled"),
+		).toBe("true")
+	})
+
+	it("authors new text with a loaded workspace font and selects its initial draft", async () => {
+		const reference = {
+			id: "font:workspace-sans",
+			family: "Workspace Sans",
+			revision: 7,
+		}
+		const save = vi.fn(async (_document: DesignDocument) => ({
+			revision: "source:two",
+		}))
+		const session = sourceSession({
+			fonts: [{ reference, bytes: new Uint8Array([1, 2, 3]) }],
+			save,
+		})
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(() => null),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		const stage = mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+			textService,
+		})
+		const pointType = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Type"]',
+		)
+		if (pointType === null) throw new Error("Type tool was not found.")
+		expect(pointType.disabled).toBe(false)
+		act(() => pointType.click())
+		const canvas = stage.container().querySelector("canvas")
+		if (canvas === null) throw new Error("Design canvas was not found.")
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: 360,
+					clientY: 280,
+					isPrimary: true,
+					pointerId: 91,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const textarea = document.querySelector<HTMLTextAreaElement>(
+			"textarea[data-design-text-editor]",
+		)
+		if (textarea === null) throw new Error("Native text editor was not opened.")
+		expect(textarea.value).toBe("Hello world")
+		expect(textarea.selectionStart).toBe(0)
+		expect(textarea.selectionEnd).toBe(11)
+		expect(textarea.style.background).toBe("transparent")
+		await vi.waitFor(() => expect(save).toHaveBeenCalled())
+		const saved = save.mock.calls.at(-1)?.[0]
+		const authored = saved?.objects.at(-1)
+		expect(authored?.geometry.kind).toBe("text")
+		if (authored?.geometry.kind !== "text")
+			throw new Error("Saved object was not text.")
+		expect(authored.geometry.typography.font).toEqual(reference)
+		expect(document.querySelector("persistence-alert")).toBeNull()
+	})
+
+	it("returns safely to Select when workspace fonts disappear", async () => {
+		const reference = {
+			id: "font:temporary",
+			family: "Temporary",
+			revision: 1,
+		}
+		const session = sourceSession({
+			fonts: [{ reference, bytes: new Uint8Array([1]) }],
+		})
+		const host = prepareDesignDom()
+		act(() => render(h(DesignApplication, { sourceSession: session }), host))
+		const pointType = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Type"]',
+		)
+		if (pointType === null) throw new Error("Type tool was not found.")
+		act(() => pointType.click())
+		expect(pointType.getAttribute("aria-pressed")).toBe("true")
+		await act(async () => {
+			render(
+				h(DesignApplication, {
+					sourceSession: { ...session, fonts: [] },
+				}),
+				host,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document
+				.querySelector<HTMLButtonElement>('button[aria-label="Select"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true")
+		expect(
+			document.querySelector<HTMLButtonElement>('button[aria-label="Type"]')
+				?.disabled,
+		).toBe(true)
+	})
+
 	it("remounts the state graph when browser options switch source sessions", async () => {
 		const first = createInitialDocument()
 		const documentA: DesignDocument = {
