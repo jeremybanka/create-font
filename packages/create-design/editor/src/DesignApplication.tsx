@@ -877,18 +877,84 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		initialTextFonts[0]?.id ?? null,
 	)
 	const registeredTextFontIdsRef = useRef<ReadonlySet<string>>(new Set())
+	const browserTextFontsRef = useRef(
+		new Map<string, Readonly<{ face: FontFace; fontSet: FontFaceSet }>>(),
+	)
 	const [textFontRevision, setTextFontRevision] = useState(0)
+	const unregisterBrowserTextFont = useCallback((fontId: string): void => {
+		const browserFont = browserTextFontsRef.current.get(fontId)
+		if (browserFont === undefined) return
+		browserFont.fontSet.delete(browserFont.face)
+		browserTextFontsRef.current.delete(fontId)
+	}, [])
+	const loadBrowserTextFont = useCallback(
+		async (
+			reference: DesignFontReference,
+			bytes: Uint8Array,
+		): Promise<Readonly<{ face: FontFace; fontSet: FontFaceSet }> | null> => {
+			const FontFaceConstructor = globalThis.FontFace
+			const fontSet = globalThis.document?.fonts
+			if (typeof FontFaceConstructor === "undefined" || fontSet === undefined)
+				return null
+			const face = new FontFaceConstructor(
+				reference.family,
+				bytes.slice().buffer,
+			)
+			await face.load()
+			return { face, fontSet }
+		},
+		[],
+	)
+	const activateBrowserTextFont = useCallback(
+		(
+			reference: DesignFontReference,
+			browserFont: Readonly<{ face: FontFace; fontSet: FontFaceSet }> | null,
+		): void => {
+			if (browserFont === null) return
+			unregisterBrowserTextFont(reference.id)
+			browserFont.fontSet.add(browserFont.face)
+			browserTextFontsRef.current.set(reference.id, browserFont)
+		},
+		[unregisterBrowserTextFont],
+	)
+	const registerBrowserTextFont = useCallback(
+		async (reference: DesignFontReference, bytes: Uint8Array): Promise<void> =>
+			activateBrowserTextFont(
+				reference,
+				await loadBrowserTextFont(reference, bytes),
+			),
+		[activateBrowserTextFont, loadBrowserTextFont],
+	)
 	useEffect(() => {
 		const resources = props.sourceSession?.fonts ?? []
-		const nextIds = new Set(resources.map(({ reference }) => reference.id))
+		let active = true
+		const loadableResources = resources.filter(({ bytes, reference }) => {
+			const diagnostics = textService.registerFont(reference, bytes)
+			const error = diagnostics.find(({ severity }) => severity === "error")
+			if (error === undefined) return true
+			setStatus(`Could not load ${reference.family}: ${error.message}`)
+			return false
+		})
+		const nextIds = new Set(
+			loadableResources.map(({ reference }) => reference.id),
+		)
 		for (const fontId of registeredTextFontIdsRef.current) {
-			if (!nextIds.has(fontId)) textService.unregisterFont(fontId)
+			if (nextIds.has(fontId)) continue
+			textService.unregisterFont(fontId)
+			unregisterBrowserTextFont(fontId)
 		}
-		for (const resource of resources)
-			textService.registerFont(resource.reference, resource.bytes)
+		for (const resource of loadableResources)
+			void registerBrowserTextFont(resource.reference, resource.bytes).catch(
+				(error: unknown) => {
+					if (!active) return
+					setStatus(
+						`Could not load ${resource.reference.family} in the browser: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				},
+			)
 		registeredTextFontIdsRef.current = nextIds
 		const references = uniqueTextFonts(
-			resources.map(({ reference }) => reference),
+			loadableResources.map(({ reference }) => reference),
 		)
 		setAvailableTextFonts(references)
 		setActiveTextFontId((current) =>
@@ -896,8 +962,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				? current
 				: (references[0]?.id ?? null),
 		)
-		if (resources.length > 0) setTextFontRevision((revision) => revision + 1)
-	}, [props.sourceSession?.fonts, textService])
+		if (loadableResources.length > 0)
+			setTextFontRevision((revision) => revision + 1)
+		return () => {
+			active = false
+		}
+	}, [
+		props.sourceSession?.fonts,
+		registerBrowserTextFont,
+		textService,
+		unregisterBrowserTextFont,
+	])
+	useEffect(
+		() => () => {
+			for (const fontId of browserTextFontsRef.current.keys())
+				unregisterBrowserTextFont(fontId)
+		},
+		[unregisterBrowserTextFont],
+	)
 	const pdfDownloadManager = useMemo(
 		() => createPdfDownloadManager(undefined, { textService }),
 		[textService],
@@ -1900,6 +1982,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus(`Could not load ${file.name}: ${error.message}`)
 				return
 			}
+			let browserFont: Awaited<ReturnType<typeof loadBrowserTextFont>>
+			try {
+				browserFont = await loadBrowserTextFont(requestedReference, bytes)
+			} catch (error) {
+				if (!wasRegistered) textService.unregisterFont(requestedReference.id)
+				setStatus(
+					`Could not load ${file.name} in the browser: ${error instanceof Error ? error.message : String(error)}`,
+				)
+				return
+			}
 			let reference: DesignFontReference
 			try {
 				reference =
@@ -1928,6 +2020,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus(`Could not load ${file.name}: ${persistedError.message}`)
 				return
 			}
+			activateBrowserTextFont(reference, browserFont)
 			registeredTextFontIdsRef.current = new Set([
 				...registeredTextFontIdsRef.current,
 				reference.id,
@@ -1942,7 +2035,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				`Loaded ${family} for canonical canvas, PDF, and expansion output.`,
 			)
 		},
-		[applyTextTypography, props.sourceSession, selectedTextObject, textService],
+		[
+			activateBrowserTextFont,
+			applyTextTypography,
+			loadBrowserTextFont,
+			props.sourceSession,
+			selectedTextObject,
+			textService,
+		],
 	)
 	const applyAreaTextFrame = useCallback(
 		(properties: Partial<NonNullable<DesignTextGeometry["frame"]>>): void => {

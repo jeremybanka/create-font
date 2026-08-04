@@ -7,6 +7,7 @@
 "@create-design/source": patch
 "@create-design/svg": patch
 "@create-design/text": patch
+"@create-font/font-service": patch
 ---
 
 Add editable point and area text, canonical font shaping and outline projection,

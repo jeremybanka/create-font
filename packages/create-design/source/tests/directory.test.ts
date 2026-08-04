@@ -146,6 +146,60 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("round-trips point and area text through canonical object units", () => {
+		const document = fixture()
+		const typography = {
+			font: {
+				id: "font:workspace-sans",
+				family: "Workspace Sans",
+				revision: `sha256:${"0".repeat(64)}`,
+			},
+			size: 24,
+			leading: 28.8,
+			tracking: 0,
+			kerning: "auto" as const,
+			alignment: "start" as const,
+			direction: "auto" as const,
+		}
+		const point = {
+			id: "object:point-text",
+			name: "Point text",
+			geometry: {
+				kind: "text" as const,
+				mode: "point" as const,
+				text: "Hello world",
+				typography,
+				x: 120,
+				y: 180,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		const area = {
+			...point,
+			id: "object:area-text",
+			name: "Area text",
+			geometry: {
+				...point.geometry,
+				mode: "area" as const,
+				x: 120,
+				y: 240,
+				frame: {
+					width: 260,
+					height: 100,
+					inset: { top: 8, right: 8, bottom: 8, left: 8 },
+					verticalAlignment: "top" as const,
+				},
+			},
+		}
+		const withText = {
+			...document,
+			objects: [...document.objects, point, area],
+		}
+
+		expect(assemble(split(withText))).toEqual(withText)
+	})
+
 	it("normalizes legacy path-and-fill objects deterministically", () => {
 		const document = fixture()
 		const result = decodeDesignDocument({

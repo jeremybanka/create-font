@@ -192,6 +192,7 @@ export const compatibleGeometrySchema = z.discriminatedUnion("kind", [
 	compatiblePathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
+	textGeometrySchema,
 ])
 const legacyGeometrySchema = z.discriminatedUnion("kind", [
 	legacyPathGeometrySchema,

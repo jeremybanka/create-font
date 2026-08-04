@@ -30,6 +30,17 @@ function fixtureBytes(): Uint8Array {
 		name,
 		advanceWidth,
 	})
+	const emptyGlyph = (name: string, advanceWidth: number) => ({
+		...template,
+		name,
+		advanceWidth,
+		leftSideBearing: 0,
+		contours: [],
+		variations: template.variations.map((variation) => ({
+			...variation,
+			deltas: { ...variation.deltas, points: [] },
+		})),
+	})
 	const expanded: VariableFontSource = {
 		...source,
 		names: {
@@ -48,6 +59,7 @@ function fixtureBytes(): Uint8Array {
 			glyph("A", 700),
 			glyph("B", 680),
 			glyph("acutecomb", 0),
+			emptyGlyph("space", 300),
 		],
 		cmap: [
 			{ codePoint: 0x4f, glyph: 1 },
@@ -56,6 +68,7 @@ function fixtureBytes(): Uint8Array {
 			{ codePoint: 0x41, glyph: 5 },
 			{ codePoint: 0x42, glyph: 6 },
 			{ codePoint: 0x0301, glyph: 7 },
+			{ codePoint: 0x20, glyph: 8 },
 			{ codePoint: 0x0627, glyph: 5 },
 			{ codePoint: 0x0628, glyph: 6 },
 		],
@@ -142,6 +155,18 @@ describe("runtime-portable font service", () => {
 		expect(new Set(shaped?.glyphs.map(({ cluster }) => cluster))).toEqual(
 			new Set([0]),
 		)
+	})
+
+	test("accepts mapped spacing glyphs with an advance and no outline", () => {
+		const { service, font } = registered()
+		const shaped = service.shape({ font, text: "A A" })
+		const space = shaped.value?.glyphs.find(({ cluster }) => cluster === 1)
+		expect(space).toMatchObject({ glyphId: 8, xAdvance: 300 })
+		if (space === undefined) throw new Error("Space glyph was not shaped.")
+		const outline = service.outline({ font, glyphId: space.glyphId })
+		expect(outline.value?.commands).toEqual([])
+		expect(outline.diagnostics).toEqual([])
+		expect(shaped.diagnostics).toEqual([])
 	})
 
 	test("shapes right-to-left runs in visual glyph order", () => {

@@ -77,6 +77,8 @@ afterEach(() => {
 		host.remove()
 	}
 	hosts.length = 0
+	Reflect.deleteProperty(document, "fonts")
+	Reflect.deleteProperty(window, "FontFace")
 	vi.restoreAllMocks()
 	vi.unstubAllGlobals()
 })
@@ -1318,6 +1320,98 @@ describe("create-design shared vector scene", () => {
 		expect(document.querySelector("persistence-alert")).toBeNull()
 	})
 
+	it("loads a promoted workspace font into the browser and permanent combobox", async () => {
+		const faces: Array<{
+			family: string
+			load: ReturnType<typeof vi.fn>
+			source: ArrayBuffer
+		}> = []
+		const TestFontFace = class {
+			readonly family: string
+			readonly source: ArrayBuffer
+			readonly load = vi.fn(async () => this)
+			constructor(family: string, source: ArrayBuffer) {
+				this.family = family
+				this.source = source
+				faces.push(this)
+			}
+		}
+		vi.stubGlobal("FontFace", TestFontFace)
+		Object.defineProperty(window, "FontFace", {
+			configurable: true,
+			value: TestFontFace,
+		})
+		const fontSet = { add: vi.fn(), delete: vi.fn(() => true) }
+		Object.defineProperty(document, "fonts", {
+			configurable: true,
+			value: fontSet,
+		})
+		expect(typeof FontFace).toBe("function")
+		expect(document.fonts).toBe(fontSet)
+		const installed = {
+			id: "font:workspace-browser",
+			family: "Workspace Browser",
+			revision: "sha256:persisted",
+		}
+		const session = sourceSession({
+			fonts: [],
+			installFont: vi.fn(async () => installed),
+		})
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(() => null),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+			textService,
+		})
+		const upload = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Add OpenType font to workspace"]',
+		)
+		if (upload === null) throw new Error("Font upload input was not found.")
+		const bytes = new Uint8Array([79, 84, 84, 79, 1, 2, 3])
+		Object.defineProperty(upload, "files", {
+			configurable: true,
+			value: [new File([bytes], "Workspace Browser.otf", { type: "font/otf" })],
+		})
+		await act(async () => {
+			upload.dispatchEvent(new Event("change", { bubbles: true }))
+			await vi.waitFor(() => expect(fontSet.add).toHaveBeenCalledOnce())
+		})
+
+		expect(typeof FontFace).toBe("function")
+		expect(document.fonts).toBe(fontSet)
+		expect(faces).toHaveLength(1)
+		expect(fontSet.add).toHaveBeenCalledOnce()
+		expect(faces[0]?.family).toBe("Workspace Browser")
+		expect(new Uint8Array(faces[0]!.source)).toEqual(bytes)
+		expect(faces[0]?.load).toHaveBeenCalledOnce()
+		expect(
+			document.querySelector<HTMLInputElement>('input[role="combobox"]')?.value,
+		).toBe("Workspace Browser")
+		expect(
+			document.querySelector<HTMLButtonElement>('button[aria-label="Type"]')
+				?.disabled,
+		).toBe(false)
+		expect(document.querySelector("persistence-alert")).toBeNull()
+		const host = hosts.at(-1)
+		if (host !== undefined) act(() => render(null, host))
+		expect(fontSet.delete).toHaveBeenCalledOnce()
+		Reflect.deleteProperty(document, "fonts")
+		Reflect.deleteProperty(window, "FontFace")
+	})
+
 	it("authors new text with a loaded workspace font and selects its initial draft", async () => {
 		const reference = {
 			id: "font:workspace-sans",
@@ -1400,8 +1494,27 @@ describe("create-design shared vector scene", () => {
 		const session = sourceSession({
 			fonts: [{ reference, bytes: new Uint8Array([1]) }],
 		})
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(() => null),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 1, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
 		const host = prepareDesignDom()
-		act(() => render(h(DesignApplication, { sourceSession: session }), host))
+		act(() =>
+			render(
+				h(DesignApplication, { sourceSession: session, textService }),
+				host,
+			),
+		)
 		const pointType = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Type"]',
 		)
@@ -1412,6 +1525,7 @@ describe("create-design shared vector scene", () => {
 			render(
 				h(DesignApplication, {
 					sourceSession: { ...session, fonts: [] },
+					textService,
 				}),
 				host,
 			)

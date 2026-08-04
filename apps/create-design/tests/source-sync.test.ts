@@ -7,27 +7,39 @@ import {
 	type JsonValue,
 } from "@create-art/source-rpc"
 import { createSourceRpcClient } from "@create-art/source-rpc/client"
+import { preflightPdfExport } from "@create-design/pdf"
 import {
+	assembleDesignDocument,
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
 } from "@create-design/source"
+import { createDesignTextService } from "@create-design/text"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
 import { createInitialDocument } from "@create-design/source"
+import {
+	createDesignTextObject,
+	DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+	updateDesignText,
+} from "../../../packages/create-design/editor/src/design-text.ts"
+import { exportDesignPdf } from "../src/pdf-export.ts"
 import { createDesignServerApp } from "../src/server.ts"
 import {
 	designSourceTransaction,
 	installDesignSourceFont,
 } from "../src/source-sync.ts"
+import { createTextFontFixtureBytes } from "./fixtures/text-font.ts"
 
 const roots: string[] = []
+const outputs: string[] = []
 
 afterEach(async () => {
 	vi.unstubAllGlobals()
 	await Promise.all(
 		roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
 	)
+	await Promise.all(outputs.splice(0).map((path) => rm(path, { force: true })))
 })
 
 function initialState(document = createInitialDocument()) {
@@ -119,6 +131,142 @@ describe(`create-design source synchronization`, () => {
 		await expect(
 			readFile(join(root, `fonts/rejected.otf`)),
 		).rejects.toMatchObject({ code: `ENOENT` })
+		expect(
+			await readdir(join(root, `.create-design`, `asset-staging`)),
+		).toEqual([])
+	})
+
+	test(`persists shaped point and area text through restart and PDF export`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-text-workflow-`))
+		roots.push(root)
+		let app = await createDesignServerApp({ root })
+		const routeFetch = (input: RequestInfo | URL, init?: RequestInit) =>
+			app.handle(input instanceof Request ? input : new Request(input, init))
+		vi.stubGlobal(`fetch`, routeFetch)
+		let client = createSourceRpcClient(`http://localhost`)
+		let state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const bytes = createTextFontFixtureBytes()
+		const installed = await installDesignSourceFont(
+			client,
+			state,
+			{
+				id: `font:workspace-fixture`,
+				family: `Workspace Fixture`,
+				revision: 1,
+			},
+			bytes,
+			`Workspace Fixture.otf`,
+		)
+		state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const assembled = assembleDesignDocument(
+			Object.fromEntries(
+				[...state.units].map(([path, unit]) => [path, unit.value]),
+			),
+		)
+		if (!assembled.ok) throw new Error(JSON.stringify(assembled.errors))
+		const appearance = { fill: { swatchId: assembled.value.swatches[1]!.id } }
+		const typography = {
+			...DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
+			font: installed.reference,
+		}
+		const point = updateDesignText(
+			createDesignTextObject({
+				id: `object:point-fixture`,
+				name: `Point text`,
+				mode: `point`,
+				x: 100,
+				y: 150,
+				appearance,
+				text: `Hello world`,
+				typography,
+			}),
+			`Hello world point edited`,
+		)
+		const area = updateDesignText(
+			createDesignTextObject({
+				id: `object:area-fixture`,
+				name: `Area text`,
+				mode: `area`,
+				x: 100,
+				y: 250,
+				width: 300,
+				height: 100,
+				appearance,
+				text: `Hello world`,
+				typography,
+			}),
+			`Hello world area edited`,
+		)
+		const transaction = designSourceTransaction(state, {
+			...assembled.value,
+			objects: [...assembled.value.objects, point, area],
+		})
+		await expect(
+			client.writeUnits({
+				idempotencyKey: crypto.randomUUID(),
+				...transaction,
+			}),
+		).resolves.toMatchObject({ removedPaths: [] })
+
+		app = await createDesignServerApp({ root })
+		client = createSourceRpcClient(`http://localhost`)
+		state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const restarted = assembleDesignDocument(
+			Object.fromEntries(
+				[...state.units].map(([path, unit]) => [path, unit.value]),
+			),
+		)
+		if (!restarted.ok) throw new Error(JSON.stringify(restarted.errors))
+		const textObjects = restarted.value.objects.filter(
+			(object) => object.geometry.kind === `text`,
+		)
+		expect(
+			textObjects.map((object) =>
+				object.geometry.kind === `text`
+					? [object.geometry.text, object.geometry.typography.font]
+					: null,
+			),
+		).toEqual([
+			[`Hello world point edited`, installed.reference],
+			[`Hello world area edited`, installed.reference],
+		])
+		const textService = createDesignTextService()
+		expect(textService.registerFont(installed.reference, bytes)).toEqual([])
+		const layouts = textObjects.map((object) => textService.layout(object))
+		expect(layouts.every((layout) => layout?.diagnostics.length === 0)).toBe(
+			true,
+		)
+		expect(
+			layouts.some((layout) =>
+				layout?.glyphs.some(
+					(glyph) => glyph.contours.length === 0 && glyph.advanceX > 0,
+				),
+			),
+		).toBe(true)
+		const preflight = preflightPdfExport(
+			restarted.value,
+			{ scope: { kind: `all` } },
+			{},
+			textService,
+		)
+		expect(preflight).toMatchObject({
+			decision: `ready`,
+			diagnostics: [],
+			summary: { errors: 0 },
+		})
+		const output = join(
+			tmpdir(),
+			`create-design-text-${crypto.randomUUID()}.pdf`,
+		)
+		outputs.push(output)
+		await expect(exportDesignPdf({ output, root })).resolves.toMatchObject({
+			pages: 1,
+			preflight: { decision: `ready`, diagnostics: [] },
+		})
+		expect(
+			JSON.parse(await readFile(join(root, `fonts/index.json`), `utf8`))
+				.entries,
+		).toHaveLength(1)
 		expect(
 			await readdir(join(root, `.create-design`, `asset-staging`)),
 		).toEqual([])
