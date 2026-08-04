@@ -376,7 +376,9 @@ export const fontIndexFileSchema = z
 		entries: z.array(
 			z
 				.object({
+					byteLength: z.number().int().nonnegative(),
 					id: fontIdSchema,
+					mediaType: mediaTypeSchema,
 					path: fontUnitPathSchema,
 					sha256: z.string().regex(/^[0-9a-f]{64}$/u),
 					family: z.string().min(1).optional(),

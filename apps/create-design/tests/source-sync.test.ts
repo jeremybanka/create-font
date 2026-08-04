@@ -1,16 +1,34 @@
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import {
 	sourceSyncStateFromSnapshot,
 	type JsonValue,
 } from "@create-art/source-rpc"
+import { createSourceRpcClient } from "@create-art/source-rpc/client"
 import {
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
 } from "@create-design/source"
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 
 import { createInitialDocument } from "@create-design/source"
-import { designSourceTransaction } from "../src/source-sync.ts"
+import { createDesignServerApp } from "../src/server.ts"
+import {
+	designSourceTransaction,
+	installDesignSourceFont,
+} from "../src/source-sync.ts"
+
+const roots: string[] = []
+
+afterEach(async () => {
+	vi.unstubAllGlobals()
+	await Promise.all(
+		roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+	)
+})
 
 function initialState(document = createInitialDocument()) {
 	const split = splitDesignDocument(document)
@@ -32,6 +50,80 @@ function initialState(document = createInitialDocument()) {
 }
 
 describe(`create-design source synchronization`, () => {
+	test(`installs a font through the real RPC as one atomic transaction`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-font-install-`))
+		roots.push(root)
+		const app = await createDesignServerApp({ root })
+		vi.stubGlobal(`fetch`, (input: RequestInfo | URL, init?: RequestInit) =>
+			app.handle(input instanceof Request ? input : new Request(input, init)),
+		)
+		const client = createSourceRpcClient(`http://localhost`)
+		const state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const bytes = new Uint8Array([79, 84, 84, 79, 0, 1, 2, 3])
+
+		const installed = await installDesignSourceFont(
+			client,
+			state,
+			{ id: `font:fixture`, family: `Fixture`, revision: 1 },
+			bytes,
+			`Fixture.otf`,
+		)
+
+		expect(installed.reference.revision).toMatch(/^sha256:/u)
+		expect(
+			new Uint8Array(await readFile(join(root, `fonts/fixture.otf`))),
+		).toEqual(bytes)
+		expect(
+			JSON.parse(await readFile(join(root, `fonts/index.json`), `utf8`)),
+		).toMatchObject({
+			entries: [
+				{
+					byteLength: bytes.byteLength,
+					id: `font:fixture`,
+					mediaType: `font/otf`,
+					path: `fonts/fixture.otf`,
+				},
+			],
+			format: `create-design.font-index`,
+			version: 1,
+		})
+		expect(
+			await readdir(join(root, `.create-design`, `asset-staging`)),
+		).toEqual([])
+	})
+
+	test(`leaves no staged or canonical font behind after a rejected promotion`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-font-reject-`))
+		roots.push(root)
+		const app = await createDesignServerApp({ root })
+		vi.stubGlobal(`fetch`, (input: RequestInfo | URL, init?: RequestInit) =>
+			app.handle(input instanceof Request ? input : new Request(input, init)),
+		)
+		const client = createSourceRpcClient(`http://localhost`)
+		const state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const indexPath = join(root, `fonts/index.json`)
+		await writeFile(indexPath, `${await readFile(indexPath, `utf8`)}\n`)
+
+		await expect(
+			installDesignSourceFont(
+				client,
+				state,
+				{ id: `font:rejected`, family: `Rejected`, revision: 1 },
+				new Uint8Array([79, 84, 84, 79]),
+				`Rejected.otf`,
+			),
+		).rejects.toThrow(`changed since it was read`)
+		expect(JSON.parse(await readFile(indexPath, `utf8`))).toMatchObject({
+			entries: [],
+		})
+		await expect(
+			readFile(join(root, `fonts/rejected.otf`)),
+		).rejects.toMatchObject({ code: `ENOENT` })
+		expect(
+			await readdir(join(root, `.create-design`, `asset-staging`)),
+		).toEqual([])
+	})
+
 	test(`does not rewrite semantically unchanged canonical units`, () => {
 		expect(
 			designSourceTransaction(initialState(), createInitialDocument()),

@@ -15,6 +15,7 @@ import {
 	sourceUnitKindForPath,
 	splitDesignDocument,
 	type DesignDocument,
+	type DesignFontReference,
 	type FontIndexFile,
 } from "@create-design/source"
 import type {
@@ -129,6 +130,115 @@ export function designSourceTransaction(
 		.filter(({ path }) => !(path in next))
 		.map(({ path, revision }) => ({ expectedRevision: revision, path }))
 	return { removals, writes }
+}
+
+type DesignSourceAssetClient = Pick<
+	ReturnType<typeof createSourceRpcClient>,
+	"discardAssetStage" | "stageAsset" | "writeAssets"
+>
+
+function fontMediaType(extension: string): string {
+	switch (extension) {
+		case "ttf":
+		case "ttc":
+			return "font/ttf"
+		case "woff":
+			return "font/woff"
+		case "woff2":
+			return "font/woff2"
+		default:
+			return "font/otf"
+	}
+}
+
+export async function installDesignSourceFont(
+	client: DesignSourceAssetClient,
+	state: SourceSyncState,
+	reference: DesignFontReference,
+	bytes: Uint8Array,
+	fileName: string,
+): Promise<
+	Readonly<{
+		reference: DesignFontReference
+		result: Awaited<ReturnType<DesignSourceAssetClient["writeAssets"]>>
+	}>
+> {
+	const hash = new Uint8Array(
+		await crypto.subtle.digest("SHA-256", bytes.slice().buffer),
+	)
+	const sha256 = [...hash]
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("")
+	const existingValue = state.units.get("fonts/index.json")?.value
+	const parsed =
+		existingValue === undefined
+			? null
+			: (existingValue as unknown as FontIndexFile)
+	const previous = parsed?.entries.find(({ id }) => id === reference.id)
+	const extension =
+		/\.(otf|ttf|woff2?|ttc)$/iu.exec(fileName)?.[1]?.toLowerCase() ?? "otf"
+	const slug = reference.id
+		.slice("font:".length)
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9._-]+/gu, "-")
+	const path = previous?.path ?? `fonts/${slug || "font"}.${extension}`
+	const mediaType = fontMediaType(extension)
+	const revision = `sha256:${sha256}` as const
+	const nextReference = { ...reference, revision }
+	const operationId = crypto.randomUUID()
+	const staged = await client.stageAsset(
+		operationId,
+		{
+			byteLength: bytes.byteLength,
+			digest: revision,
+			id: reference.id,
+			mediaType,
+			path,
+		},
+		bytes.slice().buffer,
+	)
+	const entries = [
+		...(parsed?.entries.filter(({ id }) => id !== reference.id) ?? []),
+		{
+			byteLength: bytes.byteLength,
+			id: reference.id,
+			mediaType,
+			path,
+			sha256,
+			family: reference.family,
+			...(reference.faceIndex === undefined
+				? {}
+				: { faceIndex: reference.faceIndex }),
+			revision,
+		},
+	].toSorted((left, right) => left.id.localeCompare(right.id))
+	const currentIndex = state.units.get("fonts/index.json")
+	try {
+		const result = await client.writeAssets({
+			idempotencyKey: operationId,
+			assetWrites: [
+				{
+					expectedDigest: state.assets?.get(path)?.digest ?? null,
+					stagingToken: staged.stagingToken,
+				},
+			],
+			writes: [
+				{
+					expectedRevision: currentIndex?.revision ?? null,
+					path: "fonts/index.json",
+					value: {
+						format: "create-design.font-index",
+						version: 1,
+						entries,
+					} as unknown as JsonValue,
+				},
+			],
+		})
+		return { reference: nextReference, result }
+	} catch (error) {
+		await client.discardAssetStage(staged.stagingToken).catch(() => undefined)
+		throw error
+	}
 }
 
 function websocketUrl(): string {
@@ -249,82 +359,15 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
 		...(fonts.length === 0 ? {} : { fonts }),
-		async installFont(reference, bytes, fileName, mediaType) {
-			const hash = new Uint8Array(
-				await crypto.subtle.digest("SHA-256", bytes.slice().buffer),
+		async installFont(reference, bytes, fileName, _mediaType) {
+			const installed = await installDesignSourceFont(
+				client,
+				state,
+				reference,
+				bytes,
+				fileName,
 			)
-			const sha256 = [...hash]
-				.map((byte) => byte.toString(16).padStart(2, "0"))
-				.join("")
-			const existingValue = state.units.get("fonts/index.json")?.value
-			const parsed =
-				existingValue === undefined
-					? null
-					: (existingValue as unknown as FontIndexFile)
-			const previous = parsed?.entries.find(({ id }) => id === reference.id)
-			const extension =
-				/\.(otf|ttf|woff2?|ttc)$/iu.exec(fileName)?.[1]?.toLowerCase() ?? "otf"
-			const slug = reference.id
-				.slice("font:".length)
-				.toLowerCase()
-				.replaceAll(/[^a-z0-9._-]+/gu, "-")
-			const path = previous?.path ?? `fonts/${slug || "font"}.${extension}`
-			const revision = `sha256:${sha256}` as const
-			const nextReference = { ...reference, revision }
-			const operationId = crypto.randomUUID()
-			const staged = await client.stageAsset(
-				operationId,
-				{
-					id: reference.id,
-					path,
-					mediaType:
-						mediaType ||
-						(extension === "ttf"
-							? "font/ttf"
-							: extension === "woff2"
-								? "font/woff2"
-								: extension === "woff"
-									? "font/woff"
-									: "font/otf"),
-					byteLength: bytes.byteLength,
-					digest: revision,
-				},
-				bytes.slice().buffer,
-			)
-			const entries = [
-				...(parsed?.entries.filter(({ id }) => id !== reference.id) ?? []),
-				{
-					id: reference.id,
-					path,
-					sha256,
-					family: reference.family,
-					...(reference.faceIndex === undefined
-						? {}
-						: { faceIndex: reference.faceIndex }),
-					revision,
-				},
-			].toSorted((left, right) => left.id.localeCompare(right.id))
-			const currentIndex = state.units.get("fonts/index.json")
-			const result = await client.writeAssets({
-				idempotencyKey: crypto.randomUUID(),
-				assetWrites: [
-					{
-						expectedDigest: state.assets?.get(path)?.digest ?? null,
-						stagingToken: staged.stagingToken,
-					},
-				],
-				writes: [
-					{
-						expectedRevision: currentIndex?.revision ?? null,
-						path: "fonts/index.json",
-						value: {
-							format: "create-design.font-index",
-							version: 1,
-							entries,
-						} as unknown as JsonValue,
-					},
-				],
-			})
+			const { result } = installed
 			const applied = applySourceSyncDelta(state, {
 				type: "source.changed",
 				previousRevision: result.previousRevision,
@@ -336,7 +379,7 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 			})
 			if (applied.kind === "gap") await recover(false)
 			else state = applied.state
-			return nextReference
+			return installed.reference
 		},
 		versionControl: {
 			commitUnits: (input) => client.commitUnits(input),

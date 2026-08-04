@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import {
+	access,
 	mkdir,
 	mkdtemp,
 	readFile,
@@ -141,6 +142,12 @@ async function bytesFrom(stream: ReadableStream<Uint8Array>) {
 	return result
 }
 
+async function expectStageRemoved(root: string, stagingToken: string) {
+	await expect(
+		access(join(root, `.create-art`, `asset-staging`, stagingToken)),
+	).rejects.toMatchObject({ code: `ENOENT` })
+}
+
 describe(`filesystem source assets`, () => {
 	test(`streams byte-identical content and publishes it with JSON references`, async () => {
 		const { root, service } = await assetWorkspace()
@@ -207,6 +214,7 @@ describe(`filesystem source assets`, () => {
 			`placements/one.json`,
 			`placements/two.json`,
 		])
+		await expectStageRemoved(root, staged.stagingToken)
 	})
 
 	test(`rejects oversized, mismatched, unsafe, and interrupted uploads`, async () => {
@@ -285,7 +293,7 @@ describe(`filesystem source assets`, () => {
 	})
 
 	test(`uses digest conditions and never exposes failed replacements`, async () => {
-		const { service } = await assetWorkspace()
+		const { root, service } = await assetWorkspace()
 		const firstBytes = new Uint8Array([1, 2, 3])
 		const first = descriptor(firstBytes)
 		const initial = await service.readSnapshot()
@@ -343,15 +351,23 @@ describe(`filesystem source assets`, () => {
 				],
 			}),
 		).rejects.toBeInstanceOf(SourceAssetConflictError)
+		await expectStageRemoved(root, secondStage.stagingToken)
 		expect(
 			await bytesFrom((await service.readAsset(first.path)).bytes),
 		).toEqual(firstBytes)
+		const retryStage = await service.stageAsset({
+			bytes: (async function* () {
+				yield secondBytes
+			})(),
+			descriptor: second,
+			operationId: `replace`,
+		})
 		const openRead = await service.readAsset(first.path)
 		const replaced = await service.writeAssets({
 			assetWrites: [
 				{
 					expectedDigest: first.digest,
-					stagingToken: secondStage.stagingToken,
+					stagingToken: retryStage.stagingToken,
 				},
 			],
 			idempotencyKey: `replace`,
@@ -385,6 +401,43 @@ describe(`filesystem source assets`, () => {
 		await expect(service.readAsset(second.path)).rejects.toBeInstanceOf(
 			SourceAssetNotFoundError,
 		)
+	})
+
+	test(`cleans rejected operation stages without touching unrelated uploads`, async () => {
+		const { root, service } = await assetWorkspace()
+		const ownedBytes = new Uint8Array([1, 2, 3])
+		const unrelatedBytes = new Uint8Array([4, 5, 6])
+		const owned = await service.stageAsset({
+			bytes: (async function* () {
+				yield ownedBytes
+			})(),
+			descriptor: descriptor(ownedBytes, `assets/owned.bin`),
+			operationId: `owned-operation`,
+		})
+		const unrelated = await service.stageAsset({
+			bytes: (async function* () {
+				yield unrelatedBytes
+			})(),
+			descriptor: descriptor(unrelatedBytes, `assets/unrelated.bin`),
+			operationId: `unrelated-operation`,
+		})
+
+		await expect(
+			service.writeAssets({
+				assetWrites: [
+					{ expectedDigest: null, stagingToken: owned.stagingToken },
+				],
+				idempotencyKey: `different-operation`,
+			}),
+		).rejects.toThrow(`transaction identity`)
+		await expectStageRemoved(root, owned.stagingToken)
+		await expect(
+			access(
+				join(root, `.create-art`, `asset-staging`, unrelated.stagingToken),
+			),
+		).resolves.toBeUndefined()
+		await service.discardAssetStage(unrelated.stagingToken)
+		await expectStageRemoved(root, unrelated.stagingToken)
 	})
 
 	test(`expires abandoned stages without touching canonical assets`, async () => {

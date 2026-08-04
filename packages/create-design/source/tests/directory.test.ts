@@ -439,13 +439,46 @@ describe("create-design directory source", () => {
 				version: 1,
 				entries: [
 					{
+						byteLength: 42,
 						id: "font:escape",
+						mediaType: "font/woff2",
 						path: "fonts/%2e%2e/escape.woff2",
 						sha256: "0".repeat(64),
 					},
 				],
 			}),
 		).toMatchObject({ ok: false })
+	})
+
+	it("requires canonical descriptor metadata in font inventories", () => {
+		expect(
+			validateSourceUnit("font-index", {
+				format: "create-design.font-index",
+				version: 1,
+				entries: [
+					{
+						id: "font:workspace-sans",
+						path: "fonts/workspace-sans.otf",
+						sha256: "0".repeat(64),
+					},
+				],
+			}),
+		).toMatchObject({ ok: false })
+		expect(
+			validateSourceUnit("font-index", {
+				format: "create-design.font-index",
+				version: 1,
+				entries: [
+					{
+						byteLength: 58_068,
+						id: "font:workspace-sans",
+						mediaType: "font/otf",
+						path: "fonts/workspace-sans.otf",
+						sha256: "0".repeat(64),
+					},
+				],
+			}),
+		).toMatchObject({ ok: true })
 	})
 
 	it("rejects unsafe and duplicate object source paths before splitting", () => {

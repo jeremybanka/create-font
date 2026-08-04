@@ -87,16 +87,10 @@ export const designSourceWorkspaceCodec: JsonSourceWorkspaceCodec<DesignSourceUn
 							path: entry.path,
 						})),
 						...fonts.data.entries.map((entry) => ({
-							byteLength: 0,
+							byteLength: entry.byteLength,
 							digest: `sha256:${entry.sha256}` as const,
 							id: entry.id,
-							mediaType: entry.path.endsWith(".otf")
-								? "font/otf"
-								: entry.path.endsWith(".woff2")
-									? "font/woff2"
-									: entry.path.endsWith(".woff")
-										? "font/woff"
-										: "font/ttf",
+							mediaType: entry.mediaType,
 							path: entry.path,
 						})),
 					],

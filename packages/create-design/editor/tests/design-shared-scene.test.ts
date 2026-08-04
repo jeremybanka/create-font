@@ -1264,6 +1264,60 @@ describe("create-design shared vector scene", () => {
 		).toBe("true")
 	})
 
+	it("reports a workspace font promotion failure without enabling Type", async () => {
+		const installFont = vi.fn(async () => {
+			throw new Error("Asset inventory metadata does not match the font.")
+		})
+		const session = sourceSession({ fonts: [], installFont })
+		const textService = {
+			registerFont: vi.fn(() => []),
+			unregisterFont: vi.fn(() => true),
+			layout: vi.fn(() => null),
+			expand: vi.fn(() => null),
+			cacheStats: vi.fn(() => ({
+				layouts: 0,
+				parsing: { entries: 0, hits: 0, misses: 0 },
+				shaping: { entries: 0, hits: 0, misses: 0 },
+				metrics: { entries: 0, hits: 0, misses: 0 },
+				outlines: { entries: 0, hits: 0, misses: 0 },
+			})),
+			clearCaches: vi.fn(),
+		}
+		mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+			textService,
+		})
+		const upload = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Add OpenType font to workspace"]',
+		)
+		if (upload === null) throw new Error("Font upload input was not found.")
+		const file = new File([new Uint8Array([79, 84, 84, 79])], "Broken.otf", {
+			type: "font/otf",
+		})
+		Object.defineProperty(upload, "files", {
+			configurable: true,
+			value: [file],
+		})
+		await act(async () => {
+			upload.dispatchEvent(new Event("change", { bubbles: true }))
+			await vi.waitFor(() => expect(installFont).toHaveBeenCalledOnce())
+		})
+
+		expect(textService.unregisterFont).toHaveBeenCalledWith("font:broken")
+		expect(
+			document.querySelector('footer [role="status"]')?.textContent,
+		).toContain(
+			"Could not add Broken.otf to the workspace: Asset inventory metadata does not match the font.",
+		)
+		expect(
+			document.querySelector<HTMLButtonElement>('button[aria-label="Type"]')
+				?.disabled,
+		).toBe(true)
+		expect(session.save).not.toHaveBeenCalled()
+		expect(document.querySelector("persistence-alert")).toBeNull()
+	})
+
 	it("authors new text with a loaded workspace font and selects its initial draft", async () => {
 		const reference = {
 			id: "font:workspace-sans",

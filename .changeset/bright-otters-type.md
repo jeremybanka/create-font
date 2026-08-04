@@ -1,5 +1,6 @@
 ---
 "create-design": patch
+"@create-art/source-rpc": patch
 "@create-design/editor": patch
 "@create-design/model": patch
 "@create-design/pdf": patch
