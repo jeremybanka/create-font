@@ -302,6 +302,104 @@ describe("create-design shared vector scene", () => {
 		expect(document.activeElement).toBe(help)
 	})
 
+	it("renders eight screen-stable transform handles with axis cursors and discoverable help", async () => {
+		const stage = mountDesign()
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const transform = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Transform"]',
+		)
+		if (layer === undefined || transform === null)
+			throw new Error("Design transform controls were not found.")
+		act(() => {
+			layer.click()
+			transform.click()
+		})
+
+		const handleNames = ["nw", "n", "ne", "e", "se", "s", "sw", "w"]
+		expect(
+			stage.find(".transform-handle").map((handle: { name: () => string }) =>
+				handle
+					.name()
+					.split(" ")
+					.find((name: string) => name.startsWith("transform-handle-"))
+					?.replace("transform-handle-", ""),
+			),
+		).toEqual(handleNames)
+		const positions = Object.fromEntries(
+			handleNames.map((name) => [
+				name,
+				stage.findOne(`.transform-handle-${name}`).position(),
+			]),
+		)
+		expect(positions).toEqual({
+			nw: { x: 82, y: 102 },
+			n: { x: 222, y: 102 },
+			ne: { x: 362, y: 102 },
+			e: { x: 362, y: 222 },
+			se: { x: 362, y: 342 },
+			s: { x: 222, y: 342 },
+			sw: { x: 82, y: 342 },
+			w: { x: 82, y: 222 },
+		})
+
+		const screenWidth = (name: string) => {
+			const handle = stage.findOne(`.transform-handle-${name}`)
+			return handle.width() * handle.getAbsoluteScale().x
+		}
+		for (const name of handleNames) expect(screenWidth(name)).toBeCloseTo(10)
+
+		const cursorByHandle = {
+			nw: "nwse-resize",
+			n: "ns-resize",
+			ne: "nesw-resize",
+			e: "ew-resize",
+			se: "nwse-resize",
+			s: "ns-resize",
+			sw: "nesw-resize",
+			w: "ew-resize",
+		} as const
+		for (const [name, cursor] of Object.entries(cursorByHandle)) {
+			act(() => stage.findOne(`.transform-handle-${name}`).fire("mouseenter"))
+			expect(stage.container().style.cursor).toBe(cursor)
+			act(() => stage.findOne(`.transform-handle-${name}`).fire("mouseleave"))
+		}
+		act(() => stage.findOne(".transform-rotation").fire("mouseenter"))
+		expect(stage.container().style.cursor).toBe("grab")
+
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue({ x: 480, y: 360 })
+		await act(async () => {
+			stage.fire("wheel", {
+				evt: {
+					altKey: false,
+					ctrlKey: true,
+					deltaX: 0,
+					deltaY: -300,
+					metaKey: false,
+					preventDefault: vi.fn(),
+					shiftKey: false,
+				},
+			})
+			await Promise.resolve()
+		})
+		for (const name of handleNames) expect(screenWidth(name)).toBeCloseTo(10)
+
+		const help = document.querySelector<HTMLButtonElement>(
+			'button[aria-controls="design-contextual-help"]',
+		)
+		if (help === null) throw new Error("Canvas Help was not found.")
+		act(() => help.click())
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"side handles to resize one axis",
+		)
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"numeric Transform controls for keyboard access",
+		)
+	})
+
 	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {
 		const base = createInitialDocument()
 		const template = base.objects[0]!
@@ -2849,13 +2947,21 @@ describe("create-design shared vector scene", () => {
 	})
 
 	it.each([
-		["nw", { x: -40, y: -30 }, { x: "maxX", y: "maxY" }],
-		["ne", { x: 40, y: -30 }, { x: "minX", y: "maxY" }],
-		["se", { x: 40, y: 30 }, { x: "minX", y: "minY" }],
-		["sw", { x: -40, y: 30 }, { x: "maxX", y: "minY" }],
+		["nw", { x: -40, y: -30 }, ["maxX", "maxY"]],
+		["n", { x: 23, y: -30 }, ["minX", "maxX", "maxY"]],
+		["n", { x: -19, y: 30 }, ["minX", "maxX", "maxY"]],
+		["ne", { x: 40, y: -30 }, ["minX", "maxY"]],
+		["e", { x: 40, y: 17 }, ["minX", "minY", "maxY"]],
+		["e", { x: -40, y: -21 }, ["minX", "minY", "maxY"]],
+		["se", { x: 40, y: 30 }, ["minX", "minY"]],
+		["s", { x: 13, y: 30 }, ["minX", "maxX", "minY"]],
+		["s", { x: -11, y: -30 }, ["minX", "maxX", "minY"]],
+		["sw", { x: -40, y: 30 }, ["maxX", "minY"]],
+		["w", { x: -40, y: 29 }, ["maxX", "minY", "maxY"]],
+		["w", { x: 40, y: -25 }, ["maxX", "minY", "maxY"]],
 	] as const)(
-		"keeps the opposite design corner fixed when dragging %s",
-		async (handleName, delta, fixed) => {
+		"previews and commits %s while preserving its opposite edge and inactive axis",
+		async (handleName, delta, unchanged) => {
 			const stage = mountDesign()
 			vi.spyOn(
 				HTMLCanvasElement.prototype,
@@ -2889,6 +2995,7 @@ describe("create-design shared vector scene", () => {
 				throw new Error(`${handleName} design transform handle was not found.`)
 			let pointer = handle.getAbsolutePosition()
 			vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+			const beforeDrag = localStorage.getItem(DESIGN_STORAGE_KEY)
 			await act(async () => {
 				handle.fire("pointerdown", {
 					evt: {
@@ -2905,22 +3012,42 @@ describe("create-design shared vector scene", () => {
 					x: pointer.x + delta.x,
 					y: pointer.y + delta.y,
 				}
-				for (const type of ["pointermove", "pointerup"]) {
-					canvas.dispatchEvent(
-						new PointerEvent(type, {
-							bubbles: true,
-							button: 0,
-							buttons: type === "pointerup" ? 0 : 1,
-							clientX: pointer.x,
-							clientY: pointer.y,
-							isPrimary: true,
-							pointerId: 7,
-							pointerType: "mouse",
-						}),
-					)
-				}
+				canvas.dispatchEvent(
+					new PointerEvent("pointermove", {
+						bubbles: true,
+						button: 0,
+						buttons: 1,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						isPrimary: true,
+						pointerId: 7,
+						pointerType: "mouse",
+					}),
+				)
 				await Promise.resolve()
 			})
+			expect(localStorage.getItem(DESIGN_STORAGE_KEY)).toBe(beforeDrag)
+			const previewPosition = stage
+				.findOne(`.transform-handle-${handleName}`)
+				.getAbsolutePosition()
+			await act(async () => {
+				canvas.dispatchEvent(
+					new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						buttons: 0,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						isPrimary: true,
+						pointerId: 7,
+						pointerType: "mouse",
+					}),
+				)
+				await Promise.resolve()
+			})
+			expect(
+				stage.findOne(`.transform-handle-${handleName}`).getAbsolutePosition(),
+			).toEqual(previewPosition)
 			const saved = localStorage.getItem(DESIGN_STORAGE_KEY)
 			if (saved === null) throw new Error("Design document was not persisted.")
 			const next = JSON.parse(saved) as DesignDocument
@@ -2929,8 +3056,211 @@ describe("create-design shared vector scene", () => {
 			)
 			if (bounds === null) throw new Error("Transformed object has no bounds.")
 			const original = { minX: 82, minY: 102, maxX: 362, maxY: 342 }
-			expect(bounds[fixed.x]).toBe(original[fixed.x])
-			expect(bounds[fixed.y]).toBe(original[fixed.y])
+			for (const key of unchanged) expect(bounds[key]).toBe(original[key])
+		},
+	)
+
+	it("recomputes an edge resize from the original bounds as Alt toggles", async () => {
+		const stage = mountDesign()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const transform = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Transform"]',
+		)
+		if (layer === undefined || transform === null)
+			throw new Error("Design transform controls were not found.")
+		act(() => {
+			layer.click()
+			transform.click()
+		})
+		const east = stage.findOne(".transform-handle-e")
+		const canvas = stage.container().querySelector("canvas")
+		if (east === undefined || canvas === null)
+			throw new Error("East design transform handle was not found.")
+		const originalWest = stage
+			.findOne(".transform-handle-w")
+			.getAbsolutePosition()
+		const originalEast = east.getAbsolutePosition()
+		let pointer = originalEast
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		await act(async () => {
+			east.fire("pointerdown", {
+				evt: {
+					altKey: false,
+					button: 0,
+					ctrlKey: false,
+					currentTarget: canvas,
+					metaKey: false,
+					pointerId: 7,
+					shiftKey: false,
+				},
+			})
+			pointer = { x: pointer.x + 40, y: pointer.y + 19 }
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					buttons: 1,
+					clientX: pointer.x,
+					clientY: pointer.y,
+					pointerId: 7,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const normalWest = stage
+			.findOne(".transform-handle-w")
+			.getAbsolutePosition()
+		const normalEast = stage
+			.findOne(".transform-handle-e")
+			.getAbsolutePosition()
+		expect(normalWest).toEqual(originalWest)
+		expect(normalEast.x).not.toBe(originalEast.x)
+		expect(normalEast.y).toBe(originalEast.y)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					altKey: true,
+					bubbles: true,
+					key: "Alt",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const centeredWest = stage
+			.findOne(".transform-handle-w")
+			.getAbsolutePosition()
+		const centeredEast = stage
+			.findOne(".transform-handle-e")
+			.getAbsolutePosition()
+		expect((centeredWest.x + centeredEast.x) / 2).toBeCloseTo(
+			(originalWest.x + originalEast.x) / 2,
+		)
+		expect(centeredWest.y).toBe(originalWest.y)
+		expect(centeredEast.y).toBe(originalEast.y)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keyup", {
+					altKey: false,
+					bubbles: true,
+					key: "Alt",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".transform-handle-w").getAbsolutePosition()).toEqual(
+			normalWest,
+		)
+		expect(stage.findOne(".transform-handle-e").getAbsolutePosition()).toEqual(
+			normalEast,
+		)
+	})
+
+	it.each(["pointercancel", "lostpointercapture", "Escape"] as const)(
+		"restores an edge-resize preview after %s cancellation",
+		async (cancellation) => {
+			const storage = new Map<string, string>()
+			const stage = mountDesign({}, storage)
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"setPointerCapture",
+			).mockImplementation(() => undefined)
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"releasePointerCapture",
+			).mockImplementation(() => undefined)
+			vi.spyOn(
+				HTMLCanvasElement.prototype,
+				"hasPointerCapture",
+			).mockReturnValue(false)
+			const layer = [
+				...document.querySelectorAll<HTMLButtonElement>(
+					"design-layers-tile > button",
+				),
+			].find((button) => button.textContent?.includes("Coral rectangle"))
+			const transform = document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Transform"]',
+			)
+			if (layer === undefined || transform === null)
+				throw new Error("Design transform controls were not found.")
+			act(() => {
+				layer.click()
+				transform.click()
+			})
+			const east = stage.findOne(".transform-handle-e")
+			const canvas = stage.container().querySelector("canvas")
+			if (east === undefined || canvas === null)
+				throw new Error("East design transform handle was not found.")
+			const originalEast = east.getAbsolutePosition()
+			const originalStorage = storage.get(DESIGN_STORAGE_KEY)
+			let pointer = originalEast
+			vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+			await act(async () => {
+				east.fire("pointerdown", {
+					evt: {
+						altKey: false,
+						button: 0,
+						ctrlKey: false,
+						currentTarget: canvas,
+						metaKey: false,
+						pointerId: 7,
+						shiftKey: false,
+					},
+				})
+				pointer = { x: pointer.x + 40, y: pointer.y }
+				canvas.dispatchEvent(
+					new PointerEvent("pointermove", {
+						bubbles: true,
+						buttons: 1,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						pointerId: 7,
+						pointerType: "mouse",
+					}),
+				)
+				await Promise.resolve()
+			})
+			expect(
+				stage.findOne(".transform-handle-e").getAbsolutePosition().x,
+			).not.toBe(originalEast.x)
+			await act(async () => {
+				if (cancellation === "Escape")
+					window.dispatchEvent(
+						new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+					)
+				else
+					canvas.dispatchEvent(
+						new PointerEvent(cancellation, {
+							bubbles: true,
+							pointerId: 7,
+							pointerType: "mouse",
+						}),
+					)
+				await Promise.resolve()
+			})
+			expect(storage.get(DESIGN_STORAGE_KEY)).toBe(originalStorage)
+			if (cancellation === "Escape")
+				expect(stage.findOne(".transform-handle-e")).toBeUndefined()
+			else
+				expect(
+					stage.findOne(".transform-handle-e").getAbsolutePosition(),
+				).toEqual(originalEast)
 		},
 	)
 

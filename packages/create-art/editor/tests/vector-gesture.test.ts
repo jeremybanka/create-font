@@ -335,6 +335,36 @@ describe("shared vector gesture reducer parity", () => {
 		})
 	})
 
+	it.each([
+		["e", { minX: 10, minY: 0, maxX: 10, maxY: 80 }],
+		["w", { minX: 10, minY: 0, maxX: 10, maxY: 80 }],
+		["n", { minX: 0, minY: 20, maxX: 100, maxY: 20 }],
+		["s", { minX: 0, minY: 20, maxX: 100, maxY: 20 }],
+	] as const)(
+		"keeps a degenerate %s edge resize finite without activating the other axis",
+		(handle, bounds) => {
+			const started = down({
+				tool: "transform",
+				targetId: "object:a",
+				bounds,
+				handle,
+			})
+			const moved = transition(started.state, {
+				type: "pointer-move",
+				pointerId: 7,
+				pointer: pointer(70, 90, { shiftKey: true, altKey: true }),
+			})
+			if (moved.preview?.kind !== "transform")
+				throw new Error("Expected a transform preview.")
+			expect(moved.preview.scale).toEqual({ x: 1, y: 1 })
+			expect(
+				Object.values(moved.preview.anchor).every((value) =>
+					Number.isFinite(value),
+				),
+			).toBe(true)
+		},
+	)
+
 	it("cancels atomically and ignores unrelated pointer transitions", () => {
 		const started = down({ tool: "pen" })
 		const unrelated = transition(started.state, {

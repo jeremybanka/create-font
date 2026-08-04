@@ -17,6 +17,7 @@ import {
 	VectorSnapGuides,
 	tileRegistryCommands,
 	type PaletteCommand,
+	type CanvasCursor,
 	type CanvasPoint,
 	type VectorGestureDown,
 	type VectorGestureDownInput,
@@ -545,9 +546,48 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Click for corners · Drag for curves · Click start to close · Enter finishes open · Escape cancels"
 	if (tool === "rect" || tool === "ellipse")
 		return "Drag to draw · Shift constrains · Alt draws from center"
+	if (tool === "transform")
+		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Alt resizes from center · Use numeric Transform controls for keyboard access"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
 	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
+}
+
+const DESIGN_TRANSFORM_HANDLES = [
+	"nw",
+	"n",
+	"ne",
+	"e",
+	"se",
+	"s",
+	"sw",
+	"w",
+] as const satisfies readonly Exclude<
+	VectorTransformHandle,
+	"move" | "rotation"
+>[]
+
+function designTransformHandleCursor(
+	handle: VectorTransformHandle,
+): CanvasCursor {
+	switch (handle) {
+		case "n":
+		case "s":
+			return "ns-resize"
+		case "e":
+		case "w":
+			return "ew-resize"
+		case "nw":
+		case "se":
+			return "nwse-resize"
+		case "ne":
+		case "sw":
+			return "nesw-resize"
+		case "rotation":
+			return "grab"
+		case "move":
+			return "move"
+	}
 }
 
 export type DesignApplicationProps = Readonly<{
@@ -696,6 +736,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const [paletteOpen, setPaletteOpen] = useState(false)
 	const [helpOpen, setHelpOpen] = useState(false)
+	const [transformCursor, setTransformCursor] = useState<CanvasCursor | null>(
+		null,
+	)
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<DesignTileKind> | null>(null)
 	const [status, setStatus] = useState(
@@ -1158,6 +1201,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setPreviewArtboardDocument(null)
 		previewArtboardDocumentRef.current = null
 		setGuidePreview(null)
+		setTransformCursor(null)
 	}, [gesturePolicy])
 
 	const selectTool = useCallback(
@@ -3627,6 +3671,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
+		if (gesture.kind === "transform") setTransformCursor(null)
 		const transition = reduceVectorGesture(
 			gesture.state,
 			{
@@ -3820,6 +3865,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setPreviewArtboardDocument(null)
 			previewArtboardDocumentRef.current = null
 			setGuidePreview(null)
+			setTransformCursor(null)
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
 				penPointsRef.current = []
 				setPenPoints([])
@@ -3861,6 +3907,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		const bounds = combinedSelectionBounds(selectedObjects)
 		if (bounds === null) return
 		event.cancelBubble = true
+		setTransformCursor(
+			handle === "rotation" ? "grabbing" : designTransformHandleCursor(handle),
+		)
 		beginVectorGesture(
 			event,
 			{
@@ -4097,16 +4146,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							width={canvasViewport.width}
 							height={canvasViewport.height}
 							style={{
-								cursor: canvasToolCursor(
-									tool === "direct"
-										? "select"
-										: tool === "artboard"
-											? "rect"
-											: tool,
-									{
-										dragging: gestureRef.current?.kind === "pan",
-									},
-								),
+								cursor:
+									transformCursor ??
+									canvasToolCursor(
+										tool === "direct"
+											? "select"
+											: tool === "artboard"
+												? "rect"
+												: tool,
+										{
+											dragging: gestureRef.current?.kind === "pan",
+										},
+									),
 							}}
 							onPointerDown={pointerDown}
 							onPointerMove={pointerMove}
@@ -4469,7 +4520,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												color={canvasTheme.selection}
 												rotation={tool === "transform"}
 												{...(tool === "transform"
-													? { onHandlePointerDown: startScale }
+													? {
+															handles: DESIGN_TRANSFORM_HANDLES,
+															onHandlePointerDown: startScale,
+															onHandlePointerEnter: (
+																handle: VectorTransformHandle,
+															) =>
+																setTransformCursor(
+																	designTransformHandleCursor(handle),
+																),
+															onHandlePointerLeave: () => {
+																if (gestureRef.current?.kind !== "transform")
+																	setTransformCursor(null)
+															},
+														}
 													: { handles: [], listening: false })}
 											/>
 											{selectedGroup === null ? null : (
