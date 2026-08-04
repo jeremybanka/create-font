@@ -441,9 +441,15 @@ function transformPreview(
 				: (state.currentWorld.y - anchor.y) / startY
 	if (state.modifiers.shiftKey) {
 		const magnitude =
-			Math.abs(scaleX - 1) >= Math.abs(scaleY - 1) ? scaleX : scaleY
-		if (state.handle !== "n" && state.handle !== "s") scaleX = magnitude
-		if (state.handle !== "e" && state.handle !== "w") scaleY = magnitude
+			state.handle === "n" || state.handle === "s"
+				? scaleY
+				: state.handle === "e" || state.handle === "w"
+					? scaleX
+					: Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)
+						? scaleX
+						: scaleY
+		scaleX = magnitude
+		scaleY = magnitude
 	}
 	return {
 		kind: "transform",
