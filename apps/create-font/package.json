@@ -1,6 +1,6 @@
 {
 	"name": "create-font",
-	"version": "0.3.15",
+	"version": "0.3.16",
 	"description": "Repository-local CLI and browser server for create-font font projects",
 	"license": "AGPL-3.0-or-later",
 	"repository": {

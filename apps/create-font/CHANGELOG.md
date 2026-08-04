@@ -1,5 +1,14 @@
 # create-font
 
+## 0.3.16
+
+### Patch Changes
+
+- a114bac: Load the shared tiling editor styles correctly during development.
+- a731f3b: Port the browser editors from Preact and the local Konva adapter to React 19 and react-konva.
+- Updated dependencies [a731f3b]
+  - @create-font/editor@0.9.0
+
 ## 0.3.15
 
 ### Patch Changes

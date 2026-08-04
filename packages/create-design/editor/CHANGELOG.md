@@ -1,5 +1,17 @@
 # @create-design/editor
 
+## 0.2.0
+
+### Minor Changes
+
+- a731f3b: Port the browser editors from Preact and the local Konva adapter to React 19 and react-konva.
+
+### Patch Changes
+
+- 8935808: Migrate document history and source persistence to isolated atom.io state.
+- Updated dependencies [a731f3b]
+  - @create-art/editor@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

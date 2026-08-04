@@ -1,5 +1,11 @@
 # @create-art/editor
 
+## 0.2.0
+
+### Minor Changes
+
+- a731f3b: Port the browser editors from Preact and the local Konva adapter to React 19 and react-konva.
+
 ## 0.1.1
 
 ### Patch Changes
