@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument } from "../src/document.ts"
 import { createDesignPersistenceState } from "../src/persistence.ts"
+import type { DesignDocument, DesignGeometry } from "../src/types.ts"
 
 const createState = (document = createInitialDocument()) =>
 	createDesignEditorState({
@@ -12,7 +13,35 @@ const createState = (document = createInitialDocument()) =>
 		name: "normalized-design-document-test",
 	})
 
+const withFirstObjectGeometry = (
+	document: DesignDocument,
+	geometry: DesignGeometry,
+): DesignDocument => {
+	const first = document.objects[0]
+	if (first === undefined) throw new Error("Missing object fixture.")
+	return {
+		...document,
+		objects: document.objects.map((object) =>
+			object.id === first.id ? { ...object, geometry } : object,
+		),
+	}
+}
+
 describe("normalized design document state", () => {
+	it("reads a fresh document projection through composed selector-family members in a transaction", () => {
+		const initial = createInitialDocument()
+		const state = createState(initial)
+		// Regression: https://github.com/jeremybanka/atom.io/issues/525
+		const readDocumentProjection = state.silo.transaction<() => DesignDocument>(
+			{
+				key: "readFreshDocumentProjection",
+				do: ({ get }) => get(state.states.documentSelector),
+			},
+		)
+
+		expect(state.silo.runTransaction(readDocumentProjection)()).toEqual(initial)
+	})
+
 	it("updates one granular fact without notifying unrelated family members", () => {
 		const document = createInitialDocument()
 		const [first, second] = document.objects
@@ -147,5 +176,64 @@ describe("normalized design document state", () => {
 			),
 		).toBe(true)
 		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
+	})
+
+	it("keeps composed geometry projections current through history and external loading", () => {
+		const initial = createInitialDocument()
+		const state = createState(initial)
+		const pathDocument = withFirstObjectGeometry(initial, {
+			kind: "path",
+			contours: [
+				{
+					id: "contour:history",
+					closed: true,
+					points: [
+						{ id: "point:one", x: 0, y: 0 },
+						{ id: "point:two", x: 20, y: 20 },
+					],
+				},
+			],
+		})
+
+		// Materialize the rectangle dependency set before changing geometry kinds.
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
+		state.actions.commitDocument(pathDocument)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			pathDocument,
+		)
+
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
+		state.silo.redo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			pathDocument,
+		)
+
+		const externalDocument = withFirstObjectGeometry(
+			{ ...pathDocument, title: "Externally loaded" },
+			{
+				kind: "ellipse",
+				centerX: 40,
+				centerY: 50,
+				radiusX: 20,
+				radiusY: 10,
+			},
+		)
+		state.actions.loadExternalDocument({
+			document: externalDocument,
+			durableRevision: "revision:external",
+		})
+
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			externalDocument,
+		)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 0,
+			length: 0,
+		})
+		expect(state.silo.getState(state.states.persistenceAtom)).toMatchObject({
+			durableRevision: "revision:external",
+			status: "saved",
+		})
 	})
 })
