@@ -1766,6 +1766,7 @@ function AppearancePaintControl({
 				type="button"
 				data-paint-target
 				aria-label={`${target === "fill" ? "Fill" : "Stroke"} paint: ${label}`}
+				aria-keyshortcuts="X"
 				aria-pressed={context.appearanceTarget === target}
 				aria-describedby={describedBy}
 				disabled={context.appearanceDisabledReason !== null}
@@ -1945,6 +1946,7 @@ function DesignAppearanceTile({
 								? "1 selected object"
 								: `${context.selectedObjectCount} selected objects`}
 					</span>
+					<kbd title="Toggle the active fill or stroke target">X</kbd>
 				</appearance-heading>
 				<AppearancePaintControl context={context} target="fill" />
 				<AppearancePaintControl context={context} target="stroke" />
@@ -1953,11 +1955,12 @@ function DesignAppearanceTile({
 					type="button"
 					data-swap-appearance
 					aria-label="Swap fill and stroke paints"
+					aria-keyshortcuts="Shift+X"
 					aria-describedby="appearance-eligibility"
 					disabled={context.appearanceDisabledReason !== null}
 					onClick={context.swapAppearancePaints}
 				>
-					Swap fill and stroke
+					Swap fill and stroke <kbd>Shift+X</kbd>
 				</button>
 				<p id="appearance-eligibility">
 					{context.appearanceDisabledReason ??
