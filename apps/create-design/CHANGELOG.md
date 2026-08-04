@@ -1,5 +1,14 @@
 # create-design
 
+## 0.2.1
+
+### Patch Changes
+
+- a731f3b: Port the browser editors from Preact and the local Konva adapter to React 19 and react-konva.
+- Updated dependencies [a731f3b]
+- Updated dependencies [8935808]
+  - @create-design/editor@0.2.0
+
 ## 0.2.0
 
 ### Minor Changes

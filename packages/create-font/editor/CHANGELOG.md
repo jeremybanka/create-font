@@ -1,5 +1,16 @@
 # @create-font/editor
 
+## 0.9.0
+
+### Minor Changes
+
+- a731f3b: Port the browser editors from Preact and the local Konva adapter to React 19 and react-konva.
+
+### Patch Changes
+
+- Updated dependencies [a731f3b]
+  - @create-art/editor@0.2.0
+
 ## 0.8.0
 
 ### Minor Changes

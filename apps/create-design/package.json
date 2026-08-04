@@ -1,6 +1,6 @@
 {
 	"name": "create-design",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "CLI and workspace server for create-design source projects",
 	"license": "AGPL-3.0-or-later",
 	"repository": {

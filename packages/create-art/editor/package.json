@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/editor",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Shared editor controls, tiling, canvas, and vector interaction foundations for create-art applications",
 	"license": "AGPL-3.0-or-later",
 	"repository": {
