@@ -70,11 +70,34 @@ required `key` namespaces every token, so two documents with the same entity
 IDs remain isolated.
 
 Independent editor facts are atoms. Ordered ID indexes are small atoms, and
-entities, coordinates, metrics, and mappings live in keyed atom families. In
-particular, layer node `x` and `y` values and each handle component are separate
-hot atoms, so dragging a node or handle does not replace an entire glyph or
-master. Notes and color labels are also separated from export-bearing atoms,
-so annotation changes do not invalidate glyph lowering.
+entities, coordinates, metrics, and mappings live in keyed atom families. Each
+layer node position is one coherent `{ x, y }` family member because callers
+observe and move both coordinates together. Advance width is a separate
+layer-keyed family, and each handle component remains an independent hot atom.
+Dragging a node or handle therefore does not replace unrelated point geometry,
+an entire glyph, or a master. Notes and color labels are also separated from
+export-bearing atoms, so annotation changes do not invalidate glyph lowering.
+
+The expensive aggregate source selectors intentionally depend on a shallow
+document revision edge. Every exported core transaction advances that revision
+inside the same atomic commit, so direct transaction callers cannot leave those
+projections stale. Imperative atom writes outside core transactions must call
+`markDocumentChanged` after completing their logical edit.
+
+Whole-document replacement is deliberately available through `actions.load`
+rather than the public transaction collection. Loading clears each surviving
+glyph history, disposes histories for removed glyphs, and clears kerning history
+after the atomic state replacement. A raw transaction cannot perform that
+timeline lifecycle safely, so consumers that previously ran
+`transactions.replaceFont` should call `actions.load` instead.
+
+`actions.load(source, coWrite?)` also accepts one optional declarative co-write
+for a caller-owned plain atom: `{ atom, value }`. It runs after the validated
+replacement writes and before the single document-revision write, so observers
+see the atom and new source coherently. Core atoms, selectors, families, and
+promise-like values are rejected. A rejected co-write rolls the replacement
+back and leaves histories untouched; timeline cleanup still occurs only after a
+successful commit.
 
 ### Remote source cache
 

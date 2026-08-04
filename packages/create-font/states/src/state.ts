@@ -1,7 +1,11 @@
 import {
+	type ActorToolkit,
 	type ReaderToolkit,
+	type RegularAtomToken,
 	scopeFamily,
 	Silo,
+	type TransactionOptions,
+	type TransactionToken,
 	type WriterToolkit,
 } from "atom.io"
 import {
@@ -42,12 +46,10 @@ import {
 	type ContourId,
 	type EditorAxisMapEntrySource,
 	type EditorCmapEntrySource,
-	type EditorContourSource,
 	type EditorFontSource,
 	type EditorGlyphSource,
 	type EditorHandleKind,
 	type EditorHandleVectorSource,
-	type EditorLayerPointSource,
 	type EditorKerningPairSource,
 	type EditorMasterSource,
 	type EditorNodeMode,
@@ -732,6 +734,16 @@ export interface CreateFontEditorStateOptions {
 	readonly isProduction?: boolean
 }
 
+/**
+ * Co-writes one caller-owned plain atom in the same commit as a
+ * whole-document load. Promise-like values are deliberately excluded because
+ * atom.io transactions are synchronous.
+ */
+export interface FontLoadCoWrite<Value> {
+	readonly atom: RegularAtomToken<Value>
+	readonly value: Value extends PromiseLike<unknown> ? never : Value
+}
+
 function resultWithWarnings<Value>(
 	result: ProjectionResult<Value>,
 	warnings: readonly ProjectionWarning[],
@@ -1088,6 +1100,41 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "documentRevision",
 		default: 0,
 	})
+	// Aggregate projections use this shallow edge instead of subscribing to every
+	// family member. Keep it in the transaction commit so direct transaction
+	// callers cannot publish authoring state without invalidating those caches.
+	type EditorTransactionFunction = (...parameters: never[]) => unknown
+	type RevisionedTransactionOptions<F extends EditorTransactionFunction> =
+		TransactionOptions<F> &
+			Readonly<{
+				shouldRevise?: (result: ReturnType<F>) => boolean
+			}>
+	const revisionedTransaction = <F extends EditorTransactionFunction>(
+		options: RevisionedTransactionOptions<F>,
+	): TransactionToken<F> =>
+		silo.transaction<F>({
+			key: options.key,
+			do: (toolkit: ActorToolkit, ...parameters: Parameters<F>) => {
+				// Explicit early-return no-ops should not invalidate aggregate projections.
+				// Observe public toolkit writes without coupling to atom.io internals.
+				let wroteState = false
+				const trackedToolkit = new Proxy(toolkit, {
+					get: (target, property, receiver) => {
+						if (property !== "set")
+							return Reflect.get(target, property, receiver)
+						return (...setParameters: unknown[]) => {
+							wroteState = true
+							return Reflect.apply(target.set, target, setParameters)
+						}
+					},
+				})
+				const result = options.do(trackedToolkit, ...parameters)
+				if (wroteState && (options.shouldRevise?.(result) ?? true)) {
+					toolkit.set(documentRevisionAtom, (revision) => revision + 1)
+				}
+				return result
+			},
+		})
 	const markDocumentChanged = (): void => {
 		silo.setState(documentRevisionAtom, (revision) => revision + 1)
 	}
@@ -1206,29 +1253,29 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "glyphLayerMasterIds",
 		default: null,
 	})
-	const layerGeometryAtoms = silo.atomFamily<
-		Readonly<{
-			advanceWidth: number | null
-			pointPositions: Readonly<Record<string, Vector2>>
-		}>,
-		LayerKey
+	const advanceWidthValueAtoms = silo.atomFamily<number | null, LayerKey>({
+		key: "advanceWidthValue",
+		default: null,
+	})
+	const pointPositionValueAtoms = silo.atomFamily<
+		Vector2 | null,
+		LayerPointKey
 	>({
-		key: "layerGeometry",
-		default: deepFreeze({ advanceWidth: null, pointPositions: {} }),
+		key: "pointPositionValue",
+		default: null,
 	})
 	const readAdvanceWidth = (
 		get: ReaderToolkit["get"],
 		key: LayerKey,
-	): number | null => get(layerGeometryAtoms, key).advanceWidth
+	): number | null => get(advanceWidthValueAtoms, key)
 	const writeAdvanceWidth = (
 		get: WriterToolkit["get"],
 		set: WriterToolkit["set"],
 		key: LayerKey,
 		advanceWidth: number | null,
 	): void => {
-		const geometry = get(layerGeometryAtoms, key)
-		if (geometry.advanceWidth === advanceWidth) return
-		set(layerGeometryAtoms, key, deepFreeze({ ...geometry, advanceWidth }))
+		if (get(advanceWidthValueAtoms, key) === advanceWidth) return
+		set(advanceWidthValueAtoms, key, advanceWidth)
 	}
 	const advanceWidthSelectors = silo.selectorFamily<number | null, LayerKey>({
 		key: "advanceWidth",
@@ -1243,50 +1290,28 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 	const readPointPosition = (
 		get: ReaderToolkit["get"],
-		[masterId, glyphId, pointId]: LayerPointKey,
-	): Vector2 | null =>
-		get(layerGeometryAtoms, [masterId, glyphId]).pointPositions[pointId] ?? null
+		key: LayerPointKey,
+	): Vector2 | null => get(pointPositionValueAtoms, key)
 	const writePointPosition = (
 		get: WriterToolkit["get"],
 		set: WriterToolkit["set"],
-		[masterId, glyphId, pointId]: LayerPointKey,
+		key: LayerPointKey,
 		nextPosition: Vector2 | null,
 	): void => {
-		const geometry = get(layerGeometryAtoms, [masterId, glyphId])
-		const positions = geometry.pointPositions
-		if (nextPosition === null) {
-			if (!(pointId in positions)) return
-			const nextPositions = { ...positions }
-			delete nextPositions[pointId]
-			set(
-				layerGeometryAtoms,
-				[masterId, glyphId],
-				deepFreeze({ ...geometry, pointPositions: nextPositions }),
-			)
-			return
-		}
-		set(
-			layerGeometryAtoms,
-			[masterId, glyphId],
-			deepFreeze({
-				...geometry,
-				pointPositions: { ...positions, [pointId]: nextPosition },
-			}),
+		const currentPosition = get(pointPositionValueAtoms, key)
+		if (
+			currentPosition === nextPosition ||
+			(currentPosition !== null &&
+				nextPosition !== null &&
+				currentPosition.x === nextPosition.x &&
+				currentPosition.y === nextPosition.y)
 		)
-	}
-	const writePointPositions = (
-		get: WriterToolkit["get"],
-		set: WriterToolkit["set"],
-		key: LayerKey,
-		nextPositions: readonly Readonly<{ pointId: PointId; position: Vector2 }>[],
-	): void => {
-		if (nextPositions.length === 0) return
-		const geometry = get(layerGeometryAtoms, key)
-		const pointPositions = { ...geometry.pointPositions }
-		for (const { pointId, position } of nextPositions) {
-			pointPositions[pointId] = position
-		}
-		set(layerGeometryAtoms, key, deepFreeze({ ...geometry, pointPositions }))
+			return
+		set(
+			pointPositionValueAtoms,
+			key,
+			nextPosition === null ? null : deepFreeze(nextPosition),
+		)
 	}
 	const pointPositionSelectors = silo.selectorFamily<
 		Vector2 | null,
@@ -1302,6 +1327,19 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			({ get, set }, nextPosition) =>
 				writePointPosition(get, set, key, nextPosition),
 	})
+	const writePointPositions = (
+		set: WriterToolkit["set"],
+		[masterId, glyphId]: LayerKey,
+		nextPositions: readonly Readonly<{ pointId: PointId; position: Vector2 }>[],
+	): void => {
+		for (const { pointId, position } of nextPositions) {
+			set(
+				pointPositionValueAtoms,
+				[masterId, glyphId, pointId],
+				deepFreeze({ ...position }),
+			)
+		}
+	}
 	const incomingHandleXAtoms = silo.atomFamily<number | null, LayerPointKey>({
 		key: "incomingHandleX",
 		default: null,
@@ -1339,7 +1377,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		set: WriterToolkit["set"],
 		key: LayerPointKey,
 	): void => {
-		set(pointPositionSelectors, key, null)
+		set(pointPositionValueAtoms, key, null)
 		writeHandleVector(set, key, "incoming", undefined)
 		writeHandleVector(set, key, "outgoing", undefined)
 	}
@@ -1347,6 +1385,69 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		key: "cmapGlyph",
 		default: null,
 	})
+	const coreOwnedAtomTokens = new Set<RegularAtomToken<unknown>>([
+		metadataAtom,
+		namesAtom,
+		metricsAtom,
+		styleAtom,
+		documentRevisionAtom,
+		axisIdsAtom,
+		masterIdsAtom,
+		defaultMasterIdAtom,
+		instanceIdsAtom,
+		glyphIdsAtom,
+		featureSubstitutionsAtom,
+		cmapCodePointsAtom,
+		kerningAtom,
+	])
+	const coreOwnedAtomKeys = new Set(
+		[...coreOwnedAtomTokens].map((atom) => atom.key),
+	)
+	const coreOwnedAtomFamilyKeys = new Set([
+		axisAtoms.key,
+		masterAtoms.key,
+		masterCoordinateAtoms.key,
+		masterSupportStartAtoms.key,
+		masterSupportEndAtoms.key,
+		instanceAtoms.key,
+		instanceCoordinateAtoms.key,
+		glyphAtoms.key,
+		glyphEditorAtoms.key,
+		glyphContourIdsAtoms.key,
+		contourPointIdsAtoms.key,
+		contourClosedAtoms.key,
+		pointAtoms.key,
+		glyphLayerMasterIdsAtoms.key,
+		advanceWidthValueAtoms.key,
+		pointPositionValueAtoms.key,
+		incomingHandleXAtoms.key,
+		incomingHandleYAtoms.key,
+		outgoingHandleXAtoms.key,
+		outgoingHandleYAtoms.key,
+		cmapGlyphAtoms.key,
+	])
+	const assertCallerOwnedLoadAtom = (atom: RegularAtomToken<unknown>): void => {
+		if (
+			atom.type !== "atom" ||
+			coreOwnedAtomTokens.has(atom) ||
+			coreOwnedAtomKeys.has(atom.key) ||
+			(atom.family !== undefined &&
+				coreOwnedAtomFamilyKeys.has(atom.family.key))
+		) {
+			throw new TypeError(
+				"A font-load co-write requires a caller-owned plain atom.",
+			)
+		}
+	}
+	const isThenable = (value: unknown): value is PromiseLike<unknown> => {
+		if (
+			(typeof value !== "object" || value === null) &&
+			typeof value !== "function"
+		) {
+			return false
+		}
+		return typeof Reflect.get(value, "then") === "function"
+	}
 	const glyphHistoryTimelines = silo.timelineFamily<GlyphId>({
 		key: "glyphHistory",
 		scope: [
@@ -1367,7 +1468,10 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			scopeFamily(pointAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
-			scopeFamily(layerGeometryAtoms, {
+			scopeFamily(advanceWidthValueAtoms, {
+				timelineKey: ([, glyphId]) => glyphId,
+			}),
+			scopeFamily(pointPositionValueAtoms, {
 				timelineKey: ([, glyphId]) => glyphId,
 			}),
 			scopeFamily(incomingHandleXAtoms, {
@@ -1710,8 +1814,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					}
 					const delta = nextLeftSideBearing - bounds.value.xMin
 					if (delta === 0) return
-					const geometry = get(layerGeometryAtoms, [masterId, glyphId])
-					const { advanceWidth } = geometry
+					const advanceWidth = get(advanceWidthValueAtoms, [masterId, glyphId])
 					if (advanceWidth === null) {
 						throw new TypeError(
 							`Glyph ${glyphId} has no advance width in layer ${masterId}.`,
@@ -1734,28 +1837,24 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							"An empty glyph's left side bearing is always zero.",
 						)
 					}
-					const positions = geometry.pointPositions
-					const nextPositions = { ...positions }
 					for (const pointId of pointIds) {
-						const position = positions[pointId]
-						if (position === undefined) {
+						const key: LayerPointKey = [masterId, glyphId, pointId]
+						const position = get(pointPositionValueAtoms, key)
+						if (position === null) {
 							throw new TypeError(
 								`Point ${pointId} has no position in layer ${masterId}.`,
 							)
 						}
-						nextPositions[pointId] = deepFreeze({
-							x: position.x + delta,
-							y: position.y,
-						})
+						set(
+							pointPositionValueAtoms,
+							key,
+							deepFreeze({
+								x: position.x + delta,
+								y: position.y,
+							}),
+						)
 					}
-					set(
-						layerGeometryAtoms,
-						[masterId, glyphId],
-						deepFreeze({
-							advanceWidth: nextAdvanceWidth,
-							pointPositions: nextPositions,
-						}),
-					)
+					set(advanceWidthValueAtoms, [masterId, glyphId], nextAdvanceWidth)
 					set(documentRevisionAtom, (revision) => revision + 1)
 				},
 		},
@@ -4104,11 +4203,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		livePreviewFontSourceSelector,
 	)
 
-	const replaceFontTransaction = silo.transaction<
-		(source: EditorFontSource) => void
+	const replaceFontTransaction = revisionedTransaction<
+		(source: EditorFontSource, coWrite?: FontLoadCoWrite<unknown>) => void
 	>({
 		key: "replaceFont",
-		do: ({ get, set }, source) => {
+		do: ({ get, set }, source, coWrite) => {
 			validateEditorSourceStructure(source)
 
 			const oldAxisIds = get(axisIdsAtom)
@@ -4152,17 +4251,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						set(contourPointIdsAtoms, [masterId, glyphId, contourId], null)
 						set(contourClosedAtoms, [masterId, glyphId, contourId], null)
 					}
-					set(
-						layerGeometryAtoms,
-						[masterId, glyphId],
-						deepFreeze({ advanceWidth: null, pointPositions: {} }),
-					)
 					for (const pointId of pointIds) {
+						set(pointPositionValueAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
 						set(incomingHandleYAtoms, [masterId, glyphId, pointId], null)
 						set(outgoingHandleXAtoms, [masterId, glyphId, pointId], null)
 						set(outgoingHandleYAtoms, [masterId, glyphId, pointId], null)
 					}
+					set(advanceWidthValueAtoms, [masterId, glyphId], null)
 					set(glyphContourIdsAtoms, [masterId, glyphId], null)
 				}
 				set(glyphAtoms, glyphId, null)
@@ -4307,21 +4403,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						)
 					}
 					const points = layer.contours.flatMap((contour) => contour.points)
-					// Layer geometry is one atom. Install its complete value once so
-					// repeated point-selector writes in this transaction cannot rebuild
-					// from the same pre-transaction map and lose a restored point.
 					set(
-						layerGeometryAtoms,
+						advanceWidthValueAtoms,
 						[layer.masterId, glyph.id],
-						deepFreeze({
-							advanceWidth: layer.advanceWidth,
-							pointPositions: Object.fromEntries(
-								points.map((point) => [point.id, { x: point.x, y: point.y }]),
-							),
-						}),
+						layer.advanceWidth,
 					)
 					for (const point of points) {
 						const pointId = point.id
+						set(
+							pointPositionValueAtoms,
+							[layer.masterId, glyph.id, pointId],
+							deepFreeze({ x: point.x, y: point.y }),
+						)
 						set(
 							pointAtoms,
 							[layer.masterId, glyph.id, pointId],
@@ -4353,10 +4446,22 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			for (const entry of source.cmap) {
 				set(cmapGlyphAtoms, entry.codePoint, entry.glyphId)
 			}
+			if (coWrite !== undefined) {
+				assertCallerOwnedLoadAtom(coWrite.atom)
+				if (isThenable(coWrite.value)) {
+					// Attach a rejection handler before aborting so accidental promises do
+					// not become unhandled rejections after the synchronous transaction.
+					void Promise.resolve(coWrite.value).catch(() => undefined)
+					throw new TypeError(
+						"A font-load co-write value cannot be promise-like.",
+					)
+				}
+				set(coWrite.atom, coWrite.value)
+			}
 		},
 	})
 
-	const movePointsTransaction = silo.transaction<
+	const movePointsTransaction = revisionedTransaction<
 		(input: MovePointsInput) => void
 	>({
 		key: "movePoints",
@@ -4389,7 +4494,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 			}
 			writePointPositions(
-				get,
 				set,
 				[input.masterId, input.glyphId],
 				input.points.map((point) => ({
@@ -4400,7 +4504,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const setHorizontalMetricsTransaction = silo.transaction<
+	const setHorizontalMetricsTransaction = revisionedTransaction<
 		(input: SetHorizontalMetricsInput) => void
 	>({
 		key: "setHorizontalMetrics",
@@ -4420,15 +4524,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					"Advance width must be an integer from 0 through 65535.",
 				)
 			}
-			set(
-				advanceWidthSelectors,
+			writeAdvanceWidth(
+				get,
+				set,
 				[input.masterId, input.glyphId],
 				input.advanceWidth,
 			)
 		},
 	})
 
-	const moveHandleTransaction = silo.transaction<
+	const moveHandleTransaction = revisionedTransaction<
 		(input: MoveHandleInput) => void
 	>({
 		key: "moveHandle",
@@ -4707,7 +4812,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		}
 
 		writePointPositions(
-			get,
 			set,
 			[input.masterId, input.glyphId],
 			input.points.map((point) => ({
@@ -4722,14 +4826,14 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				writeHandle(plan.atomKey, "outgoing", plan.outgoing)
 		}
 	}
-	const transformControlsTransaction = silo.transaction<
+	const transformControlsTransaction = revisionedTransaction<
 		(input: TransformControlsInput) => void
 	>({
 		key: "transformControls",
 		do: ({ get, set }, input) => applyTransformControls(get, set, input),
 	})
 
-	const slideSoftNodeTransaction = silo.transaction<
+	const slideSoftNodeTransaction = revisionedTransaction<
 		(input: SlideSoftNodeInput) => void
 	>({
 		key: "slideSoftNode",
@@ -4960,7 +5064,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				}
 			}
 			set(
-				pointPositionSelectors,
+				pointPositionValueAtoms,
 				atomKey,
 				deepFreeze({ x: input.x, y: input.y }),
 			)
@@ -4981,7 +5085,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const setNodeModeTransaction = silo.transaction<
+	const setNodeModeTransaction = revisionedTransaction<
 		(input: SetNodeModeInput) => void
 	>({
 		key: "setNodeMode",
@@ -5149,10 +5253,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const toggleNodeModesTransaction = silo.transaction<
+	const toggleNodeModesTransaction = revisionedTransaction<
 		(input: ToggleNodeModesInput) => ToggleNodeModesResult
 	>({
 		key: "toggleNodeModes",
+		shouldRevise: (result) => result.toggled > 0,
 		do: ({ get, set }, input) => {
 			const layerMasterIds = get(glyphLayerMasterIdsAtoms, input.glyphId)
 			if (layerMasterIds === null || !layerMasterIds.includes(input.masterId)) {
@@ -5350,7 +5455,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const authorPenEndpointTransaction = silo.transaction<
+	const authorPenEndpointTransaction = revisionedTransaction<
 		(input: AuthorPenEndpointInput) => void
 	>({
 		key: "authorPenEndpoint",
@@ -5500,7 +5605,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const insertPointTransaction = silo.transaction<
+	const insertPointTransaction = revisionedTransaction<
 		(input: InsertPointInput) => void
 	>({
 		key: "insertPoint",
@@ -5599,7 +5704,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				(coordinate) => coordinate.masterId === input.masterId,
 			)) {
 				set(
-					pointPositionSelectors,
+					pointPositionValueAtoms,
 					[coordinate.masterId, input.glyphId, input.point.id],
 					deepFreeze({ x: coordinate.x, y: coordinate.y }),
 				)
@@ -5627,10 +5732,11 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const addSegmentHandlesTransaction = silo.transaction<
+	const addSegmentHandlesTransaction = revisionedTransaction<
 		(input: AddSegmentHandlesInput) => boolean
 	>({
 		key: "addSegmentHandles",
+		shouldRevise: (changed) => changed,
 		do: ({ get, set }, input) => {
 			const pointIds = get(contourPointIdsAtoms, [
 				input.masterId,
@@ -5765,7 +5871,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const splitSegmentTransaction = silo.transaction<
+	const splitSegmentTransaction = revisionedTransaction<
 		(input: SplitSegmentInput) => void
 	>({
 		key: "splitSegment",
@@ -5936,7 +6042,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.pointId,
 				]
 				set(
-					pointPositionSelectors,
+					pointPositionValueAtoms,
 					atomKey,
 					deepFreeze({ x: plan.point.x, y: plan.point.y }),
 				)
@@ -5955,7 +6061,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const cutSegmentTransaction = silo.transaction<
+	const cutSegmentTransaction = revisionedTransaction<
 		(input: CutSegmentInput) => void
 	>({
 		key: "cutSegment",
@@ -6218,7 +6324,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			for (const plan of plans) {
 				for (const pointId of [input.leftPointId, input.rightPointId]) {
 					set(
-						pointPositionSelectors,
+						pointPositionValueAtoms,
 						[plan.masterId, input.glyphId, pointId],
 						deepFreeze(plan.point),
 					)
@@ -6265,7 +6371,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const joinOpenContoursTransaction = silo.transaction<
+	const joinOpenContoursTransaction = revisionedTransaction<
 		(input: JoinOpenContoursInput) => void
 	>({
 		key: "joinOpenContours",
@@ -6607,7 +6713,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const reverseContourTransaction = silo.transaction<
+	const reverseContourTransaction = revisionedTransaction<
 		(input: ReverseContourInput) => void
 	>({
 		key: "reverseContour",
@@ -6654,7 +6760,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const invertContourTransaction = silo.transaction<
+	const invertContourTransaction = revisionedTransaction<
 		(input: InvertContourInput) => void
 	>({
 		key: "invertContour",
@@ -6783,7 +6889,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			)
 			for (const plan of plans) {
 				if (plan.position !== undefined) {
-					set(pointPositionSelectors, plan.atomKey, deepFreeze(plan.position))
+					set(pointPositionValueAtoms, plan.atomKey, deepFreeze(plan.position))
 				}
 				set(incomingHandleXAtoms, plan.atomKey, plan.incoming?.x ?? null)
 				set(incomingHandleYAtoms, plan.atomKey, plan.incoming?.y ?? null)
@@ -6793,7 +6899,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const makeNodeFirstTransaction = silo.transaction<
+	const makeNodeFirstTransaction = revisionedTransaction<
 		(input: MakeNodeFirstInput) => void
 	>({
 		key: "makeNodeFirst",
@@ -6825,7 +6931,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const createContourTransaction = silo.transaction<
+	const createContourTransaction = revisionedTransaction<
 		(input: CreateContourInput) => void
 	>({
 		key: "createContour",
@@ -6932,7 +7038,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.point.id,
 				]
 				set(
-					pointPositionSelectors,
+					pointPositionValueAtoms,
 					atomKey,
 					deepFreeze({ x: coordinate.x, y: coordinate.y }),
 				)
@@ -6944,7 +7050,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const setContourClosedTransaction = silo.transaction<
+	const setContourClosedTransaction = revisionedTransaction<
 		(input: SetContourClosedInput) => void
 	>({
 		key: "setContourClosed",
@@ -6970,7 +7076,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const reorderContourTransaction = silo.transaction<
+	const reorderContourTransaction = revisionedTransaction<
 		(input: ReorderContourInput) => void
 	>({
 		key: "reorderContour",
@@ -7007,7 +7113,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const closeContourTransaction = silo.transaction<
+	const closeContourTransaction = revisionedTransaction<
 		(input: CloseContourInput) => void
 	>({
 		key: "closeContour",
@@ -7135,7 +7241,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const createCompleteContourTransaction = silo.transaction<
+	const createCompleteContourTransaction = revisionedTransaction<
 		(input: CreateCompleteContourInput) => void
 	>({
 		key: "createCompleteContour",
@@ -7274,7 +7380,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						point.pointId,
 					]
 					set(
-						pointPositionSelectors,
+						pointPositionValueAtoms,
 						atomKey,
 						deepFreeze({ x: point.x, y: point.y }),
 					)
@@ -7287,7 +7393,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const pasteContoursTransaction = silo.transaction<
+	const pasteContoursTransaction = revisionedTransaction<
 		(input: PasteContoursInput) => void
 	>({
 		key: "pasteContours",
@@ -7431,7 +7537,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						point.pointId,
 					]
 					set(
-						pointPositionSelectors,
+						pointPositionValueAtoms,
 						atomKey,
 						deepFreeze({ x: point.x, y: point.y }),
 					)
@@ -7444,7 +7550,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const deleteSelectionTransaction = silo.transaction<
+	const deleteSelectionTransaction = revisionedTransaction<
 		(input: DeleteSelectionInput) => void
 	>({
 		key: "deleteSelection",
@@ -7657,7 +7763,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				set(pointAtoms, [input.masterId, input.glyphId, pointId], null)
 				for (const masterId of [input.masterId]) {
 					const atomKey: LayerPointKey = [masterId, input.glyphId, pointId]
-					set(pointPositionSelectors, atomKey, null)
+					set(pointPositionValueAtoms, atomKey, null)
 					set(incomingHandleXAtoms, atomKey, null)
 					set(incomingHandleYAtoms, atomKey, null)
 					set(outgoingHandleXAtoms, atomKey, null)
@@ -7667,7 +7773,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
-	const setKerningPairTransaction = silo.transaction<
+	const setKerningPairTransaction = revisionedTransaction<
 		(input: SetKerningPairInput) => void
 	>({
 		key: "setKerningPair",
@@ -7809,7 +7915,6 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			livePreviewCompilation: livePreviewFontCompilationSelector,
 		},
 		transactions: {
-			replaceFont: replaceFontTransaction,
 			movePoints: movePointsTransaction,
 			setHorizontalMetrics: setHorizontalMetricsTransaction,
 			moveHandle: moveHandleTransaction,
@@ -7871,9 +7976,12 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
 			},
 			markDocumentChanged,
-			load(source: EditorFontSource): void {
+			load<Value>(
+				source: EditorFontSource,
+				coWrite?: FontLoadCoWrite<Value>,
+			): void {
 				const previousGlyphIds = silo.getState(glyphIdsAtom)
-				runReplaceFont(source)
+				runReplaceFont(source, coWrite)
 				const nextGlyphIds = silo.getState(glyphIdsAtom)
 				const nextGlyphIdSet = new Set(nextGlyphIds)
 				for (const glyphId of previousGlyphIds) {
@@ -7884,106 +7992,79 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				for (const glyphId of nextGlyphIds) {
 					silo.clearTimeline(glyphHistoryTimelines, glyphId)
 				}
-				markDocumentChanged()
 				silo.clearTimeline(kerningTimeline)
 			},
 			movePoints(input: MovePointsInput): void {
 				runMovePoints(input)
-				markDocumentChanged()
 			},
 			setHorizontalMetrics(input: SetHorizontalMetricsInput): void {
 				runSetHorizontalMetrics(input)
-				markDocumentChanged()
 			},
 			moveHandle(input: MoveHandleInput): void {
 				runMoveHandle(input)
-				markDocumentChanged()
 			},
 			transformControls(input: TransformControlsInput): void {
 				runTransformControls(input)
-				markDocumentChanged()
 			},
 			slideSoftNode(input: SlideSoftNodeInput): void {
 				runSlideSoftNode(input)
-				markDocumentChanged()
 			},
 			setNodeMode(input: SetNodeModeInput): void {
 				runSetNodeMode(input)
-				markDocumentChanged()
 			},
 			toggleNodeModes(input: ToggleNodeModesInput): ToggleNodeModesResult {
-				const result = runToggleNodeModes(input)
-				if (result.toggled > 0) markDocumentChanged()
-				return result
+				return runToggleNodeModes(input)
 			},
 			authorPenEndpoint(input: AuthorPenEndpointInput): void {
 				runAuthorPenEndpoint(input)
-				markDocumentChanged()
 			},
 			insertPoint(input: InsertPointInput): void {
 				runInsertPoint(input)
-				markDocumentChanged()
 			},
 			addSegmentHandles(input: AddSegmentHandlesInput): boolean {
-				const changed = runAddSegmentHandles(input)
-				if (changed) markDocumentChanged()
-				return changed
+				return runAddSegmentHandles(input)
 			},
 			splitSegment(input: SplitSegmentInput): void {
 				runSplitSegment(input)
-				markDocumentChanged()
 			},
 			cutSegment(input: CutSegmentInput): void {
 				runCutSegment(input)
-				markDocumentChanged()
 			},
 			joinOpenContours(input: JoinOpenContoursInput): void {
 				runJoinOpenContours(input)
-				markDocumentChanged()
 			},
 			reverseContour(input: ReverseContourInput): void {
 				runReverseContour(input)
-				markDocumentChanged()
 			},
 			invertContour(input: InvertContourInput): void {
 				runInvertContour(input)
-				markDocumentChanged()
 			},
 			makeNodeFirst(input: MakeNodeFirstInput): void {
 				runMakeNodeFirst(input)
-				markDocumentChanged()
 			},
 			createContour(input: CreateContourInput): void {
 				runCreateContour(input)
-				markDocumentChanged()
 			},
 			setContourClosed(input: SetContourClosedInput): void {
 				runSetContourClosed(input)
-				markDocumentChanged()
 			},
 			reorderContour(input: ReorderContourInput): void {
 				runReorderContour(input)
-				markDocumentChanged()
 			},
 			closeContour(input: CloseContourInput): void {
 				runCloseContour(input)
-				markDocumentChanged()
 			},
 			createCompleteContour(input: CreateCompleteContourInput): void {
 				runCreateCompleteContour(input)
-				markDocumentChanged()
 			},
 			pasteContours(input: PasteContoursInput): void {
 				runPasteContours(input)
-				markDocumentChanged()
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
 				runDeleteSelection(input)
-				markDocumentChanged()
 			},
 			setKerningPair(input: SetKerningPairInput): void {
 				runSetKerningPair(input)
-				markDocumentChanged()
 			},
 			undoKerning(): void {
 				silo.undo(kerningTimeline)
