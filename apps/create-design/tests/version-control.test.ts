@@ -7,9 +7,11 @@ import { promisify } from "node:util"
 
 import {
 	defaultObjectUnitPath,
+	defaultTextContentUnitPath,
 	splitDesignDocument,
 	type DesignSourceDirectoryFiles,
 } from "@create-design/source"
+import { sourceSyncStateFromSnapshot } from "@create-art/source-rpc"
 import type {
 	JsonValue,
 	SourceAssetDescriptor,
@@ -20,6 +22,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { createInitialDocument } from "@create-design/source"
 import { createDesignSourceService } from "../src/source-service.ts"
+import { designSourceTransaction } from "../src/source-sync.ts"
 import { createDesignSourceVersionControl } from "../src/version-control.ts"
 
 const execFileAsync = promisify(execFile)
@@ -187,6 +190,110 @@ afterEach(async () => {
 })
 
 describe(`create-design version control`, () => {
+	it(`groups raw text with its object and rejects partial text commits`, async () => {
+		const { source, versionControl } = await fixture()
+		const initial = createInitialDocument()
+		const textObject = {
+			id: `object:review-text`,
+			name: `Review text`,
+			geometry: {
+				kind: `text` as const,
+				mode: `area` as const,
+				text: `﻿Unicode 😀\r\nterminal\n`,
+				typography: {
+					font: { id: `font:test`, family: `Test` },
+					size: 24,
+					leading: 30,
+					tracking: 0,
+					kerning: `auto` as const,
+					alignment: `start` as const,
+					direction: `auto` as const,
+				},
+				x: 20,
+				y: 30,
+				frame: {
+					width: 200,
+					height: 100,
+					inset: { top: 4, right: 4, bottom: 4, left: 4 },
+					verticalAlignment: `top` as const,
+				},
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: initial.swatches[1]!.id } },
+		}
+		const snapshot = await source.readSnapshot()
+		await source.writeUnits({
+			idempotencyKey: `add-review-text`,
+			...designSourceTransaction(sourceSyncStateFromSnapshot(snapshot), {
+				...initial,
+				objects: [...initial.objects, textObject],
+			}),
+		})
+		const objectPath = defaultObjectUnitPath(textObject.id)
+		const contentPath = defaultTextContentUnitPath(textObject.id)
+		let comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		const structural = comparison.changes.find(
+			({ id }) => id === `design:coordinated-structure`,
+		)
+		expect(structural?.paths).toEqual(
+			expect.arrayContaining([objectPath, contentPath]),
+		)
+		await expect(
+			versionControl.commitUnits({
+				expectedComparisonIdentity: comparison.identity,
+				message: `Reject partial text addition`,
+				paths: [contentPath],
+			}),
+		).rejects.toMatchObject({ code: `source.repository_state` })
+		await versionControl.commitUnits({
+			expectedComparisonIdentity: comparison.identity,
+			message: `Add text`,
+			paths: comparison.changes.flatMap(({ paths }) => paths) as [
+				string,
+				...string[],
+			],
+		})
+		expect(
+			(await versionControl.readComparison({ baseRef: `HEAD` })).changes,
+		).toEqual([])
+
+		const currentContent = await source.readUnit(contentPath)
+		const currentObject = await source.readUnit(objectPath)
+		await source.writeUnits({
+			idempotencyKey: `edit-review-text`,
+			writes: [
+				{
+					expectedRevision: currentObject.revision,
+					path: objectPath,
+					value: {
+						...(currentObject.value as Record<string, JsonValue>),
+						name: `Edited review text`,
+					},
+				},
+				{
+					expectedRevision: currentContent.revision,
+					path: contentPath,
+					value: `Narrow raw diff\n`,
+				},
+			],
+		})
+		comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		expect(comparison.changes).toEqual([
+			expect.objectContaining({
+				kind: `text`,
+				label: `Edited review text`,
+				paths: [objectPath, contentPath].toSorted(),
+			}),
+		])
+		await expect(
+			versionControl.commitUnits({
+				expectedComparisonIdentity: comparison.identity,
+				message: `Reject partial text edit`,
+				paths: [objectPath],
+			}),
+		).rejects.toMatchObject({ code: `source.repository_state` })
+	})
+
 	it(`labels standalone object changes with stable design identity`, async () => {
 		const { source, versionControl } = await fixture()
 		const objectPath = defaultObjectUnitPath(`object:coral`)

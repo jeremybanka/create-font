@@ -5484,8 +5484,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 										)
 										const strokeStyle = object.appearance.stroke
 										if (object.geometry.kind === "text") {
-											if (object.hidden || editingTextId === object.id)
-												return null
+											if (object.hidden) return null
 											const geometry = object.geometry
 											const canonicalLayout = textService.layout(object)
 											const canonicalObject =

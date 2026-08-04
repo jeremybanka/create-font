@@ -10,6 +10,8 @@ import { createSourceRpcClient } from "@create-art/source-rpc/client"
 import { preflightPdfExport } from "@create-design/pdf"
 import {
 	assembleDesignDocument,
+	defaultObjectUnitPath,
+	defaultTextContentUnitPath,
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
@@ -208,6 +210,22 @@ describe(`create-design source synchronization`, () => {
 				...transaction,
 			}),
 		).resolves.toMatchObject({ removedPaths: [] })
+		expect(
+			await readFile(
+				join(root, defaultTextContentUnitPath(`object:point-fixture`)),
+				`utf8`,
+			),
+		).toBe(`Hello world point edited`)
+		const storedPoint = JSON.parse(
+			await readFile(
+				join(root, defaultObjectUnitPath(`object:point-fixture`)),
+				`utf8`,
+			),
+		) as { geometry: Record<string, unknown> }
+		expect(storedPoint.geometry).not.toHaveProperty(`text`)
+		expect(storedPoint.geometry).toMatchObject({
+			contentPath: defaultTextContentUnitPath(`object:point-fixture`),
+		})
 
 		app = await createDesignServerApp({ root })
 		client = createSourceRpcClient(`http://localhost`)
@@ -286,6 +304,79 @@ describe(`create-design source synchronization`, () => {
 		expect(
 			designSourceTransaction(initialState(), createInitialDocument()),
 		).toEqual({ removals: [], writes: [] })
+	})
+
+	test(`atomically adds, edits, copies, renames, and deletes raw text units`, () => {
+		const initial = createInitialDocument()
+		const appearance = { fill: { swatchId: initial.swatches[1]!.id } }
+		const first = createDesignTextObject({
+			id: `object:raw-first`,
+			name: `Raw first`,
+			mode: `point`,
+			x: 30,
+			y: 40,
+			appearance,
+			text: `A😀\r\nterminal\n`,
+		})
+		const withFirst = { ...initial, objects: [...initial.objects, first] }
+		const added = designSourceTransaction(initialState(), withFirst)
+		const firstJson = defaultObjectUnitPath(first.id)
+		const firstText = defaultTextContentUnitPath(first.id)
+		expect(added.writes.map(({ path }) => path)).toEqual(
+			expect.arrayContaining([firstJson, firstText]),
+		)
+		expect(added.writes.find(({ path }) => path === firstText)?.value).toBe(
+			`A😀\r\nterminal\n`,
+		)
+		expect(
+			added.writes.find(({ path }) => path === firstJson)?.value,
+		).not.toHaveProperty(`geometry.text`)
+
+		const firstState = initialState(withFirst)
+		const contentOnly = designSourceTransaction(firstState, {
+			...withFirst,
+			objects: withFirst.objects.map((object) =>
+				object.id === first.id
+					? updateDesignText(first, `changed only`)
+					: object,
+			),
+		})
+		expect(contentOnly).toMatchObject({ removals: [] })
+		expect(contentOnly.writes.map(({ path }) => path)).toEqual([firstText])
+
+		const renamedAndEdited = designSourceTransaction(firstState, {
+			...withFirst,
+			objects: withFirst.objects.map((object) =>
+				object.id === first.id
+					? { ...updateDesignText(first, `renamed edit`), name: `Renamed` }
+					: object,
+			),
+		})
+		expect(renamedAndEdited.writes.map(({ path }) => path).toSorted()).toEqual(
+			[firstJson, firstText].toSorted(),
+		)
+
+		const copy = { ...first, id: `object:raw-copy`, name: `Raw copy` }
+		const copied = designSourceTransaction(firstState, {
+			...withFirst,
+			objects: [...withFirst.objects, copy],
+		})
+		expect(copied.writes.map(({ path }) => path)).toEqual(
+			expect.arrayContaining([
+				defaultObjectUnitPath(copy.id),
+				defaultTextContentUnitPath(copy.id),
+			]),
+		)
+		expect(defaultTextContentUnitPath(copy.id)).not.toBe(firstText)
+
+		const deleted = designSourceTransaction(firstState, initial)
+		expect(deleted.removals.map(({ path }) => path).toSorted()).toEqual(
+			[firstJson, firstText].toSorted(),
+		)
+		expect(deleted.writes.map(({ path }) => path)).toEqual([
+			`scene/layers/artwork.json`,
+			`scene/objects/index.json`,
+		])
 	})
 
 	test(`writes only the changed metadata unit`, () => {

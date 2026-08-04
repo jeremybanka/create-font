@@ -61,9 +61,9 @@ transforming, renaming, restyling, reordering, editing an artboard, or
 projecting to canvas/PDF does not. This is the foundation expected by
 multi-selection work in #254 and global multi-artboard/output work in #283.
 
-## Version-two directory
+## Version-three directory
 
-The second directory version matches the current application model: ordered
+The third directory version matches the current application model: ordered
 artboards, one layer, authored path/rectangle/ellipse geometry,
 independent affine object transforms, optional fill/stroke appearance, one
 palette, structural groups, and empty asset and font inventories. Path geometry
@@ -86,6 +86,7 @@ scene/
   objects/
     index.json
     <indexed path>.json
+    <indexed path>.txt  # one adjacent raw unit per live-text object
 assets/
   index.json
 fonts/
@@ -102,15 +103,26 @@ Each fact has one owner:
 - the sole layer unit owns root stacking order;
 - each group unit owns its ordered object or nested-group children;
 - the object inventory maps stable object IDs to stable source paths; and
-- each object unit owns one complete object.
+- each object JSON owns geometry, typography, frame, transform, and appearance;
+  for a live-text object its durable `geometry.contentPath` references the
+  exactly adjacent `.txt` unit that owns the authored characters.
 
-Object inventory order has no scene meaning. Renaming or editing an object
-therefore changes only its object unit, while reordering changes only the layer
-unit. IDs, display names, source paths, and stacking order are independent.
+For example, `object:headline` has a deterministic safe adjacent pair such as
+`scene/objects/object%3Aheadline~72f07290.json` and
+`scene/objects/object%3Aheadline~72f07290.txt`. The raw unit is UTF-8 text, not
+JSON: it has no quoting or wrapper, receives no automatic terminal newline,
+and preserves authored LF, CRLF, lone CR, whitespace-only/empty content, bidi
+text, Unicode scalars, and terminal newlines. Writers do not add a transport
+BOM; an authored leading U+FEFF is content and round-trips unchanged.
+
+Object inventory order has no scene meaning. Renaming or editing structured
+object properties changes only its JSON unit, while a content-only text edit
+produces a narrow `.txt` diff. Reordering changes only the layer unit. IDs,
+display names, source paths, and stacking order are independent.
 
 Structural groups, embedded fonts, and multiple layers have explicit
 inventories. Groups are active and may nest; every object and group must have
-exactly one structural parent. Source version two still requires one layer and
+exactly one structural parent. Source version three still requires one layer and
 an empty font inventory where the current `DesignDocument` has no faithful
 model.
 Asset inventory entries are active: each records a stable ID, safe path, media
@@ -119,13 +131,15 @@ directory codec and are transferred atomically through
 `@create-art/source-rpc`; image decoding and placement semantics remain editor
 concerns.
 
-Directory readers also accept source version one and the earlier
+Directory readers also accept source versions one and two and the earlier
 `{ contours, fillId }`
 object-unit shape and deterministically normalize it to path geometry, an
 identity transform, and a fill appearance. They accept the originally shipped
 implicit `(0, 0)` artboard origin and missing path IDs, then assign the same v3
 migration defaults as the complete-document decoder. Readers also normalize
-prior width-only stroke object units. Writers emit the explicit
+prior width-only stroke object units. Inline `geometry.text` from earlier
+sources hydrates without loss; the next canonical save atomically migrates it
+to object-version-two JSON plus the raw `.txt` sidecar. Writers emit the explicit
 ordered named global artboards, stable path IDs, and canonical separated object
 shape, and mark the assembled complete document as version five. Splitting an
 artboard edit changes only that artboard unit; reordering changes only
@@ -167,6 +181,7 @@ a JSONPath-like field location.
 emits readable, recursively key-sorted JSON with author array order, negative
 zero, and exactly one trailing newline preserved. Call it only from the
 trusted Node source-service boundary; browser code parses, validates, and
-submits semantic unit values without formatting them. Derived canvas state,
+submits semantic unit values without formatting them. Raw text units bypass
+JSON formatting and are written directly from the authored string. Derived canvas state,
 selection, bounds, blend steps, shaped glyphs, PDF data, previews, and export
 artifacts do not belong in canonical source.

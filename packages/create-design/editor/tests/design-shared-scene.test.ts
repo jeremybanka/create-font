@@ -1868,6 +1868,20 @@ describe("create-design shared vector scene", () => {
 			if (textarea === null)
 				throw new Error(`${id} did not enter text editing.`)
 			expect(document.activeElement).toBe(textarea)
+			expect(
+				stage
+					.find(".design-text-hit")
+					.some((candidate: { name(): string }) =>
+						candidate.name().includes(id),
+					),
+			).toBe(true)
+			expect(
+				stage
+					.find(".design-object")
+					.some((candidate: { name(): string }) =>
+						candidate.name().includes(id),
+					),
+			).toBe(true)
 			expect(textarea.selectionStart).toBe(textarea.value.length)
 			expect(textarea.selectionEnd).toBe(textarea.value.length)
 			await act(async () => {

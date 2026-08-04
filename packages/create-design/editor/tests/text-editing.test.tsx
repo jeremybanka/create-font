@@ -128,6 +128,7 @@ describe("editable text surface", () => {
 		expect(textarea.selectionStart).toBe(0)
 		expect(textarea.selectionEnd).toBe(11)
 		expect(textarea.style.background).toBe("transparent")
+		expect(textarea.style.color).toBe("transparent")
 	})
 
 	it("keeps composition active until IME completion", () => {

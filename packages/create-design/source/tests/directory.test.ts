@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest"
 import {
 	DEFAULT_DESIGN_STROKE_STYLE,
 	DEFAULT_LAYER_ID,
+	CREATE_DESIGN_SOURCE_VERSION,
+	PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
 	assembleDesignDocument,
 	decodeDesignDocument,
 	defaultArtboardUnitPath,
 	defaultObjectUnitPath,
+	defaultTextContentUnitPath,
 	designSourcePaths,
 	formatSourceUnit,
 	parseSourceUnitText,
@@ -197,7 +200,116 @@ describe("create-design directory source", () => {
 			objects: [...document.objects, point, area],
 		}
 
-		expect(assemble(split(withText))).toEqual(withText)
+		const files = split(withText)
+		expect(files[defaultTextContentUnitPath(point.id)]).toBe("Hello world")
+		expect(files[defaultObjectUnitPath(point.id)]).toMatchObject({
+			version: 2,
+			geometry: {
+				kind: "text",
+				contentPath: defaultTextContentUnitPath(point.id),
+			},
+		})
+		expect(files[defaultObjectUnitPath(point.id)]).not.toHaveProperty(
+			"geometry.text",
+		)
+		expect(assemble(files)).toEqual(withText)
+	})
+
+	it.each([
+		["empty", ""],
+		["whitespace", " \t  "],
+		["unicode and bidi", "A😀 e\u0301 العربية אבג"],
+		["CR, LF, and terminal newline", "one\r\ntwo\rthree\n"],
+		["leading BOM scalar", "\uFEFFauthored"],
+	])("preserves raw %s text bytes without wrappers", (_label, text) => {
+		const base = fixture()
+		const object: DesignDocument["objects"][number] = {
+			id: "object:raw-text",
+			name: "Raw text",
+			geometry: {
+				kind: "text",
+				mode: "point",
+				text,
+				typography: {
+					font: { id: "font:test", family: "Test" },
+					size: 12,
+					leading: 14,
+					tracking: 0,
+					kerning: "auto",
+					alignment: "start",
+					direction: "auto",
+				},
+				x: 10,
+				y: 20,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		const document = { ...base, objects: [...base.objects, object] }
+		const files = split(document)
+		expect(files[defaultTextContentUnitPath(object.id)]).toBe(text)
+		expect(assemble(files)).toEqual(document)
+	})
+
+	it("rejects strings that cannot be represented losslessly as UTF-8", () => {
+		expect(formatSourceUnit("text-content", "\uD800")).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({ code: "source.schema" }),
+			]),
+		})
+	})
+
+	it("migrates inline version-two source to canonical raw text units", () => {
+		const base = fixture()
+		const object: DesignDocument["objects"][number] = {
+			id: "object:migrate-text",
+			name: "Migrate text",
+			geometry: {
+				kind: "text",
+				mode: "point",
+				text: "legacy\r\n😀\n",
+				typography: {
+					font: { id: "font:test", family: "Test" },
+					size: 12,
+					leading: 14,
+					tracking: 0,
+					kerning: "auto",
+					alignment: "start",
+					direction: "auto",
+				},
+				x: 10,
+				y: 20,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		const document = { ...base, objects: [...base.objects, object] }
+		const legacy = structuredClone(split(document)) as Record<string, unknown>
+		const objectPath = defaultObjectUnitPath(object.id)
+		legacy[objectPath] = {
+			format: "create-design.object",
+			version: 1,
+			id: object.id,
+			name: object.name,
+			geometry: object.geometry,
+			transform: object.transform,
+			appearance: object.appearance,
+		}
+		delete legacy[defaultTextContentUnitPath(object.id)]
+		;(
+			legacy[designSourcePaths.project] as Record<string, unknown>
+		).sourceVersion = PREVIOUS_CREATE_DESIGN_SOURCE_VERSION
+		const hydrated = assemble(legacy)
+		expect(hydrated).toEqual(document)
+		const migrated = split(hydrated)
+		expect(
+			(migrated[designSourcePaths.project] as { sourceVersion: number })
+				.sourceVersion,
+		).toBe(CREATE_DESIGN_SOURCE_VERSION)
+		expect(migrated[defaultTextContentUnitPath(object.id)]).toBe(
+			object.geometry.kind === "text" ? object.geometry.text : "",
+		)
 	})
 
 	it("normalizes legacy path-and-fill objects deterministically", () => {
@@ -584,6 +696,65 @@ describe("create-design directory source", () => {
 				"directory.entity_id",
 			]),
 		)
+	})
+
+	it("rejects missing, orphaned, and noncanonical text sidecars", () => {
+		const base = fixture()
+		const textObject: DesignDocument["objects"][number] = {
+			id: "object:sidecar",
+			name: "Sidecar",
+			geometry: {
+				kind: "text",
+				mode: "point",
+				text: "sidecar",
+				typography: {
+					font: { id: "font:test", family: "Test" },
+					size: 12,
+					leading: 14,
+					tracking: 0,
+					kerning: "auto",
+					alignment: "start",
+					direction: "auto",
+				},
+				x: 0,
+				y: 0,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		const canonical = split({
+			...base,
+			objects: [...base.objects, textObject],
+		})
+		const missing = structuredClone(canonical) as Record<string, unknown>
+		delete missing[defaultTextContentUnitPath(textObject.id)]
+		expect(assembleDesignDocument(missing)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({ code: "directory.missing_file" }),
+			]),
+		})
+		const orphaned = structuredClone(canonical) as Record<string, unknown>
+		orphaned["scene/objects/orphan.txt"] = "orphan"
+		expect(assembleDesignDocument(orphaned)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({ code: "directory.orphan_file" }),
+			]),
+		})
+		const redirected = structuredClone(canonical) as Record<string, unknown>
+		const objectPath = defaultObjectUnitPath(textObject.id)
+		const file = redirected[objectPath] as {
+			geometry: { contentPath: string }
+		}
+		file.geometry.contentPath = "scene/objects/other.txt"
+		redirected["scene/objects/other.txt"] = "sidecar"
+		expect(assembleDesignDocument(redirected)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({ code: "directory.reference" }),
+			]),
+		})
 	})
 
 	it("rejects duplicate inventories, dangling children, and unparented objects", () => {

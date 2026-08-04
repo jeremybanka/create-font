@@ -21,6 +21,8 @@ import {
 	fontUnitPathSchema,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
+	textContentUnitPathForObjectPath,
+	textContentUnitPathSchema,
 	validateSourceUnit,
 	type AssetIndexFile,
 	type DesignSourceDiagnostic,
@@ -254,6 +256,11 @@ function validateBinaryComparison(
 }
 
 export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
+	decodeUnit(path, bytes) {
+		return new TextDecoder(`utf-8`, {
+			ignoreBOM: sourceUnitKindForPath(path) === `text-content`,
+		}).decode(bytes)
+	},
 	assets: {
 		descriptors(values) {
 			return inventoryDescriptors(values)
@@ -292,12 +299,50 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 				}
 			}
 		}
+		for (const change of changes) {
+			if (!textContentUnitPathSchema.safeParse(change.path).success) continue
+			const objectPath = `${change.path.slice(0, -".txt".length)}.json`
+			if (structuralPaths.has(objectPath)) structuralPaths.add(change.path)
+		}
 		const palettePaths = paletteDependentObjectPaths(changes)
 		if (palettePaths.size > 0) palettePaths.add(designSourcePaths.palette)
+		const textChanges = new Map<string, SourceUnitChange[]>()
+		for (const change of changes) {
+			if (structuralPaths.has(change.path) || palettePaths.has(change.path))
+				continue
+			const kind = sourceUnitKindForPath(change.path)
+			let objectPath: string | undefined
+			if (kind === "text-content")
+				objectPath = `${change.path.slice(0, -".txt".length)}.json`
+			else if (kind === "object") {
+				const beforeGeometry = record(change.before?.value)?.geometry
+				const afterGeometry = record(change.after?.value)?.geometry
+				const isText = [beforeGeometry, afterGeometry].some(
+					(value) => record(value)?.kind === "text",
+				)
+				if (isText) objectPath = change.path
+			}
+			if (objectPath === undefined) continue
+			const grouped = textChanges.get(objectPath) ?? []
+			grouped.push(change)
+			textChanges.set(objectPath, grouped)
+		}
+		for (const [objectPath, grouped] of textChanges) {
+			const contentPath = textContentUnitPathForObjectPath(objectPath)
+			const companion = changes.find(({ path }) => path === contentPath)
+			if (
+				companion !== undefined &&
+				!grouped.some(({ path }) => path === companion.path)
+			)
+				grouped.push(companion)
+		}
 		const coordinatedPaths = new Set([
 			...binaryPaths,
 			...structuralPaths,
 			...palettePaths,
+			...[...textChanges.values()].flatMap((group) =>
+				group.map(({ path }) => path),
+			),
 		])
 		const coordinatedChanges = changes.filter(
 			({ path }) => structuralPaths.has(path) || palettePaths.has(path),
@@ -345,6 +390,19 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 							],
 						},
 					]),
+			...[...textChanges.entries()].map(([objectPath, grouped]) => ({
+				change: aggregateChange(grouped),
+				id: `design:text:${objectPath}`,
+				kind: `text`,
+				label:
+					record(
+						grouped.find(({ path }) => path === objectPath)?.after?.value,
+					)?.name?.toString() ?? `Text ${objectPath}`,
+				paths: grouped.map(({ path }) => path).toSorted() as [
+					string,
+					...string[],
+				],
+			})),
 			...changes
 				.filter(({ path }) => !coordinatedPaths.has(path))
 				.map(semanticGroup),

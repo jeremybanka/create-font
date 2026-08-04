@@ -289,6 +289,7 @@ export function designTextOverlayStyle(
 		left: 0,
 		top: 0,
 		background: "transparent",
+		color: "transparent",
 		width,
 		height,
 		fontFamily: designTextCssFontFamily(registeredFamily),

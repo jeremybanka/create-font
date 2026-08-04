@@ -43,6 +43,8 @@ export interface SourceVersionControlAdapter {
 	groupChanges(
 		changes: readonly SourceUnitChange[],
 	): readonly SourceChangeGroup[]
+	/** Override UTF-8 decoding for raw textual units that must retain a BOM scalar. */
+	decodeUnit?(path: string, bytes: Uint8Array): string
 	includesPath(path: string): boolean
 	parseUnit(path: string, text: string): JsonValue | Promise<JsonValue>
 	validateComparison?(
@@ -366,7 +368,9 @@ async function snapshotAtCommit(
 				`Git returned inconsistent bytes for source path ${JSON.stringify(path)}.`,
 			)
 		}
-		const text = new TextDecoder().decode(blob.stdout)
+		const text =
+			adapter.decodeUnit?.(path, blob.stdout) ??
+			new TextDecoder().decode(blob.stdout)
 		const value = await adapter.parseUnit(path, text)
 		values[path] = value
 		units.push({ path, revision: byteRevision(blob.stdout), value })

@@ -361,7 +361,12 @@ design-application.class {
 								transparent
 							);
 						background: transparent;
-						color: #111;
+						/*
+						 * Canonical shaped glyph paths remain authoritative while editing.
+						 * The native control owns input, caret, selection, and IME, but its
+						 * independently-shaped ink must not replace or duplicate the paths.
+						 */
+						color: transparent;
 						caret-color: var(--design-canvas-selection);
 						resize: none;
 						white-space: pre-wrap;
