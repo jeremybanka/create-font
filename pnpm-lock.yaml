@@ -79,6 +79,9 @@ importers:
       '@create-design/pdf':
         specifier: workspace:*
         version: link:../../packages/create-design/pdf
+      '@create-design/png':
+        specifier: workspace:*
+        version: link:../../packages/create-design/png
       '@create-design/source':
         specifier: workspace:*
         version: link:../../packages/create-design/source
@@ -337,6 +340,9 @@ importers:
       '@create-design/pdf':
         specifier: workspace:*
         version: link:../pdf
+      '@create-design/png':
+        specifier: workspace:*
+        version: link:../png
       '@create-design/source':
         specifier: workspace:*
         version: link:../source
@@ -417,6 +423,25 @@ importers:
       mondrian.pdf:
         specifier: 0.0.0
         version: 0.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/create-design/png:
+    dependencies:
+      '@create-design/model':
+        specifier: workspace:*
+        version: link:../model
+      '@create-design/source':
+        specifier: workspace:*
+        version: link:../source
+      '@create-design/svg':
+        specifier: workspace:*
+        version: link:../svg
     devDependencies:
       '@types/node':
         specifier: 25.9.5

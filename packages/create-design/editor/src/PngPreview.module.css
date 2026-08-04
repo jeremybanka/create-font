@@ -1,0 +1,46 @@
+png-preview.class {
+	display: grid;
+	grid-template-rows: minmax(180px, 1fr) min-content;
+	gap: 5px;
+	min-height: 0;
+
+	> png-preview-frame {
+		display: grid;
+		place-items: center;
+		min-height: 180px;
+		overflow: hidden;
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		background:
+			linear-gradient(45deg, #888 25%, transparent 25%),
+			linear-gradient(-45deg, #888 25%, transparent 25%),
+			linear-gradient(45deg, transparent 75%, #888 75%),
+			linear-gradient(-45deg, transparent 75%, #888 75%),
+			#aaa;
+		background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+		background-size: 16px 16px;
+
+		> p {
+			margin: 0;
+			padding: 12px;
+			text-align: center;
+		}
+		> img {
+			display: block;
+			max-width: 100%;
+			max-height: 420px;
+			object-fit: contain;
+		}
+	}
+
+	> png-preview-status {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--ink-faint);
+	}
+
+	&[data-status="failed"] > png-preview-status {
+		color: #d5786d;
+	}
+}

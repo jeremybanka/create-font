@@ -56,6 +56,8 @@ import type {
 import css from "./DesignTileContent.module.css"
 import { PdfPreview } from "./PdfPreview.tsx"
 import { SvgPreview } from "./SvgPreview.tsx"
+import { PngPreview } from "./PngPreview.tsx"
+import { preflightPngExport, type PngExportRequest } from "@create-design/png"
 import {
 	preflightSvgExport,
 	type SvgDiagnostic,
@@ -466,6 +468,9 @@ function DesignExportTile({
 }) {
 	const [previewEnabled, setPreviewEnabled] = useState(false)
 	const [svgPreviewEnabled, setSvgPreviewEnabled] = useState(false)
+	const [pngPreviewEnabled, setPngPreviewEnabled] = useState(false)
+	const [pngScale, setPngScale] = useState(1)
+	const [pngBackground, setPngBackground] = useState("transparent")
 	const [svgImportDiagnostics, setSvgImportDiagnostics] = useState<
 		readonly SvgDiagnostic[]
 	>([])
@@ -579,6 +584,26 @@ function DesignExportTile({
 	const svgPreflight = useMemo(
 		() => preflightSvgExport(context.document, svgTarget),
 		[context.document, svgTarget],
+	)
+	const pngRequest = useMemo<PngExportRequest>(
+		() => ({
+			scope: target.scope,
+			scale: pngScale,
+			background:
+				pngBackground === "transparent"
+					? { kind: "transparent" }
+					: {
+							kind: "color",
+							r: Number.parseInt(pngBackground.slice(1, 3), 16),
+							g: Number.parseInt(pngBackground.slice(3, 5), 16),
+							b: Number.parseInt(pngBackground.slice(5, 7), 16),
+						},
+		}),
+		[pngBackground, pngScale, target.scope],
+	)
+	const pngPreflight = useMemo(
+		() => preflightPngExport(context.document, pngRequest),
+		[context.document, pngRequest],
 	)
 	return (
 		<design-export-tile>
@@ -817,6 +842,67 @@ function DesignExportTile({
 			</label>
 			{svgPreviewEnabled ? (
 				<SvgPreview document={context.document} target={svgTarget} />
+			) : null}
+			<hr />
+			<strong>Portable Network Graphics</strong>
+			<span>
+				Rasterize the chosen artboard scope through the same deterministic,
+				headless pipeline used by the CLI and live proof.
+			</span>
+			<label data-field>
+				<span>Scale</span>
+				<select
+					value={pngScale}
+					onChange={(event) => setPngScale(Number(event.currentTarget.value))}
+				>
+					<option value={1}>1×</option>
+					<option value={2}>2×</option>
+					<option value={4}>4×</option>
+				</select>
+			</label>
+			<label data-field>
+				<span>Background</span>
+				<select
+					value={pngBackground}
+					onChange={(event) => setPngBackground(event.currentTarget.value)}
+				>
+					<option value="transparent">Transparent</option>
+					<option value="#ffffff">White</option>
+					<option value="#000000">Black</option>
+				</select>
+			</label>
+			{pngPreflight.diagnostics.length === 0 ? null : (
+				<ul aria-label="PNG export diagnostics" data-export-preflight>
+					{pngPreflight.diagnostics.map((diagnostic, index) => (
+						<li
+							key={`${diagnostic.code}:${diagnostic.artboardId ?? "document"}:${diagnostic.entityId ?? index}`}
+							data-severity={diagnostic.severity}
+						>
+							<strong>{diagnostic.severity}</strong> {diagnostic.message}
+						</li>
+					))}
+				</ul>
+			)}
+			<button
+				type="button"
+				disabled={pngPreflight.decision === "blocked"}
+				onClick={() => context.exportPngDocument(pngRequest)}
+			>
+				Export {pngPreflight.artboards.length} artboard
+				{pngPreflight.artboards.length === 1 ? "" : "s"} as PNG
+			</button>
+			<label data-live-preview>
+				<input
+					type="checkbox"
+					checked={pngPreviewEnabled}
+					onChange={(event) =>
+						setPngPreviewEnabled(event.currentTarget.checked)
+					}
+				/>
+				<span>Live PNG proof (opt in)</span>
+			</label>
+			{pngPreviewEnabled ? (
+				<PngPreview document={context.document} request={pngRequest} />
 			) : null}
 		</design-export-tile>
 	)

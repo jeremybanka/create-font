@@ -21,6 +21,7 @@ import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import type { ExportPreflightPreferences } from "@create-design/pdf"
 import type { SvgExportTarget, SvgImportResult } from "@create-design/svg"
+import type { PngExportRequest } from "@create-design/png"
 import type {
 	DesignAlignment,
 	DesignAlignmentTarget,
@@ -109,6 +110,7 @@ export interface DesignTileContext {
 		preferences?: ExportPreflightPreferences,
 	) => void
 	readonly exportSvgDocument: (target: SvgExportTarget) => void
+	readonly exportPngDocument: (request: PngExportRequest) => void
 	readonly importSvgDocument: (source: string) => SvgImportResult
 	readonly focusCanvas: () => void
 	readonly reviewSourceChange?: (change: DesignSourceReviewChange) => void

@@ -19,6 +19,12 @@ import {
 	exportDesignSvg,
 	formatSvgDiagnostic,
 } from "./svg-export.ts"
+import {
+	DesignPngPreflightError,
+	DesignPngSourceError,
+	exportDesignPng,
+	formatPngDiagnostic,
+} from "./png-export.ts"
 
 export type CreateDesignCliWriter = Readonly<{
 	write(value: string): unknown
@@ -49,6 +55,8 @@ type ParsedCli =
 			command: "export"
 			force: boolean
 			includeBleed: boolean
+			pngBackground?: import("@create-design/png").PngBackground
+			pngScale?: number
 			output: string
 			root: string
 	  }>
@@ -59,7 +67,7 @@ const HELP = `Usage:
 
 Commands:
   serve   Start the interactive workspace server (default).
-  export  Export a validated source project as PDF or SVG.
+  export  Export a validated source project as PDF, SVG, or PNG.
 
 Run "create-design export --help" for export options.`
 
@@ -67,8 +75,10 @@ const EXPORT_HELP = `Usage:
   create-design export [PROJECT] --output FILE [options]
 
 Options:
-  -o, --output FILE       Required .pdf or .svg path outside the source project.
-      --artboards VALUE   PDF: "all" or IDs. SVG: exactly one artboard ID.
+  -o, --output FILE       Required .pdf, .svg, or .png path outside the source project.
+      --artboards VALUE   PDF/PNG: "all" or IDs. SVG: exactly one artboard ID.
+      --scale NUMBER      PNG pixels per document unit (default 1).
+      --background VALUE PNG background: transparent or #RRGGBB.
       --include-bleed     Include authored bleed in PDF page media boxes.
       --force             Atomically replace an existing output file.
   -h, --help              Show this help.`
@@ -132,7 +142,11 @@ function parseOptions(arguments_: readonly string[]): Readonly<{
 			uniqueOption(options, name, true)
 			continue
 		}
-		if (["--output", "--port", "--artboards"].includes(name)) {
+		if (
+			["--output", "--port", "--artboards", "--scale", "--background"].includes(
+				name,
+			)
+		) {
 			const parsed = optionValue(arguments_, index, inline, name)
 			uniqueOption(options, name, parsed.value)
 			index = parsed.nextIndex
@@ -183,6 +197,8 @@ export function parseCreateDesignCli(arguments_: readonly string[]): ParsedCli {
 			"--output",
 			"--artboards",
 			"--include-bleed",
+			"--scale",
+			"--background",
 			"--force",
 		])
 			if (options.has(name))
@@ -197,11 +213,32 @@ export function parseCreateDesignCli(arguments_: readonly string[]): ParsedCli {
 	const output = stringOption(options, "--output")
 	if (output === undefined) throw new Error(`Export requires --output FILE.`)
 	const artboardIds = parseArtboards(stringOption(options, "--artboards"))
+	const scaleValue = stringOption(options, "--scale")
+	const pngScale = scaleValue === undefined ? undefined : Number(scaleValue)
+	if (pngScale !== undefined && (!Number.isFinite(pngScale) || pngScale <= 0))
+		throw new Error("--scale must be a positive finite number.")
+	const backgroundValue = stringOption(options, "--background")
+	let pngBackground: import("@create-design/png").PngBackground | undefined
+	if (backgroundValue === "transparent") pngBackground = { kind: "transparent" }
+	else if (
+		backgroundValue !== undefined &&
+		/^#[0-9a-f]{6}$/iu.test(backgroundValue)
+	)
+		pngBackground = {
+			kind: "color",
+			r: Number.parseInt(backgroundValue.slice(1, 3), 16),
+			g: Number.parseInt(backgroundValue.slice(3, 5), 16),
+			b: Number.parseInt(backgroundValue.slice(5, 7), 16),
+		}
+	else if (backgroundValue !== undefined)
+		throw new Error('--background must be "transparent" or #RRGGBB.')
 	return {
 		...(artboardIds === undefined ? {} : { artboardIds }),
 		command,
 		force: options.has("--force"),
 		includeBleed: options.has("--include-bleed"),
+		...(pngBackground === undefined ? {} : { pngBackground }),
+		...(pngScale === undefined ? {} : { pngScale }),
 		output: resolve(output),
 		root,
 	}
@@ -222,7 +259,29 @@ export async function runCreateDesignCli(
 			return 0
 		}
 		if (input.command === "export") {
+			if (extname(input.output).toLowerCase() === ".png") {
+				if (input.includeBleed)
+					throw new Error("--include-bleed is only valid for PDF export.")
+				const result = await exportDesignPng({
+					...input,
+					...(input.pngBackground === undefined
+						? {}
+						: { background: input.pngBackground }),
+					...(input.pngScale === undefined ? {} : { scale: input.pngScale }),
+				})
+				for (const diagnostic of result.preflight.diagnostics)
+					writeLine(io.stderr, formatPngDiagnostic(diagnostic))
+				writeLine(
+					io.stdout,
+					`Exported ${result.outputs.length} PNG ${result.outputs.length === 1 ? "image" : "images"} (${result.byteLength} bytes) to ${result.outputs.join(", ")}.`,
+				)
+				return 0
+			}
 			if (extname(input.output).toLowerCase() === ".svg") {
+				if (input.pngScale !== undefined || input.pngBackground !== undefined)
+					throw new Error(
+						"--scale and --background are only valid for PNG export.",
+					)
 				if (input.includeBleed)
 					throw new Error("--include-bleed is only valid for PDF export.")
 				const result = await exportDesignSvg(input)
@@ -234,6 +293,10 @@ export async function runCreateDesignCli(
 				)
 				return 0
 			}
+			if (input.pngScale !== undefined || input.pngBackground !== undefined)
+				throw new Error(
+					"--scale and --background are only valid for PNG export.",
+				)
 			const result = await exportDesignPdf(input)
 			for (const diagnostic of result.preflight.diagnostics)
 				writeLine(io.stderr, formatExportDiagnostic(diagnostic))
@@ -261,6 +324,19 @@ export async function runCreateDesignCli(
 		writeLine(io.stdout, `create-design serving ${input.root} at ${url.href}`)
 		return 0
 	} catch (error) {
+		if (error instanceof DesignPngPreflightError) {
+			for (const diagnostic of error.preflight.diagnostics)
+				writeLine(io.stderr, formatPngDiagnostic(diagnostic))
+			return 1
+		}
+		if (error instanceof DesignPngSourceError) {
+			for (const diagnostic of error.diagnostics)
+				writeLine(
+					io.stderr,
+					`error ${diagnostic.code} [${diagnostic.unitPath ?? diagnostic.path}]: ${diagnostic.message}`,
+				)
+			return 1
+		}
 		if (error instanceof DesignSvgPreflightError) {
 			for (const diagnostic of error.preflight.diagnostics)
 				writeLine(io.stderr, formatSvgDiagnostic(diagnostic))
