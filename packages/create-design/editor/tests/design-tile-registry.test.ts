@@ -19,6 +19,7 @@ describe("create-design tile registry", () => {
 			"export",
 			"tools",
 			"object",
+			"blend",
 			"transform",
 			"arrange",
 			"appearance",
@@ -31,11 +32,11 @@ describe("create-design tile registry", () => {
 			["pages", "layers"],
 			["version-control", "canvas", "export"],
 			["tools"],
-			["object", "transform", "arrange", "appearance"],
+			["object", "blend", "transform", "arrange", "appearance"],
 		])
 	})
 
-	it("splits Transform and Arrange out of customized v3 Object tiles", () => {
+	it("adds Blend, Transform, and Arrange beside customized v4 Object tiles", () => {
 		const previousLayout = {
 			...DEFAULT_DESIGN_TILING_LAYOUT,
 			columns: DEFAULT_DESIGN_TILING_LAYOUT.columns.map((column) => ({
@@ -43,6 +44,7 @@ describe("create-design tile registry", () => {
 				tiles: column.tiles.filter(
 					(tile) =>
 						tile.kind !== "version-control" &&
+						tile.kind !== "blend" &&
 						tile.kind !== "transform" &&
 						tile.kind !== "arrange",
 				),
@@ -72,6 +74,7 @@ describe("create-design tile registry", () => {
 				"export",
 				"tools",
 				"object",
+				"blend",
 				"transform",
 				"arrange",
 				"appearance",
@@ -87,6 +90,7 @@ describe("create-design tile registry", () => {
 				tiles: column.tiles.filter(
 					(tile) =>
 						tile.kind !== "object" &&
+						tile.kind !== "blend" &&
 						tile.kind !== "transform" &&
 						tile.kind !== "arrange",
 				),
@@ -112,5 +116,10 @@ describe("create-design tile registry", () => {
 				column.tiles.map((tile) => tile.kind),
 			),
 		).not.toContain("arrange")
+		expect(
+			migrated.columns.flatMap((column) =>
+				column.tiles.map((tile) => tile.kind),
+			),
+		).not.toContain("blend")
 	})
 })

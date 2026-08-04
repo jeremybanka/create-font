@@ -31,6 +31,7 @@ import type {
 import {
 	cmykToRgb,
 	oppositeColorSpace,
+	resolveDesignBlend,
 	resolvedCmyk,
 	resolvedRgb,
 	rgbToCmyk,
@@ -74,6 +75,7 @@ import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
+	DesignBlend,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -295,7 +297,27 @@ function DesignLayersTile({
 }) {
 	return (
 		<design-layers-tile>
-			<strong>{context.document.objects.length} objects</strong>
+			<strong>
+				{context.document.objects.length} objects ·{" "}
+				{context.document.blends?.length ?? 0} live blends
+			</strong>
+			{[...(context.document.blends ?? [])].reverse().map((blend) => (
+				<button
+					key={blend.id}
+					type="button"
+					data-layer-kind="blend"
+					aria-label={`Select live blend ${blend.name}`}
+					aria-pressed={context.selectedBlend?.id === blend.id}
+					onClick={() => context.selectBlend(blend)}
+				>
+					<i data-layer-color />
+					<span>{blend.name}</span>
+					<layer-icons>
+						<small>{blend.steps} steps</small>
+						{blend.locked ? <svg.LockClosed /> : null}
+					</layer-icons>
+				</button>
+			))}
 			{[...context.document.objects].reverse().map((object) => {
 				const swatch = context.document.swatches.find(
 					(candidate) =>
@@ -1532,6 +1554,163 @@ function DesignObjectTile({
 	)
 }
 
+function BlendNameInput({
+	blend,
+	context,
+}: Readonly<{ blend: DesignBlend; context: DesignTileContext }>) {
+	const [name, setName] = useState(blend.name)
+	const commit = (): void => {
+		const trimmed = name.trim()
+		if (trimmed.length === 0) setName(blend.name)
+		else if (trimmed !== blend.name)
+			context.setBlendProperty(blend, { name: trimmed })
+	}
+	return (
+		<blend-name-input>
+			<label data-field>
+				<span>Blend name</span>
+				<input
+					aria-label="Blend name"
+					value={name}
+					onInput={(event) => setName(event.currentTarget.value)}
+					onBlur={commit}
+					onKeyDown={(event) => {
+						if (event.key !== "Enter") return
+						commit()
+						event.currentTarget.blur()
+					}}
+				/>
+			</label>
+		</blend-name-input>
+	)
+}
+
+function DesignBlendTile({ context }: { readonly context: DesignTileContext }) {
+	const blend = context.selectedBlend
+	const resolution =
+		blend === null ? null : resolveDesignBlend(context.document, blend)
+	const endpoint = (kind: "start" | "end") =>
+		blend === null
+			? undefined
+			: context.document.objects.find(
+					({ id }) =>
+						id === (kind === "start" ? blend.startObjectId : blend.endObjectId),
+				)
+	return (
+		<design-blend-tile aria-label="Live blend editor">
+			<strong>Live contour blend</strong>
+			<button
+				type="button"
+				aria-describedby="make-blend-eligibility"
+				disabled={context.blendCreationDisabledReason !== null}
+				onClick={context.makeBlend}
+			>
+				Make Blend
+			</button>
+			<p id="make-blend-eligibility">
+				{context.blendCreationDisabledReason ??
+					"Create a live blend from the two selected objects; endpoints remain ordinary objects."}
+			</p>
+			{blend === null ? (
+				<p>Select a live blend on the canvas or in Layers to edit it.</p>
+			) : (
+				<blend-editor>
+					<BlendNameInput
+						key={`${blend.id}:${blend.name}`}
+						blend={blend}
+						context={context}
+					/>
+					<TileNumericField
+						label="Specified steps"
+						value={blend.steps}
+						min={1}
+						max={10_000}
+						step={1}
+						arrowStep={1}
+						onCommit={(steps) => context.setBlendProperty(blend, { steps })}
+					/>
+					<small>
+						{blend.steps} intermediate path{blend.steps === 1 ? "" : "s"};
+						endpoints are retained.
+					</small>
+					{(["start", "end"] as const).map((kind) => {
+						const object = endpoint(kind)
+						const editable = object?.geometry.kind === "path" && !object.locked
+						return (
+							<blend-endpoint key={kind} data-endpoint={kind}>
+								<strong>
+									{kind === "start" ? "Start" : "End"}:{" "}
+									{object?.name ?? "Missing"}
+								</strong>
+								<button
+									type="button"
+									disabled={!editable}
+									title={
+										editable
+											? `Reverse ${kind} endpoint direction`
+											: "Direction editing requires an unlocked ordinary path endpoint."
+									}
+									onClick={() => context.reverseBlendEndpoint(kind)}
+								>
+									Reverse {kind} direction
+								</button>
+								{object?.geometry.kind !== "path"
+									? null
+									: object.geometry.contours.map((contour, contourIndex) => (
+											<label key={contour.id} data-field>
+												<span>Contour {contourIndex + 1} first point</span>
+												<select
+													aria-label={`${kind === "start" ? "Start" : "End"} contour ${contourIndex + 1} first point`}
+													disabled={!editable || !contour.closed}
+													value={contour.points[0]?.id ?? ""}
+													onChange={(event) =>
+														context.setBlendFirstPoint(
+															kind,
+															contour.id,
+															event.currentTarget.value,
+														)
+													}
+												>
+													{contour.points.map((point, pointIndex) => (
+														<option key={point.id} value={point.id}>
+															Point {pointIndex + 1}
+														</option>
+													))}
+												</select>
+											</label>
+										))}
+							</blend-endpoint>
+						)
+					})}
+					{context.blendDiagnosticMessages.length === 0 ? (
+						<p role="status">Blend is ready and previews live.</p>
+					) : (
+						<ul aria-label="Blend diagnostics" aria-live="polite">
+							{context.blendDiagnosticMessages.map((message) => (
+								<li key={message}>{message}</li>
+							))}
+						</ul>
+					)}
+					<button
+						type="button"
+						data-expand-blend
+						disabled={resolution?.status !== "ready" || blend.locked}
+						aria-describedby="expand-blend-policy"
+						onClick={context.expandBlend}
+					>
+						Expand Blend
+					</button>
+					<p id="expand-blend-policy">
+						Retains both endpoint objects and replaces the live blend with
+						selected, ordinary editable intermediate paths in the same stacking
+						position.
+					</p>
+				</blend-editor>
+			)}
+		</design-blend-tile>
+	)
+}
+
 function ShapeNumberInput({
 	disabled = false,
 	label,
@@ -2030,6 +2209,8 @@ export function DesignTileContent({
 				<DesignExportTile context={context} />
 			) : kind === "object" ? (
 				<DesignObjectTile context={context} />
+			) : kind === "blend" ? (
+				<DesignBlendTile context={context} />
 			) : kind === "transform" ? (
 				<DesignTransformTile context={context} />
 			) : kind === "arrange" ? (

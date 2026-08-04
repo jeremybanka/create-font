@@ -3,6 +3,11 @@ import { createDesignBlend } from "@create-design/model"
 
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createDesignPenObject } from "../src/design-pen.ts"
+import {
+	expandDesignBlend,
+	makeDesignBlend,
+	updateDesignBlend,
+} from "../src/blend-operations.ts"
 import { createInitialDocument, parseDesignDocument } from "../src/document.ts"
 import { createDesignPersistenceState } from "../src/persistence.ts"
 import type { DesignDocument } from "../src/types.ts"
@@ -98,6 +103,36 @@ describe("design Pen timeline", () => {
 })
 
 describe("live blend timeline", () => {
+	it("restores exact live options and endpoints after expansion", () => {
+		const initial = createInitialDocument()
+		let id = 0
+		const nextId = () => `history-${++id}`
+		const made = makeDesignBlend(
+			initial,
+			initial.objects.slice(0, 2).map(({ id }) => id),
+			nextId,
+			6,
+		)!
+		const configured = updateDesignBlend(made.document, made.blendId, {
+			name: "Configured blend",
+			steps: 9,
+		})!
+		const expanded = expandDesignBlend(configured, made.blendId, nextId)!
+		const state = createDesignEditorState({
+			document: configured,
+			persistence: createDesignPersistenceState(null),
+			name: "blend-expand-history-test",
+		})
+		state.actions.commitDocument(expanded.document)
+		expect(state.silo.getState(state.states.documentSelector).blends).toEqual(
+			[],
+		)
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			configured,
+		)
+	})
+
 	it("persists a blend and restores endpoint-driven updates with undo", () => {
 		const initial = createInitialDocument()
 		const [start, end] = initial.objects
