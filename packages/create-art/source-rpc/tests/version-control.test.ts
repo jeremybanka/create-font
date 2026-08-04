@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
@@ -445,6 +445,23 @@ describe(`Git source version control`, () => {
 		await expect(
 			incomplete.readComparison({ baseRef: `HEAD` }),
 		).rejects.toMatchObject({ code: `source.repository_state` })
+	})
+
+	it(`reports an unreadable working snapshot as repository state`, async () => {
+		const { sourceRoot } = await fixture()
+		const versionControl = createSourceVersionControl(
+			sourceRoot,
+			async () => {
+				throw new Error(`Source asset fonts/missing.otf does not exist.`)
+			},
+			adapter,
+		)
+		await expect(
+			versionControl.readComparison({ baseRef: `HEAD` }),
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+			message: expect.stringContaining(`fonts/missing.otf`),
+		})
 	})
 
 	it(`bounds historical snapshot unit counts and bytes before parsing`, async () => {

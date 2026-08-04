@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
@@ -76,6 +76,25 @@ function assetIndexValue(assets: readonly SourceAssetDescriptor[]): JsonValue {
 	}
 }
 
+function fontIndexValue(
+	fonts: readonly SourceAssetDescriptor[],
+	family = `Test Sans`,
+): JsonValue {
+	return {
+		entries: fonts.map((font) => ({
+			byteLength: font.byteLength,
+			family,
+			id: font.id,
+			mediaType: font.mediaType,
+			path: font.path,
+			revision: font.digest,
+			sha256: font.digest.slice(`sha256:`.length),
+		})),
+		format: `create-design.font-index`,
+		version: 1,
+	}
+}
+
 function byteStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
 	return new ReadableStream({
 		start(controller) {
@@ -114,6 +133,27 @@ async function addAsset(
 				expectedRevision: index.revision,
 				path: index.path,
 				value: assetIndexValue([asset]),
+			},
+		],
+	})
+}
+
+async function addFont(
+	source: SourceService & SourceAssetService,
+	font: SourceAssetDescriptor,
+	bytes: Uint8Array,
+	operationId: string,
+) {
+	const index = await source.readUnit(`fonts/index.json`)
+	const staged = await stage(source, font, bytes, operationId)
+	return source.writeAssets({
+		assetWrites: [{ expectedDigest: null, stagingToken: staged.stagingToken }],
+		idempotencyKey: operationId,
+		writes: [
+			{
+				expectedRevision: index.revision,
+				path: index.path,
+				value: fontIndexValue([font]),
 			},
 		],
 	})
@@ -399,6 +439,141 @@ describe(`create-design version control`, () => {
 				paths: [`assets/index.json`, first.path],
 			}),
 		).rejects.toMatchObject({ code: `source.repository_state` })
+	})
+
+	it(`reviews a font as one Fonts group and selectively commits its inventory and bytes`, async () => {
+		const { designRoot, source, versionControl, workspaceRoot } =
+			await fixture()
+		const bytes = new Uint8Array([79, 84, 84, 79, 0, 1, 2, 3])
+		const font = descriptor(bytes, {
+			id: `font:test-sans`,
+			mediaType: `font/otf`,
+			path: `fonts/test-sans.otf`,
+		})
+		await addFont(source, font, bytes, `add-reviewed-font`)
+
+		const comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		expect(comparison.changes).toEqual([
+			expect.objectContaining({
+				change: `modified`,
+				id: `design:fonts`,
+				kind: `font`,
+				label: `Fonts`,
+				paths: [`fonts/index.json`, font.path],
+			}),
+		])
+		for (const path of [`fonts/index.json`, font.path] as const) {
+			await expect(
+				versionControl.commitUnits({
+					expectedComparisonIdentity: comparison.identity,
+					message: `Invalid partial font`,
+					paths: [path],
+				}),
+			).rejects.toMatchObject({ code: `source.repository_state` })
+		}
+
+		const committed = await versionControl.commitUnits({
+			expectedComparisonIdentity: comparison.identity,
+			message: `Add reviewed font`,
+			paths: [`fonts/index.json`, font.path],
+		})
+		expect(
+			await gitBytes(workspaceRoot, `show`, `HEAD:design/${font.path}`),
+		).toEqual(bytes)
+		expect(committed.comparison.changes).toEqual([])
+		expect(
+			await versionControl.readComparison({ baseRef: `HEAD` }),
+		).toMatchObject({ changes: [] })
+		expect(await readFile(join(designRoot, font.path))).toEqual(
+			Buffer.from(bytes),
+		)
+		expect(
+			await readdir(join(designRoot, `.create-design`, `asset-staging`)),
+		).toEqual([])
+	})
+
+	it(`tracks font metadata and removal while rejecting tampered or missing bytes`, async () => {
+		const { designRoot, source, versionControl } = await fixture()
+		const bytes = new Uint8Array([79, 84, 84, 79, 4, 5, 6, 7])
+		const font = descriptor(bytes, {
+			id: `font:lifecycle`,
+			mediaType: `font/otf`,
+			path: `fonts/lifecycle.otf`,
+		})
+		await addFont(source, font, bytes, `add-lifecycle-font`)
+		let comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		await versionControl.commitUnits({
+			expectedComparisonIdentity: comparison.identity,
+			message: `Add lifecycle font`,
+			paths: [`fonts/index.json`, font.path],
+		})
+
+		let index = await source.readUnit(`fonts/index.json`)
+		await source.writeUnit({
+			expectedRevision: index.revision,
+			idempotencyKey: `rename-font-family`,
+			path: index.path,
+			value: fontIndexValue([font], `Renamed Sans`),
+		})
+		comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		expect(comparison.changes).toEqual([
+			expect.objectContaining({
+				change: `modified`,
+				id: `design:fonts`,
+				paths: [`fonts/index.json`],
+			}),
+		])
+		await versionControl.commitUnits({
+			expectedComparisonIdentity: comparison.identity,
+			message: `Rename font family`,
+			paths: [`fonts/index.json`],
+		})
+
+		await writeFile(join(designRoot, font.path), new Uint8Array(bytes.length))
+		await expect(
+			versionControl.readComparison({ baseRef: `HEAD` }),
+		).rejects.toMatchObject({ code: `source.repository_state` })
+		await writeFile(join(designRoot, font.path), bytes)
+		await rm(join(designRoot, font.path))
+		await expect(
+			versionControl.readComparison({ baseRef: `HEAD` }),
+		).rejects.toMatchObject({ code: `source.repository_state` })
+
+		await writeFile(join(designRoot, font.path), bytes)
+		index = await source.readUnit(`fonts/index.json`)
+		await source.writeAssets({
+			assetRemovals: [{ expectedDigest: font.digest, path: font.path }],
+			assetWrites: [],
+			idempotencyKey: `remove-lifecycle-font`,
+			writes: [
+				{
+					expectedRevision: index.revision,
+					path: index.path,
+					value: fontIndexValue([]),
+				},
+			],
+		})
+		comparison = await versionControl.readComparison({ baseRef: `HEAD` })
+		expect(comparison.changes).toEqual([
+			expect.objectContaining({
+				change: `modified`,
+				id: `design:fonts`,
+				paths: [`fonts/index.json`, font.path],
+			}),
+		])
+		await expect(
+			versionControl.commitUnits({
+				expectedComparisonIdentity: comparison.identity,
+				message: `Invalid partial font removal`,
+				paths: [`fonts/index.json`],
+			}),
+		).rejects.toMatchObject({ code: `source.repository_state` })
+		const removed = await versionControl.commitUnits({
+			expectedComparisonIdentity: comparison.identity,
+			message: `Remove lifecycle font`,
+			paths: [`fonts/index.json`, font.path],
+		})
+		expect(removed.comparison.changes).toEqual([])
 	})
 
 	it(`tracks binary replacement and deletion and rejects a stale asset review`, async () => {

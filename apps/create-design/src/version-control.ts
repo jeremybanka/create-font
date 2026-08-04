@@ -18,12 +18,14 @@ import {
 	assembleDesignDocument,
 	assetUnitPathSchema,
 	designSourcePaths,
+	fontUnitPathSchema,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
 	validateSourceUnit,
 	type AssetIndexFile,
 	type DesignSourceDiagnostic,
 	type DesignSourceDirectoryFiles,
+	type FontIndexFile,
 } from "@create-design/source"
 
 function issues(errors: readonly DesignSourceDiagnostic[]) {
@@ -147,41 +149,52 @@ function paletteDependentObjectPaths(
 	)
 }
 
-function assetDescriptors(snapshot: SourceProjectSnapshot): ReadonlyMap<
-	string,
-	Readonly<{
-		byteLength: number
-		digest: `sha256:${string}`
-		id: string
-		mediaType: string
-		path: string
-	}>
-> {
-	const path = designSourcePaths.assetIndex
-	const value = snapshot.units.find((unit) => unit.path === path)?.value
-	const validated = validateSourceUnit(`asset-index`, value, path)
-	if (!validated.ok) throw new SourceValidationError(issues(validated.errors))
+type BinaryDescriptor = Readonly<{
+	byteLength: number
+	digest: `sha256:${string}`
+	id: string
+	mediaType: string
+	path: string
+}>
+
+function inventoryDescriptors(
+	values: Readonly<Record<string, JsonValue | undefined>>,
+): readonly BinaryDescriptor[] {
+	const assetPath = designSourcePaths.assetIndex
+	const assets = validateSourceUnit(`asset-index`, values[assetPath], assetPath)
+	if (!assets.ok) throw new SourceValidationError(issues(assets.errors))
+	const fontPath = designSourcePaths.fontIndex
+	const fonts = validateSourceUnit(`font-index`, values[fontPath], fontPath)
+	if (!fonts.ok) throw new SourceValidationError(issues(fonts.errors))
+	return [
+		...(assets.value as AssetIndexFile).entries,
+		...(fonts.value as FontIndexFile).entries,
+	].map((entry) => ({
+		byteLength: entry.byteLength,
+		digest: `sha256:${entry.sha256}` as const,
+		id: entry.id,
+		mediaType: entry.mediaType,
+		path: entry.path,
+	}))
+}
+
+function binaryDescriptors(
+	snapshot: SourceProjectSnapshot,
+): ReadonlyMap<string, BinaryDescriptor> {
 	return new Map(
-		(validated.value as AssetIndexFile).entries.map((entry) => [
-			entry.path,
-			{
-				byteLength: entry.byteLength,
-				digest: `sha256:${entry.sha256}` as const,
-				id: entry.id,
-				mediaType: entry.mediaType,
-				path: entry.path,
-			},
-		]),
+		inventoryDescriptors(
+			Object.fromEntries(snapshot.units.map((unit) => [unit.path, unit.value])),
+		).map((descriptor) => [descriptor.path, descriptor]),
 	)
 }
 
-function validateAssetComparison(
+function validateBinaryComparison(
 	base: SourceProjectSnapshot,
 	target: SourceProjectSnapshot,
 	changes: readonly SourceUnitChange[],
 ): void {
-	const before = assetDescriptors(base)
-	const after = assetDescriptors(target)
+	const before = binaryDescriptors(base)
+	const after = binaryDescriptors(target)
 	for (const [label, inventory, assets] of [
 		[`base`, before, base.assets ?? []],
 		[`target`, after, target.assets ?? []],
@@ -190,7 +203,7 @@ function validateAssetComparison(
 		if (actual.size !== inventory.size) {
 			throw new SourceVersionControlError(
 				`source.repository_state`,
-				`The ${label} design asset inventory does not match its binary assets.`,
+				`The ${label} design binary inventory does not match its binary files.`,
 			)
 		}
 		for (const [path, expected] of inventory) {
@@ -204,7 +217,7 @@ function validateAssetComparison(
 			) {
 				throw new SourceVersionControlError(
 					`source.repository_state`,
-					`The ${label} design asset metadata does not match ${JSON.stringify(path)}.`,
+					`The ${label} design binary metadata does not match ${JSON.stringify(path)}.`,
 				)
 			}
 		}
@@ -235,7 +248,7 @@ function validateAssetComparison(
 	) {
 		throw new SourceVersionControlError(
 			`source.repository_state`,
-			`The design asset index and reviewed binary changes are not coherent.`,
+			`The design binary inventories and reviewed binary changes are not coherent.`,
 		)
 	}
 }
@@ -243,33 +256,32 @@ function validateAssetComparison(
 export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 	assets: {
 		descriptors(values) {
-			const path = designSourcePaths.assetIndex
-			const validated = validateSourceUnit(`asset-index`, values[path], path)
-			if (!validated.ok)
-				throw new SourceValidationError(issues(validated.errors))
-			return (validated.value as AssetIndexFile).entries.map((entry) => ({
-				byteLength: entry.byteLength,
-				digest: `sha256:${entry.sha256}` as const,
-				id: entry.id,
-				mediaType: entry.mediaType,
-				path: entry.path,
-			}))
+			return inventoryDescriptors(values)
 		},
 		isPath(path) {
-			return assetUnitPathSchema.safeParse(path).success
+			return (
+				assetUnitPathSchema.safeParse(path).success ||
+				fontUnitPathSchema.safeParse(path).success
+			)
 		},
 	},
 	groupChanges(changes) {
 		const assetChanges = changes.filter(
 			(change) =>
 				change.path === designSourcePaths.assetIndex ||
-				change.assetBefore !== undefined ||
-				change.assetAfter !== undefined,
+				assetUnitPathSchema.safeParse(change.path).success,
 		)
-		const assetPaths = new Set(assetChanges.map(({ path }) => path))
+		const fontChanges = changes.filter(
+			(change) =>
+				change.path === designSourcePaths.fontIndex ||
+				fontUnitPathSchema.safeParse(change.path).success,
+		)
+		const binaryPaths = new Set(
+			[...assetChanges, ...fontChanges].map(({ path }) => path),
+		)
 		const structuralPaths = new Set(
 			changes
-				.filter((change) => !assetPaths.has(change.path))
+				.filter((change) => !binaryPaths.has(change.path))
 				.filter(isStructural)
 				.map(({ path }) => path),
 		)
@@ -283,7 +295,7 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 		const palettePaths = paletteDependentObjectPaths(changes)
 		if (palettePaths.size > 0) palettePaths.add(designSourcePaths.palette)
 		const coordinatedPaths = new Set([
-			...assetPaths,
+			...binaryPaths,
 			...structuralPaths,
 			...palettePaths,
 		])
@@ -300,6 +312,20 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 							kind: `asset`,
 							label: `Assets`,
 							paths: assetChanges.map(({ path }) => path).toSorted() as [
+								string,
+								...string[],
+							],
+						},
+					]),
+			...(fontChanges.length === 0
+				? []
+				: [
+						{
+							change: aggregateChange(fontChanges),
+							id: `design:fonts`,
+							kind: `font`,
+							label: `Fonts`,
+							paths: fontChanges.map(({ path }) => path).toSorted() as [
 								string,
 								...string[],
 							],
@@ -343,7 +369,7 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 		if (!parsed.ok) throw new SourceValidationError(issues(parsed.errors))
 		return parsed.value as JsonValue
 	},
-	validateComparison: validateAssetComparison,
+	validateComparison: validateBinaryComparison,
 	validateSnapshot(values) {
 		const assembled = assembleDesignDocument(
 			values as DesignSourceDirectoryFiles,

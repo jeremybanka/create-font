@@ -578,10 +578,22 @@ export function createSourceVersionControl(
 			input.targetRef === undefined
 				? undefined
 				: await resolveCommit(git, input.targetRef, runtime)
-		const targetSnapshot =
-			targetCommit === undefined
-				? await readWorkingSnapshot()
-				: await immutableSnapshot(git, targetCommit)
+		let targetSnapshot: SourceProjectSnapshot
+		if (targetCommit === undefined) {
+			try {
+				targetSnapshot = await readWorkingSnapshot()
+			} catch (error) {
+				if (error instanceof SourceVersionControlError) throw error
+				throw new SourceVersionControlError(
+					`source.repository_state`,
+					`The working source snapshot could not be read: ${
+						error instanceof Error ? error.message : String(error)
+					}`,
+				)
+			}
+		} else {
+			targetSnapshot = await immutableSnapshot(git, targetCommit)
+		}
 		const changes = sourceUnitChanges(baseSnapshot, targetSnapshot)
 		await adapter.validateComparison?.(baseSnapshot, targetSnapshot, changes)
 		return {

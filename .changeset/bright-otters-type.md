@@ -13,3 +13,6 @@
 Add editable point and area text, canonical font shaping and outline projection,
 persistent source fonts, PDF text lowering, overset diagnostics, and undoable
 text expansion.
+
+Keep installed font inventories and binary files coherent across comparison and
+selective version-control commits.
