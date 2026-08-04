@@ -1,5 +1,14 @@
 # create-design
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [0e55ec6]
+- Updated dependencies [3a29372]
+- Updated dependencies [9449dda]
+  - @create-design/editor@0.2.1
+
 ## 0.2.1
 
 ### Patch Changes

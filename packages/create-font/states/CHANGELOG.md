@@ -1,5 +1,11 @@
 # @create-font/states
 
+## 0.7.0
+
+### Minor Changes
+
+- 27b8d85: Keep editor projections current for direct transactions and isolate point geometry updates. Whole-document replacement now uses `actions.load` exclusively so it can reset glyph and kerning histories safely, with an optional transaction-scoped tuple of validated caller-owned atom co-writes.
+
 ## 0.6.8
 
 ### Patch Changes

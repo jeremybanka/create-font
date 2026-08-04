@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/states",
-	"version": "0.6.8",
+	"version": "0.7.0",
 	"description": "Atom.io state and compilation model for variable-font editors",
 	"license": "MPL-2.0",
 	"repository": {

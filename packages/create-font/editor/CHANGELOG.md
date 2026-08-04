@@ -1,5 +1,13 @@
 # @create-font/editor
 
+## 0.9.1
+
+### Patch Changes
+
+- df5f8e6: Store independently established editor interaction facts in granular atom.io atoms, coordinate multi-fact commands and source reconciliation with transactions, require atom.io 0.51.1's commit-settled notifications and safe selector-family composition, use standard React bindings, and clean up browser navigation listeners when an editor unmounts.
+- Updated dependencies [27b8d85]
+  - @create-font/states@0.7.0
+
 ## 0.9.0
 
 ### Minor Changes
