@@ -45,7 +45,7 @@ describe("atom.io React integration", () => {
 		expect(workspace.ui.previewCoordinate.type).toBe("atom_family")
 		expect(workspace.ui.activeGlyphId.type).toBe("readonly_pure_selector")
 		expect(workspace.font.silo.store.atoms.has("interaction")).toBe(false)
-		if (false) {
+		const assertLoadRejectsMismatchedCoWrites = () => {
 			workspace.font.actions.load(workspace.document, [
 				// @ts-expect-error A co-write value must match its atom's value type.
 				{
@@ -54,11 +54,12 @@ describe("atom.io React integration", () => {
 				},
 			])
 		}
+		void assertLoadRejectsMismatchedCoWrites
 	})
 
-	it("renders a transaction over separate atoms as one settled snapshot", () => {
+	it("notifies direct subscribers only after a transaction is fully settled", () => {
 		const silo = new Silo({
-			name: "separate-atom-react-transaction",
+			name: "settled-transaction-subscribers",
 			lifespan: "ephemeral",
 			isProduction: false,
 		})
@@ -71,30 +72,32 @@ describe("atom.io React integration", () => {
 				set(secondAtom, "new second")
 			},
 		})
-		const snapshots: Array<readonly [string, string]> = []
-		function Harness() {
-			snapshots.push([useO(firstAtom), useO(secondAtom)])
-			return null
+		const snapshots: Array<readonly [string, string, string]> = []
+		const readSnapshot = (source: string) => {
+			snapshots.push([
+				source,
+				silo.getState(firstAtom),
+				silo.getState(secondAtom),
+			])
 		}
-		const host = document.createElement("div")
-		document.body.append(host)
-		hosts.push(host)
-		act(() =>
-			render(
-				h(StoreProvider, {
-					store: silo.store,
-					children: h(Harness, {}),
-				}),
-				host,
-			),
+		const unsubscribeFirst = silo.subscribe(firstAtom, () =>
+			readSnapshot("first"),
+		)
+		const unsubscribeSecond = silo.subscribe(secondAtom, () =>
+			readSnapshot("second"),
 		)
 
-		act(() => silo.runTransaction(updateTransaction)())
+		silo.runTransaction(updateTransaction)()
+		unsubscribeFirst()
+		unsubscribeSecond()
 
-		expect(snapshots).toEqual([
-			["old first", "old second"],
-			["new first", "new second"],
-		])
+		expect(snapshots).toHaveLength(2)
+		expect(snapshots).toEqual(
+			expect.arrayContaining([
+				["first", "new first", "new second"],
+				["second", "new first", "new second"],
+			]),
+		)
 	})
 
 	it("renders coordinated workspace transactions as settled state", () => {
