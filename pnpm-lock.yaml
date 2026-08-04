@@ -82,6 +82,9 @@ importers:
       '@create-design/source':
         specifier: workspace:*
         version: link:../../packages/create-design/source
+      '@create-design/svg':
+        specifier: workspace:*
+        version: link:../../packages/create-design/svg
       '@elysia/node':
         specifier: 1.4.6
         version: 1.4.6(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
@@ -337,6 +340,9 @@ importers:
       '@create-design/source':
         specifier: workspace:*
         version: link:../source
+      '@create-design/svg':
+        specifier: workspace:*
+        version: link:../svg
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(react@19.2.8)
@@ -428,6 +434,22 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/create-design/svg:
+    dependencies:
+      '@create-design/model':
+        specifier: workspace:*
+        version: link:../model
+      '@create-design/source':
+        specifier: workspace:*
+        version: link:../source
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))

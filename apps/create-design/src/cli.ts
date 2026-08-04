@@ -2,7 +2,7 @@
 
 import { access } from "node:fs/promises"
 import { pathToFileURL } from "node:url"
-import { resolve } from "node:path"
+import { extname, resolve } from "node:path"
 
 import { SourceValidationError } from "@create-art/source-rpc"
 
@@ -13,6 +13,12 @@ import {
 	formatExportDiagnostic,
 } from "./pdf-export.ts"
 import { startCreateDesignServer } from "./server.ts"
+import {
+	DesignSvgPreflightError,
+	DesignSvgSourceError,
+	exportDesignSvg,
+	formatSvgDiagnostic,
+} from "./svg-export.ts"
 
 export type CreateDesignCliWriter = Readonly<{
 	write(value: string): unknown
@@ -53,17 +59,17 @@ const HELP = `Usage:
 
 Commands:
   serve   Start the interactive workspace server (default).
-  export  Export a validated source project as PDF.
+  export  Export a validated source project as PDF or SVG.
 
-Run "create-design export --help" for PDF options.`
+Run "create-design export --help" for export options.`
 
 const EXPORT_HELP = `Usage:
   create-design export [PROJECT] --output FILE [options]
 
 Options:
-  -o, --output FILE       Required .pdf path outside the source project.
-      --artboards VALUE   "all" (default) or comma-separated artboard IDs.
-      --include-bleed     Include authored bleed in page media boxes.
+  -o, --output FILE       Required .pdf or .svg path outside the source project.
+      --artboards VALUE   PDF: "all" or IDs. SVG: exactly one artboard ID.
+      --include-bleed     Include authored bleed in PDF page media boxes.
       --force             Atomically replace an existing output file.
   -h, --help              Show this help.`
 
@@ -189,8 +195,7 @@ export function parseCreateDesignCli(arguments_: readonly string[]): ParsedCli {
 	}
 	if (options.has("--port")) throw new Error(`--port is only valid for serve.`)
 	const output = stringOption(options, "--output")
-	if (output === undefined)
-		throw new Error(`PDF export requires --output FILE.`)
+	if (output === undefined) throw new Error(`Export requires --output FILE.`)
 	const artboardIds = parseArtboards(stringOption(options, "--artboards"))
 	return {
 		...(artboardIds === undefined ? {} : { artboardIds }),
@@ -217,6 +222,18 @@ export async function runCreateDesignCli(
 			return 0
 		}
 		if (input.command === "export") {
+			if (extname(input.output).toLowerCase() === ".svg") {
+				if (input.includeBleed)
+					throw new Error("--include-bleed is only valid for PDF export.")
+				const result = await exportDesignSvg(input)
+				for (const diagnostic of result.preflight.diagnostics)
+					writeLine(io.stderr, formatSvgDiagnostic(diagnostic))
+				writeLine(
+					io.stdout,
+					`Exported artboard ${result.artboardId} as SVG (${result.byteLength} bytes) to ${result.output}.`,
+				)
+				return 0
+			}
 			const result = await exportDesignPdf(input)
 			for (const diagnostic of result.preflight.diagnostics)
 				writeLine(io.stderr, formatExportDiagnostic(diagnostic))
@@ -244,6 +261,19 @@ export async function runCreateDesignCli(
 		writeLine(io.stdout, `create-design serving ${input.root} at ${url.href}`)
 		return 0
 	} catch (error) {
+		if (error instanceof DesignSvgPreflightError) {
+			for (const diagnostic of error.preflight.diagnostics)
+				writeLine(io.stderr, formatSvgDiagnostic(diagnostic))
+			return 1
+		}
+		if (error instanceof DesignSvgSourceError) {
+			for (const diagnostic of error.diagnostics)
+				writeLine(
+					io.stderr,
+					`error ${diagnostic.code} [${diagnostic.unitPath ?? diagnostic.path}]: ${diagnostic.message}`,
+				)
+			return 1
+		}
 		if (error instanceof DesignPdfPreflightError) {
 			for (const diagnostic of error.preflight.diagnostics)
 				writeLine(io.stderr, formatExportDiagnostic(diagnostic))
