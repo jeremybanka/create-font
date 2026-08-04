@@ -1,11 +1,11 @@
 import type { ContourId, EditorLayerNode, MasterId } from "@create-font/states"
+import { useI, useO } from "atom.io/react"
 import type * as React from "react"
-import { useMemo, useRef, useState } from "react"
+import { useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { editorContourToPath } from "./geometry.ts"
 import { contourSelectionTargets, selectionKey } from "./outline-selection.ts"
-import { useI, useO, useOptionalOF } from "./state-hooks.ts"
 import { compatibilityPathColor } from "./visual-debug.ts"
 import css from "./CompatibilityTile.module.css"
 
@@ -65,17 +65,7 @@ export function CompatibilityTile({ workspace }: CompatibilityTileProps) {
 		null,
 	)
 	const suppressDragClick = useRef(false)
-	const compatibilityKey = useMemo(
-		() =>
-			activeGlyphId === null
-				? null
-				: ([comparisonMasterId, activeMasterId, activeGlyphId] as const),
-		[activeGlyphId, activeMasterId, comparisonMasterId],
-	)
-	const compatibility = useOptionalOF(
-		workspace.font.selectors.glyphCompatibility,
-		compatibilityKey,
-	)
+	const compatibility = useO(workspace.ui.activeGlyphCompatibility)
 	const contours = layer?.contours ?? []
 	const editing =
 		editingTextIndex !== null && activeGlyphId !== null && layer !== null

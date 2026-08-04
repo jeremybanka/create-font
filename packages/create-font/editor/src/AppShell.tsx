@@ -1,4 +1,8 @@
+/* eslint-disable lasertag/render-tag-with-own-name -- Headless atom.io history boundaries intentionally return caller-owned controls without DOM wrappers. */
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
+import type { GlyphId } from "@create-font/states"
+import { type TimelineMeta, useO, useTL } from "atom.io/react"
+import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
@@ -8,7 +12,7 @@ import {
 	parseHotbarSlots,
 	type HotbarSlots,
 } from "./action-hotbar.ts"
-import { ActionHotbar } from "./ActionHotbar.tsx"
+import { ActionHotbar, type ActionHotbarProps } from "./ActionHotbar.tsx"
 import {
 	isCommandPaletteKeyboardEvent,
 	type PaletteCommand,
@@ -39,13 +43,6 @@ import {
 import { GlyphCanvas } from "./GlyphCanvas.tsx"
 import { GlyphLibrary } from "./GlyphLibrary.tsx"
 import { masterPaletteCommands } from "./master-commands.ts"
-import {
-	useO,
-	useOF,
-	useOptionalOF,
-	useOptionalTL,
-	useTimeline,
-} from "./state-hooks.ts"
 import { selectionProportionPaletteCommand } from "./selection-proportions.ts"
 import {
 	TilingWorkspace,
@@ -63,6 +60,65 @@ const svg = {
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
+}
+
+interface EditorHistoryBoundaryProps {
+	readonly activeGlyphId: GlyphId | null
+	readonly kerningActive: boolean
+	readonly render: (history: TimelineMeta | null) => ReactNode
+	readonly workspace: EditorWorkspace
+}
+
+function GlyphHistoryBoundary({
+	glyphId,
+	render,
+	workspace,
+}: Pick<EditorHistoryBoundaryProps, "render" | "workspace"> & {
+	readonly glyphId: GlyphId
+}) {
+	const history = useTL(workspace.font.glyphHistoryTimelines, glyphId)
+	return render(history)
+}
+
+function KerningHistoryBoundary({
+	render,
+	workspace,
+}: Pick<EditorHistoryBoundaryProps, "render" | "workspace">) {
+	const history = useTL(workspace.font.kerningTimeline)
+	return render(history)
+}
+
+function EditorHistoryBoundary({
+	activeGlyphId,
+	kerningActive,
+	render,
+	workspace,
+}: EditorHistoryBoundaryProps) {
+	if (kerningActive) {
+		return <KerningHistoryBoundary workspace={workspace} render={render} />
+	}
+	if (activeGlyphId !== null) {
+		return (
+			<GlyphHistoryBoundary
+				workspace={workspace}
+				glyphId={activeGlyphId}
+				render={render}
+			/>
+		)
+	}
+	return render(null)
+}
+
+function HistoryActionHotbar({
+	hotkeysEnabled,
+	toolContext,
+	...props
+}: ActionHotbarProps & {
+	readonly hotkeysEnabled: boolean
+	readonly toolContext: ToolContext
+}) {
+	useHotkeys(toolContext, hotkeysEnabled)
+	return <ActionHotbar {...props} />
 }
 
 function readInitialHotbarSlots(): HotbarSlots {
@@ -93,11 +149,8 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const masterIds = useO(workspace.font.atoms.masterIds)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-	)
-	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const glyph = useO(workspace.ui.activeGlyphSource)
+	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const names = useO(workspace.font.atoms.names) ?? workspace.document.names
 	const validation = useO(workspace.ui.validation)
 	const activeLayer = useO(workspace.ui.activeLayer)
@@ -109,18 +162,10 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
-	const glyphHistory = useOptionalTL(
-		workspace.font.glyphHistoryTimelines,
-		activeGlyphId,
-		workspace.font.actions.markDocumentChanged,
-	)
-	const kerningHistory = useTimeline(
-		workspace.font.kerningTimeline,
-		workspace.font.actions.markDocumentChanged,
-	)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
-	const history = activeKerningPair === null ? glyphHistory : kerningHistory
-	const toolContext: ToolContext = {
+	const toolContextForHistory = (
+		history: TimelineMeta | null,
+	): ToolContext => ({
 		activeGlyphId,
 		activeLayer,
 		activeMasterId,
@@ -129,7 +174,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		history,
 		selection,
 		workspace,
-	}
+	})
 	const fontTileContext: FontTileContext = {
 		diffView,
 		onDiffViewChange: setDiffView,
@@ -144,7 +189,6 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		workspace,
 	}
 	useEditorDocumentMetadata(faviconPreview, routeName, previewText)
-	useHotkeys(toolContext, routeName === "canvas" && !tilingStatus.management)
 	const updateTilingStatus = useCallback((status: TilingWorkspaceStatus) => {
 		setTilingStatus((current) =>
 			current.dirty === status.dirty && current.management === status.management
@@ -183,85 +227,90 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 		return () => window.removeEventListener("keydown", handleKeyDown)
 	}, [tilingStatus.management])
 
-	const commands: readonly PaletteCommand[] = [
-		{
-			id: "toggle-diff-view",
-			displayName: "Toggle Diff View",
-			category: "Version Control",
-			description: "Compare the active glyph with the selected baseline.",
-			icon: "CircleIcon",
-			keywords: ["git", "changes", "review", "baseline"],
-			checked: diffView,
-			disabled: versionControl?.comparison === undefined,
-			disabledReason: "Load a version-control comparison first.",
-			do: () => setDiffView((enabled) => !enabled),
-		},
-		{
-			id: "add-glyphs",
-			displayName: "Add glyphs",
-			category: "Glyphs",
-			description: "Add one or more glyphs to the font.",
-			icon: "PlusIcon",
-			keywords: ["new", "create", "character"],
-			do: () => {
-				workspace.actions.navigate("/glyphs")
-				setAddingGlyphs(true)
+	const commandsForHistory = (
+		history: TimelineMeta | null,
+	): readonly PaletteCommand[] => {
+		const toolContext = toolContextForHistory(history)
+		return [
+			{
+				id: "toggle-diff-view",
+				displayName: "Toggle Diff View",
+				category: "Version Control",
+				description: "Compare the active glyph with the selected baseline.",
+				icon: "CircleIcon",
+				keywords: ["git", "changes", "review", "baseline"],
+				checked: diffView,
+				disabled: versionControl?.comparison === undefined,
+				disabledReason: "Load a version-control comparison first.",
+				do: () => setDiffView((enabled) => !enabled),
 			},
-		},
-		...masterPaletteCommands(
-			masterIds.length,
-			workspace.actions.selectPreviousMaster,
-			workspace.actions.selectNextMaster,
-		),
-		...Object.values(TOOLS).map((tool) => {
-			const editingTool = [
-				"select",
-				"pen",
-				"rect",
-				"ellipse",
-				"knife",
-				"transform",
-			].includes(tool.id)
-			return {
-				id: tool.id,
-				displayName: editingTool
-					? `${tool.displayName} tool`
-					: tool.displayName,
-				category: editingTool ? "Tools" : "Edit",
-				description: tool.description,
-				icon: tool.icon,
-				keywords: [tool.id],
-				shortcut: formatHotkey(tool.hotkey).join("+"),
-				checked: tool.status(toolContext) === "active",
-				disabled:
-					routeName !== "canvas" || tool.status(toolContext) === "disabled",
-				disabledReason:
-					routeName !== "canvas"
-						? "Open the canvas to use this editor command."
-						: toolDisabledReason(tool, toolContext),
-				do: () => tool.do(toolContext),
-			}
-		}),
-		selectionProportionPaletteCommand(
-			constrainProportions,
-			workspace.actions.toggleConstrainProportions,
-		),
-		...visualDebugPaletteCommands(visualDebug, (id) =>
-			workspace.actions.toggleVisualDebug(id),
-		),
-		...tileRegistryCommands(FONT_TILE_REGISTRY, fontTileContext).map(
-			(command): PaletteCommand => ({
-				...command,
+			{
+				id: "add-glyphs",
+				displayName: "Add glyphs",
+				category: "Glyphs",
+				description: "Add one or more glyphs to the font.",
+				icon: "PlusIcon",
+				keywords: ["new", "create", "character"],
 				do: () => {
-					tileCommandSequence.current += 1
-					setTileCommandRequest({
-						id: tileCommandSequence.current,
-						kind: command.kind,
-					})
+					workspace.actions.navigate("/glyphs")
+					setAddingGlyphs(true)
 				},
+			},
+			...masterPaletteCommands(
+				masterIds.length,
+				workspace.actions.selectPreviousMaster,
+				workspace.actions.selectNextMaster,
+			),
+			...Object.values(TOOLS).map((tool) => {
+				const editingTool = [
+					"select",
+					"pen",
+					"rect",
+					"ellipse",
+					"knife",
+					"transform",
+				].includes(tool.id)
+				return {
+					id: tool.id,
+					displayName: editingTool
+						? `${tool.displayName} tool`
+						: tool.displayName,
+					category: editingTool ? "Tools" : "Edit",
+					description: tool.description,
+					icon: tool.icon,
+					keywords: [tool.id],
+					shortcut: formatHotkey(tool.hotkey).join("+"),
+					checked: tool.status(toolContext) === "active",
+					disabled:
+						routeName !== "canvas" || tool.status(toolContext) === "disabled",
+					disabledReason:
+						routeName !== "canvas"
+							? "Open the canvas to use this editor command."
+							: toolDisabledReason(tool, toolContext),
+					do: () => tool.do(toolContext),
+				}
 			}),
-		),
-	]
+			selectionProportionPaletteCommand(
+				constrainProportions,
+				workspace.actions.toggleConstrainProportions,
+			),
+			...visualDebugPaletteCommands(visualDebug, (id) =>
+				workspace.actions.toggleVisualDebug(id),
+			),
+			...tileRegistryCommands(FONT_TILE_REGISTRY, fontTileContext).map(
+				(command): PaletteCommand => ({
+					...command,
+					do: () => {
+						tileCommandSequence.current += 1
+						setTileCommandRequest({
+							id: tileCommandSequence.current,
+							kind: command.kind,
+						})
+					},
+				}),
+			),
+		]
+	}
 
 	const familyName = names.typographicFamily ?? names.family ?? "Untitled font"
 	return (
@@ -333,24 +382,35 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 							diffView={diffView}
 							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
-						<ActionHotbar
-							commands={commands}
-							enabled={!tilingStatus.management && !commandPaletteOpen}
-							paletteOpen={commandPaletteOpen}
-							slots={hotbarSlots}
-							onAssignCommand={(commandId, slotIndex) => {
-								setHotbarSlots(
-									(current) =>
-										assignPaletteCommandToHotbar(
-											current,
-											slotIndex,
-											commandId,
-											"drag",
-										).slots,
-								)
-							}}
-							onOpenCommands={openCommandPalette}
-							onSlotsChange={setHotbarSlots}
+						<EditorHistoryBoundary
+							activeGlyphId={activeGlyphId}
+							kerningActive={activeKerningPair !== null}
+							workspace={workspace}
+							render={(history) => (
+								<HistoryActionHotbar
+									commands={commandsForHistory(history)}
+									enabled={!tilingStatus.management && !commandPaletteOpen}
+									hotkeysEnabled={
+										routeName === "canvas" && !tilingStatus.management
+									}
+									paletteOpen={commandPaletteOpen}
+									slots={hotbarSlots}
+									toolContext={toolContextForHistory(history)}
+									onAssignCommand={(commandId, slotIndex) => {
+										setHotbarSlots(
+											(current) =>
+												assignPaletteCommandToHotbar(
+													current,
+													slotIndex,
+													commandId,
+													"drag",
+												).slots,
+										)
+									}}
+									onOpenCommands={openCommandPalette}
+									onSlotsChange={setHotbarSlots}
+								/>
+							)}
 						/>
 						<TilingWorkspace
 							context={fontTileContext}
@@ -406,23 +466,30 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 				</format-label>
 			</footer>
 			{commandPaletteOpen ? (
-				<CommandPalette
-					commands={commands}
-					onCancel={closeCommandPalette}
-					onExecute={(command) => {
-						setCommandPaletteOpen(false)
-						command.do()
-					}}
-					onAssign={(command, slotIndex) => {
-						const assignment = assignPaletteCommandToHotbar(
-							hotbarSlots,
-							slotIndex,
-							command.id,
-							"keyboard",
-						)
-						setHotbarSlots(assignment.slots)
-						if (assignment.closePalette) closeCommandPalette()
-					}}
+				<EditorHistoryBoundary
+					activeGlyphId={activeGlyphId}
+					kerningActive={activeKerningPair !== null}
+					workspace={workspace}
+					render={(history) => (
+						<CommandPalette
+							commands={commandsForHistory(history)}
+							onCancel={closeCommandPalette}
+							onExecute={(command) => {
+								setCommandPaletteOpen(false)
+								command.do()
+							}}
+							onAssign={(command, slotIndex) => {
+								const assignment = assignPaletteCommandToHotbar(
+									hotbarSlots,
+									slotIndex,
+									command.id,
+									"keyboard",
+								)
+								setHotbarSlots(assignment.slots)
+								if (assignment.closePalette) closeCommandPalette()
+							}}
+						/>
+					)}
 				/>
 			) : null}
 		</app-shell>

@@ -49,13 +49,27 @@ editing target and restores textarea focus and the virtual caret.
 Axes, names, and metrics are exposed through the workspace document structure;
 the glyph list and cmap can grow through the add-glyph dialog. Components
 subscribe only to narrow atoms and selectors. An edit to `.notdef`, for
-example, does not invalidate an `O` preview. A tiny Preact-native adapter
-observes the custom Silo through its public get, set, and subscribe methods.
+example, does not invalidate an `O` preview. The editor supplies its Silo to
+atom.io's standard `StoreProvider` and uses its standard hooks directly in the
+React UI. A conditional glyph-history component calls atom.io's streamlined
+`useTL(family, glyphId)` overload only for a real active glyph. Kerning history
+has its own component, while the no-history branch invokes no timeline hook.
+Editor-owned revision bookkeeping stays at the undo and redo command
+boundaries.
+
+Each independently established interaction fact owns a narrow atom: selected
+glyph, active and comparison masters, outline and rule selections, preview text,
+caret and textarea selection, edit occurrence, active tool, and pathname.
+Variation-axis preview coordinates use an atom family keyed by axis ID.
+Selectors remain only for values derived from those facts, such as route,
+active glyph, preview location, and active kerning pair. Coordinated commands
+write the relevant atoms in atom.io transactions. Whole-source replacement
+passes a validated tuple of those atom values into the font load transaction,
+so document and interaction reconciliation share one rollback boundary.
 
 Toolbar and keyboard history controls select the active glyph from the
-workspace's timeline family and call the custom Silo's `undo()` and `redo()`
-methods directly. Switching glyphs switches timeline cursors without combining
-their edits.
+workspace's timeline family with atom.io's `useTL`. Switching glyphs switches
+timeline cursors without combining their edits.
 
 ## Run
 

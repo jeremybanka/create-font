@@ -3,13 +3,13 @@ import {
 	MagnifyingGlassIcon,
 	PlusIcon,
 } from "@radix-ui/react-icons"
+import { useO } from "atom.io/react"
 import type * as React from "react"
 import { useEffect, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphLibrary.module.css"
 import { createGlyphPreview } from "./glyph-preview.ts"
-import { useO, useOF } from "./state-hooks.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 import {
 	glyphDifference,
@@ -191,7 +191,7 @@ function GlyphLibraryItem({
 	readonly versionControl?: EditorVersionControl
 }) {
 	const difference = glyphDifference(versionControl?.comparison, glyphId)
-	const glyph = useOF(workspace.font.selectors.editorGlyphSource, glyphId)
+	const glyph = useO(workspace.font.selectors.editorGlyphSource, glyphId)
 	const metrics =
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
 	const metadata =

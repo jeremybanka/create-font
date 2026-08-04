@@ -1,4 +1,5 @@
 import type { EditorAxisSource } from "@create-font/states"
+import { useO } from "atom.io/react"
 import { useEffect, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
@@ -9,7 +10,6 @@ import {
 	previewColorDefault,
 	type PreviewSampleId,
 } from "./preview-tile.ts"
-import { useO } from "./state-hooks.ts"
 import css from "./PreviewTile.module.css"
 
 export interface PreviewTileProps {

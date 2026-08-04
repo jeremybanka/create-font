@@ -1,3 +1,4 @@
+import { useO } from "atom.io/react"
 import type * as React from "react"
 import { useId, useState } from "react"
 
@@ -16,7 +17,6 @@ import {
 	type SelectionTransformResult,
 } from "./outline-selection.ts"
 import css from "./SelectionDimensions.module.css"
-import { useO } from "./state-hooks.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 
 export interface SelectionDimensionsProps {

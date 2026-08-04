@@ -59,6 +59,68 @@ describe("live font compilation", () => {
 		expect(scheduled).toHaveLength(2)
 	})
 
+	it("cancels scheduled work and cannot restart after disposal", () => {
+		const silo = new Silo({
+			name: "live-font-dispose-test",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const revision = silo.atom({ key: "revision", default: 0 })
+		const compilation = vi.fn(successfulCompilation)
+		const scheduled: (() => void)[] = []
+		const cancel = vi.fn()
+		const compiler = createLiveFontCompiler(
+			{ silo, documentRevision: revision, compilation },
+			{
+				schedule: (work) => {
+					scheduled.push(work)
+					return cancel
+				},
+				serialize: () => new Uint8Array([1]),
+			},
+		)
+
+		const release = compiler.retain()
+		expect(scheduled).toHaveLength(1)
+		compiler.dispose()
+		compiler.dispose()
+		expect(cancel).toHaveBeenCalledTimes(1)
+
+		silo.setState(revision, 1)
+		compiler.start()
+		compiler.retain()
+		scheduled[0]?.()
+		release()
+
+		expect(scheduled).toHaveLength(1)
+		expect(compilation).not.toHaveBeenCalled()
+	})
+
+	it("workspace disposal terminates retained live-font work", async () => {
+		vi.useFakeTimers()
+		try {
+			const workspace = createEditorWorkspace()
+			const release = workspace.liveFont.retain()
+			expect(
+				workspace.font.silo.getState(workspace.liveFont.compilation),
+			).toMatchObject({ status: "compiling", generation: 1 })
+
+			workspace.dispose()
+			workspace.dispose()
+			workspace.liveFont.start()
+			workspace.liveFont.retain()
+			workspace.font.actions.markDocumentChanged()
+			await vi.advanceTimersByTimeAsync(LIVE_FONT_EDIT_DEBOUNCE_MS)
+			release()
+
+			expect(
+				workspace.font.silo.getState(workspace.liveFont.compilation),
+			).toMatchObject({ status: "compiling", generation: 1 })
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
 	it("defers compilation beyond the input turn and coalesces an edit burst", async () => {
 		vi.useFakeTimers()
 		try {

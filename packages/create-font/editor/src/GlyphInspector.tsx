@@ -1,7 +1,8 @@
+import { useO } from "atom.io/react"
+
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphInspector.module.css"
 import { NumericInput } from "@create-art/editor"
-import { useO, useOF, useOptionalOF } from "./state-hooks.ts"
 
 export interface GlyphInspectorProps {
 	readonly workspace: EditorWorkspace
@@ -10,11 +11,8 @@ export interface GlyphInspectorProps {
 export function GlyphInspector({ workspace }: GlyphInspectorProps) {
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-	)
-	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const glyph = useO(workspace.ui.activeGlyphSource)
+	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const selection = useO(workspace.ui.selection)
 	const selectedPointId = selection.at(-1)?.pointId
 	const layer = useO(workspace.ui.activeLayer)

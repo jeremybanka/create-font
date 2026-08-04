@@ -1,4 +1,5 @@
 import type { EditorFontSource } from "@create-font/states"
+import { StoreProvider } from "atom.io/react"
 import { useEffect, useRef, useState } from "react"
 
 import { AppShell } from "./AppShell.tsx"
@@ -6,7 +7,6 @@ import { startBrowserLiveFont } from "./browser-font-face.ts"
 import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
-import { EditorStateContext } from "./state-hooks.ts"
 import type { EditorVersionControl } from "./version-control.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
 import { createSourcePersistenceScheduler } from "./source-persistence.ts"
@@ -37,6 +37,16 @@ export function EditorApplicationRoot({
 	}, [featureSubstitutions, workspace])
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
+
+	useEffect(() => {
+		return workspace.startBrowserNavigation()
+	}, [workspace])
+
+	useEffect(() => {
+		return () => {
+			workspace.dispose()
+		}
+	}, [workspace])
 
 	useEffect(() => {
 		const stopBrowserFont = startBrowserLiveFont(
@@ -101,12 +111,12 @@ export function EditorApplicationRoot({
 
 	return (
 		<editor-application-root className={css.class}>
-			<EditorStateContext.Provider value={workspace.font.silo}>
+			<StoreProvider store={workspace.font.silo.store}>
 				<AppShell
 					workspace={workspace}
 					{...(versionControl === undefined ? {} : { versionControl })}
 				/>
-			</EditorStateContext.Provider>
+			</StoreProvider>
 		</editor-application-root>
 	)
 }

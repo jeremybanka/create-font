@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { PreviewTile } from "../src/PreviewTile.tsx"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const hosts: HTMLElement[] = []
 
@@ -39,8 +39,8 @@ function mountTwo() {
 	const workspace = createEditorWorkspace()
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h("div", {}, [
 					h(PreviewTile, {
 						key: "first",

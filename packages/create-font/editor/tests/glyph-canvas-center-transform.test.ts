@@ -12,7 +12,7 @@ import {
 	contourSelectionTargets,
 	selectionKey,
 } from "../src/outline-selection.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
@@ -70,8 +70,8 @@ function mountTransformSelection() {
 	hosts.push(host)
 	act(() =>
 		render(
-			h(EditorStateContext.Provider, {
-				value: workspace.font.silo,
+			h(StoreProvider, {
+				store: workspace.font.silo.store,
 				children: h(GlyphCanvas, { workspace }),
 			}),
 			host,

@@ -1,4 +1,5 @@
 import type { GlyphId, MasterId } from "@create-font/states"
+import type { TimelineMeta } from "atom.io/react"
 import { useEffect } from "react"
 
 import type { EditorIconName } from "@create-art/editor"
@@ -16,7 +17,6 @@ import {
 	scaleSelectionControls,
 	type EditorSelectionTarget,
 } from "./outline-selection.ts"
-import type { TimelineMeta } from "./state-hooks.ts"
 
 type Alphabetical =
 	| "a"
@@ -64,7 +64,7 @@ export interface ToolContext {
 	readonly activeTool: EditorToolId
 	readonly activeLayer: EditorCanvasLayer | null
 	readonly editingTextIndex: number | null
-	readonly history: TimelineMeta
+	readonly history: TimelineMeta | null
 	readonly selection: readonly EditorSelectionTarget[]
 }
 
@@ -122,7 +122,7 @@ const directionChanges = new WeakMap<
 >()
 
 function rememberDirectionChange(context: ToolContext): void {
-	if (context.activeGlyphId === null) return
+	if (context.activeGlyphId === null || context.history === null) return
 	let byGlyph = directionChanges.get(context.workspace)
 	if (byGlyph === undefined) {
 		byGlyph = new Map()
@@ -175,7 +175,7 @@ function invertSelection(
 }
 
 function directionChangeAt(context: ToolContext, entry: number): boolean {
-	if (context.activeGlyphId === null) return false
+	if (context.activeGlyphId === null || context.history === null) return false
 	return (
 		directionChanges
 			.get(context.workspace)
@@ -403,10 +403,13 @@ export const TOOLS = {
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
 		icon: "DoubleArrowLeftIcon",
-		status: ({ history }) => (history.at === 0 ? "disabled" : "ready"),
+		status: ({ history }) =>
+			history === null || history.at === 0 ? "disabled" : "ready",
 		do: (context) => {
+			if (context.history === null) return
 			const remap = directionChangeAt(context, context.history.at)
 			context.history.undo()
+			context.workspace.font.actions.markDocumentChanged()
 			if (remap) remapSelectionHandles(context)
 		},
 	},
@@ -417,10 +420,12 @@ export const TOOLS = {
 		hotkey: { key: "z", mod: true, shift: true },
 		icon: "DoubleArrowRightIcon",
 		status: ({ history }) =>
-			history.at === history.length ? "disabled" : "ready",
+			history === null || history.at === history.length ? "disabled" : "ready",
 		do: (context) => {
+			if (context.history === null) return
 			const remap = directionChangeAt(context, context.history.at + 1)
 			context.history.redo()
+			context.workspace.font.actions.markDocumentChanged()
 			if (remap) remapSelectionHandles(context)
 		},
 	},
@@ -578,8 +583,8 @@ export function useHotkeys(context: ToolContext, enabled = true): void {
 		activeMasterId,
 		activeTool,
 		editingTextIndex,
-		history.at,
-		history.length,
+		history?.at,
+		history?.length,
 		selection,
 		enabled,
 		workspace,

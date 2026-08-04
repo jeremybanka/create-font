@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { EditorStateContext } from "../src/state-hooks.ts"
+import { StoreProvider } from "atom.io/react"
 import type { EditorVersionControl } from "../src/version-control.ts"
 
 const requireFromRenderer = createRequire(
@@ -103,8 +103,8 @@ describe("GlyphCanvas Diff View", () => {
 		hosts.push(host)
 		act(() =>
 			render(
-				h(EditorStateContext.Provider, {
-					value: workspace.font.silo,
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
 					children: h(GlyphCanvas, {
 						workspace,
 						diffView: true,

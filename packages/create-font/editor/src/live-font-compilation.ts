@@ -74,7 +74,9 @@ export interface LiveFontStateOwner {
 
 export interface LiveFontCompilerOptions {
 	readonly now?: () => number
-	readonly schedule?: (work: () => void) => void
+	readonly schedule?:
+		| ((work: () => void) => void)
+		| ((work: () => void) => () => void)
 	readonly serialize?: (
 		compilation: Extract<FontCompilation, { ok: true }>,
 	) => Promise<Uint8Array> | Uint8Array
@@ -94,7 +96,8 @@ export function createLiveFontCompiler(
 	const schedule =
 		options.schedule ??
 		((work: () => void) => {
-			setTimeout(work, LIVE_FONT_EDIT_DEBOUNCE_MS)
+			const timeout = setTimeout(work, LIVE_FONT_EDIT_DEBOUNCE_MS)
+			return () => clearTimeout(timeout)
 		})
 	const serialize =
 		options.serialize ??
@@ -110,8 +113,10 @@ export function createLiveFontCompiler(
 	})
 	let generation = 0
 	let unsubscribe: (() => void) | null = null
+	let cancelScheduled: (() => void) | null = null
 	let running = false
 	let retainCount = 0
+	let disposed = false
 
 	const lastGood = (): LiveFontArtifact | null => {
 		const current = owner.silo.getState(compilationAtom)
@@ -218,7 +223,9 @@ export function createLiveFontCompiler(
 		)
 	}
 	const request = (): void => {
-		if (!running) return
+		if (!running || disposed) return
+		cancelScheduled?.()
+		cancelScheduled = null
 		const currentGeneration = ++generation
 		const revision = owner.silo.getState(owner.documentRevision)
 		const requestedAt = now()
@@ -231,15 +238,21 @@ export function createLiveFontCompiler(
 				lastGood: lastGood(),
 			}),
 		)
-		schedule(() => compile(currentGeneration, revision, requestedAt))
+		const cancel = schedule(() => {
+			cancelScheduled = null
+			compile(currentGeneration, revision, requestedAt)
+		})
+		cancelScheduled = typeof cancel === "function" ? cancel : null
 	}
 	const start = (): void => {
-		if (running) return
+		if (running || disposed) return
 		running = true
 		unsubscribe = owner.silo.subscribe(owner.documentRevision, request)
 		request()
 	}
 	const stop = (): void => {
+		cancelScheduled?.()
+		cancelScheduled = null
 		if (!running) return
 		running = false
 		generation++
@@ -253,16 +266,23 @@ export function createLiveFontCompiler(
 		start,
 		stop,
 		retain(): () => void {
+			if (disposed) return () => {}
 			retainCount++
 			if (retainCount === 1) start()
 			let released = false
 			return () => {
-				if (released) return
+				if (released || disposed) return
 				released = true
 				retainCount--
 				if (retainCount === 0) stop()
 			}
 		},
 		request,
+		dispose(): void {
+			if (disposed) return
+			disposed = true
+			stop()
+			retainCount = 0
+		},
 	}
 }

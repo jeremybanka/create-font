@@ -1,10 +1,10 @@
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
+import { useI, useO } from "atom.io/react"
 import { useId } from "react"
 
 import { zoomCanvasView } from "./canvas-view.ts"
 import css from "./CanvasToolbar.module.css"
 import type { EditorWorkspace } from "./editor-workspace.ts"
-import { useI, useO, useOF, useOptionalOF } from "./state-hooks.ts"
 
 const svg = {
 	DotsHorizontal: DotsHorizontalIcon,
@@ -22,11 +22,8 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 	const activeTool = useO(workspace.ui.activeTool)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-	)
-	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const glyph = useO(workspace.ui.activeGlyphSource)
+	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const axes = useO(workspace.font.selectors.editorAxesSource) ?? []
 	const location = useO(workspace.ui.previewLocation)
 	const showNodes = useO(workspace.ui.showNodes)

@@ -91,13 +91,14 @@ after the atomic state replacement. A raw transaction cannot perform that
 timeline lifecycle safely, so consumers that previously ran
 `transactions.replaceFont` should call `actions.load` instead.
 
-`actions.load(source, coWrite?)` also accepts one optional declarative co-write
-for a caller-owned plain atom: `{ atom, value }`. It runs after the validated
-replacement writes and before the single document-revision write, so observers
-see the atom and new source coherently. Core atoms, selectors, families, and
-promise-like values are rejected. A rejected co-write rolls the replacement
-back and leaves histories untouched; timeline cleanup still occurs only after a
-successful commit.
+`actions.load(source, coWrites?)` also accepts an optional readonly tuple of
+declarative `{ atom, value }` co-writes for caller-owned plain atoms. Every
+entry is validated before any co-write is applied; all entries then run after
+the validated replacement writes and before the single document-revision
+write. Core atoms, selectors, core-family members, and promise-like values are
+rejected. Any rejected entry rolls back the replacement and every other
+co-write, leaving histories untouched; timeline cleanup still occurs only after
+a successful commit.
 
 ### Remote source cache
 

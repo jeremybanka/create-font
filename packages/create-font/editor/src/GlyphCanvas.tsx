@@ -176,7 +176,7 @@ import {
 	isMomentaryPreviewKey,
 	shouldStartMomentaryPreview,
 } from "./momentary-preview.ts"
-import { useI, useO, useOF, useOptionalOF } from "./state-hooks.ts"
+import { useI, useO } from "atom.io/react"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import {
@@ -411,22 +411,9 @@ export function GlyphCanvas({
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
 	const activeMasterId = useO(workspace.ui.activeMasterId)
 	const comparisonMasterId = useO(workspace.ui.comparisonMasterId)
-	const glyph = useOptionalOF(
-		workspace.font.selectors.editorGlyphSource,
-		activeGlyphId,
-	)
-	const compatibilityKey = useMemo(
-		() =>
-			activeGlyphId === null
-				? null
-				: ([comparisonMasterId, activeMasterId, activeGlyphId] as const),
-		[activeGlyphId, activeMasterId, comparisonMasterId],
-	)
-	const compatibility = useOptionalOF(
-		workspace.font.selectors.glyphCompatibility,
-		compatibilityKey,
-	)
-	const master = useOF(workspace.font.atoms.master, activeMasterId)
+	const glyph = useO(workspace.ui.activeGlyphSource)
+	const compatibility = useO(workspace.ui.activeGlyphCompatibility)
+	const master = useO(workspace.font.atoms.master, activeMasterId)
 	const metrics =
 		useO(workspace.font.atoms.metrics) ?? workspace.document.metrics
 	const metadata =

@@ -50,7 +50,7 @@
 		"@create-design/pdf": "workspace:*",
 		"@create-design/source": "workspace:*",
 		"@radix-ui/react-icons": "^1.3.2",
-		"atom.io": "0.51.0",
+		"atom.io": "0.51.1",
 		"react": "19.2.8",
 		"react-dom": "19.2.8"
 	},
