@@ -8,12 +8,12 @@ import {
 	appearanceSchema,
 	artboardIdSchema,
 	artboardInsetsSchema,
-	designBlendSchema,
 	compatibleGeometrySchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	DEFAULT_ARTBOARD_ID,
 	designObjectIdSchema,
+	designBlendSchema,
 	finiteNumberSchema,
 	guideSchema,
 	positiveNumberSchema,
@@ -27,6 +27,7 @@ import {
 	swatchIdSchema,
 	swatchSchema,
 	transformSchema,
+	textGeometrySchema,
 	validateDesignDocument,
 	versionTwoAppearanceSchema,
 } from "./document.ts"
@@ -42,7 +43,8 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
-export const CREATE_DESIGN_SOURCE_VERSION = 2 as const
+export const CREATE_DESIGN_SOURCE_VERSION = 3 as const
+export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 2 as const
 export const LEGACY_CREATE_DESIGN_SOURCE_VERSION = 1 as const
 export const DEFAULT_LAYER_ID = "layer:artwork" as const
 
@@ -59,6 +61,7 @@ export const projectFileSchema = z
 		format: z.literal(CREATE_DESIGN_SOURCE_FORMAT),
 		sourceVersion: z.union([
 			z.literal(LEGACY_CREATE_DESIGN_SOURCE_VERSION),
+			z.literal(PREVIOUS_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(CREATE_DESIGN_SOURCE_VERSION),
 		]),
 		documentFormat: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
@@ -159,13 +162,43 @@ export const groupFileSchema = z
 		children: z.array(sceneChildSchema),
 	})
 	.strict()
-const canonicalObjectFileSchema = z
+const inlineObjectFileSchema = z
 	.object({
 		format: z.literal("create-design.object"),
 		version: z.literal(1),
 		id: designObjectIdSchema,
 		name: z.string(),
 		geometry: compatibleGeometrySchema,
+		transform: transformSchema,
+		appearance: appearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+
+/** Raw UTF-8 text units live beside their owning object JSON. */
+export const textContentUnitPathSchema = z
+	.string()
+	.regex(
+		/^scene\/objects\/(?:[A-Za-z0-9._~%-]+\/)*[A-Za-z0-9._~%-]+\.txt$/u,
+		"Expected a relative TXT path below scene/objects/.",
+	)
+	.refine(
+		(path) => hasSafePathSegments(path.slice("scene/objects/".length)),
+		"Expected a safe relative TXT path below scene/objects/.",
+	)
+
+const externalTextGeometrySchema = textGeometrySchema
+	.omit({ text: true })
+	.extend({ contentPath: textContentUnitPathSchema })
+	.strict()
+const externalObjectFileSchema = z
+	.object({
+		format: z.literal("create-design.object"),
+		version: z.literal(2),
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: externalTextGeometrySchema,
 		transform: transformSchema,
 		appearance: appearanceSchema,
 		hidden: z.boolean().optional(),
@@ -224,22 +257,21 @@ const legacyObjectFileSchema = z
 	}))
 export const objectFileSchema = z
 	.union([
-		canonicalObjectFileSchema,
+		externalObjectFileSchema,
+		inlineObjectFileSchema,
 		versionTwoObjectFileSchema,
 		legacyObjectFileSchema,
 	])
 	.transform((file) => ({
 		format: file.format,
 		version: file.version,
-		...stabilizeDesignObjectIdentities({
-			id: file.id,
-			name: file.name,
-			geometry: file.geometry,
-			transform: file.transform,
-			appearance: file.appearance,
-			...(file.hidden === undefined ? {} : { hidden: file.hidden }),
-			...(file.locked === undefined ? {} : { locked: file.locked }),
-		}),
+		id: file.id,
+		name: file.name,
+		geometry: file.geometry,
+		transform: file.transform,
+		appearance: file.appearance,
+		...(file.hidden === undefined ? {} : { hidden: file.hidden }),
+		...(file.locked === undefined ? {} : { locked: file.locked }),
 	}))
 
 const indexEntry = <Id extends z.ZodType>(id: Id, path: z.ZodType<string>) =>
@@ -299,6 +331,8 @@ export const artboardUnitPathSchema = collectionUnitPathSchema("artboards")
 export const layerUnitPathSchema = collectionUnitPathSchema("scene/layers")
 export const groupUnitPathSchema = collectionUnitPathSchema("scene/groups")
 export const objectUnitPathSchema = collectionUnitPathSchema("scene/objects")
+export const textContentUnitPathForObjectPath = (objectPath: string): string =>
+	`${objectPath.slice(0, -".json".length)}.txt`
 export const assetUnitPathSchema = z
 	.string()
 	.refine(
@@ -308,7 +342,7 @@ export const assetUnitPathSchema = z
 			hasSafePathSegments(path.slice("assets/".length)),
 		"Expected a safe relative path below assets/.",
 	)
-const fontUnitPathSchema = z
+export const fontUnitPathSchema = z
 	.string()
 	.refine(
 		(path) =>
@@ -376,9 +410,14 @@ export const fontIndexFileSchema = z
 		entries: z.array(
 			z
 				.object({
+					byteLength: z.number().int().nonnegative(),
 					id: fontIdSchema,
+					mediaType: mediaTypeSchema,
 					path: fontUnitPathSchema,
 					sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+					family: z.string().min(1).optional(),
+					faceIndex: z.number().int().nonnegative().optional(),
+					revision: z.union([z.string(), finiteNumberSchema]).optional(),
 				})
 				.strict(),
 		),
@@ -424,6 +463,7 @@ export type DesignSourceUnitKind =
 	| "group"
 	| "object-index"
 	| "object"
+	| "text-content"
 	| "asset-index"
 	| "font-index"
 
@@ -439,6 +479,12 @@ const schemas = {
 	group: groupFileSchema,
 	"object-index": objectIndexFileSchema,
 	object: objectFileSchema,
+	"text-content": z
+		.string()
+		.refine(
+			(value) => value.isWellFormed(),
+			"Raw text must contain well-formed Unicode scalar values.",
+		),
 	"asset-index": assetIndexFileSchema,
 	"font-index": fontIndexFileSchema,
 } as const satisfies Record<DesignSourceUnitKind, z.ZodType>
@@ -493,6 +539,10 @@ export function defaultObjectUnitPath(id: string): string {
 	return `scene/objects/${encodePathSegment(id)}.json`
 }
 
+export function defaultTextContentUnitPath(id: string): string {
+	return textContentUnitPathForObjectPath(defaultObjectUnitPath(id))
+}
+
 export function defaultGroupUnitPath(id: string): string {
 	return `scene/groups/${encodePathSegment(id)}.json`
 }
@@ -519,6 +569,7 @@ export function sourceUnitKindForPath(
 	if (layerUnitPathSchema.safeParse(path).success) return "layer"
 	if (groupUnitPathSchema.safeParse(path).success) return "group"
 	if (objectUnitPathSchema.safeParse(path).success) return "object"
+	if (textContentUnitPathSchema.safeParse(path).success) return "text-content"
 	return null
 }
 
@@ -558,6 +609,7 @@ export function parseSourceUnitText(
 	text: string,
 	unitPath?: string,
 ): DesignSourceResult<unknown> {
+	if (kind === "text-content") return validateSourceUnit(kind, text, unitPath)
 	let value: unknown
 	try {
 		value = JSON.parse(text)
@@ -574,6 +626,8 @@ export function formatSourceUnit(
 	value: unknown,
 ): DesignSourceResult<string> {
 	const validated = validateSourceUnit(kind, value)
+	if (kind === "text-content" && validated.ok)
+		return success(validated.value as string)
 	return validated.ok
 		? success(formatSourceJson(validated.value as unknown as SourceJsonValue))
 		: failure(validated.errors)
@@ -588,13 +642,21 @@ export interface SplitDesignDocumentOptions {
 	readonly groupPath?: (group: DesignGroup, index: number) => string
 }
 
-function objectFile(object: DesignObject): ObjectFile {
+function objectFile(object: DesignObject, objectPath: string): ObjectFile {
+	const geometry = (() => {
+		if (object.geometry.kind !== "text") return object.geometry
+		const { text: _text, ...external } = object.geometry
+		return {
+			...external,
+			contentPath: textContentUnitPathForObjectPath(objectPath),
+		}
+	})()
 	return {
 		format: "create-design.object",
-		version: 1,
+		version: object.geometry.kind === "text" ? 2 : 1,
 		id: object.id,
 		name: object.name,
-		geometry: object.geometry,
+		geometry,
 		transform: object.transform,
 		appearance: object.appearance,
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
@@ -771,7 +833,10 @@ export function splitDesignDocument(
 	}
 	for (const [index, object] of validated.value.objects.entries()) {
 		const entry = objectEntries[index]
-		if (entry !== undefined) files[entry.path] = objectFile(object)
+		if (entry === undefined) continue
+		files[entry.path] = objectFile(object, entry.path)
+		if (object.geometry.kind === "text")
+			files[textContentUnitPathForObjectPath(entry.path)] = object.geometry.text
 	}
 	for (const [index, group] of groups.entries()) {
 		const entry = groupEntries[index]
@@ -917,22 +982,6 @@ export function assembleDesignDocument(
 		errors.push(...indexedErrors(entries, index))
 		for (const entry of entries) expected.add(entry.path)
 	}
-	for (const path of Object.keys(files)) {
-		if (expected.has(path)) continue
-		errors.push(
-			diagnostic(
-				sourceUnitKindForPath(path) === null
-					? "directory.unknown_file"
-					: "directory.orphan_file",
-				"$",
-				sourceUnitKindForPath(path) === null
-					? `Unknown canonical source unit ${path}.`
-					: `Source unit ${path} is not present in its inventory.`,
-				path,
-			),
-		)
-	}
-
 	if (artboardIndex !== null && artboardIndex.entries.length === 0)
 		errors.push(
 			diagnostic(
@@ -986,14 +1035,9 @@ export function assembleDesignDocument(
 				designSourcePaths.groupIndex,
 			),
 		)
-	if (fontIndex !== null && fontIndex.entries.length > 0)
+	if (fontIndex !== null)
 		errors.push(
-			diagnostic(
-				"directory.unsupported",
-				"$.entries",
-				"This source version reserves fonts but requires an empty inventory.",
-				designSourcePaths.fontIndex,
-			),
+			...indexedErrors(fontIndex.entries, designSourcePaths.fontIndex),
 		)
 
 	const layerEntry = layerIndex?.entries[0]
@@ -1039,15 +1083,76 @@ export function assembleDesignDocument(
 					entry.path,
 				),
 			)
-		objects.set(entry.id, {
-			id: file.id,
-			name: file.name,
-			geometry: file.geometry,
-			transform: file.transform,
-			appearance: file.appearance,
-			...(file.hidden === undefined ? {} : { hidden: file.hidden }),
-			...(file.locked === undefined ? {} : { locked: file.locked }),
-		})
+		let geometry: DesignObject["geometry"]
+		if (file.geometry.kind === "text" && "contentPath" in file.geometry) {
+			const canonicalContentPath = textContentUnitPathForObjectPath(entry.path)
+			if (file.geometry.contentPath !== canonicalContentPath)
+				errors.push(
+					diagnostic(
+						"directory.reference",
+						"$.geometry.contentPath",
+						`Text content path must be ${canonicalContentPath}.`,
+						entry.path,
+					),
+				)
+			expected.add(file.geometry.contentPath)
+			const content = files[file.geometry.contentPath]
+			if (typeof content !== "string") {
+				errors.push(
+					diagnostic(
+						"directory.missing_file",
+						"$",
+						`Missing required raw text source unit ${file.geometry.contentPath}.`,
+						file.geometry.contentPath,
+					),
+				)
+				continue
+			}
+			const { contentPath: _contentPath, ...storedGeometry } = file.geometry
+			geometry = { ...storedGeometry, text: content }
+		} else {
+			if (
+				project?.sourceVersion === CREATE_DESIGN_SOURCE_VERSION &&
+				file.geometry.kind === "text"
+			) {
+				errors.push(
+					diagnostic(
+						"directory.unsupported",
+						"$.geometry.text",
+						`Source version ${CREATE_DESIGN_SOURCE_VERSION} stores text content in an adjacent raw .txt unit.`,
+						entry.path,
+					),
+				)
+			}
+			geometry = file.geometry
+		}
+		objects.set(
+			entry.id,
+			stabilizeDesignObjectIdentities({
+				id: file.id,
+				name: file.name,
+				geometry,
+				transform: file.transform,
+				appearance: file.appearance,
+				...(file.hidden === undefined ? {} : { hidden: file.hidden }),
+				...(file.locked === undefined ? {} : { locked: file.locked }),
+			}),
+		)
+	}
+	for (const path of Object.keys(files)) {
+		if (expected.has(path)) continue
+		errors.push(
+			diagnostic(
+				sourceUnitKindForPath(path) === null
+					? "directory.unknown_file"
+					: "directory.orphan_file",
+				"$",
+				sourceUnitKindForPath(path) === null
+					? `Unknown canonical source unit ${path}.`
+					: `Source unit ${path} is not present in its inventory.`,
+				path,
+			),
+		)
 	}
 	const groups = new Map<string, DesignGroup>()
 	for (const entry of groupIndex?.entries ?? []) {
@@ -1157,7 +1262,6 @@ export function assembleDesignDocument(
 				),
 			)
 	}
-
 	if (
 		errors.length > 0 ||
 		metadata === null ||

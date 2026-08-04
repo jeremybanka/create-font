@@ -4,6 +4,7 @@ import {
 	CursorArrowIcon,
 	Pencil1Icon,
 	SquareIcon,
+	TextIcon,
 	TransformIcon,
 } from "@radix-ui/react-icons"
 
@@ -51,6 +52,18 @@ export const DESIGN_TOOLS = {
 		key: "O",
 		icon: CircleIcon,
 		paletteIcon: "CircleIcon",
+	},
+	text: {
+		label: "Type",
+		key: "T",
+		icon: TextIcon,
+		paletteIcon: "Pencil1Icon",
+	},
+	"area-text": {
+		label: "Area Type",
+		key: "Y",
+		icon: TextIcon,
+		paletteIcon: "SquareIcon",
 	},
 } as const satisfies Record<
 	DesignTool,

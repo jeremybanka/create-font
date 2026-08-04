@@ -637,16 +637,6 @@ export function createFontService(): FontService {
 		const diagnostics = Object.freeze([
 			...parsed.diagnostics,
 			...varied.diagnostics,
-			...(commands.length === 0 && request.glyphId !== 0
-				? [
-						diagnostic({
-							code: "glyph.missing",
-							font: request.font,
-							glyphId: request.glyphId,
-							message: `Font has no outline for glyph ${request.glyphId}.`,
-						}),
-					]
-				: []),
 		])
 		const value = Object.freeze({
 			font: request.font,

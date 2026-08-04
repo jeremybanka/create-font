@@ -1321,7 +1321,26 @@ export async function createFileSystemSourceService<Kind>(
 				return unit
 			}),
 		stageAsset: (input) => withLock(() => stageAssetUnlocked(input)),
-		writeAssets: (input) => withLock(() => writeAssetsUnlocked(input)),
+		writeAssets: (input) =>
+			withLock(async () => {
+				try {
+					return await writeAssetsUnlocked(input)
+				} catch (error) {
+					for (const stagingToken of new Set(
+						input.assetWrites.map(({ stagingToken }) => stagingToken),
+					)) {
+						try {
+							await rm(stagingRootFor(stagingToken), {
+								force: true,
+								recursive: true,
+							})
+						} catch {
+							// Invalid or already-removed tokens own no stage to clean.
+						}
+					}
+					throw error
+				}
+			}),
 		writeUnits: (input) => withLock(() => writeUnitsUnlocked(input)),
 		subscribe(listener) {
 			listeners.add(listener)

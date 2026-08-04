@@ -11,12 +11,15 @@ export type {
 	DesignDocument,
 	DesignFill,
 	DesignFillRule,
+	DesignFontReference,
 	DesignGeometry,
 	DesignGuide,
 	DesignGroup,
 	DesignObject,
 	DesignPoint,
 	DesignStroke,
+	DesignTextGeometry,
+	DesignTextTypography,
 	DesignSceneChild,
 	DesignSwatch,
 	DesignTransform,
@@ -31,3 +34,5 @@ export type DesignTool =
 	| "pen"
 	| "rect"
 	| "ellipse"
+	| "text"
+	| "area-text"

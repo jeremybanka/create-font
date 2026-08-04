@@ -13,6 +13,7 @@ import {
 } from "./pdf.ts"
 import { projectDesignDocumentBlends, type Bounds } from "@create-design/model"
 import type { DesignArtboard, DesignDocument } from "@create-design/source"
+import type { DesignTextService } from "@create-design/text"
 
 export const PDF_EXPORT_CAPABILITIES = Object.freeze([
 	"artboard.bleed",
@@ -21,6 +22,7 @@ export const PDF_EXPORT_CAPABILITIES = Object.freeze([
 	"paint.fill.even-odd",
 	"paint.rgb",
 	"paint.stroke",
+	"text.outline-lowering",
 	"vector.ellipse",
 	"vector.live-blend",
 	"vector.open-path-fill",
@@ -143,6 +145,7 @@ export function preflightPdfExport(
 	document: DesignDocument,
 	target: PdfExportTarget,
 	preferences: ExportPreflightPreferences = {},
+	textService?: DesignTextService,
 ): ExportPreflightResult {
 	const blendProjection = projectDesignDocumentBlends(document)
 	const result = runExportPreflight(
@@ -152,7 +155,53 @@ export function preflightPdfExport(
 			swatches: blendProjection.swatches,
 		},
 		target,
-		PDF_PREFLIGHT_ADAPTER,
+		Object.freeze({
+			...PDF_PREFLIGHT_ADAPTER,
+			inspectObject({ object }) {
+				if (object.hidden || object.geometry.kind !== "text") return []
+				const action = Object.freeze({
+					kind: "select-entity" as const,
+					entityKind: "object",
+					entityId: object.id,
+				})
+				if (textService === undefined)
+					return [
+						Object.freeze({
+							action,
+							capability: "text.outline-lowering",
+							code: "pdf.text-service-missing",
+							entityId: object.id,
+							entityKind: "object",
+							message: `${object.name} needs its source font loaded before PDF export.`,
+							severity: "error" as const,
+							target: "pdf",
+						}),
+					]
+				const layout = textService.layout(object)
+				if (layout === null) return []
+				const seen = new Set<string>()
+				return layout.diagnostics.flatMap((diagnostic) => {
+					if (seen.has(diagnostic.code)) return []
+					seen.add(diagnostic.code)
+					const blocking =
+						diagnostic.severity === "error" ||
+						diagnostic.code === "glyph.missing" ||
+						diagnostic.code === "font.unsupported-table"
+					return [
+						Object.freeze({
+							action,
+							capability: "text.outline-lowering",
+							code: `pdf.${diagnostic.code}`,
+							entityId: object.id,
+							entityKind: "object",
+							message: diagnostic.message,
+							severity: blocking ? ("error" as const) : ("warning" as const),
+							target: "pdf",
+						}),
+					]
+				})
+			},
+		}) satisfies ExportPreflightAdapter<PdfExportTarget>,
 		preferences,
 	)
 	if (blendProjection.diagnostics.length === 0) return result

@@ -3,7 +3,11 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { assembleDesignDocument } from "@create-design/source"
+import {
+	assembleDesignDocument,
+	createInitialDocument,
+	defaultTextContentUnitPath,
+} from "@create-design/source"
 import { describe, expect, test } from "vitest"
 
 import {
@@ -12,6 +16,77 @@ import {
 } from "../src/source-service.ts"
 
 describe(`create-design source service`, () => {
+	test(`publishes external raw-text changes and reloads their exact content`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-source-`))
+		const initial = createInitialDocument()
+		const textObject = {
+			id: `object:watched-text`,
+			name: `Watched text`,
+			geometry: {
+				kind: `text` as const,
+				mode: `point` as const,
+				text: `before`,
+				typography: {
+					font: { id: `font:test`, family: `Test` },
+					size: 12,
+					leading: 14,
+					tracking: 0,
+					kerning: `auto` as const,
+					alignment: `start` as const,
+					direction: `auto` as const,
+				},
+				x: 20,
+				y: 30,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: initial.swatches[1]!.id } },
+		}
+		await initializeDesignSourceWorkspace(root, {
+			...initial,
+			objects: [...initial.objects, textObject],
+		})
+		const service = await createDesignSourceService(root, { initialize: false })
+		const contentPath = defaultTextContentUnitPath(textObject.id)
+		const changed = new Promise<void>((resolveChanged) => {
+			const unsubscribe = service.subscribe?.((event) => {
+				if (!event.units.some(({ path }) => path === contentPath)) return
+				unsubscribe?.()
+				resolveChanged()
+			})
+		})
+		const authored = ` \t😀\r\nterminal\n`
+		await writeFile(join(root, contentPath), authored)
+		await Promise.race([
+			changed,
+			new Promise<never>((_resolve, reject) =>
+				setTimeout(
+					() => reject(new Error(`Timed out waiting for source change.`)),
+					2_000,
+				),
+			),
+		])
+		const snapshot = await service.readSnapshot()
+		expect(snapshot.units.find(({ path }) => path === contentPath)?.value).toBe(
+			authored,
+		)
+		const assembled = assembleDesignDocument(
+			Object.fromEntries(
+				snapshot.units.map(({ path, value }) => [path, value]),
+			),
+		)
+		expect(assembled).toMatchObject({
+			ok: true,
+			value: {
+				objects: expect.arrayContaining([
+					expect.objectContaining({
+						id: textObject.id,
+						geometry: expect.objectContaining({ text: authored }),
+					}),
+				]),
+			},
+		})
+	})
+
 	test(`publishes byte-preserved assets with their design inventory`, async () => {
 		const root = await mkdtemp(join(tmpdir(), `create-design-source-`))
 		const service = await createDesignSourceService(root)
@@ -116,6 +191,22 @@ describe(`create-design source service`, () => {
 				],
 			}),
 		).rejects.toMatchObject({ name: `SourceUnitNotFoundError` })
+		expect((await service.readSnapshot()).revision).toBe(before.revision)
+		await expect(
+			service.writeUnits({
+				idempotencyKey: `orphan-text`,
+				writes: [
+					{
+						expectedRevision: null,
+						path: `scene/objects/orphan.txt`,
+						value: `must not persist`,
+					},
+				],
+			}),
+		).rejects.toMatchObject({ name: `SourceValidationError` })
+		await expect(
+			readFile(join(root, `scene/objects/orphan.txt`), `utf8`),
+		).rejects.toMatchObject({ code: `ENOENT` })
 		expect((await service.readSnapshot()).revision).toBe(before.revision)
 	})
 

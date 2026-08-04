@@ -1,5 +1,6 @@
 import type {
 	DesignDocument,
+	DesignFontReference,
 	DesignSourceDiagnostic,
 } from "@create-design/source"
 
@@ -12,10 +13,16 @@ export type DesignSourceStatus =
 	| "recovering"
 	| "conflict"
 
+export type DesignSourceFontResource = Readonly<{
+	reference: DesignFontReference
+	bytes: Uint8Array
+}>
+
 export type DesignExternalSourceUpdate =
 	| Readonly<{
 			ok: true
 			document: DesignDocument
+			fonts: readonly DesignSourceFontResource[]
 			revision: string
 	  }>
 	| Readonly<{
@@ -28,6 +35,13 @@ export interface DesignSourceSession {
 	readonly displayName?: string
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
+	readonly fonts?: readonly DesignSourceFontResource[]
+	installFont?(
+		reference: DesignFontReference,
+		bytes: Uint8Array,
+		fileName: string,
+		mediaType: string,
+	): Promise<DesignFontReference>
 	readonly versionControl?: DesignVersionControlSession
 	reload(): Promise<DesignExternalSourceUpdate>
 	save(document: DesignDocument): Promise<Readonly<{ revision: string }>>

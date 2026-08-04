@@ -35,6 +35,10 @@ type EllipseGeometry = Omit<
 	Extract<DesignGeometry, Readonly<{ kind: "ellipse" }>>,
 	"kind"
 >
+type TextGeometry = Omit<
+	Extract<DesignGeometry, Readonly<{ kind: "text" }>>,
+	"kind"
+>
 type GeometryKind = DesignGeometry["kind"]
 type ObjectContourKey = readonly [objectId: string, contourId: string]
 type PointReference = readonly [pointId: string, occurrence: number]
@@ -215,6 +219,10 @@ export function createDesignDocumentState(
 		key: "ellipseGeometry",
 		default: null,
 	})
+	const textGeometryAtoms = silo.atomFamily<TextGeometry | null, string>({
+		key: "textGeometry",
+		default: null,
+	})
 	const pathFillRuleAtoms = silo.atomFamily<DesignFillRule | undefined, string>(
 		{ key: "pathFillRule", default: undefined },
 	)
@@ -260,6 +268,10 @@ export function createDesignDocumentState(
 		if (kind === "ellipse") {
 			const ellipse = get(ellipseGeometryAtoms, objectId)
 			return ellipse === null ? null : { kind, ...ellipse }
+		}
+		if (kind === "text") {
+			const text = get(textGeometryAtoms, objectId)
+			return text === null ? null : { kind, ...text }
 		}
 		const contourIds = get(objectContourIdsAtoms, objectId)
 		if (contourIds === null) return null
@@ -459,6 +471,8 @@ export function createDesignDocumentState(
 			tools.dispose(rectangleGeometryAtoms, objectId)
 		if (previousKind === "ellipse" && geometry.kind !== "ellipse")
 			tools.dispose(ellipseGeometryAtoms, objectId)
+		if (previousKind === "text" && geometry.kind !== "text")
+			tools.dispose(textGeometryAtoms, objectId)
 		if (previousKind !== geometry.kind)
 			tools.set(objectKindAtoms, objectId, geometry.kind)
 
@@ -474,6 +488,16 @@ export function createDesignDocumentState(
 			const { kind: _, ...ellipse } = geometry
 			if (!sameEllipse(tools.get(ellipseGeometryAtoms, objectId), ellipse))
 				tools.set(ellipseGeometryAtoms, objectId, ellipse)
+			return
+		}
+		if (geometry.kind === "text") {
+			const { kind: _, ...text } = geometry
+			const previous = tools.get(textGeometryAtoms, objectId)
+			if (
+				previous === null ||
+				JSON.stringify(previous) !== JSON.stringify(text)
+			)
+				tools.set(textGeometryAtoms, objectId, text)
 			return
 		}
 
@@ -543,6 +567,7 @@ export function createDesignDocumentState(
 		if (kind === "path") clearPath(tools, objectId)
 		if (kind === "rectangle") tools.dispose(rectangleGeometryAtoms, objectId)
 		if (kind === "ellipse") tools.dispose(ellipseGeometryAtoms, objectId)
+		if (kind === "text") tools.dispose(textGeometryAtoms, objectId)
 		tools.dispose(objectKindAtoms, objectId)
 		tools.dispose(objectNameAtoms, objectId)
 		tools.dispose(objectTransformAtoms, objectId)

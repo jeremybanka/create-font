@@ -13,6 +13,8 @@ import {
 import {
 	assembleDesignDocument,
 	assetUnitPathSchema,
+	fontIndexFileSchema,
+	fontUnitPathSchema,
 	formatSourceUnit,
 	parseSourceUnitText,
 	sourceUnitKindForPath,
@@ -58,19 +60,47 @@ export const designSourceWorkspaceCodec: JsonSourceWorkspaceCodec<DesignSourceUn
 					return { ok: false, errors: issues(validated.errors) }
 				}
 				const index = validated.value as AssetIndexFile
+				const fontPath = `fonts/index.json`
+				const fonts = fontIndexFileSchema.safeParse(files[fontPath])
+				if (!fonts.success)
+					return {
+						ok: false as const,
+						errors: [
+							{
+								code: "source.schema",
+								message: "Invalid font inventory.",
+								path: "$",
+								unitPath: fontPath,
+							},
+						] as [
+							{ code: string; message: string; path: string; unitPath: string },
+						],
+					}
 				return {
 					ok: true,
-					value: index.entries.map((entry) => ({
-						byteLength: entry.byteLength,
-						digest: `sha256:${entry.sha256}` as const,
-						id: entry.id,
-						mediaType: entry.mediaType,
-						path: entry.path,
-					})),
+					value: [
+						...index.entries.map((entry) => ({
+							byteLength: entry.byteLength,
+							digest: `sha256:${entry.sha256}` as const,
+							id: entry.id,
+							mediaType: entry.mediaType,
+							path: entry.path,
+						})),
+						...fonts.data.entries.map((entry) => ({
+							byteLength: entry.byteLength,
+							digest: `sha256:${entry.sha256}` as const,
+							id: entry.id,
+							mediaType: entry.mediaType,
+							path: entry.path,
+						})),
+					],
 				}
 			},
 			isPath(path) {
-				return assetUnitPathSchema.safeParse(path).success
+				return (
+					assetUnitPathSchema.safeParse(path).success ||
+					fontUnitPathSchema.safeParse(path).success
+				)
 			},
 		},
 		assemble(files) {

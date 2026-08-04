@@ -72,6 +72,7 @@ import {
 	type ExportPreflightPreferences,
 } from "@create-design/pdf"
 import { DesignVersionControlTile } from "./DesignVersionControlTile.tsx"
+import { DesignFontCombobox } from "./DesignFontCombobox.tsx"
 import type {
 	ColorDefinition,
 	DesignDocument,
@@ -464,13 +465,26 @@ function DesignToolsTile({ context }: { readonly context: DesignTileContext }) {
 				][]
 			).map(([id, definition]) => {
 				const svg = { Icon: definition.icon }
+				const disabled =
+					(id === "text" || id === "area-text") &&
+					context.textToolsDisabledReason !== null
 				return (
 					<button
 						key={id}
 						type="button"
-						title={`${definition.label} (${definition.key})`}
+						title={
+							disabled
+								? (context.textToolsDisabledReason ?? definition.label)
+								: `${definition.label} (${definition.key})`
+						}
 						aria-label={definition.label}
 						aria-pressed={context.tool === id}
+						disabled={disabled}
+						aria-description={
+							disabled
+								? (context.textToolsDisabledReason ?? undefined)
+								: undefined
+						}
 						onClick={() => context.selectTool(id)}
 					>
 						<svg.Icon aria-hidden="true" />
@@ -553,8 +567,20 @@ function DesignExportTile({
 		[checkOutsideArtwork],
 	)
 	const preflight = useMemo(
-		() => preflightPdfExport(context.document, target, preflightPreferences),
-		[context.document, preflightPreferences, target],
+		() =>
+			preflightPdfExport(
+				context.document,
+				target,
+				preflightPreferences,
+				context.textService,
+			),
+		[
+			context.document,
+			context.textFontRevision,
+			context.textService,
+			preflightPreferences,
+			target,
+		],
 	)
 	const diagnosticGroups = useMemo(() => {
 		const groups = new Map<
@@ -793,6 +819,9 @@ function DesignExportTile({
 					document={context.document}
 					target={target}
 					preflightPreferences={preflightPreferences}
+					{...(context.textService === undefined
+						? {}
+						: { textService: context.textService })}
 				/>
 			) : null}
 			<hr />
@@ -1376,8 +1405,24 @@ function DesignObjectTile({
 	readonly context: DesignTileContext
 }) {
 	const object = context.selectedObject
-	const bounds = object === null ? null : exactObjectBounds(object)
-	const visibleBounds = object === null ? null : visibleObjectBounds(object)
+	const interactionBounds = context.selectedObjectBounds ?? null
+	const bounds =
+		object?.geometry.kind === "text" && interactionBounds !== null
+			? {
+					x: interactionBounds.minX,
+					y: interactionBounds.minY,
+					width: interactionBounds.maxX - interactionBounds.minX,
+					height: interactionBounds.maxY - interactionBounds.minY,
+				}
+			: object === null
+				? null
+				: exactObjectBounds(object)
+	const visibleBounds =
+		object?.geometry.kind === "text"
+			? interactionBounds
+			: object === null
+				? null
+				: visibleObjectBounds(object)
 	const geometryFields = objectGeometryFields(context, object)
 	const geometryLabel =
 		object?.geometry.kind === "rectangle"
@@ -1432,7 +1477,11 @@ function DesignObjectTile({
 							? "Select one object to edit exact geometry."
 							: "Live geometry remains editable until expanded."}
 				</object-geometry-help>
-				<strong>Geometric document bounds</strong>
+				<strong>
+					{object?.geometry.kind === "text"
+						? "Text interaction bounds"
+						: "Geometric document bounds"}
+				</strong>
 				<shape-number-grid>
 					<ShapeNumberInput
 						disabled={bounds === null}
@@ -2186,6 +2235,290 @@ function DesignAppearanceTile({
 	)
 }
 
+function DesignTypographyTile({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	const object =
+		context.selectedObject?.geometry.kind === "text"
+			? context.selectedObject
+			: null
+	const typography =
+		object?.geometry.kind === "text" ? object.geometry.typography : null
+	const frame =
+		object?.geometry.kind === "text" && object.geometry.mode === "area"
+			? object.geometry.frame
+			: undefined
+	const controlsDisabled =
+		typography === null || context.textToolsDisabledReason !== null
+	const number = (
+		label: string,
+		value: number,
+		onChange: (value: number) => void,
+		minimum?: number,
+	) => (
+		<label data-field data-number-field>
+			<span>{label}</span>
+			<input
+				type="number"
+				step="any"
+				value={value}
+				disabled={controlsDisabled}
+				{...(minimum === undefined ? {} : { min: minimum })}
+				onChange={(event) => {
+					const next = event.currentTarget.valueAsNumber
+					if (Number.isFinite(next)) onChange(next)
+				}}
+			/>
+		</label>
+	)
+	return (
+		<design-typography-tile>
+			<typography-heading>
+				<strong>Typography</strong>
+				<span>{object?.name ?? "New text defaults"}</span>
+			</typography-heading>
+			<typography-font-section aria-label="Workspace font">
+				<label data-field>
+					<span>Font family</span>
+					<DesignFontCombobox
+						label="Font family"
+						fonts={context.availableTextFonts}
+						selectedFontId={context.activeTextFontId}
+						disabled={context.textToolsDisabledReason !== null}
+						onSelect={context.selectTextFont}
+					/>
+				</label>
+				<label data-font-upload>
+					<span>Add font</span>
+					<input
+						type="file"
+						aria-label="Add OpenType font to workspace"
+						accept=".otf,.ttf,.woff,.woff2,font/otf,font/ttf,font/woff,font/woff2"
+						onChange={(event) => {
+							const file = event.currentTarget.files?.[0]
+							if (file !== undefined) void context.registerTextFont(file)
+						}}
+					/>
+				</label>
+			</typography-font-section>
+			{context.textToolsDisabledReason === null ? null : (
+				<typography-empty-state role="status">
+					<strong>No workspace fonts yet</strong>
+					<span>{context.textToolsDisabledReason}</span>
+					<small>Add an OTF, TTF, WOFF, or WOFF2 file above to begin.</small>
+				</typography-empty-state>
+			)}
+			<typography-selection-status role="status">
+				{object === null
+					? "Select text to edit its type settings. Font choice applies to the next text object."
+					: `${object.name}: settings apply to the complete object${context.textSelectionRange === null ? "." : `, including outside range ${context.textSelectionRange.start}–${context.textSelectionRange.end}.`}`}
+			</typography-selection-status>
+			{object === null ? (
+				<typography-conversion>
+					<button
+						type="button"
+						disabled={context.areaTextConversionDisabledReason !== null}
+						title={context.areaTextConversionDisabledReason ?? undefined}
+						onClick={context.convertSelectionToAreaText}
+					>
+						Convert rectangle to Area Type
+					</button>
+					<small>{context.areaTextConversionDisabledReason}</small>
+				</typography-conversion>
+			) : null}
+			<typography-controls aria-label="Type settings">
+				<strong>Type settings</strong>
+				<shape-number-grid>
+					{number(
+						"Size",
+						typography?.size ?? 0,
+						(size) => context.applyTextTypography({ size }),
+						0.01,
+					)}
+					{number(
+						"Leading",
+						typography?.leading ?? 0,
+						(leading) => context.applyTextTypography({ leading }),
+						0.01,
+					)}
+					{number("Tracking", typography?.tracking ?? 0, (tracking) =>
+						context.applyTextTypography({ tracking }),
+					)}
+					{number(
+						"Kerning",
+						typography?.kerning === "auto" ? 0 : (typography?.kerning ?? 0),
+						(kerning) => context.applyTextTypography({ kerning }),
+					)}
+				</shape-number-grid>
+				<typography-select-grid>
+					<label data-field>
+						<span>Kerning</span>
+						<select
+							disabled={controlsDisabled}
+							value={typography?.kerning === "auto" ? "auto" : "manual"}
+							onChange={(event) =>
+								context.applyTextTypography({
+									kerning: event.currentTarget.value === "auto" ? "auto" : 0,
+								})
+							}
+						>
+							<option value="auto">Automatic</option>
+							<option value="manual">Manual</option>
+						</select>
+					</label>
+					<label data-field>
+						<span>Align</span>
+						<select
+							disabled={controlsDisabled}
+							value={typography?.alignment ?? "start"}
+							onChange={(event) =>
+								context.applyTextTypography({
+									alignment: event.currentTarget.value as
+										| "start"
+										| "center"
+										| "end"
+										| "justify",
+								})
+							}
+						>
+							<option value="start">Start</option>
+							<option value="center">Center</option>
+							<option value="end">End</option>
+							<option value="justify">Justify</option>
+						</select>
+					</label>
+					<label data-field>
+						<span>Direction</span>
+						<select
+							disabled={controlsDisabled}
+							value={typography?.direction ?? "auto"}
+							onChange={(event) =>
+								context.applyTextTypography({
+									direction: event.currentTarget.value as
+										| "auto"
+										| "ltr"
+										| "rtl"
+										| "ttb"
+										| "btt",
+								})
+							}
+						>
+							<option value="auto">Automatic</option>
+							<option value="ltr">Left to right</option>
+							<option value="rtl">Right to left</option>
+							<option value="ttb">Top to bottom</option>
+							<option value="btt">Bottom to top</option>
+						</select>
+					</label>
+				</typography-select-grid>
+			</typography-controls>
+			{frame === undefined ? null : (
+				<area-text-controls>
+					<area-text-heading>
+						<strong>Area frame</strong>
+						<span>{context.textOverset ? "Overset" : "Fits"}</span>
+					</area-text-heading>
+					<shape-number-grid>
+						{number(
+							"Width",
+							frame.width,
+							(width) => context.applyAreaTextFrame({ width }),
+							0.01,
+						)}
+						{number(
+							"Height",
+							frame.height,
+							(height) => context.applyAreaTextFrame({ height }),
+							0.01,
+						)}
+						{number(
+							"Top inset",
+							frame.inset.top,
+							(top) =>
+								context.applyAreaTextFrame({ inset: { ...frame.inset, top } }),
+							0,
+						)}
+						{number(
+							"Right inset",
+							frame.inset.right,
+							(right) =>
+								context.applyAreaTextFrame({
+									inset: { ...frame.inset, right },
+								}),
+							0,
+						)}
+						{number(
+							"Bottom inset",
+							frame.inset.bottom,
+							(bottom) =>
+								context.applyAreaTextFrame({
+									inset: { ...frame.inset, bottom },
+								}),
+							0,
+						)}
+						{number(
+							"Left inset",
+							frame.inset.left,
+							(left) =>
+								context.applyAreaTextFrame({ inset: { ...frame.inset, left } }),
+							0,
+						)}
+					</shape-number-grid>
+					<label data-field>
+						<span>Vertical alignment</span>
+						<select
+							disabled={controlsDisabled}
+							value={frame.verticalAlignment}
+							onChange={(event) =>
+								context.applyAreaTextFrame({
+									verticalAlignment: event.currentTarget.value as
+										| "top"
+										| "center"
+										| "bottom",
+								})
+							}
+						>
+							<option value="top">Top</option>
+							<option value="center">Center</option>
+							<option value="bottom">Bottom</option>
+						</select>
+					</label>
+					<area-text-status role="status" aria-live="polite">
+						{context.textOverset
+							? "Overset text: hidden characters remain editable. Enlarge the frame or reduce the type."
+							: "All source characters fit in the frame."}
+					</area-text-status>
+				</area-text-controls>
+			)}
+			<typography-actions>
+				<button
+					type="button"
+					disabled={object === null || context.textToolsDisabledReason !== null}
+					onClick={() =>
+						object === null ? undefined : context.beginTextEditing(object)
+					}
+				>
+					Edit text
+				</button>
+				<button
+					type="button"
+					data-expand-text
+					disabled={context.textExpansionDisabledReason !== null}
+					onClick={context.expandTextSelection}
+				>
+					Expand Text
+				</button>
+			</typography-actions>
+			<typography-action-help>
+				{context.textExpansionDisabledReason ??
+					"Expand Text replaces live text with grouped glyph paths in one undoable entry."}
+			</typography-action-help>
+		</design-typography-tile>
+	)
+}
+
 export function DesignTileContent({
 	context,
 	kind,
@@ -2215,6 +2548,8 @@ export function DesignTileContent({
 				<DesignTransformTile context={context} />
 			) : kind === "arrange" ? (
 				<DesignArrangeTile context={context} />
+			) : kind === "typography" ? (
+				<DesignTypographyTile context={context} />
 			) : (
 				<DesignAppearanceTile context={context} />
 			)}

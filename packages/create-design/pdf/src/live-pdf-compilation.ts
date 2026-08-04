@@ -13,6 +13,7 @@ import {
 } from "./pdf.ts"
 import { preflightPdfExport } from "./pdf-preflight.ts"
 import type { DesignDocument } from "@create-design/source"
+import type { DesignTextService } from "@create-design/text"
 
 export type LivePdfDiagnostic = Readonly<{
 	code: string
@@ -72,6 +73,7 @@ export interface LivePdfCompilerOptions {
 	readonly serialize?: (
 		projection: PdfDocumentProjection,
 	) => Promise<Uint8Array> | Uint8Array
+	readonly textService?: DesignTextService
 }
 
 export const LIVE_PDF_EDIT_DEBOUNCE_MS = 180
@@ -151,7 +153,12 @@ export function createLivePdfCompiler(options: LivePdfCompilerOptions = {}) {
 		if (!running || currentGeneration !== generation) return
 		const effectiveTarget = target ?? document.artboards[0]
 		if (effectiveTarget === undefined) return
-		const preflight = preflightPdfExport(document, effectiveTarget, preferences)
+		const preflight = preflightPdfExport(
+			document,
+			effectiveTarget,
+			preferences,
+			options.textService,
+		)
 		if (!exportPreflightAllowsOutput(preflight)) {
 			publish(
 				Object.freeze({

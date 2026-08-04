@@ -85,6 +85,7 @@ const shards = {
 				`@create-design/pdf`,
 				`@create-design/png`,
 				`@create-design/svg`,
+				`@create-design/text`,
 				`@create-font/font-service`,
 				`@create-font/server`,
 				`@create-font/target`,

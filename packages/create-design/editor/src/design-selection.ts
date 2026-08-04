@@ -83,10 +83,13 @@ export function selectableObjectIds(
 
 export function selectionBounds(
 	objects: readonly DesignObject[],
+	boundsForObject: (
+		object: DesignObject,
+	) => Bounds | null = visibleObjectBounds,
 ): Bounds | null {
 	const bounds = objects.flatMap((object) => {
 		if (object.hidden) return []
-		const value = visibleObjectBounds(object)
+		const value = boundsForObject(object)
 		return value === null ? [] : [value]
 	})
 	if (bounds.length === 0) return null
@@ -101,10 +104,13 @@ export function selectionBounds(
 export function marqueeObjectIds(
 	objects: readonly DesignObject[],
 	bounds: Bounds,
+	boundsForObject: (
+		object: DesignObject,
+	) => Bounds | null = visibleObjectBounds,
 ): readonly string[] {
 	return objects.flatMap((object) => {
 		if (object.hidden || object.locked) return []
-		const objectBounds = visibleObjectBounds(object)
+		const objectBounds = boundsForObject(object)
 		if (objectBounds === null) return []
 		return objectBounds.maxX >= bounds.minX &&
 			objectBounds.minX <= bounds.maxX &&

@@ -94,6 +94,9 @@ export function geometryContours(
 	geometry: DesignGeometry,
 	identityPrefix = "geometry-projection",
 ): readonly DesignContour[] {
+	// Live text owns a separate authoritative glyph-outline projection. Treating
+	// it as authored vector geometry here would silently discard editability.
+	if (geometry.kind === "text") return []
 	if (geometry.kind === "path") return geometry.contours
 	if (geometry.kind === "rectangle") {
 		return [
@@ -217,6 +220,29 @@ function cubicForSegment(from: DesignPoint, to: DesignPoint): Cubic {
 }
 
 export function objectBounds(object: DesignObject): Bounds | null {
+	if (object.geometry.kind === "text") {
+		const geometry = object.geometry
+		const width =
+			geometry.frame?.width ??
+			Math.max(
+				geometry.typography.size,
+				geometry.text.length * geometry.typography.size * 0.55,
+			)
+		const height =
+			geometry.frame?.height ??
+			Math.max(geometry.typography.size, geometry.typography.leading)
+		const minY =
+			geometry.frame === undefined
+				? geometry.y - geometry.typography.size
+				: geometry.y
+		const points = [
+			{ id: "text-bounds:0", x: geometry.x, y: minY },
+			{ id: "text-bounds:1", x: geometry.x + width, y: minY },
+			{ id: "text-bounds:2", x: geometry.x + width, y: minY + height },
+			{ id: "text-bounds:3", x: geometry.x, y: minY + height },
+		].map((point) => transformDesignPoint(object.transform, point))
+		return boundsOfPoints(points)
+	}
 	const contours = projectDesignObjectContours(object)
 	const points = contours.flatMap((contour) => contour.points)
 	if (points.length === 0) return null

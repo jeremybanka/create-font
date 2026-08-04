@@ -41,7 +41,56 @@ export interface DesignContour {
 
 export type DesignFillRule = "nonzero" | "evenodd"
 
+/** A durable reference into the source project's `fonts/index.json`. */
+export interface DesignFontReference {
+	readonly id: string
+	readonly family: string
+	readonly faceIndex?: number
+	readonly revision?: string | number
+}
+
+export interface DesignTextTypography {
+	readonly font: DesignFontReference
+	/** Type size in document units. */
+	readonly size: number
+	/** Baseline-to-baseline distance in document units. */
+	readonly leading: number
+	/** Additional advance per grapheme in em/1000 units. */
+	readonly tracking: number
+	/** `auto` enables the font's kern feature; a number is an em/1000 override. */
+	readonly kerning: "auto" | number
+	readonly alignment: "start" | "center" | "end" | "justify"
+	readonly direction: "auto" | "ltr" | "rtl" | "ttb" | "btt"
+	readonly language?: string
+	readonly script?: string
+	readonly variations?: Readonly<Record<string, number>>
+}
+
+export type DesignTextGeometry = Readonly<{
+	readonly kind: "text"
+	readonly mode: "point" | "area"
+	/** Canonical UTF-16 source. It is never replaced by shaped output. */
+	readonly text: string
+	readonly typography: DesignTextTypography
+	/** Local-space insertion point and first baseline. */
+	readonly x: number
+	readonly y: number
+	/** Required for area text and absent for point text. */
+	readonly frame?: Readonly<{
+		readonly width: number
+		readonly height: number
+		readonly inset: Readonly<{
+			readonly top: number
+			readonly right: number
+			readonly bottom: number
+			readonly left: number
+		}>
+		readonly verticalAlignment: "top" | "center" | "bottom"
+	}>
+}>
+
 export type DesignGeometry =
+	| DesignTextGeometry
 	| Readonly<{
 			readonly kind: "path"
 			/** Fill containment semantics. Legacy paths without this field are even-odd. */

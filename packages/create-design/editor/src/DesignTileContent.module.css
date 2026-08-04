@@ -13,7 +13,8 @@ design-tile-content.class {
 	> design-blend-tile,
 	> design-transform-tile,
 	> design-arrange-tile,
-	> design-appearance-tile {
+	> design-appearance-tile,
+	> design-typography-tile {
 		display: grid;
 		align-content: start;
 		gap: 7px;
@@ -102,6 +103,11 @@ design-tile-content.class {
 		&[aria-pressed="true"] {
 			border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 			background: var(--selected);
+		}
+
+		&:disabled {
+			opacity: 0.45;
+			cursor: not-allowed;
 		}
 	}
 
@@ -455,7 +461,8 @@ design-tile-content.class {
 
 	> design-object-tile,
 	> design-transform-tile,
-	> design-arrange-tile {
+	> design-arrange-tile,
+	> design-typography-tile {
 		--tile-control-font-size: 8px;
 		--tile-label-font-size: 7px;
 		--tile-field-height: 26px;
@@ -725,6 +732,225 @@ design-tile-content.class {
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 			gap: 4px;
+		}
+	}
+
+	> design-typography-tile {
+		grid-auto-rows: min-content;
+		gap: 8px;
+		overflow-x: hidden;
+
+		> typography-heading,
+		> area-text-controls > area-text-heading {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 8px;
+			min-width: 0;
+
+			> strong {
+				font-size: 9px;
+				color: var(--ink);
+			}
+
+			> span {
+				overflow: hidden;
+				font-size: var(--tile-label-font-size);
+				color: var(--ink-faint);
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+		}
+
+		[data-field] {
+			display: grid;
+			gap: 3px;
+			min-width: 0;
+
+			> span {
+				font-size: var(--tile-label-font-size);
+				font-weight: 600;
+				color: var(--ink-muted);
+			}
+
+			input,
+			select {
+				width: 100%;
+				min-width: 0;
+				height: var(--tile-field-height);
+				padding: 5px 6px;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: var(--paper);
+				font-size: var(--tile-control-font-size);
+				color: var(--ink);
+
+				&:focus-visible {
+					border-color: var(--accent);
+					outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+				}
+
+				&:disabled {
+					opacity: 0.48;
+					cursor: not-allowed;
+				}
+			}
+		}
+
+		> typography-font-section {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) 66px;
+			align-items: end;
+			gap: 5px;
+			padding: 7px;
+			border: 1px solid var(--line);
+			border-radius: 6px;
+			background: color-mix(in srgb, var(--panel) 72%, var(--paper));
+
+			> label[data-font-upload] {
+				display: grid;
+				gap: 3px;
+				min-width: 0;
+
+				> span {
+					font-size: var(--tile-label-font-size);
+					font-weight: 600;
+					color: var(--ink-muted);
+				}
+
+				> input {
+					width: 100%;
+					min-width: 0;
+					height: var(--tile-field-height);
+					padding: 4px;
+					border: 1px solid var(--line);
+					border-radius: 4px;
+					background: var(--paper);
+					font-size: 0;
+					color: var(--ink);
+
+					&::file-selector-button {
+						width: 100%;
+						height: 16px;
+						padding: 0 4px;
+						border: 0;
+						background: transparent;
+						font-size: var(--tile-control-font-size);
+						color: var(--ink);
+						cursor: pointer;
+					}
+				}
+			}
+		}
+
+		> typography-empty-state,
+		> typography-selection-status,
+		> typography-action-help,
+		> area-text-controls > area-text-status {
+			display: grid;
+			gap: 3px;
+			min-width: 0;
+			padding: 7px;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: color-mix(in srgb, var(--panel) 74%, var(--paper));
+			font-size: 7px;
+			line-height: 1.4;
+			color: var(--ink-faint);
+		}
+
+		> typography-empty-state {
+			border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+			background: color-mix(in srgb, var(--accent) 7%, var(--paper));
+
+			> strong {
+				font-size: 8px;
+				color: var(--ink);
+			}
+		}
+
+		> typography-conversion {
+			display: grid;
+			gap: 4px;
+
+			> small {
+				min-height: 20px;
+				font-size: 7px;
+				line-height: 1.4;
+				color: var(--ink-faint);
+			}
+		}
+
+		> typography-controls,
+		> area-text-controls {
+			display: grid;
+			gap: 6px;
+			padding-block: 3px;
+
+			> shape-number-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(62px, 1fr));
+				gap: 5px;
+			}
+		}
+
+		> typography-controls {
+			> strong {
+				font-size: 8px;
+				color: var(--ink-muted);
+			}
+
+			> typography-select-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(62px, 1fr));
+				gap: 5px;
+			}
+
+			> typography-select-grid > [data-field]:last-child {
+				grid-column: 1 / -1;
+			}
+		}
+
+		> area-text-controls {
+			padding-block-start: 8px;
+			border-block-start: 1px solid var(--line);
+		}
+
+		> typography-conversion > button,
+		> typography-actions > button {
+			min-width: 0;
+			padding: 6px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--paper);
+			font-size: var(--tile-control-font-size);
+			color: var(--ink);
+			cursor: pointer;
+
+			&:hover:not(:disabled) {
+				border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+				background: var(--selected);
+			}
+
+			&:disabled {
+				opacity: 0.48;
+				cursor: not-allowed;
+			}
+		}
+
+		> typography-actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 5px;
+
+			> button[data-expand-text] {
+				border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+				background: var(--selected);
+			}
+		}
+
+		> typography-action-help {
+			min-height: 32px;
 		}
 	}
 

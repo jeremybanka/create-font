@@ -20,8 +20,9 @@ import type {
 import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import type { ExportPreflightPreferences } from "@create-design/pdf"
-import type { SvgExportTarget, SvgImportResult } from "@create-design/svg"
 import type { PngExportRequest } from "@create-design/png"
+import type { SvgExportTarget, SvgImportResult } from "@create-design/svg"
+import type { DesignTextService } from "@create-design/text"
 import type {
 	DesignAlignment,
 	DesignAlignmentTarget,
@@ -31,9 +32,12 @@ import type {
 	DesignArtboard,
 	DesignBlend,
 	DesignDocument,
+	DesignFontReference,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
+	DesignTextGeometry,
+	DesignTextTypography,
 	DesignTool,
 } from "./types.ts"
 
@@ -48,6 +52,7 @@ export type DesignTileKind =
 	| "blend"
 	| "transform"
 	| "arrange"
+	| "typography"
 	| "appearance"
 
 export interface DesignTileContext {
@@ -123,6 +128,8 @@ export interface DesignTileContext {
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
 	readonly expandStrokeSelection: () => void
+	readonly expandTextSelection: () => void
+	readonly textExpansionDisabledReason: string | null
 	readonly exportDocument: (
 		target?: PdfExportTarget,
 		preferences?: ExportPreflightPreferences,
@@ -136,8 +143,32 @@ export interface DesignTileContext {
 	readonly selectSwatch: (swatch: DesignSwatch) => void
 	readonly selectTool: (tool: DesignTool) => void
 	readonly selectedObject: DesignObject | null
+	readonly selectedObjectBounds?: Readonly<{
+		minX: number
+		minY: number
+		maxX: number
+		maxY: number
+	}> | null
 	readonly selectedObjectCount: number
 	readonly selectedObjectIds: readonly string[]
+	readonly textSelectionRange: Readonly<{ start: number; end: number }> | null
+	readonly textOverset: boolean
+	readonly availableTextFonts: readonly DesignFontReference[]
+	readonly activeTextFontId: string | null
+	readonly textToolsDisabledReason: string | null
+	readonly textService?: DesignTextService
+	readonly textFontRevision?: number
+	readonly beginTextEditing: (object: DesignObject) => void
+	readonly applyTextTypography: (
+		properties: Partial<DesignTextTypography>,
+	) => void
+	readonly selectTextFont: (fontId: string) => void
+	readonly registerTextFont: (file: File) => Promise<void>
+	readonly applyAreaTextFrame: (
+		properties: Partial<NonNullable<DesignTextGeometry["frame"]>>,
+	) => void
+	readonly convertSelectionToAreaText: () => void
+	readonly areaTextConversionDisabledReason: string | null
 	readonly selectedSwatch: DesignSwatch | undefined
 	readonly selectedSwatchId: string
 	readonly selectedGuideId: string | null
@@ -252,6 +283,14 @@ const registrations = [
 		defaultPlacement: { column: 4 },
 		render: ({ context }) =>
 			createElement(DesignTileContent, { context, kind: "arrange" }),
+	},
+	{
+		kind: "typography",
+		name: "Typography",
+		description: "Edit live point and area text typography and frame flow.",
+		defaultPlacement: { column: 4 },
+		render: ({ context }) =>
+			createElement(DesignTileContent, { context, kind: "typography" }),
 	},
 	{
 		kind: "appearance",

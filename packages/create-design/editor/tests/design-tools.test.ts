@@ -12,6 +12,8 @@ describe("create-design tool registration", () => {
 			"pen",
 			"rect",
 			"ellipse",
+			"text",
+			"area-text",
 		])
 		expect(DESIGN_TOOLS.artboard).toMatchObject({
 			label: "Artboard",
