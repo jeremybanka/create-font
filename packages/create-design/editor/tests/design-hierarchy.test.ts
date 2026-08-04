@@ -197,7 +197,7 @@ describe("design hierarchy commands", () => {
 			length: 1,
 		})
 		state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toEqual(
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
 			grouped.document,
 		)
 	})

@@ -24,12 +24,16 @@ describe("create-design atom.io state", () => {
 		const left = stateFor("Left")
 		const right = stateFor("Right")
 		left.actions.commitDocument({
-			...left.silo.getState(left.states.documentAtom),
+			...left.silo.getState(left.states.documentSelector),
 			title: "Changed",
 		})
 
-		expect(left.silo.getState(left.states.documentAtom).title).toBe("Changed")
-		expect(right.silo.getState(right.states.documentAtom).title).toBe("Right")
+		expect(left.silo.getState(left.states.documentSelector).title).toBe(
+			"Changed",
+		)
+		expect(right.silo.getState(right.states.documentSelector).title).toBe(
+			"Right",
+		)
 		expect(right.silo.inspectTimeline(right.documentTimeline)).toEqual({
 			at: 0,
 			length: 0,
@@ -38,7 +42,7 @@ describe("create-design atom.io state", () => {
 
 	it("records logical commits, ignores no-ops, and supports undo and redo", () => {
 		const state = stateFor("Initial")
-		const initial = state.silo.getState(state.states.documentAtom)
+		const initial = state.silo.getState(state.states.documentSelector)
 		state.actions.commitDocument(initial)
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 0,
@@ -53,14 +57,14 @@ describe("create-design atom.io state", () => {
 		})
 
 		state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(initial)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 0,
 			length: 1,
 		})
 
 		state.silo.redo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom)).toBe(edited)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(edited)
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 1,
 			length: 1,
@@ -74,7 +78,7 @@ describe("create-design atom.io state", () => {
 
 		for (let index = 1; index <= DESIGN_HISTORY_UNDO_LIMIT + 1; index += 1) {
 			state.actions.commitDocument({
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title: String(index),
 			})
 		}
@@ -97,7 +101,7 @@ describe("create-design atom.io state", () => {
 
 		for (let index = 0; index < DESIGN_HISTORY_UNDO_LIMIT; index += 1)
 			state.silo.undo(state.documentTimeline)
-		expect(state.silo.getState(state.states.documentAtom).title).toBe("1")
+		expect(state.silo.getState(state.states.documentSelector).title).toBe("1")
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 			at: 0,
 			length: DESIGN_HISTORY_UNDO_LIMIT,
@@ -108,7 +112,7 @@ describe("create-design atom.io state", () => {
 
 	it("invalidates the redo branch before settling a replacement commit", () => {
 		const state = stateFor("Initial")
-		const initial = state.silo.getState(state.states.documentAtom)
+		const initial = state.silo.getState(state.states.documentSelector)
 		state.actions.commitDocument({ ...initial, title: "One" })
 		state.actions.commitDocument({ ...initial, title: "Two" })
 		state.silo.undo(state.documentTimeline)
@@ -118,7 +122,7 @@ describe("create-design atom.io state", () => {
 		})
 
 		state.actions.commitDocument({ ...initial, title: "Replacement" })
-		expect(state.silo.getState(state.states.documentAtom).title).toBe(
+		expect(state.silo.getState(state.states.documentSelector).title).toBe(
 			"Replacement",
 		)
 		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
@@ -129,14 +133,16 @@ describe("create-design atom.io state", () => {
 
 	it("rebases history for reset, external load, and recovery", () => {
 		const state = stateFor("Initial")
-		const initial = state.silo.getState(state.states.documentAtom)
+		const initial = state.silo.getState(state.states.documentSelector)
 		const commit = (title: string) =>
 			state.actions.commitDocument({
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title,
 			})
 		const expectRebased = (title: string) => {
-			expect(state.silo.getState(state.states.documentAtom).title).toBe(title)
+			expect(state.silo.getState(state.states.documentSelector).title).toBe(
+				title,
+			)
 			expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
 				at: 0,
 				length: 0,
@@ -174,17 +180,17 @@ describe("create-design atom.io state", () => {
 		const state = stateFor("Initial")
 		const observed = vi.fn()
 		const unsubscribe = state.silo.subscribe(
-			state.states.snapshotSelector,
+			state.states.documentSelector,
 			() => {
 				observed(
-					state.silo.getState(state.states.documentAtom).title,
+					state.silo.getState(state.states.documentSelector).title,
 					state.silo.getState(state.states.persistenceAtom).durableRevision,
 				)
 			},
 		)
 		state.actions.loadExternalDocument({
 			document: {
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title: "External",
 			},
 			durableRevision: "revision-2",

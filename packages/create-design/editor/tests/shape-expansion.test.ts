@@ -113,7 +113,7 @@ describe("live shape expansion", () => {
 		)
 	})
 
-	it("commits one undo entry, retains object selection, and reuses identities on redo", () => {
+	it("commits one undo entry and restores the normalized path on redo", () => {
 		const document = createInitialDocument()
 		const rectangle = document.objects[0]
 		if (rectangle === undefined) throw new Error("Missing rectangle fixture.")
@@ -139,11 +139,12 @@ describe("live shape expansion", () => {
 
 		state.silo.undo(state.documentTimeline)
 		expect(
-			state.silo.getState(state.states.documentAtom).objects[0]?.geometry.kind,
+			state.silo.getState(state.states.documentSelector).objects[0]?.geometry
+				.kind,
 		).toBe("rectangle")
 		state.silo.redo(state.documentTimeline)
-		const redone = state.silo.getState(state.states.documentAtom)
-		expect(redone.objects[0]).toBe(expanded)
+		const redone = state.silo.getState(state.states.documentSelector)
+		expect(redone.objects[0]).toEqual(expanded)
 		expect(
 			redone.objects[0]?.geometry.kind === "path"
 				? redone.objects[0].geometry.contours[0]?.id

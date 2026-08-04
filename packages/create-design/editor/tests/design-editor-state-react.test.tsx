@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 function StateOutput({ state }: Readonly<{ state: DesignEditorState }>) {
-	const snapshot = useO(state.states.snapshotSelector)
+	const document = useO(state.states.documentSelector)
 	const { at, length, redo, undo } = useTL(state.documentTimeline)
 	return h(
 		"section",
@@ -31,7 +31,7 @@ function StateOutput({ state }: Readonly<{ state: DesignEditorState }>) {
 				"data-at": at,
 				"data-length": length,
 			},
-			snapshot.document.title,
+			document.title,
 		),
 		h("button", { type: "button", onClick: undo }, "Undo"),
 		h("button", { type: "button", onClick: redo }, "Redo"),
@@ -60,7 +60,7 @@ describe("create-design atom.io React bindings", () => {
 		act(() => {
 			for (let index = 1; index <= DESIGN_HISTORY_UNDO_LIMIT + 1; index += 1) {
 				state.actions.commitDocument({
-					...state.silo.getState(state.states.documentAtom),
+					...state.silo.getState(state.states.documentSelector),
 					title: `Observed ${index}`,
 				})
 			}
@@ -83,7 +83,7 @@ describe("create-design atom.io React bindings", () => {
 
 		act(() => {
 			state.actions.resetDocument({
-				...state.silo.getState(state.states.documentAtom),
+				...state.silo.getState(state.states.documentSelector),
 				title: "Rebased",
 			})
 		})

@@ -10,9 +10,15 @@ The `create-design` application supplies filesystem-backed source sessions and
 serves the built browser artifact. Neither the source service nor the headless
 model and export packages depend on this editor package.
 
-Each mounted editor owns an ephemeral atom.io `Silo`. Its document atom is
-tracked by an atom.io timeline, and the React UI observes and controls that
-timeline through `useTL`. A timeline effect retains the latest 100 complete undo
-steps with `cullUndoSteps(100)`; transaction checkpoints are never split.
-Loading, resetting, or recovering a document rebases the timeline after the
-document and persistence state transition together.
+Each mounted editor owns an ephemeral atom.io `Silo`. Authored document state is
+normalized into ID-index atoms and keyed families for artboards, swatches,
+objects, groups, guides, contours, and points. Read-only selectors compose those
+facts upward into entity and `DesignDocument` projections at the UI, source RPC,
+and persistence boundaries; there is no monolithic document atom.
+
+The authored atoms and families share one atom.io timeline, which the React UI
+controls through `useTL`. A timeline effect retains the latest 100 complete undo
+steps with `cullUndoSteps(100)`; multi-fact transaction checkpoints are never
+split. Loading, resetting, or recovering a document reconciles the normalized
+graph and rebases the timeline after the document and persistence transition
+complete together.

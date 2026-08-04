@@ -90,7 +90,7 @@ const expectSingleUndo = (
 		length: 1,
 	})
 	state.silo.undo(state.documentTimeline)
-	expect(state.silo.getState(state.states.documentAtom)).toEqual(before)
+	expect(state.silo.getState(state.states.documentSelector)).toEqual(before)
 }
 
 const line = (id: string, startX: number, endX: number): DesignContour =>
