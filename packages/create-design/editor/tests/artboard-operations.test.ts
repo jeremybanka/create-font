@@ -9,11 +9,9 @@ import {
 	reorderDesignArtboard,
 	updateDesignArtboard,
 } from "../src/artboard-operations.ts"
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
 
 describe("design artboard operations", () => {
 	it("creates, duplicates, renames, reorders, and deletes without changing artwork", () => {
@@ -97,13 +95,20 @@ describe("design artboard operations", () => {
 	it("keeps every canonical action in one undo step", () => {
 		const initial = createInitialDocument()
 		const created = createDesignArtboard(initial, "artboard:two").document
-		const history = reduceDesignHistory(createDesignHistory(initial), {
-			type: "commit",
-			document: created,
+		const state = createDesignEditorState({
+			document: initial,
+			persistence: createDesignPersistenceState(null),
+			name: "artboard-history-test",
 		})
-		expect(history.past).toHaveLength(1)
-		expect(reduceDesignHistory(history, { type: "undo" }).present).toBe(initial)
-		expect(reduceDesignHistory(history, { type: "redo" }).present).toBe(created)
+		state.actions.commitDocument(created)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom)).toBe(initial)
+		state.silo.redo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom)).toBe(created)
 	})
 
 	it("navigates overlapping artboards and computes fit-all bounds", () => {

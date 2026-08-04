@@ -50,7 +50,7 @@ import {
 	useState,
 } from "react"
 import type { ReactNode, ComponentProps } from "react"
-import { StoreProvider, useO } from "atom.io/react"
+import { StoreProvider, useO, useTL } from "atom.io/react"
 
 import {
 	defaultDesignAppearance,
@@ -605,9 +605,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasTheme = useDesignCanvasTheme()
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
-	const { document, history, persistence } = useO(
-		editorState.states.snapshotSelector,
-	)
+	const { document, persistence } = useO(editorState.states.snapshotSelector)
+	const {
+		at: historyAt,
+		length: historyLength,
+		redo: redoDocument,
+		undo: undoDocument,
+	} = useTL(editorState.documentTimeline)
+	const history = {
+		canRedo: historyAt < historyLength,
+		canUndo: historyAt > 0,
+	}
 	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
@@ -1431,14 +1439,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const navigateDesignHistory = useCallback(
 		(type: "redo" | "undo"): void => {
-			const target = editorState.actions.navigateDocumentHistory(type)
-			if (target === null) return
+			if (type === "undo") {
+				if (historyAt === 0) return
+				undoDocument()
+			} else {
+				if (historyAt === historyLength) return
+				redoDocument()
+			}
+			const target = editorState.silo.getState(editorState.states.documentAtom)
 			const recorded = pathCommandSelectionsRef.current.get(target)
 			if (recorded === undefined) return
 			setSelection(recorded.objectSelection)
 			setDirectSelection(recorded.directSelection)
 		},
-		[editorState],
+		[editorState, historyAt, historyLength, redoDocument, undoDocument],
 	)
 
 	const finishPen = useCallback(

@@ -15,11 +15,9 @@ import {
 	type StrokeJoin,
 } from "@create-art/vector-geometry"
 
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
 import {
 	ellipseContour,
 	rotateObject,
@@ -541,15 +539,23 @@ describe("design stroke expansion", () => {
 		expect(result.ok).toBe(true)
 		if (!result.ok) return
 		const after = { ...before, objects: [unrelated, ...result.objects] }
-		const committed = reduceDesignHistory(createDesignHistory(before), {
-			type: "commit",
-			document: after,
+		const state = createDesignEditorState({
+			document: before,
+			persistence: createDesignPersistenceState(null),
+			name: "stroke-expansion-history-test",
 		})
-		expect(committed.past).toEqual([before])
-		expect(committed.present.objects[0]).toBe(unrelated)
-		const undone = reduceDesignHistory(committed, { type: "undo" })
-		expect(undone.present).toBe(before)
-		expect(reduceDesignHistory(undone, { type: "redo" }).present).toBe(after)
+		state.actions.commitDocument(after)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+		expect(state.silo.getState(state.states.documentAtom).objects[0]).toBe(
+			unrelated,
+		)
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom)).toBe(before)
+		state.silo.redo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom)).toBe(after)
 	})
 
 	it("fails degenerate, self-crossing, and invalid inputs without allocating IDs", () => {

@@ -757,6 +757,32 @@ describe("create-design shared vector scene", () => {
 				]),
 			}),
 		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await vi.waitFor(() => expect(saveB).toHaveBeenCalledTimes(2))
+		})
+		expect(saveB).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ title: "Document B" }),
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			)
+			await vi.waitFor(() => expect(saveB).toHaveBeenCalledTimes(3))
+		})
+		expect(saveB).toHaveBeenNthCalledWith(
+			3,
+			expect.objectContaining({ title: "Edited B" }),
+		)
 		act(() => mounted.unmount())
 	})
 

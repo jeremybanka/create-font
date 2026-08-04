@@ -12,10 +12,8 @@ import {
 	ungroupDesignSelection,
 } from "../src/design-hierarchy.ts"
 import { createInitialDocument } from "../src/document.ts"
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
 import { translateObject } from "@create-design/model"
 
 const fixture = () => {
@@ -188,14 +186,18 @@ describe("design hierarchy commands", () => {
 			y: object.transform.f,
 		}))
 		expect(after).toEqual(before.map(({ x, y }) => ({ x: x + 17, y: y - 9 })))
-		const committed = reduceDesignHistory(
-			createDesignHistory(grouped.document),
-			{
-				type: "commit",
-				document: moved,
-			},
-		)
-		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
+		const state = createDesignEditorState({
+			document: grouped.document,
+			persistence: createDesignPersistenceState(null),
+			name: "hierarchy-history-test",
+		})
+		state.actions.commitDocument(moved)
+		expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+			at: 1,
+			length: 1,
+		})
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentAtom)).toEqual(
 			grouped.document,
 		)
 	})

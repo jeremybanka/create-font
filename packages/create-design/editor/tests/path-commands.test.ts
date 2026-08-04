@@ -7,12 +7,10 @@ import {
 import { validateDesignDocument } from "@create-design/source"
 import { describe, expect, it } from "vitest"
 
-import {
-	createDesignHistory,
-	reduceDesignHistory,
-} from "../src/design-history.ts"
 import { nearestDesignObject } from "../src/design-canvas.ts"
 import { DESIGN_VECTOR_MIME, writeDesignClipboard } from "../src/clipboard.ts"
+import { createDesignEditorState } from "../src/design-editor-state.ts"
+import { createDesignPersistenceState } from "../src/persistence.ts"
 import { ellipseContour, objectBounds } from "@create-design/model"
 import {
 	applyDesignPathCommand,
@@ -76,6 +74,24 @@ const context = (
 	directSelection,
 	scopeGroupId,
 })
+
+const expectSingleUndo = (
+	before: DesignDocument,
+	after: DesignDocument,
+): void => {
+	const state = createDesignEditorState({
+		document: before,
+		persistence: createDesignPersistenceState(null),
+		name: "path-command-history-test",
+	})
+	state.actions.commitDocument(after)
+	expect(state.silo.inspectTimeline(state.documentTimeline)).toEqual({
+		at: 1,
+		length: 1,
+	})
+	state.silo.undo(state.documentTimeline)
+	expect(state.silo.getState(state.states.documentAtom)).toEqual(before)
+}
 
 const line = (id: string, startX: number, endX: number): DesignContour =>
 	contour(id, [
@@ -792,12 +808,7 @@ describe("create-design path commands", () => {
 			"e",
 		])
 
-		const committed = reduceDesignHistory(createDesignHistory(source), {
-			type: "commit",
-			document: normalized.document,
-		})
-		const undone = reduceDesignHistory(committed, { type: "undo" })
-		expect(undone.present).toEqual(source)
+		expectSingleUndo(source, normalized.document)
 	})
 
 	it("preserves nonzero fill semantics through contour editing commands", () => {
@@ -994,13 +1005,7 @@ describe("create-design path commands", () => {
 		)
 		expect(result.message).toMatch(/2 front objects/iu)
 
-		const committed = reduceDesignHistory(createDesignHistory(source), {
-			type: "commit",
-			document: result.document,
-		})
-		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
-			source,
-		)
+		expectSingleUndo(source, result.document)
 	})
 
 	it("commits a deterministic empty subtraction when front fills cover the target", () => {
@@ -1183,13 +1188,7 @@ describe("create-design path commands", () => {
 		)
 		expect(pdfObjectContentStream(excluded, source.swatches[0])).toContain("f*")
 
-		const committed = reduceDesignHistory(createDesignHistory(source), {
-			type: "commit",
-			document: result.document,
-		})
-		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
-			source,
-		)
+		expectSingleUndo(source, result.document)
 	})
 
 	it("divides coverage into fresh deterministic pieces under the topmost complete appearance", () => {
@@ -1585,13 +1584,7 @@ describe("create-design path commands", () => {
 			dividedInside.objectSelection.map((id) => ({ kind: "object", id })),
 		)
 		expect(dividedInside.document.objects.at(-1)?.id).toBe(front.id)
-		const committed = reduceDesignHistory(createDesignHistory(source), {
-			type: "commit",
-			document: divided.document,
-		})
-		expect(reduceDesignHistory(committed, { type: "undo" }).present).toEqual(
-			source,
-		)
+		expectSingleUndo(source, divided.document)
 	})
 
 	it.each([
