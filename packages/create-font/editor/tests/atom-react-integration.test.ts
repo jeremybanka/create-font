@@ -100,6 +100,35 @@ describe("atom.io React integration", () => {
 		)
 	})
 
+	it("composes an unmaterialized selector-family member inside a transaction", () => {
+		const silo = new Silo({
+			name: "transaction-selector-family-composition",
+			lifespan: "ephemeral",
+			isProduction: false,
+		})
+		const values = silo.atomFamily<string, string>({
+			key: "compositionValues",
+			default: (key) => key,
+		})
+		const lengths = silo.selectorFamily<number, string>({
+			key: "compositionLengths",
+			get:
+				(key) =>
+				({ get }) =>
+					get(values, key).length,
+		})
+		const documentSelector = silo.selector<{ readonly length: number }>({
+			key: "compositionDocument",
+			get: ({ get }) => ({ length: get(lengths, "fresh") }),
+		})
+		const readDocument = silo.transaction<() => { readonly length: number }>({
+			key: "readCompositionDocument",
+			do: ({ get }) => get(documentSelector),
+		})
+
+		expect(silo.runTransaction(readDocument)()).toEqual({ length: 5 })
+	})
+
 	it("renders coordinated workspace transactions as settled state", () => {
 		const workspace = createEditorWorkspace()
 		workspace.font.silo.setState(workspace.ui.activeTool, "pen")
