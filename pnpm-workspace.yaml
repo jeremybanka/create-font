@@ -15,6 +15,7 @@ minimumReleaseAgeExclude:
   - agents.yaml
   - atom.io
   - lasertag
+  - mondrian.pdf
 verifyDepsBeforeRun: error
 
 peerDependencyRules:
