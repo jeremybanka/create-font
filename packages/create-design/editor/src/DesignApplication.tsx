@@ -268,6 +268,7 @@ import {
 	designObjectInteractionBounds,
 	designTextKonvaTransform,
 	estimateDesignTextLayout,
+	scaleDesignTextObject,
 	updateDesignAreaTextFrame,
 	updateDesignText,
 	updateDesignTextTypography,
@@ -429,12 +430,32 @@ function resolveDesignGestureObject(
 		}
 	}
 	if (gesture.kind !== "transform" || preview?.kind !== "transform") return null
+	let scaleX = preview.scale.x
+	let scaleY = preview.scale.y
+	if (
+		preview.handle !== "rotation" &&
+		preview.handle !== "move" &&
+		gesture.originals.some(({ geometry }) => geometry.kind === "text")
+	) {
+		const factor =
+			preview.handle === "n" || preview.handle === "s"
+				? scaleY
+				: preview.handle === "e" || preview.handle === "w"
+					? scaleX
+					: Math.abs(scaleX - 1) >= Math.abs(scaleY - 1)
+						? scaleX
+						: scaleY
+		scaleX = factor
+		scaleY = factor
+	}
 	const transformed = gesture.originals.map((object) =>
 		preview.handle === "rotation"
 			? rotateObject(object, preview.anchor, preview.rotationDegrees)
 			: preview.handle === "move"
 				? translateObject(object, preview.delta.x, preview.delta.y)
-				: scaleObject(object, preview.anchor, preview.scale.x, preview.scale.y),
+				: object.geometry.kind === "text"
+					? scaleDesignTextObject(object, preview.anchor, scaleX)
+					: scaleObject(object, preview.anchor, scaleX, scaleY),
 	)
 	return {
 		objects: transformed,

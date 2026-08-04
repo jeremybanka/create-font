@@ -201,6 +201,31 @@ describe("editable text surface", () => {
 		expect(textarea.style.fontFamily).toBe(`"Registered Fixture"`)
 		expect(textarea.style.fontVariationSettings).toBe(`'wdth' 90, 'wght' 650`)
 		expect(textarea.style.transform).toBe("matrix(0, 4, -6, 0, -269, 143)")
+		expect(textarea.style.boxSizing).toBe("content-box")
+		expect(textarea.style.whiteSpace).toBe("pre-wrap")
+		expect(textarea.style.overflowWrap).toBe("normal")
+	})
+
+	it("prevents point text from soft-wrapping before its canonical end caret", () => {
+		const host = document.createElement("div")
+		hosts.push(host)
+		const target = updateDesignText(object(), "the quick brown fox")
+		render(
+			h(TextEditingSurface, {
+				object: target,
+				layout: layout(target),
+				registeredFamily: "Registered Fixture",
+				view: { x: 0, y: 0 },
+				worldScale: 1,
+				onChange: vi.fn(),
+				onExit: vi.fn(),
+			}),
+			host,
+		)
+		const textarea = host.querySelector("textarea")!
+		expect(textarea.style.boxSizing).toBe("content-box")
+		expect(textarea.style.whiteSpace).toBe("pre")
+		expect(textarea.style.wordBreak).toBe("normal")
 	})
 
 	it("reflows area text without changing source and persistently reports overset", () => {

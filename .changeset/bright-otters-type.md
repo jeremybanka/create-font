@@ -20,6 +20,11 @@ Keep canonical glyph outlines visually authoritative while the accessible native
 surface owns caret, selection, composition, and input. Store authored text in
 stable adjacent raw UTF-8 `.txt` units with lossless inline-source migration and
 coherent source/version-control transactions.
+Absorb proportional Point and Area Text resizing into canonical typography and
+frame metrics, including mixed selections and repeated transforms, while
+preserving anchored world geometry. Keep the native editor's content width
+independent of its border and prevent Point Text from soft-wrapping so caret and
+selection insertion boundaries remain aligned with shaped glyph advances.
 
 Keep installed font inventories and binary files coherent across comparison and
 selective version-control commits.

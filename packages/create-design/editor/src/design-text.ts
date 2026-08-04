@@ -5,6 +5,7 @@ import {
 	type DesignTextTypography,
 } from "@create-design/source"
 import {
+	scaleObject,
 	transformDesignPoint,
 	visibleObjectBounds,
 	type Bounds,
@@ -106,6 +107,73 @@ export function updateDesignAreaTextFrame(
 			...object.geometry,
 			frame: { ...object.geometry.frame, ...properties },
 		},
+	}
+}
+
+/**
+ * Applies a proportional world-space resize while keeping type size canonical.
+ * Scaling every local text metric by the magnitude and retaining only a
+ * possible 180-degree reflection in the affine matrix is algebraically
+ * equivalent to a uniform left-multiplied object scale.
+ */
+export function scaleDesignTextObject(
+	object: DesignObject,
+	anchor: Readonly<{ x: number; y: number }>,
+	scale: number,
+): DesignObject {
+	if (object.geometry.kind !== "text")
+		return scaleObject(object, anchor, scale, scale)
+	const magnitude = Math.max(Math.abs(scale), Number.EPSILON)
+	const direction = scale < 0 ? -1 : 1
+	const scaled = scaleObject(object, anchor, scale, scale)
+	const frame = object.geometry.frame
+	const stroke = object.appearance.stroke
+	return {
+		...scaled,
+		geometry: {
+			...object.geometry,
+			x: object.geometry.x * magnitude,
+			y: object.geometry.y * magnitude,
+			typography: {
+				...object.geometry.typography,
+				size: object.geometry.typography.size * magnitude,
+				leading: object.geometry.typography.leading * magnitude,
+			},
+			...(frame === undefined
+				? {}
+				: {
+						frame: {
+							...frame,
+							width: frame.width * magnitude,
+							height: frame.height * magnitude,
+							inset: {
+								top: frame.inset.top * magnitude,
+								right: frame.inset.right * magnitude,
+								bottom: frame.inset.bottom * magnitude,
+								left: frame.inset.left * magnitude,
+							},
+						},
+					}),
+		},
+		transform: {
+			...scaled.transform,
+			a: direction * object.transform.a,
+			b: direction * object.transform.b,
+			c: direction * object.transform.c,
+			d: direction * object.transform.d,
+		},
+		appearance:
+			stroke === undefined
+				? object.appearance
+				: {
+						...object.appearance,
+						stroke: {
+							...stroke,
+							width: stroke.width * magnitude,
+							dashArray: stroke.dashArray.map((value) => value * magnitude),
+							dashOffset: stroke.dashOffset * magnitude,
+						},
+					},
 	}
 }
 
@@ -290,8 +358,12 @@ export function designTextOverlayStyle(
 		top: 0,
 		background: "transparent",
 		color: "transparent",
+		boxSizing: "content-box",
 		width,
 		height,
+		whiteSpace: geometry.mode === "point" ? "pre" : "pre-wrap",
+		overflowWrap: "normal",
+		wordBreak: "normal",
 		fontFamily: designTextCssFontFamily(registeredFamily),
 		fontVariationSettings: variations.length === 0 ? "normal" : variations,
 		fontKerning: geometry.typography.kerning === "auto" ? "auto" : "none",

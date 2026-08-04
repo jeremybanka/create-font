@@ -6,6 +6,7 @@ import {
 import { visibleObjectBounds } from "@create-design/model"
 import { selectionBounds } from "./design-selection.ts"
 import { designSelectionUnits } from "./design-hierarchy.ts"
+import { scaleDesignTextObject } from "./design-text.ts"
 import type { DesignArtboard, DesignDocument, DesignObject } from "./types.ts"
 
 export type DesignAlignment =
@@ -229,12 +230,17 @@ export function transformDesignSelection(
 	const anchor = originPoint(bounds, input.origin)
 	let sx = input.width === undefined ? 1 : input.width / width
 	let sy = input.height === undefined ? 1 : input.height / height
-	if (input.constrainProportions) {
+	const containsText = objects.some(({ geometry }) => geometry.kind === "text")
+	if (input.constrainProportions || containsText) {
 		const factor = input.width !== undefined ? sx : sy
 		sx = factor
 		sy = factor
 	}
-	const scaled = objects.map((object) => scaleObject(object, anchor, sx, sy))
+	const scaled = objects.map((object) =>
+		object.geometry.kind === "text"
+			? scaleDesignTextObject(object, anchor, sx)
+			: scaleObject(object, anchor, sx, sy),
+	)
 	const rotated =
 		input.rotation === undefined
 			? scaled
