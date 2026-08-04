@@ -545,7 +545,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
-	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles`
+	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
 }
 
 export type DesignApplicationProps = Readonly<{
@@ -672,6 +672,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}>
 		>(),
 	)
+	const historySelectionsRef = useRef(
+		new Map<
+			number,
+			Readonly<{
+				objectSelection: readonly string[]
+				directSelection: readonly DesignDirectSelectionTarget[]
+			}>
+		>(),
+	)
+	const pendingHistorySelectionRef = useRef<number | null>(null)
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -856,6 +866,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return valid.length === current.length ? current : valid
 		})
 	}, [document.groups])
+	useEffect(() => {
+		const objectIds = new Set(document.objects.map(({ id }) => id))
+		setSelection((current) => {
+			const valid = current.filter((id) => objectIds.has(id))
+			return valid.length === current.length ? current : valid
+		})
+		setDirectSelection((current) => {
+			const valid = current.filter((target) => objectIds.has(target.objectId))
+			return valid.length === current.length ? current : valid
+		})
+	}, [document.objects])
 	const authoredAppearance = validDesignAppearance(
 		currentAppearance,
 		document.swatches,
@@ -1475,21 +1496,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		(type: "redo" | "undo"): void => {
 			if (type === "undo") {
 				if (historyAt === 0) return
+				pendingHistorySelectionRef.current = historyAt - 1
 				undoDocument()
 			} else {
 				if (historyAt === historyLength) return
+				pendingHistorySelectionRef.current = historyAt + 1
 				redoDocument()
 			}
-			const target = editorState.silo.getState(
-				editorState.states.documentSelector,
-			)
-			const recorded = pathCommandSelectionsRef.current.get(target)
-			if (recorded === undefined) return
-			setSelection(recorded.objectSelection)
-			setDirectSelection(recorded.directSelection)
 		},
-		[editorState, historyAt, historyLength, redoDocument, undoDocument],
+		[historyAt, historyLength, redoDocument, undoDocument],
 	)
+	useEffect(() => {
+		if (pendingHistorySelectionRef.current !== historyAt) return
+		pendingHistorySelectionRef.current = null
+		const recorded =
+			historySelectionsRef.current.get(historyAt) ??
+			pathCommandSelectionsRef.current.get(document)
+		if (recorded === undefined) return
+		setSelection(recorded.objectSelection)
+		setDirectSelection(recorded.directSelection)
+	}, [document, historyAt])
 
 	const finishPen = useCallback(
 		(closed = false): void => {
@@ -1725,6 +1751,62 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 	}
 
+	const activateAppearanceTarget = useCallback(
+		(target: AppearancePaintTarget): void => {
+			setAppearanceTarget(target)
+			const value = appearanceSummary[target]
+			if (value !== null && value !== "mixed") setSelectedSwatchId(value)
+			setStatus(`${target === "fill" ? "Fill" : "Stroke"} paint target active.`)
+		},
+		[appearanceSummary],
+	)
+
+	const swapSingleObjectAppearance = useCallback((): void => {
+		if (gestureRef.current !== null || penPointsRef.current.length > 0) {
+			setStatus("Finish the active canvas gesture before swapping paints.")
+			return
+		}
+		if (selection.length !== 1 || selectedObjects.length !== 1) {
+			setStatus(
+				"Select exactly one complete object to swap its fill and stroke.",
+			)
+			return
+		}
+		const object = selectedObjects[0]!
+		if (object.locked) {
+			setStatus(`Unlock ${object.name} before swapping its fill and stroke.`)
+			return
+		}
+		const swatchIds = new Set(document.swatches.map(({ id }) => id))
+		const unavailable = [
+			object.appearance.fill?.swatchId,
+			object.appearance.stroke?.swatchId,
+		].find((id) => id !== undefined && !swatchIds.has(id))
+		if (unavailable !== undefined) {
+			setStatus(
+				`Paint ${unavailable} is unavailable; fill and stroke were not swapped.`,
+			)
+			return
+		}
+		const appearance = swapDesignAppearancePaints(object.appearance)
+		if (JSON.stringify(appearance) === JSON.stringify(object.appearance)) {
+			setStatus(
+				object.appearance.fill === undefined &&
+					object.appearance.stroke === undefined
+					? `${object.name} has no fill or stroke to swap.`
+					: `${object.name}'s fill and stroke are already the same.`,
+			)
+			return
+		}
+		commit({
+			...document,
+			objects: document.objects.map((candidate) =>
+				candidate.id === object.id ? { ...candidate, appearance } : candidate,
+			),
+		})
+		setStatus(`Swapped fill and stroke for ${object.name}.`)
+	}, [commit, document, selectedObjects, selection.length])
+
 	const applyStrokeProperties = (
 		properties: Partial<Omit<DesignStroke, "swatchId">>,
 	): void => {
@@ -1935,11 +2017,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setArtboardProperty,
 		setDocumentTitle: (title) => commit({ ...document, title }),
 		setMoveArtworkWithArtboard,
-		setAppearanceTarget: (target) => {
-			setAppearanceTarget(target)
-			const value = appearanceSummary[target]
-			if (value !== null && value !== "mixed") setSelectedSwatchId(value)
-		},
+		setAppearanceTarget: activateAppearanceTarget,
 		swapAppearancePaints: swapAppearance,
 		strokePropertiesDisabledReason,
 		strokeExpansionDisabledReason: strokeEligibility.eligible
@@ -2554,6 +2632,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			const mod = event.metaKey || event.ctrlKey
+			const key = event.key.toLowerCase()
+			// Leave Mod-X to the browser so it can dispatch the `cut` event.
+			if (mod && key === "x") return
 			if (mod && event.key.toLowerCase() === "a") {
 				event.preventDefault()
 				const objectIds = normalizeDesignSelection(
@@ -2596,6 +2677,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (mod && event.key.toLowerCase() === "z") {
 				event.preventDefault()
 				navigateDesignHistory(event.shiftKey ? "redo" : "undo")
+				return
+			}
+			if (key === "x" && !mod && !event.altKey) {
+				event.preventDefault()
+				if (event.shiftKey) swapSingleObjectAppearance()
+				else
+					activateAppearanceTarget(
+						appearanceTarget === "fill" ? "stroke" : "fill",
+					)
 				return
 			}
 			if (event.key === "Enter" && tool === "pen") {
@@ -2720,6 +2810,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			window.removeEventListener("keyup", updateGestureModifiers)
 		}
 	}, [
+		activateAppearanceTarget,
+		appearanceTarget,
 		deleteSelection,
 		duplicateSelection,
 		groupSelection,
@@ -2741,26 +2833,112 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedGuideId,
 		selection,
 		snapSettings,
+		swapSingleObjectAppearance,
 		tool,
 		ungroupSelection,
 		worldScale,
 	])
 
 	useEffect(() => {
-		const copy = (event: ClipboardEvent): void => {
-			if (editableTarget(event.target) || event.clipboardData === null) return
-			const count = writeDesignClipboard(
-				event.clipboardData,
+		const writeSelection = (
+			clipboard: DataTransfer,
+			objectIds: readonly string[],
+		): number =>
+			writeDesignClipboard(
+				clipboard,
 				document,
-				selection,
-				designVectorAdapter.clipboard(document, selection),
+				objectIds,
+				designVectorAdapter.clipboard(document, objectIds),
 			)
+		const copy = (event: ClipboardEvent): void => {
+			if (
+				paletteOpen ||
+				editableTarget(event.target) ||
+				event.clipboardData === null
+			)
+				return
+			let count: number
+			try {
+				count = writeSelection(event.clipboardData, selection)
+			} catch {
+				setStatus("Could not write the selection to the clipboard.")
+				return
+			}
 			if (count === 0) return
 			event.preventDefault()
 			setStatus(`Copied ${count} vector object${count === 1 ? "" : "s"}.`)
 		}
+		const cut = (event: ClipboardEvent): void => {
+			if (paletteOpen || editableTarget(event.target)) return
+			if (gestureRef.current !== null || penPointsRef.current.length > 0) {
+				setStatus(
+					"Finish the active canvas gesture before cutting the selection.",
+				)
+				return
+			}
+			if (event.clipboardData === null) {
+				setStatus("Clipboard access is unavailable; the selection was not cut.")
+				return
+			}
+			const capturedSelection = [...selection]
+			if (capturedSelection.length === 0) {
+				setStatus("Select one or more complete objects to cut.")
+				return
+			}
+			const result = applyDesignVectorIntent(document, capturedSelection, {
+				kind: "delete",
+				objectIds: capturedSelection,
+			})
+			if (!result.ok) {
+				setStatus(result.error)
+				return
+			}
+			let count: number
+			try {
+				count = writeSelection(event.clipboardData, capturedSelection)
+			} catch {
+				setStatus(
+					"Could not write the selection to the clipboard; nothing was cut.",
+				)
+				return
+			}
+			if (count === 0) {
+				setStatus("The selection could not be copied; nothing was cut.")
+				return
+			}
+			event.preventDefault()
+			const deletedIds = new Set(capturedSelection)
+			pathCommandSelectionsRef.current.set(document, {
+				objectSelection: capturedSelection,
+				directSelection,
+			})
+			historySelectionsRef.current.set(historyAt, {
+				objectSelection: capturedSelection,
+				directSelection,
+			})
+			const nextDirectSelection = directSelection.filter(
+				(target) => !deletedIds.has(target.objectId),
+			)
+			pathCommandSelectionsRef.current.set(result.document, {
+				objectSelection: result.selection,
+				directSelection: nextDirectSelection,
+			})
+			historySelectionsRef.current.set(historyAt + 1, {
+				objectSelection: result.selection,
+				directSelection: nextDirectSelection,
+			})
+			commit(result.document)
+			setSelection(result.selection)
+			setDirectSelection(nextDirectSelection)
+			setStatus(`Cut ${count} vector object${count === 1 ? "" : "s"}.`)
+		}
 		const paste = (event: ClipboardEvent): void => {
-			if (editableTarget(event.target) || event.clipboardData === null) return
+			if (
+				paletteOpen ||
+				editableTarget(event.target) ||
+				event.clipboardData === null
+			)
+				return
 			const nativeAddition = readDesignClipboard(
 				event.clipboardData,
 				document,
@@ -2832,12 +3010,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 		}
 		window.addEventListener("copy", copy)
+		window.addEventListener("cut", cut)
 		window.addEventListener("paste", paste)
 		return () => {
 			window.removeEventListener("copy", copy)
+			window.removeEventListener("cut", cut)
 			window.removeEventListener("paste", paste)
 		}
-	}, [activeArtboard, commit, document, fallbackSwatchId, nextId, selection])
+	}, [
+		activeArtboard,
+		commit,
+		directSelection,
+		document,
+		fallbackSwatchId,
+		historyAt,
+		nextId,
+		paletteOpen,
+		selection,
+	])
 
 	const gestureModifiers = (
 		event: Pick<PointerEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
@@ -3861,6 +4051,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						role="application"
 						aria-label="Design artboard"
 						aria-describedby="design-selection-status"
+						aria-keyshortcuts="X Shift+X Meta+X Control+X"
 						tabIndex={-1}
 					>
 						<span id="design-selection-status" data-screen-reader>

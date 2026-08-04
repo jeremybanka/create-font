@@ -161,6 +161,18 @@ function mountDesign(
 	return stage
 }
 
+function clipboardEvent(
+	type: "copy" | "cut" | "paste",
+	clipboard: Pick<DataTransfer, "getData" | "setData"> | null,
+): ClipboardEvent {
+	const event = new Event(type, {
+		bubbles: true,
+		cancelable: true,
+	}) as ClipboardEvent
+	Object.defineProperty(event, "clipboardData", { value: clipboard })
+	return event
+}
+
 describe("create-design shared vector scene", () => {
 	it("passes the authored fill rule to the canvas path", () => {
 		const document = createInitialDocument()
@@ -1572,6 +1584,458 @@ describe("create-design shared vector scene", () => {
 			{ fill: { swatchId: "swatch:ink" } },
 			{ fill: { swatchId: "swatch:ink" } },
 		])
+	})
+
+	it("routes X paint shortcuts with exact modifier, focus, selection, and history semantics", async () => {
+		const base = createInitialDocument()
+		const first = base.objects[0]!
+		const stroke = {
+			...DEFAULT_DESIGN_STROKE_STYLE,
+			swatchId: "swatch:ink",
+			width: 5,
+			cap: "round" as const,
+		}
+		const initialDocument: DesignDocument = {
+			...base,
+			objects: base.objects.map((object) =>
+				object.id === first.id
+					? {
+							...object,
+							appearance: {
+								fill: { swatchId: "swatch:coral" },
+								stroke,
+							},
+						}
+					: object,
+			),
+		}
+		const storage = new Map<string, string>()
+		mountDesign({ initialDocument }, storage)
+		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(first.name))
+		if (artboard === null || layer === undefined)
+			throw new Error("Design artboard or source layer was not found.")
+		expect(artboard.getAttribute("aria-keyshortcuts")).toBe(
+			"X Shift+X Meta+X Control+X",
+		)
+		act(() => layer.click())
+
+		const key = (options: KeyboardEventInit): KeyboardEvent => {
+			const event = new KeyboardEvent("keydown", {
+				bubbles: true,
+				cancelable: true,
+				...options,
+			})
+			window.dispatchEvent(event)
+			return event
+		}
+		await act(async () => {
+			key({ key: "x" })
+			await Promise.resolve()
+		})
+		expect(
+			document
+				.querySelector('button[aria-label^="Stroke paint:"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true")
+		expect(document.querySelector("[data-footer-status]")?.textContent).toBe(
+			"Stroke paint target active.",
+		)
+		const afterToggle = storage.get(DESIGN_STORAGE_KEY)
+		const alt = key({ altKey: true, key: "x" })
+		expect(alt.defaultPrevented).toBe(false)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(afterToggle)
+
+		await act(async () => {
+			// Uppercase from Caps Lock remains the plain-X command without Shift.
+			key({ key: "X" })
+			await Promise.resolve()
+		})
+		expect(
+			document
+				.querySelector('button[aria-label^="Fill paint:"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true")
+
+		const mod = key({ ctrlKey: true, key: "x" })
+		expect(mod.defaultPrevented).toBe(false)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(afterToggle)
+
+		await act(async () => {
+			key({ key: "x", shiftKey: true })
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.find(({ id }) => id === first.id)?.appearance).toEqual(
+			{
+				fill: { swatchId: "swatch:ink" },
+				stroke: { ...stroke, swatchId: "swatch:coral" },
+			},
+		)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain(`Swapped fill and stroke for ${first.name}`)
+
+		await act(async () => {
+			key({ ctrlKey: true, key: "z" })
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.find(({ id }) => id === first.id)?.appearance).toEqual(
+			{
+				fill: { swatchId: "swatch:coral" },
+				stroke,
+			},
+		)
+		await act(async () => {
+			key({ ctrlKey: true, key: "z", shiftKey: true })
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(
+			saved.objects.find(({ id }) => id === first.id)?.appearance.fill,
+		).toEqual({ swatchId: "swatch:ink" })
+
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title field was not found.")
+		title.focus()
+		const editableX = new KeyboardEvent("keydown", {
+			bubbles: true,
+			cancelable: true,
+			key: "x",
+		})
+		title.dispatchEvent(editableX)
+		expect(editableX.defaultPrevented).toBe(false)
+		expect(document.activeElement).toBe(title)
+
+		const otherLayer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => !button.textContent?.includes(first.name))
+		if (otherLayer === undefined) throw new Error("Second layer was not found.")
+		act(() => {
+			otherLayer.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			)
+		})
+		const beforeRejected = storage.get(DESIGN_STORAGE_KEY)
+		await act(async () => {
+			key({ key: "x", shiftKey: true })
+			await Promise.resolve()
+		})
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(beforeRejected)
+	})
+
+	it("defers paint swapping and Cut while a Pen draft is active", async () => {
+		const base = createInitialDocument()
+		const first = base.objects[0]!
+		const initialDocument: DesignDocument = {
+			...base,
+			objects: base.objects.map((object) =>
+				object.id === first.id
+					? {
+							...object,
+							appearance: {
+								fill: { swatchId: "swatch:coral" },
+								stroke: {
+									...DEFAULT_DESIGN_STROKE_STYLE,
+									swatchId: "swatch:ink",
+									width: 2,
+								},
+							},
+						}
+					: object,
+			),
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(first.name))
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
+		if (
+			layer === undefined ||
+			pen === null ||
+			canvas === null ||
+			artboard === null
+		)
+			throw new Error("Pen draft controls were not found.")
+		act(() => {
+			layer.click()
+			pen.click()
+		})
+		const fire = (type: string): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: 80,
+					clientY: 100,
+					isPrimary: true,
+					pointerId: 91,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		await act(async () => {
+			fire("pointerdown")
+			fire("pointerup")
+			await Promise.resolve()
+		})
+		const before = storage.get(DESIGN_STORAGE_KEY)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "x", shiftKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(before)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Finish the active canvas gesture")
+		const writes: string[] = []
+		const cut = clipboardEvent("cut", {
+			getData: () => "",
+			setData: (format) => writes.push(format),
+		})
+		act(() => artboard.dispatchEvent(cut))
+		expect(cut.defaultPrevented).toBe(false)
+		expect(writes).toEqual([])
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(before)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("before cutting")
+	})
+
+	it("cuts the same payload as Copy only after a successful clipboard write", async () => {
+		const storage = new Map<string, string>()
+		const initialDocument = createInitialDocument()
+		mountDesign({ initialDocument }, storage)
+		const first = initialDocument.objects[0]!
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(first.name))
+		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
+		if (layer === undefined || artboard === null)
+			throw new Error("Design artboard or source layer was not found.")
+		act(() => layer.click())
+
+		const copyEntries = new Map<string, string>()
+		const copyData = {
+			getData: (format: string) => copyEntries.get(format) ?? "",
+			setData: (format: string, value: string) => {
+				copyEntries.set(format, value)
+			},
+		}
+		const copy = clipboardEvent("copy", copyData)
+		act(() => artboard.dispatchEvent(copy))
+		expect(copy.defaultPrevented).toBe(true)
+
+		const cutEntries = new Map<string, string>()
+		const cutData = {
+			getData: (format: string) => cutEntries.get(format) ?? "",
+			setData: (format: string, value: string) => {
+				cutEntries.set(format, value)
+			},
+		}
+		const cut = clipboardEvent("cut", cutData)
+		await act(async () => {
+			artboard.dispatchEvent(cut)
+			await Promise.resolve()
+		})
+		expect(cut.defaultPrevented).toBe(true)
+		expect([...cutEntries]).toEqual([...copyEntries])
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map(({ id }) => id)).not.toContain(first.id)
+		expect(document.querySelector("[data-footer-status]")?.textContent).toBe(
+			"Cut 1 vector object.",
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map(({ id }) => id)).toContain(first.id)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					ctrlKey: true,
+					key: "z",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects.map(({ id }) => id)).not.toContain(first.id)
+
+		const paste = clipboardEvent("paste", cutData)
+		await act(async () => {
+			artboard.dispatchEvent(paste)
+			await Promise.resolve()
+		})
+		expect(paste.defaultPrevented).toBe(true)
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects).toHaveLength(initialDocument.objects.length)
+		expect(saved.objects.some(({ id }) => id === first.id)).toBe(false)
+		expect(saved.objects.some(({ name }) => name === first.name)).toBe(true)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			[...document.querySelectorAll("design-layers-tile > button")].some(
+				(button) => button.getAttribute("aria-pressed") === "true",
+			),
+		).toBe(false)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			[
+				...document.querySelectorAll<HTMLButtonElement>(
+					"design-layers-tile > button",
+				),
+			]
+				.find((button) => button.textContent?.includes(first.name))
+				?.getAttribute("aria-pressed"),
+		).toBe("true")
+	})
+
+	it("keeps failed, locked, editable, and palette-local cuts non-destructive", async () => {
+		const base = createInitialDocument()
+		const first = base.objects[0]!
+		const initialDocument: DesignDocument = {
+			...base,
+			objects: base.objects.map((object) =>
+				object.id === first.id ? { ...object, locked: true } : object,
+			),
+		}
+		const storage = new Map<string, string>()
+		mountDesign({ initialDocument }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(first.name))
+		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
+		if (layer === undefined || artboard === null)
+			throw new Error("Design artboard or locked layer was not found.")
+		act(() => layer.click())
+		const initial = storage.get(DESIGN_STORAGE_KEY)
+		const writes: string[] = []
+		const locked = clipboardEvent("cut", {
+			getData: () => "",
+			setData: (format) => writes.push(format),
+		})
+		act(() => artboard.dispatchEvent(locked))
+		expect(locked.defaultPrevented).toBe(false)
+		expect(writes).toEqual([])
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(initial)
+
+		act(() => {
+			const unlock = [
+				...document.querySelectorAll<HTMLButtonElement>(
+					"design-object-actions button",
+				),
+			].find((button) => button.textContent?.includes("Locked"))
+			if (unlock === undefined) throw new Error("Unlock action was not found.")
+			unlock.click()
+		})
+		const beforeThrow = storage.get(DESIGN_STORAGE_KEY)
+		let writeCount = 0
+		const throwing = clipboardEvent("cut", {
+			getData: () => "",
+			setData: () => {
+				writeCount += 1
+				if (writeCount === 3) throw new Error("clipboard full")
+			},
+		})
+		act(() => artboard.dispatchEvent(throwing))
+		expect(writeCount).toBe(3)
+		expect(throwing.defaultPrevented).toBe(false)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(beforeThrow)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("nothing was cut")
+
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title field was not found.")
+		const editableWrites: string[] = []
+		const editable = clipboardEvent("cut", {
+			getData: () => "",
+			setData: (format) => editableWrites.push(format),
+		})
+		act(() => title.dispatchEvent(editable))
+		expect(editable.defaultPrevented).toBe(false)
+		expect(editableWrites).toEqual([])
+
+		const command = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Command Palette"]',
+		)
+		if (command === null) throw new Error("Command center was not found.")
+		act(() => command.click())
+		const search = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (search === null) throw new Error("Command search was not found.")
+		const paletteWrites: string[] = []
+		const paletteCut = clipboardEvent("cut", {
+			getData: () => "",
+			setData: (format) => paletteWrites.push(format),
+		})
+		act(() => search.dispatchEvent(paletteCut))
+		expect(paletteCut.defaultPrevented).toBe(false)
+		expect(paletteWrites).toEqual([])
 	})
 
 	it("authors the complete stroke vocabulary and renders it on canvas", async () => {
