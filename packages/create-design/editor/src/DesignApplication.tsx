@@ -7059,11 +7059,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 									})}
 									{canvasAuthoredObjects.flatMap((object) => {
 										const entry = effectiveHierarchy.byObjectId.get(object.id)
+										const selected = selection.includes(object.id)
+										const editingClippingGroup =
+											entry?.clippingForGroupId === currentGroupScope
 										if (
 											entry?.clippingForGroupId === null ||
 											entry?.clippingForGroupId === undefined ||
 											!entry.visible ||
-											!selection.includes(object.id) ||
+											(!selected && !editingClippingGroup) ||
 											object.geometry.kind === "image" ||
 											object.geometry.kind === "text"
 										)
@@ -7071,14 +7074,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 										return [
 											<VectorContourPath
 												key={`clipping-selection:${object.id}`}
-												name={`design-clipping-selection ${object.id}`}
+												name={`${selected ? "design-clipping-selection" : "design-clipping-hit"} ${object.id}`}
 												object={projectDesignVectorObject(
 													canvasDocument,
 													object,
 												)}
-												fillEnabled={false}
+												fill="rgba(0, 0, 0, 0)"
+												fillEnabled
+												fillRule={designObjectFillRule(object)}
 												strokeWidth={1 / worldScale}
-												selected
+												hitStrokeWidth={12 / worldScale}
+												selected={selected}
 												selectionStroke={layerUiColorForObject(object.id)}
 												listening={!entry.locked}
 												onPointerDown={(event) =>

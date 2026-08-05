@@ -35,6 +35,7 @@ export function VectorContourPath({
 	readonly fillRule?: "evenodd" | "nonzero"
 	readonly opacity?: number
 	readonly strokeWidth?: number
+	readonly hitStrokeWidth?: number
 	readonly dash?: number[]
 	readonly dashOffset?: number
 	readonly lineCap?: "butt" | "round" | "square"

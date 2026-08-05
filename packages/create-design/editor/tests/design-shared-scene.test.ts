@@ -492,21 +492,32 @@ describe("create-design shared vector scene", () => {
 		expect(contourRow.getAttribute("aria-selected")).toBe("true")
 		const contours = stage.find(".design-clipping-selection")
 		expect(contours).toHaveLength(1)
-		expect(contours[0]!.fillEnabled()).toBe(false)
+		expect(contours[0]!.fillEnabled()).toBe(true)
+		expect(contours[0]!.fill()).toBe("rgba(0, 0, 0, 0)")
 		expect(contours[0]!.listening()).toBe(true)
 		expect(contours[0]!.stroke()).toBe(
 			designLayerUiColorCss(initial.layers[0]!.uiColor),
 		)
 		expect(stage.find(".design-object")).toHaveLength(1)
+		const contentRow = document.querySelector<HTMLElement>(
+			`design-layers-tile [data-tree-key="object:${source.objects[0]!.id}"]`,
+		)
+		if (contentRow === null)
+			throw new Error("Masked content row did not render.")
+		act(() => contentRow.click())
+		const hit = stage.findOne(".design-clipping-hit")
+		expect(hit).toBeDefined()
+		expect(hit.fillEnabled()).toBe(true)
+		expect(hit.hitStrokeWidth()).toBeGreaterThan(hit.strokeWidth())
 		let pointer = { x: 300, y: 240 }
 		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
-		const before = contours[0]!.getClientRect()
+		const before = hit.getClientRect()
 		const fire = (
 			type: "pointerdown" | "pointermove" | "pointerup",
 			next: { x: number; y: number },
 		) => {
 			pointer = next
-			contours[0]!.fire(
+			hit.fire(
 				type,
 				{
 					evt: new PointerEvent(type, {
