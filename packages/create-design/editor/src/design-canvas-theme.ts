@@ -6,6 +6,7 @@ export interface DesignCanvasTheme {
 	readonly artboardShadowOpacity: number
 	readonly guide: string
 	readonly handleFill: string
+	readonly marquee: string
 	readonly selection: string
 }
 
@@ -15,6 +16,7 @@ const fallbackTheme: DesignCanvasTheme = Object.freeze({
 	artboardShadowOpacity: 0.36,
 	guide: "#36a8e0",
 	handleFill: "#fff",
+	marquee: "#737373",
 	selection: "#e17352",
 })
 
@@ -45,6 +47,7 @@ export function designCanvasThemeFromStyle(
 			: fallbackTheme.artboardShadowOpacity,
 		guide: read("--design-canvas-guide", fallbackTheme.guide),
 		handleFill: read("--design-canvas-handle-fill", fallbackTheme.handleFill),
+		marquee: read("--design-canvas-marquee", fallbackTheme.marquee),
 		selection: read("--design-canvas-selection", fallbackTheme.selection),
 	})
 }

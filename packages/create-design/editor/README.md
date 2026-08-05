@@ -21,6 +21,11 @@ layer row is also the artwork target: selecting it makes subsequent drawing,
 paste, import, blend expansion, and other authored insertions land in that
 layer. Selecting artwork on the canvas or in the tree retargets its owning
 layer. The target layer is per-user editor state and is not written to source.
+Each layer also owns one of twelve authored UI colors. Its tree marker and the
+outline plus faint selection fill of its objects use that color; a selection
+spanning layers retains per-object colors while its aggregate bounds remain
+neutral. The in-progress marquee is always neutral because it has no target
+layer yet. These colors are editor metadata and never artwork paint.
 
 Layer visibility and locking are inherited effective state. Hidden layers do
 not render, hit-test, snap, preview, or export. Locked layers still render and

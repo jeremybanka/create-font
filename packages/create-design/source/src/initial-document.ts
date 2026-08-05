@@ -83,6 +83,7 @@ export function createInitialDocument(): DesignDocument {
 					{ kind: "object", id: "object:coral" },
 					{ kind: "object", id: "object:cyan" },
 				],
+				uiColor: "red",
 			},
 		],
 		groups: [],

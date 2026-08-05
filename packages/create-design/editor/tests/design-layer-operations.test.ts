@@ -8,6 +8,7 @@ import {
 	renameDesignLayer,
 	reorderDesignLayer,
 	setDesignLayerLocked,
+	setDesignLayerUiColor,
 	setDesignLayerVisibility,
 } from "../src/design-layer-operations.ts"
 import type { DesignDocument } from "../src/types.ts"
@@ -30,11 +31,13 @@ function layeredFixture(): DesignDocument {
 			{
 				id: "layer:back",
 				name: "Back",
+				uiColor: "purple",
 				children: [{ kind: "group", id: "group:nested" }],
 			},
 			{
 				id: "layer:front",
 				name: "Front",
+				uiColor: "teal",
 				children: [{ kind: "object", id: second.id }],
 			},
 		],
@@ -61,7 +64,8 @@ describe("design layer operations", () => {
 		const renamed = renameDesignLayer(created, "layer:new", "  Foreground  ")
 		const hidden = setDesignLayerVisibility(renamed, "layer:new", false)
 		const locked = setDesignLayerLocked(hidden, "layer:new", true)
-		const lowered = reorderDesignLayer(locked, "layer:new", "down")
+		const recolored = setDesignLayerUiColor(locked, "layer:new", "lime")
+		const lowered = reorderDesignLayer(recolored, "layer:new", "down")
 
 		expect(lowered.layers.map(({ id }) => id)).toEqual([
 			"layer:back",
@@ -70,12 +74,21 @@ describe("design layer operations", () => {
 		])
 		expect(lowered.layers[1]).toMatchObject({
 			name: "Foreground",
+			uiColor: "lime",
 			hidden: true,
 			locked: true,
 			children: [],
 		})
 		expect(lowered.objects).toEqual(source.objects)
 		expect(lowered.groups).toEqual(source.groups)
+	})
+
+	it("chooses the first unused standard UI color for new layers", () => {
+		const created = createDesignLayer(layeredFixture(), {
+			id: "layer:new",
+			name: "New layer",
+		})
+		expect(created.layers.at(-1)?.uiColor).toBe("red")
 	})
 
 	it("duplicates a complete layer tree with fresh identities and no cross-layer blend", () => {
@@ -94,6 +107,7 @@ describe("design layer operations", () => {
 		expect(duplicate).toMatchObject({
 			id: "layer:copy:3",
 			name: "Back copy",
+			uiColor: "purple",
 			children: [{ kind: "group", id: "group:copy:2" }],
 		})
 		expect(clonedGroup).toMatchObject({

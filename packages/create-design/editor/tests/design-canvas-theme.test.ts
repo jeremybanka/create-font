@@ -23,6 +23,7 @@ describe("design canvas theme", () => {
 			["--design-canvas-artboard-shadow-opacity", "0.2"],
 			["--design-canvas-guide", "#0577aa"],
 			["--design-canvas-handle-fill", "#fff"],
+			["--design-canvas-marquee", "#676767"],
 			["--design-canvas-selection", "#ce5d3d"],
 		])
 		expect(
@@ -35,6 +36,7 @@ describe("design canvas theme", () => {
 			artboardShadowOpacity: 0.2,
 			guide: "#0577aa",
 			handleFill: "#fff",
+			marquee: "#676767",
 			selection: "#ce5d3d",
 		})
 	})

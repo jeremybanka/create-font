@@ -26,6 +26,7 @@ import {
 	TileTextField,
 } from "@create-art/editor"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { DESIGN_LAYER_UI_COLORS } from "@create-design/source"
 import type {
 	AppearancePaintTarget,
 	AppearancePaintValue,
@@ -85,12 +86,14 @@ import type {
 	DesignDocument,
 	DesignBlend,
 	DesignLayer,
+	DesignLayerUiColor,
 	DesignObject,
 	DesignSceneChild,
 	DesignStroke,
 	DesignSwatch,
 	DesignTool,
 } from "./types.ts"
+import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 
 const svg = {
 	AlignBottom: AlignBottomIcon,
@@ -521,8 +524,12 @@ function DesignLayersTile({
 			const layer = context.document.layers.find(
 				({ id }) => id === row.layerId,
 			)!
+			const layerIndex = context.document.layers.findIndex(
+				({ id }) => id === layer.id,
+			)
 			return [
 				row.layerId === context.activeLayerId ? "Target layer" : "Layer",
+				`UI color ${layer.uiColor ?? DESIGN_LAYER_UI_COLORS[layerIndex % DESIGN_LAYER_UI_COLORS.length]}`,
 				`${row.descendantCount ?? 0} descendants`,
 				...(layer.hidden ? ["Hidden"] : ["Visible"]),
 				...(layer.locked ? ["Locked"] : ["Unlocked"]),
@@ -708,20 +715,13 @@ function DesignLayersTile({
 								? context.selectedObjectIds.includes(row.object!.id) &&
 									context.selectedGroupId === null
 								: false
-					const swatch =
-						row.object === undefined
-							? undefined
-							: context.document.swatches.find(
-									(candidate) =>
-										candidate.id ===
-										(row.object?.appearance.fill?.swatchId ??
-											row.object?.appearance.stroke?.swatchId),
-								)
 					const label = stateLabel(row)
-					const rowLayer =
-						row.kind === "layer"
-							? context.document.layers.find(({ id }) => id === row.layerId)
-							: undefined
+					const rowLayer = context.document.layers.find(
+						({ id }) => id === row.layerId,
+					)
+					const rowLayerIndex = context.document.layers.findIndex(
+						({ id }) => id === row.layerId,
+					)
 					return (
 						<layer-tree-row
 							key={row.key}
@@ -835,8 +835,10 @@ function DesignLayersTile({
 							<i
 								data-layer-color
 								style={{
-									background:
-										swatch === undefined ? "transparent" : swatchCss(swatch),
+									background: designLayerUiColorCss(
+										rowLayer?.uiColor,
+										rowLayerIndex,
+									),
 								}}
 							/>
 							<span>
@@ -855,7 +857,7 @@ function DesignLayersTile({
 								>
 									Edit
 								</button>
-							) : rowLayer !== undefined ? (
+							) : row.kind === "layer" && rowLayer !== undefined ? (
 								<layer-row-controls aria-label={`${rowLayer.name} state`}>
 									<button
 										type="button"
@@ -907,6 +909,30 @@ function DesignLayersTile({
 							event.currentTarget.blur()
 						}}
 					/>
+				</label>
+				<label>
+					<span>Layer UI color</span>
+					<select
+						aria-label={`UI color for ${activeLayer.name}`}
+						value={
+							activeLayer.uiColor ??
+							DESIGN_LAYER_UI_COLORS[
+								activeLayerIndex % DESIGN_LAYER_UI_COLORS.length
+							]
+						}
+						onChange={(event) =>
+							context.setLayerUiColor(
+								activeLayer.id,
+								event.currentTarget.value as DesignLayerUiColor,
+							)
+						}
+					>
+						{DESIGN_LAYER_UI_COLORS.map((color) => (
+							<option key={color} value={color}>
+								{color[0]!.toUpperCase() + color.slice(1)}
+							</option>
+						))}
+					</select>
 				</label>
 				<layer-actions
 					role="toolbar"

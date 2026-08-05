@@ -288,6 +288,7 @@ describe("create-design path commands", () => {
 					id: "layer:artwork",
 					name: "Artwork",
 					children: [{ kind: "group", id: "group:joined" }],
+					uiColor: "red",
 				},
 			],
 			groups: [

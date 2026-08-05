@@ -10,6 +10,8 @@ import {
 	type DesignApplicationProps,
 } from "../src/DesignApplication.tsx"
 import { mountDesignEditor } from "../src/browser.ts"
+import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
+import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import { groupDesignSelection } from "../src/design-hierarchy.ts"
 import {
@@ -319,6 +321,9 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		expect(stage.find(".vector-selection-bounds")).toHaveLength(1)
+		expect(stage.findOne(".transform-selection-box").stroke()).toBe(
+			readDesignCanvasTheme().marquee,
+		)
 		expect(
 			document.querySelector("[data-footer-status]")?.textContent,
 		).not.toContain("Unlock Locked layer")
@@ -379,6 +384,65 @@ describe("create-design shared vector scene", () => {
 		).toContain("Unlock Locked layer")
 		expect(hiddenObject.hidden).toBeUndefined()
 		expect(lockedObject.locked).toBeUndefined()
+	})
+
+	it("colors object selections by their owning layers while keeping cross-layer bounds neutral", () => {
+		const initial = createInitialDocument()
+		const back = initial.objects[0]!
+		const front = initial.objects[1]!
+		const layered: DesignDocument = {
+			...initial,
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					uiColor: "purple",
+					children: [{ kind: "object", id: back.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					uiColor: "teal",
+					children: [{ kind: "object", id: front.id }],
+				},
+			],
+		}
+		const stage = mountDesign({ initialDocument: layered })
+		const rows = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		]
+		if (rows.length !== 2) throw new Error("Expected two object rows.")
+
+		act(() => rows[0]!.click())
+		let boxes = stage.find(".transform-selection-box")
+		expect(boxes).toHaveLength(1)
+		expect(boxes[0]!.stroke()).toBe(designLayerUiColorCss("teal"))
+		expect(boxes[0]!.fill()).toBe(designLayerUiColorCss("teal"))
+		expect(boxes[0]!.opacity()).toBe(0.06)
+
+		act(() =>
+			rows[1]!.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			),
+		)
+		boxes = stage.find(".transform-selection-box")
+		const coloredBoxes = boxes.filter(
+			(box: { opacity(): number }) => box.opacity() > 0,
+		)
+		expect(
+			coloredBoxes.map((box: { stroke(): string }) => box.stroke()),
+		).toEqual(
+			expect.arrayContaining([
+				designLayerUiColorCss("purple"),
+				designLayerUiColorCss("teal"),
+			]),
+		)
+		const aggregate = boxes.find(
+			(box: { opacity(): number }) => box.opacity() === 0,
+		)
+		expect(aggregate?.stroke()).toBe(readDesignCanvasTheme().marquee)
 	})
 
 	it("cancels an in-flight object gesture when its layer becomes locked", async () => {

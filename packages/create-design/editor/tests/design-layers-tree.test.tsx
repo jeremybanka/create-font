@@ -30,6 +30,7 @@ const fixture = (): DesignTileContext["document"] => {
 			{
 				id: "layer:back",
 				name: "Back",
+				uiColor: "purple" as const,
 				hidden: true,
 				children: [
 					{ kind: "object" as const, id: back.id },
@@ -39,6 +40,7 @@ const fixture = (): DesignTileContext["document"] => {
 			{
 				id: "layer:front",
 				name: "Front",
+				uiColor: "teal" as const,
 				locked: true,
 				children: [{ kind: "object" as const, id: front.id }],
 			},
@@ -76,6 +78,7 @@ function context(
 		reorderLayer: vi.fn(),
 		moveHierarchyNode: vi.fn(),
 		setLayerLocked: vi.fn(),
+		setLayerUiColor: vi.fn(),
 		setLayerVisibility: vi.fn(),
 		selectLayer: vi.fn(),
 		selectHierarchyGroup: vi.fn(),
@@ -140,6 +143,11 @@ describe("Design Layers tree", () => {
 				.find((row) => row.textContent?.includes("Nested object"))
 				?.getAttribute("aria-label"),
 		).toContain("Hidden by Back layer")
+		expect(rows[0]?.getAttribute("aria-label")).toContain("UI color teal")
+		expect(
+			rows[0]?.querySelector<HTMLElement>("[data-layer-color]")?.style
+				.background,
+		).toBe("#0e9888")
 	})
 
 	it("keeps disclosure local and supports roving tree keyboard focus", () => {
@@ -238,6 +246,16 @@ describe("Design Layers tree", () => {
 				?.click(),
 		)
 		expect(value.setLayerLocked).toHaveBeenCalledWith("layer:back", true)
+		const color = host.querySelector<HTMLSelectElement>(
+			'select[aria-label="UI color for Back"]',
+		)
+		if (color === null)
+			throw new Error("Layer UI color control did not render.")
+		act(() => {
+			color.value = "lime"
+			color.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(value.setLayerUiColor).toHaveBeenCalledWith("layer:back", "lime")
 
 		act(() => button("New layer").click())
 		expect(value.createLayer).toHaveBeenCalledOnce()

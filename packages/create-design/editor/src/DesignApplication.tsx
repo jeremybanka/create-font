@@ -86,6 +86,7 @@ import {
 import { swatchCss } from "@create-design/model"
 import { canvasToDocumentPoint } from "@create-design/model"
 import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
+import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
 	createInitialDocument,
 	DESIGN_STORAGE_KEY,
@@ -158,6 +159,7 @@ import {
 	renameDesignLayer,
 	reorderDesignLayer,
 	setDesignLayerLocked,
+	setDesignLayerUiColor,
 	setDesignLayerVisibility,
 } from "./design-layer-operations.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
@@ -3607,6 +3609,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			setStatus(`${layer.name} ${locked ? "locked" : "unlocked"}.`)
 		},
+		setLayerUiColor: (layerId, uiColor) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined || layer.uiColor === uiColor) return
+			commit(setDesignLayerUiColor(document, layerId, uiColor))
+			setStatus(`${layer.name} UI color changed to ${uiColor}.`)
+		},
 		setLayerVisibility: (layerId, visible) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
 			if (layer === undefined || !layer.hidden === visible) return
@@ -6012,6 +6020,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			: null
 	const canvasDocument =
 		previewArtboardDocument ?? copyingGesture?.copy?.document ?? document
+	const layerUiColorForObject = (objectId: string): string => {
+		const layerId = designLayerIdForObject(canvasDocument, objectId)
+		const layerIndex = canvasDocument.layers.findIndex(
+			({ id }) => id === layerId,
+		)
+		return designLayerUiColorCss(
+			canvasDocument.layers[layerIndex]?.uiColor,
+			layerIndex,
+		)
+	}
 	const canvasActiveArtboardId =
 		gestureRef.current?.kind === "artboard" &&
 		gestureRef.current.mode === "create"
@@ -6065,6 +6083,23 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							interactionBoundsForObject,
 						)
 					: null
+	const selectionVisualObjects =
+		selectionBounds === null || selectedBlend !== null
+			? []
+			: copyingGesture?.copy === null || copyingGesture === null
+				? selectedObjects.map((object) => previewById.get(object.id) ?? object)
+				: copyingGesture.copy.selection.flatMap((id) => {
+						const object = previewById.get(id)
+						return object === undefined ? [] : [object]
+					})
+	const selectionLayerColors = selectionVisualObjects.map(({ id }) =>
+		layerUiColorForObject(id),
+	)
+	const uniqueSelectionLayerColors = new Set(selectionLayerColors)
+	const aggregateSelectionColor =
+		uniqueSelectionLayerColors.size === 1
+			? selectionLayerColors[0]!
+			: canvasTheme.marquee
 
 	const recoverDraft = (): void => {
 		const draft = persistence.recoveryDraft
@@ -6345,6 +6380,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											))}
 									{displayedObjects.map((object) => {
 										const derived = !authoredCanvasObjectIds.has(object.id)
+										const objectLayerUiColor = layerUiColorForObject(object.id)
 										const derivedBlendId = derivedBlendByObjectId.get(object.id)
 										const fill = canvasOutputProjection.swatches.find(
 											(candidate) =>
@@ -6430,7 +6466,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															height={geometry.frame.height}
 															stroke={
 																selection.includes(object.id)
-																	? canvasTheme.selection
+																	? objectLayerUiColor
 																	: "#999"
 															}
 															strokeWidth={1 / worldScale}
@@ -6499,6 +6535,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																? {}
 																: { fill: textColor })}
 															fillEnabled={fill !== undefined}
+															selected={selection.includes(object.id)}
+															selectionStroke={objectLayerUiColor}
 															onPointerDown={(event) =>
 																startObjectGesture(event, object)
 															}
@@ -6567,6 +6605,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														: selectedGroup === null &&
 															selection.includes(object.id)
 												}
+												selectionStroke={objectLayerUiColor}
 												listening={
 													!object.locked &&
 													(!derived || derivedBlendId !== undefined)
@@ -6703,7 +6742,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																key={`${object.id}:${node.id}`}
 																node={node}
 																inverseScale={1 / worldScale}
-																color={canvasTheme.selection}
+																color={layerUiColorForObject(object.id)}
 																listening
 																nodeHitRadius={9 / worldScale}
 																handleHitRadius={{
@@ -6793,16 +6832,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 										<VectorSelectionBounds
 											bounds={gesturePreview.bounds}
 											inverseScale={1 / worldScale}
-											color={canvasTheme.selection}
+											color={canvasTheme.marquee}
 											handles={[]}
 										/>
 									) : null}
+									{selectionVisualObjects.length <= 1
+										? null
+										: selectionVisualObjects.map((object, index) => {
+												const bounds = interactionBoundsForObject(object)
+												return bounds === null ? null : (
+													<VectorSelectionBounds
+														key={`layer-selection:${object.id}`}
+														bounds={bounds}
+														inverseScale={1 / worldScale}
+														color={selectionLayerColors[index]!}
+														handles={[]}
+														listening={false}
+													/>
+												)
+											})}
 									{selectionBounds === null ? null : (
 										<>
 											<VectorSelectionBounds
 												bounds={selectionBounds}
 												inverseScale={1 / worldScale}
-												color={canvasTheme.selection}
+												color={aggregateSelectionColor}
+												fillOpacity={
+													selectionVisualObjects.length > 1 ? 0 : 0.06
+												}
 												rotation={tool === "transform"}
 												{...(tool === "transform"
 													? {
@@ -6828,7 +6885,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													y={selectionBounds.minY - 20 / worldScale}
 													text={`${selectedGroup.name} · ${selectedGroup.objectIds.length} objects`}
 													fontSize={12 / worldScale}
-													fill={canvasTheme.selection}
+													fill={aggregateSelectionColor}
 													listening={false}
 												/>
 											)}

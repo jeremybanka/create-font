@@ -56,6 +56,12 @@ export {
 	type SplitDesignDocumentOptions,
 } from "./directory.ts"
 export {
+	DESIGN_LAYER_UI_COLORS,
+	designLayerUiColorAt,
+	nextDesignLayerUiColor,
+	type DesignLayerUiColor,
+} from "./layer-ui-color.ts"
+export {
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	DEFAULT_ARTBOARD_ID,

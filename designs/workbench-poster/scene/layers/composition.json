@@ -13,5 +13,6 @@
 	"format": "create-design.layer",
 	"id": "layer:composition",
 	"name": "Composition",
+	"uiColor": "blue",
 	"version": 2
 }

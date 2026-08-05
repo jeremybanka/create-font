@@ -39,6 +39,7 @@ describe("PDF preview tile", () => {
 			reorderLayer: vi.fn(),
 			moveHierarchyNode: vi.fn(),
 			setLayerLocked: vi.fn(),
+			setLayerUiColor: vi.fn(),
 			setLayerVisibility: vi.fn(),
 			selectLayer: vi.fn(),
 			selectHierarchyGroup: vi.fn(),

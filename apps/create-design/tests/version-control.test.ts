@@ -190,17 +190,17 @@ afterEach(async () => {
 })
 
 describe(`create-design version control`, () => {
-	it(`labels an isolated layer metadata change by stable layer identity`, async () => {
+	it(`labels an isolated layer UI color change by stable layer identity`, async () => {
 		const { source, versionControl } = await fixture()
 		const path = `scene/layers/artwork.json`
 		const layer = await source.readUnit(path)
 		await source.writeUnit({
 			expectedRevision: layer.revision,
-			idempotencyKey: `rename-layer`,
+			idempotencyKey: `recolor-layer`,
 			path,
 			value: {
 				...(layer.value as Record<string, JsonValue>),
-				name: `Presentation`,
+				uiColor: `purple`,
 			},
 		})
 
@@ -210,7 +210,7 @@ describe(`create-design version control`, () => {
 			expect.objectContaining({
 				id: `layer:artwork`,
 				kind: `structure`,
-				label: `Layer · Presentation`,
+				label: `Layer · Artwork`,
 				paths: [path],
 			}),
 		])

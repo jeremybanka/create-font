@@ -101,6 +101,7 @@ const fixture = (): DesignDocument => ({
 		{
 			id: "layer:artwork",
 			name: "Artwork",
+			uiColor: "red",
 			children: [
 				{ kind: "object", id: "object:coral" },
 				{ kind: "object", id: "object:ink" },
@@ -445,18 +446,21 @@ describe("create-design directory source", () => {
 				{
 					id: "layer:background",
 					name: "Background",
+					uiColor: "red",
 					hidden: true,
 					children: [{ kind: "object", id: "object:coral" }],
 				},
 				{
 					id: "layer:empty",
 					name: "Empty notes",
+					uiColor: "blue",
 					locked: true,
 					children: [],
 				},
 				{
 					id: "layer:foreground",
 					name: "Foreground",
+					uiColor: "yellow",
 					children: [{ kind: "group", id: "group:top" }],
 				},
 			],
@@ -548,6 +552,28 @@ describe("create-design directory source", () => {
 		expect(reorderedFiles[designSourcePaths.objectIndex]).toEqual(
 			originalFiles[designSourcePaths.objectIndex],
 		)
+	})
+
+	it("persists a layer UI color in only that layer source unit", () => {
+		const original = fixture()
+		const originalFiles = split(original)
+		const recolored = {
+			...original,
+			layers: original.layers.map((layer) => ({
+				...layer,
+				uiColor: "magenta" as const,
+			})),
+		}
+		const recoloredFiles = split(recolored)
+		expect(changedPaths(originalFiles, recoloredFiles)).toEqual([
+			defaultLayerUnitPath("layer:artwork"),
+		])
+		expect(recoloredFiles[defaultLayerUnitPath("layer:artwork")]).toMatchObject(
+			{
+				uiColor: "magenta",
+			},
+		)
+		expect(assemble(recoloredFiles)).toEqual(recolored)
 	})
 
 	it("owns ordered global artboards independently from object units", () => {

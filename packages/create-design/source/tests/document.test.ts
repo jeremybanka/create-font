@@ -123,6 +123,7 @@ describe("editable text source", () => {
 				{
 					id: "layer:artwork",
 					name: "Artwork",
+					uiColor: "red" as const,
 					children: [{ kind: "object" as const, id: "object:text" }],
 				},
 			],
@@ -299,6 +300,7 @@ describe("complete design document codec", () => {
 					{
 						id: "layer:artwork",
 						name: "Artwork",
+						uiColor: "red",
 						children: [{ kind: "object", id: "object:mark" }],
 					},
 				],
@@ -344,6 +346,7 @@ describe("complete design document codec", () => {
 					{
 						id: "layer:artwork",
 						name: "Artwork",
+						uiColor: "red",
 						children: previous.scene,
 					},
 				],
@@ -392,6 +395,7 @@ describe("complete design document codec", () => {
 					{
 						id: "layer:artwork",
 						name: "Artwork",
+						uiColor: "red",
 						children: canonical.objects.map(({ id }) => ({
 							kind: "object",
 							id,
