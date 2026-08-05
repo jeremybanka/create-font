@@ -35,7 +35,7 @@
 		"@create-design/model": "workspace:*",
 		"@create-design/source": "workspace:*",
 		"@create-design/text": "workspace:*",
-		"mondrian.pdf": "0.0.0"
+		"mondrian.pdf": "0.1.0"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.5",
