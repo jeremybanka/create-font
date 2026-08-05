@@ -238,7 +238,7 @@ describe("Design Layers tree", () => {
 		expect(active?.textContent).toContain("Inner group")
 	})
 
-	it("marks clipping contours as attached, selectable layer-tree roles", () => {
+	it("marks clipping contours as selectable, draggable layer-tree members", () => {
 		const document = fixture()
 		const masked = {
 			...document,
@@ -257,9 +257,8 @@ describe("Design Layers tree", () => {
 		if (row === null) throw new Error("Clipping contour row did not render.")
 
 		expect(row.getAttribute("data-clipping-path")).toBe("true")
-		expect(row.hasAttribute("draggable")).toBe(false)
+		expect(row.hasAttribute("draggable")).toBe(true)
 		expect(row.getAttribute("aria-label")).toContain("Clipping path")
-		expect(row.getAttribute("title")).toContain("move the clipping mask group")
 		expect(row.querySelector("[data-clipping-path-badge]")?.textContent).toBe(
 			"Clip",
 		)

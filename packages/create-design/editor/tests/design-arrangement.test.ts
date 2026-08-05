@@ -11,7 +11,12 @@ import {
 	createDesignTextObject,
 	scaleDesignTextObject,
 } from "../src/design-text.ts"
-import { scaleObject, visibleObjectBounds } from "@create-design/model"
+import { makeDesignClippingMask } from "../src/design-hierarchy.ts"
+import {
+	scaleObject,
+	translateObject,
+	visibleObjectBounds,
+} from "@create-design/model"
 
 const textObject = (mode: "point" | "area") => {
 	const document = createInitialDocument()
@@ -104,6 +109,37 @@ describe("design arrangement", () => {
 				width: Number.NaN,
 			}),
 		).toBeNull()
+	})
+
+	it("scales a clipping mask from its clipping contour bounds", () => {
+		const initial = createInitialDocument()
+		const content = translateObject(initial.objects[0]!, 500, 300)
+		const clippingPath = initial.objects[1]!
+		const source = { ...initial, objects: [content, clippingPath] }
+		const masked = makeDesignClippingMask(
+			source,
+			source.objects.map(({ id }) => id),
+			() => "numeric-transform",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const before = visibleObjectBounds(clippingPath)!
+		const result = transformDesignSelection(masked.document, masked.selection, {
+			origin: "top-left",
+			width: 2 * (before.maxX - before.minX),
+		})
+		const transformedClip = result?.objects.find(
+			({ id }) => id === clippingPath.id,
+		)
+		const after =
+			transformedClip === undefined
+				? null
+				: visibleObjectBounds(transformedClip)
+
+		expect(after?.minX).toBeCloseTo(before.minX)
+		expect(after?.minY).toBeCloseTo(before.minY)
+		expect(after === null ? null : after.maxX - after.minX).toBeCloseTo(
+			2 * (before.maxX - before.minX),
+		)
 	})
 
 	it.each(["point", "area"] as const)(

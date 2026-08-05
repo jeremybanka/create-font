@@ -138,6 +138,7 @@ import {
 	appendDesignHierarchyObjects,
 	defaultDesignHierarchyScope,
 	designGroupSelectionUnit,
+	designHierarchySelectionBounds,
 	designLayerIdForObject,
 	designParentGroupId,
 	designSelectInteraction,
@@ -174,7 +175,6 @@ import {
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
 	selectableObjectIds,
-	selectionBounds as combinedSelectionBounds,
 	toggleDirectSelection,
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
@@ -194,6 +194,7 @@ import {
 	rotateObject,
 	scaleObject,
 	translateObject,
+	type Bounds,
 	type DesignEffectiveHierarchyEntry,
 } from "@create-design/model"
 import {
@@ -422,6 +423,7 @@ function resolveDesignGestureObject(
 	preview: VectorGesturePreview | null,
 	worldScale: number,
 	snapSettings: DesignSnapSettings,
+	boundsForObject: (object: DesignObject) => Bounds | null,
 ): DesignGestureObjectPreview | null {
 	if (gesture.kind === "move" && preview?.kind === "select-move") {
 		const rawObjects = gesture.originals.map((object) =>
@@ -430,7 +432,17 @@ function resolveDesignGestureObject(
 		const snapped =
 			rawObjects.length === 1
 				? snapDesignObject(rawObjects[0]!, document, worldScale, snapSettings)
-				: snapDesignObjects(rawObjects, document, worldScale, snapSettings)
+				: snapDesignObjects(
+						rawObjects,
+						document,
+						worldScale,
+						snapSettings,
+						designHierarchySelectionBounds(
+							document,
+							rawObjects,
+							boundsForObject,
+						),
+					)
 		const movedObjects =
 			"object" in snapped ? [snapped.object] : snapped.objects
 		const copyObjects = gesture.copy?.originals
@@ -4121,7 +4133,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		areaTextConversionDisabledReason,
 		selectionBounds:
 			selectedBlend === null
-				? combinedSelectionBounds(selectedObjects, interactionBoundsForObject)
+				? designHierarchySelectionBounds(
+						document,
+						selectedObjects,
+						interactionBoundsForObject,
+					)
 				: designBlendBounds(document, selectedBlend),
 		selectedObjectBounds:
 			selectedObject === null
@@ -4862,6 +4878,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					transition.preview,
 					worldScale,
 					snapSettings,
+					interactionBoundsForObject,
 				)
 				if (resolved !== null) {
 					previewObjectsRef.current = resolved.objects
@@ -5935,6 +5952,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			transition.preview,
 			worldScale,
 			snapSettings,
+			interactionBoundsForObject,
 		)
 		if (resolved === null) return
 		previewObjectsRef.current = resolved.objects
@@ -6194,6 +6212,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						transition.intent,
 						worldScale,
 						snapSettings,
+						interactionBoundsForObject,
 					)
 		const committedPreviews = finalResolved?.objects ?? []
 		previewObjectsRef.current = []
@@ -6306,7 +6325,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setStatus(selectionTransformDisabledReason)
 			return
 		}
-		const bounds = combinedSelectionBounds(
+		const bounds = designHierarchySelectionBounds(
+			document,
 			selectedObjects,
 			interactionBoundsForObject,
 		)
@@ -6386,7 +6406,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			: selectedBlend !== null
 				? designBlendBounds(canvasDocument, selectedBlend)
 				: selectedObjects.length > 0
-					? combinedSelectionBounds(
+					? designHierarchySelectionBounds(
+							canvasDocument,
 							copyingGesture?.copy === null || copyingGesture === null
 								? selectedObjects.map(
 										(object) => previewById.get(object.id) ?? object,
@@ -7049,7 +7070,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												strokeWidth={1 / worldScale}
 												selected
 												selectionStroke={layerUiColorForObject(object.id)}
-												listening={false}
+												listening={!entry.locked}
+												onPointerDown={(event) =>
+													startObjectGesture(event, object)
+												}
+												onDoubleClick={(event) =>
+													enterObjectGroup(event, object)
+												}
 											/>,
 										]
 									})}

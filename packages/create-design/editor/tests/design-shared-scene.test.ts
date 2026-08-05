@@ -22,7 +22,11 @@ import {
 	designTextBrowserFontFamily,
 	designTextCssFontFamily,
 } from "../src/design-text.ts"
-import { objectBounds } from "@create-design/model"
+import {
+	objectBounds,
+	translateObject,
+	visibleObjectBounds,
+} from "@create-design/model"
 import type {
 	PathfinderWorkerClient,
 	PathfinderWorkerOutcome,
@@ -457,7 +461,7 @@ describe("create-design shared vector scene", () => {
 		expect(aggregate?.stroke()).toBe(readDesignCanvasTheme().marquee)
 	})
 
-	it("outlines a selected clipping contour without painting it as artwork", () => {
+	it("outlines and drags a selected clipping contour without painting it", async () => {
 		const initial = createInitialDocument()
 		const masked = makeDesignClippingMask(
 			initial,
@@ -482,10 +486,76 @@ describe("create-design shared vector scene", () => {
 		const contours = stage.find(".design-clipping-selection")
 		expect(contours).toHaveLength(1)
 		expect(contours[0]!.fillEnabled()).toBe(false)
+		expect(contours[0]!.listening()).toBe(true)
 		expect(contours[0]!.stroke()).toBe(
 			designLayerUiColorCss(initial.layers[0]!.uiColor),
 		)
 		expect(stage.find(".design-object")).toHaveLength(1)
+		let pointer = { x: 300, y: 240 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const before = contours[0]!.getClientRect()
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			next: { x: number; y: number },
+		) => {
+			pointer = next
+			contours[0]!.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: next.x,
+						clientY: next.y,
+						isPrimary: true,
+						pointerId: 91,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", pointer)
+			fire("pointermove", { x: 337, y: 269 })
+			fire("pointerup", { x: 337, y: 269 })
+			await Promise.resolve()
+		})
+		const after = stage.findOne(".design-clipping-selection").getClientRect()
+		expect({ x: after.x, y: after.y }).not.toEqual({ x: before.x, y: before.y })
+	})
+
+	it("uses clipping contour bounds for a clipping mask transform box", () => {
+		const initial = createInitialDocument()
+		const content = translateObject(initial.objects[0]!, 500, 300)
+		const clippingPath = initial.objects[1]!
+		const source = { ...initial, objects: [content, clippingPath] }
+		const masked = makeDesignClippingMask(
+			source,
+			source.objects.map(({ id }) => id),
+			() => "transform-bounds",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const stage = mountDesign({ initialDocument: masked.document })
+		const groupRow = document.querySelector<HTMLElement>(
+			'design-layers-tile [data-tree-key="group:group:transform-bounds"]',
+		)
+		const clippingBounds = visibleObjectBounds(clippingPath)
+		if (groupRow === null || clippingBounds === null)
+			throw new Error("Clipping-mask transform fixture did not render.")
+
+		act(() => groupRow.click())
+		const aggregate = stage
+			.find(".transform-selection-box")
+			.find((box: { opacity(): number }) => box.opacity() === 0)
+		expect(aggregate).toBeDefined()
+		expect({
+			minX: aggregate!.x(),
+			minY: aggregate!.y(),
+			maxX: aggregate!.x() + aggregate!.width(),
+			maxY: aggregate!.y() + aggregate!.height(),
+		}).toEqual(clippingBounds)
 	})
 
 	it("cancels an in-flight object gesture when its layer becomes locked", async () => {

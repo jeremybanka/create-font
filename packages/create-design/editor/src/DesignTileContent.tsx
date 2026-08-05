@@ -619,12 +619,7 @@ function DesignLayersTile({
 						row.key === `group:${context.selectedGroupId}`,
 				)
 	const selectedNode =
-		selectedHierarchyRow === undefined ||
-		(selectedHierarchyRow.kind === "object" &&
-			(effective.byObjectId.get(selectedHierarchyRow.object!.id)
-				?.clippingForGroupId ?? null) !== null)
-			? null
-			: nodeForRow(selectedHierarchyRow)
+		selectedHierarchyRow === undefined ? null : nodeForRow(selectedHierarchyRow)
 	const selectedParent =
 		selectedHierarchyRow?.parentKey === null ||
 		selectedHierarchyRow?.parentKey === undefined
@@ -754,12 +749,7 @@ function DesignLayersTile({
 							data-layer-kind={row.kind}
 							data-tree-key={row.key}
 							data-clipping-path={clippingPath ? "true" : undefined}
-							draggable={row.kind !== "layer" && !clippingPath}
-							title={
-								clippingPath
-									? "Clipping contour; move the clipping mask group to keep it attached"
-									: undefined
-							}
+							draggable={row.kind !== "layer"}
 							data-dragging={draggedKey === row.key ? "true" : undefined}
 							data-drop-target={dropKey === row.key ? "true" : undefined}
 							data-active-scope={
@@ -776,7 +766,7 @@ function DesignLayersTile({
 							style={{ "--tree-depth": row.depth } as React.CSSProperties}
 							onFocus={() => setFocusedKey(row.key)}
 							onDragStart={(event: React.DragEvent<HTMLElement>) => {
-								if (row.kind === "layer" || clippingPath) return
+								if (row.kind === "layer") return
 								setDraggedKey(row.key)
 								event.dataTransfer.effectAllowed = "move"
 								event.dataTransfer.setData("text/plain", row.key)

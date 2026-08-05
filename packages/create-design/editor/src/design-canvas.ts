@@ -448,12 +448,12 @@ export function snapDesignObjects(
 	settingsOrThreshold:
 		| DesignSnapSettings
 		| number = DEFAULT_DESIGN_SNAP_SETTINGS,
+	selectionBounds: Bounds | null = combinedVisibleBounds(objects),
 ): DesignGroupSnapResult {
-	const bounds = combinedVisibleBounds(objects)
-	if (bounds === null || !(worldScale > 0))
+	if (selectionBounds === null || !(worldScale > 0))
 		return { objects, x: null, y: null, matches: [] }
 	const result = snapBoundsTranslation(
-		bounds,
+		selectionBounds,
 		sceneInput,
 		worldScale,
 		settingsOrThreshold,

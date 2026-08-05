@@ -4,6 +4,7 @@ import type {
 	DesignObject,
 	DesignSceneChild,
 } from "./types.ts"
+import { visibleObjectBounds, type Bounds } from "@create-design/model"
 
 export type DesignStackCommand = "forward" | "backward" | "front" | "back"
 
@@ -46,6 +47,80 @@ export type DesignHierarchyMoveResult = DesignHierarchyResult &
 		layerId: string
 		parent: DesignHierarchyParent
 	}>
+
+function unionBounds(left: Bounds | null, right: Bounds | null): Bounds | null {
+	if (left === null) return right
+	if (right === null) return left
+	return {
+		minX: Math.min(left.minX, right.minX),
+		minY: Math.min(left.minY, right.minY),
+		maxX: Math.max(left.maxX, right.maxX),
+		maxY: Math.max(left.maxY, right.maxY),
+	}
+}
+
+/**
+ * Resolves selected hierarchy geometry while treating a complete clipping mask
+ * as the bounds of its clipping contour instead of its overflowing children.
+ */
+export function designHierarchySelectionBounds(
+	document: Pick<DesignDocument, "groups" | "layers">,
+	objects: readonly DesignObject[],
+	boundsForObject: (
+		object: DesignObject,
+	) => Bounds | null = visibleObjectBounds,
+): Bounds | null {
+	const selected = new Map(objects.map((object) => [object.id, object]))
+	const visited = new Set<string>()
+	const groups = new Map(document.groups.map((group) => [group.id, group]))
+	const childBounds = (
+		child: DesignSceneChild,
+	): Readonly<{ bounds: Bounds | null; complete: boolean }> => {
+		if (child.kind === "object") {
+			const object = selected.get(child.id)
+			if (object !== undefined) visited.add(object.id)
+			return {
+				bounds:
+					object === undefined || object.hidden
+						? null
+						: boundsForObject(object),
+				complete: object !== undefined,
+			}
+		}
+		const group = groups.get(child.id)
+		if (group === undefined) return { bounds: null, complete: false }
+		const children = group.children.map(childBounds)
+		const complete = children.every((result) => result.complete)
+		if (complete && group.clippingPathId !== undefined) {
+			const clippingPath = selected.get(group.clippingPathId)
+			return {
+				bounds:
+					clippingPath === undefined ? null : boundsForObject(clippingPath),
+				complete,
+			}
+		}
+		return {
+			bounds: children.reduce<Bounds | null>(
+				(result, child) => unionBounds(result, child.bounds),
+				null,
+			),
+			complete,
+		}
+	}
+	let result = document.layers.reduce<Bounds | null>(
+		(result, layer) =>
+			layer.children.reduce<Bounds | null>(
+				(layerBounds, child) =>
+					unionBounds(layerBounds, childBounds(child).bounds),
+				result,
+			),
+		null,
+	)
+	for (const object of objects)
+		if (!visited.has(object.id) && !object.hidden)
+			result = unionBounds(result, boundsForObject(object))
+	return result
+}
 
 function childContainsGroup(
 	child: DesignSceneChild,
@@ -655,6 +730,16 @@ export function moveDesignHierarchyNode(
 		currentDestination,
 		destinationChildren,
 	)
+	if (!sameParent && node.kind === "object" && sourceParent.kind === "group")
+		replaced = {
+			...replaced,
+			groups: replaced.groups.map((group) => {
+				if (group.id !== sourceParent.id || group.clippingPathId !== node.id)
+					return group
+				const { clippingPathId: _clippingPathId, ...released } = group
+				return released
+			}),
+		}
 	const nextDocument = installHierarchy(
 		document,
 		replaced.layers,

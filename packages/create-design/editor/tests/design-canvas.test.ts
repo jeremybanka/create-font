@@ -15,6 +15,7 @@ import {
 	snapDesignObjects,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
+import { designHierarchySelectionBounds } from "../src/design-hierarchy.ts"
 import type { DesignObject, DesignStroke } from "../src/types.ts"
 
 const rectangle = (
@@ -455,5 +456,43 @@ describe("design canvas adapter", () => {
 		expect(result.x).toBe(63)
 		expect(result.objects[0]?.transform.e).toBe(3)
 		expect(result.objects[1]?.transform.e).toBe(3)
+	})
+
+	it("snaps a clipping-mask group from its clipping contour bounds", () => {
+		const initial = createInitialDocument()
+		const content = rectangle("content", 0, 0, 100, 100)
+		const clip = rectangle("clip", 40, 40, 60, 60)
+		const masked = {
+			...initial,
+			objects: [content, clip],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:clip" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:clip",
+					name: "Clip",
+					children: [
+						{ kind: "object" as const, id: content.id },
+						{ kind: "object" as const, id: clip.id },
+					],
+					clippingPathId: clip.id,
+				},
+			],
+			guides: [{ id: "guide:right", axis: "x" as const, value: 63 }],
+		}
+		const result = snapDesignObjects(
+			masked.objects,
+			masked,
+			1,
+			DEFAULT_DESIGN_SNAP_SETTINGS,
+			designHierarchySelectionBounds(masked, masked.objects),
+		)
+
+		expect(result.x).toBe(63)
+		expect(result.objects.map((object) => object.transform.e)).toEqual([3, 3])
 	})
 })
