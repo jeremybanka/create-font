@@ -39,7 +39,7 @@ geometric poster served by create-design during development. Its headless PDF
 export uses the same projection and preflight as the browser:
 
 ```sh
-create-design export designs/workbench-poster \
+design export designs/workbench-poster \
   --output artifacts/workbench-poster.pdf
 ```
 
@@ -54,8 +54,9 @@ Applications live under `apps/`. Namespaced libraries use
 directly. Unscoped tooling and framework-integration packages remain directly
 under `packages/`.
 
-- [`create-design`](apps/create-design/README.md) provides the design CLI,
-  source workspace server, and application composition.
+- [`create-design`](apps/create-design/README.md) provides the `create-design`
+  initializer, the repository-local `design` CLI, source workspace server, and
+  application composition.
 - [`@create-design/editor`](packages/create-design/editor/README.md) owns the
   create-design browser editor and document interaction model.
 - [`@create-design/model`](packages/create-design/model/README.md) owns headless
@@ -157,6 +158,9 @@ mise install
 pnpm install
 pnpm dev
 ```
+
+The root workspace also exposes the production-shaped CLI commands through
+`pnpm create-font`, `pnpm font`, `pnpm create-design`, and `pnpm design`.
 
 The development command enables the packages' `development` export condition
 and starts four consecutive servers. The default base port is 16384—the maximum
