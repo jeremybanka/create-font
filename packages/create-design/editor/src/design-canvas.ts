@@ -402,11 +402,12 @@ export function snapDesignObject(
 	settingsOrThreshold:
 		| DesignSnapSettings
 		| number = DEFAULT_DESIGN_SNAP_SETTINGS,
+	interactionBounds: Bounds | null = visibleObjectBounds(object),
 ): DesignSnapResult {
-	const bounds = visibleObjectBounds(object)
-	if (bounds === null || !(worldScale > 0)) return { object, x: null, y: null }
+	if (interactionBounds === null || !(worldScale > 0))
+		return { object, x: null, y: null }
 	const result = snapBoundsTranslation(
-		bounds,
+		interactionBounds,
 		sceneInput,
 		worldScale,
 		settingsOrThreshold,

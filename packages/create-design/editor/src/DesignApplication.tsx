@@ -188,6 +188,7 @@ import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
+	objectBounds,
 	projectDesignObjectContours,
 	projectDesignEffectiveHierarchy,
 	projectDesignOutput,
@@ -431,7 +432,13 @@ function resolveDesignGestureObject(
 		)
 		const snapped =
 			rawObjects.length === 1
-				? snapDesignObject(rawObjects[0]!, document, worldScale, snapSettings)
+				? snapDesignObject(
+						rawObjects[0]!,
+						document,
+						worldScale,
+						snapSettings,
+						boundsForObject(rawObjects[0]!),
+					)
 				: snapDesignObjects(
 						rawObjects,
 						document,
@@ -1711,7 +1718,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[selectedTextObject, textFontRevision, textService],
 	)
 	const interactionBoundsForObject = (object: DesignObject) =>
-		designObjectInteractionBounds(object, textService)
+		(effectiveHierarchy.byObjectId.get(object.id)?.clippingForGroupId ??
+			null) === null
+			? designObjectInteractionBounds(object, textService)
+			: objectBounds(object)
 	const selectedTextEstimate =
 		selectedTextObject === null
 			? null

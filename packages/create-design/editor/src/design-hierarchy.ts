@@ -4,7 +4,11 @@ import type {
 	DesignObject,
 	DesignSceneChild,
 } from "./types.ts"
-import { visibleObjectBounds, type Bounds } from "@create-design/model"
+import {
+	objectBounds,
+	visibleObjectBounds,
+	type Bounds,
+} from "@create-design/model"
 
 export type DesignStackCommand = "forward" | "backward" | "front" | "back"
 
@@ -94,8 +98,7 @@ export function designHierarchySelectionBounds(
 		if (complete && group.clippingPathId !== undefined) {
 			const clippingPath = selected.get(group.clippingPathId)
 			return {
-				bounds:
-					clippingPath === undefined ? null : boundsForObject(clippingPath),
+				bounds: clippingPath === undefined ? null : objectBounds(clippingPath),
 				complete,
 			}
 		}

@@ -463,9 +463,16 @@ describe("create-design shared vector scene", () => {
 
 	it("outlines and drags a selected clipping contour without painting it", async () => {
 		const initial = createInitialDocument()
+		const source = {
+			...initial,
+			objects: [
+				initial.objects[0]!,
+				{ ...initial.objects[1]!, appearance: {} },
+			],
+		}
 		const masked = makeDesignClippingMask(
-			initial,
-			initial.objects.map(({ id }) => id),
+			source,
+			source.objects.map(({ id }) => id),
 			() => "selection-outline",
 		)
 		if (masked === null) throw new Error("Expected clipping mask to succeed.")
