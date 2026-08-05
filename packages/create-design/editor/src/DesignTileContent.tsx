@@ -522,12 +522,33 @@ function DesignLayersTile({
 		const group = groups.get(id)
 		return group === undefined ? [] : [{ id, name: group.name }]
 	})
+	const activeLayer = context.document.layers.find(
+		({ id }) => id === context.activeLayerId,
+	)!
+	const activeLayerIndex = context.document.layers.findIndex(
+		({ id }) => id === activeLayer.id,
+	)
+	const [activeLayerName, setActiveLayerName] = useState(activeLayer.name)
+	useEffect(
+		() => setActiveLayerName(activeLayer.name),
+		[activeLayer.id, activeLayer.name],
+	)
+	const commitActiveLayerName = (): void => {
+		const trimmed = activeLayerName.trim()
+		if (trimmed.length === 0) setActiveLayerName(activeLayer.name)
+		else context.renameLayer(activeLayer.id, trimmed)
+	}
 	return (
 		<design-layers-tile>
 			<strong>
 				{context.document.objects.length} objects ·{" "}
 				{context.document.blends?.length ?? 0} live blends
 			</strong>
+			<layer-toolbar role="toolbar" aria-label="Layer authoring">
+				<button type="button" onClick={context.createLayer}>
+					New layer
+				</button>
+			</layer-toolbar>
 			{context.activeGroupScope.length === 0 ? null : (
 				<layer-breadcrumb aria-label="Active group editing scope">
 					<button type="button" onClick={() => context.setHierarchyScope([])}>
@@ -571,6 +592,10 @@ function DesignLayersTile({
 											row.object?.appearance.stroke?.swatchId),
 								)
 					const label = stateLabel(row)
+					const rowLayer =
+						row.kind === "layer"
+							? context.document.layers.find(({ id }) => id === row.layerId)
+							: undefined
 					return (
 						<layer-tree-row
 							key={row.key}
@@ -673,11 +698,97 @@ function DesignLayersTile({
 								>
 									Edit
 								</button>
+							) : rowLayer !== undefined ? (
+								<layer-row-controls aria-label={`${rowLayer.name} state`}>
+									<button
+										type="button"
+										data-layer-visibility
+										aria-label={`${rowLayer.hidden ? "Show" : "Hide"} ${rowLayer.name}`}
+										aria-pressed={!rowLayer.hidden}
+										title={`${rowLayer.hidden ? "Show" : "Hide"} ${rowLayer.name}`}
+										onClick={(event) => {
+											event.stopPropagation()
+											context.setLayerVisibility(
+												rowLayer.id,
+												Boolean(rowLayer.hidden),
+											)
+										}}
+										onKeyDown={(event) => event.stopPropagation()}
+									>
+										{rowLayer.hidden ? <svg.EyeClosed /> : <svg.EyeOpen />}
+									</button>
+									<button
+										type="button"
+										data-layer-lock
+										aria-label={`${rowLayer.locked ? "Unlock" : "Lock"} ${rowLayer.name}`}
+										aria-pressed={Boolean(rowLayer.locked)}
+										title={`${rowLayer.locked ? "Unlock" : "Lock"} ${rowLayer.name}`}
+										onClick={(event) => {
+											event.stopPropagation()
+											context.setLayerLocked(rowLayer.id, !rowLayer.locked)
+										}}
+										onKeyDown={(event) => event.stopPropagation()}
+									>
+										{rowLayer.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+									</button>
+								</layer-row-controls>
 							) : null}
 						</layer-tree-row>
 					)
 				})}
 			</layer-tree>
+			<layer-management aria-label={`Manage ${activeLayer.name}`}>
+				<label>
+					<span>Active layer name</span>
+					<input
+						value={activeLayerName}
+						onInput={(event) => setActiveLayerName(event.currentTarget.value)}
+						onBlur={commitActiveLayerName}
+						onKeyDown={(event) => {
+							if (event.key !== "Enter") return
+							commitActiveLayerName()
+							event.currentTarget.blur()
+						}}
+					/>
+				</label>
+				<layer-actions
+					role="toolbar"
+					aria-label={`${activeLayer.name} actions`}
+				>
+					<button
+						type="button"
+						onClick={() => context.duplicateLayer(activeLayer.id)}
+					>
+						Duplicate
+					</button>
+					<button
+						type="button"
+						disabled={activeLayerIndex === context.document.layers.length - 1}
+						onClick={() => context.reorderLayer(activeLayer.id, "up")}
+					>
+						Move up
+					</button>
+					<button
+						type="button"
+						disabled={activeLayerIndex === 0}
+						onClick={() => context.reorderLayer(activeLayer.id, "down")}
+					>
+						Move down
+					</button>
+					<button
+						type="button"
+						disabled={context.document.layers.length === 1}
+						title={
+							context.document.layers.length === 1
+								? "A document must keep at least one layer"
+								: `Delete ${activeLayer.name} and its contents`
+						}
+						onClick={() => context.deleteLayer(activeLayer.id)}
+					>
+						Delete
+					</button>
+				</layer-actions>
+			</layer-management>
 			{(context.document.blends?.length ?? 0) === 0 ? null : (
 				<design-live-blends aria-label="Live blends">
 					<strong>Live blends</strong>

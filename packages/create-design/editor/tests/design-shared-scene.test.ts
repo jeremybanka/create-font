@@ -411,6 +411,97 @@ describe("create-design shared vector scene", () => {
 		expect(lockedDocument.objects[0]?.locked).toBeUndefined()
 	})
 
+	it("authors layers through visible controls and restores deletion atomically", async () => {
+		mountDesign()
+		const layerRows = () => [
+			...document.querySelectorAll<HTMLElement>(
+				'design-layers-tile [data-layer-kind="layer"]',
+			),
+		]
+		const control = (label: string): HTMLButtonElement => {
+			const match = [
+				...document.querySelectorAll<HTMLButtonElement>(
+					"design-layers-tile button",
+				),
+			].find((button) => button.textContent?.trim() === label)
+			if (match === undefined)
+				throw new Error(`${label} control was not found.`)
+			return match
+		}
+
+		expect(control("Delete").disabled).toBe(true)
+		await act(async () => {
+			control("New layer").click()
+			await Promise.resolve()
+		})
+		expect(layerRows()).toHaveLength(2)
+		expect(
+			document.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.textContent,
+		).toContain("Layer 2")
+
+		const name = document.querySelector<HTMLInputElement>(
+			"layer-management input",
+		)
+		if (name === null) throw new Error("Layer name control was not found.")
+		act(() => {
+			name.value = "Studio"
+			name.dispatchEvent(new Event("input", { bubbles: true }))
+		})
+		await act(async () => {
+			name.dispatchEvent(new FocusEvent("focusout", { bubbles: true }))
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.textContent,
+		).toContain("Studio")
+
+		act(() =>
+			document
+				.querySelector<HTMLButtonElement>('button[aria-label="Hide Studio"]')
+				?.click(),
+		)
+		expect(
+			document.querySelector('button[aria-label="Show Studio"]'),
+		).not.toBeNull()
+		act(() =>
+			document
+				.querySelector<HTMLButtonElement>('button[aria-label="Lock Studio"]')
+				?.click(),
+		)
+		expect(
+			document.querySelector('button[aria-label="Unlock Studio"]'),
+		).not.toBeNull()
+
+		await act(async () => {
+			control("Duplicate").click()
+			await Promise.resolve()
+		})
+		expect(layerRows()).toHaveLength(3)
+		expect(
+			document.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.textContent,
+		).toContain("Studio copy")
+		await act(async () => {
+			control("Delete").click()
+			await Promise.resolve()
+		})
+		expect(layerRows()).toHaveLength(2)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(layerRows()).toHaveLength(3)
+		expect(
+			document.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.textContent,
+		).toContain("Studio copy")
+	})
+
 	it("creates in the selected object's layer and restores scoped selection through history", async () => {
 		const initial = createInitialDocument()
 		const backObject = initial.objects[0]!

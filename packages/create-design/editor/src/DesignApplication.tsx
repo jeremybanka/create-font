@@ -149,6 +149,15 @@ import {
 	type DesignHierarchyScope,
 	type DesignStackCommand,
 } from "./design-hierarchy.ts"
+import {
+	createDesignLayer,
+	deleteDesignLayer,
+	duplicateDesignLayer,
+	renameDesignLayer,
+	reorderDesignLayer,
+	setDesignLayerLocked,
+	setDesignLayerVisibility,
+} from "./design-layer-operations.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import {
 	directSelectionDescription,
@@ -3458,6 +3467,123 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		activeLayerId,
 		activeGroupScope: groupScope,
 		selectedGroupId: selectedGroup?.id ?? null,
+		createLayer: () => {
+			const layerId = `layer:${nextId()}`
+			const name = `Layer ${document.layers.length + 1}`
+			commit(createDesignLayer(document, { id: layerId, name }))
+			setSelectedLayerId(layerId)
+			setGroupScope([])
+			setSelection([])
+			setDirectSelection([])
+			setSelectedBlendId(null)
+			setStatus(`${name} created and made active.`)
+		},
+		deleteLayer: (layerId) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined) return
+			try {
+				const deleted = deleteDesignLayer(document, layerId)
+				commit(deleted.document)
+				setSelection((current) =>
+					current.filter((id) => !deleted.removedObjectIds.includes(id)),
+				)
+				setDirectSelection((current) =>
+					current.filter(
+						(target) => !deleted.removedObjectIds.includes(target.objectId),
+					),
+				)
+				setSelectedBlendId(null)
+				if (layerId === activeLayerId) {
+					setSelectedLayerId(deleted.fallbackLayerId)
+					setGroupScope([])
+				}
+				setStatus(
+					`${layer.name} and ${deleted.removedObjectIds.length} descendant object${deleted.removedObjectIds.length === 1 ? "" : "s"} deleted.`,
+				)
+			} catch (error) {
+				setStatus(error instanceof Error ? error.message : String(error))
+			}
+		},
+		duplicateLayer: (layerId) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined) return
+			const duplicated = duplicateDesignLayer(
+				document,
+				layerId,
+				(kind) => `${kind}:${nextId()}`,
+			)
+			commit(duplicated.document)
+			setSelectedLayerId(duplicated.layerId)
+			setGroupScope([])
+			setSelection([])
+			setDirectSelection([])
+			setSelectedBlendId(null)
+			setStatus(`${layer.name} duplicated as the active top layer.`)
+		},
+		renameLayer: (layerId, name) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined || layer.name === name.trim()) return
+			try {
+				const renamed = renameDesignLayer(document, layerId, name)
+				commit(renamed)
+				setStatus(`${layer.name} renamed to ${name.trim()}.`)
+			} catch (error) {
+				setStatus(error instanceof Error ? error.message : String(error))
+			}
+		},
+		reorderLayer: (layerId, direction) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined) return
+			const reordered = reorderDesignLayer(document, layerId, direction)
+			if (reordered === document) {
+				setStatus(
+					`${layer.name} is already at the ${direction === "up" ? "top" : "bottom"}.`,
+				)
+				return
+			}
+			commit(reordered)
+			setStatus(`${layer.name} moved ${direction}.`)
+		},
+		setLayerLocked: (layerId, locked) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined || Boolean(layer.locked) === locked) return
+			commit(setDesignLayerLocked(document, layerId, locked))
+			if (locked) {
+				setSelection((current) =>
+					current.filter(
+						(id) => designLayerIdForObject(document, id) !== layerId,
+					),
+				)
+				setDirectSelection((current) =>
+					current.filter(
+						(target) =>
+							designLayerIdForObject(document, target.objectId) !== layerId,
+					),
+				)
+				if (layerId === activeLayerId) setGroupScope([])
+			}
+			setStatus(`${layer.name} ${locked ? "locked" : "unlocked"}.`)
+		},
+		setLayerVisibility: (layerId, visible) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined || !layer.hidden === visible) return
+			commit(setDesignLayerVisibility(document, layerId, visible))
+			if (!visible) {
+				setSelection((current) =>
+					current.filter(
+						(id) => designLayerIdForObject(document, id) !== layerId,
+					),
+				)
+				setDirectSelection((current) =>
+					current.filter(
+						(target) =>
+							designLayerIdForObject(document, target.objectId) !== layerId,
+					),
+				)
+				if (layerId === activeLayerId) setGroupScope([])
+			}
+			setStatus(`${layer.name} ${visible ? "shown" : "hidden"}.`)
+		},
 		selectLayer: (layerId) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
 			if (layer === undefined) return
