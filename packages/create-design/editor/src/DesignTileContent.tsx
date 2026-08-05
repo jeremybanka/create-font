@@ -465,7 +465,7 @@ function DesignLayersTile({
 				({ id }) => id === row.layerId,
 			)!
 			return [
-				"Layer",
+				row.layerId === context.activeLayerId ? "Target layer" : "Layer",
 				`${row.descendantCount ?? 0} descendants`,
 				...(layer.hidden ? ["Hidden"] : ["Visible"]),
 				...(layer.locked ? ["Locked"] : ["Unlocked"]),
@@ -739,7 +739,7 @@ function DesignLayersTile({
 			</layer-tree>
 			<layer-management aria-label={`Manage ${activeLayer.name}`}>
 				<label>
-					<span>Active layer name</span>
+					<span>Target layer name</span>
 					<input
 						value={activeLayerName}
 						onInput={(event) => setActiveLayerName(event.currentTarget.value)}

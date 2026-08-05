@@ -8,6 +8,7 @@ import type {
 	DesignDocument,
 	DesignObject,
 	DesignPoint,
+	DesignSceneChild,
 	DesignStroke,
 	DesignSwatch,
 	DesignTransform,
@@ -745,6 +746,7 @@ export function pasteDesignBlendSelection(
 	payload: DesignBlendClipboardPayload,
 	nextId: () => string,
 	offset: Readonly<{ x: number; y: number }> = { x: 12, y: 12 },
+	target?: Readonly<{ layerId: string; groupId: string | null }>,
 ): Readonly<{ document: DesignDocument; blendIds: readonly string[] }> | null {
 	if (
 		payload.format !== "create-design.blends" ||
@@ -873,28 +875,67 @@ export function pasteDesignBlendSelection(
 		]
 	})
 	if (blends.length === 0) return null
-	const targetLayer = document.layers.at(-1)
+	const targetLayer =
+		target === undefined
+			? document.layers.at(-1)
+			: document.layers.find(({ id }) => id === target.layerId)
 	if (targetLayer === undefined) return null
+	const groupById = new Map(document.groups.map((group) => [group.id, group]))
+	const containsGroup = (
+		children: readonly DesignSceneChild[],
+		groupId: string,
+	): boolean =>
+		children.some(
+			(child) =>
+				child.kind === "group" &&
+				(child.id === groupId ||
+					containsGroup(groupById.get(child.id)?.children ?? [], groupId)),
+		)
+	const targetGroupId = target?.groupId ?? null
+	if (
+		targetGroupId !== null &&
+		!containsGroup(targetLayer.children, targetGroupId)
+	)
+		return null
+	const additionsToHierarchy = objects.map(({ id }) => ({
+		kind: "object" as const,
+		id,
+	}))
+	const layers = document.layers.map((layer) =>
+		layer.id === targetLayer.id && targetGroupId === null
+			? { ...layer, children: [...layer.children, ...additionsToHierarchy] }
+			: layer,
+	)
+	const groups = document.groups.map((group) =>
+		group.id === targetGroupId
+			? { ...group, children: [...group.children, ...additionsToHierarchy] }
+			: group,
+	)
+	const nextObjectById = new Map(
+		[...document.objects, ...objects].map((object) => [object.id, object]),
+	)
+	const nextGroupById = new Map(groups.map((group) => [group.id, group]))
+	const orderedObjectIds = (
+		children: readonly DesignSceneChild[],
+	): readonly string[] =>
+		children.flatMap((child) =>
+			child.kind === "object"
+				? [child.id]
+				: orderedObjectIds(nextGroupById.get(child.id)?.children ?? []),
+		)
 	return {
 		document: {
 			...document,
 			swatches: [...document.swatches, ...additions],
-			objects: [...document.objects, ...objects],
+			objects: layers
+				.flatMap((layer) => orderedObjectIds(layer.children))
+				.flatMap((id) => {
+					const object = nextObjectById.get(id)
+					return object === undefined ? [] : [object]
+				}),
 			blends: [...(document.blends ?? []), ...blends],
-			layers: document.layers.map((layer) =>
-				layer.id === targetLayer.id
-					? {
-							...layer,
-							children: [
-								...layer.children,
-								...objects.map(({ id }) => ({
-									kind: "object" as const,
-									id,
-								})),
-							],
-						}
-					: layer,
-			),
+			layers,
+			groups,
 		},
 		blendIds: blends.map(({ id }) => id),
 	}
