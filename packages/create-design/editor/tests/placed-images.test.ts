@@ -37,15 +37,11 @@ describe("placed images and clipping-mask editing", () => {
 			},
 			transform: { a: 1, b: 0, c: 0, d: 1, e: 144, f: 72 },
 		})
-		const linked = updateDesignImageSource(
-			placed.document,
-			placed.object.id,
-			{
-				kind: "linked",
-				id: "asset:product",
-				href: "../images/product.jpg",
-			},
-		)
+		const linked = updateDesignImageSource(placed.document, placed.object.id, {
+			kind: "linked",
+			id: "asset:product",
+			href: "../images/product.jpg",
+		})
 		const object = linked.objects.find(({ id }) => id === placed.object.id)!
 		expect(object.geometry).toMatchObject({
 			intrinsicWidth: 1200,
@@ -60,9 +56,7 @@ describe("placed images and clipping-mask editing", () => {
 		const ids = initial.objects.map(({ id }) => id)
 		const masked = makeDesignClippingMask(initial, ids, () => "mask")
 		expect(masked).not.toBeNull()
-		const group = masked!.document.groups.find(
-			({ id }) => id === "group:mask",
-		)!
+		const group = masked!.document.groups.find(({ id }) => id === "group:mask")!
 		expect(group).toMatchObject({
 			name: "Clipping Mask 1",
 			clippingPathId: initial.objects.at(-1)!.id,
