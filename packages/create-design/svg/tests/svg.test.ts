@@ -119,6 +119,56 @@ describe("SVG export", () => {
 })
 
 describe("SVG import", () => {
+	it("imports into an explicit layer or group scope and derives paint order", () => {
+		const initial = createInitialDocument()
+		const scoped = {
+			...initial,
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "group" as const, id: "group:back" }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					children: [{ kind: "object" as const, id: "object:cyan" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:back",
+					name: "Back group",
+					children: [{ kind: "object" as const, id: "object:coral" }],
+				},
+			],
+		}
+		let scopeId = 0
+		const result = importSvg(
+			`<svg viewBox="0 0 100 100"><rect id="scoped" x="10" y="10" width="20" height="20" fill="#123456"/></svg>`,
+			scoped,
+			{
+				hierarchyScope: {
+					layerId: "layer:back",
+					groupId: "group:back",
+				},
+				nextId: () => `scoped-${scopeId++}`,
+			},
+		)
+		expect(result.ok).toBe(true)
+		const importedId = result.importedObjectIds[0]
+		expect(result.document.groups[0]?.children.at(-1)).toEqual({
+			kind: "object",
+			id: importedId,
+		})
+		expect(result.document.layers[1]).toEqual(scoped.layers[1])
+		expect(result.document.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			importedId,
+			"object:cyan",
+		])
+	})
+
 	it("round trips supported geometry with fresh IDs in one returned document", () => {
 		const initial = createInitialDocument()
 		let id = 0

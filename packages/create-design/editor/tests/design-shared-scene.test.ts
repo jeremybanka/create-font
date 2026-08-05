@@ -219,6 +219,198 @@ function clipboardEvent(
 }
 
 describe("create-design shared vector scene", () => {
+	it("inherits layer visibility and locking across canvas interaction and creation", async () => {
+		const initial = createInitialDocument()
+		const hiddenObject = initial.objects[0]!
+		const lockedObject = initial.objects[1]!
+		const editableObject = {
+			...hiddenObject,
+			id: "object:editable-layer",
+			name: "Editable layer object",
+			transform: { ...hiddenObject.transform, e: 320 },
+		}
+		const layered: DesignDocument = {
+			...initial,
+			objects: [hiddenObject, editableObject, lockedObject],
+			layers: [
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object", id: hiddenObject.id }],
+				},
+				{
+					id: "layer:editable",
+					name: "Editable",
+					children: [{ kind: "object", id: editableObject.id }],
+				},
+				{
+					id: "layer:locked",
+					name: "Locked",
+					locked: true,
+					children: [{ kind: "object", id: lockedObject.id }],
+				},
+			],
+		}
+		const stage = mountDesign({ initialDocument: layered })
+		expect(stage.find(".design-object")).toHaveLength(2)
+		const buttons = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		]
+		const lockedButton = buttons.find((button) =>
+			button.textContent?.includes(lockedObject.name),
+		)
+		const editableButton = buttons.find((button) =>
+			button.textContent?.includes(editableObject.name),
+		)
+		const rectangle = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Rectangle"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (
+			lockedButton === undefined ||
+			editableButton === undefined ||
+			rectangle === null ||
+			canvas === null
+		)
+			throw new Error("Layer policy controls were not found.")
+		act(() => rectangle.click())
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: 320,
+					clientY: 240,
+					pointerId: 88,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					clientX: 420,
+					clientY: 340,
+					pointerId: 88,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-object")).toHaveLength(2)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Unlock Locked layer")
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "a", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(editableButton.getAttribute("aria-pressed")).toBe("true")
+		expect(lockedButton.getAttribute("aria-pressed")).toBe("false")
+		act(() => lockedButton.click())
+		expect(lockedButton.getAttribute("aria-pressed")).toBe("false")
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Unlock Locked layer")
+		expect(hiddenObject.hidden).toBeUndefined()
+		expect(lockedObject.locked).toBeUndefined()
+	})
+
+	it("cancels an in-flight object gesture when its layer becomes locked", async () => {
+		const initial = createInitialDocument()
+		let listener: ((update: DesignExternalSourceUpdate) => void) | undefined
+		const session = sourceSession({
+			initialDocument: initial,
+			subscribeDocument: (next) => {
+				listener = next
+				return () => undefined
+			},
+		})
+		const stage = mountDesign({
+			initialDocument: initial,
+			sourceSession: session,
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const source = initial.objects[0]!
+		const node = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(source.id),
+			)
+		if (node === undefined || listener === undefined)
+			throw new Error("Object gesture or source listener was not available.")
+		let pointer = { x: 260, y: 220 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (type: "pointerdown" | "pointermove" | "pointerup"): void => {
+			node.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						isPrimary: true,
+						pointerId: 89,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			fire("pointerdown")
+			pointer = { x: 360, y: 300 }
+			fire("pointermove")
+			await Promise.resolve()
+		})
+		const lockedDocument = {
+			...initial,
+			layers: initial.layers.map((layer) => ({ ...layer, locked: true })),
+		}
+		await act(async () => {
+			listener?.({
+				ok: true,
+				document: lockedDocument,
+				fonts: [],
+				revision: "source:locked",
+			})
+			await Promise.resolve()
+		})
+		await act(async () => {
+			fire("pointerup")
+			await Promise.resolve()
+		})
+		expect(session.save).not.toHaveBeenCalled()
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Unlock Artwork layer")
+		expect(
+			document.querySelector(
+				'design-layers-tile > button[aria-pressed="true"]',
+			),
+		).toBeNull()
+		expect(lockedDocument.objects[0]?.locked).toBeUndefined()
+	})
+
 	it("creates in the selected object's layer and restores scoped selection through history", async () => {
 		const initial = createInitialDocument()
 		const backObject = initial.objects[0]!
@@ -1685,7 +1877,17 @@ describe("create-design shared vector scene", () => {
 				direction: "auto",
 			},
 		})
-		const source = { ...initial, objects: [...initial.objects, point] }
+		const source = {
+			...initial,
+			objects: [...initial.objects, point],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: "object" as const, id: point.id },
+				],
+			})),
+		}
 		const textService = {
 			registerFont: vi.fn(() => []),
 			unregisterFont: vi.fn(() => true),
@@ -1926,6 +2128,15 @@ describe("create-design shared vector scene", () => {
 		const source = {
 			...initial,
 			objects: [...initial.objects, point, area, locked],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: "object" as const, id: point.id },
+					{ kind: "object" as const, id: area.id },
+					{ kind: "object" as const, id: locked.id },
+				],
+			})),
 		}
 		const session = sourceSession({
 			initialDocument: source,
