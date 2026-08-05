@@ -346,9 +346,7 @@ function DesignLayersTile({
 		],
 		[context.document.groups, context.document.layers],
 	)
-	const [expanded, setExpanded] = useState<ReadonlySet<string>>(
-		() => new Set(branchKeys),
-	)
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
 	const knownBranches = useRef(new Set(branchKeys))
 	useEffect(() => {
 		const additions = branchKeys.filter(
@@ -843,7 +841,7 @@ function DesignLayersTile({
 							/>
 							<span>
 								<b>{row.name}</b>
-								<small>{label}</small>
+								{/* <small>{label}</small> */}
 							</span>
 							{row.kind === "group" ? (
 								<button

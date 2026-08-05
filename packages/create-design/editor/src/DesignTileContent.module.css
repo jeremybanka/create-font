@@ -247,7 +247,7 @@ design-tile-content.class {
 				align-items: center;
 				gap: 5px;
 				min-width: 0;
-				padding: 5px 5px 5px calc(4px + (var(--tree-depth) - 1) * 12px);
+				padding: 3px 3px 3px calc(3px + (var(--tree-depth) - 1) * 12px);
 				border: 1px solid transparent;
 				border-radius: 5px;
 				outline: none;
@@ -276,7 +276,7 @@ design-tile-content.class {
 				&[aria-current="true"] {
 					border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
 					background: color-mix(in srgb, var(--accent) 10%, var(--paper));
-					box-shadow: inset 3px 0 0 var(--accent);
+					/* box-shadow: inset 3px 0 0 var(--accent); */
 				}
 
 				&[aria-current="true"] > span > b {
@@ -303,7 +303,7 @@ design-tile-content.class {
 					height: 20px;
 					padding: 0;
 					border: 0;
-					background: color-mix(in srgb, var(--ink) 8%, transparent);
+					background: transparent;
 					color: var(--ink);
 					line-height: 1;
 				}
@@ -324,15 +324,10 @@ design-tile-content.class {
 					min-width: 0;
 					line-height: 1.25;
 
-					> b,
-					> small {
+					> b {
 						overflow: hidden;
 						text-overflow: ellipsis;
 						white-space: nowrap;
-					}
-
-					> small {
-						color: var(--ink-faint);
 					}
 				}
 
