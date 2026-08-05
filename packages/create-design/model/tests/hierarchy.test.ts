@@ -5,8 +5,70 @@ import {
 	designObjectEffectiveState,
 	projectDesignEffectiveHierarchy,
 } from "../src/hierarchy.ts"
+import { resolveDesignImages } from "../src/images.ts"
 
 describe("effective design hierarchy", () => {
+	it("separates a mask path from clipped children without losing hierarchy", () => {
+		const initial = createInitialDocument()
+		const image = {
+			id: "object:image",
+			name: "Linked image",
+			geometry: {
+				kind: "image" as const,
+				source: {
+					kind: "linked" as const,
+					id: "asset:image",
+					href: "missing.jpg",
+				},
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 80,
+				intrinsicHeight: 60,
+			},
+			transform: { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 },
+			appearance: {},
+		}
+		const clip = initial.objects[0]!
+		const document = {
+			...initial,
+			objects: [image, clip],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:mask" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:mask",
+					name: "Image mask",
+					children: [
+						{ kind: "object" as const, id: image.id },
+						{ kind: "object" as const, id: clip.id },
+					],
+					clippingPathId: clip.id,
+				},
+			],
+		}
+		const hierarchy = projectDesignEffectiveHierarchy(document)
+		expect(hierarchy.byObjectId.get(image.id)).toMatchObject({
+			maskGroupIds: ["group:mask"],
+			clippingForGroupId: null,
+		})
+		expect(hierarchy.byObjectId.get(clip.id)).toMatchObject({
+			maskGroupIds: [],
+			clippingForGroupId: "group:mask",
+		})
+		expect(hierarchy.visibleObjects.map(({ id }) => id)).toEqual([image.id])
+		const [resolution] = resolveDesignImages(document)
+		expect(resolution?.diagnostics).toEqual([
+			expect.objectContaining({
+				code: "image.missing-resource",
+				severity: "warning",
+				sourceId: "asset:image",
+			}),
+		])
+		expect(resolution?.maskGroupIds).toEqual(["group:mask"])
+	})
 	it("projects nested groups in layer paint order with independent inherited state", () => {
 		const initial = createInitialDocument()
 		const coral = initial.objects[0]!

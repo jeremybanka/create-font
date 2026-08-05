@@ -19,6 +19,7 @@ import {
 } from "@create-design/svg"
 import {
 	assembleDesignDocument,
+	assetIndexFileSchema,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
@@ -158,15 +159,51 @@ export async function exportDesignSvg(
 		Object.fromEntries(snapshot.units.map(({ path, value }) => [path, value])),
 	)
 	if (!assembled.ok) throw new DesignSvgSourceError(assembled.errors)
+	const assetIndexUnit = snapshot.units.find(
+		({ path }) => path === "assets/index.json",
+	)
+	const assetIndex = assetIndexFileSchema.safeParse(assetIndexUnit?.value)
+	const imageResources = new Map(
+		assetIndex.success
+			? await Promise.all(
+					assetIndex.data.entries
+						.filter(
+							(entry) =>
+								entry.mediaType === "image/jpeg" ||
+								entry.mediaType === "image/png",
+						)
+						.map(async (entry) => {
+							const asset = await source.readAsset(entry.path)
+							const mediaType =
+								entry.mediaType === "image/jpeg" ? "image/jpeg" : "image/png"
+							return [
+								entry.id,
+								{
+									id: entry.id,
+									mediaType,
+									bytes: new Uint8Array(
+										await new Response(asset.bytes).arrayBuffer(),
+									),
+								},
+							] as const
+						}),
+				)
+			: [],
+	)
 	const artboardId =
 		options.artboardIds?.[0] ?? assembled.value.artboards[0]?.id
 	if (artboardId === undefined)
 		throw new Error("SVG export requires one artboard.")
 	const target = { artboardId }
-	const preflight = preflightSvgExport(assembled.value, target)
+	const projectionOptions = { imageResources }
+	const preflight = preflightSvgExport(
+		assembled.value,
+		target,
+		projectionOptions,
+	)
 	if (!svgPreflightAllowsOutput(preflight))
 		throw new DesignSvgPreflightError(preflight)
-	const bytes = exportSvg(assembled.value, target)
+	const bytes = exportSvg(assembled.value, target, projectionOptions)
 	await writeSvgAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		artboardId,

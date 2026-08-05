@@ -1,5 +1,6 @@
 import "konva/lib/shapes/Circle.js"
 import "konva/lib/shapes/Line.js"
+import "konva/lib/shapes/Image.js"
 import "konva/lib/shapes/Path.js"
 import "konva/lib/shapes/Rect.js"
 import "konva/lib/shapes/Text.js"
@@ -14,6 +15,7 @@ import {
 export {
 	Circle,
 	Group,
+	Image,
 	Layer,
 	Line,
 	Path,

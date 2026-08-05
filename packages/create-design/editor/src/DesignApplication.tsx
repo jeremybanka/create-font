@@ -30,6 +30,7 @@ import {
 } from "@create-art/editor"
 import {
 	Group,
+	Image as CanvasImage,
 	type KonvaEventObject,
 	Layer,
 	Line,
@@ -144,11 +145,13 @@ import {
 	designSelectionUnitAtObject,
 	designSelectionUnitForIds,
 	groupDesignSelection,
+	makeDesignClippingMask,
 	moveDesignHierarchyNode,
 	normalizeDesignSelection,
 	replaceDesignHierarchyObject,
 	stackDesignSelection,
 	ungroupDesignSelection,
+	releaseDesignClippingMask,
 	type DesignHierarchyScope,
 	type DesignStackCommand,
 } from "./design-hierarchy.ts"
@@ -163,6 +166,7 @@ import {
 	setDesignLayerVisibility,
 } from "./design-layer-operations.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
+import { placeDesignImage } from "./placed-images.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
@@ -184,6 +188,7 @@ import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
+	projectDesignObjectContours,
 	projectDesignEffectiveHierarchy,
 	projectDesignOutput,
 	rotateObject,
@@ -268,6 +273,7 @@ import type {
 	DesignFontReference,
 	DesignGeometry,
 	DesignGuide,
+	DesignImageResource,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -703,8 +709,144 @@ function registerDesignTextFontResources(
 	return { resources: registered, errors }
 }
 
+function useDesignCanvasImages(
+	document: DesignDocument,
+	resources: readonly DesignImageResource[],
+): ReadonlyMap<string, HTMLImageElement> {
+	const [images, setImages] = useState<ReadonlyMap<string, HTMLImageElement>>(
+		new Map(),
+	)
+	useEffect(() => {
+		const next = new Map<string, HTMLImageElement>()
+		const urls: string[] = []
+		let active = true
+		const resourcesById = new Map(
+			resources.map((resource) => [resource.id, resource]),
+		)
+		const sources = new Map(
+			document.objects.flatMap((object) =>
+				object.geometry.kind === "image"
+					? [[object.geometry.source.id, object.geometry.source] as const]
+					: [],
+			),
+		)
+		for (const [id, source] of sources) {
+			const resource = resourcesById.get(id)
+			const url =
+				resource === undefined
+					? source.kind === "linked"
+						? source.href
+						: null
+					: URL.createObjectURL(
+							new Blob([resource.bytes.slice().buffer], {
+								type: resource.mediaType,
+							}),
+						)
+			if (url === null) continue
+			if (resource !== undefined) urls.push(url)
+			const image = new globalThis.Image()
+			image.onload = () => {
+				if (!active) return
+				next.set(id, image)
+				setImages(new Map(next))
+			}
+			image.src = url
+		}
+		return () => {
+			active = false
+			for (const url of urls) URL.revokeObjectURL(url)
+		}
+	}, [document, resources])
+	return images
+}
+
+function imageTransform(object: DesignObject): Readonly<{
+	x: number
+	y: number
+	rotation: number
+	scaleX: number
+	scaleY: number
+	skewX: number
+}> {
+	const { a, b, c, d, e, f } = object.transform
+	const scaleX = Math.hypot(a, b) || 1
+	const determinant = a * d - b * c
+	return {
+		x: e,
+		y: f,
+		rotation: (Math.atan2(b, a) * 180) / Math.PI,
+		scaleX,
+		scaleY: determinant / scaleX,
+		skewX: (Math.atan2(a * c + b * d, scaleX * scaleX) * 180) / Math.PI,
+	}
+}
+
+/* eslint-disable lasertag/render-tag-with-own-name -- Konva clipping groups must remain renderer nodes rather than DOM custom elements. */
+function DesignCanvasMasks({
+	children,
+	masks,
+	index = 0,
+}: Readonly<{
+	children: ReactNode
+	masks: readonly DesignObject[]
+	index?: number
+}>) {
+	const mask = masks[index]
+	if (mask === undefined) return children
+	return (
+		<Group
+			clipFunc={(context) => {
+				context.beginPath()
+				for (const contour of projectDesignObjectContours(mask)) {
+					const first = contour.points[0]
+					if (first === undefined) continue
+					context.moveTo(first.x, first.y)
+					const segment = (
+						from: (typeof contour.points)[number],
+						to: (typeof contour.points)[number],
+					) => {
+						if (from.outgoing === undefined && to.incoming === undefined)
+							context.lineTo(to.x, to.y)
+						else {
+							const outgoing = from.outgoing ?? { x: 0, y: 0 }
+							const incoming = to.incoming ?? { x: 0, y: 0 }
+							context.bezierCurveTo(
+								from.x + outgoing.x,
+								from.y + outgoing.y,
+								to.x + incoming.x,
+								to.y + incoming.y,
+								to.x,
+								to.y,
+							)
+						}
+					}
+					for (
+						let pointIndex = 1;
+						pointIndex < contour.points.length;
+						pointIndex += 1
+					)
+						segment(
+							contour.points[pointIndex - 1]!,
+							contour.points[pointIndex]!,
+						)
+					if (contour.closed) {
+						segment(contour.points.at(-1)!, first)
+						context.closePath()
+					}
+				}
+			}}
+		>
+			<DesignCanvasMasks masks={masks} index={index + 1}>
+				{children}
+			</DesignCanvasMasks>
+		</Group>
+	)
+}
+/* eslint-enable lasertag/render-tag-with-own-name */
+
 export type DesignApplicationProps = Readonly<{
 	children?: ReactNode
+	imageResources?: readonly DesignImageResource[]
 	initialDocument?: DesignDocument
 	pathfinderWorkerClient?: PathfinderWorkerClient
 	sourceSession?: DesignSourceSession
@@ -835,6 +977,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
+	const [imageResources, setImageResources] = useState<
+		readonly DesignImageResource[]
+	>(() => props.imageResources ?? sourceSession?.images ?? [])
+	const canvasImages = useDesignCanvasImages(document, imageResources)
 	const [selectedBlendId, setSelectedBlendId] = useState<string | null>(null)
 	const [editingTextId, setEditingTextId] = useState<string | null>(null)
 	const [textSelectionRange, setTextSelectionRange] = useState<Readonly<{
@@ -1192,10 +1338,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[unregisterBrowserTextFont],
 	)
 	const pdfDownloadManager = useMemo(
-		() => createPdfDownloadManager(undefined, { textService }),
-		[textService],
+		() =>
+			createPdfDownloadManager(undefined, {
+				textService,
+				imageResources: new Map(
+					imageResources.map((resource) => [resource.id, resource]),
+				),
+			}),
+		[imageResources, textService],
 	)
-	const svgDownloadManager = useMemo(() => createSvgDownloadManager(), [])
+	const svgDownloadManager = useMemo(
+		() =>
+			createSvgDownloadManager(undefined, {
+				imageResources: new Map(
+					imageResources.map((resource) => [resource.id, resource]),
+				),
+			}),
+		[imageResources],
+	)
 	const pngDownloadManager = useMemo(() => createPngDownloadManager(), [])
 	const pathfinderClient = useMemo(
 		() => pathfinderWorkerClient ?? createPathfinderWorkerClient(),
@@ -1625,6 +1785,92 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[editorState],
 	)
+	const placeImageFile = useCallback(
+		async (file: File): Promise<void> => {
+			const mediaType =
+				file.type === "image/png" || /\.png$/iu.test(file.name)
+					? "image/png"
+					: file.type === "image/jpeg" || /\.jpe?g$/iu.test(file.name)
+						? "image/jpeg"
+						: null
+			if (mediaType === null) {
+				setStatus("Place Image supports PNG and JPEG files.")
+				return
+			}
+			if (sourceSession?.installImage === undefined) {
+				setStatus("Connect a source workspace before placing an image.")
+				return
+			}
+			try {
+				const [bytes, bitmap] = await Promise.all([
+					file.arrayBuffer().then((buffer) => new Uint8Array(buffer)),
+					globalThis.createImageBitmap(file),
+				])
+				const intrinsicWidth = bitmap.width
+				const intrinsicHeight = bitmap.height
+				bitmap.close()
+				const id = `asset:${nextId()}`
+				const resource = await sourceSession.installImage(
+					id,
+					bytes,
+					file.name,
+					mediaType,
+				)
+				const scale = Math.min(
+					1,
+					activeArtboard.width / intrinsicWidth,
+					activeArtboard.height / intrinsicHeight,
+				)
+				const placed = placeDesignImage(
+					documentRef.current,
+					{
+						name: file.name.replace(/\.[^.]+$/u, "") || "Placed image",
+						source: { kind: "embedded", id },
+						mediaType,
+						intrinsicWidth,
+						intrinsicHeight,
+						scale,
+						x:
+							activeArtboard.x +
+							(activeArtboard.width - intrinsicWidth * scale) / 2,
+						y:
+							activeArtboard.y +
+							(activeArtboard.height - intrinsicHeight * scale) / 2,
+					},
+					activeHierarchyScope,
+					nextId,
+				)
+				setImageResources((current) => [
+					...current.filter((candidate) => candidate.id !== resource.id),
+					resource,
+				])
+				commit(placed.document)
+				setSelectedBlendId(null)
+				setDirectSelection([])
+				setSelection([placed.object.id])
+				setStatus(`Placed ${file.name} as an embedded image.`)
+			} catch (error) {
+				setStatus(
+					`Could not place ${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		},
+		[activeArtboard, activeHierarchyScope, commit, nextId, sourceSession],
+	)
+	const chooseImageFile = useCallback((): void => {
+		const input = globalThis.document.createElement("input")
+		input.type = "file"
+		input.accept = ".jpg,.jpeg,.png,image/jpeg,image/png"
+		input.addEventListener(
+			"change",
+			() => {
+				const file = input.files?.[0]
+				if (file !== undefined) void placeImageFile(file)
+			},
+			{ once: true },
+		)
+		input.click()
+	}, [placeImageFile])
 	const beginTextEditing = useCallback(
 		(object: DesignObject, selectAll = false): void => {
 			if (object.geometry.kind !== "text") return
@@ -2165,6 +2411,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setDirectSelection([])
 		setStatus("Ungrouped selection.")
 	}, [commit, document, selectedUnavailableEntry, selection])
+
+	const makeClippingMask = useCallback((): void => {
+		const result = makeDesignClippingMask(document, selection, nextId)
+		if (result === null) {
+			setStatus(
+				"Select sibling artwork with a topmost vector object to make a clipping mask.",
+			)
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setDirectSelection([])
+		setStatus(
+			"Created clipping mask; double-click it to edit the path and contents separately.",
+		)
+	}, [commit, document, nextId, selection])
+
+	const releaseClippingMask = useCallback((): void => {
+		if (selectedGroup === null) return
+		const result = releaseDesignClippingMask(document, selectedGroup.id)
+		if (result === null) {
+			setStatus("Select a clipping-mask group to release it.")
+			return
+		}
+		commit(result.document)
+		setSelection(result.selection)
+		setStatus("Released clipping mask; the path is ordinary artwork again.")
+	}, [commit, document, selectedGroup])
 
 	const stackSelection = useCallback(
 		(command: DesignStackCommand): void => {
@@ -3958,6 +4232,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				do: () => distributeSelection(axis),
 			})),
 			{
+				id: "place-image",
+				displayName: "Place Image",
+				category: "File",
+				description:
+					"Install and place an embedded PNG or JPEG in the active layer.",
+				icon: "PlusIcon",
+				disabled: sourceSession?.installImage === undefined,
+				disabledReason: "Connect a source workspace before placing an image.",
+				do: chooseImageFile,
+			},
+			{
 				id: "export-pdf",
 				displayName: "Export PDF",
 				category: "File",
@@ -3997,6 +4282,30 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				disabled: selection.length === 0,
 				disabledReason: "Select a complete group first.",
 				do: ungroupSelection,
+			},
+			{
+				id: "make-clipping-mask",
+				displayName: "Make Clipping Mask",
+				category: "Object",
+				description:
+					"Use the topmost selected vector object to clip its selected siblings.",
+				icon: "Link1Icon",
+				disabled: selection.length < 2,
+				disabledReason: "Select artwork and a topmost vector clipping path.",
+				do: makeClippingMask,
+			},
+			{
+				id: "release-clipping-mask",
+				displayName: "Release Clipping Mask",
+				category: "Object",
+				description: "Restore the clipping path as ordinary grouped artwork.",
+				icon: "LinkBreak1Icon",
+				disabled:
+					selectedGroup === null ||
+					document.groups.find(({ id }) => id === selectedGroup.id)
+						?.clippingPathId === undefined,
+				disabledReason: "Select a clipping-mask group.",
+				do: releaseClippingMask,
 			},
 			...(
 				[
@@ -4298,7 +4607,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			executePathCommand,
 			expansionEligibility,
 			blendEligibility,
+			chooseImageFile,
 			makeBlend,
+			makeClippingMask,
 			exportDocument,
 			exportSvgDocument,
 			history.canRedo,
@@ -4314,10 +4625,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			selectedObject?.id,
 			selectedBlend,
 			selectedSwatchId,
+			selectedGroup,
+			releaseClippingMask,
 			tool,
 			ungroupSelection,
 			document,
 			textToolsDisabledReason,
+			sourceSession,
 		],
 	)
 
@@ -4436,6 +4750,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			registerHeadlessTextFontResources(update.fonts)
+			setImageResources(update.images ?? [])
 			serializedDocumentRef.current = JSON.stringify(update.document)
 			editorState.actions.loadExternalDocument({
 				document: update.document,
@@ -6129,6 +6444,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			registerHeadlessTextFontResources(update.fonts)
+			setImageResources(update.images ?? [])
 			serializedDocumentRef.current = JSON.stringify(update.document)
 			editorState.actions.loadExternalDocument({
 				document: update.document,
@@ -6381,6 +6697,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 									{displayedObjects.map((object) => {
 										const derived = !authoredCanvasObjectIds.has(object.id)
 										const objectLayerUiColor = layerUiColorForObject(object.id)
+										const outputEntry = canvasOutputProjection.byObjectId.get(
+											object.id,
+										)
+										const masks = (outputEntry?.maskGroupIds ?? []).flatMap(
+											(groupId) => {
+												const clippingPathId = canvasDocument.groups.find(
+													(group) => group.id === groupId,
+												)?.clippingPathId
+												const mask = canvasAuthoredObjects.find(
+													(candidate) => candidate.id === clippingPathId,
+												)
+												return mask === undefined ? [] : [mask]
+											},
+										)
+										const masked = (content: ReactNode) => (
+											<DesignCanvasMasks key={object.id} masks={masks}>
+												{content}
+											</DesignCanvasMasks>
+										)
 										const derivedBlendId = derivedBlendByObjectId.get(object.id)
 										const fill = canvasOutputProjection.swatches.find(
 											(candidate) =>
@@ -6391,6 +6726,38 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
 										const strokeStyle = object.appearance.stroke
+										if (object.geometry.kind === "image") {
+											if (object.hidden) return null
+											const image = canvasImages.get(object.geometry.source.id)
+											const transform = imageTransform(object)
+											return masked(
+												<Group {...transform} listening={!object.locked}>
+													{image === undefined ? (
+														<Rect
+															name={`design-missing-image ${object.id}`}
+															width={object.geometry.intrinsicWidth}
+															height={object.geometry.intrinsicHeight}
+															fill="#f5f5f5"
+															stroke="#c62828"
+															dash={[8 / worldScale, 6 / worldScale]}
+															onPointerDown={(event) =>
+																startObjectGesture(event, object)
+															}
+														/>
+													) : (
+														<CanvasImage
+															name={`design-image ${object.id}`}
+															image={image}
+															width={object.geometry.intrinsicWidth}
+															height={object.geometry.intrinsicHeight}
+															onPointerDown={(event) =>
+																startObjectGesture(event, object)
+															}
+														/>
+													)}
+												</Group>,
+											)
+										}
 										if (object.geometry.kind === "text") {
 											if (object.hidden) return null
 											const geometry = object.geometry
@@ -6573,85 +6940,91 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												object.appearance.fill === undefined) &&
 												(stroke === undefined ||
 													strokeStyle === undefined ||
-													strokeStyle.width === 0)) ? null : (
-											<VectorContourPath
-												key={object.id}
-												name={`design-object ${object.id}`}
-												object={projectDesignVectorObject(
-													canvasDocument,
-													object,
-												)}
-												{...(fill === undefined
-													? {}
-													: { fill: swatchCss(fill) })}
-												fillEnabled={fill !== undefined}
-												{...(stroke === undefined ||
-												strokeStyle === undefined ||
-												strokeStyle.width === 0
-													? {}
-													: {
-															stroke: swatchCss(stroke),
-															strokeWidth: strokeStyle.width,
-															lineCap: strokeStyle.cap,
-															lineJoin: strokeStyle.join,
-															miterLimit: strokeStyle.miterLimit,
-															dash: [...strokeStyle.dashArray],
-															dashOffset: strokeStyle.dashOffset,
-														})}
-												fillRule={designObjectFillRule(object)}
-												selected={
-													derived
-														? selectedBlendId === derivedBlendId
-														: selectedGroup === null &&
-															selection.includes(object.id)
-												}
-												selectionStroke={objectLayerUiColor}
-												listening={
-													!object.locked &&
-													(!derived || derivedBlendId !== undefined)
-												}
-												onPointerDown={(event) =>
-													derivedBlendId === undefined
-														? startObjectGesture(event, object)
-														: selectBlendFromCanvas(event, derivedBlendId)
-												}
-												onDoubleClick={(
-													event: KonvaEventObject<MouseEvent | TouchEvent>,
-												) => enterObjectGroup(event, object)}
-												onPointerEnter={(event) => {
-													if (
-														object.locked ||
-														(tool !== "select" &&
-															tool !== "direct" &&
-															tool !== "transform")
-													)
-														return
-													const container = event.target.getStage()?.container()
-													if (container !== undefined)
-														container.style.cursor = canvasToolCursor(
-															tool === "direct" ? "select" : tool,
-															{
-																overObject: true,
-															},
-														)
-												}}
-												onPointerLeave={(event) => {
-													const container = event.target.getStage()?.container()
-													if (container !== undefined)
-														container.style.cursor = canvasToolCursor(
-															tool === "direct"
-																? "select"
-																: tool === "artboard"
-																	? "rect"
-																	: tool === "text"
+													strokeStyle.width === 0))
+											? null
+											: masked(
+													<VectorContourPath
+														key={object.id}
+														name={`design-object ${object.id}`}
+														object={projectDesignVectorObject(
+															canvasDocument,
+															object,
+														)}
+														{...(fill === undefined
+															? {}
+															: { fill: swatchCss(fill) })}
+														fillEnabled={fill !== undefined}
+														{...(stroke === undefined ||
+														strokeStyle === undefined ||
+														strokeStyle.width === 0
+															? {}
+															: {
+																	stroke: swatchCss(stroke),
+																	strokeWidth: strokeStyle.width,
+																	lineCap: strokeStyle.cap,
+																	lineJoin: strokeStyle.join,
+																	miterLimit: strokeStyle.miterLimit,
+																	dash: [...strokeStyle.dashArray],
+																	dashOffset: strokeStyle.dashOffset,
+																})}
+														fillRule={designObjectFillRule(object)}
+														selected={
+															derived
+																? selectedBlendId === derivedBlendId
+																: selectedGroup === null &&
+																	selection.includes(object.id)
+														}
+														selectionStroke={objectLayerUiColor}
+														listening={
+															!object.locked &&
+															(!derived || derivedBlendId !== undefined)
+														}
+														onPointerDown={(event) =>
+															derivedBlendId === undefined
+																? startObjectGesture(event, object)
+																: selectBlendFromCanvas(event, derivedBlendId)
+														}
+														onDoubleClick={(
+															event: KonvaEventObject<MouseEvent | TouchEvent>,
+														) => enterObjectGroup(event, object)}
+														onPointerEnter={(event) => {
+															if (
+																object.locked ||
+																(tool !== "select" &&
+																	tool !== "direct" &&
+																	tool !== "transform")
+															)
+																return
+															const container = event.target
+																.getStage()
+																?.container()
+															if (container !== undefined)
+																container.style.cursor = canvasToolCursor(
+																	tool === "direct" ? "select" : tool,
+																	{
+																		overObject: true,
+																	},
+																)
+														}}
+														onPointerLeave={(event) => {
+															const container = event.target
+																.getStage()
+																?.container()
+															if (container !== undefined)
+																container.style.cursor = canvasToolCursor(
+																	tool === "direct"
 																		? "select"
-																		: tool === "area-text"
+																		: tool === "artboard"
 																			? "rect"
-																			: tool,
-														)
-												}}
-											/>
-										)
+																			: tool === "text"
+																				? "select"
+																				: tool === "area-text"
+																					? "rect"
+																					: tool,
+																)
+														}}
+													/>,
+												)
 									})}
 									{document.guides.map((guide) => {
 										const value =

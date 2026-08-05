@@ -21,8 +21,10 @@ import {
 } from "@create-design/pdf"
 import {
 	assembleDesignDocument,
+	assetIndexFileSchema,
 	fontIndexFileSchema,
 	type DesignDocument,
+	type DesignImageResource,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 import {
@@ -163,6 +165,7 @@ function pdfRequest(options: DesignPdfExportOptions): PdfExportRequest {
 
 async function loadDesignDocument(root: string): Promise<{
 	document: DesignDocument
+	imageResources: ReadonlyMap<string, DesignImageResource>
 	revision: string
 	textService: DesignTextService
 }> {
@@ -173,6 +176,37 @@ async function loadDesignDocument(root: string): Promise<{
 	)
 	if (!assembled.ok) throw new DesignPdfSourceError(assembled.errors)
 	const textService = createDesignTextService()
+	const assetIndexUnit = snapshot.units.find(
+		({ path }) => path === "assets/index.json",
+	)
+	const assetIndex = assetIndexFileSchema.safeParse(assetIndexUnit?.value)
+	const imageResources = new Map(
+		assetIndex.success
+			? await Promise.all(
+					assetIndex.data.entries
+						.filter(
+							(entry) =>
+								entry.mediaType === "image/jpeg" ||
+								entry.mediaType === "image/png",
+						)
+						.map(async (entry) => {
+							const asset = await source.readAsset(entry.path)
+							const mediaType =
+								entry.mediaType === "image/jpeg" ? "image/jpeg" : "image/png"
+							return [
+								entry.id,
+								{
+									id: entry.id,
+									mediaType,
+									bytes: new Uint8Array(
+										await new Response(asset.bytes).arrayBuffer(),
+									),
+								},
+							] as const
+						}),
+				)
+			: [],
+	)
 	const fontIndexUnit = snapshot.units.find(
 		({ path }) => path === "fonts/index.json",
 	)
@@ -197,6 +231,7 @@ async function loadDesignDocument(root: string): Promise<{
 		}
 	return {
 		document: assembled.value,
+		imageResources,
 		revision: snapshot.revision,
 		textService,
 	}
@@ -213,7 +248,7 @@ export async function exportDesignPdf(
 	assertOutputOutsideRoot(root, output)
 	const canonicalRoot = await realpath(root)
 	assertOutputOutsideRoot(canonicalRoot, await canonicalFuturePath(output))
-	const { document, revision, textService } =
+	const { document, imageResources, revision, textService } =
 		await loadDesignDocument(canonicalRoot)
 	const request = pdfRequest(options)
 	const preflight = preflightPdfExport(
@@ -223,10 +258,11 @@ export async function exportDesignPdf(
 			enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
 		},
 		textService,
+		imageResources,
 	)
 	if (!exportPreflightAllowsOutput(preflight))
 		throw new DesignPdfPreflightError(preflight)
-	const bytes = exportPdf(document, request, { textService })
+	const bytes = exportPdf(document, request, { imageResources, textService })
 	await writePdfAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		byteLength: bytes.byteLength,

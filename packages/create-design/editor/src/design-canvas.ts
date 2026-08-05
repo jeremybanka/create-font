@@ -143,6 +143,18 @@ export function nearestDesignObject(
 				candidates.push({ object, distancePixels: 0, index })
 			continue
 		}
+		if (object.geometry.kind === "image") {
+			const bounds = visibleObjectBounds(object)
+			if (
+				bounds !== null &&
+				point.x >= bounds.minX &&
+				point.x <= bounds.maxX &&
+				point.y >= bounds.minY &&
+				point.y <= bounds.maxY
+			)
+				candidates.push({ object, distancePixels: 0, index })
+			continue
+		}
 		const strokeVisible =
 			object.appearance.stroke !== undefined &&
 			object.appearance.stroke.width > 0

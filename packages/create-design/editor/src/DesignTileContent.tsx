@@ -534,16 +534,15 @@ function DesignLayersTile({
 			].join(" · ")
 		}
 		if (row.kind === "group") {
-			const entries = descendantIds(
-				groups.get(row.key.slice("group:".length))?.children ?? [],
-			).flatMap((id) => {
+			const group = groups.get(row.key.slice("group:".length))
+			const entries = descendantIds(group?.children ?? []).flatMap((id) => {
 				const entry = effective.byObjectId.get(id)
 				return entry === undefined ? [] : [entry]
 			})
 			const hidden = entries.find(({ visible }) => !visible)
 			const locked = entries.find((entry) => entry.locked)
 			return [
-				"Group",
+				group?.clippingPathId === undefined ? "Group" : "Clipping mask",
 				`${row.descendantCount ?? 0} descendants`,
 				...(hidden === undefined
 					? []
@@ -563,7 +562,12 @@ function DesignLayersTile({
 		}
 		const entry = effective.byObjectId.get(row.object!.id)
 		return [
-			"Object",
+			entry?.clippingForGroupId === null ||
+			entry?.clippingForGroupId === undefined
+				? row.object?.geometry.kind === "image"
+					? "Placed image"
+					: "Object"
+				: "Clipping path",
 			...(entry?.hiddenBy === null || entry?.hiddenBy === undefined
 				? ["Visible"]
 				: [

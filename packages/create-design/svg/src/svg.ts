@@ -2,6 +2,7 @@ import {
 	contourSvgPath,
 	designOutputLayerForEntity,
 	projectDesignOutput,
+	resolveDesignImages,
 	resolvedRgb,
 	type DesignOutputEntry,
 } from "@create-design/model"
@@ -18,11 +19,11 @@ import type {
 	SvgDiagnostic,
 	SvgDocumentProjection,
 	SvgExportTarget,
-	SvgGroupProjection,
 	SvgObjectProjection,
 	SvgPreflightResult,
 	SvgProjectionGraph,
 	SvgProjectionNode,
+	SvgProjectionOptions,
 } from "./types.ts"
 
 const number = (value: number): string => Number(value.toFixed(4)).toString()
@@ -66,6 +67,7 @@ const diagnostic = (
 export function preflightSvgExport(
 	document: DesignDocument,
 	target?: SvgExportTarget,
+	options: SvgProjectionOptions = {},
 ): SvgPreflightResult {
 	let artboard: DesignArtboard | null = null
 	const diagnostics: SvgDiagnostic[] = []
@@ -134,6 +136,27 @@ export function preflightSvgExport(
 			),
 		)
 	}
+	for (const resolution of resolveDesignImages(
+		document,
+		options.imageResources,
+	)) {
+		for (const source of resolution.diagnostics) {
+			if (
+				source.code === "image.missing-resource" &&
+				resolution.object.geometry.source.kind === "linked"
+			)
+				continue
+			diagnostics.push(
+				diagnostic(
+					`svg.${source.code}`,
+					source.message,
+					source.severity,
+					source.objectId,
+					designOutputLayerForEntity(output, source.objectId) ?? undefined,
+				),
+			)
+		}
+	}
 	const frozen = Object.freeze(diagnostics)
 	const summary = Object.freeze({
 		errors: frozen.filter(({ severity }) => severity === "error").length,
@@ -155,14 +178,18 @@ export function svgPreflightAllowsOutput(result: SvgPreflightResult): boolean {
 
 function projectionNodes(
 	document: DesignDocument,
+	options: SvgProjectionOptions,
 ): readonly SvgProjectionNode[] {
 	const output = projectDesignOutput(document)
 	const groups = new Map(document.groups.map((group) => [group.id, group]))
 	const swatches = new Map(output.swatches.map((swatch) => [swatch.id, swatch]))
+	const imageResources = options.imageResources ?? new Map()
+	const objects = new Map(document.objects.map((object) => [object.id, object]))
 	type MutableGroup = {
 		kind: "group"
 		group: DesignGroup
 		children: Array<SvgObjectProjection | MutableGroup>
+		clippingObject?: DesignObject
 	}
 	const root: Array<SvgObjectProjection | MutableGroup> = []
 	const append = (entry: DesignOutputEntry): void => {
@@ -175,7 +202,14 @@ function projectionNodes(
 					candidate.kind === "group" && candidate.group.id === groupId,
 			)
 			if (node === undefined) {
-				node = { kind: "group", group, children: [] }
+				node = {
+					kind: "group",
+					group,
+					children: [],
+					...(group.clippingPathId === undefined
+						? {}
+						: { clippingObject: objects.get(group.clippingPathId) }),
+				}
 				children.push(node)
 			}
 			children = node.children
@@ -197,6 +231,12 @@ function projectionNodes(
 					...(fill === undefined ? {} : { fill }),
 					...(stroke === undefined ? {} : { stroke }),
 				}),
+				...(object.geometry.kind !== "image" ||
+				imageResources.get(object.geometry.source.id) === undefined
+					? {}
+					: {
+							imageResource: imageResources.get(object.geometry.source.id),
+						}),
 			}),
 		)
 	}
@@ -213,7 +253,9 @@ function projectionNodes(
 	return Object.freeze(root.map(freezeNode))
 }
 
-export function createSvgProjectionGraph(): SvgProjectionGraph {
+export function createSvgProjectionGraph(
+	options: SvgProjectionOptions = {},
+): SvgProjectionGraph {
 	let previousDocument: DesignDocument | null = null
 	let previousArtboard: DesignArtboard | null = null
 	let previous: SvgDocumentProjection | null = null
@@ -228,7 +270,7 @@ export function createSvgProjectionGraph(): SvgProjectionGraph {
 				return previous
 			const projection = Object.freeze({
 				artboard,
-				children: projectionNodes(document),
+				children: projectionNodes(document, options),
 				title: document.title,
 			}) satisfies SvgDocumentProjection
 			previousDocument = document
@@ -304,6 +346,15 @@ function serializeObject(
 	const { object } = projection
 	const attributes = ` id="${escapeXml(object.id)}"${objectAttributes(projection)}`
 	const title = `${indent}  <title>${escapeXml(object.name)}</title>`
+	if (object.geometry.kind === "image") {
+		const href =
+			object.geometry.source.kind === "linked"
+				? object.geometry.source.href
+				: projection.imageResource === undefined
+					? ""
+					: `data:${projection.imageResource.mediaType};base64,${base64(projection.imageResource.bytes)}`
+		return `${indent}<image${attributes} width="${number(object.geometry.intrinsicWidth)}" height="${number(object.geometry.intrinsicHeight)}" href="${escapeXml(href)}" preserveAspectRatio="none">\n${title}\n${indent}</image>`
+	}
 	if (object.geometry.kind === "rectangle") {
 		const { x, y, width, height } = object.geometry
 		return `${indent}<rect${attributes} x="${number(x)}" y="${number(y)}" width="${number(width)}" height="${number(height)}">\n${title}\n${indent}</rect>`
@@ -323,13 +374,51 @@ function serializeObject(
 	return `${indent}<path${attributes} d="${escapeXml(d)}">\n${title}\n${indent}</path>`
 }
 
+function base64(bytes: Uint8Array): string {
+	let binary = ""
+	for (let offset = 0; offset < bytes.length; offset += 0x8000)
+		binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+	return btoa(binary)
+}
+
+function serializeClipObject(object: DesignObject, indent: string): string {
+	const transformAttribute = transform(object)
+	const attributes =
+		transformAttribute === undefined
+			? ""
+			: ` transform="${escapeXml(transformAttribute)}"`
+	if (object.geometry.kind === "rectangle") {
+		const { x, y, width, height } = object.geometry
+		return `${indent}<rect${attributes} x="${number(x)}" y="${number(y)}" width="${number(width)}" height="${number(height)}"/>`
+	}
+	if (object.geometry.kind === "ellipse") {
+		const { centerX, centerY, radiusX, radiusY } = object.geometry
+		return `${indent}<ellipse${attributes} cx="${number(centerX)}" cy="${number(centerY)}" rx="${number(radiusX)}" ry="${number(radiusY)}"/>`
+	}
+	if (object.geometry.kind !== "path") return ""
+	const d = object.geometry.contours
+		.map(contourSvgPath)
+		.filter(Boolean)
+		.join(" ")
+	return `${indent}<path${attributes} fill-rule="${object.geometry.fillRule ?? "evenodd"}" d="${escapeXml(d)}"/>`
+}
+
 function serializeNode(node: SvgProjectionNode, indent: string): string {
 	if (node.kind === "object") return serializeObject(node, indent)
 	const children = node.children.map((child) =>
 		serializeNode(child, `${indent}  `),
 	)
+	const clippingObject = node.clippingObject
+	const clipId = `${node.group.id}:clip`
 	return [
-		`${indent}<g id="${escapeXml(node.group.id)}" aria-label="${escapeXml(node.group.name)}">`,
+		...(clippingObject === undefined
+			? []
+			: [
+					`${indent}<defs><clipPath id="${escapeXml(clipId)}">`,
+					serializeClipObject(clippingObject, `${indent}  `),
+					`${indent}</clipPath></defs>`,
+				]),
+		`${indent}<g id="${escapeXml(node.group.id)}" aria-label="${escapeXml(node.group.name)}"${clippingObject === undefined ? "" : ` clip-path="url(#${escapeXml(clipId)})"`}>`,
 		...children,
 		`${indent}</g>`,
 	].join("\n")
@@ -357,8 +446,9 @@ export function serializeSvg(projection: SvgDocumentProjection): string {
 export function exportSvg(
 	document: DesignDocument,
 	target?: SvgExportTarget,
+	options: SvgProjectionOptions = {},
 ): Uint8Array {
 	return new TextEncoder().encode(
-		serializeSvg(createSvgProjectionGraph().project(document, target)),
+		serializeSvg(createSvgProjectionGraph(options).project(document, target)),
 	)
 }

@@ -5,7 +5,7 @@ import {
 	type SvgExportTarget,
 	type SvgPreflightResult,
 } from "@create-design/svg"
-import type { DesignDocument } from "./types.ts"
+import type { DesignDocument, DesignImageResource } from "./types.ts"
 
 export interface SvgDownloadEnvironment {
 	readonly activate: (url: string, filename: string) => void
@@ -32,8 +32,18 @@ export function browserSvgDownloadEnvironment(): SvgDownloadEnvironment {
 
 export function createSvgDownloadManager(
 	environment: SvgDownloadEnvironment = browserSvgDownloadEnvironment(),
+	options: Readonly<{
+		imageResources?: ReadonlyMap<string, DesignImageResource>
+	}> = {},
 ) {
-	const serialize = environment.serialize ?? exportSvg
+	const projectionOptions =
+		options.imageResources === undefined
+			? {}
+			: { imageResources: options.imageResources }
+	const serialize =
+		environment.serialize ??
+		((document: DesignDocument, target: SvgExportTarget) =>
+			exportSvg(document, target, projectionOptions))
 	let generation = 0
 	let disposed = false
 	return {
@@ -45,7 +55,7 @@ export function createSvgDownloadManager(
 			document: DesignDocument,
 			target: SvgExportTarget,
 		): SvgPreflightResult {
-			return preflightSvgExport(document, target)
+			return preflightSvgExport(document, target, projectionOptions)
 		},
 		async request(
 			document: DesignDocument,
@@ -53,7 +63,11 @@ export function createSvgDownloadManager(
 		): Promise<boolean> {
 			if (disposed) return false
 			const currentGeneration = ++generation
-			if (!svgPreflightAllowsOutput(preflightSvgExport(document, target)))
+			if (
+				!svgPreflightAllowsOutput(
+					preflightSvgExport(document, target, projectionOptions),
+				)
+			)
 				return false
 			let bytes: Uint8Array
 			try {

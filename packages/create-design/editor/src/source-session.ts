@@ -1,6 +1,7 @@
 import type {
 	DesignDocument,
 	DesignFontReference,
+	DesignImageResource,
 	DesignSourceDiagnostic,
 } from "@create-design/source"
 
@@ -23,6 +24,8 @@ export type DesignExternalSourceUpdate =
 			ok: true
 			document: DesignDocument
 			fonts: readonly DesignSourceFontResource[]
+			images?: readonly DesignImageResource[]
+			imageDiagnostics?: readonly string[]
 			revision: string
 	  }>
 	| Readonly<{
@@ -36,6 +39,14 @@ export interface DesignSourceSession {
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
 	readonly fonts?: readonly DesignSourceFontResource[]
+	readonly images?: readonly DesignImageResource[]
+	readonly imageDiagnostics?: readonly string[]
+	installImage?(
+		id: string,
+		bytes: Uint8Array,
+		fileName: string,
+		mediaType: "image/jpeg" | "image/png",
+	): Promise<DesignImageResource>
 	installFont?(
 		reference: DesignFontReference,
 		bytes: Uint8Array,

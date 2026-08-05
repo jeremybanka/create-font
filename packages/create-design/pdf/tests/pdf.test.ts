@@ -14,8 +14,118 @@ import {
 	resolvePdfArtboards,
 } from "../src/pdf.ts"
 import { parsePdfFixture } from "./pdf-parser-fixture.ts"
+import { preflightPdfExport } from "../src/pdf-preflight.ts"
 
 describe("PDF export", () => {
+	it("embeds baseline JPEG pixels under explicit vector clipping", () => {
+		const jpegBase64 =
+			"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/Aaf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/Aaf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z"
+		const jpeg = Uint8Array.from(atob(jpegBase64), (character) =>
+			character.charCodeAt(0),
+		)
+		const initial = createInitialDocument()
+		const clip = initial.objects[0]!
+		const image = {
+			id: "object:jpeg",
+			name: "JPEG",
+			geometry: {
+				kind: "image" as const,
+				source: { kind: "embedded" as const, id: "asset:jpeg" },
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 1,
+				intrinsicHeight: 1,
+			},
+			transform: { a: 100, b: 0, c: 0, d: 80, e: 40, f: 50 },
+			appearance: {},
+		}
+		const document = {
+			...initial,
+			objects: [image, clip],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:mask" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:mask",
+					name: "JPEG mask",
+					children: [
+						{ kind: "object" as const, id: image.id },
+						{ kind: "object" as const, id: clip.id },
+					],
+					clippingPathId: clip.id,
+				},
+			],
+		}
+		const imageResources = new Map([
+			[
+				"asset:jpeg",
+				{
+					id: "asset:jpeg",
+					mediaType: "image/jpeg" as const,
+					bytes: jpeg,
+				},
+			],
+		])
+		const target = document.artboards[0]!
+		expect(
+			preflightPdfExport(document, target, {}, undefined, imageResources)
+				.decision,
+		).toBe("ready")
+		const bytes = exportPdf(document, target, { imageResources })
+		expect(
+			validatePdf(createPdfIr(document, target, { imageResources })),
+		).toEqual([])
+		const source = new TextDecoder("latin1").decode(bytes)
+		expect(source).toContain("/Subtype /Image")
+		expect(source).toContain("/Filter /DCTDecode")
+		expect(source).toMatch(/W\*? n/)
+		expect(source).toMatch(/\/Im[0-9a-f]+ Do/)
+	})
+
+	it("reports a recoverable missing linked image before PDF export", () => {
+		const initial = createInitialDocument()
+		const image = {
+			id: "object:missing",
+			name: "Missing link",
+			geometry: {
+				kind: "image" as const,
+				source: {
+					kind: "linked" as const,
+					id: "asset:missing",
+					href: "../missing.jpg",
+				},
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 20,
+				intrinsicHeight: 10,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {},
+		}
+		const document = {
+			...initial,
+			objects: [image],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: image.id }],
+				},
+			],
+			groups: [],
+		}
+		const preflight = preflightPdfExport(document, document.artboards[0]!)
+		expect(preflight.decision).toBe("blocked")
+		expect(preflight.diagnostics).toContainEqual(
+			expect.objectContaining({
+				code: "pdf.image.missing-resource",
+				entityId: image.id,
+				message: expect.stringContaining("relink"),
+			}),
+		)
+		expect(document.objects[0]).toBe(image)
+	})
 	const multiArtboardDocument = () => {
 		const document = createInitialDocument()
 		return {

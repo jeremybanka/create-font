@@ -26,6 +26,7 @@ export function mountDesignEditor(
 		if (
 			previousOptions !== undefined &&
 			(previousOptions.initialDocument !== nextOptions.initialDocument ||
+				previousOptions.imageResources !== nextOptions.imageResources ||
 				previousOptions.sourceSession !== nextOptions.sourceSession)
 		)
 			graphRevision += 1
@@ -51,6 +52,7 @@ export function mountDesignEditor(
 export type {
 	DesignDocument,
 	DesignEditorBrowserOptions,
+	DesignImageResource,
 	DesignSourceSession,
 	MountedDesignEditor,
 } from "./browser-api.ts"
