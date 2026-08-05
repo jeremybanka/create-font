@@ -3455,6 +3455,102 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}
 
 	const designTileContext: DesignTileContext = {
+		activeLayerId,
+		activeGroupScope: groupScope,
+		selectedGroupId: selectedGroup?.id ?? null,
+		selectLayer: (layerId) => {
+			const layer = document.layers.find(({ id }) => id === layerId)
+			if (layer === undefined) return
+			setSelectedLayerId(layer.id)
+			setGroupScope([])
+			setSelection([])
+			setDirectSelection([])
+			setSelectedBlendId(null)
+			setStatus(`${layer.name} is the active layer.`)
+		},
+		selectHierarchyGroup: (groupId, layerId, parentScope) => {
+			const unit = designGroupSelectionUnit(document, groupId)
+			if (unit === null) return
+			const unavailable = unit.objectIds
+				.map((id) => effectiveHierarchy.byObjectId.get(id))
+				.find(
+					(entry): entry is DesignEffectiveHierarchyEntry =>
+						entry?.hiddenBy?.kind === "layer" ||
+						entry?.lockedBy?.kind === "layer",
+				)
+			if (unavailable !== undefined) {
+				setStatus(
+					effectiveStateReason(unavailable, "selecting the group") ??
+						"The group is unavailable.",
+				)
+				return
+			}
+			setSelectedLayerId(layerId)
+			setGroupScope(parentScope)
+			setSelection(unit.objectIds)
+			setDirectSelection([])
+			setSelectedBlendId(null)
+			setStatus(
+				`${unit.name} selected as one group with ${unit.objectIds.length} descendant object${unit.objectIds.length === 1 ? "" : "s"}.`,
+			)
+		},
+		selectHierarchyObject: (object, layerId, parentScope, additive = false) => {
+			const effective = effectiveHierarchy.byObjectId.get(object.id)
+			if (
+				effective?.hiddenBy?.kind === "layer" ||
+				effective?.lockedBy?.kind === "layer"
+			) {
+				setStatus(
+					effectiveStateReason(effective, "selecting the object") ??
+						"The object is unavailable.",
+				)
+				return
+			}
+			const sameScope =
+				parentScope.length === groupScope.length &&
+				parentScope.every((id, index) => groupScope[index] === id)
+			setSelectedLayerId(layerId)
+			setGroupScope(parentScope)
+			setSelectedBlendId(null)
+			setSelection((current) =>
+				additive && sameScope
+					? current.includes(object.id)
+						? current.filter((id) => id !== object.id)
+						: [...current, object.id]
+					: [object.id],
+			)
+			setDirectSelection([])
+		},
+		setHierarchyScope: (nextScope) => {
+			if (
+				nextScope.length === groupScope.length &&
+				nextScope.every((id, index) => groupScope[index] === id)
+			)
+				return
+			if (nextScope.length > groupScope.length) {
+				const entered = designGroupSelectionUnit(document, nextScope.at(-1)!)
+				setGroupScope(nextScope)
+				setSelection([])
+				setDirectSelection([])
+				setSelectedBlendId(null)
+				setStatus(
+					`Editing inside ${entered?.name ?? "group"}. Use the Layers breadcrumb or Escape to exit.`,
+				)
+				return
+			}
+			const exitedGroupId = groupScope[nextScope.length]
+			setGroupScope(nextScope)
+			setDirectSelection([])
+			setSelectedBlendId(null)
+			if (exitedGroupId === undefined) {
+				setSelection([])
+				setStatus("Editing at the document layer level.")
+				return
+			}
+			const unit = designGroupSelectionUnit(document, exitedGroupId)
+			setSelection(unit?.objectIds ?? [])
+			setStatus(`Exited ${unit?.name ?? "group"}; group selected.`)
+		},
 		activateArtboard,
 		addSwatch,
 		appearanceDisabledReason,

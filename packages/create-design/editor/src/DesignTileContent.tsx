@@ -6,6 +6,8 @@ import {
 	AlignLeftIcon,
 	AlignRightIcon,
 	AlignTopIcon,
+	ChevronDownIcon,
+	ChevronRightIcon,
 	EyeClosedIcon,
 	EyeOpenIcon,
 	Link1Icon,
@@ -23,7 +25,7 @@ import {
 	TileSelect,
 	TileTextField,
 } from "@create-art/editor"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type {
 	AppearancePaintTarget,
 	AppearancePaintValue,
@@ -36,6 +38,7 @@ import {
 	resolvedRgb,
 	rgbToCmyk,
 	swatchCss,
+	projectDesignEffectiveHierarchy,
 } from "@create-design/model"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import {
@@ -77,7 +80,9 @@ import type {
 	ColorDefinition,
 	DesignDocument,
 	DesignBlend,
+	DesignLayer,
 	DesignObject,
+	DesignSceneChild,
 	DesignStroke,
 	DesignSwatch,
 	DesignTool,
@@ -296,63 +301,405 @@ function DesignLayersTile({
 }: {
 	readonly context: DesignTileContext
 }) {
+	type TreeRow = Readonly<{
+		key: string
+		kind: "layer" | "group" | "object"
+		name: string
+		depth: number
+		parentKey: string | null
+		hasChildren: boolean
+		layerId: string | null
+		groupScope: readonly string[]
+		object?: DesignObject
+		descendantCount?: number
+	}>
+	const groups = useMemo(
+		() => new Map(context.document.groups.map((group) => [group.id, group])),
+		[context.document.groups],
+	)
+	const objects = useMemo(
+		() =>
+			new Map(context.document.objects.map((object) => [object.id, object])),
+		[context.document.objects],
+	)
+	const effective = useMemo(
+		() => projectDesignEffectiveHierarchy(context.document),
+		[context.document],
+	)
+	const descendantIds = (children: readonly DesignSceneChild[]): string[] =>
+		children.flatMap((child) =>
+			child.kind === "object"
+				? [child.id]
+				: descendantIds(groups.get(child.id)?.children ?? []),
+		)
+	const branchKeys = useMemo(
+		() => [
+			...context.document.layers.map(({ id }) => `layer:${id}`),
+			...context.document.groups.map(({ id }) => `group:${id}`),
+		],
+		[context.document.groups, context.document.layers],
+	)
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+		() => new Set(branchKeys),
+	)
+	const knownBranches = useRef(new Set(branchKeys))
+	useEffect(() => {
+		const additions = branchKeys.filter(
+			(key) => !knownBranches.current.has(key),
+		)
+		knownBranches.current = new Set(branchKeys)
+		if (additions.length > 0)
+			setExpanded((current) => new Set([...current, ...additions]))
+	}, [branchKeys])
+	const rows = useMemo(() => {
+		const result: TreeRow[] = []
+		const appendChildren = (
+			children: readonly DesignSceneChild[],
+			layer: DesignLayer,
+			parentKey: string,
+			depth: number,
+			parentScope: readonly string[],
+		): void => {
+			for (const child of [...children].reverse()) {
+				if (child.kind === "object") {
+					const object = objects.get(child.id)
+					if (object !== undefined)
+						result.push({
+							key: `object:${object.id}`,
+							kind: "object",
+							name: object.name,
+							depth,
+							parentKey,
+							hasChildren: false,
+							layerId: layer.id,
+							groupScope: parentScope,
+							object,
+						})
+					continue
+				}
+				const group = groups.get(child.id)
+				if (group === undefined) continue
+				const key = `group:${group.id}`
+				const groupScope = [...parentScope, group.id]
+				result.push({
+					key,
+					kind: "group",
+					name: group.name,
+					depth,
+					parentKey,
+					hasChildren: group.children.length > 0,
+					layerId: layer.id,
+					groupScope,
+					descendantCount: descendantIds(group.children).length,
+				})
+				if (expanded.has(key))
+					appendChildren(group.children, layer, key, depth + 1, groupScope)
+			}
+		}
+		for (const layer of [...context.document.layers].reverse()) {
+			const key = `layer:${layer.id}`
+			result.push({
+				key,
+				kind: "layer",
+				name: layer.name,
+				depth: 1,
+				parentKey: null,
+				hasChildren: layer.children.length > 0,
+				layerId: layer.id,
+				groupScope: [],
+				descendantCount: descendantIds(layer.children).length,
+			})
+			if (expanded.has(key)) appendChildren(layer.children, layer, key, 2, [])
+		}
+		return result
+	}, [context.document, expanded, groups, objects])
+	const [focusedKey, setFocusedKey] = useState(
+		() => `layer:${context.document.layers.at(-1)!.id}`,
+	)
+	const rowRefs = useRef(new Map<string, HTMLElement>())
+	useEffect(() => {
+		if (!rows.some(({ key }) => key === focusedKey) && rows[0] !== undefined)
+			setFocusedKey(rows[0].key)
+	}, [focusedKey, rows])
+	const focusRow = (key: string): void => {
+		setFocusedKey(key)
+		rowRefs.current.get(key)?.focus()
+		requestAnimationFrame(() => rowRefs.current.get(key)?.focus())
+	}
+	const toggle = (key: string): void =>
+		setExpanded((current) => {
+			const next = new Set(current)
+			if (next.has(key)) next.delete(key)
+			else next.add(key)
+			return next
+		})
+	const selectRow = (row: TreeRow, additive = false): void => {
+		if (row.kind === "layer") context.selectLayer(row.layerId!)
+		else if (row.kind === "group")
+			context.selectHierarchyGroup(
+				row.key.slice("group:".length),
+				row.layerId!,
+				row.groupScope.slice(0, -1),
+			)
+		else if (row.object !== undefined)
+			context.selectHierarchyObject(
+				row.object,
+				row.layerId!,
+				row.groupScope,
+				additive,
+			)
+	}
+	const pathRelated = (row: TreeRow): boolean => {
+		if (row.layerId !== context.activeLayerId) return false
+		const active = context.activeGroupScope
+		if (active.length === 0) return true
+		const path = row.groupScope
+		return (
+			active.every((id, index) => path[index] === id) ||
+			path.every((id, index) => active[index] === id)
+		)
+	}
+	const stateLabel = (row: TreeRow): string => {
+		if (row.kind === "layer") {
+			const layer = context.document.layers.find(
+				({ id }) => id === row.layerId,
+			)!
+			return [
+				"Layer",
+				`${row.descendantCount ?? 0} descendants`,
+				...(layer.hidden ? ["Hidden"] : ["Visible"]),
+				...(layer.locked ? ["Locked"] : ["Unlocked"]),
+			].join(" · ")
+		}
+		if (row.kind === "group") {
+			const entries = descendantIds(
+				groups.get(row.key.slice("group:".length))?.children ?? [],
+			).flatMap((id) => {
+				const entry = effective.byObjectId.get(id)
+				return entry === undefined ? [] : [entry]
+			})
+			const hidden = entries.find(({ visible }) => !visible)
+			const locked = entries.find((entry) => entry.locked)
+			return [
+				"Group",
+				`${row.descendantCount ?? 0} descendants`,
+				...(hidden === undefined
+					? []
+					: [
+							hidden.hiddenBy?.kind === "layer"
+								? `Hidden by ${hidden.layer.name} layer`
+								: "Contains hidden artwork",
+						]),
+				...(locked === undefined
+					? []
+					: [
+							locked.lockedBy?.kind === "layer"
+								? `Locked by ${locked.layer.name} layer`
+								: "Contains locked artwork",
+						]),
+			].join(" · ")
+		}
+		const entry = effective.byObjectId.get(row.object!.id)
+		return [
+			"Object",
+			...(entry?.hiddenBy === null || entry?.hiddenBy === undefined
+				? ["Visible"]
+				: [
+						entry.hiddenBy.kind === "layer"
+							? `Hidden by ${entry.hiddenBy.name} layer`
+							: "Hidden on object",
+					]),
+			...(entry?.lockedBy === null || entry?.lockedBy === undefined
+				? ["Unlocked"]
+				: [
+						entry.lockedBy.kind === "layer"
+							? `Locked by ${entry.lockedBy.name} layer`
+							: "Locked on object",
+					]),
+		].join(" · ")
+	}
+	const activeScopeNames = context.activeGroupScope.flatMap((id) => {
+		const group = groups.get(id)
+		return group === undefined ? [] : [{ id, name: group.name }]
+	})
 	return (
 		<design-layers-tile>
 			<strong>
 				{context.document.objects.length} objects ·{" "}
 				{context.document.blends?.length ?? 0} live blends
 			</strong>
-			{[...(context.document.blends ?? [])].reverse().map((blend) => (
-				<button
-					key={blend.id}
-					type="button"
-					data-layer-kind="blend"
-					aria-label={`Select live blend ${blend.name}`}
-					aria-pressed={context.selectedBlend?.id === blend.id}
-					onClick={() => context.selectBlend(blend)}
-				>
-					<i data-layer-color />
-					<span>{blend.name}</span>
-					<layer-icons>
-						<small>{blend.steps} steps</small>
-						{blend.locked ? <svg.LockClosed /> : null}
-					</layer-icons>
-				</button>
-			))}
-			{[...context.document.objects].reverse().map((object) => {
-				const swatch = context.document.swatches.find(
-					(candidate) =>
-						candidate.id ===
-						(object.appearance.fill?.swatchId ??
-							object.appearance.stroke?.swatchId),
-				)
-				return (
-					<button
-						key={object.id}
-						type="button"
-						aria-pressed={context.selectedObjectIds.includes(object.id)}
-						onClick={(event) =>
-							context.selectObject(
-								object,
-								event.shiftKey || event.metaKey || event.ctrlKey,
-							)
-						}
-					>
-						<i
-							data-layer-color
-							style={{
-								background:
-									swatch === undefined ? "transparent" : swatchCss(swatch),
-							}}
-						/>
-						<span>{object.name}</span>
-						<layer-icons>
-							{object.hidden ? <svg.EyeClosed /> : <svg.EyeOpen />}
-							{object.locked ? <svg.LockClosed /> : null}
-						</layer-icons>
+			{context.activeGroupScope.length === 0 ? null : (
+				<layer-breadcrumb aria-label="Active group editing scope">
+					<button type="button" onClick={() => context.setHierarchyScope([])}>
+						Document
 					</button>
-				)
-			})}
+					{activeScopeNames.map((group, index) => (
+						<button
+							key={group.id}
+							type="button"
+							aria-current={
+								index === activeScopeNames.length - 1 ? "location" : undefined
+							}
+							onClick={() =>
+								context.setHierarchyScope(
+									context.activeGroupScope.slice(0, index + 1),
+								)
+							}
+						>
+							{group.name}
+						</button>
+					))}
+				</layer-breadcrumb>
+			)}
+			<layer-tree role="tree" aria-label="Document layers">
+				{rows.map((row, index) => {
+					const branch = row.hasChildren
+					const selected =
+						row.kind === "group"
+							? context.selectedGroupId === row.key.slice("group:".length)
+							: row.kind === "object"
+								? context.selectedObjectIds.includes(row.object!.id) &&
+									context.selectedGroupId === null
+								: false
+					const swatch =
+						row.object === undefined
+							? undefined
+							: context.document.swatches.find(
+									(candidate) =>
+										candidate.id ===
+										(row.object?.appearance.fill?.swatchId ??
+											row.object?.appearance.stroke?.swatchId),
+								)
+					const label = stateLabel(row)
+					return (
+						<layer-tree-row
+							key={row.key}
+							ref={(element: HTMLElement | null) => {
+								if (element === null) rowRefs.current.delete(row.key)
+								else rowRefs.current.set(row.key, element)
+							}}
+							role="treeitem"
+							aria-level={row.depth}
+							aria-expanded={branch ? expanded.has(row.key) : undefined}
+							aria-selected={selected ? "true" : "false"}
+							aria-current={
+								row.kind === "layer" && row.layerId === context.activeLayerId
+									? "true"
+									: undefined
+							}
+							aria-label={`${row.name}. ${label}${pathRelated(row) ? "" : ". Outside the active editing scope"}`}
+							tabIndex={focusedKey === row.key ? 0 : -1}
+							data-layer-kind={row.kind}
+							data-tree-key={row.key}
+							data-active-scope={
+								row.kind === "group" &&
+								row.groupScope.length === context.activeGroupScope.length &&
+								row.groupScope.every(
+									(id, scopeIndex) =>
+										context.activeGroupScope[scopeIndex] === id,
+								)
+									? "true"
+									: undefined
+							}
+							data-out-of-scope={pathRelated(row) ? undefined : "true"}
+							style={{ "--tree-depth": row.depth } as React.CSSProperties}
+							onFocus={() => setFocusedKey(row.key)}
+							onClick={(event: React.MouseEvent<HTMLElement>) =>
+								selectRow(row, event.shiftKey || event.metaKey || event.ctrlKey)
+							}
+							onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
+								const previous = rows[index - 1]
+								const next = rows[index + 1]
+								if (event.key === "ArrowDown" && next !== undefined)
+									focusRow(next.key)
+								else if (event.key === "ArrowUp" && previous !== undefined)
+									focusRow(previous.key)
+								else if (event.key === "Home") focusRow(rows[0]!.key)
+								else if (event.key === "End") focusRow(rows.at(-1)!.key)
+								else if (event.key === "ArrowRight" && branch) {
+									if (!expanded.has(row.key)) toggle(row.key)
+									else if (next?.parentKey === row.key) focusRow(next.key)
+								} else if (event.key === "ArrowLeft") {
+									if (branch && expanded.has(row.key)) toggle(row.key)
+									else if (row.parentKey !== null) focusRow(row.parentKey)
+								} else if (event.key === "Enter" || event.key === " ")
+									selectRow(
+										row,
+										event.shiftKey || event.metaKey || event.ctrlKey,
+									)
+								else return
+								event.preventDefault()
+							}}
+						>
+							{branch ? (
+								<button
+									type="button"
+									data-disclosure
+									aria-label={`${expanded.has(row.key) ? "Collapse" : "Expand"} ${row.name}`}
+									onClick={(event) => {
+										event.stopPropagation()
+										toggle(row.key)
+									}}
+								>
+									{expanded.has(row.key) ? (
+										<ChevronDownIcon width={18} height={18} />
+									) : (
+										<ChevronRightIcon width={18} height={18} />
+									)}
+								</button>
+							) : (
+								<i data-disclosure-placeholder />
+							)}
+							<i
+								data-layer-color
+								style={{
+									background:
+										swatch === undefined ? "transparent" : swatchCss(swatch),
+								}}
+							/>
+							<span>
+								<b>{row.name}</b>
+								<small>{label}</small>
+							</span>
+							{row.kind === "group" ? (
+								<button
+									type="button"
+									data-edit-scope
+									aria-label={`Edit inside ${row.name}`}
+									onClick={(event) => {
+										event.stopPropagation()
+										context.setHierarchyScope(row.groupScope)
+									}}
+								>
+									Edit
+								</button>
+							) : null}
+						</layer-tree-row>
+					)
+				})}
+			</layer-tree>
+			{(context.document.blends?.length ?? 0) === 0 ? null : (
+				<design-live-blends aria-label="Live blends">
+					<strong>Live blends</strong>
+					{[...(context.document.blends ?? [])].reverse().map((blend) => (
+						<button
+							key={blend.id}
+							type="button"
+							data-layer-kind="blend"
+							aria-label={`Select live blend ${blend.name}`}
+							aria-pressed={context.selectedBlend?.id === blend.id}
+							onClick={() => context.selectBlend(blend)}
+						>
+							<i data-layer-color />
+							<span>{blend.name}</span>
+							<layer-icons>
+								<small>{blend.steps} steps</small>
+								{blend.locked ? <svg.LockClosed /> : null}
+							</layer-icons>
+						</button>
+					))}
+				</design-live-blends>
+			)}
 		</design-layers-tile>
 	)
 }
