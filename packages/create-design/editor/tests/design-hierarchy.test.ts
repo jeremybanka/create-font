@@ -37,7 +37,103 @@ const fixture = () => {
 	}
 }
 
+const multiLayerFixture = () => {
+	const document = fixture()
+	return {
+		...document,
+		layers: [
+			{
+				id: "layer:back",
+				name: "Back",
+				children: [{ kind: "object" as const, id: "object:coral" }],
+			},
+			{
+				id: "layer:front",
+				name: "Front",
+				children: [
+					{ kind: "object" as const, id: "object:middle" },
+					{ kind: "object" as const, id: "object:front" },
+				],
+			},
+		],
+	}
+}
+
 describe("design hierarchy commands", () => {
+	it("inserts new objects into an explicit layer or group and derives paint order", () => {
+		const document = multiLayerFixture()
+		const newObject = {
+			...document.objects[0]!,
+			id: "object:new",
+			name: "New",
+		}
+		const appendedToBack = appendDesignHierarchyObjects(
+			{ ...document, objects: [...document.objects, newObject] },
+			[newObject.id],
+			{ layerId: "layer:back", groupId: null },
+		)
+		expect(appendedToBack.layers[0]?.children).toEqual([
+			{ kind: "object", id: "object:coral" },
+			{ kind: "object", id: "object:new" },
+		])
+		expect(appendedToBack.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:new",
+			"object:middle",
+			"object:front",
+		])
+
+		const grouped = groupDesignSelection(
+			appendedToBack,
+			["object:coral", "object:new"],
+			() => "back",
+		)
+		if (grouped === null) throw new Error("Expected back-layer group.")
+		const nestedObject = {
+			...document.objects[0]!,
+			id: "object:nested",
+			name: "Nested",
+		}
+		const appendedToGroup = appendDesignHierarchyObjects(
+			{
+				...grouped.document,
+				objects: [...grouped.document.objects, nestedObject],
+			},
+			[nestedObject.id],
+			{ layerId: "layer:back", groupId: "group:back" },
+		)
+		expect(appendedToGroup.groups[0]?.children.at(-1)).toEqual({
+			kind: "object",
+			id: "object:nested",
+		})
+		expect(appendedToGroup.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:new",
+			"object:nested",
+			"object:middle",
+			"object:front",
+		])
+	})
+
+	it("rejects grouping and stacking selections that cross layer boundaries", () => {
+		const document = multiLayerFixture()
+		expect(
+			groupDesignSelection(
+				document,
+				["object:coral", "object:middle"],
+				() => "cross-layer",
+			),
+		).toBeNull()
+		expect(
+			stackDesignSelection(
+				document,
+				["object:coral", "object:middle"],
+				"front",
+			),
+		).toBeNull()
+		expect(document.layers).toEqual(multiLayerFixture().layers)
+	})
+
 	it("groups and ungroups children without changing their authored state", () => {
 		const document = fixture()
 		const before = document.objects.map((object) => ({ ...object }))
@@ -150,7 +246,17 @@ describe("design hierarchy commands", () => {
 		expect(removed.layers[0]?.children).toEqual([
 			{ kind: "object", id: "object:front" },
 		])
-		const appended = appendDesignHierarchyObjects(removed, ["object:new"])
+		const appended = appendDesignHierarchyObjects(
+			{
+				...removed,
+				objects: [
+					...removed.objects,
+					{ ...removed.objects[0]!, id: "object:new", name: "New" },
+				],
+			},
+			["object:new"],
+			{ layerId: removed.layers[0]!.id, groupId: null },
+		)
 		expect(appended.layers[0]?.children.at(-1)).toEqual({
 			kind: "object",
 			id: "object:new",

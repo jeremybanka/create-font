@@ -137,11 +137,7 @@ export function duplicateDesignObjects(
 		idMap,
 		nextId,
 	)
-	if (hierarchy !== null) return hierarchy
-	return {
-		document: withDuplicates,
-		selection: duplicates.map((object) => object.id),
-	}
+	return hierarchy
 }
 
 export function writeDesignClipboard(

@@ -15,6 +15,73 @@ import { projectDesignObjectContours } from "@create-design/model"
 import { expandDesignShape } from "../src/shape-expansion.ts"
 
 describe("vector clipboard interoperability", () => {
+	it("duplicates nested groups in their source layer and rejects cross-layer batches", () => {
+		const document = createInitialDocument()
+		const first = document.objects[0]!
+		const second = document.objects[1]!
+		const layered = {
+			...document,
+			objects: [
+				first,
+				second,
+				{ ...first, id: "object:third", name: "Third" },
+				{ ...first, id: "object:fourth", name: "Fourth" },
+			],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object" as const, id: first.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					children: [
+						{ kind: "object" as const, id: second.id },
+						{ kind: "object" as const, id: "object:third" },
+						{ kind: "object" as const, id: "object:fourth" },
+					],
+				},
+			],
+		}
+		const inner = groupDesignSelection(
+			layered,
+			[second.id, "object:third"],
+			() => "inner",
+		)
+		if (inner === null) throw new Error("Expected inner group.")
+		const outer = groupDesignSelection(
+			inner.document,
+			[...inner.selection, "object:fourth"],
+			() => "outer",
+		)
+		if (outer === null) throw new Error("Expected outer group.")
+		let sequence = 0
+		const duplicated = duplicateDesignObjects(
+			outer.document,
+			outer.selection,
+			() => `nested:${sequence++}`,
+		)
+		if (duplicated === null) throw new Error("Expected nested duplicate.")
+		expect(duplicated.document.layers[0]).toEqual(outer.document.layers[0])
+		expect(duplicated.document.layers[1]?.children).toEqual([
+			{ kind: "group", id: "group:outer" },
+			{ kind: "group", id: expect.stringMatching(/^group:nested:/u) },
+		])
+		expect(
+			duplicated.document.groups.filter((group) =>
+				group.name.endsWith(" copy"),
+			),
+		).toHaveLength(2)
+		expect(
+			duplicateDesignObjects(
+				layered,
+				[first.id, second.id],
+				() => `cross:${sequence++}`,
+			),
+		).toBeNull()
+	})
+
 	it("duplicates a selected group as one offset hierarchy unit", () => {
 		const document = createInitialDocument()
 		const source = document.objects[0]!
@@ -376,7 +443,10 @@ describe("vector clipboard interoperability", () => {
 				: undefined,
 		)
 
-		const imported = importDesignObjects(document, [], addition)
+		const imported = importDesignObjects(document, [], addition, {
+			layerId: document.layers[0]!.id,
+			groupId: null,
+		})
 		expect(imported.ok).toBe(true)
 		if (!imported.ok) return
 		expect(imported.document.objects.at(-2)?.geometry.kind).toBe("rectangle")

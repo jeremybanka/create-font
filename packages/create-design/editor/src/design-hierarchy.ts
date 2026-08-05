@@ -26,27 +26,114 @@ export type DesignHierarchyResult = Readonly<{
 	selection: readonly string[]
 }>
 
+export type DesignHierarchyScope = Readonly<{
+	layerId: string
+	groupId: string | null
+}>
+
+function childContainsGroup(
+	child: DesignSceneChild,
+	groupId: string,
+	groups: ReadonlyMap<string, DesignGroup>,
+): boolean {
+	if (child.kind === "object") return false
+	if (child.id === groupId) return true
+	return (
+		groups
+			.get(child.id)
+			?.children.some((candidate) =>
+				childContainsGroup(candidate, groupId, groups),
+			) ?? false
+	)
+}
+
+function childContainsObject(
+	child: DesignSceneChild,
+	objectId: string,
+	groups: ReadonlyMap<string, DesignGroup>,
+): boolean {
+	if (child.kind === "object") return child.id === objectId
+	return (
+		groups
+			.get(child.id)
+			?.children.some((candidate) =>
+				childContainsObject(candidate, objectId, groups),
+			) ?? false
+	)
+}
+
+export function defaultDesignHierarchyScope(
+	document: DesignDocument,
+): DesignHierarchyScope {
+	const layer = document.layers.at(-1)
+	if (layer === undefined)
+		throw new Error("A design document must contain at least one layer.")
+	return { layerId: layer.id, groupId: null }
+}
+
+export function designLayerIdForObject(
+	document: DesignDocument,
+	objectId: string,
+): string | null {
+	const groups = new Map(document.groups.map((group) => [group.id, group]))
+	return (
+		document.layers.find((layer) =>
+			layer.children.some((child) =>
+				childContainsObject(child, objectId, groups),
+			),
+		)?.id ?? null
+	)
+}
+
+export function designLayerIdForGroup(
+	document: DesignDocument,
+	groupId: string,
+): string | null {
+	const groups = new Map(document.groups.map((group) => [group.id, group]))
+	return (
+		document.layers.find((layer) =>
+			layer.children.some((child) =>
+				childContainsGroup(child, groupId, groups),
+			),
+		)?.id ?? null
+	)
+}
+
+export function isDesignHierarchyScopeValid(
+	document: DesignDocument,
+	scope: DesignHierarchyScope,
+): boolean {
+	if (!document.layers.some((layer) => layer.id === scope.layerId)) return false
+	return (
+		scope.groupId === null ||
+		designLayerIdForGroup(document, scope.groupId) === scope.layerId
+	)
+}
+
 export function appendDesignHierarchyObjects(
 	document: DesignDocument,
 	objectIds: readonly string[],
+	scope: DesignHierarchyScope,
 ): DesignDocument {
 	if (objectIds.length === 0) return document
-	const target = document.layers.at(-1)
-	if (target === undefined) return document
-	return {
-		...document,
-		layers: document.layers.map((layer) =>
-			layer.id === target.id
-				? {
-						...layer,
-						children: [
-							...layer.children,
-							...objectIds.map((id) => ({ kind: "object" as const, id })),
-						],
-					}
-				: layer,
-		),
-	}
+	if (!isDesignHierarchyScopeValid(document, scope))
+		throw new Error("The active design hierarchy scope is unavailable.")
+	const objects = new Set(document.objects.map((object) => object.id))
+	const unknown = objectIds.find((id) => !objects.has(id))
+	if (unknown !== undefined)
+		throw new Error(`Cannot insert unknown design object ${unknown}.`)
+	const additions = objectIds.map((id) => ({ kind: "object" as const, id }))
+	const layers = document.layers.map((layer) =>
+		scope.groupId === null && layer.id === scope.layerId
+			? { ...layer, children: [...layer.children, ...additions] }
+			: layer,
+	)
+	const groups = document.groups.map((group) =>
+		group.id === scope.groupId
+			? { ...group, children: [...group.children, ...additions] }
+			: group,
+	)
+	return installHierarchy(document, layers, groups)
 }
 
 function replaceChildren(

@@ -135,7 +135,9 @@ import {
 } from "./design-arrangement.ts"
 import {
 	appendDesignHierarchyObjects,
+	defaultDesignHierarchyScope,
 	designGroupSelectionUnit,
+	designLayerIdForObject,
 	designSelectInteraction,
 	designSelectionUnits,
 	designSelectionUnitAtObject,
@@ -145,6 +147,7 @@ import {
 	replaceDesignHierarchyObject,
 	stackDesignSelection,
 	ungroupDesignSelection,
+	type DesignHierarchyScope,
 	type DesignStackCommand,
 } from "./design-hierarchy.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
@@ -198,7 +201,7 @@ import {
 } from "./stroke-expansion.ts"
 import {
 	applyDesignVectorIntent,
-	designVectorAdapter,
+	createDesignVectorAdapter,
 	importDesignVectorClipboard,
 	importDesignObjects,
 	projectDesignVectorObject,
@@ -813,6 +816,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		end: number
 	}> | null>(null)
 	const [groupScope, setGroupScope] = useState<readonly string[]>([])
+	const [selectedLayerId, setSelectedLayerId] = useState(
+		() => defaultDesignHierarchyScope(initialLoad.document).layerId,
+	)
 	const [activeArtboardId, setActiveArtboardId] = useState(
 		() => activeDesignArtboard(initialLoad.document).id,
 	)
@@ -831,6 +837,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				objectSelection: readonly string[]
 				directSelection: readonly DesignDirectSelectionTarget[]
 				blendId?: string
+				layerId?: string
+				groupScope?: readonly string[]
 			}>
 		>(),
 	)
@@ -841,10 +849,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				objectSelection: readonly string[]
 				directSelection: readonly DesignDirectSelectionTarget[]
 				blendId?: string
+				layerId?: string
+				groupScope?: readonly string[]
 			}>
 		>(),
 	)
 	const pendingHistorySelectionRef = useRef<number | null>(null)
+	const restoringHistorySelectionRef = useRef(false)
 	const [currentAppearance, setCurrentAppearance] = useState<DesignAppearance>(
 		() => defaultDesignAppearance(initialLoad.document.swatches),
 	)
@@ -1212,6 +1223,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	persistenceRef.current = persistence
 	const activeArtboard = activeDesignArtboard(document, activeArtboardId)
 	const currentGroupScope = groupScope.at(-1) ?? null
+	const activeLayerId = document.layers.some(
+		(layer) => layer.id === selectedLayerId,
+	)
+		? selectedLayerId
+		: defaultDesignHierarchyScope(document).layerId
+	const activeHierarchyScope = useMemo<DesignHierarchyScope>(
+		() => ({ layerId: activeLayerId, groupId: currentGroupScope }),
+		[activeLayerId, currentGroupScope],
+	)
 	currentGroupScopeRef.current = currentGroupScope
 	const selectedUnit = designSelectionUnitForIds(
 		document,
@@ -1230,6 +1250,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (selectedBlendId !== null && selectedBlend === null)
 			setSelectedBlendId(null)
 	}, [selectedBlend, selectedBlendId])
+	useEffect(() => {
+		const layerIds = new Set(
+			selection.flatMap((objectId) => {
+				const layerId = designLayerIdForObject(document, objectId)
+				return layerId === null ? [] : [layerId]
+			}),
+		)
+		if (layerIds.size === 1) setSelectedLayerId([...layerIds][0]!)
+	}, [document, selection])
 	const selectedObject =
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
 	const editingTextObject:
@@ -1579,7 +1608,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const commitVectorIntent = useCallback(
 		(intent: VectorEditIntent): boolean => {
-			const result = applyDesignVectorIntent(document, selection, intent)
+			const result = applyDesignVectorIntent(
+				document,
+				selection,
+				intent,
+				activeHierarchyScope,
+			)
 			if (!result.ok) {
 				setStatus(result.error)
 				return false
@@ -1588,7 +1622,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection(result.selection)
 			return true
 		},
-		[commit, document, selection],
+		[activeHierarchyScope, commit, document, selection],
 	)
 
 	const pagePoint = useCallback(
@@ -1721,12 +1755,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setSelection((current) =>
 					normalizeDesignSelection(document, current, currentGroupScope),
 				)
-			if (
-				nextTool !== "select" &&
-				nextTool !== "transform" &&
-				nextTool !== "direct"
-			)
-				setGroupScope([])
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
 		},
@@ -2546,6 +2574,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	useEffect(() => {
 		if (pendingHistorySelectionRef.current !== historyAt) return
+		restoringHistorySelectionRef.current = true
 		pendingHistorySelectionRef.current = null
 		const recorded =
 			historySelectionsRef.current.get(historyAt) ??
@@ -2554,7 +2583,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setSelection(recorded.objectSelection)
 		setDirectSelection(recorded.directSelection)
 		setSelectedBlendId(recorded.blendId ?? null)
+		if (
+			recorded.layerId !== undefined &&
+			document.layers.some((layer) => layer.id === recorded.layerId)
+		)
+			setSelectedLayerId(recorded.layerId)
+		if (recorded.groupScope !== undefined) setGroupScope(recorded.groupScope)
 	}, [document, historyAt])
+	useEffect(() => {
+		if (restoringHistorySelectionRef.current) {
+			restoringHistorySelectionRef.current = false
+			return
+		}
+		if (pendingHistorySelectionRef.current !== null) return
+		historySelectionsRef.current.set(historyAt, {
+			objectSelection: selection,
+			directSelection,
+			...(selectedBlendId === null ? {} : { blendId: selectedBlendId }),
+			layerId: activeLayerId,
+			groupScope,
+		})
+	}, [
+		activeLayerId,
+		directSelection,
+		groupScope,
+		historyAt,
+		selectedBlendId,
+		selection,
+	])
 
 	const finishPen = useCallback(
 		(closed = false): void => {
@@ -2574,6 +2630,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				appendDesignHierarchyObjects(
 					{ ...document, objects: [...document.objects, object] },
 					[object.id],
+					activeHierarchyScope,
 				),
 			)
 			setSelection([object.id])
@@ -2585,7 +2642,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
 			)
 		},
-		[cancelCanvasGesture, commit, authoredAppearance, document, nextId],
+		[
+			activeHierarchyScope,
+			cancelCanvasGesture,
+			commit,
+			authoredAppearance,
+			document,
+			nextId,
+		],
 	)
 
 	const exportDocument = useCallback(
@@ -4023,7 +4087,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				clipboard,
 				document,
 				objectIds,
-				designVectorAdapter.clipboard(document, objectIds),
+				createDesignVectorAdapter(activeHierarchyScope).clipboard(
+					document,
+					objectIds,
+				),
 			)
 		const copy = (event: ClipboardEvent): void => {
 			if (
@@ -4068,10 +4135,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus("Select one or more complete objects to cut.")
 				return
 			}
-			const result = applyDesignVectorIntent(document, capturedSelection, {
-				kind: "delete",
-				objectIds: capturedSelection,
-			})
+			const result = applyDesignVectorIntent(
+				document,
+				capturedSelection,
+				{
+					kind: "delete",
+					objectIds: capturedSelection,
+				},
+				activeHierarchyScope,
+			)
 			if (!result.ok) {
 				setStatus(result.error)
 				return
@@ -4098,9 +4170,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			historySelectionsRef.current.set(historyAt, {
 				objectSelection: capturedSelection,
 				directSelection,
+				layerId: activeLayerId,
+				groupScope,
 			})
 			const nextDirectSelection = directSelection.filter(
 				(target) => !deletedIds.has(target.objectId),
+			)
+			const remainingGroupIds = new Set(
+				result.document.groups.map((group) => group.id),
+			)
+			const nextGroupScope = groupScope.filter((id) =>
+				remainingGroupIds.has(id),
 			)
 			pathCommandSelectionsRef.current.set(result.document, {
 				objectSelection: result.selection,
@@ -4109,6 +4189,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			historySelectionsRef.current.set(historyAt + 1, {
 				objectSelection: result.selection,
 				directSelection: nextDirectSelection,
+				layerId: activeLayerId,
+				groupScope: nextGroupScope,
 			})
 			commit(result.document)
 			setSelection(result.selection)
@@ -4155,7 +4237,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				},
 			)
 			if (nativeAddition !== null && nativeAddition.objects.length > 0) {
-				const result = importDesignObjects(document, selection, nativeAddition)
+				const result = importDesignObjects(
+					document,
+					selection,
+					nativeAddition,
+					activeHierarchyScope,
+				)
 				if (!result.ok) {
 					setStatus(result.error)
 					return
@@ -4180,6 +4267,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					vector,
 					nextId,
 					fallbackSwatchId,
+					activeHierarchyScope,
 				)
 				if (!result.ok) {
 					setStatus(result.error)
@@ -4203,7 +4291,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			if (fallbackAddition === null || fallbackAddition.objects.length === 0)
 				return
-			const result = importDesignObjects(document, selection, fallbackAddition)
+			const result = importDesignObjects(
+				document,
+				selection,
+				fallbackAddition,
+				activeHierarchyScope,
+			)
 			if (!result.ok) {
 				setStatus(result.error)
 				return
@@ -4225,10 +4318,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 	}, [
 		activeArtboard,
+		activeHierarchyScope,
 		commit,
 		directSelection,
 		document,
 		fallbackSwatchId,
+		groupScope,
 		historyAt,
 		nextId,
 		paletteOpen,
@@ -4618,6 +4713,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				appendDesignHierarchyObjects(
 					{ ...document, objects: [...document.objects, object] },
 					[object.id],
+					activeHierarchyScope,
 				),
 			)
 			beginTextEditing(object, true)
@@ -4919,6 +5015,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					appendDesignHierarchyObjects(
 						{ ...document, objects: [...document.objects, object] },
 						[object.id],
+						activeHierarchyScope,
 					),
 				)
 				beginTextEditing(object, true)
@@ -4950,6 +5047,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				appendDesignHierarchyObjects(
 					{ ...document, objects: [...document.objects, object] },
 					[object.id],
+					activeHierarchyScope,
 				),
 			)
 			setSelection([object.id])
