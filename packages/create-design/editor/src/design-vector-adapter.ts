@@ -22,7 +22,9 @@ import {
 } from "@create-design/model"
 import {
 	appendDesignHierarchyObjects,
+	isDesignHierarchyScopeValid,
 	removeDesignHierarchyObjects,
+	type DesignHierarchyScope,
 } from "./design-hierarchy.ts"
 import type {
 	DesignContour,
@@ -207,211 +209,218 @@ function replaceAt(
 	}
 }
 
-export const designVectorAdapter: VectorDocumentAdapter<
-	DesignDocument,
-	DesignVectorSelection
-> = {
-	project: projectDesignVectorSnapshot,
-	apply(document, selection, intent) {
-		if (intent.kind === "create-object") {
-			const error = validateVectorObject(intent.object)
-			if (error !== null) return reject(error)
-			if (document.objects.some((object) => object.id === intent.object.id))
-				return reject(`Object ID ${intent.object.id} is already in use.`)
-			const appearance = appearanceFromStyle(intent.object.style)
-			const fillId = appearance.fill?.swatchId
-			if (
-				fillId !== undefined &&
-				!document.swatches.some((swatch) => swatch.id === fillId)
-			)
-				return reject(`Unknown design swatch ${fillId}.`)
-			const object: DesignObject = {
-				id: intent.object.id,
-				name: intent.object.name,
-				geometry: { kind: "path", contours: designContours(intent.object) },
-				transform: IDENTITY_DESIGN_TRANSFORM,
-				appearance,
-				...(intent.object.hidden === undefined
-					? {}
-					: { hidden: intent.object.hidden }),
-				...(intent.object.locked === undefined
-					? {}
-					: { locked: intent.object.locked }),
+export function createDesignVectorAdapter(
+	scope: DesignHierarchyScope,
+): VectorDocumentAdapter<DesignDocument, DesignVectorSelection> {
+	return {
+		project: projectDesignVectorSnapshot,
+		apply(document, selection, intent) {
+			if (intent.kind === "create-object") {
+				if (!isDesignHierarchyScopeValid(document, scope))
+					return reject("The active design hierarchy scope is unavailable.")
+				const error = validateVectorObject(intent.object)
+				if (error !== null) return reject(error)
+				if (document.objects.some((object) => object.id === intent.object.id))
+					return reject(`Object ID ${intent.object.id} is already in use.`)
+				const appearance = appearanceFromStyle(intent.object.style)
+				const fillId = appearance.fill?.swatchId
+				if (
+					fillId !== undefined &&
+					!document.swatches.some((swatch) => swatch.id === fillId)
+				)
+					return reject(`Unknown design swatch ${fillId}.`)
+				const object: DesignObject = {
+					id: intent.object.id,
+					name: intent.object.name,
+					geometry: { kind: "path", contours: designContours(intent.object) },
+					transform: IDENTITY_DESIGN_TRANSFORM,
+					appearance,
+					...(intent.object.hidden === undefined
+						? {}
+						: { hidden: intent.object.hidden }),
+					...(intent.object.locked === undefined
+						? {}
+						: { locked: intent.object.locked }),
+				}
+				const next = { ...document, objects: [...document.objects, object] }
+				return {
+					ok: true,
+					document: appendDesignHierarchyObjects(next, [object.id], scope),
+					selection: [object.id],
+				}
 			}
-			const next = { ...document, objects: [...document.objects, object] }
-			return {
-				ok: true,
-				document: appendDesignHierarchyObjects(next, [object.id]),
-				selection: [object.id],
+			if (intent.kind === "replace-object") {
+				const error = validateVectorObject(intent.object)
+				if (error !== null) return reject(error)
+				const current = document.objects.find(
+					(object) => object.id === intent.object.id,
+				)
+				if (current === undefined)
+					return reject(`Unknown design object ${intent.object.id}.`)
+				if (current.locked) return reject(`Object ${current.id} is locked.`)
+				const fillId =
+					intent.object.style.kind === "fill"
+						? intent.object.style.swatchId
+						: undefined
+				if (
+					fillId !== undefined &&
+					!document.swatches.some((swatch) => swatch.id === fillId)
+				)
+					return reject(`Unknown design swatch ${fillId}.`)
+				return {
+					ok: true,
+					document: replaceAt(
+						document,
+						designObjectFromVector(current, intent.object),
+					),
+					selection,
+				}
 			}
-		}
-		if (intent.kind === "replace-object") {
-			const error = validateVectorObject(intent.object)
-			if (error !== null) return reject(error)
-			const current = document.objects.find(
-				(object) => object.id === intent.object.id,
-			)
-			if (current === undefined)
-				return reject(`Unknown design object ${intent.object.id}.`)
-			if (current.locked) return reject(`Object ${current.id} is locked.`)
-			const fillId =
-				intent.object.style.kind === "fill"
-					? intent.object.style.swatchId
-					: undefined
-			if (
-				fillId !== undefined &&
-				!document.swatches.some((swatch) => swatch.id === fillId)
-			)
-				return reject(`Unknown design swatch ${fillId}.`)
-			return {
-				ok: true,
-				document: replaceAt(
-					document,
-					designObjectFromVector(current, intent.object),
-				),
-				selection,
+			if (intent.kind === "delete") {
+				const ids = new Set(intent.objectIds)
+				const unknown = [...ids].find(
+					(id) => !document.objects.some((object) => object.id === id),
+				)
+				if (unknown !== undefined)
+					return reject(`Unknown design object ${unknown}.`)
+				const locked = document.objects.find(
+					(object) => ids.has(object.id) && object.locked,
+				)
+				if (locked !== undefined)
+					return reject(`Object ${locked.id} is locked.`)
+				const next = {
+					...document,
+					objects: document.objects.filter((object) => !ids.has(object.id)),
+				}
+				return {
+					ok: true,
+					document: removeDesignHierarchyObjects(next, ids),
+					selection: selection.filter((objectId) => !ids.has(objectId)),
+				}
 			}
-		}
-		if (intent.kind === "delete") {
-			const ids = new Set(intent.objectIds)
-			const unknown = [...ids].find(
-				(id) => !document.objects.some((object) => object.id === id),
-			)
-			if (unknown !== undefined)
-				return reject(`Unknown design object ${unknown}.`)
-			const locked = document.objects.find(
-				(object) => ids.has(object.id) && object.locked,
-			)
-			if (locked !== undefined) return reject(`Object ${locked.id} is locked.`)
-			const next = {
-				...document,
-				objects: document.objects.filter((object) => !ids.has(object.id)),
-			}
-			return {
-				ok: true,
-				document: removeDesignHierarchyObjects(next, ids),
-				selection: selection.filter((objectId) => !ids.has(objectId)),
-			}
-		}
-		if (intent.kind === "reorder") {
-			const fromIndex = document.objects.findIndex(
-				(object) => object.id === intent.objectId,
-			)
-			if (fromIndex < 0)
-				return reject(`Unknown design object ${intent.objectId}.`)
-			if (
-				!Number.isInteger(intent.toIndex) ||
-				intent.toIndex < 0 ||
-				intent.toIndex >= document.objects.length
-			)
-				return reject("Design object order is outside the document.")
-			const targetId = document.objects[intent.toIndex]?.id
-			const layer = document.layers.find((candidate) =>
-				candidate.children.some(
+			if (intent.kind === "reorder") {
+				const fromIndex = document.objects.findIndex(
+					(object) => object.id === intent.objectId,
+				)
+				if (fromIndex < 0)
+					return reject(`Unknown design object ${intent.objectId}.`)
+				if (
+					!Number.isInteger(intent.toIndex) ||
+					intent.toIndex < 0 ||
+					intent.toIndex >= document.objects.length
+				)
+					return reject("Design object order is outside the document.")
+				const targetId = document.objects[intent.toIndex]?.id
+				const layer = document.layers.find((candidate) =>
+					candidate.children.some(
+						(child) => child.kind === "object" && child.id === intent.objectId,
+					),
+				)
+				if (
+					layer === undefined ||
+					targetId === undefined ||
+					!layer.children.some(
+						(child) => child.kind === "object" && child.id === targetId,
+					)
+				)
+					return reject(
+						"Use hierarchy-aware stacking commands across groups or layers.",
+					)
+				const children = [...layer.children]
+				const childIndex = children.findIndex(
 					(child) => child.kind === "object" && child.id === intent.objectId,
-				),
-			)
-			if (
-				layer === undefined ||
-				targetId === undefined ||
-				!layer.children.some(
+				)
+				const targetChildIndex = children.findIndex(
 					(child) => child.kind === "object" && child.id === targetId,
 				)
-			)
-				return reject(
-					"Use hierarchy-aware stacking commands across groups or layers.",
+				const [child] = children.splice(childIndex, 1)
+				if (child === undefined) return reject("Design object is unavailable.")
+				children.splice(targetChildIndex, 0, child)
+				const objects = [...document.objects]
+				const [object] = objects.splice(fromIndex, 1)
+				if (object === undefined) return reject("Design object is unavailable.")
+				objects.splice(intent.toIndex, 0, object)
+				return {
+					ok: true,
+					document: {
+						...document,
+						objects,
+						layers: document.layers.map((candidate) =>
+							candidate.id === layer.id
+								? { ...candidate, children }
+								: candidate,
+						),
+					},
+					selection,
+				}
+			}
+			if (intent.kind === "set-style") {
+				const object = document.objects.find(
+					(candidate) => candidate.id === intent.objectId,
 				)
-			const children = [...layer.children]
-			const childIndex = children.findIndex(
-				(child) => child.kind === "object" && child.id === intent.objectId,
-			)
-			const targetChildIndex = children.findIndex(
-				(child) => child.kind === "object" && child.id === targetId,
-			)
-			const [child] = children.splice(childIndex, 1)
-			if (child === undefined) return reject("Design object is unavailable.")
-			children.splice(targetChildIndex, 0, child)
-			const objects = [...document.objects]
-			const [object] = objects.splice(fromIndex, 1)
-			if (object === undefined) return reject("Design object is unavailable.")
-			objects.splice(intent.toIndex, 0, object)
-			return {
-				ok: true,
-				document: {
-					...document,
-					objects,
-					layers: document.layers.map((candidate) =>
-						candidate.id === layer.id ? { ...candidate, children } : candidate,
-					),
-				},
-				selection,
+				if (object === undefined)
+					return reject(`Unknown design object ${intent.objectId}.`)
+				if (object.locked) return reject(`Object ${object.id} is locked.`)
+				const fillId =
+					intent.style.kind === "fill" ? intent.style.swatchId : undefined
+				if (
+					fillId !== undefined &&
+					!document.swatches.some((swatch) => swatch.id === fillId)
+				)
+					return reject(`Unknown design swatch ${fillId}.`)
+				return {
+					ok: true,
+					document: replaceAt(document, {
+						...object,
+						appearance: setAppearanceFill(object.appearance, fillId),
+					}),
+					selection,
+				}
 			}
-		}
-		if (intent.kind === "set-style") {
-			const object = document.objects.find(
-				(candidate) => candidate.id === intent.objectId,
-			)
-			if (object === undefined)
-				return reject(`Unknown design object ${intent.objectId}.`)
-			if (object.locked) return reject(`Object ${object.id} is locked.`)
-			const fillId =
-				intent.style.kind === "fill" ? intent.style.swatchId : undefined
-			if (
-				fillId !== undefined &&
-				!document.swatches.some((swatch) => swatch.id === fillId)
-			)
-				return reject(`Unknown design swatch ${fillId}.`)
-			return {
-				ok: true,
-				document: replaceAt(document, {
+			if (intent.kind === "set-object-properties") {
+				const object = document.objects.find(
+					(candidate) => candidate.id === intent.objectId,
+				)
+				if (object === undefined)
+					return reject(`Unknown design object ${intent.objectId}.`)
+				const updated: DesignObject = {
 					...object,
-					appearance: setAppearanceFill(object.appearance, fillId),
-				}),
-				selection,
+					...(intent.name === undefined ? {} : { name: intent.name }),
+					...(intent.hidden === undefined ? {} : { hidden: intent.hidden }),
+					...(intent.locked === undefined ? {} : { locked: intent.locked }),
+				}
+				return {
+					ok: true,
+					document: replaceAt(document, updated),
+					selection,
+				}
 			}
-		}
-		if (intent.kind === "set-object-properties") {
-			const object = document.objects.find(
-				(candidate) => candidate.id === intent.objectId,
-			)
-			if (object === undefined)
-				return reject(`Unknown design object ${intent.objectId}.`)
-			const updated: DesignObject = {
-				...object,
-				...(intent.name === undefined ? {} : { name: intent.name }),
-				...(intent.hidden === undefined ? {} : { hidden: intent.hidden }),
-				...(intent.locked === undefined ? {} : { locked: intent.locked }),
+			if (intent.kind === "transform-controls") {
+				return reject(
+					"Design control transforms require an object-scoped replacement.",
+				)
 			}
-			return {
-				ok: true,
-				document: replaceAt(document, updated),
-				selection,
-			}
-		}
-		if (intent.kind === "transform-controls") {
-			return reject(
-				"Design control transforms require an object-scoped replacement.",
-			)
-		}
-		return reject(`The design document does not support ${intent.kind}.`)
-	},
-	clipboard(document, selection) {
-		const snapshot = projectDesignVectorSnapshot(document, selection)
-		return vectorClipboardPayload({
-			...snapshot,
-			objects: document.objects.map((object) =>
-				projectDesignClipboardObject(document, object),
-			),
-		})
-	},
+			return reject(`The design document does not support ${intent.kind}.`)
+		},
+		clipboard(document, selection) {
+			const snapshot = projectDesignVectorSnapshot(document, selection)
+			return vectorClipboardPayload({
+				...snapshot,
+				objects: document.objects.map((object) =>
+					projectDesignClipboardObject(document, object),
+				),
+			})
+		},
+	}
 }
 
 export function applyDesignVectorIntent(
 	document: DesignDocument,
 	selection: DesignVectorSelection,
 	intent: VectorEditIntent,
+	scope: DesignHierarchyScope,
 ) {
-	return designVectorAdapter.apply(document, selection, intent)
+	return createDesignVectorAdapter(scope).apply(document, selection, intent)
 }
 
 export function importDesignVectorClipboard(
@@ -420,6 +429,7 @@ export function importDesignVectorClipboard(
 	payload: VectorClipboardPayload,
 	nextId: () => string,
 	fallbackSwatchId: string,
+	scope: DesignHierarchyScope,
 ) {
 	let nextDocument = document
 	let nextSelection = selection
@@ -499,10 +509,14 @@ export function importDesignVectorClipboard(
 				}),
 			})),
 		}
-		const result = designVectorAdapter.apply(nextDocument, nextSelection, {
-			kind: "create-object",
-			object,
-		})
+		const result = createDesignVectorAdapter(scope).apply(
+			nextDocument,
+			nextSelection,
+			{
+				kind: "create-object",
+				object,
+			},
+		)
 		if (!result.ok) return result
 		nextDocument = result.document
 		nextSelection = result.selection
@@ -522,7 +536,10 @@ export function importDesignObjects(
 		objects: readonly DesignObject[]
 		swatches: readonly DesignSwatch[]
 	}>,
+	scope: DesignHierarchyScope,
 ) {
+	if (!isDesignHierarchyScopeValid(document, scope))
+		return reject("The active design hierarchy scope is unavailable.")
 	const objectIds = new Set(document.objects.map((object) => object.id))
 	const duplicateObject = addition.objects.find((object) =>
 		objectIds.has(object.id),
@@ -549,7 +566,7 @@ export function importDesignObjects(
 	}
 	return {
 		ok: true,
-		document: appendDesignHierarchyObjects(next, importedIds),
+		document: appendDesignHierarchyObjects(next, importedIds, scope),
 		selection: importedIds,
 	} as const
 }

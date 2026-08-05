@@ -219,6 +219,104 @@ function clipboardEvent(
 }
 
 describe("create-design shared vector scene", () => {
+	it("creates in the selected object's layer and restores scoped selection through history", async () => {
+		const initial = createInitialDocument()
+		const backObject = initial.objects[0]!
+		const frontObject = initial.objects[1]!
+		const layered: DesignDocument = {
+			...initial,
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object", id: backObject.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					children: [{ kind: "object", id: frontObject.id }],
+				},
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: layered }, storage)
+		const backButton = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes(backObject.name))
+		const rectangle = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Rectangle"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (backButton === undefined || rectangle === null || canvas === null)
+			throw new Error("Layer selection or rectangle controls were not found.")
+		await act(async () => {
+			backButton.click()
+			await Promise.resolve()
+		})
+		act(() => rectangle.click())
+		const fire = (type: string, x: number, y: number): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId: 73,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", 360, 280)
+			fire("pointermove", 440, 350)
+			fire("pointerup", 440, 350)
+			await Promise.resolve()
+		})
+		const saved = storage.get(DESIGN_STORAGE_KEY)
+		if (saved === undefined)
+			throw new Error("Design document was not persisted.")
+		const created = JSON.parse(saved) as DesignDocument
+		const createdId = created.objects.find(
+			(object) => !initial.objects.some((source) => source.id === object.id),
+		)?.id
+		if (createdId === undefined) throw new Error("Rectangle was not created.")
+		expect(created.layers[0]?.children).toEqual([
+			{ kind: "object", id: backObject.id },
+			{ kind: "object", id: createdId },
+		])
+		expect(created.layers[1]?.children).toEqual([
+			{ kind: "object", id: frontObject.id },
+		])
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(backButton.getAttribute("aria-pressed")).toBe("true")
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		const recreatedButton = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				"design-layers-tile > button",
+			),
+		].find((button) => button.textContent?.includes("Rectangle"))
+		expect(recreatedButton?.getAttribute("aria-pressed")).toBe("true")
+	})
+
 	it("creates, selects, edits, and undoes a live blend through visible controls", () => {
 		const initial = createInitialDocument()
 		const stage = mountDesign({ initialDocument: initial })

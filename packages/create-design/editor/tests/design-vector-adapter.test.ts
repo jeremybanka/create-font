@@ -2,14 +2,60 @@ import { describe, expect, it } from "vitest"
 
 import { vectorDocumentAdapterContract } from "../../../create-art/editor/tests/vector-document-adapter.contract.ts"
 import {
-	designVectorAdapter,
+	createDesignVectorAdapter,
 	importDesignVectorClipboard,
 	projectDesignVectorObject,
 } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
 import { projectDesignObjectContours } from "@create-design/model"
 
+const defaultScope = {
+	layerId: createInitialDocument().layers[0]!.id,
+	groupId: null,
+} as const
+const designVectorAdapter = createDesignVectorAdapter(defaultScope)
+
 describe("design object vector adapter", () => {
+	it("creates through an explicit layer scope without crossing paint boundaries", () => {
+		const document = createInitialDocument()
+		const source = document.objects[0]!
+		const layered = {
+			...document,
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object" as const, id: source.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					children: document.objects.slice(1).map((object) => ({
+						kind: "object" as const,
+						id: object.id,
+					})),
+				},
+			],
+		}
+		const vector = {
+			...projectDesignVectorObject(document, source),
+			id: "object:scoped",
+			name: "Scoped object",
+		}
+		const result = createDesignVectorAdapter({
+			layerId: "layer:back",
+			groupId: null,
+		}).apply(layered, [], { kind: "create-object", object: vector })
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.layers[0]?.children.at(-1)).toEqual({
+			kind: "object",
+			id: vector.id,
+		})
+		expect(result.document.layers[1]).toEqual(layered.layers[1])
+		expect(result.document.objects[1]?.id).toBe(vector.id)
+	})
+
 	it("projects authored RGB/CMYK swatches without lossy neutral sentinels", () => {
 		const document = createInitialDocument()
 		const coral = document.objects[0]
@@ -258,6 +304,7 @@ describe("design object vector adapter", () => {
 			payload,
 			() => `contract:${sequence++}`,
 			"swatch:ink",
+			defaultScope,
 		)
 		expect(imported.ok).toBe(true)
 		if (!imported.ok) return
@@ -294,6 +341,7 @@ describe("design object vector adapter", () => {
 			neutralPayload,
 			() => `active:${sequence++}`,
 			"swatch:coral",
+			defaultScope,
 		)
 		expect(withActiveFill.ok).toBe(true)
 		if (!withActiveFill.ok) return
@@ -307,6 +355,7 @@ describe("design object vector adapter", () => {
 			neutralPayload,
 			() => `fallback:${sequence++}`,
 			"swatch:missing",
+			defaultScope,
 		)
 		expect(withInkFallback.ok).toBe(true)
 		if (!withInkFallback.ok) return
