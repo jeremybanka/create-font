@@ -259,6 +259,16 @@ design-tile-content.class {
 					background: var(--selected);
 				}
 
+				&[aria-current="true"] {
+					border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+					background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+					box-shadow: inset 3px 0 0 var(--accent);
+				}
+
+				&[aria-current="true"] > span > b {
+					color: var(--accent);
+				}
+
 				&:focus-visible {
 					box-shadow: 0 0 0 2px
 						color-mix(in srgb, var(--accent) 55%, transparent);

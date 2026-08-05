@@ -254,6 +254,16 @@ describe("create-design shared vector scene", () => {
 		}
 		const stage = mountDesign({ initialDocument: layered })
 		expect(stage.find(".design-object")).toHaveLength(2)
+		const lockedCanvasObject = stage
+			.find(".design-object")
+			.find((node: { name(): string }) => node.name().includes(lockedObject.id))
+		const editableCanvasObject = stage
+			.find(".design-object")
+			.find((node: { name(): string }) =>
+				node.name().includes(editableObject.id),
+			)
+		expect(lockedCanvasObject?.listening()).toBe(false)
+		expect(editableCanvasObject?.listening()).toBe(true)
 		const buttons = [
 			...document.querySelectorAll<HTMLButtonElement>(
 				'design-layers-tile [data-layer-kind="object"]',
@@ -270,12 +280,60 @@ describe("create-design shared vector scene", () => {
 		)
 		const canvas = stage.container().querySelector("canvas")
 		if (
+			lockedCanvasObject === undefined ||
+			editableCanvasObject === undefined ||
 			lockedButton === undefined ||
 			editableButton === undefined ||
 			rectangle === null ||
 			canvas === null
 		)
 			throw new Error("Layer policy controls were not found.")
+		const lockedBounds = lockedCanvasObject.getClientRect()
+		const marqueeStart = {
+			x: lockedBounds.x + lockedBounds.width / 2,
+			y: lockedBounds.y + lockedBounds.height / 2,
+		}
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: marqueeStart.x,
+					clientY: marqueeStart.y,
+					pointerId: 87,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: marqueeStart.x + 24,
+					clientY: marqueeStart.y + 24,
+					pointerId: 87,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".vector-selection-bounds")).toHaveLength(1)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).not.toContain("Unlock Locked layer")
+		act(() =>
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					clientX: marqueeStart.x + 24,
+					clientY: marqueeStart.y + 24,
+					pointerId: 87,
+					pointerType: "mouse",
+				}),
+			),
+		)
 		act(() => rectangle.click())
 		await act(async () => {
 			canvas.dispatchEvent(
@@ -500,6 +558,112 @@ describe("create-design shared vector scene", () => {
 			document.querySelector('[data-layer-kind="layer"][aria-current="true"]')
 				?.textContent,
 		).toContain("Studio copy")
+	})
+
+	it("targets an object's layer and pastes into the subsequently chosen target", async () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const existing = initial.objects[1]!
+		const layered: DesignDocument = {
+			...initial,
+			layers: [
+				{
+					id: "layer:source",
+					name: "Source",
+					children: [{ kind: "object", id: source.id }],
+				},
+				{
+					id: "layer:target",
+					name: "Target",
+					children: [{ kind: "object", id: existing.id }],
+				},
+				{
+					id: "layer:locked-target",
+					name: "Locked target",
+					locked: true,
+					children: [],
+				},
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: layered }, storage)
+		const layerRow = (name: string): HTMLElement => {
+			const row = [
+				...document.querySelectorAll<HTMLElement>(
+					'design-layers-tile [data-layer-kind="layer"]',
+				),
+			].find((candidate) => candidate.querySelector("b")?.textContent === name)
+			if (row === undefined) throw new Error(`${name} layer row was not found.`)
+			return row
+		}
+		const sourceNode = stage
+			.find(".design-object")
+			.find((node: { name(): string }) => node.name().includes(source.id))
+		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
+		if (sourceNode === undefined || artboard === null)
+			throw new Error("Source canvas object or artboard was not found.")
+		const down = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 407,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(down)
+			sourceNode.fire("pointerdown", { evt: down }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 407,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(layerRow("Source").getAttribute("aria-current")).toBe("true")
+
+		const entries = new Map<string, string>()
+		const clipboard = {
+			getData: (format: string) => entries.get(format) ?? "",
+			setData: (format: string, value: string) => entries.set(format, value),
+		}
+		await act(async () => {
+			artboard.dispatchEvent(clipboardEvent("cut", clipboard))
+			await Promise.resolve()
+		})
+		act(() => layerRow("Target").click())
+		expect(layerRow("Target").getAttribute("aria-current")).toBe("true")
+		const paste = clipboardEvent("paste", clipboard)
+		await act(async () => {
+			artboard.dispatchEvent(paste)
+			await Promise.resolve()
+		})
+		expect(paste.defaultPrevented).toBe(true)
+		const pasted = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(pasted.layers[0]?.children).toEqual([])
+		expect(pasted.layers[1]?.children[0]).toEqual({
+			kind: "object",
+			id: existing.id,
+		})
+		expect(pasted.layers[1]?.children).toHaveLength(2)
+
+		act(() => layerRow("Locked target").click())
+		const beforeRejectedPaste = storage.get(DESIGN_STORAGE_KEY)
+		const rejected = clipboardEvent("paste", clipboard)
+		act(() => artboard.dispatchEvent(rejected))
+		expect(rejected.defaultPrevented).toBe(false)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(beforeRejectedPaste)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Unlock Locked target layer before pasting into it")
 	})
 
 	it("creates in the selected object's layer and restores scoped selection through history", async () => {

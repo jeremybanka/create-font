@@ -119,6 +119,10 @@ describe("Design Layers tree", () => {
 		])
 		expect(host.querySelector('[data-layer-kind="document"]')).toBeNull()
 		expect(
+			host.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.textContent,
+		).toContain("Target layer")
+		expect(
 			host.querySelector('[data-layer-kind="group"][aria-selected="true"] b')
 				?.textContent,
 		).toContain("Outer group")

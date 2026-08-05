@@ -421,4 +421,48 @@ describe("live contour blends", () => {
 			"ready",
 		)
 	})
+
+	it("pastes a live unit into the requested layer and nested group", () => {
+		const source = documentWith()
+		const document: DesignDocument = {
+			...source,
+			layers: [
+				{
+					id: "layer:target",
+					name: "Target",
+					children: [{ kind: "group", id: "group:target" }],
+				},
+				...source.layers,
+			],
+			groups: [{ id: "group:target", name: "Target", children: [] }],
+		}
+		const payload = copyDesignBlendSelection(document, ["blend:test"])
+		let next = 0
+		const pasted = pasteDesignBlendSelection(
+			document,
+			payload!,
+			() => `scoped-${next++}`,
+			undefined,
+			{ layerId: "layer:target", groupId: "group:target" },
+		)
+		const pastedIds = pasted!.document.blends![1]!
+
+		expect(pasted!.document.groups[0]?.children).toEqual([
+			{ kind: "object", id: pastedIds.startObjectId },
+			{ kind: "object", id: pastedIds.endObjectId },
+		])
+		expect(pasted!.document.objects.slice(0, 2).map(({ id }) => id)).toEqual([
+			pastedIds.startObjectId,
+			pastedIds.endObjectId,
+		])
+		expect(
+			pasteDesignBlendSelection(
+				document,
+				payload!,
+				() => "invalid",
+				undefined,
+				{ layerId: "layer:target", groupId: "group:missing" },
+			),
+		).toBeNull()
+	})
 })

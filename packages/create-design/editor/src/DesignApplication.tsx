@@ -1286,6 +1286,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		: activeLayer.locked
 			? `Unlock ${activeLayer.name} layer before adding artwork to it.`
 			: null
+	const activeLayerPasteUnavailableReason = activeLayer.hidden
+		? `Show ${activeLayer.name} layer before pasting into it.`
+		: activeLayer.locked
+			? `Unlock ${activeLayer.name} layer before pasting into it.`
+			: null
 	currentGroupScopeRef.current = currentGroupScope
 	const selectedUnit = designSelectionUnitForIds(
 		document,
@@ -3476,7 +3481,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection([])
 			setDirectSelection([])
 			setSelectedBlendId(null)
-			setStatus(`${name} created and made active.`)
+			setStatus(`${name} created and made the target layer.`)
 		},
 		deleteLayer: (layerId) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
@@ -3518,7 +3523,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection([])
 			setDirectSelection([])
 			setSelectedBlendId(null)
-			setStatus(`${layer.name} duplicated as the active top layer.`)
+			setStatus(`${layer.name} duplicated as the target top layer.`)
 		},
 		renameLayer: (layerId, name) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
@@ -3592,7 +3597,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection([])
 			setDirectSelection([])
 			setSelectedBlendId(null)
-			setStatus(`${layer.name} is the active layer.`)
+			setStatus(`${layer.name} is now the target layer.`)
 		},
 		selectHierarchyGroup: (groupId, layerId, parentScope) => {
 			const unit = designGroupSelectionUnit(document, groupId)
@@ -4866,8 +4871,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				event.clipboardData === null
 			)
 				return
-			if (activeLayerUnavailableReason !== null) {
-				setStatus(activeLayerUnavailableReason)
+			if (activeLayerPasteUnavailableReason !== null) {
+				setStatus(activeLayerPasteUnavailableReason)
 				return
 			}
 			const serializedBlend = event.clipboardData.getData(DESIGN_BLEND_MIME)
@@ -4876,7 +4881,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					const payload = JSON.parse(serializedBlend) as Parameters<
 						typeof pasteDesignBlendSelection
 					>[1]
-					const result = pasteDesignBlendSelection(document, payload, nextId)
+					const result = pasteDesignBlendSelection(
+						document,
+						payload,
+						nextId,
+						undefined,
+						activeHierarchyScope,
+					)
 					if (result !== null) {
 						event.preventDefault()
 						commit(result.document)
@@ -4985,7 +4996,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [
 		activeArtboard,
 		activeHierarchyScope,
-		activeLayerUnavailableReason,
+		activeLayerPasteUnavailableReason,
 		commit,
 		directSelection,
 		document,
@@ -6343,7 +6354,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											const textColor =
 												fill === undefined ? "#111" : swatchCss(fill)
 											return (
-												<Group key={object.id} {...transform}>
+												<Group
+													key={object.id}
+													{...transform}
+													listening={!object.locked}
+												>
 													{canonicalLayout === null ||
 													canonicalLayout.diagnostics.some(
 														(diagnostic) => diagnostic.severity === "error",
@@ -6513,7 +6528,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														: selectedGroup === null &&
 															selection.includes(object.id)
 												}
-												listening={!derived || derivedBlendId !== undefined}
+												listening={
+													!object.locked &&
+													(!derived || derivedBlendId !== undefined)
+												}
 												onPointerDown={(event) =>
 													derivedBlendId === undefined
 														? startObjectGesture(event, object)
