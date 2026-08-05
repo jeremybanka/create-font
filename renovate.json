@@ -43,7 +43,12 @@
 			"dependencyDashboardApproval": true
 		},
 		{
-			"matchPackageNames": ["agents.yaml", "atom.io", "lasertag"],
+			"matchPackageNames": [
+				"agents.yaml",
+				"atom.io",
+				"lasertag",
+				"mondrian.pdf"
+			],
 			"minimumReleaseAge": null
 		}
 	]
