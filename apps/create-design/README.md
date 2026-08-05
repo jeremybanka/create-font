@@ -226,13 +226,15 @@ separate avoids ambiguous branching and makes every shared or exterior
 boundary directly selectable.
 
 The versioned repository source boundary lives in
-[`@create-design/source`](../../packages/create-design/source/README.md). Its second directory
-format splits document metadata, palette, ordered artboards, layer ordering,
+[`@create-design/source`](../../packages/create-design/source/README.md). Its fourth directory
+format splits document metadata, palette, ordered artboards, ordered layers,
 and each design object into independently validated units. Artboard order lives
 only in its inventory while each artboard's stable ID, name, global bounds,
 bleed, and safe-area metadata live in its own unit. Object IDs, display names,
 source paths, and stacking order remain independent so ordinary edits produce
-narrow Git diffs. Structural groups have their own units and recursively
+narrow Git diffs. Layer order lives only in its inventory; each layer unit owns
+its stable ID, name, visibility, lock state, and direct children. Structural
+groups have their own units and recursively
 reference ordered object or group children. Asset and font inventories reserve
 their separate source boundaries.
 

@@ -79,13 +79,20 @@ describe("design document storage", () => {
 				id: `object:appearance-${index}`,
 				appearance,
 			})),
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: appearances.map((_, index) => ({
+					kind: "object" as const,
+					id: `object:appearance-${index}`,
+				})),
+			})),
 		}
 		expect(parseDesignDocument(JSON.stringify(document))?.objects).toEqual(
 			document.objects,
 		)
 	})
 
-	it("hydrates a v1 key, migrates once, and saves canonical v5", () => {
+	it("hydrates a v1 key, migrates once, and saves canonical v6", () => {
 		const storage = memoryStorage({
 			[LEGACY_DESIGN_STORAGE_KEY]: JSON.stringify(legacyDocument()),
 		})
@@ -94,7 +101,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 5,
+				version: 6,
 				artboards: [
 					{
 						id: "artboard:page",
@@ -151,7 +158,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 5,
+				version: 6,
 				objects: [
 					{
 						geometry: {
@@ -201,7 +208,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 5,
+				version: 6,
 				objects: [
 					{
 						appearance: {
@@ -243,7 +250,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 5,
+				version: 6,
 				artboards: [
 					{
 						id: "artboard:page",

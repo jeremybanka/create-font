@@ -238,27 +238,22 @@ export function expandDesignBlend(
 				...document.objects.slice(insertionIndex),
 			],
 			blends: document.blends!.filter(({ id }) => id !== blendId),
-			...(document.scene === undefined
-				? {}
-				: {
-						scene: insertSceneChildrenBefore(
-							document.scene,
-							laterEndpointId,
-							sceneInsertions,
-						),
-					}),
-			...(document.groups === undefined
-				? {}
-				: {
-						groups: document.groups.map((group) => ({
-							...group,
-							children: insertSceneChildrenBefore(
-								group.children,
-								laterEndpointId,
-								sceneInsertions,
-							),
-						})),
-					}),
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: insertSceneChildrenBefore(
+					layer.children,
+					laterEndpointId,
+					sceneInsertions,
+				),
+			})),
+			groups: document.groups.map((group) => ({
+				...group,
+				children: insertSceneChildrenBefore(
+					group.children,
+					laterEndpointId,
+					sceneInsertions,
+				),
+			})),
 		},
 		selection: objects.map(({ id }) => id),
 	}

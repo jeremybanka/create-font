@@ -51,7 +51,7 @@ const path = (
 
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	format: "create-design.document",
-	version: 5,
+	version: 6,
 	title: "Topology",
 	artboards: [
 		{ id: "artboard", name: "Artboard", x: 0, y: 0, width: 500, height: 500 },
@@ -60,6 +60,14 @@ const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 		{ id: "ink", name: "Ink", source: { space: "rgb", r: 0, g: 0, b: 0 } },
 	],
 	objects,
+	layers: [
+		{
+			id: "layer:artwork",
+			name: "Artwork",
+			children: objects.map(({ id }) => ({ kind: "object", id })),
+		},
+	],
+	groups: [],
 	guides: [],
 })
 
@@ -275,7 +283,13 @@ describe("create-design path commands", () => {
 				id: `object:${object.id}`,
 				appearance: { fill: { swatchId: "swatch:ink" } },
 			})),
-			scene: [{ kind: "group", id: "group:joined" }],
+			layers: [
+				{
+					id: "layer:artwork",
+					name: "Artwork",
+					children: [{ kind: "group", id: "group:joined" }],
+				},
+			],
 			groups: [
 				{
 					id: "group:joined",
@@ -308,7 +322,7 @@ describe("create-design path commands", () => {
 		)
 		expect(joinedOuter.ok).toBe(true)
 		if (!joinedOuter.ok) return
-		expect(joinedOuter.document.scene).toEqual([
+		expect(joinedOuter.document.layers[0]?.children).toEqual([
 			{ kind: "object", id: "object:right" },
 		])
 		expect(joinedOuter.document.groups).toEqual([])
@@ -323,7 +337,7 @@ describe("create-design path commands", () => {
 		)
 		expect(joinedGroup.ok).toBe(true)
 		if (!joinedGroup.ok) return
-		expect(joinedGroup.document.scene).toEqual([
+		expect(joinedGroup.document.layers[0]?.children).toEqual([
 			{ kind: "group", id: "group:joined" },
 		])
 		expect(joinedGroup.document.groups?.[0]?.children).toEqual([
@@ -695,9 +709,15 @@ describe("create-design path commands", () => {
 		const front = path("front", [rectangle("front-box", 30, 0, 40, 10)])
 		const grouped: DesignDocument = {
 			...documentWith(first, second, front),
-			scene: [
-				{ kind: "group", id: "group:compound-source" },
-				{ kind: "object", id: front.id },
+			layers: [
+				{
+					id: "layer:artwork",
+					name: "Artwork",
+					children: [
+						{ kind: "group", id: "group:compound-source" },
+						{ kind: "object", id: front.id },
+					],
+				},
 			],
 			groups: [
 				{
@@ -716,7 +736,7 @@ describe("create-design path commands", () => {
 		)
 		expect(made.ok).toBe(true)
 		if (!made.ok) return
-		expect(made.document.scene).toEqual([
+		expect(made.document.layers[0]?.children).toEqual([
 			{ kind: "object", id: second.id },
 			{ kind: "object", id: front.id },
 		])
@@ -731,7 +751,7 @@ describe("create-design path commands", () => {
 		)
 		expect(madeInside.ok).toBe(true)
 		if (!madeInside.ok) return
-		expect(madeInside.document.scene).toEqual([
+		expect(madeInside.document.layers[0]?.children).toEqual([
 			{ kind: "group", id: "group:compound-source" },
 			{ kind: "object", id: front.id },
 		])
@@ -751,7 +771,7 @@ describe("create-design path commands", () => {
 		)
 		expect(released.ok).toBe(true)
 		if (!released.ok) return
-		expect(released.document.scene).toEqual([
+		expect(released.document.layers[0]?.children).toEqual([
 			{ kind: "object", id: second.id },
 			{ kind: "object", id: "object:hierarchy:0" },
 			{ kind: "object", id: front.id },
@@ -1540,9 +1560,15 @@ describe("create-design path commands", () => {
 		const front = path("front", [rectangle("front-box", 30, 0, 40, 10)])
 		const source: DesignDocument = {
 			...documentWith(first, second, front),
-			scene: [
-				{ kind: "group", id: "group:pathfinder" },
-				{ kind: "object", id: front.id },
+			layers: [
+				{
+					id: "layer:artwork",
+					name: "Artwork",
+					children: [
+						{ kind: "group", id: "group:pathfinder" },
+						{ kind: "object", id: front.id },
+					],
+				},
 			],
 			groups: [
 				{
@@ -1564,11 +1590,11 @@ describe("create-design path commands", () => {
 		expect(divided.ok).toBe(true)
 		if (!divided.ok) return
 		expect(divided.document.groups).toEqual([])
-		expect(divided.document.scene?.at(-1)).toEqual({
+		expect(divided.document.layers[0]?.children.at(-1)).toEqual({
 			kind: "object",
 			id: front.id,
 		})
-		expect(divided.document.scene?.slice(0, -1)).toEqual(
+		expect(divided.document.layers[0]?.children.slice(0, -1)).toEqual(
 			divided.objectSelection.map((id) => ({ kind: "object", id })),
 		)
 		sequence = 0
@@ -1579,7 +1605,7 @@ describe("create-design path commands", () => {
 		)
 		expect(dividedInside.ok).toBe(true)
 		if (!dividedInside.ok) return
-		expect(dividedInside.document.scene).toEqual(source.scene)
+		expect(dividedInside.document.layers).toEqual(source.layers)
 		expect(dividedInside.document.groups?.[0]?.children).toEqual(
 			dividedInside.objectSelection.map((id) => ({ kind: "object", id })),
 		)

@@ -34,7 +34,7 @@ const fixture = (): DesignDocument => {
 	const end = endpoint("object:end", 30)
 	return {
 		format: "create-design.document",
-		version: 5,
+		version: 6,
 		title: "PDF blend",
 		artboards: [
 			{ id: "artboard:one", name: "One", x: 0, y: 0, width: 100, height: 100 },
@@ -48,6 +48,17 @@ const fixture = (): DesignDocument => {
 		],
 		objects: [start, end],
 		blends: [createDesignBlend("blend:pdf", "PDF", start, end, 2)],
+		layers: [
+			{
+				id: "layer:artwork",
+				name: "Artwork",
+				children: [
+					{ kind: "object", id: start.id },
+					{ kind: "object", id: end.id },
+				],
+			},
+		],
+		groups: [],
 		guides: [],
 	}
 }

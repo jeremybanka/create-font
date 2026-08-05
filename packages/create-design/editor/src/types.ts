@@ -15,6 +15,7 @@ export type {
 	DesignGeometry,
 	DesignGuide,
 	DesignGroup,
+	DesignLayer,
 	DesignObject,
 	DesignPoint,
 	DesignStroke,

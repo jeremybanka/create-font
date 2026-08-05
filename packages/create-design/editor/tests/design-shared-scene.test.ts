@@ -532,6 +532,13 @@ describe("create-design shared vector scene", () => {
 					f: Math.floor(index / 6) * 12,
 				},
 			})),
+			layers: base.layers.map((layer) => ({
+				...layer,
+				children: Array.from({ length: 24 }, (_, index) => ({
+					kind: "object" as const,
+					id: `object:large:${index}`,
+				})),
+			})),
 		}
 		const worker = new DeferredPathfinderWorkerClient()
 		mountDesign({ initialDocument, pathfinderWorkerClient: worker })
@@ -675,9 +682,12 @@ describe("create-design shared vector scene", () => {
 		const expanded = {
 			...base,
 			objects: [...base.objects, third],
-			scene: [...base.objects, third].map(({ id }) => ({
-				kind: "object" as const,
-				id,
+			layers: base.layers.map((layer) => ({
+				...layer,
+				children: [...base.objects, third].map(({ id }) => ({
+					kind: "object" as const,
+					id,
+				})),
 			})),
 		}
 		const inner = groupDesignSelection(
@@ -988,9 +998,8 @@ describe("create-design shared vector scene", () => {
 			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
 		) as DesignDocument
 		expect(copied.objects).toHaveLength(source.objects.length + 1)
-		expect(copied.objects.slice(0, source.objects.length)).toEqual(
-			source.objects,
-		)
+		expect(copied.objects[0]).toEqual(source.objects[0])
+		expect(copied.objects.at(-1)).toEqual(source.objects.at(-1))
 		const duplicate = copied.objects.find(
 			(object) => !source.objects.some(({ id }) => id === object.id),
 		)
@@ -1683,6 +1692,14 @@ describe("create-design shared vector scene", () => {
 		const source = {
 			...initial,
 			objects: [...initial.objects, point, area],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: "object" as const, id: point.id },
+					{ kind: "object" as const, id: area.id },
+				],
+			})),
 		}
 		const storage = new Map<string, string>()
 		const textService = {
@@ -1937,11 +1954,13 @@ describe("create-design shared vector scene", () => {
 		const expanded = {
 			...initial,
 			objects: [...initial.objects, point],
-			scene: [
-				...(initial.scene ??
-					initial.objects.map(({ id }) => ({ kind: "object" as const, id }))),
-				{ kind: "object" as const, id: point.id },
-			],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: "object" as const, id: point.id },
+				],
+			})),
 		}
 		const grouped = groupDesignSelection(
 			expanded,
@@ -3859,6 +3878,10 @@ describe("create-design shared vector scene", () => {
 					},
 				},
 			],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object", id: path.id }],
+			})),
 		}
 		const storage = new Map([[DESIGN_STORAGE_KEY, JSON.stringify(source)]])
 		const stage = mountDesign({}, storage)

@@ -873,20 +873,28 @@ export function pasteDesignBlendSelection(
 		]
 	})
 	if (blends.length === 0) return null
+	const targetLayer = document.layers.at(-1)
+	if (targetLayer === undefined) return null
 	return {
 		document: {
 			...document,
 			swatches: [...document.swatches, ...additions],
 			objects: [...document.objects, ...objects],
 			blends: [...(document.blends ?? []), ...blends],
-			...(document.scene === undefined
-				? {}
-				: {
-						scene: [
-							...document.scene,
-							...objects.map(({ id }) => ({ kind: "object" as const, id })),
-						],
-					}),
+			layers: document.layers.map((layer) =>
+				layer.id === targetLayer.id
+					? {
+							...layer,
+							children: [
+								...layer.children,
+								...objects.map(({ id }) => ({
+									kind: "object" as const,
+									id,
+								})),
+							],
+						}
+					: layer,
+			),
 		},
 		blendIds: blends.map(({ id }) => id),
 	}

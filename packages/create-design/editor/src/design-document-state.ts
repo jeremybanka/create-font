@@ -17,6 +17,7 @@ import type {
 	DesignGeometry,
 	DesignGroup,
 	DesignGuide,
+	DesignLayer,
 	DesignObject,
 	DesignPoint,
 	DesignSceneChild,
@@ -141,13 +142,13 @@ export function createDesignDocumentState(
 		key: "blends",
 		default: undefined,
 	})
-	const sceneAtom = silo.atom<readonly DesignSceneChild[] | undefined>({
-		key: "scene",
-		default: undefined,
+	const layerIdsAtom = silo.atom<readonly string[]>({
+		key: "layerIds",
+		default: [],
 	})
-	const groupIdsAtom = silo.atom<readonly string[] | undefined>({
+	const groupIdsAtom = silo.atom<readonly string[]>({
 		key: "groupIds",
-		default: undefined,
+		default: [],
 	})
 	const guideIdsAtom = silo.atom<readonly string[]>({
 		key: "guideIds",
@@ -251,6 +252,22 @@ export function createDesignDocumentState(
 		readonly DesignSceneChild[] | null,
 		string
 	>({ key: "groupChildren", default: null })
+	const layerNameAtoms = silo.atomFamily<string | null, string>({
+		key: "layerName",
+		default: null,
+	})
+	const layerChildrenAtoms = silo.atomFamily<
+		readonly DesignSceneChild[] | null,
+		string
+	>({ key: "layerChildren", default: null })
+	const layerHiddenAtoms = silo.atomFamily<boolean | undefined, string>({
+		key: "layerHidden",
+		default: undefined,
+	})
+	const layerLockedAtoms = silo.atomFamily<boolean | undefined, string>({
+		key: "layerLocked",
+		default: undefined,
+	})
 	const guideAtoms = silo.atomFamily<DesignGuide | null, string>({
 		key: "guide",
 		default: null,
@@ -389,6 +406,25 @@ export function createDesignDocumentState(
 					: { id, name, children }
 			},
 	})
+	const layerSelectors = silo.selectorFamily<DesignLayer | null, string>({
+		key: "layer",
+		get:
+			(id) =>
+			({ get }) => {
+				const name = get(layerNameAtoms, id)
+				const children = get(layerChildrenAtoms, id)
+				if (name === null || children === null) return null
+				const hidden = get(layerHiddenAtoms, id)
+				const locked = get(layerLockedAtoms, id)
+				return {
+					id,
+					name,
+					children,
+					...(hidden === undefined ? {} : { hidden }),
+					...(locked === undefined ? {} : { locked }),
+				}
+			},
+	})
 
 	const required = <Value>(
 		value: Value | null,
@@ -403,10 +439,9 @@ export function createDesignDocumentState(
 		key: "document",
 		get: ({ get }) => {
 			const groupIds = get(groupIdsAtom)
-			const scene = get(sceneAtom)
 			return {
 				format: "create-design.document",
-				version: 5,
+				version: 6,
 				title: get(titleAtom),
 				artboards: get(artboardIdsAtom).map((id) =>
 					required(get(artboardSelectors, id), "artboard", id),
@@ -418,14 +453,12 @@ export function createDesignDocumentState(
 					required(get(objectSelectors, id), "object", id),
 				),
 				...(get(blendsAtom) === undefined ? {} : { blends: get(blendsAtom)! }),
-				...(scene === undefined ? {} : { scene }),
-				...(groupIds === undefined
-					? {}
-					: {
-							groups: groupIds.map((id) =>
-								required(get(groupSelectors, id), "group", id),
-							),
-						}),
+				layers: get(layerIdsAtom).map((id) =>
+					required(get(layerSelectors, id), "layer", id),
+				),
+				groups: groupIds.map((id) =>
+					required(get(groupSelectors, id), "group", id),
+				),
 				guides: get(guideIdsAtom).map((id) =>
 					required(get(guideAtoms, id), "guide", id),
 				),
@@ -652,14 +685,36 @@ export function createDesignDocumentState(
 		if (tools.get(blendsAtom) !== document.blends)
 			tools.set(blendsAtom, document.blends)
 
-		if (!sameSceneChildren(tools.get(sceneAtom), document.scene))
-			tools.set(sceneAtom, document.scene)
-		const previousGroupIds = tools.get(groupIdsAtom) ?? []
-		const groupIds =
-			document.groups === undefined
-				? undefined
-				: uniqueIds(document.groups, "group")
-		const nextGroupIds = new Set(groupIds ?? [])
+		const previousLayerIds = tools.get(layerIdsAtom)
+		const layerIds = uniqueIds(document.layers, "layer")
+		const nextLayerIds = new Set(layerIds)
+		for (const id of previousLayerIds) {
+			if (nextLayerIds.has(id)) continue
+			tools.dispose(layerNameAtoms, id)
+			tools.dispose(layerChildrenAtoms, id)
+			tools.dispose(layerHiddenAtoms, id)
+			tools.dispose(layerLockedAtoms, id)
+		}
+		setStrings(tools.get, tools.set, layerIdsAtom, layerIds)
+		for (const layer of document.layers) {
+			if (tools.get(layerNameAtoms, layer.id) !== layer.name)
+				tools.set(layerNameAtoms, layer.id, layer.name)
+			if (
+				!sameSceneChildren(
+					tools.get(layerChildrenAtoms, layer.id) ?? [],
+					layer.children,
+				)
+			)
+				tools.set(layerChildrenAtoms, layer.id, layer.children)
+			if (tools.get(layerHiddenAtoms, layer.id) !== layer.hidden)
+				tools.set(layerHiddenAtoms, layer.id, layer.hidden)
+			if (tools.get(layerLockedAtoms, layer.id) !== layer.locked)
+				tools.set(layerLockedAtoms, layer.id, layer.locked)
+		}
+
+		const previousGroupIds = tools.get(groupIdsAtom)
+		const groupIds = uniqueIds(document.groups, "group")
+		const nextGroupIds = new Set(groupIds)
 		for (const id of previousGroupIds) {
 			if (nextGroupIds.has(id)) continue
 			tools.dispose(groupNameAtoms, id)
@@ -667,7 +722,7 @@ export function createDesignDocumentState(
 		}
 		if (!sameStrings(tools.get(groupIdsAtom), groupIds))
 			tools.set(groupIdsAtom, groupIds)
-		for (const group of document.groups ?? []) {
+		for (const group of document.groups) {
 			if (tools.get(groupNameAtoms, group.id) !== group.name)
 				tools.set(groupNameAtoms, group.id, group.name)
 			if (
@@ -723,7 +778,11 @@ export function createDesignDocumentState(
 		contourClosedAtoms,
 		contourPointIdsAtoms,
 		pointAtoms,
-		sceneAtom,
+		layerIdsAtom,
+		layerNameAtoms,
+		layerChildrenAtoms,
+		layerHiddenAtoms,
+		layerLockedAtoms,
 		groupIdsAtom,
 		groupNameAtoms,
 		groupChildrenAtoms,
@@ -764,7 +823,12 @@ export function createDesignDocumentState(
 			pointAtoms,
 			objectGeometrySelectors,
 			objectSelectors,
-			sceneAtom,
+			layerIdsAtom,
+			layerNameAtoms,
+			layerChildrenAtoms,
+			layerHiddenAtoms,
+			layerLockedAtoms,
+			layerSelectors,
 			groupIdsAtom,
 			groupNameAtoms,
 			groupChildrenAtoms,

@@ -85,7 +85,7 @@ const areaText = (): DesignObject => ({
 
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	format: "create-design.document",
-	version: 5,
+	version: 6,
 	title: "Preflight fixture",
 	artboards: [
 		{
@@ -114,6 +114,14 @@ const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 		},
 	],
 	objects,
+	layers: [
+		{
+			id: "layer:artwork",
+			name: "Artwork",
+			children: objects.map(({ id }) => ({ kind: "object", id })),
+		},
+	],
+	groups: [],
 	guides: [],
 })
 

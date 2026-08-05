@@ -204,6 +204,15 @@ export interface DesignGroup {
 	readonly children: readonly DesignSceneChild[]
 }
 
+/** A named top-level paint-order and editing boundary. */
+export interface DesignLayer {
+	readonly id: string
+	readonly name: string
+	readonly children: readonly DesignSceneChild[]
+	readonly hidden?: boolean
+	readonly locked?: boolean
+}
+
 export interface DesignGuide {
 	readonly id: string
 	readonly axis: "x" | "y"
@@ -238,7 +247,7 @@ export interface DesignArtboard {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 5
+	readonly version: 6
 	readonly title: string
 	/** Ordered export rectangles, independent from the global scene hierarchy. */
 	readonly artboards: readonly DesignArtboard[]
@@ -246,10 +255,10 @@ export interface DesignDocument {
 	readonly objects: readonly DesignObject[]
 	/** Live derived blends; intermediate geometry is never persisted as objects. */
 	readonly blends?: readonly DesignBlend[]
-	/** Root scene order. Omitted only by legacy version-5 documents. */
-	readonly scene?: readonly DesignSceneChild[]
-	/** Structural groups referenced by `scene` and other groups. */
-	readonly groups?: readonly DesignGroup[]
+	/** Ordered top-level paint and editing boundaries, back to front. */
+	readonly layers: readonly DesignLayer[]
+	/** Structural groups referenced by layers and other groups. */
+	readonly groups: readonly DesignGroup[]
 	readonly guides: readonly DesignGuide[]
 }
 

@@ -37,10 +37,7 @@ function orderedObjects(document: DesignDocument): readonly DesignObject[] {
 			active.delete(child.id)
 			return descendants
 		})
-	return visit(
-		document.scene ??
-			document.objects.map(({ id }) => ({ kind: "object", id })),
-	)
+	return document.layers.flatMap((layer) => visit(layer.children))
 }
 
 function byte(value: number): number {

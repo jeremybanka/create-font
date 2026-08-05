@@ -227,6 +227,13 @@ describe(`create-design version control`, () => {
 			...designSourceTransaction(sourceSyncStateFromSnapshot(snapshot), {
 				...initial,
 				objects: [...initial.objects, textObject],
+				layers: initial.layers.map((layer) => ({
+					...layer,
+					children: [
+						...layer.children,
+						{ kind: `object` as const, id: textObject.id },
+					],
+				})),
 			}),
 		})
 		const objectPath = defaultObjectUnitPath(textObject.id)
@@ -331,6 +338,13 @@ describe(`create-design version control`, () => {
 		const split = splitDesignDocument({
 			...initial,
 			objects: [...initial.objects, added],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: `object` as const, id: added.id },
+				],
+			})),
 		})
 		if (!split.ok) throw new Error(split.errors[0].message)
 		const values = split.value as DesignSourceDirectoryFiles

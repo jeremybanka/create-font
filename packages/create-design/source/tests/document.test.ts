@@ -119,6 +119,14 @@ describe("editable text source", () => {
 					appearance: { fill: { swatchId: "swatch:black" } },
 				},
 			],
+			layers: [
+				{
+					id: "layer:artwork",
+					name: "Artwork",
+					children: [{ kind: "object" as const, id: "object:text" }],
+				},
+			],
+			groups: [],
 			guides: [],
 		}
 		const validated = validateDesignDocument(base)
@@ -254,7 +262,7 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
-	it("migrates every shipped v1 field into the explicit v5 model", () => {
+	it("migrates every shipped v1 field into the explicit v6 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)
 		expect(decoded).toEqual({
@@ -287,9 +295,65 @@ describe("complete design document codec", () => {
 						locked: true,
 					},
 				],
+				layers: [
+					{
+						id: "layer:artwork",
+						name: "Artwork",
+						children: [{ kind: "object", id: "object:mark" }],
+					},
+				],
+				groups: [],
 				guides: legacy.guides,
 			},
 		})
+	})
+
+	it("migrates the v5 scene and nested groups into one visible unlocked Artwork layer", () => {
+		const current = decodeDesignDocument(canonicalV1Fixture())
+		if (!current.ok) throw new Error("Expected the fixture to migrate.")
+		const { layers: _layers, groups: _groups, ...common } = current.value
+		const previous = {
+			...common,
+			version: 5 as const,
+			scene: [{ kind: "group" as const, id: "group:root" }],
+			groups: [
+				{
+					id: "group:root",
+					name: "Root",
+					children: [
+						{ kind: "object" as const, id: current.value.objects[0]!.id },
+						{ kind: "group" as const, id: "group:nested" },
+					],
+				},
+				{
+					id: "group:nested",
+					name: "Nested",
+					children: [
+						{ kind: "object" as const, id: current.value.objects[1]!.id },
+					],
+				},
+			],
+		}
+
+		const decoded = decodeDesignDocument(previous)
+		expect(decoded).toMatchObject({
+			ok: true,
+			value: {
+				version: CREATE_DESIGN_DOCUMENT_VERSION,
+				layers: [
+					{
+						id: "layer:artwork",
+						name: "Artwork",
+						children: previous.scene,
+					},
+				],
+				groups: previous.groups,
+			},
+		})
+		if (!decoded.ok) throw new Error("Expected the v5 fixture to migrate.")
+		expect(decoded.value.objects).toEqual(previous.objects)
+		expect(decoded.value.layers[0]).not.toHaveProperty("hidden")
+		expect(decoded.value.layers[0]).not.toHaveProperty("locked")
 	})
 
 	it("preserves canonical v1 IDs, ordering, colors, geometry, appearance, transforms, flags, guides, and page properties", () => {
@@ -324,6 +388,17 @@ describe("complete design document codec", () => {
 								}),
 					},
 				})),
+				layers: [
+					{
+						id: "layer:artwork",
+						name: "Artwork",
+						children: canonical.objects.map(({ id }) => ({
+							kind: "object",
+							id,
+						})),
+					},
+				],
+				groups: [],
 				guides: canonical.guides,
 			},
 		})
