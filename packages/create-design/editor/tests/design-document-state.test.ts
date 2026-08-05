@@ -178,6 +178,35 @@ describe("normalized design document state", () => {
 		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
 	})
 
+	it("materializes new empty layers and groups before publishing their IDs", () => {
+		const initial = createInitialDocument()
+		const state = createState(initial)
+		const expanded: DesignDocument = {
+			...initial,
+			layers: [
+				...initial.layers,
+				{ id: "layer:empty", name: "Empty", children: [] },
+				{
+					id: "layer:container",
+					name: "Container",
+					children: [{ kind: "group", id: "group:empty" }],
+				},
+			],
+			groups: [
+				...initial.groups,
+				{ id: "group:empty", name: "Empty group", children: [] },
+			],
+		}
+
+		state.actions.commitDocument(expanded)
+
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(expanded)
+		state.silo.undo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
+		state.silo.redo(state.documentTimeline)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(expanded)
+	})
+
 	it("keeps composed geometry projections current through history and external loading", () => {
 		const initial = createInitialDocument()
 		const state = createState(initial)

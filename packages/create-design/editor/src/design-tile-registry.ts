@@ -128,6 +128,13 @@ export interface DesignTileContext {
 	readonly activeLayerId: string
 	readonly activeGroupScope: readonly string[]
 	readonly selectedGroupId: string | null
+	readonly createLayer: () => void
+	readonly deleteLayer: (layerId: string) => void
+	readonly duplicateLayer: (layerId: string) => void
+	readonly renameLayer: (layerId: string, name: string) => void
+	readonly reorderLayer: (layerId: string, direction: "down" | "up") => void
+	readonly setLayerLocked: (layerId: string, locked: boolean) => void
+	readonly setLayerVisibility: (layerId: string, visible: boolean) => void
 	readonly selectLayer: (layerId: string) => void
 	readonly selectHierarchyGroup: (
 		groupId: string,

@@ -619,14 +619,6 @@ export function createDesignDocumentState(
 		const previousArtboardIds = tools.get(artboardIdsAtom)
 		const artboardIds = uniqueIds(document.artboards, "artboard")
 		const nextArtboardIds = new Set(artboardIds)
-		for (const id of previousArtboardIds) {
-			if (nextArtboardIds.has(id)) continue
-			tools.dispose(artboardNameAtoms, id)
-			tools.dispose(artboardRectAtoms, id)
-			tools.dispose(artboardBleedAtoms, id)
-			tools.dispose(artboardSafeAreaAtoms, id)
-		}
-		setStrings(tools.get, tools.set, artboardIdsAtom, artboardIds)
 		for (const artboard of document.artboards) {
 			if (tools.get(artboardNameAtoms, artboard.id) !== artboard.name)
 				tools.set(artboardNameAtoms, artboard.id, artboard.name)
@@ -643,17 +635,18 @@ export function createDesignDocumentState(
 			if (tools.get(artboardSafeAreaAtoms, artboard.id) !== artboard.safeArea)
 				tools.set(artboardSafeAreaAtoms, artboard.id, artboard.safeArea)
 		}
+		setStrings(tools.get, tools.set, artboardIdsAtom, artboardIds)
+		for (const id of previousArtboardIds) {
+			if (nextArtboardIds.has(id)) continue
+			tools.dispose(artboardNameAtoms, id)
+			tools.dispose(artboardRectAtoms, id)
+			tools.dispose(artboardBleedAtoms, id)
+			tools.dispose(artboardSafeAreaAtoms, id)
+		}
 
 		const previousSwatchIds = tools.get(swatchIdsAtom)
 		const swatchIds = uniqueIds(document.swatches, "swatch")
 		const nextSwatchIds = new Set(swatchIds)
-		for (const id of previousSwatchIds) {
-			if (nextSwatchIds.has(id)) continue
-			tools.dispose(swatchNameAtoms, id)
-			tools.dispose(swatchSourceAtoms, id)
-			tools.dispose(swatchAlternateAtoms, id)
-		}
-		setStrings(tools.get, tools.set, swatchIdsAtom, swatchIds)
 		for (const swatch of document.swatches) {
 			if (tools.get(swatchNameAtoms, swatch.id) !== swatch.name)
 				tools.set(swatchNameAtoms, swatch.id, swatch.name)
@@ -662,13 +655,17 @@ export function createDesignDocumentState(
 			if (tools.get(swatchAlternateAtoms, swatch.id) !== swatch.alternate)
 				tools.set(swatchAlternateAtoms, swatch.id, swatch.alternate)
 		}
+		setStrings(tools.get, tools.set, swatchIdsAtom, swatchIds)
+		for (const id of previousSwatchIds) {
+			if (nextSwatchIds.has(id)) continue
+			tools.dispose(swatchNameAtoms, id)
+			tools.dispose(swatchSourceAtoms, id)
+			tools.dispose(swatchAlternateAtoms, id)
+		}
 
 		const previousObjectIds = tools.get(objectIdsAtom)
 		const objectIds = uniqueIds(document.objects, "object")
 		const nextObjectIds = new Set(objectIds)
-		for (const id of previousObjectIds)
-			if (!nextObjectIds.has(id)) disposeObject(tools, id)
-		setStrings(tools.get, tools.set, objectIdsAtom, objectIds)
 		for (const object of document.objects) {
 			if (tools.get(objectNameAtoms, object.id) !== object.name)
 				tools.set(objectNameAtoms, object.id, object.name)
@@ -682,28 +679,22 @@ export function createDesignDocumentState(
 				tools.set(objectLockedAtoms, object.id, object.locked)
 			writeGeometry(tools, object.id, object.geometry)
 		}
+		setStrings(tools.get, tools.set, objectIdsAtom, objectIds)
+		for (const id of previousObjectIds)
+			if (!nextObjectIds.has(id)) disposeObject(tools, id)
 		if (tools.get(blendsAtom) !== document.blends)
 			tools.set(blendsAtom, document.blends)
 
 		const previousLayerIds = tools.get(layerIdsAtom)
 		const layerIds = uniqueIds(document.layers, "layer")
 		const nextLayerIds = new Set(layerIds)
-		for (const id of previousLayerIds) {
-			if (nextLayerIds.has(id)) continue
-			tools.dispose(layerNameAtoms, id)
-			tools.dispose(layerChildrenAtoms, id)
-			tools.dispose(layerHiddenAtoms, id)
-			tools.dispose(layerLockedAtoms, id)
-		}
-		setStrings(tools.get, tools.set, layerIdsAtom, layerIds)
 		for (const layer of document.layers) {
 			if (tools.get(layerNameAtoms, layer.id) !== layer.name)
 				tools.set(layerNameAtoms, layer.id, layer.name)
+			const currentChildren = tools.get(layerChildrenAtoms, layer.id)
 			if (
-				!sameSceneChildren(
-					tools.get(layerChildrenAtoms, layer.id) ?? [],
-					layer.children,
-				)
+				currentChildren === null ||
+				!sameSceneChildren(currentChildren, layer.children)
 			)
 				tools.set(layerChildrenAtoms, layer.id, layer.children)
 			if (tools.get(layerHiddenAtoms, layer.id) !== layer.hidden)
@@ -711,38 +702,45 @@ export function createDesignDocumentState(
 			if (tools.get(layerLockedAtoms, layer.id) !== layer.locked)
 				tools.set(layerLockedAtoms, layer.id, layer.locked)
 		}
+		setStrings(tools.get, tools.set, layerIdsAtom, layerIds)
+		for (const id of previousLayerIds) {
+			if (nextLayerIds.has(id)) continue
+			tools.dispose(layerNameAtoms, id)
+			tools.dispose(layerChildrenAtoms, id)
+			tools.dispose(layerHiddenAtoms, id)
+			tools.dispose(layerLockedAtoms, id)
+		}
 
 		const previousGroupIds = tools.get(groupIdsAtom)
 		const groupIds = uniqueIds(document.groups, "group")
 		const nextGroupIds = new Set(groupIds)
+		for (const group of document.groups) {
+			if (tools.get(groupNameAtoms, group.id) !== group.name)
+				tools.set(groupNameAtoms, group.id, group.name)
+			const currentChildren = tools.get(groupChildrenAtoms, group.id)
+			if (
+				currentChildren === null ||
+				!sameSceneChildren(currentChildren, group.children)
+			)
+				tools.set(groupChildrenAtoms, group.id, group.children)
+		}
+		if (!sameStrings(tools.get(groupIdsAtom), groupIds))
+			tools.set(groupIdsAtom, groupIds)
 		for (const id of previousGroupIds) {
 			if (nextGroupIds.has(id)) continue
 			tools.dispose(groupNameAtoms, id)
 			tools.dispose(groupChildrenAtoms, id)
 		}
-		if (!sameStrings(tools.get(groupIdsAtom), groupIds))
-			tools.set(groupIdsAtom, groupIds)
-		for (const group of document.groups) {
-			if (tools.get(groupNameAtoms, group.id) !== group.name)
-				tools.set(groupNameAtoms, group.id, group.name)
-			if (
-				!sameSceneChildren(
-					tools.get(groupChildrenAtoms, group.id) ?? [],
-					group.children,
-				)
-			)
-				tools.set(groupChildrenAtoms, group.id, group.children)
-		}
 
 		const previousGuideIds = tools.get(guideIdsAtom)
 		const guideIds = uniqueIds(document.guides, "guide")
 		const nextGuideIds = new Set(guideIds)
-		for (const id of previousGuideIds)
-			if (!nextGuideIds.has(id)) tools.dispose(guideAtoms, id)
-		setStrings(tools.get, tools.set, guideIdsAtom, guideIds)
 		for (const guide of document.guides)
 			if (tools.get(guideAtoms, guide.id) !== guide)
 				tools.set(guideAtoms, guide.id, guide)
+		setStrings(tools.get, tools.set, guideIdsAtom, guideIds)
+		for (const id of previousGuideIds)
+			if (!nextGuideIds.has(id)) tools.dispose(guideAtoms, id)
 	}
 
 	const initializeDocumentTransaction = silo.transaction<

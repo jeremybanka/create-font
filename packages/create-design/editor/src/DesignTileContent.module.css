@@ -88,8 +88,11 @@ design-tile-content.class {
 	}
 
 	> design-pages-tile button,
+	> design-layers-tile > layer-toolbar > button,
 	> design-layers-tile > layer-breadcrumb > button,
 	> design-layers-tile > layer-tree > layer-tree-row > button,
+	> design-layers-tile > layer-tree > layer-tree-row > layer-row-controls > button,
+	> design-layers-tile > layer-management > layer-actions > button,
 	> design-layers-tile > design-live-blends > button,
 	> design-canvas-tile > button,
 	> design-tools-tile > button,
@@ -201,6 +204,15 @@ design-tile-content.class {
 			color: var(--ink-muted);
 		}
 
+		> layer-toolbar {
+			display: flex;
+
+			> button {
+				flex: 1 1 auto;
+				padding: 5px;
+			}
+		}
+
 		> layer-breadcrumb {
 			display: flex;
 			align-items: center;
@@ -303,6 +315,63 @@ design-tile-content.class {
 				> button[data-edit-scope] {
 					padding: 3px 5px;
 					font-size: 7px;
+				}
+
+				> layer-row-controls {
+					display: flex;
+					gap: 2px;
+
+					> button {
+						display: grid;
+						place-items: center;
+						width: 20px;
+						height: 20px;
+						padding: 3px;
+
+						> svg {
+							width: 11px;
+							height: 11px;
+						}
+
+						&[aria-pressed="true"] {
+							border-color: var(--accent);
+							background: var(--selected);
+						}
+					}
+				}
+			}
+		}
+
+		> layer-management {
+			display: grid;
+			gap: 5px;
+			padding-top: 5px;
+			border-top: 1px solid var(--line);
+
+			> label {
+				display: grid;
+				gap: 3px;
+				color: var(--ink-muted);
+
+				> input {
+					min-width: 0;
+					width: 100%;
+					padding: 5px;
+					border: 1px solid var(--line);
+					border-radius: 4px;
+					background: var(--paper);
+					font-size: 8px;
+					color: var(--ink);
+				}
+			}
+
+			> layer-actions {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 4px;
+
+				> button {
+					padding: 5px;
 				}
 			}
 		}

@@ -69,6 +69,13 @@ function context(
 		selectedGroupId: null,
 		selectedObjectIds: [],
 		selectedBlend: null,
+		createLayer: vi.fn(),
+		deleteLayer: vi.fn(),
+		duplicateLayer: vi.fn(),
+		renameLayer: vi.fn(),
+		reorderLayer: vi.fn(),
+		setLayerLocked: vi.fn(),
+		setLayerVisibility: vi.fn(),
 		selectLayer: vi.fn(),
 		selectHierarchyGroup: vi.fn(),
 		selectHierarchyObject: vi.fn(),
@@ -200,5 +207,55 @@ describe("Design Layers tree", () => {
 		expect(setHierarchyScope).toHaveBeenCalledWith([])
 		const active = host.querySelector<HTMLElement>('[data-active-scope="true"]')
 		expect(active?.textContent).toContain("Inner group")
+	})
+
+	it("exposes separate layer state toggles and active-layer authoring controls", () => {
+		const value = context()
+		const host = mount(value)
+		const button = (label: string): HTMLButtonElement => {
+			const match = [
+				...host.querySelectorAll<HTMLButtonElement>("button"),
+			].find((candidate) => candidate.textContent?.trim() === label)
+			if (match === undefined)
+				throw new Error(`${label} control did not render.`)
+			return match
+		}
+
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>('button[aria-label="Show Back"]')
+				?.click(),
+		)
+		expect(value.setLayerVisibility).toHaveBeenCalledWith("layer:back", true)
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>('button[aria-label="Lock Back"]')
+				?.click(),
+		)
+		expect(value.setLayerLocked).toHaveBeenCalledWith("layer:back", true)
+
+		act(() => button("New layer").click())
+		expect(value.createLayer).toHaveBeenCalledOnce()
+		act(() => button("Duplicate").click())
+		expect(value.duplicateLayer).toHaveBeenCalledWith("layer:back")
+		act(() => button("Move up").click())
+		expect(value.reorderLayer).toHaveBeenCalledWith("layer:back", "up")
+		expect(button("Move down").disabled).toBe(true)
+		act(() => button("Delete").click())
+		expect(value.deleteLayer).toHaveBeenCalledWith("layer:back")
+
+		const input = host.querySelector<HTMLInputElement>("layer-management input")
+		if (input === null) throw new Error("Layer name control did not render.")
+		act(() => {
+			input.value = "Renamed layer"
+			input.dispatchEvent(new Event("input", { bubbles: true }))
+		})
+		act(() =>
+			input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })),
+		)
+		expect(value.renameLayer).toHaveBeenCalledWith(
+			"layer:back",
+			"Renamed layer",
+		)
 	})
 })
