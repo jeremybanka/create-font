@@ -13,7 +13,10 @@ import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
-import { groupDesignSelection } from "../src/design-hierarchy.ts"
+import {
+	groupDesignSelection,
+	makeDesignClippingMask,
+} from "../src/design-hierarchy.ts"
 import {
 	createDesignTextObject,
 	designTextBrowserFontFamily,
@@ -452,6 +455,37 @@ describe("create-design shared vector scene", () => {
 			(box: { opacity(): number }) => box.opacity() === 0,
 		)
 		expect(aggregate?.stroke()).toBe(readDesignCanvasTheme().marquee)
+	})
+
+	it("outlines a selected clipping contour without painting it as artwork", () => {
+		const initial = createInitialDocument()
+		const masked = makeDesignClippingMask(
+			initial,
+			initial.objects.map(({ id }) => id),
+			() => "selection-outline",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const group = masked.document.groups.find(
+			({ id }) => id === "group:selection-outline",
+		)
+		if (group?.clippingPathId === undefined)
+			throw new Error("Expected a clipping contour.")
+		const stage = mountDesign({ initialDocument: masked.document })
+		const contourRow = document.querySelector<HTMLElement>(
+			`design-layers-tile [data-tree-key="object:${group.clippingPathId}"]`,
+		)
+		if (contourRow === null)
+			throw new Error("Clipping contour row did not render.")
+
+		act(() => contourRow.click())
+		expect(contourRow.getAttribute("aria-selected")).toBe("true")
+		const contours = stage.find(".design-clipping-selection")
+		expect(contours).toHaveLength(1)
+		expect(contours[0]!.fillEnabled()).toBe(false)
+		expect(contours[0]!.stroke()).toBe(
+			designLayerUiColorCss(initial.layers[0]!.uiColor),
+		)
+		expect(stage.find(".design-object")).toHaveLength(1)
 	})
 
 	it("cancels an in-flight object gesture when its layer becomes locked", async () => {

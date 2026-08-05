@@ -119,9 +119,7 @@ export function projectDesignEffectiveHierarchy(
 			entry.visible && entry.clippingForGroupId === null ? [entry.object] : [],
 		),
 		editableObjects: entries.flatMap((entry) =>
-			entry.visible && !entry.locked && entry.clippingForGroupId === null
-				? [entry.object]
-				: [],
+			entry.visible && !entry.locked ? [entry.object] : [],
 		),
 	}
 }

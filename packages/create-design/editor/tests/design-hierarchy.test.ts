@@ -5,6 +5,7 @@ import {
 	designSelectInteraction,
 	designSelectionUnitAtObject,
 	groupDesignSelection,
+	makeDesignClippingMask,
 	moveDesignHierarchyNode,
 	normalizeDesignSelection,
 	removeDesignHierarchyObjects,
@@ -15,7 +16,10 @@ import {
 import { createInitialDocument } from "../src/document.ts"
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createDesignPersistenceState } from "../src/persistence.ts"
-import { translateObject } from "@create-design/model"
+import {
+	projectDesignEffectiveHierarchy,
+	translateObject,
+} from "@create-design/model"
 
 const fixture = () => {
 	const document = createInitialDocument()
@@ -432,6 +436,39 @@ describe("design hierarchy commands", () => {
 		expect(state.silo.getState(state.states.documentSelector)).toEqual(
 			grouped.document,
 		)
+	})
+
+	it("turns a clipped member hit into one rigid clipping-mask interaction", () => {
+		const document = fixture()
+		const masked = makeDesignClippingMask(
+			document,
+			["object:coral", "object:middle"],
+			() => "selection",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const eligibleObjectIds = new Set(
+			projectDesignEffectiveHierarchy(masked.document).editableObjects.map(
+				({ id }) => id,
+			),
+		)
+		const interaction = designSelectInteraction(
+			masked.document,
+			[],
+			"object:coral",
+			null,
+			false,
+			eligibleObjectIds,
+		)
+
+		expect(interaction?.unit).toMatchObject({
+			kind: "group",
+			id: "group:selection",
+			objectIds: ["object:coral", "object:middle"],
+		})
+		expect(interaction?.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:middle",
+		])
 	})
 
 	it("resolves nested units by explicit group scope and never partially selects", () => {

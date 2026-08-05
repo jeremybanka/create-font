@@ -7026,6 +7026,33 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													/>,
 												)
 									})}
+									{canvasAuthoredObjects.flatMap((object) => {
+										const entry = effectiveHierarchy.byObjectId.get(object.id)
+										if (
+											entry?.clippingForGroupId === null ||
+											entry?.clippingForGroupId === undefined ||
+											!entry.visible ||
+											!selection.includes(object.id) ||
+											object.geometry.kind === "image" ||
+											object.geometry.kind === "text"
+										)
+											return []
+										return [
+											<VectorContourPath
+												key={`clipping-selection:${object.id}`}
+												name={`design-clipping-selection ${object.id}`}
+												object={projectDesignVectorObject(
+													canvasDocument,
+													object,
+												)}
+												fillEnabled={false}
+												strokeWidth={1 / worldScale}
+												selected
+												selectionStroke={layerUiColorForObject(object.id)}
+												listening={false}
+											/>,
+										]
+									})}
 									{document.guides.map((guide) => {
 										const value =
 											guidePreview !== null && guidePreview.id === guide.id

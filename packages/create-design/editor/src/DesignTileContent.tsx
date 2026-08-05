@@ -619,7 +619,12 @@ function DesignLayersTile({
 						row.key === `group:${context.selectedGroupId}`,
 				)
 	const selectedNode =
-		selectedHierarchyRow === undefined ? null : nodeForRow(selectedHierarchyRow)
+		selectedHierarchyRow === undefined ||
+		(selectedHierarchyRow.kind === "object" &&
+			(effective.byObjectId.get(selectedHierarchyRow.object!.id)
+				?.clippingForGroupId ?? null) !== null)
+			? null
+			: nodeForRow(selectedHierarchyRow)
 	const selectedParent =
 		selectedHierarchyRow?.parentKey === null ||
 		selectedHierarchyRow?.parentKey === undefined
@@ -710,6 +715,10 @@ function DesignLayersTile({
 			<layer-tree role="tree" aria-label="Document layers">
 				{rows.map((row, index) => {
 					const branch = row.hasChildren
+					const clippingPath =
+						row.kind === "object" &&
+						(effective.byObjectId.get(row.object!.id)?.clippingForGroupId ??
+							null) !== null
 					const selected =
 						row.kind === "group"
 							? context.selectedGroupId === row.key.slice("group:".length)
@@ -744,7 +753,13 @@ function DesignLayersTile({
 							tabIndex={focusedKey === row.key ? 0 : -1}
 							data-layer-kind={row.kind}
 							data-tree-key={row.key}
-							draggable={row.kind !== "layer"}
+							data-clipping-path={clippingPath ? "true" : undefined}
+							draggable={row.kind !== "layer" && !clippingPath}
+							title={
+								clippingPath
+									? "Clipping contour; move the clipping mask group to keep it attached"
+									: undefined
+							}
 							data-dragging={draggedKey === row.key ? "true" : undefined}
 							data-drop-target={dropKey === row.key ? "true" : undefined}
 							data-active-scope={
@@ -761,7 +776,7 @@ function DesignLayersTile({
 							style={{ "--tree-depth": row.depth } as React.CSSProperties}
 							onFocus={() => setFocusedKey(row.key)}
 							onDragStart={(event: React.DragEvent<HTMLElement>) => {
-								if (row.kind === "layer") return
+								if (row.kind === "layer" || clippingPath) return
 								setDraggedKey(row.key)
 								event.dataTransfer.effectAllowed = "move"
 								event.dataTransfer.setData("text/plain", row.key)
@@ -892,6 +907,8 @@ function DesignLayersTile({
 										{rowLayer.locked ? <svg.LockClosed /> : <svg.LockOpen />}
 									</button>
 								</layer-row-controls>
+							) : clippingPath ? (
+								<small data-clipping-path-badge>Clip</small>
 							) : null}
 						</layer-tree-row>
 					)

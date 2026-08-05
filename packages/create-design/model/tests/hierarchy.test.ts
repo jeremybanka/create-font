@@ -59,6 +59,10 @@ describe("effective design hierarchy", () => {
 			clippingForGroupId: "group:mask",
 		})
 		expect(hierarchy.visibleObjects.map(({ id }) => id)).toEqual([image.id])
+		expect(hierarchy.editableObjects.map(({ id }) => id)).toEqual([
+			image.id,
+			clip.id,
+		])
 		const [resolution] = resolveDesignImages(document)
 		expect(resolution?.diagnostics).toEqual([
 			expect.objectContaining({
