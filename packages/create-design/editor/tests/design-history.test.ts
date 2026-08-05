@@ -39,7 +39,17 @@ describe("design Pen timeline", () => {
 			closed: false,
 		})
 		if (object === null) throw new TypeError("Expected a Pen object.")
-		return { ...document, objects: [...document.objects, object] }
+		return {
+			...document,
+			objects: [...document.objects, object],
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: "object" as const, id: object.id },
+				],
+			})),
+		}
 	}
 
 	it("commits a completed contour as one atomic undo/redo operation", () => {

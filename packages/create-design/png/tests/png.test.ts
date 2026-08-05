@@ -157,10 +157,13 @@ describe("deterministic PNG output", () => {
 			...initial,
 			artboards: [{ ...initial.artboards[0]!, width: 4, height: 1 }],
 			objects: [start, end],
-			scene: [
-				{ kind: "object" as const, id: start.id },
-				{ kind: "object" as const, id: end.id },
-			],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					{ kind: "object" as const, id: start.id },
+					{ kind: "object" as const, id: end.id },
+				],
+			})),
 			blends: [
 				{
 					id: "blend:one",

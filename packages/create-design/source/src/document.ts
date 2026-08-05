@@ -5,14 +5,16 @@ import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
 	DesignArtboard,
+	DesignLayer,
 	DesignObject,
 	DesignSourceDiagnostic,
 	DesignSourceResult,
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 5 as const
-export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 4 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 6 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 5 as const
+export const VERSION_FOUR_DESIGN_DOCUMENT_VERSION = 4 as const
 export const VERSION_THREE_DESIGN_DOCUMENT_VERSION = 3 as const
 export const VERSION_TWO_DESIGN_DOCUMENT_VERSION = 2 as const
 export const LEGACY_DESIGN_DOCUMENT_VERSION = 1 as const
@@ -22,6 +24,7 @@ export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
 export const blendIdSchema = z.string().regex(/^blend:.+/u)
 export const groupIdSchema = z.string().regex(/^group:.+/u)
+export const layerIdSchema = z.string().regex(/^layer:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
 export const artboardIdSchema = z.string().regex(/^artboard:.+/u)
@@ -341,6 +344,15 @@ export const groupSchema = z
 		children: z.array(sceneChildSchema),
 	})
 	.strict()
+export const layerSchema = z
+	.object({
+		id: layerIdSchema,
+		name: z.string(),
+		children: z.array(sceneChildSchema),
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
 
 export const artboardInsetsSchema = z
 	.object({
@@ -379,6 +391,21 @@ export const designDocumentSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
 		version: z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
+		title: z.string(),
+		artboards: z.array(artboardSchema).min(1),
+		swatches: z.array(swatchSchema),
+		objects: z.array(designObjectSchema),
+		blends: z.array(designBlendSchema).optional(),
+		layers: z.array(layerSchema).min(1),
+		groups: z.array(groupSchema),
+		guides: z.array(guideSchema),
+	})
+	.strict()
+
+export const versionFiveDesignDocumentSchema = z
+	.object({
+		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
+		version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
 		artboards: z.array(artboardSchema).min(1),
 		swatches: z.array(swatchSchema),
@@ -426,10 +453,10 @@ export const versionThreeDesignDocumentSchema = z
 	})
 	.strict()
 
-export const previousDesignDocumentSchema = z
+export const versionFourDesignDocumentSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
-		version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+		version: z.literal(VERSION_FOUR_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
 		page: pageSchema,
 		swatches: z.array(swatchSchema),
@@ -569,40 +596,59 @@ function relationalDiagnostics(
 			)
 		seenBlends.add(blend.id)
 	}
-	if ((document.scene === undefined) !== (document.groups === undefined))
-		errors.push(
-			diagnostic(
-				"directory.hierarchy",
-				"$.scene",
-				"Scene roots and groups must be authored together.",
-			),
-		)
-	if (document.scene !== undefined && document.groups !== undefined) {
-		const groups = new Map(document.groups.map((group) => [group.id, group]))
-		if (groups.size !== document.groups.length)
-			errors.push(
-				diagnostic(
-					"directory.duplicate_id",
-					"$.groups",
-					"Group IDs must be unique.",
-				),
-			)
+	{
+		const layers = new Map<string, DesignLayer>()
+		for (const [index, layer] of document.layers.entries()) {
+			if (layers.has(layer.id))
+				errors.push(
+					diagnostic(
+						"directory.duplicate_id",
+						`$.layers[${index}].id`,
+						`Duplicate layer ID ${layer.id}.`,
+					),
+				)
+			layers.set(layer.id, layer)
+		}
+		const groups = new Map<string, import("./types.ts").DesignGroup>()
+		for (const [index, group] of document.groups.entries()) {
+			if (groups.has(group.id))
+				errors.push(
+					diagnostic(
+						"directory.duplicate_id",
+						`$.groups[${index}].id`,
+						`Duplicate group ID ${group.id}.`,
+					),
+				)
+			groups.set(group.id, group)
+		}
 		const visitedObjects: string[] = []
+		const structuralObjects = new Set<string>()
 		const visitedGroups = new Set<string>()
 		const activeGroups = new Set<string>()
 		const visit = (
 			children: readonly import("./types.ts").DesignSceneChild[],
+			path: string,
 		) => {
-			for (const child of children) {
+			for (const [index, child] of children.entries()) {
+				const childPath = `${path}[${index}].id`
 				if (child.kind === "object") {
 					if (!seenObjects.has(child.id))
 						errors.push(
 							diagnostic(
 								"directory.reference",
-								"$.scene",
-								`Scene references missing object ${child.id}.`,
+								childPath,
+								`Hierarchy references missing object ${child.id}.`,
 							),
 						)
+					if (structuralObjects.has(child.id))
+						errors.push(
+							diagnostic(
+								"directory.hierarchy",
+								childPath,
+								`Object ${child.id} has more than one structural parent.`,
+							),
+						)
+					structuralObjects.add(child.id)
 					visitedObjects.push(child.id)
 					continue
 				}
@@ -611,8 +657,8 @@ function relationalDiagnostics(
 					errors.push(
 						diagnostic(
 							"directory.reference",
-							"$.scene",
-							`Scene references missing group ${child.id}.`,
+							childPath,
+							`Hierarchy references missing group ${child.id}.`,
 						),
 					)
 					continue
@@ -621,7 +667,7 @@ function relationalDiagnostics(
 					errors.push(
 						diagnostic(
 							"directory.hierarchy",
-							"$.groups",
+							childPath,
 							`Group ${child.id} creates a hierarchy cycle.`,
 						),
 					)
@@ -631,7 +677,7 @@ function relationalDiagnostics(
 					errors.push(
 						diagnostic(
 							"directory.hierarchy",
-							"$.groups",
+							childPath,
 							`Group ${child.id} has more than one structural parent.`,
 						),
 					)
@@ -639,11 +685,15 @@ function relationalDiagnostics(
 				}
 				visitedGroups.add(child.id)
 				activeGroups.add(child.id)
-				visit(group.children)
+				const groupIndex = document.groups.findIndex(
+					(candidate) => candidate.id === group.id,
+				)
+				visit(group.children, `$.groups[${groupIndex}].children`)
 				activeGroups.delete(child.id)
 			}
 		}
-		visit(document.scene)
+		for (const [index, layer] of document.layers.entries())
+			visit(layer.children, `$.layers[${index}].children`)
 		if (
 			visitedObjects.length !== seenObjects.size ||
 			new Set(visitedObjects).size !== visitedObjects.length ||
@@ -652,8 +702,8 @@ function relationalDiagnostics(
 			errors.push(
 				diagnostic(
 					"directory.hierarchy",
-					"$.scene",
-					"Every object must appear once in scene paint order.",
+					"$.layers",
+					"Every object must appear once in layer paint order.",
 				),
 			)
 		if (visitedGroups.size !== groups.size)
@@ -688,6 +738,14 @@ export function validateDesignDocument(
 	const document = parsed.data as DesignDocument
 	const errors = relationalDiagnostics(document)
 	return errors.length === 0 ? success(document) : failure(errors)
+}
+
+export const DEFAULT_LAYER_ID = "layer:artwork" as const
+
+function defaultLayer(
+	children: readonly import("./types.ts").DesignSceneChild[],
+): DesignLayer {
+	return { id: DEFAULT_LAYER_ID, name: "Artwork", children }
 }
 
 function migrateObjectV1(
@@ -803,6 +861,12 @@ function migrateCompleteDocument(
 		artboards: [legacyPageArtboard(document.page)],
 		swatches: document.swatches,
 		objects: document.objects.map(stabilizeDesignObjectIdentities),
+		layers: [
+			defaultLayer(
+				document.objects.map(({ id }) => ({ kind: "object" as const, id })),
+			),
+		],
+		groups: [],
 		guides: document.guides,
 	})
 }
@@ -858,6 +922,12 @@ export function migrateDesignDocumentV3(
 		artboards: [legacyPageArtboard(parsed.data.page)],
 		swatches: parsed.data.swatches,
 		objects: parsed.data.objects.map(stabilizeDesignObjectIdentities),
+		layers: [
+			defaultLayer(
+				parsed.data.objects.map(({ id }) => ({ kind: "object" as const, id })),
+			),
+		],
+		groups: [],
 		guides: parsed.data.guides,
 	})
 }
@@ -865,7 +935,7 @@ export function migrateDesignDocumentV3(
 export function migrateDesignDocumentV4(
 	value: unknown,
 ): DesignSourceResult<DesignDocument> {
-	const parsed = previousDesignDocumentSchema.safeParse(value)
+	const parsed = versionFourDesignDocumentSchema.safeParse(value)
 	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
 	return validateDesignDocument({
 		format: parsed.data.format,
@@ -874,6 +944,39 @@ export function migrateDesignDocumentV4(
 		artboards: [legacyPageArtboard(parsed.data.page)],
 		swatches: parsed.data.swatches,
 		objects: parsed.data.objects,
+		layers: [
+			defaultLayer(
+				parsed.data.objects.map(({ id }) => ({ kind: "object" as const, id })),
+			),
+		],
+		groups: [],
+		guides: parsed.data.guides,
+	})
+}
+
+export function migrateDesignDocumentV5(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
+	const parsed = versionFiveDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return validateDesignDocument({
+		format: parsed.data.format,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		title: parsed.data.title,
+		artboards: parsed.data.artboards,
+		swatches: parsed.data.swatches,
+		objects: parsed.data.objects,
+		...(parsed.data.blends === undefined ? {} : { blends: parsed.data.blends }),
+		layers: [
+			defaultLayer(
+				parsed.data.scene ??
+					parsed.data.objects.map(({ id }) => ({
+						kind: "object" as const,
+						id,
+					})),
+			),
+		],
+		groups: parsed.data.groups ?? [],
 		guides: parsed.data.guides,
 	})
 }
@@ -923,10 +1026,12 @@ export function decodeDesignDocument(
 			return migrateDesignDocumentV1(value)
 		case VERSION_TWO_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV2(value)
-		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+		case VERSION_FOUR_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV4(value)
 		case VERSION_THREE_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV3(value)
+		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV5(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)
 		default:

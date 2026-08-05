@@ -2,12 +2,10 @@ import {
 	DEFAULT_DESIGN_STROKE_STYLE,
 	IDENTITY_DESIGN_TRANSFORM,
 	type DesignAppearance,
-	type DesignArtboard,
 	type DesignContour,
 	type DesignDocument,
 	type DesignGroup,
 	type DesignObject,
-	type DesignPoint,
 	type DesignSceneChild,
 	type DesignSwatch,
 	type DesignTransform,
@@ -879,16 +877,24 @@ export function importSvg(
 			importedObjectIds: Object.freeze([]),
 			ok: false,
 		})
+	const targetLayer = document.layers.at(-1)
+	if (targetLayer === undefined)
+		return Object.freeze({
+			diagnostics: Object.freeze(diagnostics),
+			document,
+			importedObjectIds: Object.freeze([]),
+			ok: false,
+		})
 	const nextDocument: DesignDocument = {
 		...document,
 		swatches: [...document.swatches, ...swatches],
 		objects: [...document.objects, ...objects],
-		scene: [
-			...(document.scene ??
-				document.objects.map(({ id }) => ({ kind: "object" as const, id }))),
-			...importedScene,
-		],
-		groups: [...(document.groups ?? []), ...groups],
+		layers: document.layers.map((layer) =>
+			layer.id === targetLayer.id
+				? { ...layer, children: [...layer.children, ...importedScene] }
+				: layer,
+		),
+		groups: [...document.groups, ...groups],
 	}
 	return Object.freeze({
 		diagnostics: Object.freeze(diagnostics),

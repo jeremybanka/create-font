@@ -10,7 +10,7 @@ import {
 
 const document: DesignDocument = {
 	format: "create-design.document",
-	version: 5,
+	version: 6,
 	title: "Persisted blend",
 	artboards: [
 		{ id: "artboard:one", name: "One", x: 0, y: 0, width: 100, height: 100 },
@@ -50,6 +50,17 @@ const document: DesignDocument = {
 			appearance: {},
 		},
 	],
+	layers: [
+		{
+			id: "layer:artwork",
+			name: "Artwork",
+			children: [
+				{ kind: "object", id: "object:a" },
+				{ kind: "object", id: "object:b" },
+			],
+		},
+	],
+	groups: [],
 	blends: [
 		{
 			id: "blend:one",
@@ -86,7 +97,14 @@ describe("persisted live blends", () => {
 	})
 
 	it("keeps missing endpoints recoverable for the model resolver", () => {
-		const missing = { ...document, objects: document.objects.slice(0, 1) }
+		const missing = {
+			...document,
+			objects: document.objects.slice(0, 1),
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: layer.children.slice(0, 1),
+			})),
+		}
 		expect(validateDesignDocument(missing)).toEqual({
 			ok: true,
 			value: missing,

@@ -294,28 +294,58 @@ export const designVectorAdapter: VectorDocumentAdapter<
 			}
 		}
 		if (intent.kind === "reorder") {
-			if (document.scene !== undefined)
-				return reject(
-					"Use hierarchy-aware stacking commands for grouped artwork.",
-				)
 			const fromIndex = document.objects.findIndex(
 				(object) => object.id === intent.objectId,
 			)
 			if (fromIndex < 0)
 				return reject(`Unknown design object ${intent.objectId}.`)
-			if (document.objects[fromIndex]?.locked)
-				return reject(`Object ${intent.objectId} is locked.`)
 			if (
 				!Number.isInteger(intent.toIndex) ||
 				intent.toIndex < 0 ||
 				intent.toIndex >= document.objects.length
 			)
 				return reject("Design object order is outside the document.")
+			const targetId = document.objects[intent.toIndex]?.id
+			const layer = document.layers.find((candidate) =>
+				candidate.children.some(
+					(child) => child.kind === "object" && child.id === intent.objectId,
+				),
+			)
+			if (
+				layer === undefined ||
+				targetId === undefined ||
+				!layer.children.some(
+					(child) => child.kind === "object" && child.id === targetId,
+				)
+			)
+				return reject(
+					"Use hierarchy-aware stacking commands across groups or layers.",
+				)
+			const children = [...layer.children]
+			const childIndex = children.findIndex(
+				(child) => child.kind === "object" && child.id === intent.objectId,
+			)
+			const targetChildIndex = children.findIndex(
+				(child) => child.kind === "object" && child.id === targetId,
+			)
+			const [child] = children.splice(childIndex, 1)
+			if (child === undefined) return reject("Design object is unavailable.")
+			children.splice(targetChildIndex, 0, child)
 			const objects = [...document.objects]
 			const [object] = objects.splice(fromIndex, 1)
 			if (object === undefined) return reject("Design object is unavailable.")
 			objects.splice(intent.toIndex, 0, object)
-			return { ok: true, document: { ...document, objects }, selection }
+			return {
+				ok: true,
+				document: {
+					...document,
+					objects,
+					layers: document.layers.map((candidate) =>
+						candidate.id === layer.id ? { ...candidate, children } : candidate,
+					),
+				},
+				selection,
+			}
 		}
 		if (intent.kind === "set-style") {
 			const object = document.objects.find(

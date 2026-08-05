@@ -30,13 +30,22 @@ export function appendDesignHierarchyObjects(
 	document: DesignDocument,
 	objectIds: readonly string[],
 ): DesignDocument {
-	if (document.scene === undefined || objectIds.length === 0) return document
+	if (objectIds.length === 0) return document
+	const target = document.layers.at(-1)
+	if (target === undefined) return document
 	return {
 		...document,
-		scene: [
-			...document.scene,
-			...objectIds.map((id) => ({ kind: "object" as const, id })),
-		],
+		layers: document.layers.map((layer) =>
+			layer.id === target.id
+				? {
+						...layer,
+						children: [
+							...layer.children,
+							...objectIds.map((id) => ({ kind: "object" as const, id })),
+						],
+					}
+				: layer,
+		),
 	}
 }
 
@@ -57,11 +66,12 @@ export function replaceDesignHierarchyObject(
 	objectId: string,
 	replacementIds: readonly string[],
 ): DesignDocument {
-	if (document.scene === undefined || document.groups === undefined)
-		return document
 	return {
 		...document,
-		scene: replaceChildren(document.scene, objectId, replacementIds),
+		layers: document.layers.map((layer) => ({
+			...layer,
+			children: replaceChildren(layer.children, objectId, replacementIds),
+		})),
 		groups: document.groups.map((group) => ({
 			...group,
 			children: replaceChildren(group.children, objectId, replacementIds),
@@ -73,8 +83,6 @@ export function removeDesignHierarchyObjects(
 	document: DesignDocument,
 	objectIds: ReadonlySet<string>,
 ): DesignDocument {
-	if (document.scene === undefined || document.groups === undefined)
-		return document
 	let groups = document.groups.map((group) => ({
 		...group,
 		children: group.children.filter(
@@ -105,23 +113,21 @@ export function removeDesignHierarchyObjects(
 	}
 	return {
 		...document,
-		scene: document.scene.filter(
-			(child) =>
-				(child.kind !== "object" || !objectIds.has(child.id)) &&
-				(child.kind !== "group" || !empty.has(child.id)),
-		),
+		layers: document.layers.map((layer) => ({
+			...layer,
+			children: layer.children.filter(
+				(child) =>
+					(child.kind !== "object" || !objectIds.has(child.id)) &&
+					(child.kind !== "group" || !empty.has(child.id)),
+			),
+		})),
 		groups,
 	}
 }
 
 const normalized = (document: DesignDocument) => ({
-	scene:
-		document.scene ??
-		document.objects.map((object) => ({
-			kind: "object" as const,
-			id: object.id,
-		})),
-	groups: document.groups ?? [],
+	layers: document.layers,
+	groups: document.groups,
 })
 
 const groupMap = (groups: readonly DesignGroup[]) =>
@@ -146,40 +152,56 @@ function paintOrder(
 
 function installHierarchy(
 	document: DesignDocument,
-	scene: readonly DesignSceneChild[],
+	layers: DesignDocument["layers"],
 	groups: readonly DesignGroup[],
 ): DesignDocument {
 	const objects = new Map(document.objects.map((object) => [object.id, object]))
-	const ordered = paintOrder(scene, groupMap(groups)).flatMap((id) => {
-		const object = objects.get(id)
-		return object === undefined ? [] : [object]
-	})
-	return { ...document, scene, groups, objects: ordered }
+	const ordered = layers
+		.flatMap((layer) => paintOrder(layer.children, groupMap(groups)))
+		.flatMap((id) => {
+			const object = objects.get(id)
+			return object === undefined ? [] : [object]
+		})
+	return { ...document, layers, groups, objects: ordered }
 }
 
 type Parent = Readonly<{
-	id: string | null
+	kind: "layer" | "group"
+	id: string
 	children: readonly DesignSceneChild[]
 }>
 
 function parents(
-	scene: readonly DesignSceneChild[],
+	layers: DesignDocument["layers"],
 	groups: readonly DesignGroup[],
 ): readonly Parent[] {
 	return [
-		{ id: null, children: scene },
-		...groups.map((group) => ({ id: group.id, children: group.children })),
+		...layers.map((layer) => ({
+			kind: "layer" as const,
+			id: layer.id,
+			children: layer.children,
+		})),
+		...groups.map((group) => ({
+			kind: "group" as const,
+			id: group.id,
+			children: group.children,
+		})),
 	]
 }
 
-function parentForScope(
+function parentsForScope(
 	document: DesignDocument,
 	scopeGroupId: string | null,
-): Parent | null {
+): readonly Parent[] {
 	const hierarchy = normalized(document)
-	if (scopeGroupId === null) return { id: null, children: hierarchy.scene }
+	if (scopeGroupId === null)
+		return parents(hierarchy.layers, hierarchy.groups).filter(
+			(parent) => parent.kind === "layer",
+		)
 	const group = hierarchy.groups.find(({ id }) => id === scopeGroupId)
-	return group === undefined ? null : { id: group.id, children: group.children }
+	return group === undefined
+		? []
+		: [{ kind: "group", id: group.id, children: group.children }]
 }
 
 /** Resolves a painted object to the direct selection unit in the active group scope. */
@@ -190,8 +212,12 @@ export function designSelectionUnitAtObject(
 ): DesignSelectionUnit | null {
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
-	const parent = parentForScope(document, scopeGroupId)
-	if (parent === null) return null
+	const parent = parentsForScope(document, scopeGroupId).find((candidate) =>
+		candidate.children.some((child) =>
+			descendantIds(child, groups).includes(objectId),
+		),
+	)
+	if (parent === undefined) return null
 	const child = parent.children.find((candidate) =>
 		descendantIds(candidate, groups).includes(objectId),
 	)
@@ -242,14 +268,14 @@ export function normalizeDesignSelection(
 	scopeGroupId: string | null = null,
 ): readonly string[] {
 	const selected = new Set(objectIds)
-	const parent = parentForScope(document, scopeGroupId)
-	if (parent === null) return []
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
-	return parent.children.flatMap((child) => {
-		const ids = descendantIds(child, groups)
-		return ids.some((id) => selected.has(id)) ? ids : []
-	})
+	return parentsForScope(document, scopeGroupId).flatMap((parent) =>
+		parent.children.flatMap((child) => {
+			const ids = descendantIds(child, groups)
+			return ids.some((id) => selected.has(id)) ? ids : []
+		}),
+	)
 }
 
 /** Plans the exact selection and rigid object batch used by a Select-tool hit. */
@@ -339,7 +365,7 @@ export function designSelectionUnits(
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
 	const selected = new Set(selection)
-	const parent = parents(hierarchy.scene, hierarchy.groups).find(
+	const parent = parents(hierarchy.layers, hierarchy.groups).find(
 		(candidate) => {
 			const units = selectedUnits(candidate, selected, groups)
 			return (
@@ -357,17 +383,22 @@ export function designSelectionUnits(
 }
 
 function replaceParent(
-	scene: readonly DesignSceneChild[],
+	layers: DesignDocument["layers"],
 	groups: readonly DesignGroup[],
-	parentId: string | null,
+	parent: Parent,
 	children: readonly DesignSceneChild[],
 ) {
-	return parentId === null
-		? { scene: children, groups }
+	return parent.kind === "layer"
+		? {
+				layers: layers.map((layer) =>
+					layer.id === parent.id ? { ...layer, children } : layer,
+				),
+				groups,
+			}
 		: {
-				scene,
+				layers,
 				groups: groups.map((group) =>
-					group.id === parentId ? { ...group, children } : group,
+					group.id === parent.id ? { ...group, children } : group,
 				),
 			}
 }
@@ -379,11 +410,10 @@ export function duplicateDesignHierarchySelection(
 	objectIdMap: ReadonlyMap<string, string>,
 	nextId: () => string,
 ): DesignHierarchyResult | null {
-	if (document.scene === undefined || document.groups === undefined) return null
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
 	const selected = new Set(selection)
-	const parent = parents(hierarchy.scene, hierarchy.groups).find(
+	const parent = parents(hierarchy.layers, hierarchy.groups).find(
 		(candidate) => {
 			const units = selectedUnits(candidate, selected, groups)
 			return (
@@ -423,15 +453,10 @@ export function duplicateDesignHierarchySelection(
 	const children = [...parent.children]
 	children.splice(last + 1, 0, ...clones)
 	const allGroups = [...hierarchy.groups, ...clonedGroups]
-	const replaced = replaceParent(
-		hierarchy.scene,
-		allGroups,
-		parent.id,
-		children,
-	)
+	const replaced = replaceParent(hierarchy.layers, allGroups, parent, children)
 	const nextDocument = installHierarchy(
 		document,
-		replaced.scene,
+		replaced.layers,
 		replaced.groups,
 	)
 	return {
@@ -450,7 +475,7 @@ export function groupDesignSelection(
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
 	const selected = new Set(selection)
-	const parent = parents(hierarchy.scene, hierarchy.groups).find(
+	const parent = parents(hierarchy.layers, hierarchy.groups).find(
 		(candidate) => {
 			const units = selectedUnits(candidate, selected, groups)
 			return (
@@ -477,13 +502,13 @@ export function groupDesignSelection(
 	)
 	children.splice(first, 0, { kind: "group", id })
 	const replaced = replaceParent(
-		hierarchy.scene,
+		hierarchy.layers,
 		[...hierarchy.groups, group],
-		parent.id,
+		parent,
 		children,
 	)
 	return {
-		document: installHierarchy(document, replaced.scene, replaced.groups),
+		document: installHierarchy(document, replaced.layers, replaced.groups),
 		selection: paintOrder(group.children, groupMap(replaced.groups)),
 	}
 }
@@ -504,7 +529,7 @@ export function ungroupDesignSelection(
 		)
 	})
 	if (group === undefined) return null
-	const parent = parents(hierarchy.scene, hierarchy.groups).find((candidate) =>
+	const parent = parents(hierarchy.layers, hierarchy.groups).find((candidate) =>
 		candidate.children.some(
 			(child) => child.kind === "group" && child.id === group.id,
 		),
@@ -518,14 +543,9 @@ export function ungroupDesignSelection(
 	const remaining = hierarchy.groups.filter(
 		(candidate) => candidate.id !== group.id,
 	)
-	const replaced = replaceParent(
-		hierarchy.scene,
-		remaining,
-		parent.id,
-		children,
-	)
+	const replaced = replaceParent(hierarchy.layers, remaining, parent, children)
 	return {
-		document: installHierarchy(document, replaced.scene, replaced.groups),
+		document: installHierarchy(document, replaced.layers, replaced.groups),
 		selection: paintOrder(group.children, groups),
 	}
 }
@@ -538,7 +558,7 @@ export function stackDesignSelection(
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
 	const selected = new Set(selection)
-	const parent = parents(hierarchy.scene, hierarchy.groups).find(
+	const parent = parents(hierarchy.layers, hierarchy.groups).find(
 		(candidate) => {
 			const units = selectedUnits(candidate, selected, groups)
 			return (
@@ -576,13 +596,13 @@ export function stackDesignSelection(
 	if (children.every((child, index) => child === parent.children[index]))
 		return null
 	const replaced = replaceParent(
-		hierarchy.scene,
+		hierarchy.layers,
 		hierarchy.groups,
-		parent.id,
+		parent,
 		children,
 	)
 	return {
-		document: installHierarchy(document, replaced.scene, replaced.groups),
+		document: installHierarchy(document, replaced.layers, replaced.groups),
 		selection,
 	}
 }
@@ -612,13 +632,18 @@ export function replaceDesignHierarchySelection(
 	replacementIds: readonly string[],
 	scopeGroupId: string | null = null,
 ): DesignDocument | null {
-	if (document.scene === undefined || document.groups === undefined)
-		return scopeGroupId === null ? document : null
 	const hierarchy = normalized(document)
 	const groups = groupMap(hierarchy.groups)
 	const selected = new Set(selection)
-	const parent = parentForScope(document, scopeGroupId)
-	if (parent === null) return null
+	const parent = parentsForScope(document, scopeGroupId).find((candidate) => {
+		const units = selectedUnits(candidate, selected, groups)
+		return (
+			units.length > 0 &&
+			new Set(units.flatMap((unit) => descendantIds(unit, groups))).size ===
+				selected.size
+		)
+	})
+	if (parent === undefined) return null
 	const units = selectedUnits(parent, selected, groups)
 	if (
 		units.length === 0 ||
@@ -648,10 +673,10 @@ export function replaceDesignHierarchySelection(
 		(group) => !removedGroups.has(group.id),
 	)
 	const replaced = replaceParent(
-		hierarchy.scene,
+		hierarchy.layers,
 		remainingGroups,
-		parent.id,
+		parent,
 		children,
 	)
-	return installHierarchy(document, replaced.scene, replaced.groups)
+	return installHierarchy(document, replaced.layers, replaced.groups)
 }

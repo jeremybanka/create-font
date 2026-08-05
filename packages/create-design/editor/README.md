@@ -43,8 +43,8 @@ topology. First-point and direction controls are available only for ordinary
 unlocked path endpoints.
 
 Each mounted editor owns an ephemeral atom.io `Silo`. Authored document state is
-normalized into ID-index atoms and keyed families for artboards, swatches,
-objects, groups, guides, contours, and points. Read-only selectors compose those
+normalized into ID-index atoms and keyed families for artboards, layers,
+swatches, objects, groups, guides, contours, and points. Read-only selectors compose those
 facts upward into entity and `DesignDocument` projections at the UI, source RPC,
 and persistence boundaries; there is no monolithic document atom.
 

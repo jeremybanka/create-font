@@ -76,7 +76,10 @@ describe("SVG export", () => {
 		const document = {
 			...initial,
 			objects: [object],
-			scene: [{ kind: "group" as const, id: "group:one" }],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "group" as const, id: "group:one" }],
+			})),
 			groups: [
 				{
 					id: "group:one",
@@ -121,7 +124,13 @@ describe("SVG import", () => {
 		let id = 0
 		const imported = importSvg(
 			new TextDecoder().decode(exportSvg(initial)),
-			{ ...initial, objects: [], scene: [], groups: [], swatches: [] },
+			{
+				...initial,
+				objects: [],
+				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+				groups: [],
+				swatches: [],
+			},
 			{ nextId: () => `roundtrip-${id++}` },
 		)
 		expect(imported.ok).toBe(true)

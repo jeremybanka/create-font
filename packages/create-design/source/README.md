@@ -7,16 +7,23 @@ into validated JSON units.
 
 ## Complete document versions
 
-Complete documents use a strict, version-dispatched codec. Version five is the
-current schema. It replaces v4's singleton global page with a nonempty ordered
-`artboards` collection. Each artboard persists a stable ID, display name,
-global `{ x, y, width, height }` rectangle, and optional nonnegative
+Complete documents use a strict, version-dispatched codec. Version six is the
+current schema. It replaces v5's optional root `scene` with a nonempty ordered
+`layers` collection. Each layer persists a stable ID, display name, ordered
+object/group children, and optional hidden and locked states. Every object and
+group has exactly one structural parent, and groups cannot cross layer
+boundaries. Version five introduced the nonempty ordered `artboards`
+collection; each artboard persists a stable ID, display name, global
+`{ x, y, width, height }` rectangle, and optional nonnegative
 `bleed`/`safeArea` edge insets. Array order is canonical output order; active
-artboard state is deliberately absent from the document.
-`decodeDesignDocument()` accepts complete version-one through version-four
-documents and deterministically migrates them to v5. Every legacy page becomes
+artboard and active layer state are deliberately absent from the document.
+`decodeDesignDocument()` accepts complete version-one through version-five
+documents and deterministically migrates them to v6. A v5 `scene`, or the
+object order when `scene` is absent, becomes the children of one visible,
+unlocked `layer:artwork` named `Artwork`. Every legacy page becomes
 the single equivalent `artboard:page` named `Artboard 1`. Existing object IDs,
-global coordinates, geometry, transforms, and appearance are preserved.
+group IDs, hierarchy paint order, global coordinates, geometry, transforms,
+and appearance are preserved.
 Missing v1/v2 path IDs are derived from the owning object and source order, and
 their artboard receives the legacy implicit origin `(0, 0)`. Prior width-only
 strokes receive the renderer-neutral butt cap, miter join, miter limit 4, and
@@ -61,10 +68,10 @@ transforming, renaming, restyling, reordering, editing an artboard, or
 projecting to canvas/PDF does not. This is the foundation expected by
 multi-selection work in #254 and global multi-artboard/output work in #283.
 
-## Version-three directory
+## Version-four directory
 
-The third directory version matches the current application model: ordered
-artboards, one layer, authored path/rectangle/ellipse geometry,
+The fourth directory version matches the current application model: ordered
+artboards, ordered first-class layers, authored path/rectangle/ellipse geometry,
 independent affine object transforms, optional fill/stroke appearance, one
 palette, structural groups, and empty asset and font inventories. Path geometry
 may persist an explicit `nonzero` or `evenodd` fill rule; omitted legacy rules
@@ -100,7 +107,8 @@ Each fact has one owner:
 - the ordered artboard inventory owns output order and maps each stable ID to
   an independent unit that owns its name, global rectangle, and optional
   bleed/safe-area metadata;
-- the sole layer unit owns root stacking order;
+- the layer inventory owns layer order while each layer unit owns only its
+  display metadata, flags, and direct root children;
 - each group unit owns its ordered object or nested-group children;
 - the object inventory maps stable object IDs to stable source paths; and
 - each object JSON owns geometry, typography, frame, transform, and appearance;
@@ -120,11 +128,12 @@ object properties changes only its JSON unit, while a content-only text edit
 produces a narrow `.txt` diff. Reordering changes only the layer unit. IDs,
 display names, source paths, and stacking order are independent.
 
-Structural groups, embedded fonts, and multiple layers have explicit
-inventories. Groups are active and may nest; every object and group must have
-exactly one structural parent. Source version three still requires one layer and
-an empty font inventory where the current `DesignDocument` has no faithful
-model.
+Structural groups, embedded fonts, and layers have explicit inventories. Groups
+are active and may nest; every object and group must have exactly one structural
+parent. Empty, hidden, and locked layers are retained. Source versions before
+four require the singleton `layer:artwork`; their version-one layer unit is
+deterministically named `Artwork`. The font inventory remains empty where the
+current `DesignDocument` has no faithful model.
 Asset inventory entries are active: each records a stable ID, safe path, media
 type, byte length, and SHA-256 digest. Asset bytes remain outside the JSON
 directory codec and are transferred atomically through
@@ -141,7 +150,8 @@ prior width-only stroke object units. Inline `geometry.text` from earlier
 sources hydrates without loss; the next canonical save atomically migrates it
 to object-version-two JSON plus the raw `.txt` sidecar. Writers emit the explicit
 ordered named global artboards, stable path IDs, and canonical separated object
-shape, and mark the assembled complete document as version five. Splitting an
+shape, ordered named layers, and mark the assembled complete document as version
+six. Splitting an
 artboard edit changes only that artboard unit; reordering changes only
 `artboards/index.json`; and object units retain byte-equivalent semantic values.
 

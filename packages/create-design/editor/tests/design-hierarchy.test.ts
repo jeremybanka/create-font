@@ -26,6 +26,14 @@ const fixture = () => {
 			{ ...first, id: "object:middle", name: "Middle" },
 			{ ...first, id: "object:front", name: "Front" },
 		],
+		layers: document.layers.map((layer) => ({
+			...layer,
+			children: [
+				{ kind: "object" as const, id: "object:coral" },
+				{ kind: "object" as const, id: "object:middle" },
+				{ kind: "object" as const, id: "object:front" },
+			],
+		})),
 	}
 }
 
@@ -39,7 +47,7 @@ describe("design hierarchy commands", () => {
 			() => "selection",
 		)
 		if (grouped === null) throw new Error("Expected grouping to succeed.")
-		expect(grouped.document.scene).toEqual([
+		expect(grouped.document.layers[0]?.children).toEqual([
 			{ kind: "group", id: "group:selection" },
 			{ kind: "object", id: "object:front" },
 		])
@@ -59,7 +67,7 @@ describe("design hierarchy commands", () => {
 			grouped.document,
 			grouped.selection,
 		)
-		expect(ungrouped?.document.scene).toEqual(
+		expect(ungrouped?.document.layers[0]?.children).toEqual(
 			document.objects.map((object) => ({ kind: "object", id: object.id })),
 		)
 		expect(ungrouped?.document.groups).toEqual([])
@@ -80,7 +88,7 @@ describe("design hierarchy commands", () => {
 			grouped.selection,
 			"front",
 		)
-		expect(front?.document.scene).toEqual([
+		expect(front?.document.layers[0]?.children).toEqual([
 			{ kind: "object", id: "object:front" },
 			{ kind: "group", id: "group:selection" },
 		])
@@ -139,9 +147,11 @@ describe("design hierarchy commands", () => {
 			new Set(["object:fill", "object:outline", "object:middle"]),
 		)
 		expect(removed.groups).toEqual([])
-		expect(removed.scene).toEqual([{ kind: "object", id: "object:front" }])
+		expect(removed.layers[0]?.children).toEqual([
+			{ kind: "object", id: "object:front" },
+		])
 		const appended = appendDesignHierarchyObjects(removed, ["object:new"])
-		expect(appended.scene?.at(-1)).toEqual({
+		expect(appended.layers[0]?.children.at(-1)).toEqual({
 			kind: "object",
 			id: "object:new",
 		})

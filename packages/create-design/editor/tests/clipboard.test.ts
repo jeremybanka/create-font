@@ -21,6 +21,13 @@ describe("vector clipboard interoperability", () => {
 		const paired = {
 			...document,
 			objects: [source, { ...source, id: "object:second", name: "Second" }],
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: [
+					{ kind: "object" as const, id: source.id },
+					{ kind: "object" as const, id: "object:second" },
+				],
+			})),
 		}
 		const grouped = groupDesignSelection(
 			paired,
@@ -36,11 +43,11 @@ describe("vector clipboard interoperability", () => {
 		)
 		if (duplicate === null) throw new Error("Expected duplicate to succeed.")
 		expect(duplicate.selection).toHaveLength(2)
-		expect(duplicate.document.scene).toEqual([
+		expect(duplicate.document.layers[0]?.children).toEqual([
 			{ kind: "group", id: "group:source" },
 			{ kind: "group", id: expect.stringMatching(/^group:duplicate:/) },
 		])
-		expect(duplicate.document.groups?.[1]).toMatchObject({
+		expect(duplicate.document.groups[1]).toMatchObject({
 			name: "Group 1 copy",
 			children: duplicate.selection.map((id) => ({ kind: "object", id })),
 		})

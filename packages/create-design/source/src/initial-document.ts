@@ -12,7 +12,7 @@ export const IDENTITY_DESIGN_TRANSFORM: DesignTransform = Object.freeze({
 export function createInitialDocument(): DesignDocument {
 	return {
 		format: "create-design.document",
-		version: 5,
+		version: 6,
 		title: "Untitled design",
 		artboards: [
 			{
@@ -75,6 +75,17 @@ export function createInitialDocument(): DesignDocument {
 				appearance: { fill: { swatchId: "swatch:cyan" } },
 			},
 		],
+		layers: [
+			{
+				id: "layer:artwork",
+				name: "Artwork",
+				children: [
+					{ kind: "object", id: "object:coral" },
+					{ kind: "object", id: "object:cyan" },
+				],
+			},
+		],
+		groups: [],
 		guides: [],
 	}
 }

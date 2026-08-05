@@ -338,7 +338,7 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 			parsed.version === 3
 				? validateDesignDocument({
 						...envelope,
-						version: 5,
+						version: 6,
 						artboards: [
 							{
 								id: "artboard:clipboard",
@@ -349,6 +349,21 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 								height: 1,
 							},
 						],
+						layers: [
+							{
+								id: "layer:clipboard",
+								name: "Clipboard",
+								children: parsed.objects.flatMap((object) =>
+									typeof object === "object" &&
+									object !== null &&
+									"id" in object &&
+									typeof object.id === "string"
+										? [{ kind: "object" as const, id: object.id }]
+										: [],
+								),
+							},
+						],
+						groups: [],
 					})
 				: parsed.version === 2
 					? decodeDesignDocument({

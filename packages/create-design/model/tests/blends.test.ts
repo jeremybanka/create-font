@@ -79,7 +79,7 @@ const documentWith = (
 	const blend = createDesignBlend("blend:test", "Test blend", start, end, 2)
 	return {
 		format: "create-design.document",
-		version: 5,
+		version: 6,
 		title: "Blend",
 		artboards: [
 			{ id: "artboard:one", name: "One", x: 0, y: 0, width: 200, height: 200 },
@@ -98,6 +98,17 @@ const documentWith = (
 		],
 		objects: [start, end],
 		blends: [blend],
+		layers: [
+			{
+				id: "layer:artwork",
+				name: "Artwork",
+				children: [
+					{ kind: "object", id: start.id },
+					{ kind: "object", id: end.id },
+				],
+			},
+		],
+		groups: [],
 		guides: [],
 	}
 }

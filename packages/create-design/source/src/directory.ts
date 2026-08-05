@@ -12,6 +12,7 @@ import {
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	DEFAULT_ARTBOARD_ID,
+	DEFAULT_LAYER_ID,
 	designObjectIdSchema,
 	designBlendSchema,
 	finiteNumberSchema,
@@ -19,6 +20,7 @@ import {
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_FOUR_DESIGN_DOCUMENT_VERSION,
 	VERSION_THREE_DESIGN_DOCUMENT_VERSION,
 	VERSION_TWO_DESIGN_DOCUMENT_VERSION,
 	previousContourSchema,
@@ -36,6 +38,7 @@ import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
 	DesignGroup,
+	DesignLayer,
 	DesignObject,
 	DesignSceneChild,
 	DesignSourceDiagnostic,
@@ -43,10 +46,10 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
-export const CREATE_DESIGN_SOURCE_VERSION = 3 as const
-export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 2 as const
+export const CREATE_DESIGN_SOURCE_VERSION = 4 as const
+export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 3 as const
+export const VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION = 2 as const
 export const LEGACY_CREATE_DESIGN_SOURCE_VERSION = 1 as const
-export const DEFAULT_LAYER_ID = "layer:artwork" as const
 
 const layerIdSchema = z.string().regex(/^layer:.+/u)
 const groupIdSchema = z.string().regex(/^group:.+/u)
@@ -61,6 +64,7 @@ export const projectFileSchema = z
 		format: z.literal(CREATE_DESIGN_SOURCE_FORMAT),
 		sourceVersion: z.union([
 			z.literal(LEGACY_CREATE_DESIGN_SOURCE_VERSION),
+			z.literal(VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(PREVIOUS_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(CREATE_DESIGN_SOURCE_VERSION),
 		]),
@@ -68,8 +72,9 @@ export const projectFileSchema = z
 		documentVersion: z.union([
 			z.literal(LEGACY_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_TWO_DESIGN_DOCUMENT_VERSION),
-			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+			z.literal(VERSION_FOUR_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_THREE_DESIGN_DOCUMENT_VERSION),
+			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
 	})
@@ -145,7 +150,18 @@ const sceneChildSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("object"), id: designObjectIdSchema }).strict(),
 	z.object({ kind: z.literal("group"), id: groupIdSchema }).strict(),
 ])
-export const layerFileSchema = z
+const currentLayerFileSchema = z
+	.object({
+		format: z.literal("create-design.layer"),
+		version: z.literal(2),
+		id: layerIdSchema,
+		name: z.string(),
+		children: z.array(sceneChildSchema),
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+const legacyLayerFileSchema = z
 	.object({
 		format: z.literal("create-design.layer"),
 		version: z.literal(1),
@@ -153,6 +169,11 @@ export const layerFileSchema = z
 		children: z.array(sceneChildSchema),
 	})
 	.strict()
+	.transform((layer) => ({ ...layer, version: 2 as const, name: "Artwork" }))
+export const layerFileSchema = z.union([
+	currentLayerFileSchema,
+	legacyLayerFileSchema,
+])
 export const groupFileSchema = z
 	.object({
 		format: z.literal("create-design.group"),
@@ -547,6 +568,12 @@ export function defaultGroupUnitPath(id: string): string {
 	return `scene/groups/${encodePathSegment(id)}.json`
 }
 
+export function defaultLayerUnitPath(id: string): string {
+	return id === DEFAULT_LAYER_ID
+		? "scene/layers/artwork.json"
+		: `scene/layers/${encodePathSegment(id)}.json`
+}
+
 export function defaultArtboardUnitPath(id: string): string {
 	return id === DEFAULT_ARTBOARD_ID
 		? "artboards/page.json"
@@ -640,6 +667,7 @@ export interface SplitDesignDocumentOptions {
 	) => string
 	readonly objectPath?: (object: DesignObject, index: number) => string
 	readonly groupPath?: (group: DesignGroup, index: number) => string
+	readonly layerPath?: (layer: DesignLayer, index: number) => string
 }
 
 function objectFile(object: DesignObject, objectPath: string): ObjectFile {
@@ -675,10 +703,11 @@ export function splitDesignDocument(
 		path:
 			options.objectPath?.(object, index) ?? defaultObjectUnitPath(object.id),
 	}))
-	const groups = validated.value.groups ?? []
-	const scene =
-		validated.value.scene ??
-		validated.value.objects.map(({ id }) => ({ kind: "object" as const, id }))
+	const groups = validated.value.groups
+	const layerEntries = validated.value.layers.map((layer, index) => ({
+		id: layer.id,
+		path: options.layerPath?.(layer, index) ?? defaultLayerUnitPath(layer.id),
+	}))
 	const groupEntries = groups.map((group, index) => ({
 		id: group.id,
 		path: options.groupPath?.(group, index) ?? defaultGroupUnitPath(group.id),
@@ -706,6 +735,26 @@ export function splitDesignDocument(
 					"directory.duplicate_path",
 					`$.artboards[${index}].path`,
 					`Duplicate artboard source path ${entry.path}.`,
+				),
+			)
+		paths.add(entry.path)
+	}
+	paths.clear()
+	for (const [index, entry] of layerEntries.entries()) {
+		if (!layerUnitPathSchema.safeParse(entry.path).success)
+			errors.push(
+				diagnostic(
+					"directory.unsafe_path",
+					`$.layers[${index}].path`,
+					`Layer ${entry.id} has unsafe source path ${entry.path}.`,
+				),
+			)
+		if (paths.has(entry.path))
+			errors.push(
+				diagnostic(
+					"directory.duplicate_path",
+					`$.layers[${index}].path`,
+					`Duplicate layer source path ${entry.path}.`,
 				),
 			)
 		paths.add(entry.path)
@@ -752,7 +801,6 @@ export function splitDesignDocument(
 	}
 	if (errors.length > 0) return failure(errors)
 
-	const layerPath = "scene/layers/artwork.json"
 	const files: Record<string, unknown> = {
 		[designSourcePaths.project]: {
 			format: CREATE_DESIGN_SOURCE_FORMAT,
@@ -789,14 +837,8 @@ export function splitDesignDocument(
 		[designSourcePaths.layerIndex]: {
 			format: "create-design.layer-index",
 			version: 1,
-			entries: [{ id: DEFAULT_LAYER_ID, path: layerPath }],
+			entries: layerEntries,
 		} satisfies LayerIndexFile,
-		[layerPath]: {
-			format: "create-design.layer",
-			version: 1,
-			id: DEFAULT_LAYER_ID,
-			children: scene,
-		} satisfies LayerFile,
 		[designSourcePaths.groupIndex]: {
 			format: "create-design.group-index",
 			version: 1,
@@ -830,6 +872,15 @@ export function splitDesignDocument(
 			version: 2,
 			...artboard,
 		} satisfies ArtboardFile
+	}
+	for (const [index, layer] of validated.value.layers.entries()) {
+		const entry = layerEntries[index]
+		if (entry === undefined) continue
+		files[entry.path] = {
+			format: "create-design.layer",
+			version: 2,
+			...layer,
+		} satisfies LayerFile
 	}
 	for (const [index, object] of validated.value.objects.entries()) {
 		const entry = objectEntries[index]
@@ -1004,21 +1055,26 @@ export function assembleDesignDocument(
 				designSourcePaths.artboardIndex,
 			),
 		)
-	if (layerIndex !== null && layerIndex.entries.length !== 1)
+	if (layerIndex !== null && layerIndex.entries.length === 0)
+		errors.push(
+			diagnostic(
+				"directory.hierarchy",
+				"$.entries",
+				"A design source requires at least one layer.",
+				designSourcePaths.layerIndex,
+			),
+		)
+	if (
+		project?.sourceVersion !== CREATE_DESIGN_SOURCE_VERSION &&
+		layerIndex !== null &&
+		(layerIndex.entries.length !== 1 ||
+			layerIndex.entries[0]?.id !== DEFAULT_LAYER_ID)
+	)
 		errors.push(
 			diagnostic(
 				"directory.unsupported",
 				"$.entries",
-				"Source version 1 requires exactly one layer.",
-				designSourcePaths.layerIndex,
-			),
-		)
-	if (layerIndex !== null && layerIndex.entries[0]?.id !== DEFAULT_LAYER_ID)
-		errors.push(
-			diagnostic(
-				"directory.entity_id",
-				"$.entries[0].id",
-				`Source version 1 requires layer ID ${DEFAULT_LAYER_ID}.`,
+				`Source versions before ${CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
 				designSourcePaths.layerIndex,
 			),
 		)
@@ -1040,7 +1096,6 @@ export function assembleDesignDocument(
 			...indexedErrors(fontIndex.entries, designSourcePaths.fontIndex),
 		)
 
-	const layerEntry = layerIndex?.entries[0]
 	const artboards = [] as ArtboardFile[]
 	for (const entry of artboardIndex?.entries ?? []) {
 		const artboard = requiredUnit(files, entry.path, artboardFileSchema, errors)
@@ -1056,19 +1111,27 @@ export function assembleDesignDocument(
 			)
 		artboards.push(artboard)
 	}
-	const layer =
-		layerEntry === undefined
-			? null
-			: requiredUnit(files, layerEntry.path, layerFileSchema, errors)
-	if (layer !== null && layer.id !== layerEntry?.id)
-		errors.push(
-			diagnostic(
-				"directory.entity_id",
-				"$.id",
-				`Layer unit ID ${layer.id} does not match indexed ID ${layerEntry?.id}.`,
-				layerEntry?.path,
-			),
-		)
+	const layers: DesignLayer[] = []
+	for (const entry of layerIndex?.entries ?? []) {
+		const layer = requiredUnit(files, entry.path, layerFileSchema, errors)
+		if (layer === null) continue
+		if (layer.id !== entry.id)
+			errors.push(
+				diagnostic(
+					"directory.entity_id",
+					"$.id",
+					`Layer unit ID ${layer.id} does not match indexed ID ${entry.id}.`,
+					entry.path,
+				),
+			)
+		layers.push({
+			id: layer.id,
+			name: layer.name,
+			children: layer.children,
+			...(layer.hidden === undefined ? {} : { hidden: layer.hidden }),
+			...(layer.locked === undefined ? {} : { locked: layer.locked }),
+		})
+	}
 
 	const objects = new Map<string, DesignObject>()
 	for (const entry of objectIndex?.entries ?? []) {
@@ -1112,14 +1175,15 @@ export function assembleDesignDocument(
 			geometry = { ...storedGeometry, text: content }
 		} else {
 			if (
-				project?.sourceVersion === CREATE_DESIGN_SOURCE_VERSION &&
+				project?.sourceVersion !== LEGACY_CREATE_DESIGN_SOURCE_VERSION &&
+				project?.sourceVersion !== VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION &&
 				file.geometry.kind === "text"
 			) {
 				errors.push(
 					diagnostic(
 						"directory.unsupported",
 						"$.geometry.text",
-						`Source version ${CREATE_DESIGN_SOURCE_VERSION} stores text content in an adjacent raw .txt unit.`,
+						`Source version ${project.sourceVersion} stores text content in an adjacent raw .txt unit.`,
 						entry.path,
 					),
 				)
@@ -1239,7 +1303,8 @@ export function assembleDesignDocument(
 			else orderedObjects.push(object)
 		}
 	}
-	visit(layer?.children ?? [], layerEntry?.path)
+	for (const [index, layer] of layers.entries())
+		visit(layer.children, layerIndex?.entries[index]?.path)
 	for (const id of objects.keys()) {
 		if (!structural.has(id))
 			errors.push(
@@ -1267,7 +1332,7 @@ export function assembleDesignDocument(
 		metadata === null ||
 		palette === null ||
 		artboards.length === 0 ||
-		layer === null
+		layers.length === 0
 	)
 		return failure(
 			errors.length > 0
@@ -1299,9 +1364,8 @@ export function assembleDesignDocument(
 		})),
 		swatches: palette.swatches,
 		objects: orderedObjects,
-		...(groups.size === 0
-			? {}
-			: { scene: layer.children, groups: [...groups.values()] }),
+		layers,
+		groups: [...groups.values()],
 		guides: metadata.guides,
 	})
 }

@@ -221,6 +221,8 @@ describe("create-design recovery storage", () => {
 		const durable = createInitialDocument()
 		const reordered = {
 			artboards: durable.artboards,
+			layers: durable.layers,
+			groups: durable.groups,
 			guides: durable.guides,
 			objects: durable.objects,
 			swatches: durable.swatches,
@@ -307,7 +309,7 @@ describe("create-design recovery storage", () => {
 		}
 		expect(readDesignRecoveryDraft(storage)).toMatchObject({
 			document: {
-				version: 5,
+				version: 6,
 				artboards: [
 					{
 						id: "artboard:page",

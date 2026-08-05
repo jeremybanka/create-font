@@ -2,7 +2,6 @@ import { contourSvgPath, resolvedRgb } from "@create-design/model"
 import type {
 	DesignArtboard,
 	DesignDocument,
-	DesignGroup,
 	DesignObject,
 	DesignSceneChild,
 	DesignSwatch,
@@ -124,19 +123,14 @@ export function svgPreflightAllowsOutput(result: SvgPreflightResult): boolean {
 }
 
 function sceneFor(document: DesignDocument): readonly DesignSceneChild[] {
-	return (
-		document.scene ??
-		document.objects.map(({ id }) => ({ kind: "object" as const, id }))
-	)
+	return document.layers.flatMap((layer) => layer.children)
 }
 
 function projectionNodes(
 	document: DesignDocument,
 ): readonly SvgProjectionNode[] {
 	const objects = new Map(document.objects.map((object) => [object.id, object]))
-	const groups = new Map(
-		(document.groups ?? []).map((group) => [group.id, group]),
-	)
+	const groups = new Map(document.groups.map((group) => [group.id, group]))
 	const swatches = new Map(
 		document.swatches.map((swatch) => [swatch.id, swatch]),
 	)

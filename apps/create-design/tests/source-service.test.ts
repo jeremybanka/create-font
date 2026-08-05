@@ -44,6 +44,13 @@ describe(`create-design source service`, () => {
 		await initializeDesignSourceWorkspace(root, {
 			...initial,
 			objects: [...initial.objects, textObject],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: `object` as const, id: textObject.id },
+				],
+			})),
 		})
 		const service = await createDesignSourceService(root, { initialize: false })
 		const contentPath = defaultTextContentUnitPath(textObject.id)

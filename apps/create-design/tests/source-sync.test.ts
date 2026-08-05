@@ -203,6 +203,18 @@ describe(`create-design source synchronization`, () => {
 		const transaction = designSourceTransaction(state, {
 			...assembled.value,
 			objects: [...assembled.value.objects, point, area],
+			layers: assembled.value.layers.map((layer, index, layers) =>
+				index === layers.length - 1
+					? {
+							...layer,
+							children: [
+								...layer.children,
+								{ kind: `object`, id: point.id },
+								{ kind: `object`, id: area.id },
+							],
+						}
+					: layer,
+			),
 		})
 		await expect(
 			client.writeUnits({
@@ -318,7 +330,17 @@ describe(`create-design source synchronization`, () => {
 			appearance,
 			text: `A😀\r\nterminal\n`,
 		})
-		const withFirst = { ...initial, objects: [...initial.objects, first] }
+		const withFirst = {
+			...initial,
+			objects: [...initial.objects, first],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [
+					...layer.children,
+					{ kind: `object` as const, id: first.id },
+				],
+			})),
+		}
 		const added = designSourceTransaction(initialState(), withFirst)
 		const firstJson = defaultObjectUnitPath(first.id)
 		const firstText = defaultTextContentUnitPath(first.id)
@@ -360,6 +382,10 @@ describe(`create-design source synchronization`, () => {
 		const copied = designSourceTransaction(firstState, {
 			...withFirst,
 			objects: [...withFirst.objects, copy],
+			layers: withFirst.layers.map((layer) => ({
+				...layer,
+				children: [...layer.children, { kind: `object` as const, id: copy.id }],
+			})),
 		})
 		expect(copied.writes.map(({ path }) => path)).toEqual(
 			expect.arrayContaining([
@@ -374,8 +400,8 @@ describe(`create-design source synchronization`, () => {
 			[firstJson, firstText].toSorted(),
 		)
 		expect(deleted.writes.map(({ path }) => path)).toEqual([
-			`scene/layers/artwork.json`,
 			`scene/objects/index.json`,
+			`scene/layers/artwork.json`,
 		])
 	})
 
@@ -396,12 +422,19 @@ describe(`create-design source synchronization`, () => {
 		const transaction = designSourceTransaction(initialState(), {
 			...document,
 			objects: document.objects.slice(1),
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: layer.children.filter(
+					(child) =>
+						child.kind !== `object` || child.id !== document.objects[0]!.id,
+				),
+			})),
 		})
 		expect(transaction.removals).toHaveLength(1)
 		expect(transaction.removals[0]?.path).toContain(`scene/objects/`)
 		expect(transaction.writes.map(({ path }) => path)).toEqual([
-			`scene/layers/artwork.json`,
 			`scene/objects/index.json`,
+			`scene/layers/artwork.json`,
 		])
 	})
 

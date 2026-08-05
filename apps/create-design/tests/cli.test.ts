@@ -83,6 +83,7 @@ function multipleArtboards(): DesignDocument {
 			},
 		],
 		objects: [],
+		layers: document.layers.map((layer) => ({ ...layer, children: [] })),
 	}
 }
 

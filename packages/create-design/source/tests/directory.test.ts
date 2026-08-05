@@ -4,10 +4,12 @@ import {
 	DEFAULT_DESIGN_STROKE_STYLE,
 	DEFAULT_LAYER_ID,
 	CREATE_DESIGN_SOURCE_VERSION,
-	PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
+	VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION,
 	assembleDesignDocument,
 	decodeDesignDocument,
 	defaultArtboardUnitPath,
+	defaultGroupUnitPath,
+	defaultLayerUnitPath,
 	defaultObjectUnitPath,
 	defaultTextContentUnitPath,
 	designSourcePaths,
@@ -24,7 +26,7 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 5,
+	version: 6,
 	title: "Directory proof",
 	artboards: [
 		{
@@ -95,6 +97,17 @@ const fixture = (): DesignDocument => ({
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		},
 	],
+	layers: [
+		{
+			id: "layer:artwork",
+			name: "Artwork",
+			children: [
+				{ kind: "object", id: "object:coral" },
+				{ kind: "object", id: "object:ink" },
+			],
+		},
+	],
+	groups: [],
 	guides: [{ id: "guide:center", axis: "x", value: 306, locked: true }],
 })
 
@@ -119,6 +132,28 @@ function assemble(files: DesignSourceDirectoryFiles): DesignDocument {
 				.join("\n"),
 		)
 	return result.value
+}
+
+function appendObjects(
+	document: DesignDocument,
+	...objects: readonly DesignDocument["objects"][number][]
+): DesignDocument {
+	const target = document.layers.at(-1)!
+	return {
+		...document,
+		objects: [...document.objects, ...objects],
+		layers: document.layers.map((layer) =>
+			layer.id === target.id
+				? {
+						...layer,
+						children: [
+							...layer.children,
+							...objects.map(({ id }) => ({ kind: "object" as const, id })),
+						],
+					}
+				: layer,
+		),
+	}
 }
 
 function mutable(
@@ -195,10 +230,7 @@ describe("create-design directory source", () => {
 				},
 			},
 		}
-		const withText = {
-			...document,
-			objects: [...document.objects, point, area],
-		}
+		const withText = appendObjects(document, point, area)
 
 		const files = split(withText)
 		expect(files[defaultTextContentUnitPath(point.id)]).toBe("Hello world")
@@ -245,7 +277,7 @@ describe("create-design directory source", () => {
 			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		}
-		const document = { ...base, objects: [...base.objects, object] }
+		const document = appendObjects(base, object)
 		const files = split(document)
 		expect(files[defaultTextContentUnitPath(object.id)]).toBe(text)
 		expect(assemble(files)).toEqual(document)
@@ -284,7 +316,7 @@ describe("create-design directory source", () => {
 			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		}
-		const document = { ...base, objects: [...base.objects, object] }
+		const document = appendObjects(base, object)
 		const legacy = structuredClone(split(document)) as Record<string, unknown>
 		const objectPath = defaultObjectUnitPath(object.id)
 		legacy[objectPath] = {
@@ -299,7 +331,7 @@ describe("create-design directory source", () => {
 		delete legacy[defaultTextContentUnitPath(object.id)]
 		;(
 			legacy[designSourcePaths.project] as Record<string, unknown>
-		).sourceVersion = PREVIOUS_CREATE_DESIGN_SOURCE_VERSION
+		).sourceVersion = VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION
 		const hydrated = assemble(legacy)
 		expect(hydrated).toEqual(document)
 		const migrated = split(hydrated)
@@ -376,7 +408,7 @@ describe("create-design directory source", () => {
 			stroke: { swatchId: "swatch:ink", width: 3 },
 		}
 		const assembled = assemble(files as DesignSourceDirectoryFiles)
-		expect(assembled.version).toBe(5)
+		expect(assembled.version).toBe(6)
 		expect(assembled.objects[0]?.appearance.stroke).toEqual({
 			...DEFAULT_DESIGN_STROKE_STYLE,
 			swatchId: "swatch:ink",
@@ -405,6 +437,87 @@ describe("create-design directory source", () => {
 		})
 	})
 
+	it("round-trips ordered, empty, hidden, and locked layers with nested groups", () => {
+		const original = fixture()
+		const layered: DesignDocument = {
+			...original,
+			layers: [
+				{
+					id: "layer:background",
+					name: "Background",
+					hidden: true,
+					children: [{ kind: "object", id: "object:coral" }],
+				},
+				{
+					id: "layer:empty",
+					name: "Empty notes",
+					locked: true,
+					children: [],
+				},
+				{
+					id: "layer:foreground",
+					name: "Foreground",
+					children: [{ kind: "group", id: "group:top" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:nested",
+					name: "Nested",
+					children: [{ kind: "object", id: "object:ink" }],
+				},
+				{
+					id: "group:top",
+					name: "Top",
+					children: [{ kind: "group", id: "group:nested" }],
+				},
+			],
+		}
+		const files = mutable(
+			split(layered, {
+				layerPath: (layer, index) =>
+					`scene/layers/${index}-${layer.name.toLowerCase().replaceAll(" ", "-")}.json`,
+			}),
+		)
+		expect(unit(files, designSourcePaths.layerIndex).entries).toEqual([
+			{ id: "layer:background", path: "scene/layers/0-background.json" },
+			{ id: "layer:empty", path: "scene/layers/1-empty-notes.json" },
+			{ id: "layer:foreground", path: "scene/layers/2-foreground.json" },
+		])
+		expect(unit(files, "scene/layers/0-background.json")).toMatchObject({
+			version: 2,
+			name: "Background",
+			hidden: true,
+		})
+		expect(unit(files, "scene/layers/1-empty-notes.json")).toMatchObject({
+			children: [],
+			locked: true,
+		})
+
+		const objectIndex = unit(files, designSourcePaths.objectIndex)
+		objectIndex.entries = (
+			structuredClone(objectIndex.entries) as Record<string, unknown>[]
+		).toReversed()
+		expect(assemble(files)).toEqual(layered)
+	})
+
+	it("migrates a pre-v4 singleton layer unit without changing hierarchy order", () => {
+		const original = fixture()
+		const files = mutable(split(original))
+		const project = unit(files, designSourcePaths.project)
+		project.sourceVersion = 3
+		project.documentVersion = 5
+		const currentLayer = unit(files, defaultLayerUnitPath(DEFAULT_LAYER_ID))
+		files[defaultLayerUnitPath(DEFAULT_LAYER_ID)] = {
+			format: "create-design.layer",
+			version: 1,
+			id: DEFAULT_LAYER_ID,
+			children: currentLayer.children,
+		}
+
+		expect(assemble(files)).toEqual(original)
+	})
+
 	it("keeps IDs, display names, source paths, and stacking order independent", () => {
 		const original = fixture()
 		const originalFiles = split(original)
@@ -424,6 +537,10 @@ describe("create-design directory source", () => {
 		const reorderedFiles = split({
 			...original,
 			objects: original.objects.toReversed(),
+			layers: original.layers.map((layer) => ({
+				...layer,
+				children: layer.children.toReversed(),
+			})),
 		})
 		expect(changedPaths(originalFiles, reorderedFiles)).toEqual([
 			"scene/layers/artwork.json",
@@ -722,10 +839,7 @@ describe("create-design directory source", () => {
 			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		}
-		const canonical = split({
-			...base,
-			objects: [...base.objects, textObject],
-		})
+		const canonical = split(appendObjects(base, textObject))
 		const missing = structuredClone(canonical) as Record<string, unknown>
 		delete missing[defaultTextContentUnitPath(textObject.id)]
 		expect(assembleDesignDocument(missing)).toMatchObject({
@@ -804,7 +918,10 @@ describe("create-design directory source", () => {
 		const document = fixture()
 		const grouped: DesignDocument = {
 			...document,
-			scene: [{ kind: "group", id: "group:artwork" }],
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "group", id: "group:artwork" }],
+			})),
 			groups: [
 				{
 					id: "group:artwork",
@@ -826,7 +943,10 @@ describe("create-design directory source", () => {
 		const files = mutable(
 			split({
 				...document,
-				scene: [{ kind: "group", id: "group:artwork" }],
+				layers: document.layers.map((layer) => ({
+					...layer,
+					children: [{ kind: "group", id: "group:artwork" }],
+				})),
 				groups: [
 					{
 						id: "group:artwork",
@@ -900,6 +1020,7 @@ describe("create-design directory source", () => {
 
 	it("requires the canonical version-one layer identity", () => {
 		const files = mutable(split(fixture()))
+		unit(files, designSourcePaths.project).sourceVersion = 1
 		const index = unit(files, designSourcePaths.layerIndex)
 		index.entries = [{ id: "layer:renamed", path: "scene/layers/artwork.json" }]
 		const result = assembleDesignDocument(files)
@@ -907,8 +1028,107 @@ describe("create-design directory source", () => {
 			ok: false,
 			errors: expect.arrayContaining([
 				expect.objectContaining({
-					code: "directory.entity_id",
-					message: `Source version 1 requires layer ID ${DEFAULT_LAYER_ID}.`,
+					code: "directory.unsupported",
+					message: `Source versions before ${CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
+				}),
+			]),
+		})
+	})
+
+	it("reports precise layer schema, inventory, and hierarchy failures", () => {
+		expect(
+			validateSourceUnit("layer", {
+				format: "create-design.layer",
+				version: 2,
+				id: "not-a-layer",
+				name: "Invalid",
+				children: [],
+			}),
+		).toMatchObject({
+			ok: false,
+			errors: [expect.objectContaining({ path: "$.id" })],
+		})
+
+		const original = fixture()
+		const duplicateLayer = {
+			...original,
+			layers: [...original.layers, { ...original.layers[0]!, children: [] }],
+		}
+		expect(validateDesignDocument(duplicateLayer)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.duplicate_id",
+					path: "$.layers[1].id",
+				}),
+			]),
+		})
+
+		const missing = mutable(split(original))
+		delete missing[defaultLayerUnitPath(DEFAULT_LAYER_ID)]
+		expect(assembleDesignDocument(missing)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.missing_file",
+					unitPath: defaultLayerUnitPath(DEFAULT_LAYER_ID),
+				}),
+			]),
+		})
+
+		const grouped: DesignDocument = {
+			...original,
+			layers: [
+				{
+					id: "layer:first",
+					name: "First",
+					children: [{ kind: "group", id: "group:shared" }],
+				},
+				{
+					id: "layer:second",
+					name: "Second",
+					children: [],
+				},
+			],
+			groups: [
+				{
+					id: "group:shared",
+					name: "Shared",
+					children: original.objects.map(({ id }) => ({
+						kind: "object",
+						id,
+					})),
+				},
+			],
+		}
+		const crossLayer = mutable(split(grouped))
+		const secondLayerPath = defaultLayerUnitPath("layer:second")
+		unit(crossLayer, secondLayerPath).children = [
+			{ kind: "group", id: "group:shared" },
+		]
+		const crossLayerResult = assembleDesignDocument(crossLayer)
+		expect(crossLayerResult).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.hierarchy",
+					path: "$.children[0].id",
+					unitPath: secondLayerPath,
+				}),
+			]),
+		})
+
+		const cyclic = mutable(split(grouped))
+		unit(cyclic, defaultGroupUnitPath("group:shared")).children = [
+			{ kind: "group", id: "group:shared" },
+		]
+		expect(assembleDesignDocument(cyclic)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.hierarchy",
+					path: "$.children[0].id",
+					unitPath: defaultGroupUnitPath("group:shared"),
 				}),
 			]),
 		})
