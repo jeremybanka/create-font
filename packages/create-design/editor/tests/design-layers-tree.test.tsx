@@ -97,10 +97,23 @@ function mount(value: DesignTileContext) {
 	return host
 }
 
+function expandAll(host: HTMLElement): void {
+	for (;;) {
+		const disclosures = [
+			...host.querySelectorAll<HTMLButtonElement>(
+				'[role="treeitem"][aria-expanded="false"] > button[data-disclosure]',
+			),
+		]
+		if (disclosures.length === 0) return
+		act(() => disclosures.forEach((disclosure) => disclosure.click()))
+	}
+}
+
 describe("Design Layers tree", () => {
 	it("renders exact topmost-first hierarchy with effective state and one group selection", () => {
 		const value = context(fixture(), { selectedGroupId: "group:outer" })
 		const host = mount(value)
+		expandAll(host)
 		const rows = [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')]
 
 		expect(rows.map((row) => row.querySelector("b")?.textContent)).toEqual([
@@ -123,8 +136,9 @@ describe("Design Layers tree", () => {
 		])
 		expect(host.querySelector('[data-layer-kind="document"]')).toBeNull()
 		expect(
-			host.querySelector('[data-layer-kind="layer"][aria-current="true"]')
-				?.textContent,
+			host
+				.querySelector('[data-layer-kind="layer"][aria-current="true"]')
+				?.getAttribute("aria-label"),
 		).toContain("Target layer")
 		expect(
 			host.querySelector('[data-layer-kind="group"][aria-selected="true"] b')
@@ -167,12 +181,13 @@ describe("Design Layers tree", () => {
 			throw new Error("Tree fixture did not render.")
 
 		expect(disclosure.querySelector("svg")).not.toBeNull()
-		act(() => disclosure.click())
-		expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(6)
+		expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(2)
 		expect(host.textContent).not.toContain("Cyan ellipse")
+		act(() => disclosure.click())
+		expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(3)
+		expect(host.textContent).toContain("Cyan ellipse")
 		expect(value.selectLayer).not.toHaveBeenCalled()
 		expect(value.document).toEqual(fixture())
-		act(() => disclosure.click())
 		act(() => {
 			root.focus()
 			root.dispatchEvent(
@@ -205,6 +220,7 @@ describe("Design Layers tree", () => {
 				setHierarchyScope,
 			}),
 		)
+		expandAll(host)
 
 		expect(
 			host.querySelector('layer-breadcrumb [aria-current="location"]')
@@ -295,6 +311,7 @@ describe("Design Layers tree", () => {
 			selectedObjectIds: ["object:coral"],
 		})
 		const host = mount(value)
+		expandAll(host)
 		const management = host.querySelectorAll("layer-management")[1]!
 		const select = management.querySelector<HTMLSelectElement>("select")!
 		act(() => {

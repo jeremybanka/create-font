@@ -276,7 +276,6 @@ design-tile-content.class {
 				&[aria-current="true"] {
 					border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
 					background: color-mix(in srgb, var(--accent) 10%, var(--paper));
-					/* box-shadow: inset 3px 0 0 var(--accent); */
 				}
 
 				&[aria-current="true"] > span > b {

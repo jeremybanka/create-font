@@ -202,6 +202,15 @@ function mountDesign(
 ) {
 	const host = prepareDesignDom(storage, resize)
 	act(() => render(h(DesignApplication, props), host))
+	for (;;) {
+		const disclosures = [
+			...host.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [role="treeitem"][aria-expanded="false"] > button[data-disclosure]',
+			),
+		]
+		if (disclosures.length === 0) break
+		act(() => disclosures.forEach((disclosure) => disclosure.click()))
+	}
 	const stage = Konva.stages.at(-1)
 	if (resize !== undefined) return stage
 	if (stage === undefined) throw new Error("Design stage did not mount.")

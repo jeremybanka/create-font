@@ -841,7 +841,6 @@ function DesignLayersTile({
 							/>
 							<span>
 								<b>{row.name}</b>
-								{/* <small>{label}</small> */}
 							</span>
 							{row.kind === "group" ? (
 								<button
