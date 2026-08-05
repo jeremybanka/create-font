@@ -31,6 +31,22 @@ export type DesignHierarchyScope = Readonly<{
 	groupId: string | null
 }>
 
+export type DesignHierarchyNode = Readonly<{
+	kind: "object" | "group"
+	id: string
+}>
+
+export type DesignHierarchyParent = Readonly<{
+	kind: "layer" | "group"
+	id: string
+}>
+
+export type DesignHierarchyMoveResult = DesignHierarchyResult &
+	Readonly<{
+		layerId: string
+		parent: DesignHierarchyParent
+	}>
+
 function childContainsGroup(
 	child: DesignSceneChild,
 	groupId: string,
@@ -499,6 +515,154 @@ function replaceParent(
 					group.id === parent.id ? { ...group, children } : group,
 				),
 			}
+}
+
+function sameNode(
+	left: Pick<DesignSceneChild, "kind" | "id">,
+	right: Pick<DesignSceneChild, "kind" | "id">,
+): boolean {
+	return left.kind === right.kind && left.id === right.id
+}
+
+export function designHierarchyParentForNode(
+	document: DesignDocument,
+	node: DesignHierarchyNode,
+): DesignHierarchyParent | null {
+	const hierarchy = normalized(document)
+	const parent = parents(hierarchy.layers, hierarchy.groups).find((candidate) =>
+		candidate.children.some((child) => sameNode(child, node)),
+	)
+	return parent === undefined ? null : { kind: parent.kind, id: parent.id }
+}
+
+function layerForParent(
+	document: DesignDocument,
+	parent: DesignHierarchyParent,
+): DesignDocument["layers"][number] | null {
+	const layerId =
+		parent.kind === "layer"
+			? parent.id
+			: designLayerIdForGroup(document, parent.id)
+	return document.layers.find(({ id }) => id === layerId) ?? null
+}
+
+/**
+ * Moves one complete object or group to an explicit parent and final sibling
+ * index. The index is interpreted after removing the source from its old
+ * parent, which keeps same-parent reordering deterministic.
+ */
+export function moveDesignHierarchyNode(
+	document: DesignDocument,
+	node: DesignHierarchyNode,
+	destination: DesignHierarchyParent,
+	index: number,
+): DesignHierarchyMoveResult | null {
+	const hierarchy = normalized(document)
+	const sourceParent = parents(hierarchy.layers, hierarchy.groups).find(
+		(candidate) => candidate.children.some((child) => sameNode(child, node)),
+	)
+	if (sourceParent === undefined)
+		throw new Error(`Cannot move unknown ${node.kind} ${node.id}.`)
+	const sourceLayer = layerForParent(document, {
+		kind: sourceParent.kind,
+		id: sourceParent.id,
+	})
+	if (sourceLayer === null)
+		throw new Error(`The source ${node.kind} has no valid layer.`)
+	if (sourceLayer.hidden)
+		throw new Error(`Show ${sourceLayer.name} before moving its contents.`)
+	if (sourceLayer.locked)
+		throw new Error(`Unlock ${sourceLayer.name} before moving its contents.`)
+
+	const destinationParent = parents(hierarchy.layers, hierarchy.groups).find(
+		(candidate) =>
+			candidate.kind === destination.kind && candidate.id === destination.id,
+	)
+	if (destinationParent === undefined)
+		throw new Error(
+			`Cannot move into unknown ${destination.kind} ${destination.id}.`,
+		)
+	const destinationLayer = layerForParent(document, destination)
+	if (destinationLayer === null)
+		throw new Error(`The destination ${destination.kind} has no valid layer.`)
+	if (destinationLayer.hidden)
+		throw new Error(
+			`Show ${destinationLayer.name} before moving artwork into it.`,
+		)
+	if (destinationLayer.locked)
+		throw new Error(
+			`Unlock ${destinationLayer.name} before moving artwork into it.`,
+		)
+	if (node.kind === "group") {
+		if (destination.kind === "group" && destination.id === node.id)
+			throw new Error("A group cannot be moved into itself.")
+		const groups = groupMap(hierarchy.groups)
+		const source = groups.get(node.id)
+		if (
+			destination.kind === "group" &&
+			source?.children.some((child) =>
+				childContainsGroup(child, destination.id, groups),
+			)
+		)
+			throw new Error("A group cannot be moved into one of its descendants.")
+	}
+
+	const sourceChildren = sourceParent.children.filter(
+		(child) => !sameNode(child, node),
+	)
+	const sameParent =
+		sourceParent.kind === destinationParent.kind &&
+		sourceParent.id === destinationParent.id
+	const destinationChildren = sameParent
+		? [...sourceChildren]
+		: [...destinationParent.children]
+	if (
+		!Number.isInteger(index) ||
+		index < 0 ||
+		index > destinationChildren.length
+	)
+		throw new Error("The requested hierarchy position is unavailable.")
+	destinationChildren.splice(index, 0, { kind: node.kind, id: node.id })
+	if (
+		sameParent &&
+		destinationChildren.every(
+			(child, childIndex) =>
+				sourceParent.children[childIndex] !== undefined &&
+				sameNode(child, sourceParent.children[childIndex]!),
+		)
+	)
+		return null
+
+	let replaced = replaceParent(
+		hierarchy.layers,
+		hierarchy.groups,
+		sourceParent,
+		sourceChildren,
+	)
+	const currentDestination = parents(replaced.layers, replaced.groups).find(
+		(candidate) =>
+			candidate.kind === destination.kind && candidate.id === destination.id,
+	)!
+	replaced = replaceParent(
+		replaced.layers,
+		replaced.groups,
+		currentDestination,
+		destinationChildren,
+	)
+	const nextDocument = installHierarchy(
+		document,
+		replaced.layers,
+		replaced.groups,
+	)
+	return {
+		document: nextDocument,
+		selection: descendantIds(
+			{ kind: node.kind, id: node.id },
+			groupMap(replaced.groups),
+		),
+		layerId: destinationLayer.id,
+		parent: destination,
+	}
 }
 
 /** Recreates complete selected hierarchy units using an existing object ID map. */

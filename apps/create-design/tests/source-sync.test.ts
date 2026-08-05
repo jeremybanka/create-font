@@ -474,4 +474,98 @@ describe(`create-design source synchronization`, () => {
 			`artboards/index.json`,
 		])
 	})
+
+	test(`keeps layer and group paths stable while emitting minimal hierarchy transactions`, () => {
+		const initial = createInitialDocument()
+		const back = initial.objects[0]!
+		const front = initial.objects[1]!
+		const document = {
+			...initial,
+			objects: [back, front],
+			layers: [
+				{
+					id: `layer:background`,
+					name: `Background`,
+					children: [{ kind: `object` as const, id: back.id }],
+				},
+				{
+					id: `layer:lettering`,
+					name: `Lettering`,
+					children: [{ kind: `group` as const, id: `group:wordmark` }],
+				},
+			],
+			groups: [
+				{
+					id: `group:wordmark`,
+					name: `Wordmark`,
+					children: [{ kind: `object` as const, id: front.id }],
+				},
+			],
+		}
+		const split = splitDesignDocument(document, {
+			layerPath: (layer) =>
+				`scene/layers/custom/${layer.name.toLowerCase()}.json`,
+			groupPath: () => `scene/groups/custom/wordmark.json`,
+		})
+		if (!split.ok) throw new Error(split.errors[0].message)
+		const state = sourceSyncStateFromSnapshot({
+			revision: `custom-layout`,
+			units: Object.entries(split.value).map(([path, value]) => ({
+				path,
+				revision: `revision:${path}`,
+				value: value as JsonValue,
+			})),
+		})
+		const backgroundPath = `scene/layers/custom/background.json`
+		const letteringPath = `scene/layers/custom/lettering.json`
+		const groupPath = `scene/groups/custom/wordmark.json`
+
+		const renamed = designSourceTransaction(state, {
+			...document,
+			layers: document.layers.map((layer) =>
+				layer.id === `layer:lettering` ? { ...layer, name: `Type` } : layer,
+			),
+		})
+		expect(renamed.removals).toEqual([])
+		expect(renamed.writes.map(({ path }) => path)).toEqual([letteringPath])
+
+		const reordered = designSourceTransaction(state, {
+			...document,
+			layers: document.layers.toReversed(),
+			objects: [front, back],
+		})
+		expect(reordered.writes.map(({ path }) => path)).toEqual([
+			`scene/layers/index.json`,
+		])
+
+		const reparented = designSourceTransaction(state, {
+			...document,
+			layers: document.layers.map((layer) =>
+				layer.id === `layer:background` ? { ...layer, children: [] } : layer,
+			),
+			groups: document.groups.map((group) => ({
+				...group,
+				children: [...group.children, { kind: `object` as const, id: back.id }],
+			})),
+			objects: [front, back],
+		})
+		expect(reparented.removals).toEqual([])
+		expect(reparented.writes.map(({ path }) => path).toSorted()).toEqual(
+			[backgroundPath, groupPath].toSorted(),
+		)
+
+		const created = designSourceTransaction(state, {
+			...document,
+			layers: [
+				...document.layers,
+				{ id: `layer:notes`, name: `Notes`, children: [] },
+			],
+		})
+		const createdPaths = created.writes.map(({ path }) => path)
+		expect(createdPaths).toHaveLength(2)
+		expect(createdPaths).toContain(`scene/layers/index.json`)
+		expect(
+			createdPaths.find((path) => path !== `scene/layers/index.json`),
+		).toMatch(/^scene\/layers\/(?!custom\/)/u)
+	})
 })

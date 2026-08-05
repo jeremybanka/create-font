@@ -1,0 +1,12 @@
+{
+	"children": [
+		{ "id": "object:letter-f", "kind": "object" },
+		{ "id": "object:letter-o", "kind": "object" },
+		{ "id": "object:letter-r", "kind": "object" },
+		{ "id": "object:letter-m", "kind": "object" }
+	],
+	"format": "create-design.layer",
+	"id": "layer:lettering",
+	"name": "Lettering",
+	"version": 2
+}

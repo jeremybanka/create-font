@@ -1,0 +1,7 @@
+{
+	"children": [{ "id": "object:background-paper", "kind": "object" }],
+	"format": "create-design.layer",
+	"id": "layer:background",
+	"name": "Background",
+	"version": 2
+}

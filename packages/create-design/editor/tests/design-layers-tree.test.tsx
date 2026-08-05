@@ -74,6 +74,7 @@ function context(
 		duplicateLayer: vi.fn(),
 		renameLayer: vi.fn(),
 		reorderLayer: vi.fn(),
+		moveHierarchyNode: vi.fn(),
 		setLayerLocked: vi.fn(),
 		setLayerVisibility: vi.fn(),
 		selectLayer: vi.fn(),
@@ -260,6 +261,45 @@ describe("Design Layers tree", () => {
 		expect(value.renameLayer).toHaveBeenCalledWith(
 			"layer:back",
 			"Renamed layer",
+		)
+	})
+
+	it("offers keyboard-accessible hierarchy reparenting and sibling order controls", () => {
+		const document = {
+			...fixture(),
+			layers: fixture().layers.map((layer) => ({
+				...layer,
+				hidden: false,
+				locked: false,
+			})),
+		}
+		const value = context(document, {
+			selectedObjectIds: ["object:coral"],
+		})
+		const host = mount(value)
+		const management = host.querySelectorAll("layer-management")[1]!
+		const select = management.querySelector<HTMLSelectElement>("select")!
+		act(() => {
+			select.value = "group:group:inner"
+			select.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		const action = (name: string) =>
+			[...management.querySelectorAll<HTMLButtonElement>("button")].find(
+				(button) => button.textContent?.trim() === name,
+			)!
+		expect(action("Move to top").disabled).toBe(false)
+		act(() => action("Move to top").click())
+		expect(value.moveHierarchyNode).toHaveBeenCalledWith(
+			{ kind: "object", id: "object:coral" },
+			{ kind: "group", id: "group:inner" },
+			1,
+		)
+
+		act(() => action("Move up").click())
+		expect(value.moveHierarchyNode).toHaveBeenLastCalledWith(
+			{ kind: "object", id: "object:coral" },
+			{ kind: "layer", id: "layer:back" },
+			1,
 		)
 	})
 })
