@@ -125,6 +125,22 @@ export interface DesignTileContext {
 	readonly blendDiagnosticMessages: readonly string[]
 	readonly directSelectionSummary: string
 	readonly document: DesignDocument
+	readonly activeLayerId: string
+	readonly activeGroupScope: readonly string[]
+	readonly selectedGroupId: string | null
+	readonly selectLayer: (layerId: string) => void
+	readonly selectHierarchyGroup: (
+		groupId: string,
+		layerId: string,
+		parentScope: readonly string[],
+	) => void
+	readonly selectHierarchyObject: (
+		object: DesignObject,
+		layerId: string,
+		parentScope: readonly string[],
+		additive?: boolean,
+	) => void
+	readonly setHierarchyScope: (groupScope: readonly string[]) => void
 	readonly expandSelection: () => void
 	readonly expansionDisabledReason: string | null
 	readonly expandStrokeSelection: () => void

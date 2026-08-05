@@ -29,6 +29,13 @@ describe("PDF preview tile", () => {
 		const exportDocument = vi.fn()
 		const selectObject = vi.fn()
 		const context: DesignTileContext = {
+			activeLayerId: document.layers[0]!.id,
+			activeGroupScope: [],
+			selectedGroupId: null,
+			selectLayer: vi.fn(),
+			selectHierarchyGroup: vi.fn(),
+			selectHierarchyObject: vi.fn(),
+			setHierarchyScope: vi.fn(),
 			activateArtboard: vi.fn(),
 			activeArtboard: document.artboards[0]!,
 			createArtboard: vi.fn(),

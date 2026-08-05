@@ -256,7 +256,7 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".design-object")).toHaveLength(2)
 		const buttons = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		]
 		const lockedButton = buttons.find((button) =>
@@ -312,10 +312,10 @@ describe("create-design shared vector scene", () => {
 			)
 			await Promise.resolve()
 		})
-		expect(editableButton.getAttribute("aria-pressed")).toBe("true")
-		expect(lockedButton.getAttribute("aria-pressed")).toBe("false")
+		expect(editableButton.getAttribute("aria-selected")).toBe("true")
+		expect(lockedButton.getAttribute("aria-selected")).toBe("false")
 		act(() => lockedButton.click())
-		expect(lockedButton.getAttribute("aria-pressed")).toBe("false")
+		expect(lockedButton.getAttribute("aria-selected")).toBe("false")
 		expect(
 			document.querySelector("[data-footer-status]")?.textContent,
 		).toContain("Unlock Locked layer")
@@ -405,7 +405,7 @@ describe("create-design shared vector scene", () => {
 		).toContain("Unlock Artwork layer")
 		expect(
 			document.querySelector(
-				'design-layers-tile > button[aria-pressed="true"]',
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		).toBeNull()
 		expect(lockedDocument.objects[0]?.locked).toBeUndefined()
@@ -434,7 +434,7 @@ describe("create-design shared vector scene", () => {
 		const stage = mountDesign({ initialDocument: layered }, storage)
 		const backButton = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(backObject.name))
 		const rectangle = document.querySelector<HTMLButtonElement>(
@@ -490,7 +490,7 @@ describe("create-design shared vector scene", () => {
 			)
 			await Promise.resolve()
 		})
-		expect(backButton.getAttribute("aria-pressed")).toBe("true")
+		expect(backButton.getAttribute("aria-selected")).toBe("true")
 		await act(async () => {
 			window.dispatchEvent(
 				new KeyboardEvent("keydown", {
@@ -503,10 +503,10 @@ describe("create-design shared vector scene", () => {
 		})
 		const recreatedButton = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Rectangle"))
-		expect(recreatedButton?.getAttribute("aria-pressed")).toBe("true")
+		expect(recreatedButton?.getAttribute("aria-selected")).toBe("true")
 	})
 
 	it("creates, selects, edits, and undoes a live blend through visible controls", () => {
@@ -514,7 +514,7 @@ describe("create-design shared vector scene", () => {
 		const stage = mountDesign({ initialDocument: initial })
 		const layers = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button:not([data-layer-kind='blend'])",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		]
 		expect(layers.length).toBeGreaterThanOrEqual(2)
@@ -656,7 +656,7 @@ describe("create-design shared vector scene", () => {
 		).toBe("design-selection-status")
 		expect(document.querySelectorAll('footer [role="status"]')).toHaveLength(1)
 		const firstLayer = document.querySelector<HTMLButtonElement>(
-			"design-layers-tile > button",
+			'design-layers-tile [data-layer-kind="object"]',
 		)
 		if (firstLayer === null) throw new Error("A design layer was not found.")
 		act(() => firstLayer.click())
@@ -713,7 +713,7 @@ describe("create-design shared vector scene", () => {
 		const stage = mountDesign()
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Coral rectangle"))
 		const transform = document.querySelector<HTMLButtonElement>(
@@ -1297,8 +1297,9 @@ describe("create-design shared vector scene", () => {
 		expect(duplicate?.transform.e).not.toBe(sourceObject.transform.e)
 		expect(duplicate?.transform.f).not.toBe(sourceObject.transform.f)
 		expect(
-			document.querySelector('design-layers-tile > button[aria-pressed="true"]')
-				?.textContent,
+			document.querySelector(
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+			)?.textContent,
 		).toContain(sourceObject.name)
 		expect(
 			document.querySelector("[data-footer-status]")?.textContent,
@@ -1409,7 +1410,7 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".design-object")).toHaveLength(source.objects.length)
 		expect(
 			document.querySelector(
-				'design-layers-tile > button[aria-pressed="true"]',
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		).not.toBeNull()
 
@@ -2956,7 +2957,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({}, storage)
 		const layers = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		]
 		if (layers.length < 2) throw new Error("Expected two design layers.")
@@ -2969,7 +2970,7 @@ describe("create-design shared vector scene", () => {
 		})
 
 		expect(
-			layers.every((layer) => layer.getAttribute("aria-pressed") === "true"),
+			layers.every((layer) => layer.getAttribute("aria-selected") === "true"),
 		).toBe(true)
 		expect(
 			document.querySelector<HTMLButtonElement>(
@@ -3085,7 +3086,7 @@ describe("create-design shared vector scene", () => {
 		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(first.name))
 		if (artboard === null || layer === undefined)
@@ -3193,7 +3194,7 @@ describe("create-design shared vector scene", () => {
 
 		const otherLayer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => !button.textContent?.includes(first.name))
 		if (otherLayer === undefined) throw new Error("Second layer was not found.")
@@ -3243,7 +3244,7 @@ describe("create-design shared vector scene", () => {
 		).mockImplementation(() => undefined)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(first.name))
 		const pen = document.querySelector<HTMLButtonElement>(
@@ -3313,7 +3314,7 @@ describe("create-design shared vector scene", () => {
 		const first = initialDocument.objects[0]!
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(first.name))
 		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
@@ -3399,9 +3400,11 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		expect(
-			[...document.querySelectorAll("design-layers-tile > button")].some(
-				(button) => button.getAttribute("aria-pressed") === "true",
-			),
+			[
+				...document.querySelectorAll(
+					'design-layers-tile [data-layer-kind="object"]',
+				),
+			].some((button) => button.getAttribute("aria-selected") === "true"),
 		).toBe(false)
 		await act(async () => {
 			window.dispatchEvent(
@@ -3412,11 +3415,11 @@ describe("create-design shared vector scene", () => {
 		expect(
 			[
 				...document.querySelectorAll<HTMLButtonElement>(
-					"design-layers-tile > button",
+					'design-layers-tile [data-layer-kind="object"]',
 				),
 			]
 				.find((button) => button.textContent?.includes(first.name))
-				?.getAttribute("aria-pressed"),
+				?.getAttribute("aria-selected"),
 		).toBe("true")
 	})
 
@@ -3433,7 +3436,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({ initialDocument }, storage)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(first.name))
 		const artboard = document.querySelector<HTMLElement>("artboard-wrap")
@@ -3513,7 +3516,7 @@ describe("create-design shared vector scene", () => {
 		const storage = new Map<string, string>()
 		const stage = mountDesign({}, storage)
 		const layer = document.querySelector<HTMLButtonElement>(
-			"design-layers-tile > button:last-child",
+			'design-layers-tile [data-layer-kind="object"]:last-of-type',
 		)
 		if (layer === null) throw new Error("Design layer was not found.")
 		act(() => layer.click())
@@ -3621,7 +3624,7 @@ describe("create-design shared vector scene", () => {
 		})
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes(first.name))
 		if (layer === undefined) throw new Error("Locked layer was not found.")
@@ -3779,7 +3782,7 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".vector-contour-path").length).toBeGreaterThan(1)
 		expect(stage.findOne(".design-object")).toBeDefined()
 		const layer = document.querySelector<HTMLButtonElement>(
-			"design-layers-tile > button:last-child",
+			'design-layers-tile [data-layer-kind="object"]:last-of-type',
 		)
 		const transform = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Transform"]',
@@ -3821,7 +3824,7 @@ describe("create-design shared vector scene", () => {
 		})
 		const selected = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				'design-layers-tile > button[aria-pressed="true"]',
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		]
 		expect(selected).toHaveLength(1)
@@ -3835,7 +3838,7 @@ describe("create-design shared vector scene", () => {
 		})
 		expect(
 			document.querySelectorAll(
-				'design-layers-tile > button[aria-pressed="true"]',
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		).toHaveLength(0)
 		const title = document.querySelector<HTMLInputElement>(
@@ -3858,7 +3861,7 @@ describe("create-design shared vector scene", () => {
 		expect(title.selectionEnd).toBe(title.value.length)
 		expect(
 			document.querySelectorAll(
-				'design-layers-tile > button[aria-pressed="true"]',
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		).toHaveLength(0)
 	})
@@ -3875,7 +3878,7 @@ describe("create-design shared vector scene", () => {
 			storage,
 		)
 		const layer = document.querySelector<HTMLButtonElement>(
-			"design-layers-tile > button",
+			'design-layers-tile [data-layer-kind="object"]',
 		)
 		const direct = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Direct Selection"]',
@@ -3957,7 +3960,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({}, storage)
 		const layers = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		]
 		if (layers.length !== 2) throw new Error("Expected two design layers.")
@@ -3993,7 +3996,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({}, storage)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Coral rectangle"))
 		if (layer === undefined) throw new Error("Rectangle layer was not found.")
@@ -4112,7 +4115,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({}, storage)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Coral rectangle"))
 		if (layer === undefined) throw new Error("Rectangle layer was not found.")
@@ -4195,7 +4198,7 @@ describe("create-design shared vector scene", () => {
 		const storage = new Map([[DESIGN_STORAGE_KEY, JSON.stringify(source)]])
 		const stage = mountDesign({}, storage)
 		const layer = document.querySelector<HTMLButtonElement>(
-			"design-layers-tile > button",
+			'design-layers-tile [data-layer-kind="object"]',
 		)
 		const direct = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Direct Selection"]',
@@ -4288,7 +4291,7 @@ describe("create-design shared vector scene", () => {
 		mountDesign({}, storage)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Degenerate stroke"))
 		if (layer === undefined) throw new Error("Degenerate layer was not found.")
@@ -4304,7 +4307,7 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
-		expect(layer.getAttribute("aria-pressed")).toBe("true")
+		expect(layer.getAttribute("aria-selected")).toBe("true")
 		expect(document.querySelector("footer > span")?.textContent).toContain(
 			"no visible length",
 		)
@@ -4320,7 +4323,7 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
-		expect(layer.getAttribute("aria-pressed")).toBe("true")
+		expect(layer.getAttribute("aria-selected")).toBe("true")
 	})
 
 	it.each([
@@ -4354,7 +4357,7 @@ describe("create-design shared vector scene", () => {
 			).mockReturnValue(false)
 			const layer = [
 				...document.querySelectorAll<HTMLButtonElement>(
-					"design-layers-tile > button",
+					'design-layers-tile [data-layer-kind="object"]',
 				),
 			].find((button) => button.textContent?.includes("Coral rectangle"))
 			const transform = document.querySelector<HTMLButtonElement>(
@@ -4452,7 +4455,7 @@ describe("create-design shared vector scene", () => {
 		)
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
-				"design-layers-tile > button",
+				'design-layers-tile [data-layer-kind="object"]',
 			),
 		].find((button) => button.textContent?.includes("Coral rectangle"))
 		const transform = document.querySelector<HTMLButtonElement>(
@@ -4720,7 +4723,7 @@ describe("create-design shared vector scene", () => {
 			).mockReturnValue(false)
 			const layer = [
 				...document.querySelectorAll<HTMLButtonElement>(
-					"design-layers-tile > button",
+					'design-layers-tile [data-layer-kind="object"]',
 				),
 			].find((button) => button.textContent?.includes("Coral rectangle"))
 			const transform = document.querySelector<HTMLButtonElement>(
@@ -4904,8 +4907,9 @@ describe("create-design shared vector scene", () => {
 			outgoing: expect.any(Object),
 		})
 		expect(
-			document.querySelector('design-layers-tile > button[aria-pressed="true"]')
-				?.textContent,
+			document.querySelector(
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+			)?.textContent,
 		).toContain("Pen path")
 
 		await act(async () => {
