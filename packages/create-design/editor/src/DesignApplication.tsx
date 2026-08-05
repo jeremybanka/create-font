@@ -7079,9 +7079,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													canvasDocument,
 													object,
 												)}
-												fill="rgba(0, 0, 0, 0)"
-												fillEnabled
+												fillEnabled={false}
 												fillRule={designObjectFillRule(object)}
+												{...(selected ? {} : { stroke: "rgb(0 0 0 / 0.001)" })}
 												strokeWidth={1 / worldScale}
 												hitStrokeWidth={12 / worldScale}
 												selected={selected}
