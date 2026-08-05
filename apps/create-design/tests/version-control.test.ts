@@ -190,6 +190,32 @@ afterEach(async () => {
 })
 
 describe(`create-design version control`, () => {
+	it(`labels an isolated layer metadata change by stable layer identity`, async () => {
+		const { source, versionControl } = await fixture()
+		const path = `scene/layers/artwork.json`
+		const layer = await source.readUnit(path)
+		await source.writeUnit({
+			expectedRevision: layer.revision,
+			idempotencyKey: `rename-layer`,
+			path,
+			value: {
+				...(layer.value as Record<string, JsonValue>),
+				name: `Presentation`,
+			},
+		})
+
+		expect(
+			(await versionControl.readComparison({ baseRef: `HEAD` })).changes,
+		).toEqual([
+			expect.objectContaining({
+				id: `layer:artwork`,
+				kind: `structure`,
+				label: `Layer · Presentation`,
+				paths: [path],
+			}),
+		])
+	})
+
 	it(`groups raw text with its object and rejects partial text commits`, async () => {
 		const { source, versionControl } = await fixture()
 		const initial = createInitialDocument()

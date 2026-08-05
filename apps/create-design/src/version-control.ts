@@ -111,6 +111,33 @@ function isStructural(change: SourceUnitChange): boolean {
 	)
 }
 
+function structuralDescription(changes: readonly SourceUnitChange[]): Readonly<{
+	id: string
+	label: string
+}> {
+	const kinds = new Set(changes.map(({ path }) => sourceUnitKindForPath(path)))
+	if (changes.length === 1 && kinds.has(`layer-index`))
+		return { id: `design:layer-order`, label: `Layer order` }
+	if (changes.length === 1 && kinds.has(`layer`)) {
+		const value = record(changes[0]!.after?.value ?? changes[0]!.before?.value)
+		const id = typeof value?.id === `string` ? value.id : changes[0]!.path
+		const name = typeof value?.name === `string` ? value.name : id
+		return { id, label: `Layer · ${name}` }
+	}
+	if (
+		(kinds.has(`layer`) || kinds.has(`layer-index`) || kinds.has(`group`)) &&
+		!kinds.has(`object`) &&
+		!kinds.has(`object-index`)
+	)
+		return { id: `design:layer-hierarchy`, label: `Layer hierarchy` }
+	if (changes.length === 1 && kinds.has(`artboard-index`))
+		return { id: `design:artboard-order`, label: `Artboard order` }
+	return {
+		id: `design:coordinated-structure`,
+		label: `Coordinated design structure`,
+	}
+}
+
 function paletteIds(value: JsonValue | undefined): ReadonlySet<string> {
 	const swatches = record(value)?.swatches
 	if (!Array.isArray(swatches)) return new Set()
@@ -347,6 +374,7 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 		const coordinatedChanges = changes.filter(
 			({ path }) => structuralPaths.has(path) || palettePaths.has(path),
 		)
+		const structure = structuralDescription(coordinatedChanges)
 		return [
 			...(assetChanges.length === 0
 				? []
@@ -381,9 +409,9 @@ export const designSourceVersionControlAdapter: SourceVersionControlAdapter = {
 				: [
 						{
 							change: aggregateChange(coordinatedChanges),
-							id: `design:coordinated-structure`,
+							id: structure.id,
 							kind: `structure`,
-							label: `Coordinated design structure`,
+							label: structure.label,
 							paths: coordinatedChanges.map(({ path }) => path).toSorted() as [
 								string,
 								...string[],

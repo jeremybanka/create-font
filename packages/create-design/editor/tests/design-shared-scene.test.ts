@@ -560,6 +560,80 @@ describe("create-design shared vector scene", () => {
 		).toContain("Studio copy")
 	})
 
+	it("reparents a selected object across layers and restores its exact hierarchy", async () => {
+		const initial = createInitialDocument()
+		const back = initial.objects[0]!
+		const front = initial.objects[1]!
+		const layered: DesignDocument = {
+			...initial,
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object", id: back.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					children: [{ kind: "object", id: front.id }],
+				},
+			],
+		}
+		const storage = new Map<string, string>()
+		mountDesign({ initialDocument: layered }, storage)
+		const backRow = document.querySelector<HTMLElement>(
+			`[data-tree-key="object:${back.id}"]`,
+		)
+		if (backRow === null) throw new Error("Back object row was not found.")
+		act(() => backRow.click())
+		const parent = document.querySelector<HTMLSelectElement>(
+			`select[aria-label="Parent for ${back.name}"]`,
+		)
+		if (parent === null)
+			throw new Error("Hierarchy parent control was not found.")
+		await act(async () => {
+			parent.value = "layer:layer:front"
+			parent.dispatchEvent(new Event("change", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const move = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				`layer-management[aria-label="Move ${back.name}"] button`,
+			),
+		].find((button) => button.textContent?.trim() === "Move to top")
+		if (move === undefined)
+			throw new Error("Move to top control was not found.")
+		await act(async () => {
+			move.click()
+			await Promise.resolve()
+		})
+		const moved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(moved.layers[0]?.children).toEqual([])
+		expect(moved.layers[1]?.children).toEqual([
+			{ kind: "object", id: front.id },
+			{ kind: "object", id: back.id },
+		])
+		expect(moved.objects.map(({ id }) => id)).toEqual([front.id, back.id])
+		expect(moved.objects.find(({ id }) => id === back.id)).toEqual(back)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain(`${back.name} moved into Front`)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		const restored = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(restored.layers).toEqual(layered.layers)
+		expect(restored.objects).toEqual(layered.objects)
+	})
+
 	it("targets an object's layer and pastes into the subsequently chosen target", async () => {
 		const initial = createInitialDocument()
 		const source = initial.objects[0]!

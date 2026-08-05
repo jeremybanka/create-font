@@ -14,6 +14,30 @@ compilation lives in [`@create-design/pdf`](../pdf/README.md), SVG interchange
 lives in [`@create-design/svg`](../svg/README.md), and the canonical
 document contract lives in [`@create-design/source`](../source/README.md).
 
+## Layers and hierarchy
+
+The Layers tile shows topmost-first layers with nested groups and objects. A
+layer row is also the artwork target: selecting it makes subsequent drawing,
+paste, import, blend expansion, and other authored insertions land in that
+layer. Selecting artwork on the canvas or in the tree retargets its owning
+layer. The target layer is per-user editor state and is not written to source.
+
+Layer visibility and locking are inherited effective state. Hidden layers do
+not render, hit-test, snap, preview, or export. Locked layers still render and
+export, but their descendants are interaction-transparent and cannot be
+mutated. The footer explains a rejected paste, hierarchy move, or other edit
+and names the layer that must be shown or unlocked; descendant authored flags
+are never rewritten by a layer toggle.
+
+Drag an object or complete group onto a layer or group to move it to that
+container's top, or onto an object to place it immediately above that object.
+The selected hierarchy unit also exposes a parent selector plus **Move to
+top**, **Move up**, and **Move down** controls as the keyboard and screen-reader
+equivalent. Moves preserve IDs, geometry, transforms, and appearance, reject
+cycles and unavailable destinations before mutation, and commit as one undo
+step. Ordinary Bring/Send commands remain local to the current parent; only an
+explicit hierarchy move crosses a group or layer boundary.
+
 The `create-design` application supplies filesystem-backed source sessions and
 serves the built browser artifact. Neither the source service nor the headless
 model and export packages depend on this editor package.

@@ -1,6 +1,5 @@
 {
 	"children": [
-		{ "id": "object:background-paper", "kind": "object" },
 		{ "id": "object:cobalt-column", "kind": "object" },
 		{ "id": "object:coral-sun", "kind": "object" },
 		{ "id": "object:yellow-beam", "kind": "object" },
@@ -9,13 +8,10 @@
 		{ "id": "object:aqua-counter", "kind": "object" },
 		{ "id": "object:ink-pivot", "kind": "object" },
 		{ "id": "object:coral-block", "kind": "object" },
-		{ "id": "object:sun-dot", "kind": "object" },
-		{ "id": "object:letter-f", "kind": "object" },
-		{ "id": "object:letter-o", "kind": "object" },
-		{ "id": "object:letter-r", "kind": "object" },
-		{ "id": "object:letter-m", "kind": "object" }
+		{ "id": "object:sun-dot", "kind": "object" }
 	],
 	"format": "create-design.layer",
-	"id": "layer:artwork",
-	"version": 1
+	"id": "layer:composition",
+	"name": "Composition",
+	"version": 2
 }

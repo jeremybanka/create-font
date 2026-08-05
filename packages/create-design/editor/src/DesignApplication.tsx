@@ -137,11 +137,13 @@ import {
 	defaultDesignHierarchyScope,
 	designGroupSelectionUnit,
 	designLayerIdForObject,
+	designParentGroupId,
 	designSelectInteraction,
 	designSelectionUnits,
 	designSelectionUnitAtObject,
 	designSelectionUnitForIds,
 	groupDesignSelection,
+	moveDesignHierarchyNode,
 	normalizeDesignSelection,
 	replaceDesignHierarchyObject,
 	stackDesignSelection,
@@ -3549,6 +3551,42 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			commit(reordered)
 			setStatus(`${layer.name} moved ${direction}.`)
 		},
+		moveHierarchyNode: (node, parent, index) => {
+			const name =
+				node.kind === "group"
+					? document.groups.find(({ id }) => id === node.id)?.name
+					: document.objects.find(({ id }) => id === node.id)?.name
+			try {
+				const moved = moveDesignHierarchyNode(document, node, parent, index)
+				if (moved === null) {
+					setStatus(`${name ?? node.id} is already in that position.`)
+					return
+				}
+				const parentScope: string[] = []
+				if (parent.kind === "group") {
+					let groupId: string | null = parent.id
+					while (groupId !== null) {
+						parentScope.unshift(groupId)
+						groupId = designParentGroupId(moved.document, groupId)
+					}
+				}
+				commit(moved.document)
+				setSelectedLayerId(moved.layerId)
+				setGroupScope(parentScope)
+				setSelection(moved.selection)
+				setDirectSelection([])
+				setSelectedBlendId(null)
+				const destinationName =
+					parent.kind === "layer"
+						? moved.document.layers.find(({ id }) => id === parent.id)?.name
+						: moved.document.groups.find(({ id }) => id === parent.id)?.name
+				setStatus(
+					`${name ?? node.id} moved into ${destinationName ?? parent.id}.`,
+				)
+			} catch (error) {
+				setStatus(error instanceof Error ? error.message : String(error))
+			}
+		},
 		setLayerLocked: (layerId, locked) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
 			if (layer === undefined || Boolean(layer.locked) === locked) return
@@ -3963,7 +4001,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				id: `stack-${command}`,
 				displayName,
 				category: "Object",
-				description: "Change the selected object or group's stacking order.",
+				description:
+					"Change stacking only among siblings in the current group or layer.",
 				icon: "ShuffleIcon" as const,
 				disabled: selection.length === 0,
 				disabledReason: "Select an object first.",

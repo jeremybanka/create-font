@@ -97,7 +97,9 @@ geometry, transforms, appearances, visibility, or locks. Normal selection and
 stacking treat a group as one rigid unit; double-clicking enters a nested group
 scope. Bring Forward, Send Backward, Bring to Front, and Send to Back reorder
 only the selected sibling units, and every hierarchy command is one history
-entry.
+entry. The Layers tile provides explicit drag and keyboard controls for moving
+complete objects or groups among parents and layers; cycles, partial-group
+moves, and hidden or locked destinations are rejected before mutation.
 
 The canonical document plane is global, point-based, and Y-down. Ordered named
 artboards are positioned rectangles in that plane, not parents of ordinary
@@ -236,11 +238,15 @@ narrow Git diffs. Layer order lives only in its inventory; each layer unit owns
 its stable ID, name, visibility, lock state, and direct children. Structural
 groups have their own units and recursively
 reference ordered object or group children. Asset and font inventories reserve
-their separate source boundaries.
+their separate source boundaries. Browser saves preserve every indexed layer,
+group, artboard, and object path. Source review labels isolated layer metadata,
+layer order, and coordinated hierarchy changes separately while keeping every
+old/new parent required by a selective Git commit in one atomic review group.
 
 The repository's [`designs/workbench-poster`](../../designs/workbench-poster)
-project is a complete source-format example and the default development
-workspace.
+project is a complete multi-layer source-format example and the default
+development workspace. Its Background, Composition, and Lettering layers retain
+the singleton fixture's exact PDF, SVG, and PNG output.
 
 The Export tile offers opt-in live PDF and SVG proofs rendered from the actual
 generated artifacts. SVG download, preview, and CLI output share one headless

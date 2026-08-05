@@ -37,6 +37,7 @@ describe("PDF preview tile", () => {
 			duplicateLayer: vi.fn(),
 			renameLayer: vi.fn(),
 			reorderLayer: vi.fn(),
+			moveHierarchyNode: vi.fn(),
 			setLayerLocked: vi.fn(),
 			setLayerVisibility: vi.fn(),
 			selectLayer: vi.fn(),

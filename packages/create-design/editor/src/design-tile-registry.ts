@@ -29,6 +29,10 @@ import type {
 	DesignTransformOrigin,
 } from "./design-arrangement.ts"
 import type {
+	DesignHierarchyNode,
+	DesignHierarchyParent,
+} from "./design-hierarchy.ts"
+import type {
 	DesignArtboard,
 	DesignBlend,
 	DesignDocument,
@@ -133,6 +137,11 @@ export interface DesignTileContext {
 	readonly duplicateLayer: (layerId: string) => void
 	readonly renameLayer: (layerId: string, name: string) => void
 	readonly reorderLayer: (layerId: string, direction: "down" | "up") => void
+	readonly moveHierarchyNode: (
+		node: DesignHierarchyNode,
+		parent: DesignHierarchyParent,
+		index: number,
+	) => void
 	readonly setLayerLocked: (layerId: string, locked: boolean) => void
 	readonly setLayerVisibility: (layerId: string, visible: boolean) => void
 	readonly selectLayer: (layerId: string) => void

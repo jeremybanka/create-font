@@ -1,5 +1,9 @@
 {
-	"entries": [{ "id": "layer:artwork", "path": "scene/layers/artwork.json" }],
+	"entries": [
+		{ "id": "layer:background", "path": "scene/layers/background.json" },
+		{ "id": "layer:composition", "path": "scene/layers/composition.json" },
+		{ "id": "layer:lettering", "path": "scene/layers/lettering.json" }
+	],
 	"format": "create-design.layer-index",
 	"version": 1
 }

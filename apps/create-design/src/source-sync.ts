@@ -11,6 +11,8 @@ import { createSourceRpcClient } from "@create-art/source-rpc/client"
 import {
 	assembleDesignDocument,
 	defaultArtboardUnitPath,
+	defaultGroupUnitPath,
+	defaultLayerUnitPath,
 	defaultObjectUnitPath,
 	sourceUnitKindForPath,
 	splitDesignDocument,
@@ -103,9 +105,13 @@ export function designSourceTransaction(
 }> {
 	const objectPaths = collectionPaths(state, `scene/objects/index.json`)
 	const artboardPaths = collectionPaths(state, `artboards/index.json`)
+	const layerPaths = collectionPaths(state, `scene/layers/index.json`)
+	const groupPaths = collectionPaths(state, `scene/groups/index.json`)
 	const split = splitDesignDocument(document, {
 		artboardPath: ({ id }) =>
 			artboardPaths.get(id) ?? defaultArtboardUnitPath(id),
+		layerPath: ({ id }) => layerPaths.get(id) ?? defaultLayerUnitPath(id),
+		groupPath: ({ id }) => groupPaths.get(id) ?? defaultGroupUnitPath(id),
 		objectPath: ({ id }) => objectPaths.get(id) ?? defaultObjectUnitPath(id),
 	})
 	if (!split.ok) {

@@ -54,6 +54,10 @@ import type {
 	DesignTileKind,
 } from "./design-tile-registry.ts"
 import type {
+	DesignHierarchyNode,
+	DesignHierarchyParent,
+} from "./design-hierarchy.ts"
+import type {
 	DesignAlignmentTarget,
 	DesignTransformOrigin,
 } from "./design-arrangement.ts"
@@ -416,6 +420,8 @@ function DesignLayersTile({
 	const [focusedKey, setFocusedKey] = useState(
 		() => `layer:${context.document.layers.at(-1)!.id}`,
 	)
+	const [draggedKey, setDraggedKey] = useState<string | null>(null)
+	const [dropKey, setDropKey] = useState<string | null>(null)
 	const rowRefs = useRef(new Map<string, HTMLElement>())
 	useEffect(() => {
 		if (!rows.some(({ key }) => key === focusedKey) && rows[0] !== undefined)
@@ -448,6 +454,57 @@ function DesignLayersTile({
 				row.groupScope,
 				additive,
 			)
+	}
+	const nodeForRow = (row: TreeRow): DesignHierarchyNode | null =>
+		row.kind === "layer"
+			? null
+			: { kind: row.kind, id: row.key.slice(row.kind.length + 1) }
+	const parentForKey = (key: string): DesignHierarchyParent => {
+		const separator = key.indexOf(":")
+		return {
+			kind: key.slice(0, separator) as DesignHierarchyParent["kind"],
+			id: key.slice(separator + 1),
+		}
+	}
+	const childrenForParent = (
+		parent: DesignHierarchyParent,
+	): readonly DesignSceneChild[] =>
+		parent.kind === "layer"
+			? (context.document.layers.find(({ id }) => id === parent.id)?.children ??
+				[])
+			: (groups.get(parent.id)?.children ?? [])
+	const moveToRow = (sourceKey: string, target: TreeRow): void => {
+		const source = rows.find(({ key }) => key === sourceKey)
+		if (source === undefined) return
+		const node = nodeForRow(source)
+		if (node === null) return
+		if (target.kind === "layer" || target.kind === "group") {
+			const parent = parentForKey(target.key)
+			const length = childrenForParent(parent).length
+			context.moveHierarchyNode(
+				node,
+				parent,
+				source.parentKey === target.key ? Math.max(0, length - 1) : length,
+			)
+			return
+		}
+		if (target.parentKey === null) return
+		const parent = parentForKey(target.parentKey)
+		const targetIndex = childrenForParent(parent).findIndex(
+			(child) => child.kind === "object" && child.id === target.object?.id,
+		)
+		if (targetIndex >= 0) {
+			const sourceIndex = childrenForParent(parent).findIndex(
+				(child) => child.kind === node.kind && child.id === node.id,
+			)
+			context.moveHierarchyNode(
+				node,
+				parent,
+				targetIndex +
+					1 -
+					(sourceIndex >= 0 && sourceIndex < targetIndex ? 1 : 0),
+			)
+		}
 	}
 	const pathRelated = (row: TreeRow): boolean => {
 		if (row.layerId !== context.activeLayerId) return false
@@ -538,6 +595,75 @@ function DesignLayersTile({
 		if (trimmed.length === 0) setActiveLayerName(activeLayer.name)
 		else context.renameLayer(activeLayer.id, trimmed)
 	}
+	const selectedHierarchyRow =
+		context.selectedGroupId === null
+			? context.selectedObjectIds.length === 1
+				? rows.find(
+						(row) =>
+							row.kind === "object" &&
+							row.object?.id === context.selectedObjectIds[0],
+					)
+				: undefined
+			: rows.find(
+					(row) =>
+						row.kind === "group" &&
+						row.key === `group:${context.selectedGroupId}`,
+				)
+	const selectedNode =
+		selectedHierarchyRow === undefined ? null : nodeForRow(selectedHierarchyRow)
+	const selectedParent =
+		selectedHierarchyRow?.parentKey === null ||
+		selectedHierarchyRow?.parentKey === undefined
+			? null
+			: parentForKey(selectedHierarchyRow.parentKey)
+	const selectedSiblings =
+		selectedParent === null ? [] : childrenForParent(selectedParent)
+	const selectedSiblingIndex =
+		selectedNode === null
+			? -1
+			: selectedSiblings.findIndex(
+					(child) =>
+						child.kind === selectedNode.kind && child.id === selectedNode.id,
+				)
+	const invalidGroupParents = new Set<string>()
+	if (selectedNode?.kind === "group") {
+		const visitGroup = (groupId: string): void => {
+			if (invalidGroupParents.has(groupId)) return
+			invalidGroupParents.add(groupId)
+			for (const child of groups.get(groupId)?.children ?? [])
+				if (child.kind === "group") visitGroup(child.id)
+		}
+		visitGroup(selectedNode.id)
+	}
+	const parentChoices = [
+		...context.document.layers.map((layer) => ({
+			key: `layer:${layer.id}`,
+			label: `Layer · ${layer.name}`,
+			disabled: Boolean(layer.hidden || layer.locked),
+		})),
+		...context.document.groups.map((group) => {
+			const layerId = rows.find(
+				({ key }) => key === `group:${group.id}`,
+			)?.layerId
+			const layer = context.document.layers.find(({ id }) => id === layerId)
+			return {
+				key: `group:${group.id}`,
+				label: `Group · ${group.name}`,
+				disabled:
+					invalidGroupParents.has(group.id) ||
+					Boolean(layer?.hidden || layer?.locked),
+			}
+		}),
+	]
+	const [moveParentChoice, setMoveParentChoice] = useState<Readonly<{
+		rowKey: string
+		parentKey: string
+	}> | null>(null)
+	const moveParentKey =
+		moveParentChoice !== null &&
+		moveParentChoice.rowKey === selectedHierarchyRow?.key
+			? moveParentChoice.parentKey
+			: (selectedHierarchyRow?.parentKey ?? "")
 	return (
 		<design-layers-tile>
 			<strong>
@@ -616,6 +742,9 @@ function DesignLayersTile({
 							tabIndex={focusedKey === row.key ? 0 : -1}
 							data-layer-kind={row.kind}
 							data-tree-key={row.key}
+							draggable={row.kind !== "layer"}
+							data-dragging={draggedKey === row.key ? "true" : undefined}
+							data-drop-target={dropKey === row.key ? "true" : undefined}
 							data-active-scope={
 								row.kind === "group" &&
 								row.groupScope.length === context.activeGroupScope.length &&
@@ -629,6 +758,34 @@ function DesignLayersTile({
 							data-out-of-scope={pathRelated(row) ? undefined : "true"}
 							style={{ "--tree-depth": row.depth } as React.CSSProperties}
 							onFocus={() => setFocusedKey(row.key)}
+							onDragStart={(event: React.DragEvent<HTMLElement>) => {
+								if (row.kind === "layer") return
+								setDraggedKey(row.key)
+								event.dataTransfer.effectAllowed = "move"
+								event.dataTransfer.setData("text/plain", row.key)
+							}}
+							onDragOver={(event: React.DragEvent<HTMLElement>) => {
+								if (draggedKey === null || draggedKey === row.key) return
+								event.preventDefault()
+								event.dataTransfer.dropEffect = "move"
+								setDropKey(row.key)
+							}}
+							onDragLeave={() => {
+								if (dropKey === row.key) setDropKey(null)
+							}}
+							onDrop={(event: React.DragEvent<HTMLElement>) => {
+								event.preventDefault()
+								const sourceKey =
+									draggedKey ?? event.dataTransfer.getData("text/plain")
+								if (sourceKey !== "" && sourceKey !== row.key)
+									moveToRow(sourceKey, row)
+								setDraggedKey(null)
+								setDropKey(null)
+							}}
+							onDragEnd={() => {
+								setDraggedKey(null)
+								setDropKey(null)
+							}}
 							onClick={(event: React.MouseEvent<HTMLElement>) =>
 								selectRow(row, event.shiftKey || event.metaKey || event.ctrlKey)
 							}
@@ -789,6 +946,84 @@ function DesignLayersTile({
 					</button>
 				</layer-actions>
 			</layer-management>
+			{selectedHierarchyRow === undefined || selectedNode === null ? null : (
+				<layer-management aria-label={`Move ${selectedHierarchyRow.name}`}>
+					<strong>Move {selectedHierarchyRow.name}</strong>
+					<label>
+						<span>Parent layer or group</span>
+						<select
+							aria-label={`Parent for ${selectedHierarchyRow.name}`}
+							value={moveParentKey}
+							onChange={(event) =>
+								setMoveParentChoice({
+									rowKey: selectedHierarchyRow.key,
+									parentKey: event.currentTarget.value,
+								})
+							}
+						>
+							{parentChoices.map((choice) => (
+								<option
+									key={choice.key}
+									value={choice.key}
+									disabled={choice.disabled}
+								>
+									{choice.label}
+								</option>
+							))}
+						</select>
+					</label>
+					<layer-actions
+						role="toolbar"
+						aria-label={`${selectedHierarchyRow.name} hierarchy`}
+					>
+						<button
+							type="button"
+							disabled={moveParentKey === ""}
+							onClick={() => {
+								const parent = parentForKey(moveParentKey)
+								context.moveHierarchyNode(
+									selectedNode,
+									parent,
+									childrenForParent(parent).length -
+										(selectedHierarchyRow.parentKey === moveParentKey ? 1 : 0),
+								)
+							}}
+						>
+							Move to top
+						</button>
+						<button
+							type="button"
+							disabled={
+								selectedParent === null ||
+								selectedSiblingIndex < 0 ||
+								selectedSiblingIndex === selectedSiblings.length - 1
+							}
+							onClick={() =>
+								context.moveHierarchyNode(
+									selectedNode,
+									selectedParent!,
+									selectedSiblingIndex + 1,
+								)
+							}
+						>
+							Move up
+						</button>
+						<button
+							type="button"
+							disabled={selectedParent === null || selectedSiblingIndex <= 0}
+							onClick={() =>
+								context.moveHierarchyNode(
+									selectedNode,
+									selectedParent!,
+									selectedSiblingIndex - 1,
+								)
+							}
+						>
+							Move down
+						</button>
+					</layer-actions>
+				</layer-management>
+			)}
 			{(context.document.blends?.length ?? 0) === 0 ? null : (
 				<design-live-blends aria-label="Live blends">
 					<strong>Live blends</strong>

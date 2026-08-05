@@ -5,6 +5,7 @@ import {
 	designSelectInteraction,
 	designSelectionUnitAtObject,
 	groupDesignSelection,
+	moveDesignHierarchyNode,
 	normalizeDesignSelection,
 	removeDesignHierarchyObjects,
 	replaceDesignHierarchyObject,
@@ -132,6 +133,121 @@ describe("design hierarchy commands", () => {
 			),
 		).toBeNull()
 		expect(document.layers).toEqual(multiLayerFixture().layers)
+	})
+
+	it("reparents complete objects and groups across layers without changing authored entities", () => {
+		const document = multiLayerFixture()
+		const coral = document.objects.find(({ id }) => id === "object:coral")!
+		const moved = moveDesignHierarchyNode(
+			document,
+			{ kind: "object", id: coral.id },
+			{ kind: "layer", id: "layer:front" },
+			1,
+		)
+		expect(moved).toMatchObject({
+			selection: [coral.id],
+			layerId: "layer:front",
+			parent: { kind: "layer", id: "layer:front" },
+		})
+		expect(moved?.document.layers).toEqual([
+			{ id: "layer:back", name: "Back", children: [] },
+			{
+				id: "layer:front",
+				name: "Front",
+				children: [
+					{ kind: "object", id: "object:middle" },
+					{ kind: "object", id: "object:coral" },
+					{ kind: "object", id: "object:front" },
+				],
+			},
+		])
+		expect(moved?.document.objects.map(({ id }) => id)).toEqual([
+			"object:middle",
+			"object:coral",
+			"object:front",
+		])
+		expect(moved?.document.objects[1]).toBe(coral)
+
+		const grouped = groupDesignSelection(
+			moved!.document,
+			["object:coral", "object:front"],
+			() => "move",
+		)!
+		const movedGroup = moveDesignHierarchyNode(
+			grouped.document,
+			{ kind: "group", id: "group:move" },
+			{ kind: "layer", id: "layer:back" },
+			0,
+		)
+		expect(movedGroup?.document.layers[0]?.children).toEqual([
+			{ kind: "group", id: "group:move" },
+		])
+		expect(movedGroup?.selection).toEqual(["object:coral", "object:front"])
+		expect(movedGroup?.document.groups[0]).toBe(grouped.document.groups[0])
+	})
+
+	it("rejects cycles and hidden or locked hierarchy move boundaries before mutation", () => {
+		const document = multiLayerFixture()
+		const nested = {
+			...document,
+			layers: document.layers.map((layer) =>
+				layer.id === "layer:front"
+					? {
+							...layer,
+							children: [{ kind: "group" as const, id: "group:outer" }],
+						}
+					: layer,
+			),
+			groups: [
+				{
+					id: "group:outer",
+					name: "Outer",
+					children: [{ kind: "group" as const, id: "group:inner" }],
+				},
+				{
+					id: "group:inner",
+					name: "Inner",
+					children: [
+						{ kind: "object" as const, id: "object:middle" },
+						{ kind: "object" as const, id: "object:front" },
+					],
+				},
+			],
+		}
+		expect(() =>
+			moveDesignHierarchyNode(
+				nested,
+				{ kind: "group", id: "group:outer" },
+				{ kind: "group", id: "group:inner" },
+				0,
+			),
+		).toThrow("descendants")
+		expect(() =>
+			moveDesignHierarchyNode(
+				{
+					...document,
+					layers: document.layers.map((layer) =>
+						layer.id === "layer:front" ? { ...layer, locked: true } : layer,
+					),
+				},
+				{ kind: "object", id: "object:coral" },
+				{ kind: "layer", id: "layer:front" },
+				0,
+			),
+		).toThrow("Unlock Front")
+		expect(() =>
+			moveDesignHierarchyNode(
+				{
+					...document,
+					layers: document.layers.map((layer) =>
+						layer.id === "layer:back" ? { ...layer, hidden: true } : layer,
+					),
+				},
+				{ kind: "object", id: "object:coral" },
+				{ kind: "layer", id: "layer:front" },
+				0,
+			),
+		).toThrow("Show Back")
 	})
 
 	it("groups and ungroups children without changing their authored state", () => {
