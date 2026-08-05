@@ -10,7 +10,12 @@ into validated JSON units.
 Complete documents use a strict, version-dispatched codec. Version six is the
 current schema. It replaces v5's optional root `scene` with a nonempty ordered
 `layers` collection. Each layer persists a stable ID, display name, ordered
-object/group children, and optional hidden and locked states. Every object and
+object/group children, a symbolic UI color, and optional hidden and locked
+states. UI colors are planning metadata: they never become artwork paint or
+affect PDF, SVG, or PNG output. Canonical colors follow the fixed order red,
+blue, yellow, purple, green, pink, cyan, orange, indigo, lime, magenta, and
+teal; readers assign missing legacy colors by layer order and cycle after the
+twelfth layer. Every object and
 group has exactly one structural parent, and groups cannot cross layer
 boundaries. Version five introduced the nonempty ordered `artboards`
 collection; each artboard persists a stable ID, display name, global
@@ -113,7 +118,7 @@ Each fact has one owner:
   an independent unit that owns its name, global rectangle, and optional
   bleed/safe-area metadata;
 - the layer inventory owns layer order while each layer unit owns only its
-  display metadata, flags, and direct root children;
+  display metadata (including UI color), flags, and direct root children;
 - each group unit owns its ordered object or nested-group children;
 - the object inventory maps stable object IDs to stable source paths; and
 - each object JSON owns geometry, typography, frame, transform, and appearance;

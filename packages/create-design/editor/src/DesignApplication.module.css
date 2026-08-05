@@ -21,6 +21,7 @@
 	--design-canvas-artboard-shadow: #000;
 	--design-canvas-artboard-shadow-opacity: 0.36;
 	--design-canvas-guide: #36a8e0;
+	--design-canvas-marquee: #8b8b8b;
 	--design-canvas-selection: #e17352;
 	--design-canvas-handle-fill: #fff;
 }
@@ -634,6 +635,7 @@ design-application.class {
 		--design-canvas-artboard-shadow: #3d3b36;
 		--design-canvas-artboard-shadow-opacity: 0.2;
 		--design-canvas-guide: #0577aa;
+		--design-canvas-marquee: #676767;
 		--design-canvas-selection: #ce5d3d;
 		--design-canvas-handle-fill: #fff;
 	}
@@ -668,6 +670,7 @@ design-application.class {
 		--design-canvas-artboard-outline: CanvasText;
 		--design-canvas-artboard-shadow: CanvasText;
 		--design-canvas-guide: LinkText;
+		--design-canvas-marquee: CanvasText;
 		--design-canvas-selection: Highlight;
 		--design-canvas-handle-fill: Canvas;
 	}

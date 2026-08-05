@@ -54,6 +54,7 @@ const document: DesignDocument = {
 		{
 			id: "layer:artwork",
 			name: "Artwork",
+			uiColor: "red",
 			children: [
 				{ kind: "object", id: "object:a" },
 				{ kind: "object", id: "object:b" },

@@ -209,6 +209,8 @@ export interface DesignLayer {
 	readonly id: string
 	readonly name: string
 	readonly children: readonly DesignSceneChild[]
+	/** Symbolic editor-only planning color; never artwork paint. */
+	readonly uiColor?: DesignLayerUiColor
 	readonly hidden?: boolean
 	readonly locked?: boolean
 }
@@ -304,3 +306,4 @@ export interface DesignSourceFailure {
 export type DesignSourceResult<Value> =
 	| DesignSourceSuccess<Value>
 	| DesignSourceFailure
+import type { DesignLayerUiColor } from "./layer-ui-color.ts"

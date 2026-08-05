@@ -16,6 +16,7 @@ export type {
 	DesignGuide,
 	DesignGroup,
 	DesignLayer,
+	DesignLayerUiColor,
 	DesignObject,
 	DesignPoint,
 	DesignStroke,

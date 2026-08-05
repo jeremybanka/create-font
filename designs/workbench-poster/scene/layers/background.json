@@ -3,5 +3,6 @@
 	"format": "create-design.layer",
 	"id": "layer:background",
 	"name": "Background",
+	"uiColor": "red",
 	"version": 2
 }

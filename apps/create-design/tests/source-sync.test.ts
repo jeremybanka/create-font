@@ -486,11 +486,13 @@ describe(`create-design source synchronization`, () => {
 				{
 					id: `layer:background`,
 					name: `Background`,
+					uiColor: `red` as const,
 					children: [{ kind: `object` as const, id: back.id }],
 				},
 				{
 					id: `layer:lettering`,
 					name: `Lettering`,
+					uiColor: `blue` as const,
 					children: [{ kind: `group` as const, id: `group:wordmark` }],
 				},
 			],
@@ -529,6 +531,18 @@ describe(`create-design source synchronization`, () => {
 		expect(renamed.removals).toEqual([])
 		expect(renamed.writes.map(({ path }) => path)).toEqual([letteringPath])
 
+		const recolored = designSourceTransaction(state, {
+			...document,
+			layers: document.layers.map((layer) =>
+				layer.id === `layer:background`
+					? { ...layer, uiColor: `lime` as const }
+					: layer,
+			),
+		})
+		expect(recolored.removals).toEqual([])
+		expect(recolored.writes.map(({ path }) => path)).toEqual([backgroundPath])
+		expect(recolored.writes[0]?.value).toMatchObject({ uiColor: `lime` })
+
 		const reordered = designSourceTransaction(state, {
 			...document,
 			layers: document.layers.toReversed(),
@@ -558,7 +572,7 @@ describe(`create-design source synchronization`, () => {
 			...document,
 			layers: [
 				...document.layers,
-				{ id: `layer:notes`, name: `Notes`, children: [] },
+				{ id: `layer:notes`, name: `Notes`, uiColor: `yellow`, children: [] },
 			],
 		})
 		const createdPaths = created.writes.map(({ path }) => path)

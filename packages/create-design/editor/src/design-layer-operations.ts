@@ -1,4 +1,10 @@
-import type { DesignDocument, DesignLayer, DesignSceneChild } from "./types.ts"
+import { nextDesignLayerUiColor } from "@create-design/source"
+import type {
+	DesignDocument,
+	DesignLayer,
+	DesignLayerUiColor,
+	DesignSceneChild,
+} from "./types.ts"
 
 export type DesignLayerIdKind = "blend" | "group" | "layer" | "object"
 export type DesignLayerIdFactory = (kind: DesignLayerIdKind) => string
@@ -51,7 +57,9 @@ function booleanProperty(
 
 export function createDesignLayer(
 	document: DesignDocument,
-	layer: Readonly<Pick<DesignLayer, "id" | "name">>,
+	layer: Readonly<
+		Pick<DesignLayer, "id" | "name"> & Partial<Pick<DesignLayer, "uiColor">>
+	>,
 ): DesignDocument {
 	if (document.layers.some(({ id }) => id === layer.id))
 		throw new Error(`Design layer ${layer.id} already exists.`)
@@ -59,7 +67,31 @@ export function createDesignLayer(
 	if (name.length === 0) throw new Error("A layer name cannot be empty.")
 	return {
 		...document,
-		layers: [...document.layers, { ...layer, name, children: [] }],
+		layers: [
+			...document.layers,
+			{
+				...layer,
+				name,
+				children: [],
+				uiColor:
+					layer.uiColor ??
+					nextDesignLayerUiColor(document.layers.map(({ uiColor }) => uiColor)),
+			},
+		],
+	}
+}
+
+export function setDesignLayerUiColor(
+	document: DesignDocument,
+	layerId: string,
+	uiColor: DesignLayerUiColor,
+): DesignDocument {
+	requireLayer(document, layerId)
+	return {
+		...document,
+		layers: document.layers.map((layer) =>
+			layer.id === layerId ? { ...layer, uiColor } : layer,
+		),
 	}
 }
 

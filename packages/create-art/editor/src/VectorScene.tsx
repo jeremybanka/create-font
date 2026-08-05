@@ -24,6 +24,7 @@ export function VectorContourPath({
 	object,
 	name,
 	selected = false,
+	selectionStroke = "#e17352",
 	...props
 }: {
 	readonly object: VectorObject
@@ -41,6 +42,7 @@ export function VectorContourPath({
 	readonly miterLimit?: number
 	readonly listening?: boolean
 	readonly selected?: boolean
+	readonly selectionStroke?: string
 	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void
 	readonly onDoubleClick?: (
 		event: KonvaEventObject<MouseEvent | TouchEvent>,
@@ -55,7 +57,7 @@ export function VectorContourPath({
 			name={`vector-contour-path ${name}`}
 			data={vectorObjectPath(object)}
 			{...(selected && pathProps.stroke === undefined
-				? { stroke: "#e17352" }
+				? { stroke: selectionStroke }
 				: {})}
 			onDblClick={(event) => onDoubleClick?.(event)}
 			onDblTap={(event) => onDoubleClick?.(event)}
@@ -393,6 +395,7 @@ export function VectorSelectionBounds({
 	listening = true,
 	yAxis = "down",
 	draggable = false,
+	fillOpacity = 0.06,
 	onHandlePointerDown,
 	onHandleDragStart,
 	onHandleDragMove,
@@ -411,6 +414,7 @@ export function VectorSelectionBounds({
 	readonly listening?: boolean
 	readonly yAxis?: "up" | "down"
 	readonly draggable?: boolean
+	readonly fillOpacity?: number
 	readonly onHandlePointerDown?: (
 		handle: VectorTransformHandle,
 		event: KonvaEventObject<PointerEvent>,
@@ -455,7 +459,7 @@ export function VectorSelectionBounds({
 				width={bounds.maxX - bounds.minX}
 				height={bounds.maxY - bounds.minY}
 				fill={color}
-				opacity={0.06}
+				opacity={fillOpacity}
 				stroke={color}
 				strokeWidth={1.5 * inverseScale}
 				draggable={draggable}

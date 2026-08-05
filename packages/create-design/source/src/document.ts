@@ -1,6 +1,10 @@
 import { z } from "zod/v4"
 
 import { diagnostic, failure, success } from "./result.ts"
+import {
+	DESIGN_LAYER_UI_COLORS,
+	designLayerUiColorAt,
+} from "./layer-ui-color.ts"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
@@ -349,6 +353,7 @@ export const layerSchema = z
 		id: layerIdSchema,
 		name: z.string(),
 		children: z.array(sceneChildSchema),
+		uiColor: z.enum(DESIGN_LAYER_UI_COLORS).optional(),
 		hidden: z.boolean().optional(),
 		locked: z.boolean().optional(),
 	})
@@ -735,7 +740,13 @@ export function validateDesignDocument(
 ): DesignSourceResult<DesignDocument> {
 	const parsed = designDocumentSchema.safeParse(value)
 	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
-	const document = parsed.data as DesignDocument
+	const document = {
+		...parsed.data,
+		layers: parsed.data.layers.map((layer, index) => ({
+			...layer,
+			uiColor: layer.uiColor ?? designLayerUiColorAt(index),
+		})),
+	} as DesignDocument
 	const errors = relationalDiagnostics(document)
 	return errors.length === 0 ? success(document) : failure(errors)
 }
@@ -745,7 +756,12 @@ export const DEFAULT_LAYER_ID = "layer:artwork" as const
 function defaultLayer(
 	children: readonly import("./types.ts").DesignSceneChild[],
 ): DesignLayer {
-	return { id: DEFAULT_LAYER_ID, name: "Artwork", children }
+	return {
+		id: DEFAULT_LAYER_ID,
+		name: "Artwork",
+		children,
+		uiColor: designLayerUiColorAt(0),
+	}
 }
 
 function migrateObjectV1(

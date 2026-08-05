@@ -18,6 +18,7 @@ import type {
 	DesignGroup,
 	DesignGuide,
 	DesignLayer,
+	DesignLayerUiColor,
 	DesignObject,
 	DesignPoint,
 	DesignSceneChild,
@@ -260,6 +261,10 @@ export function createDesignDocumentState(
 		readonly DesignSceneChild[] | null,
 		string
 	>({ key: "layerChildren", default: null })
+	const layerUiColorAtoms = silo.atomFamily<
+		DesignLayerUiColor | undefined,
+		string
+	>({ key: "layerUiColor", default: undefined })
 	const layerHiddenAtoms = silo.atomFamily<boolean | undefined, string>({
 		key: "layerHidden",
 		default: undefined,
@@ -414,12 +419,14 @@ export function createDesignDocumentState(
 				const name = get(layerNameAtoms, id)
 				const children = get(layerChildrenAtoms, id)
 				if (name === null || children === null) return null
+				const uiColor = get(layerUiColorAtoms, id)
 				const hidden = get(layerHiddenAtoms, id)
 				const locked = get(layerLockedAtoms, id)
 				return {
 					id,
 					name,
 					children,
+					...(uiColor === undefined ? {} : { uiColor }),
 					...(hidden === undefined ? {} : { hidden }),
 					...(locked === undefined ? {} : { locked }),
 				}
@@ -699,6 +706,8 @@ export function createDesignDocumentState(
 				tools.set(layerChildrenAtoms, layer.id, layer.children)
 			if (tools.get(layerHiddenAtoms, layer.id) !== layer.hidden)
 				tools.set(layerHiddenAtoms, layer.id, layer.hidden)
+			if (tools.get(layerUiColorAtoms, layer.id) !== layer.uiColor)
+				tools.set(layerUiColorAtoms, layer.id, layer.uiColor)
 			if (tools.get(layerLockedAtoms, layer.id) !== layer.locked)
 				tools.set(layerLockedAtoms, layer.id, layer.locked)
 		}
@@ -707,6 +716,7 @@ export function createDesignDocumentState(
 			if (nextLayerIds.has(id)) continue
 			tools.dispose(layerNameAtoms, id)
 			tools.dispose(layerChildrenAtoms, id)
+			tools.dispose(layerUiColorAtoms, id)
 			tools.dispose(layerHiddenAtoms, id)
 			tools.dispose(layerLockedAtoms, id)
 		}
@@ -779,6 +789,7 @@ export function createDesignDocumentState(
 		layerIdsAtom,
 		layerNameAtoms,
 		layerChildrenAtoms,
+		layerUiColorAtoms,
 		layerHiddenAtoms,
 		layerLockedAtoms,
 		groupIdsAtom,
@@ -824,6 +835,7 @@ export function createDesignDocumentState(
 			layerIdsAtom,
 			layerNameAtoms,
 			layerChildrenAtoms,
+			layerUiColorAtoms,
 			layerHiddenAtoms,
 			layerLockedAtoms,
 			layerSelectors,

@@ -50,15 +50,23 @@ describe("Workbench Poster", () => {
 		expect(assembled.value.objects).toHaveLength(14)
 		expect(assembled.value.guides).toHaveLength(7)
 		expect(
-			assembled.value.layers.map(({ name, children }) => ({
+			assembled.value.layers.map(({ name, children, uiColor }) => ({
 				name,
 				children: children.length,
+				uiColor,
 			})),
 		).toEqual([
-			{ name: "Background", children: 1 },
-			{ name: "Composition", children: 9 },
-			{ name: "Lettering", children: 4 },
+			{ name: "Background", children: 1, uiColor: "red" },
+			{ name: "Composition", children: 9, uiColor: "blue" },
+			{ name: "Lettering", children: 4, uiColor: "yellow" },
 		])
+		const recolored = {
+			...assembled.value,
+			layers: assembled.value.layers.map((layer) => ({
+				...layer,
+				uiColor: "magenta" as const,
+			})),
+		}
 		const singleton = {
 			...assembled.value,
 			layers: [
@@ -75,10 +83,15 @@ describe("Workbench Poster", () => {
 		expect(pdf).toContain("/MediaBox [0 0 612 792]")
 		expect(pdf).toContain("/Title <FEFF")
 		expect(exportPdf(assembled.value)).toEqual(exportPdf(singleton))
+		expect(exportPdf(assembled.value)).toEqual(exportPdf(recolored))
 		expect(exportSvg(assembled.value)).toEqual(exportSvg(singleton))
+		expect(exportSvg(assembled.value)).toEqual(exportSvg(recolored))
 		const request = { scope: { kind: "all" as const }, samples: 1 as const }
 		expect(
 			(await exportPng(assembled.value, request)).artifacts[0]?.bytes,
 		).toEqual((await exportPng(singleton, request)).artifacts[0]?.bytes)
+		expect(
+			(await exportPng(assembled.value, request)).artifacts[0]?.bytes,
+		).toEqual((await exportPng(recolored, request)).artifacts[0]?.bytes)
 	}, 15_000)
 })

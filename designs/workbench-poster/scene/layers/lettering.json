@@ -8,5 +8,6 @@
 	"format": "create-design.layer",
 	"id": "layer:lettering",
 	"name": "Lettering",
+	"uiColor": "yellow",
 	"version": 2
 }

@@ -34,6 +34,10 @@ import {
 	versionTwoAppearanceSchema,
 } from "./document.ts"
 import { diagnostic, failure, success } from "./result.ts"
+import {
+	DESIGN_LAYER_UI_COLORS,
+	designLayerUiColorAt,
+} from "./layer-ui-color.ts"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "./types.ts"
 import type {
 	DesignDocument,
@@ -157,6 +161,7 @@ const currentLayerFileSchema = z
 		id: layerIdSchema,
 		name: z.string(),
 		children: z.array(sceneChildSchema),
+		uiColor: z.enum(DESIGN_LAYER_UI_COLORS).optional(),
 		hidden: z.boolean().optional(),
 		locked: z.boolean().optional(),
 	})
@@ -1128,6 +1133,7 @@ export function assembleDesignDocument(
 			id: layer.id,
 			name: layer.name,
 			children: layer.children,
+			uiColor: layer.uiColor ?? designLayerUiColorAt(layers.length),
 			...(layer.hidden === undefined ? {} : { hidden: layer.hidden }),
 			...(layer.locked === undefined ? {} : { locked: layer.locked }),
 		})

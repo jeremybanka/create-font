@@ -37,6 +37,7 @@ import type {
 	DesignBlend,
 	DesignDocument,
 	DesignFontReference,
+	DesignLayerUiColor,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -143,6 +144,10 @@ export interface DesignTileContext {
 		index: number,
 	) => void
 	readonly setLayerLocked: (layerId: string, locked: boolean) => void
+	readonly setLayerUiColor: (
+		layerId: string,
+		uiColor: DesignLayerUiColor,
+	) => void
 	readonly setLayerVisibility: (layerId: string, visible: boolean) => void
 	readonly selectLayer: (layerId: string) => void
 	readonly selectHierarchyGroup: (
