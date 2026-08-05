@@ -71,6 +71,10 @@ export interface SvgProjectionGraph {
 
 export interface SvgImportOptions {
 	readonly artboardId?: string
+	readonly hierarchyScope?: Readonly<{
+		layerId: string
+		groupId: string | null
+	}>
 	/** Supplies globally unique suffixes. The editor passes its document ID source. */
 	readonly nextId?: () => string
 }

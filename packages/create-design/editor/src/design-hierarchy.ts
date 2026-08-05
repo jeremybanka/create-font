@@ -353,6 +353,7 @@ export function normalizeDesignSelection(
 	document: DesignDocument,
 	objectIds: readonly string[],
 	scopeGroupId: string | null = null,
+	eligibleObjectIds?: ReadonlySet<string>,
 ): readonly string[] {
 	const selected = new Set(objectIds)
 	const hierarchy = normalized(document)
@@ -360,7 +361,11 @@ export function normalizeDesignSelection(
 	return parentsForScope(document, scopeGroupId).flatMap((parent) =>
 		parent.children.flatMap((child) => {
 			const ids = descendantIds(child, groups)
-			return ids.some((id) => selected.has(id)) ? ids : []
+			return ids.some((id) => selected.has(id)) &&
+				(eligibleObjectIds === undefined ||
+					ids.every((id) => eligibleObjectIds.has(id)))
+				? ids
+				: []
 		}),
 	)
 }
@@ -372,9 +377,15 @@ export function designSelectInteraction(
 	objectId: string,
 	scopeGroupId: string | null = null,
 	additive = false,
+	eligibleObjectIds?: ReadonlySet<string>,
 ): DesignSelectInteraction | null {
 	const unit = designSelectionUnitAtObject(document, objectId, scopeGroupId)
 	if (unit === null) return null
+	if (
+		eligibleObjectIds !== undefined &&
+		!unit.objectIds.every((id) => eligibleObjectIds.has(id))
+	)
+		return null
 	const unitIds = new Set(unit.objectIds)
 	const alreadySelected = unit.objectIds.every((id) =>
 		currentSelection.includes(id),

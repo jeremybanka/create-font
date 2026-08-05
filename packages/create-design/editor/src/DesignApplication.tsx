@@ -172,9 +172,11 @@ import css from "./DesignApplication.module.css"
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
+	projectDesignEffectiveHierarchy,
 	rotateObject,
 	scaleObject,
 	translateObject,
+	type DesignEffectiveHierarchyEntry,
 } from "@create-design/model"
 import {
 	expandDesignShape,
@@ -742,6 +744,17 @@ const sameDirectSelection = (
 			directSelectionKey(value) === directSelectionKey(right[index]!),
 	)
 
+function effectiveStateReason(
+	entry: DesignEffectiveHierarchyEntry,
+	action: string,
+): string | null {
+	const blocker = entry.hiddenBy ?? entry.lockedBy
+	if (blocker === null) return null
+	const subject =
+		blocker.kind === "layer" ? `${blocker.name} layer` : blocker.name
+	return `${entry.hiddenBy === blocker ? "Show" : "Unlock"} ${subject} before ${action}.`
+}
+
 export function DesignApplication(props: DesignApplicationProps) {
 	const [initialLoad] = useState(() => initialDesignLoad(props.initialDocument))
 	const [textRuntime] = useState(() => {
@@ -1232,6 +1245,38 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		() => ({ layerId: activeLayerId, groupId: currentGroupScope }),
 		[activeLayerId, currentGroupScope],
 	)
+	const effectiveHierarchy = useMemo(
+		() => projectDesignEffectiveHierarchy(document),
+		[document],
+	)
+	const effectivePolicyDocument = useMemo<DesignDocument>(
+		() => ({
+			...document,
+			objects: effectiveHierarchy.entries.map((entry) =>
+				entry.visible && entry.locked === Boolean(entry.object.locked)
+					? entry.object
+					: {
+							...entry.object,
+							...(entry.visible ? {} : { hidden: true }),
+							...(entry.locked ? { locked: true } : {}),
+						},
+			),
+		}),
+		[document, effectiveHierarchy],
+	)
+	const effectiveEditableObjectIds = useMemo(
+		() =>
+			new Set(effectiveHierarchy.editableObjects.map((object) => object.id)),
+		[effectiveHierarchy],
+	)
+	const activeLayer = document.layers.find(
+		(layer) => layer.id === activeLayerId,
+	)!
+	const activeLayerUnavailableReason = activeLayer.hidden
+		? `Show ${activeLayer.name} layer before adding artwork to it.`
+		: activeLayer.locked
+			? `Unlock ${activeLayer.name} layer before adding artwork to it.`
+			: null
 	currentGroupScopeRef.current = currentGroupScope
 	const selectedUnit = designSelectionUnitForIds(
 		document,
@@ -1241,8 +1286,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
+	const selectedUnavailableEntry = selection
+		.map((id) => effectiveHierarchy.byObjectId.get(id))
+		.find(
+			(entry): entry is DesignEffectiveHierarchyEntry =>
+				entry !== undefined && (!entry.visible || entry.locked),
+		)
+	const selectedInheritedUnavailableEntry = selection
+		.map((id) => effectiveHierarchy.byObjectId.get(id))
+		.find(
+			(entry): entry is DesignEffectiveHierarchyEntry =>
+				entry?.hiddenBy?.kind === "layer" || entry?.lockedBy?.kind === "layer",
+		)
 	const selectedBlend =
 		document.blends?.find(({ id }) => id === selectedBlendId) ?? null
+	const selectedBlendUnavailableEntry =
+		selectedBlend === null
+			? undefined
+			: [selectedBlend.startObjectId, selectedBlend.endObjectId]
+					.map((id) => effectiveHierarchy.byObjectId.get(id))
+					.find(
+						(entry): entry is DesignEffectiveHierarchyEntry =>
+							entry !== undefined && (!entry.visible || entry.locked),
+					)
 	useEffect(() => {
 		if (selection.length > 0) setSelectedBlendId(null)
 	}, [selection])
@@ -1261,6 +1327,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [document, selection])
 	const selectedObject =
 		selectedUnit?.kind === "group" ? null : (selectedObjects[0] ?? null)
+	const selectedObjectEffectiveEntry =
+		selectedObject === null
+			? undefined
+			: effectiveHierarchy.byObjectId.get(selectedObject.id)
 	const editingTextObject:
 		| (DesignObject & { readonly geometry: DesignTextGeometry })
 		| null =
@@ -1284,20 +1354,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					? null
 					: editingTextObject.geometry.typography.font.family))
 	const selectedGroup = selectedUnit?.kind === "group" ? selectedUnit : null
-	const selectedLockedObject = selectedObjects.find((object) => object.locked)
+	const selectedLockedObject = selection
+		.map((id) => effectiveHierarchy.byObjectId.get(id))
+		.find((entry) => entry?.locked)?.object
 	const selectionArrangementUnitCount = designSelectionUnits(
 		document,
 		selection,
 	).length
-	const selectedTransformUnavailableObject = selectedObjects.find(
-		(object) => object.locked || object.hidden,
-	)
 	const selectionTransformDisabledReason =
 		selectedObjects.length === 0
 			? "Select one or more objects to transform or arrange."
-			: selectedTransformUnavailableObject === undefined
+			: selectedUnavailableEntry === undefined
 				? null
-				: `${selectedTransformUnavailableObject.hidden ? "Show" : "Unlock"} ${selectedTransformUnavailableObject.name} before transforming the selection.`
+				: effectiveStateReason(
+						selectedUnavailableEntry,
+						"transforming the selection",
+					)
 	const selectionDescription =
 		selectedBlend !== null
 			? `${selectedBlend.name}, live blend with ${selectedBlend.steps} specified step${selectedBlend.steps === 1 ? "" : "s"}, selected.`
@@ -1357,13 +1429,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedObjects,
 		authoredAppearance,
 	)
-	const lockedAppearanceObject = selectedObjects.find((object) => object.locked)
 	const appearanceDisabledReason =
-		lockedAppearanceObject === undefined
+		selectedUnavailableEntry === undefined
 			? document.swatches.length === 0
 				? "Add a document swatch before assigning paint."
 				: null
-			: `Unlock ${lockedAppearanceObject.name} before editing the selection appearance.`
+			: effectiveStateReason(
+					selectedUnavailableEntry,
+					"editing the selection appearance",
+				)
 	const strokePropertiesDisabledReason =
 		appearanceDisabledReason ??
 		((
@@ -1378,9 +1452,39 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedSwatch =
 		document.swatches.find((swatch) => swatch.id === selectedSwatchId) ??
 		document.swatches[0]
-	const expansionEligibility = shapeExpansionEligibility(document, selection)
-	const strokeEligibility = strokeExpansionEligibility(document, selection)
-	const blendEligibility = designBlendEligibility(document, selection)
+	const expansionEligibility =
+		selectedUnavailableEntry === undefined
+			? shapeExpansionEligibility(effectivePolicyDocument, selection)
+			: {
+					eligible: false as const,
+					reason:
+						effectiveStateReason(
+							selectedUnavailableEntry,
+							"expanding the selected shape",
+						) ?? "The selected shape is unavailable.",
+				}
+	const strokeEligibility =
+		selectedUnavailableEntry === undefined
+			? strokeExpansionEligibility(effectivePolicyDocument, selection)
+			: {
+					eligible: false as const,
+					reason:
+						effectiveStateReason(
+							selectedUnavailableEntry,
+							"expanding the selected stroke",
+						) ?? "The selected stroke is unavailable.",
+				}
+	const blendEligibility =
+		selectedUnavailableEntry === undefined
+			? designBlendEligibility(effectivePolicyDocument, selection)
+			: {
+					eligible: false as const,
+					reason:
+						effectiveStateReason(
+							selectedUnavailableEntry,
+							"making a live blend",
+						) ?? "The selection is unavailable.",
+				}
 	const blendDiagnostics =
 		selectedBlend === null
 			? []
@@ -1397,6 +1501,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					readonly geometry: DesignTextGeometry
 				})
 			: null
+	const selectedTextEffectiveEntry =
+		selectedTextObject === null
+			? undefined
+			: effectiveHierarchy.byObjectId.get(selectedTextObject.id)
 	const textToolsDisabledReason =
 		availableTextFonts.length === 0
 			? "Add an OpenType font to this workspace before using Point Type or Area Type."
@@ -1423,8 +1531,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const textExpansionDisabledReason =
 		selectedTextObject === null
 			? "Select one text object to expand it."
-			: selectedTextObject.locked
-				? `Unlock ${selectedTextObject.name} before expanding it.`
+			: selectedTextEffectiveEntry !== undefined &&
+				  (!selectedTextEffectiveEntry.visible ||
+						selectedTextEffectiveEntry.locked)
+				? effectiveStateReason(
+						selectedTextEffectiveEntry,
+						"expanding the text object",
+					)
 				: availableTextFonts.some(
 							({ id }) => id === selectedTextObject.geometry.typography.font.id,
 					  )
@@ -1435,6 +1548,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		objectSelection: selection,
 		directSelection,
 		scopeGroupId: currentGroupScope,
+		editingDisabledReason:
+			selectedUnavailableEntry === undefined
+				? null
+				: effectiveStateReason(
+						selectedUnavailableEntry,
+						"editing the selected paths",
+					),
+	}
+	const pathCommandPolicyContext = {
+		...pathCommandContext,
+		document: effectivePolicyDocument,
 	}
 	const baseScale = designBaseScale(canvasViewport, activeArtboard)
 	const viewOptions = useMemo(
@@ -1487,9 +1611,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		(object: DesignObject, selectAll = false): void => {
 			if (object.geometry.kind !== "text") return
 			const geometry = object.geometry
-			if (object.hidden || object.locked) {
+			const effective = effectiveHierarchy.byObjectId.get(object.id)
+			if (effective !== undefined && (!effective.visible || effective.locked)) {
 				setStatus(
-					`${object.hidden ? "Show" : "Unlock"} ${object.name} before editing its text.`,
+					effectiveStateReason(effective, "editing its text") ??
+						"The text object is unavailable.",
 				)
 				return
 			}
@@ -1510,7 +1636,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 			setStatus(`Editing ${object.name}. Escape returns to object selection.`)
 		},
-		[availableTextFonts],
+		[availableTextFonts, effectiveHierarchy],
 	)
 	const finishTextEditing = useCallback((): void => {
 		if (editingTextId === null) return
@@ -1608,6 +1734,31 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const commitVectorIntent = useCallback(
 		(intent: VectorEditIntent): boolean => {
+			if (
+				intent.kind === "create-object" &&
+				activeLayerUnavailableReason !== null
+			) {
+				setStatus(activeLayerUnavailableReason)
+				return false
+			}
+			const authoredStateIntent =
+				intent.kind === "set-object-properties" &&
+				intent.name === undefined &&
+				(intent.hidden !== undefined || intent.locked !== undefined)
+			if (
+				intent.kind !== "create-object" &&
+				selectedUnavailableEntry !== undefined &&
+				(!authoredStateIntent ||
+					selectedInheritedUnavailableEntry !== undefined)
+			) {
+				setStatus(
+					effectiveStateReason(
+						selectedUnavailableEntry,
+						"editing the selection",
+					) ?? "The selection is unavailable.",
+				)
+				return false
+			}
 			const result = applyDesignVectorIntent(
 				document,
 				selection,
@@ -1622,7 +1773,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection(result.selection)
 			return true
 		},
-		[activeHierarchyScope, commit, document, selection],
+		[
+			activeHierarchyScope,
+			activeLayerUnavailableReason,
+			commit,
+			document,
+			selectedInheritedUnavailableEntry,
+			selectedUnavailableEntry,
+			selection,
+		],
 	)
 
 	const pagePoint = useCallback(
@@ -1735,6 +1894,75 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setGuidePreview(null)
 		setTransformCursor(null)
 	}, [gesturePolicy])
+	useEffect(() => {
+		const activeScopeUnavailable =
+			(activeLayer.hidden || activeLayer.locked) &&
+			(currentGroupScope !== null ||
+				gestureRef.current !== null ||
+				penPointsRef.current.length > 0)
+		if (
+			selectedInheritedUnavailableEntry === undefined &&
+			selectedBlendUnavailableEntry === undefined &&
+			!activeScopeUnavailable
+		)
+			return
+		cancelCanvasGesture()
+		const activeTask = pathfinderTaskRef.current
+		if (activeTask !== null) {
+			pathfinderGenerationRef.current += 1
+			activeTask.task.cancel()
+			pathfinderTaskRef.current = null
+			setActivePathfinder(null)
+		}
+		setSelection((current) =>
+			current.filter((id) => {
+				const entry = effectiveHierarchy.byObjectId.get(id)
+				return entry?.visible === true && !entry.locked
+			}),
+		)
+		setDirectSelection((current) =>
+			current.filter((target) => {
+				const entry = effectiveHierarchy.byObjectId.get(target.objectId)
+				return entry?.visible === true && !entry.locked
+			}),
+		)
+		if (selectedBlendUnavailableEntry !== undefined) setSelectedBlendId(null)
+		if (activeScopeUnavailable) setGroupScope([])
+		const editingEntry =
+			editingTextId === null
+				? undefined
+				: effectiveHierarchy.byObjectId.get(editingTextId)
+		if (
+			editingEntry !== undefined &&
+			(!editingEntry.visible || editingEntry.locked)
+		) {
+			setEditingTextId(null)
+			setTextSelectionRange(null)
+		}
+		setStatus(
+			(selectedInheritedUnavailableEntry === undefined
+				? selectedBlendUnavailableEntry === undefined
+					? activeLayerUnavailableReason
+					: effectiveStateReason(
+							selectedBlendUnavailableEntry,
+							"editing the live blend",
+						)
+				: effectiveStateReason(
+						selectedInheritedUnavailableEntry,
+						"continuing the edit",
+					)) ?? "The active hierarchy scope is unavailable.",
+		)
+	}, [
+		activeLayer.hidden,
+		activeLayer.locked,
+		activeLayerUnavailableReason,
+		cancelCanvasGesture,
+		currentGroupScope,
+		editingTextId,
+		effectiveHierarchy,
+		selectedBlendUnavailableEntry,
+		selectedInheritedUnavailableEntry,
+	])
 
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
@@ -1753,7 +1981,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (nextTool !== "direct") setDirectSelection([])
 			if (nextTool === "select" || nextTool === "transform")
 				setSelection((current) =>
-					normalizeDesignSelection(document, current, currentGroupScope),
+					normalizeDesignSelection(
+						document,
+						current,
+						currentGroupScope,
+						effectiveEditableObjectIds,
+					),
 				)
 			setTool(nextTool)
 			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
@@ -1763,6 +1996,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			currentGroupScope,
 			document,
 			editingTextId,
+			effectiveEditableObjectIds,
 			textToolsDisabledReason,
 		],
 	)
@@ -1820,11 +2054,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (selection.length === 0) return
-		const locked = document.objects.find(
-			(object) => selection.includes(object.id) && object.locked,
-		)
-		if (locked !== undefined) {
-			setStatus(`Unlock ${locked.name} before deleting the complete selection.`)
+		if (selectedUnavailableEntry !== undefined) {
+			setStatus(
+				effectiveStateReason(
+					selectedUnavailableEntry,
+					"deleting the complete selection",
+				) ?? "The selection is unavailable.",
+			)
 			return
 		}
 		if (
@@ -1834,9 +2070,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 		)
 			setStatus("Deleted selection.")
-	}, [commit, commitVectorIntent, document, selectedBlend, selection])
+	}, [
+		commit,
+		commitVectorIntent,
+		document,
+		selectedBlend,
+		selectedUnavailableEntry,
+		selection,
+	])
 
 	const duplicateSelection = useCallback((): void => {
+		if (selectedUnavailableEntry !== undefined) {
+			setStatus(
+				effectiveStateReason(
+					selectedUnavailableEntry,
+					"duplicating the selection",
+				) ?? "The selection is unavailable.",
+			)
+			return
+		}
 		const result = duplicateDesignObjects(document, selection, nextId)
 		if (result === null) return
 		commit(result.document)
@@ -1845,9 +2097,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setStatus(
 			`Duplicated ${selectedGroup?.name ?? `${result.selection.length} object${result.selection.length === 1 ? "" : "s"}`} with offset.`,
 		)
-	}, [commit, document, nextId, selectedGroup?.name, selection])
+	}, [
+		commit,
+		document,
+		nextId,
+		selectedGroup?.name,
+		selectedUnavailableEntry,
+		selection,
+	])
 
 	const groupSelection = useCallback((): void => {
+		if (selectedUnavailableEntry !== undefined) {
+			setStatus(
+				effectiveStateReason(
+					selectedUnavailableEntry,
+					"grouping the selection",
+				) ?? "The selection is unavailable.",
+			)
+			return
+		}
 		const result = groupDesignSelection(document, selection, nextId)
 		if (result === null) {
 			setStatus("Select at least two sibling objects to group.")
@@ -1857,9 +2125,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setSelection(result.selection)
 		setDirectSelection([])
 		setStatus("Grouped selection.")
-	}, [commit, document, nextId, selection])
+	}, [commit, document, nextId, selectedUnavailableEntry, selection])
 
 	const ungroupSelection = useCallback((): void => {
+		if (selectedUnavailableEntry !== undefined) {
+			setStatus(
+				effectiveStateReason(
+					selectedUnavailableEntry,
+					"ungrouping the selection",
+				) ?? "The selection is unavailable.",
+			)
+			return
+		}
 		const result = ungroupDesignSelection(document, selection)
 		if (result === null) {
 			setStatus("Select every object in one group to ungroup it.")
@@ -1869,10 +2146,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setSelection(result.selection)
 		setDirectSelection([])
 		setStatus("Ungrouped selection.")
-	}, [commit, document, selection])
+	}, [commit, document, selectedUnavailableEntry, selection])
 
 	const stackSelection = useCallback(
 		(command: DesignStackCommand): void => {
+			if (selectedUnavailableEntry !== undefined) {
+				setStatus(
+					effectiveStateReason(
+						selectedUnavailableEntry,
+						"changing the selection stacking order",
+					) ?? "The selection is unavailable.",
+				)
+				return
+			}
 			const result = stackDesignSelection(document, selection, command)
 			if (result === null) {
 				setStatus("The selection is already at that stacking position.")
@@ -1882,7 +2168,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelection(result.selection)
 			setStatus("Changed selection stacking order.")
 		},
-		[commit, document, selection],
+		[commit, document, selectedUnavailableEntry, selection],
 	)
 
 	const alignSelection = useCallback(
@@ -1891,6 +2177,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			target: DesignAlignmentTarget,
 			keyObjectId?: string,
 		): void => {
+			if (selectionTransformDisabledReason !== null) {
+				setStatus(selectionTransformDisabledReason)
+				return
+			}
 			const next = alignDesignObjects(
 				document,
 				selection,
@@ -1903,11 +2193,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			commit(next)
 			setStatus(`Aligned selection ${alignment}.`)
 		},
-		[activeArtboard, commit, document, selection],
+		[
+			activeArtboard,
+			commit,
+			document,
+			selection,
+			selectionTransformDisabledReason,
+		],
 	)
 
 	const distributeSelection = useCallback(
 		(axis: "x" | "y"): void => {
+			if (selectionTransformDisabledReason !== null) {
+				setStatus(selectionTransformDisabledReason)
+				return
+			}
 			const next = distributeDesignObjects(document, selection, axis)
 			if (next === null) return
 			commit(next)
@@ -1915,26 +2215,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				`Distributed selection ${axis === "x" ? "horizontally" : "vertically"}.`,
 			)
 		},
-		[commit, document, selection],
+		[commit, document, selection, selectionTransformDisabledReason],
 	)
 
 	const transformSelection = useCallback(
 		(input: Parameters<typeof transformDesignSelection>[2]): void => {
+			if (selectionTransformDisabledReason !== null) {
+				setStatus(selectionTransformDisabledReason)
+				return
+			}
 			const next = transformDesignSelection(document, selection, input)
 			if (next === null) return
 			commit(next)
 			setStatus("Transformed selection numerically.")
 		},
-		[commit, document, selection],
+		[commit, document, selection, selectionTransformDisabledReason],
 	)
 
 	const expandSelection = useCallback((): void => {
-		const eligibility = shapeExpansionEligibility(document, selection)
-		if (!eligibility.eligible) {
-			setStatus(eligibility.reason)
+		if (!expansionEligibility.eligible) {
+			setStatus(expansionEligibility.reason)
 			return
 		}
-		const expanded = expandDesignShape(eligibility.object, nextId)
+		const expanded = expandDesignShape(expansionEligibility.object, nextId)
 		commit({
 			...document,
 			objects: document.objects.map((object) =>
@@ -1943,21 +2246,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		})
 		setSelection([expanded.id])
 		setStatus(`Expanded ${expanded.name} to ordinary path geometry.`)
-	}, [commit, document, nextId, selection])
+	}, [commit, document, expansionEligibility, nextId])
 
 	const expandStrokeSelection = useCallback((): void => {
-		const eligibility = strokeExpansionEligibility(document, selection)
-		if (!eligibility.eligible) {
-			setStatus(eligibility.reason)
+		if (!strokeEligibility.eligible) {
+			setStatus(strokeEligibility.reason)
 			return
 		}
-		const result = expandDesignStroke(eligibility.object, nextId)
+		const result = expandDesignStroke(strokeEligibility.object, nextId)
 		if (!result.ok) {
 			setStatus(result.error)
 			return
 		}
 		const index = document.objects.findIndex(
-			(object) => object.id === eligibility.object.id,
+			(object) => object.id === strokeEligibility.object.id,
 		)
 		if (index < 0) {
 			setStatus("The selected object is unavailable.")
@@ -1973,21 +2275,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						...document.objects.slice(index + 1),
 					],
 				},
-				eligibility.object.id,
+				strokeEligibility.object.id,
 				result.objects.map((object) => object.id),
 			),
 		)
 		setSelection([result.selectedObjectId])
 		setDirectSelection([])
 		setStatus(
-			`Expanded ${eligibility.object.name}'s stroke to filled contours.`,
+			`Expanded ${strokeEligibility.object.name}'s stroke to filled contours.`,
 		)
-	}, [commit, document, nextId, selection])
+	}, [commit, document, nextId, strokeEligibility])
 
 	const makeBlend = useCallback((): void => {
-		const eligibility = designBlendEligibility(document, selection)
-		if (!eligibility.eligible) {
-			setStatus(eligibility.reason)
+		if (!blendEligibility.eligible) {
+			setStatus(blendEligibility.reason)
 			return
 		}
 		const result = makeDesignBlend(document, selection, nextId)
@@ -2006,11 +2307,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setDirectSelection([])
 		setSelectedBlendId(result.blendId)
 		setStatus(
-			eligibility.warnings.length === 0
+			blendEligibility.warnings.length === 0
 				? "Created live blend with 5 specified steps."
-				: `Created live blend. ${eligibility.warnings.join(" ")}`,
+				: `Created live blend. ${blendEligibility.warnings.join(" ")}`,
 		)
-	}, [commit, directSelection, document, nextId, selection])
+	}, [commit, directSelection, document, blendEligibility, nextId, selection])
 
 	const setBlendProperty = useCallback(
 		(
@@ -2132,9 +2433,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus("Select one text object before editing typography.")
 				return
 			}
-			if (selectedTextObject.locked) {
+			if (
+				selectedTextEffectiveEntry !== undefined &&
+				(!selectedTextEffectiveEntry.visible ||
+					selectedTextEffectiveEntry.locked)
+			) {
 				setStatus(
-					`Unlock ${selectedTextObject.name} before editing typography.`,
+					effectiveStateReason(
+						selectedTextEffectiveEntry,
+						"editing typography",
+					) ?? "The text object is unavailable.",
 				)
 				return
 			}
@@ -2167,7 +2475,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				`Updated typography for the complete ${selectedTextObject.name} object.`,
 			)
 		},
-		[commit, document, selectedTextObject],
+		[commit, document, selectedTextEffectiveEntry, selectedTextObject],
 	)
 	const selectTextFont = useCallback(
 		(fontId: string): void => {
@@ -2278,6 +2586,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				selectedTextObject.geometry.frame === undefined
 			)
 				return
+			if (
+				selectedTextEffectiveEntry !== undefined &&
+				(!selectedTextEffectiveEntry.visible ||
+					selectedTextEffectiveEntry.locked)
+			) {
+				setStatus(
+					effectiveStateReason(
+						selectedTextEffectiveEntry,
+						"resizing the text frame",
+					) ?? "The text object is unavailable.",
+				)
+				return
+			}
 			const frame = { ...selectedTextObject.geometry.frame, ...properties }
 			if (
 				!Number.isFinite(frame.width) ||
@@ -2300,14 +2621,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				`Resized ${selectedTextObject.name}; source text was preserved and reflowed.`,
 			)
 		},
-		[commit, document, selectedTextObject],
+		[commit, document, selectedTextEffectiveEntry, selectedTextObject],
 	)
 	const areaTextConversionDisabledReason =
 		textToolsDisabledReason ??
 		(selectedObject === null
 			? "Select one live rectangle to convert it to Area Type."
-			: selectedObject.locked || selectedObject.hidden
-				? `${selectedObject.hidden ? "Show" : "Unlock"} ${selectedObject.name} before converting it.`
+			: selectedObjectEffectiveEntry !== undefined &&
+				  (!selectedObjectEffectiveEntry.visible ||
+						selectedObjectEffectiveEntry.locked)
+				? effectiveStateReason(
+						selectedObjectEffectiveEntry,
+						"converting the object",
+					)
 				: selectedObject.geometry.kind !== "rectangle"
 					? "Initial Area Type conversion supports live rectangular frames; concave and compound paths are explicitly unsupported."
 					: null)
@@ -2315,8 +2641,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (
 			activeTextFont === null ||
 			selectedObject?.geometry.kind !== "rectangle" ||
-			selectedObject.locked ||
-			selectedObject.hidden
+			(selectedObjectEffectiveEntry !== undefined &&
+				(!selectedObjectEffectiveEntry.visible ||
+					selectedObjectEffectiveEntry.locked))
 		) {
 			setStatus(
 				areaTextConversionDisabledReason ?? "Cannot convert this object.",
@@ -2357,14 +2684,23 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		commit,
 		document,
 		selectedObject,
+		selectedObjectEffectiveEntry,
 	])
 	const expandTextSelection = useCallback((): void => {
 		if (selectedTextObject === null) {
 			setStatus("Select one text object to expand it.")
 			return
 		}
-		if (selectedTextObject.locked) {
-			setStatus(`Unlock ${selectedTextObject.name} before expanding it.`)
+		if (
+			selectedTextEffectiveEntry !== undefined &&
+			(!selectedTextEffectiveEntry.visible || selectedTextEffectiveEntry.locked)
+		) {
+			setStatus(
+				effectiveStateReason(
+					selectedTextEffectiveEntry,
+					"expanding the text object",
+				) ?? "The text object is unavailable.",
+			)
 			return
 		}
 		const expanded = textService.expand(
@@ -2406,7 +2742,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setEditingTextId(null)
 		setTextSelectionRange(null)
 		setStatus(`Expanded ${selectedTextObject.name} to editable glyph paths.`)
-	}, [commit, document, nextId, selectedTextObject, textService])
+	}, [
+		commit,
+		document,
+		nextId,
+		selectedTextEffectiveEntry,
+		selectedTextObject,
+		textService,
+	])
 
 	const executePartitionPathfinder = useCallback(
 		(command: DesignPartitionPathfinderCommand): void => {
@@ -2523,6 +2866,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const executePathCommand = useCallback(
 		(command: DesignPathCommand): void => {
+			const eligibility = designPathCommandEligibility(
+				command,
+				pathCommandPolicyContext,
+			)
+			if (!eligibility.eligible) {
+				setStatus(eligibility.reason)
+				return
+			}
 			if (isDesignPartitionPathfinderCommand(command)) {
 				executePartitionPathfinder(command)
 				return
@@ -2554,6 +2905,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			executePartitionPathfinder,
 			nextId,
 			pathCommandContext,
+			pathCommandPolicyContext,
 			selection,
 		],
 	)
@@ -2614,6 +2966,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const finishPen = useCallback(
 		(closed = false): void => {
+			if (activeLayerUnavailableReason !== null) {
+				cancelCanvasGesture()
+				setStatus(activeLayerUnavailableReason)
+				return
+			}
 			const points = penPointsRef.current
 			const object = createDesignPenObject({
 				id: `object:${nextId()}`,
@@ -2644,6 +3001,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[
 			activeHierarchyScope,
+			activeLayerUnavailableReason,
 			cancelCanvasGesture,
 			commit,
 			authoredAppearance,
@@ -2745,8 +3103,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const importSvgDocument = useCallback(
 		(source: string): SvgImportResult => {
+			if (activeLayerUnavailableReason !== null) {
+				setStatus(activeLayerUnavailableReason)
+				return {
+					diagnostics: [
+						{
+							code: "svg.import.active-layer",
+							message: activeLayerUnavailableReason,
+							severity: "error",
+							stage: "import",
+						},
+					],
+					document,
+					importedObjectIds: [],
+					ok: false,
+				}
+			}
 			const result = importSvg(source, document, {
 				artboardId: activeArtboard.id,
+				hierarchyScope: activeHierarchyScope,
 				nextId,
 			})
 			if (result.ok && result.importedObjectIds.length > 0) {
@@ -2764,7 +3139,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			return result
 		},
-		[activeArtboard.id, commit, document, nextId],
+		[
+			activeArtboard.id,
+			activeHierarchyScope,
+			activeLayerUnavailableReason,
+			commit,
+			document,
+			nextId,
+		],
 	)
 
 	const setObjectProperty = (
@@ -2788,8 +3170,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		object: DesignObject,
 		geometry: DesignGeometry,
 	): void => {
-		if (object.locked) {
-			setStatus("Unlock the selected shape before editing its parameters.")
+		const effective = effectiveHierarchy.byObjectId.get(object.id)
+		if (effective !== undefined && (!effective.visible || effective.locked)) {
+			setStatus(
+				effectiveStateReason(effective, "editing its shape parameters") ??
+					"The shape is unavailable.",
+			)
 			return
 		}
 		if (
@@ -2905,8 +3291,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		const object = selectedObjects[0]!
-		if (object.locked) {
-			setStatus(`Unlock ${object.name} before swapping its fill and stroke.`)
+		if (selectedUnavailableEntry !== undefined) {
+			setStatus(
+				effectiveStateReason(
+					selectedUnavailableEntry,
+					"swapping its fill and stroke",
+				) ?? "The object is unavailable.",
+			)
 			return
 		}
 		const swatchIds = new Set(document.swatches.map(({ id }) => id))
@@ -2937,7 +3328,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			),
 		})
 		setStatus(`Swapped fill and stroke for ${object.name}.`)
-	}, [commit, document, selectedObjects, selection.length])
+	}, [
+		commit,
+		document,
+		selectedObjects,
+		selectedUnavailableEntry,
+		selection.length,
+	])
 
 	const applyStrokeProperties = (
 		properties: Partial<Omit<DesignStroke, "swatchId">>,
@@ -3076,6 +3473,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		makeBlend,
 		selectedBlend,
 		selectBlend: (blend) => {
+			const unavailable = [blend.startObjectId, blend.endObjectId]
+				.map((id) => effectiveHierarchy.byObjectId.get(id))
+				.find(
+					(entry): entry is DesignEffectiveHierarchyEntry =>
+						entry?.hiddenBy?.kind === "layer" ||
+						entry?.lockedBy?.kind === "layer",
+				)
+			if (unavailable !== undefined) {
+				setStatus(
+					effectiveStateReason(unavailable, "selecting the live blend") ??
+						"The live blend is unavailable.",
+				)
+				return
+			}
 			setSelection([])
 			setDirectSelection([])
 			setSelectedBlendId(blend.id)
@@ -3107,6 +3518,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		reorderArtboard,
 		reviewSourceChange,
 		selectObject: (object, additive = false) => {
+			const effective = effectiveHierarchy.byObjectId.get(object.id)
+			if (
+				effective?.hiddenBy?.kind === "layer" ||
+				effective?.lockedBy?.kind === "layer"
+			) {
+				setStatus(
+					effectiveStateReason(effective, "selecting the object") ??
+						"The object is unavailable.",
+				)
+				return
+			}
 			setSelectedBlendId(null)
 			const unit = designSelectionUnitAtObject(
 				document,
@@ -3435,7 +3857,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					],
 				] as const
 			).map(([id, displayName, description]) => {
-				const eligibility = designPathCommandEligibility(id, pathCommandContext)
+				const eligibility = designPathCommandEligibility(
+					id,
+					pathCommandPolicyContext,
+				)
 				const workerBusy =
 					activePathfinder !== null && isDesignPartitionPathfinderCommand(id)
 				return {
@@ -3488,7 +3913,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					],
 				] as const
 			).map(([id, displayName, description]) => {
-				const eligibility = designPathCommandEligibility(id, pathCommandContext)
+				const eligibility = designPathCommandEligibility(
+					id,
+					pathCommandPolicyContext,
+				)
 				return {
 					id: `path-${id}`,
 					displayName,
@@ -3509,13 +3937,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				description: "Select every visible unlocked object.",
 				icon: "CursorArrowIcon",
 				shortcut: "⌘ A",
-				disabled: selectableObjectIds(document.objects).length === 0,
+				disabled:
+					selectableObjectIds(effectivePolicyDocument.objects).length === 0,
 				do: () => {
 					setSelectedBlendId(null)
 					const objectIds = normalizeDesignSelection(
 						document,
-						selectableObjectIds(document.objects),
+						selectableObjectIds(effectivePolicyDocument.objects),
 						currentGroupScope,
+						effectiveEditableObjectIds,
 					)
 					setSelection(objectIds)
 					setDirectSelection(
@@ -3838,7 +4268,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (gesture.kind === "move" || gesture.kind === "transform") {
 				const nextGesture = { ...gesture, state: transition.state }
 				const resolved = resolveDesignGestureObject(
-					document,
+					effectivePolicyDocument,
 					nextGesture,
 					transition.preview,
 					worldScale,
@@ -3877,8 +4307,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				event.preventDefault()
 				const objectIds = normalizeDesignSelection(
 					document,
-					selectableObjectIds(document.objects),
+					selectableObjectIds(effectivePolicyDocument.objects),
 					currentGroupScope,
+					effectiveEditableObjectIds,
 				)
 				setSelection(objectIds)
 				if (tool === "direct")
@@ -4135,6 +4566,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus("Select one or more complete objects to cut.")
 				return
 			}
+			if (selectedUnavailableEntry !== undefined) {
+				setStatus(
+					effectiveStateReason(
+						selectedUnavailableEntry,
+						"cutting the selection",
+					) ?? "The selection is unavailable.",
+				)
+				return
+			}
 			const result = applyDesignVectorIntent(
 				document,
 				capturedSelection,
@@ -4204,6 +4644,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				event.clipboardData === null
 			)
 				return
+			if (activeLayerUnavailableReason !== null) {
+				setStatus(activeLayerUnavailableReason)
+				return
+			}
 			const serializedBlend = event.clipboardData.getData(DESIGN_BLEND_MIME)
 			if (serializedBlend.length > 0) {
 				try {
@@ -4319,6 +4763,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [
 		activeArtboard,
 		activeHierarchyScope,
+		activeLayerUnavailableReason,
 		commit,
 		directSelection,
 		document,
@@ -4328,6 +4773,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		nextId,
 		paletteOpen,
 		selectedBlend,
+		selectedUnavailableEntry,
 		selection,
 	])
 
@@ -4402,12 +4848,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		object: DesignObject,
 	): void => {
 		if (tool !== "select" && tool !== "transform") return
+		const effective = effectiveHierarchy.byObjectId.get(object.id)
+		if (effective !== undefined && (!effective.visible || effective.locked)) {
+			event.cancelBubble = true
+			setStatus(
+				effectiveStateReason(effective, "selecting the object") ??
+					"The object is unavailable.",
+			)
+			return
+		}
 		const interaction = designSelectInteraction(
 			document,
 			selection,
 			object.id,
 			currentGroupScope,
 			gestureModifiers(event.evt).additive,
+			effectiveEditableObjectIds,
 		)
 		if (interaction === null) return
 		const { unit } = interaction
@@ -4476,6 +4932,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (tool !== "select" && tool !== "transform") return
 		const blend = document.blends?.find(({ id }) => id === blendId)
 		if (blend === undefined || blend.hidden || blend.locked) return
+		const unavailable = [blend.startObjectId, blend.endObjectId]
+			.map((id) => effectiveHierarchy.byObjectId.get(id))
+			.find(
+				(entry): entry is DesignEffectiveHierarchyEntry =>
+					entry !== undefined && (!entry.visible || entry.locked),
+			)
+		if (unavailable !== undefined) {
+			setStatus(
+				effectiveStateReason(unavailable, "selecting the live blend") ??
+					"The live blend is unavailable.",
+			)
+			return
+		}
 		event.cancelBubble = true
 		setSelection([])
 		setDirectSelection([])
@@ -4684,6 +5153,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			beginArtboardGesture(event, point)
 			return
 		}
+		if (
+			activeLayerUnavailableReason !== null &&
+			(tool === "rect" ||
+				tool === "ellipse" ||
+				tool === "text" ||
+				tool === "area-text" ||
+				tool === "pen")
+		) {
+			setStatus(activeLayerUnavailableReason)
+			return
+		}
 		if (tool === "rect" || tool === "ellipse") {
 			beginVectorGesture(event, { tool })
 			return
@@ -4855,7 +5335,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setGesturePreview(transition.preview)
 		if (nextGesture.kind !== "move" && nextGesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
-			document,
+			effectivePolicyDocument,
 			nextGesture,
 			transition.preview,
 			worldScale,
@@ -5057,7 +5537,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (transition.intent?.kind === "select-marquee") {
 			const intent = transition.intent
 			if (tool === "direct") {
-				const targets = marqueeDirectSelection(document, intent.bounds)
+				const targets = marqueeDirectSelection(
+					effectivePolicyDocument,
+					intent.bounds,
+				)
 				setDirectSelection((current) => {
 					const next = intent.additive
 						? [
@@ -5077,11 +5560,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			const ids = normalizeDesignSelection(
 				document,
 				marqueeObjectIds(
-					document.objects,
+					effectivePolicyDocument.objects,
 					intent.bounds,
 					interactionBoundsForObject,
 				),
 				currentGroupScope,
+				effectiveEditableObjectIds,
 			)
 			setSelection((current) =>
 				intent.additive
@@ -5089,6 +5573,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							document,
 							[...current, ...ids],
 							currentGroupScope,
+							effectiveEditableObjectIds,
 						)
 					: ids,
 			)
@@ -5109,7 +5594,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			finalGesture === null || transition.intent === null
 				? null
 				: resolveDesignGestureObject(
-						document,
+						effectivePolicyDocument,
 						finalGesture,
 						transition.intent,
 						worldScale,
@@ -5222,11 +5707,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<PointerEvent>,
 	): void => {
 		if (selectedObjects.length === 0) return
-		const locked = selectedObjects.find((object) => object.locked)
-		if (locked !== undefined) {
-			setStatus(
-				`Unlock ${locked.name} before transforming the complete selection.`,
-			)
+		if (selectionTransformDisabledReason !== null) {
+			setStatus(selectionTransformDisabledReason)
 			return
 		}
 		const bounds = combinedSelectionBounds(
@@ -5272,17 +5754,30 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
-	const canvasBlendProjection = projectDesignDocumentBlends({
+	const canvasEffectiveHierarchy = projectDesignEffectiveHierarchy({
 		...canvasDocument,
 		objects: canvasAuthoredObjects,
 	})
+	const canvasPolicyDocument = {
+		...canvasDocument,
+		objects: canvasEffectiveHierarchy.entries.map((entry) =>
+			entry.visible && entry.locked === Boolean(entry.object.locked)
+				? entry.object
+				: {
+						...entry.object,
+						...(entry.visible ? {} : { hidden: true }),
+						...(entry.locked ? { locked: true } : {}),
+					},
+		),
+	}
+	const canvasBlendProjection =
+		projectDesignDocumentBlends(canvasPolicyDocument)
 	const displayedObjects = canvasBlendProjection.objects
 	const derivedBlendByObjectId = new Map(
 		(canvasDocument.blends ?? []).flatMap((blend) =>
-			resolveDesignBlend(
-				{ ...canvasDocument, objects: canvasAuthoredObjects },
-				blend,
-			).objects.map((object) => [object.id, blend.id] as const),
+			resolveDesignBlend(canvasPolicyDocument, blend).objects.map(
+				(object) => [object.id, blend.id] as const,
+			),
 		),
 	)
 	const authoredCanvasObjectIds = new Set(

@@ -7,6 +7,7 @@ import {
 
 import {
 	projectDesignObjectContours,
+	projectDesignEffectiveHierarchy,
 	translateObject,
 	type Bounds,
 } from "@create-design/model"
@@ -269,6 +270,12 @@ const categoryPriority: Readonly<Record<DesignSnapCategory, number>> = {
 function snapScene(
 	scene: DesignSnapScene | DesignDocument | DesignArtboard,
 ): DesignSnapScene {
+	if ("layers" in scene)
+		return {
+			artboards: scene.artboards,
+			guides: scene.guides,
+			objects: projectDesignEffectiveHierarchy(scene).visibleObjects,
+		}
 	if ("artboards" in scene)
 		return {
 			artboards: scene.artboards,

@@ -306,6 +306,16 @@ describe("design canvas adapter", () => {
 		const document = {
 			...createInitialDocument(),
 			objects: [moving, locked, hidden],
+			layers: [
+				{
+					id: "layer:test",
+					name: "Test",
+					children: [moving, locked, hidden].map((object) => ({
+						kind: "object" as const,
+						id: object.id,
+					})),
+				},
+			],
 			guides: [
 				{ id: "guide:locked", axis: "x" as const, value: 32, locked: true },
 			],
@@ -329,12 +339,58 @@ describe("design canvas adapter", () => {
 		expect(targets.some(({ id }) => id.includes("hidden"))).toBe(false)
 	})
 
+	it("inherits layer visibility for snaps while retaining locked-layer references", () => {
+		const moving = rectangle("moving", 0, 0, 10, 10)
+		const hidden = rectangle("layer-hidden", 40, 40, 50, 50)
+		const locked = rectangle("layer-locked", 80, 80, 90, 90)
+		const document = {
+			...createInitialDocument(),
+			objects: [moving, hidden, locked],
+			layers: [
+				{
+					id: "layer:moving",
+					name: "Moving",
+					children: [{ kind: "object" as const, id: moving.id }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:locked",
+					name: "Locked",
+					locked: true,
+					children: [{ kind: "object" as const, id: locked.id }],
+				},
+			],
+		}
+		const targets = designSnapTargets(
+			document,
+			"x",
+			DEFAULT_DESIGN_SNAP_SETTINGS,
+			new Set([moving.id]),
+		)
+		expect(targets.some(({ id }) => id.includes(hidden.id))).toBe(false)
+		expect(targets.some(({ id }) => id.includes(locked.id))).toBe(true)
+		expect(hidden.hidden).toBeUndefined()
+		expect(locked.locked).toBeUndefined()
+	})
+
 	it("honors disabled categories without changing document geometry", () => {
 		const moving = rectangle("moving", 100, 100, 110, 110)
 		const document = {
 			...createInitialDocument(),
 			artboards: [artboard({ x: 1_000, y: 1_000, width: 100, height: 100 })],
 			objects: [moving],
+			layers: [
+				{
+					id: "layer:test",
+					name: "Test",
+					children: [{ kind: "object" as const, id: moving.id }],
+				},
+			],
 			guides: [{ id: "guide:near", axis: "x" as const, value: 112 }],
 		}
 		const enabled = snapDesignObject(moving, document, 1)

@@ -10,6 +10,7 @@ import {
 	type DesignSwatch,
 	type DesignTransform,
 } from "@create-design/source"
+import { projectDesignEffectiveHierarchy } from "@create-design/model"
 
 import type {
 	SvgDiagnostic,
@@ -22,6 +23,22 @@ interface XmlElement {
 	readonly children: XmlElement[]
 	readonly name: string
 	text: string
+}
+
+function hierarchyContainsGroup(
+	children: readonly DesignSceneChild[],
+	groupId: string,
+	groups: ReadonlyMap<string, DesignGroup>,
+): boolean {
+	return children.some((child) => {
+		if (child.kind === "object") return false
+		if (child.id === groupId) return true
+		return hierarchyContainsGroup(
+			groups.get(child.id)?.children ?? [],
+			groupId,
+			groups,
+		)
+	})
 }
 
 const decodeXml = (value: string): string =>
@@ -877,7 +894,11 @@ export function importSvg(
 			importedObjectIds: Object.freeze([]),
 			ok: false,
 		})
-	const targetLayer = document.layers.at(-1)
+	const targetLayer =
+		document.layers.find(
+			(layer) => layer.id === options.hierarchyScope?.layerId,
+		) ??
+		(options.hierarchyScope === undefined ? document.layers.at(-1) : undefined)
 	if (targetLayer === undefined)
 		return Object.freeze({
 			diagnostics: Object.freeze(diagnostics),
@@ -885,16 +906,51 @@ export function importSvg(
 			importedObjectIds: Object.freeze([]),
 			ok: false,
 		})
-	const nextDocument: DesignDocument = {
+	const targetGroupId = options.hierarchyScope?.groupId ?? null
+	const authoredGroups = new Map(
+		document.groups.map((group) => [group.id, group]),
+	)
+	if (
+		targetGroupId !== null &&
+		(!authoredGroups.has(targetGroupId) ||
+			!hierarchyContainsGroup(
+				targetLayer.children,
+				targetGroupId,
+				authoredGroups,
+			))
+	) {
+		issue(
+			"svg.import.missing-hierarchy-scope",
+			"SVG import requires an available destination layer or group.",
+			"error",
+		)
+		return Object.freeze({
+			diagnostics: Object.freeze(diagnostics),
+			document,
+			importedObjectIds: Object.freeze([]),
+			ok: false,
+		})
+	}
+	const authoredDocument: DesignDocument = {
 		...document,
 		swatches: [...document.swatches, ...swatches],
 		objects: [...document.objects, ...objects],
 		layers: document.layers.map((layer) =>
-			layer.id === targetLayer.id
+			targetGroupId === null && layer.id === targetLayer.id
 				? { ...layer, children: [...layer.children, ...importedScene] }
 				: layer,
 		),
-		groups: [...document.groups, ...groups],
+		groups: [...document.groups, ...groups].map((group) =>
+			group.id === targetGroupId
+				? { ...group, children: [...group.children, ...importedScene] }
+				: group,
+		),
+	}
+	const nextDocument: DesignDocument = {
+		...authoredDocument,
+		objects: projectDesignEffectiveHierarchy(authoredDocument).entries.map(
+			(entry) => entry.object,
+		),
 	}
 	return Object.freeze({
 		diagnostics: Object.freeze(diagnostics),

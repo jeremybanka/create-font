@@ -9,7 +9,10 @@ import {
 	projectDesignVectorObject,
 } from "./design-vector-adapter.ts"
 import type { Bounds } from "@create-design/model"
-import { visibleObjectBounds } from "@create-design/model"
+import {
+	projectDesignEffectiveHierarchy,
+	visibleObjectBounds,
+} from "@create-design/model"
 import type { DesignDocument, DesignObject } from "./types.ts"
 
 export type DesignDirectSelectionTarget =
@@ -125,28 +128,30 @@ export function marqueeDirectSelection(
 	document: DesignDocument,
 	bounds: Bounds,
 ): readonly DesignDirectSelectionTarget[] {
-	return document.objects.flatMap((object) => {
-		if (object.hidden || object.locked || object.geometry.kind !== "path")
-			return []
-		return projectDesignVectorObject(document, object).contours.flatMap(
-			(contour) =>
-				contour.nodes.flatMap((node) =>
-					node.x >= bounds.minX &&
-					node.x <= bounds.maxX &&
-					node.y >= bounds.minY &&
-					node.y <= bounds.maxY
-						? [
-								{
-									kind: "node" as const,
-									objectId: object.id,
-									contourId: contour.id,
-									pointId: node.id,
-								},
-							]
-						: [],
-				),
-		)
-	})
+	return projectDesignEffectiveHierarchy(document).editableObjects.flatMap(
+		(object) => {
+			if (object.hidden || object.locked || object.geometry.kind !== "path")
+				return []
+			return projectDesignVectorObject(document, object).contours.flatMap(
+				(contour) =>
+					contour.nodes.flatMap((node) =>
+						node.x >= bounds.minX &&
+						node.x <= bounds.maxX &&
+						node.y >= bounds.minY &&
+						node.y <= bounds.maxY
+							? [
+									{
+										kind: "node" as const,
+										objectId: object.id,
+										contourId: contour.id,
+										pointId: node.id,
+									},
+								]
+							: [],
+					),
+			)
+		},
+	)
 }
 
 const squaredDistance = (first: CanvasPoint, second: CanvasPoint): number =>

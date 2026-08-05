@@ -60,6 +60,16 @@ const path = (overrides: Partial<DesignObject> = {}): DesignObject => ({
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	...createInitialDocument(),
 	objects,
+	layers: [
+		{
+			id: "layer:test",
+			name: "Test",
+			children: objects.map((object) => ({
+				kind: "object" as const,
+				id: object.id,
+			})),
+		},
+	],
 })
 
 describe("design selection", () => {
@@ -167,6 +177,24 @@ describe("design selection", () => {
 			maxY: 15,
 		})
 		expect(marquee.map(directSelectionKey)).toEqual([directSelectionKey(node)])
+	})
+
+	it("excludes direct targets inherited from hidden or locked layers", () => {
+		const object = path()
+		const hidden = documentWith(object)
+		const hiddenLayer = {
+			...hidden,
+			layers: hidden.layers.map((layer) => ({ ...layer, hidden: true })),
+		}
+		const lockedLayer = {
+			...hidden,
+			layers: hidden.layers.map((layer) => ({ ...layer, locked: true })),
+		}
+		const bounds = { minX: 5, minY: 5, maxX: 15, maxY: 15 }
+		expect(marqueeDirectSelection(hiddenLayer, bounds)).toEqual([])
+		expect(marqueeDirectSelection(lockedLayer, bounds)).toEqual([])
+		expect(object.hidden).toBeUndefined()
+		expect(object.locked).toBeUndefined()
 	})
 
 	it("moves exactly the selected node and handle without touching unrelated geometry", () => {

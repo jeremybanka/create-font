@@ -62,6 +62,8 @@ export interface DesignPathCommandContext {
 	readonly directSelection: readonly DesignDirectSelectionTarget[]
 	/** Active structural editing scope; null means the root scene. */
 	readonly scopeGroupId: string | null
+	/** Inherited editor policy may block the complete path selection. */
+	readonly editingDisabledReason?: string | null
 }
 
 export type DesignPathCommandEligibility =
@@ -279,6 +281,8 @@ export function designPathCommandEligibility(
 	command: DesignPathCommand,
 	context: DesignPathCommandContext,
 ): DesignPathCommandEligibility {
+	if (context.editingDisabledReason)
+		return reject(context.editingDisabledReason)
 	if (
 		command === "pathfinder-unite" ||
 		command === "pathfinder-subtract-front" ||

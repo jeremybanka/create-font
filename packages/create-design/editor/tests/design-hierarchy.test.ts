@@ -381,4 +381,33 @@ describe("design hierarchy commands", () => {
 		])
 		expect(interaction?.lockedObject?.id).toBe("object:middle")
 	})
+
+	it("rejects partial group selection when an effective descendant is unavailable", () => {
+		const grouped = groupDesignSelection(
+			fixture(),
+			["object:coral", "object:middle"],
+			() => "guarded",
+		)
+		if (grouped === null) throw new Error("Expected grouping to succeed.")
+		const eligibleObjectIds = new Set(["object:coral", "object:front"])
+
+		expect(
+			normalizeDesignSelection(
+				grouped.document,
+				["object:coral"],
+				null,
+				eligibleObjectIds,
+			),
+		).toEqual([])
+		expect(
+			designSelectInteraction(
+				grouped.document,
+				[],
+				"object:coral",
+				null,
+				false,
+				eligibleObjectIds,
+			),
+		).toBeNull()
+	})
 })
