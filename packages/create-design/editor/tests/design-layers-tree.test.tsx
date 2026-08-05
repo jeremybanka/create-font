@@ -93,7 +93,6 @@ describe("Design Layers tree", () => {
 		const rows = [...host.querySelectorAll<HTMLElement>('[role="treeitem"]')]
 
 		expect(rows.map((row) => row.querySelector("b")?.textContent)).toEqual([
-			"Tree document",
 			"Front",
 			"Cyan ellipse",
 			"Back",
@@ -105,13 +104,13 @@ describe("Design Layers tree", () => {
 		expect(rows.map((row) => row.getAttribute("aria-level"))).toEqual([
 			"1",
 			"2",
-			"3",
+			"1",
 			"2",
 			"3",
 			"4",
-			"5",
-			"3",
+			"2",
 		])
+		expect(host.querySelector('[data-layer-kind="document"]')).toBeNull()
 		expect(
 			host.querySelector('[data-layer-kind="group"][aria-selected="true"] b')
 				?.textContent,
@@ -147,8 +146,10 @@ describe("Design Layers tree", () => {
 		)
 			throw new Error("Tree fixture did not render.")
 
+		expect(disclosure.querySelector("svg")).not.toBeNull()
 		act(() => disclosure.click())
-		expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(1)
+		expect(host.querySelectorAll('[role="treeitem"]')).toHaveLength(6)
+		expect(host.textContent).not.toContain("Cyan ellipse")
 		expect(value.selectLayer).not.toHaveBeenCalled()
 		expect(value.document).toEqual(fixture())
 		act(() => disclosure.click())
@@ -159,9 +160,10 @@ describe("Design Layers tree", () => {
 			)
 		})
 		expect(document.activeElement?.getAttribute("data-layer-kind")).toBe(
-			"layer",
+			"object",
 		)
-		expect(document.activeElement?.textContent).toContain("Front")
+		expect(document.activeElement?.textContent).toContain("Cyan ellipse")
+		const focusedTreeKey = document.activeElement?.getAttribute("data-tree-key")
 
 		render(
 			h(DesignTileContent, {
@@ -171,7 +173,7 @@ describe("Design Layers tree", () => {
 			host,
 		)
 		expect(document.activeElement?.getAttribute("data-tree-key")).toBe(
-			"layer:layer:front",
+			focusedTreeKey,
 		)
 	})
 

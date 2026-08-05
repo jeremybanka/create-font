@@ -6,6 +6,8 @@ import {
 	AlignLeftIcon,
 	AlignRightIcon,
 	AlignTopIcon,
+	ChevronDownIcon,
+	ChevronRightIcon,
 	EyeClosedIcon,
 	EyeOpenIcon,
 	Link1Icon,
@@ -301,7 +303,7 @@ function DesignLayersTile({
 }) {
 	type TreeRow = Readonly<{
 		key: string
-		kind: "document" | "layer" | "group" | "object"
+		kind: "layer" | "group" | "object"
 		name: string
 		depth: number
 		parentKey: string | null
@@ -332,7 +334,6 @@ function DesignLayersTile({
 		)
 	const branchKeys = useMemo(
 		() => [
-			"document",
 			...context.document.layers.map(({ id }) => `layer:${id}`),
 			...context.document.groups.map(({ id }) => `group:${id}`),
 		],
@@ -351,20 +352,7 @@ function DesignLayersTile({
 			setExpanded((current) => new Set([...current, ...additions]))
 	}, [branchKeys])
 	const rows = useMemo(() => {
-		const result: TreeRow[] = [
-			{
-				key: "document",
-				kind: "document",
-				name: context.document.title,
-				depth: 1,
-				parentKey: null,
-				hasChildren: context.document.layers.length > 0,
-				layerId: null,
-				groupScope: [],
-				descendantCount: context.document.objects.length,
-			},
-		]
-		if (!expanded.has("document")) return result
+		const result: TreeRow[] = []
 		const appendChildren = (
 			children: readonly DesignSceneChild[],
 			layer: DesignLayer,
@@ -414,21 +402,24 @@ function DesignLayersTile({
 				key,
 				kind: "layer",
 				name: layer.name,
-				depth: 2,
-				parentKey: "document",
+				depth: 1,
+				parentKey: null,
 				hasChildren: layer.children.length > 0,
 				layerId: layer.id,
 				groupScope: [],
 				descendantCount: descendantIds(layer.children).length,
 			})
-			if (expanded.has(key)) appendChildren(layer.children, layer, key, 3, [])
+			if (expanded.has(key)) appendChildren(layer.children, layer, key, 2, [])
 		}
 		return result
 	}, [context.document, expanded, groups, objects])
-	const [focusedKey, setFocusedKey] = useState("document")
+	const [focusedKey, setFocusedKey] = useState(
+		() => `layer:${context.document.layers.at(-1)!.id}`,
+	)
 	const rowRefs = useRef(new Map<string, HTMLElement>())
 	useEffect(() => {
-		if (!rows.some(({ key }) => key === focusedKey)) setFocusedKey("document")
+		if (!rows.some(({ key }) => key === focusedKey) && rows[0] !== undefined)
+			setFocusedKey(rows[0].key)
 	}, [focusedKey, rows])
 	const focusRow = (key: string): void => {
 		setFocusedKey(key)
@@ -443,8 +434,7 @@ function DesignLayersTile({
 			return next
 		})
 	const selectRow = (row: TreeRow, additive = false): void => {
-		if (row.kind === "document") context.setHierarchyScope([])
-		else if (row.kind === "layer") context.selectLayer(row.layerId!)
+		if (row.kind === "layer") context.selectLayer(row.layerId!)
 		else if (row.kind === "group")
 			context.selectHierarchyGroup(
 				row.key.slice("group:".length),
@@ -460,7 +450,6 @@ function DesignLayersTile({
 			)
 	}
 	const pathRelated = (row: TreeRow): boolean => {
-		if (row.kind === "document") return true
 		if (row.layerId !== context.activeLayerId) return false
 		const active = context.activeGroupScope
 		if (active.length === 0) return true
@@ -471,8 +460,6 @@ function DesignLayersTile({
 		)
 	}
 	const stateLabel = (row: TreeRow): string => {
-		if (row.kind === "document")
-			return `${row.descendantCount ?? 0} objects in ${context.document.layers.length} layers`
 		if (row.kind === "layer") {
 			const layer = context.document.layers.find(
 				({ id }) => id === row.layerId,
@@ -654,7 +641,11 @@ function DesignLayersTile({
 										toggle(row.key)
 									}}
 								>
-									{expanded.has(row.key) ? "▾" : "▸"}
+									{expanded.has(row.key) ? (
+										<ChevronDownIcon width={18} height={18} />
+									) : (
+										<ChevronRightIcon width={18} height={18} />
+									)}
 								</button>
 							) : (
 								<i data-disclosure-placeholder />
