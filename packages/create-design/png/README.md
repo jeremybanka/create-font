@@ -19,8 +19,9 @@ const result = await exportPng(document, {
   is clipped at that rectangle.
 - The reference backend uses a fixed ordered 4 × 4 subpixel grid. Set `samples`
   to 1 or 2 when explicitly trading edge quality for throughput.
-- Paint follows document scene order, with fill before stroke. Hidden artwork
-  is omitted. CMYK colors use the same deterministic sRGB alternate as SVG.
+- Paint follows the shared flattened layer/group order, with fill before
+  stroke. Hidden layers are omitted, locked layers stay output-visible, and CMYK
+  colors use the same deterministic sRGB alternate as SVG.
 - Valid live contour blends are lowered through the shared model projection;
   incompatible blends block output with the shared blend diagnostics.
 - Color and alpha use half-up 8-bit rounding. Partially covered transparent

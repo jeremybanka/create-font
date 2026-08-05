@@ -31,6 +31,8 @@ export interface PngDiagnostic {
 	readonly severity: PngDiagnosticSeverity
 	readonly artboardId?: string
 	readonly entityId?: string
+	readonly layerId?: string
+	readonly layerName?: string
 }
 
 export interface PngPreflightResult {

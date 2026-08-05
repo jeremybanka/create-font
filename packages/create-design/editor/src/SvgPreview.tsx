@@ -52,6 +52,7 @@ export function SvgPreview({
 		[
 			compiler,
 			document.artboards,
+			document.blends,
 			document.groups,
 			document.layers,
 			document.objects,

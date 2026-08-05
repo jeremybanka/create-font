@@ -16,6 +16,44 @@ const defaultScope = {
 const designVectorAdapter = createDesignVectorAdapter(defaultScope)
 
 describe("design object vector adapter", () => {
+	it("flattens vector clipboard payloads in effective hierarchy order", () => {
+		const initial = createInitialDocument()
+		const back = initial.objects[0]!
+		const front = initial.objects[1]!
+		const hidden = { ...back, id: "object:hidden", name: "Hidden" }
+		const document = {
+			...initial,
+			objects: [front, hidden, back],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object" as const, id: back.id }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					locked: true,
+					children: [{ kind: "object" as const, id: front.id }],
+				},
+			],
+			groups: [],
+		}
+		const payload = createDesignVectorAdapter({
+			layerId: "layer:back",
+			groupId: null,
+		}).clipboard(document, [front.id, hidden.id, back.id])
+
+		expect(payload.objects.map(({ id }) => id)).toEqual([back.id, front.id])
+		expect(payload.objects[1]).toMatchObject({ locked: true })
+	})
+
 	it("creates through an explicit layer scope without crossing paint boundaries", () => {
 		const document = createInitialDocument()
 		const source = document.objects[0]!

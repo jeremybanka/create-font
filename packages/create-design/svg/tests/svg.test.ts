@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createInitialDocument } from "@create-design/source"
+import { createDesignBlend } from "@create-design/model"
 import {
 	createSvgProjectionGraph,
 	exportSvg,
@@ -11,6 +12,120 @@ import {
 import { parseSvgFixture } from "./svg-parser-fixture.ts"
 
 describe("SVG export", () => {
+	it("matches effective layer visibility, locking, nesting, and paint order", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const back = { ...source, id: "object:layer-back", name: "Layer back" }
+		const hidden = {
+			...source,
+			id: "object:layer-hidden",
+			name: "Layer hidden",
+		}
+		const front = {
+			...initial.objects[1]!,
+			id: "object:layer-front",
+			name: "Layer front",
+		}
+		const document = {
+			...initial,
+			objects: [front, hidden, back],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "group" as const, id: "group:back" }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					locked: true,
+					children: [{ kind: "object" as const, id: front.id }],
+				},
+			],
+			groups: [
+				{
+					id: "group:back",
+					name: "Back group",
+					children: [{ kind: "object" as const, id: back.id }],
+				},
+			],
+		}
+		const svg = new TextDecoder().decode(exportSvg(document))
+		const unlockedSvg = new TextDecoder().decode(
+			exportSvg({
+				...document,
+				layers: document.layers.map((layer) => ({
+					...layer,
+					...(layer.id === "layer:front" ? { locked: false } : {}),
+				})),
+			}),
+		)
+
+		expect(svg).toBe(unlockedSvg)
+		expect(svg).toContain('<g id="group:back" aria-label="Back group">')
+		expect(svg).not.toContain(hidden.id)
+		expect(svg.indexOf(back.id)).toBeLessThan(svg.indexOf(front.id))
+		expect(
+			preflightSvgExport(document).diagnostics.find(
+				({ code }) => code === "svg.paint.cmyk-converted",
+			),
+		).toMatchObject({
+			entityId: front.id,
+			layerId: "layer:front",
+			layerName: "Front",
+		})
+	})
+
+	it("lowers live blends into the later endpoint's layer and group slot", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const start = { ...source, id: "object:blend-start", name: "Start" }
+		const end = {
+			...source,
+			id: "object:blend-end",
+			name: "End",
+			transform: { ...source.transform, e: source.transform.e + 100 },
+		}
+		const blend = createDesignBlend("blend:svg", "SVG blend", start, end, 1)
+		const document = {
+			...initial,
+			objects: [end, start],
+			blends: [blend],
+			layers: [
+				{
+					id: "layer:start",
+					name: "Start layer",
+					children: [{ kind: "object" as const, id: start.id }],
+				},
+				{
+					id: "layer:end",
+					name: "End layer",
+					children: [{ kind: "group" as const, id: "group:end" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:end",
+					name: "End group",
+					children: [{ kind: "object" as const, id: end.id }],
+				},
+			],
+		}
+		const svg = new TextDecoder().decode(exportSvg(document))
+		const derivedId = "object:blend:svg:step:1"
+
+		expect(preflightSvgExport(document).decision).toBe("ready")
+		expect(svg.indexOf(start.id)).toBeLessThan(svg.indexOf(derivedId))
+		expect(svg.indexOf(derivedId)).toBeLessThan(svg.indexOf(end.id))
+		expect(svg.indexOf("group:end")).toBeLessThan(svg.indexOf(derivedId))
+	})
+
 	it("serializes deterministic, independently parseable artboard SVG", () => {
 		const document = createInitialDocument()
 		const graph = createSvgProjectionGraph()

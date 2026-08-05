@@ -50,6 +50,58 @@ describe("PDF export", () => {
 		}
 	}
 
+	it("uses hierarchy paint order while omitting hidden and retaining locked layers", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const back = { ...source, id: "object:layer-back", name: "Back" }
+		const hidden = { ...source, id: "object:layer-hidden", name: "Hidden" }
+		const front = { ...source, id: "object:layer-front", name: "Front" }
+		const document = {
+			...initial,
+			objects: [front, hidden, back],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "group" as const, id: "group:back" }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					locked: true,
+					children: [{ kind: "object" as const, id: front.id }],
+				},
+			],
+			groups: [
+				{
+					id: "group:back",
+					name: "Back group",
+					children: [{ kind: "object" as const, id: back.id }],
+				},
+			],
+		}
+		const projection = createPdfProjectionGraph().project(document)
+		const unlocked = {
+			...document,
+			layers: document.layers.map((layer) => ({
+				...layer,
+				...(layer.id === "layer:front" ? { locked: false } : {}),
+			})),
+		}
+
+		expect(projection.page.objectProjections.map(({ id }) => id)).toEqual([
+			back.id,
+			front.id,
+		])
+		expect(pdfContentStream(document)).toBe(pdfContentStream(unlocked))
+	})
+
 	it("resolves active, selected, ranged, and all scopes in document order", () => {
 		const document = multiArtboardDocument()
 		expect(
@@ -246,40 +298,43 @@ describe("PDF export", () => {
 
 	it("exports curved Pen contours with fill-only cubic geometry", () => {
 		const document = createInitialDocument()
-		const content = pdfContentStream({
-			...document,
-			objects: [
-				{
-					id: "object:pen",
-					name: "Pen",
-					geometry: {
-						kind: "path",
-						contours: [
+		const pen = {
+			id: "object:pen",
+			name: "Pen",
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:pen",
+						closed: false,
+						points: [
 							{
-								id: "contour:pen",
-								closed: false,
-								points: [
-									{
-										id: "point:pen:0",
-										x: 40,
-										y: 50,
-										outgoing: { x: 30, y: 20 },
-									},
-									{
-										id: "point:pen:1",
-										x: 160,
-										y: 120,
-										incoming: { x: -30, y: -20 },
-									},
-									{ id: "point:pen:2", x: 80, y: 200 },
-								],
+								id: "point:pen:0",
+								x: 40,
+								y: 50,
+								outgoing: { x: 30, y: 20 },
 							},
+							{
+								id: "point:pen:1",
+								x: 160,
+								y: 120,
+								incoming: { x: -30, y: -20 },
+							},
+							{ id: "point:pen:2", x: 80, y: 200 },
 						],
 					},
-					transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
-					appearance: { fill: { swatchId: "swatch:coral" } },
-				},
-			],
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:coral" } },
+		}
+		const content = pdfContentStream({
+			...document,
+			objects: [pen],
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object" as const, id: pen.id }],
+			})),
 		})
 		expect(content).toContain("1 0 0 -1 0 792 cm")
 		expect(content).toContain("70 70 130 100 160 120 c")
@@ -466,7 +521,10 @@ describe("PDF export", () => {
 		const before = graph.project(document)
 		const reordered = graph.project({
 			...document,
-			objects: document.objects.toReversed(),
+			layers: document.layers.map((layer) => ({
+				...layer,
+				children: layer.children.toReversed(),
+			})),
 		})
 		expect(reordered.page).not.toBe(before.page)
 		expect(reordered.page.objectProjections).toEqual(

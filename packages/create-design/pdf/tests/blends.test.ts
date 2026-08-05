@@ -105,6 +105,6 @@ describe("PDF live blend lowering", () => {
 			createPdfProjectionGraph()
 				.project(hidden)
 				.page.objectProjections.map(({ id }) => id),
-		).toEqual(["object:start", "object:end"])
+		).toEqual(["object:start"])
 	})
 })

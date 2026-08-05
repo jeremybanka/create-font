@@ -1,5 +1,8 @@
 import { preflightSvgExport } from "@create-design/svg"
-import { projectDesignDocumentBlends } from "@create-design/model"
+import {
+	designOutputLayerForEntity,
+	projectDesignOutput,
+} from "@create-design/model"
 import type { DesignArtboard, DesignDocument } from "@create-design/source"
 
 import { referencePngRasterBackend } from "./raster.ts"
@@ -22,16 +25,18 @@ function projectedPngDocument(document: DesignDocument): Readonly<{
 	diagnostics: readonly PngDiagnostic[]
 	document: DesignDocument
 }> {
-	const projection = projectDesignDocumentBlends(document)
+	const projection = projectDesignOutput(document)
 	return {
-		diagnostics: projection.diagnostics.map((source) =>
-			Object.freeze({
+		diagnostics: projection.diagnostics.map((source) => {
+			const layer = designOutputLayerForEntity(projection, source.blendId)
+			return Object.freeze({
 				code: `png.${source.code}`,
 				entityId: source.blendId,
 				message: source.message,
 				severity: source.severity,
-			}),
-		),
+				...(layer === null ? {} : { layerId: layer.id, layerName: layer.name }),
+			})
+		}),
 		document: {
 			...document,
 			objects: projection.objects,
@@ -163,8 +168,9 @@ export function preflightPngExport(
 						artboard.id,
 					),
 				)
-			const svg = preflightSvgExport(projection.document, artboard)
-			for (const source of svg.diagnostics)
+			const svg = preflightSvgExport(document, artboard)
+			for (const source of svg.diagnostics) {
+				if (source.code.startsWith("svg.blend.")) continue
 				diagnostics.push(
 					Object.freeze({
 						code: source.code.replace(/^svg\./u, "png."),
@@ -174,8 +180,15 @@ export function preflightPngExport(
 						...(source.entityId === undefined
 							? {}
 							: { entityId: source.entityId }),
+						...(source.layerId === undefined
+							? {}
+							: {
+									layerId: source.layerId,
+									layerName: source.layerName,
+								}),
 					}),
 				)
+			}
 		}
 	const frozen = Object.freeze(diagnostics)
 	const summary = Object.freeze({

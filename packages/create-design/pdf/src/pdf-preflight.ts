@@ -11,7 +11,11 @@ import {
 	type PdfExportRequest,
 	type PdfExportTarget,
 } from "./pdf.ts"
-import { projectDesignDocumentBlends, type Bounds } from "@create-design/model"
+import {
+	designOutputLayerForEntity,
+	projectDesignOutput,
+	type Bounds,
+} from "@create-design/model"
 import type { DesignArtboard, DesignDocument } from "@create-design/source"
 import type { DesignTextService } from "@create-design/text"
 
@@ -147,12 +151,12 @@ export function preflightPdfExport(
 	preferences: ExportPreflightPreferences = {},
 	textService?: DesignTextService,
 ): ExportPreflightResult {
-	const blendProjection = projectDesignDocumentBlends(document)
+	const output = projectDesignOutput(document)
 	const result = runExportPreflight(
 		{
 			...document,
-			objects: blendProjection.objects,
-			swatches: blendProjection.swatches,
+			objects: output.objects,
+			swatches: output.swatches,
 		},
 		target,
 		Object.freeze({
@@ -204,8 +208,7 @@ export function preflightPdfExport(
 		}) satisfies ExportPreflightAdapter<PdfExportTarget>,
 		preferences,
 	)
-	if (blendProjection.diagnostics.length === 0) return result
-	const blendDiagnostics = blendProjection.diagnostics.map((item) =>
+	const blendDiagnostics = output.diagnostics.map((item) =>
 		Object.freeze({
 			action: Object.freeze({
 				kind: "select-entity" as const,
@@ -221,10 +224,21 @@ export function preflightPdfExport(
 			target: "pdf",
 		}),
 	)
-	const diagnostics = Object.freeze([
-		...result.diagnostics,
-		...blendDiagnostics,
-	])
+	const diagnostics = Object.freeze(
+		[...result.diagnostics, ...blendDiagnostics].map((diagnostic) => {
+			const layer =
+				diagnostic.entityId === undefined
+					? null
+					: designOutputLayerForEntity(output, diagnostic.entityId)
+			return layer === null
+				? diagnostic
+				: Object.freeze({
+						...diagnostic,
+						layerId: layer.id,
+						layerName: layer.name,
+					})
+		}),
+	)
 	const summary = Object.freeze({
 		errors: diagnostics.filter(({ severity }) => severity === "error").length,
 		warnings: diagnostics.filter(({ severity }) => severity === "warning")

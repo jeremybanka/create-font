@@ -61,6 +61,11 @@ page-local, bottom-left Y-up transform from the selected artboard:
 transforms, including any deliberate paste offset, are projections and never
 canonical geometry mutations.
 
+Clipboard formats do not carry editable create-design layers. Copies therefore
+flatten visible objects in canonical layer/group paint order, omit objects from
+hidden layers, and retain visible locked-layer artwork without changing the
+source document's authored descendant flags.
+
 Object IDs are document-wide. Contour and point IDs are required and unique
 within their owning object. Edits preserve every unaffected identity. Copying
 or deriving a distinct object assigns a new object ID and new path IDs;

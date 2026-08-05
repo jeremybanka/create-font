@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createHash } from "node:crypto"
 import { createInitialDocument } from "@create-design/source"
+import { resolvedRgb } from "@create-design/model"
 
 import {
 	encodeRgbaPng,
@@ -58,6 +59,88 @@ async function decode(
 }
 
 describe("deterministic PNG output", () => {
+	it("rasterizes hierarchy order with hidden layers omitted and locked layers visible", async () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const rectangle = {
+			...source,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 0,
+				y: 0,
+				width: 1,
+				height: 1,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const back = { ...rectangle, id: "object:back" }
+		const hidden = {
+			...rectangle,
+			id: "object:hidden",
+			appearance: { fill: { swatchId: "swatch:ink" } },
+		}
+		const front = {
+			...rectangle,
+			id: "object:front",
+			appearance: { fill: { swatchId: "swatch:cyan" } },
+		}
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 1, height: 1 }],
+			objects: [front, hidden, back],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "group" as const, id: "group:back" }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					locked: true,
+					children: [{ kind: "object" as const, id: front.id }],
+				},
+			],
+			groups: [
+				{
+					id: "group:back",
+					name: "Back group",
+					children: [{ kind: "object" as const, id: back.id }],
+				},
+			],
+		}
+		const request = { scope: { kind: "all" as const }, samples: 1 as const }
+		const locked = await exportPng(document, request)
+		const unlocked = await exportPng(
+			{
+				...document,
+				layers: document.layers.map((layer) => ({
+					...layer,
+					...(layer.id === "layer:front" ? { locked: false } : {}),
+				})),
+			},
+			request,
+		)
+		const image = await decode(locked.artifacts[0]!.bytes)
+		const expected = resolvedRgb(
+			initial.swatches.find(({ id }) => id === "swatch:cyan")!,
+		)
+
+		expect(locked.artifacts[0]!.bytes).toEqual(unlocked.artifacts[0]!.bytes)
+		expect([...image.rgba]).toEqual([
+			Math.round(expected.r),
+			Math.round(expected.g),
+			Math.round(expected.b),
+			255,
+		])
+	})
+
 	it("encodes canonical metadata-free RGBA bytes", async () => {
 		const bytes = encodeRgbaPng(1, 1, new Uint8Array([12, 34, 56, 78]))
 		expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
@@ -181,14 +264,30 @@ describe("deterministic PNG output", () => {
 				},
 			],
 		}
-		const result = await exportPng(document, {
+		const request = {
 			scope: { kind: "all" },
-			samples: 1,
-		})
+			samples: 1 as const,
+		} as const
+		const result = await exportPng(document, request)
 		const image = await decode(result.artifacts[0]!.bytes)
 		expect([0, 1, 2, 3].map((column) => image.rgba[column * 4 + 3])).toEqual([
 			255, 255, 0, 255,
 		])
+
+		const hiddenLayer = {
+			...document,
+			layers: document.layers.map((layer) => ({ ...layer, hidden: true })),
+		}
+		expect(preflightPngExport(hiddenLayer, request)).toMatchObject({
+			decision: "ready",
+			diagnostics: [
+				{
+					code: "png.blend.endpoint.hidden",
+					layerId: document.layers[0]!.id,
+					severity: "info",
+				},
+			],
+		})
 	})
 
 	it("blocks invalid scale, unknown scopes, and excessive allocations", () => {

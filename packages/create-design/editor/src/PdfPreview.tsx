@@ -76,6 +76,9 @@ export function PdfPreview({
 	}, [
 		compiler,
 		document.artboards,
+		document.blends,
+		document.groups,
+		document.layers,
 		document.objects,
 		document.swatches,
 		document.title,

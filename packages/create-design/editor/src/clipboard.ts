@@ -10,6 +10,7 @@ import {
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	objectBounds,
+	projectDesignOutput,
 	projectDesignObjectContours,
 	translateObject,
 } from "@create-design/model"
@@ -146,8 +147,9 @@ export function writeDesignClipboard(
 	objectIds: readonly string[],
 	vectorPayload?: VectorClipboardPayload,
 ): number {
-	const selected = document.objects.filter((object) =>
-		objectIds.includes(object.id),
+	const selectedIds = new Set(objectIds)
+	const selected = projectDesignOutput(document).entries.flatMap(
+		({ object }) => (selectedIds.has(object.id) ? [object] : []),
 	)
 	if (selected.length === 0) return 0
 	const swatchIds = new Set(

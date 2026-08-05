@@ -9,7 +9,11 @@ import {
 	type VectorStyle,
 } from "@create-art/editor"
 
-import { swatchCss } from "@create-design/model"
+import {
+	projectDesignEffectiveHierarchy,
+	projectDesignOutput,
+	swatchCss,
+} from "@create-design/model"
 import {
 	documentToInterchangePoint,
 	documentToInterchangeVector,
@@ -41,6 +45,14 @@ const documentRevision = (document: DesignDocument): string =>
 		document.objects.length,
 		document.swatches.length,
 		document.objects.map((object) => object.id).join(","),
+		document.layers
+			.map((layer) =>
+				[layer.id, layer.hidden, layer.locked, layer.children.length].join(":"),
+			)
+			.join(","),
+		document.groups
+			.map((group) => [group.id, group.children.length].join(":"))
+			.join(","),
 	].join(":")
 
 function swatchStyle(swatch: DesignSwatch | undefined): VectorStyle {
@@ -97,10 +109,15 @@ function projectDesignVectorSnapshot(
 	document: DesignDocument,
 	selection: DesignVectorSelection,
 ): VectorSnapshot {
+	const hierarchy = projectDesignEffectiveHierarchy(document)
 	return {
 		revision: documentRevision(document),
-		objects: document.objects.map((object) =>
-			projectDesignVectorObject(document, object),
+		objects: hierarchy.entries.map((entry) =>
+			projectDesignVectorObject(document, {
+				...entry.object,
+				...(entry.visible ? {} : { hidden: true }),
+				...(entry.locked ? { locked: true } : {}),
+			}),
 		),
 		selection: selection.map((objectId) => ({ kind: "object", objectId })),
 	}
@@ -403,10 +420,14 @@ export function createDesignVectorAdapter(
 			return reject(`The design document does not support ${intent.kind}.`)
 		},
 		clipboard(document, selection) {
-			const snapshot = projectDesignVectorSnapshot(document, selection)
+			const output = projectDesignOutput(document)
 			return vectorClipboardPayload({
-				...snapshot,
-				objects: document.objects.map((object) =>
+				revision: documentRevision(document),
+				selection: selection.map((objectId) => ({
+					kind: "object" as const,
+					objectId,
+				})),
+				objects: output.objects.map((object) =>
 					projectDesignClipboardObject(document, object),
 				),
 			})
