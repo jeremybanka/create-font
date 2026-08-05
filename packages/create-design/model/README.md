@@ -37,3 +37,13 @@ correspondence without importing the editor. `expandDesignBlend()` retains both
 ordinary endpoints, assigns fresh object/contour/point/swatch identities to the
 resolved intermediate paths, inserts them at the live projection position, and
 removes the live record as one immutable document replacement.
+
+## Output projection
+
+`projectDesignOutput()` is the shared flattening boundary for renderers,
+exporters, previews, and interchange. It walks layers and nested groups in
+canonical paint order, omits objects hidden by either their object or layer,
+keeps locked-layer artwork output-visible, and lowers live blend steps into the
+later-painted endpoint's layer and group slot. The returned entries retain
+their containing layer and group ancestry for structured output and
+diagnostics; formats without editable layers flatten the entry order exactly.

@@ -18,7 +18,7 @@ import {
 } from "mondrian.pdf"
 
 import {
-	projectDesignDocumentBlends,
+	projectDesignOutput,
 	resolvedCmyk,
 	resolvedRgb,
 	type DesignBlendDiagnostic,
@@ -228,7 +228,7 @@ export class PdfBlendProjectionError extends Error {
 }
 
 function projectedBlendDocument(document: DesignDocument): DesignDocument {
-	const projection = projectDesignDocumentBlends(document)
+	const projection = projectDesignOutput(document)
 	const errors = projection.diagnostics.filter(
 		({ severity }) => severity === "error",
 	)

@@ -21,6 +21,8 @@ export interface SvgDiagnostic {
 	readonly stage: SvgDiagnosticStage
 	readonly element?: string
 	readonly entityId?: string
+	readonly layerId?: string
+	readonly layerName?: string
 }
 
 export type SvgExportTarget =

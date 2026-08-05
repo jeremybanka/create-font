@@ -6,38 +6,13 @@ import {
 	resolvedRgb,
 	visibleObjectBounds,
 } from "@create-design/model"
-import type {
-	DesignDocument,
-	DesignObject,
-	DesignSceneChild,
-} from "@create-design/source"
+import type { DesignDocument, DesignObject } from "@create-design/source"
 
 import { encodeRgbaPng } from "./png-encoder.ts"
 import type { PngRasterBackend } from "./types.ts"
 
 function orderedObjects(document: DesignDocument): readonly DesignObject[] {
-	if ((document.blends?.length ?? 0) > 0)
-		return document.objects.filter((object) => !object.hidden)
-	const objects = new Map(document.objects.map((object) => [object.id, object]))
-	const groups = new Map(
-		(document.groups ?? []).map((group) => [group.id, group]),
-	)
-	const active = new Set<string>()
-	const visit = (children: readonly DesignSceneChild[]): DesignObject[] =>
-		children.flatMap((child) => {
-			if (child.kind === "object") {
-				const object = objects.get(child.id)
-				return object === undefined || object.hidden ? [] : [object]
-			}
-			if (active.has(child.id)) return []
-			const group = groups.get(child.id)
-			if (group === undefined) return []
-			active.add(child.id)
-			const descendants = visit(group.children)
-			active.delete(child.id)
-			return descendants
-		})
-	return document.layers.flatMap((layer) => visit(layer.children))
+	return document.objects.filter((object) => !object.hidden)
 }
 
 function byte(value: number): number {

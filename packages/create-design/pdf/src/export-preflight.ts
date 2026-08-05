@@ -24,6 +24,8 @@ export interface ExportDiagnostic {
 	readonly entityId?: string
 	readonly entityKind?: string
 	readonly message: string
+	readonly layerId?: string
+	readonly layerName?: string
 	readonly severity: ExportDiagnosticSeverity
 	readonly target: string
 }

@@ -67,7 +67,6 @@ import {
 	copyDesignBlendSelection,
 	designBlendBounds,
 	pasteDesignBlendSelection,
-	projectDesignDocumentBlends,
 	resolveDesignBlend,
 } from "@create-design/model"
 import {
@@ -173,6 +172,7 @@ import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
 	projectDesignEffectiveHierarchy,
+	projectDesignOutput,
 	rotateObject,
 	scaleObject,
 	translateObject,
@@ -5754,30 +5754,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
-	const canvasEffectiveHierarchy = projectDesignEffectiveHierarchy({
+	const canvasOutputProjection = projectDesignOutput({
 		...canvasDocument,
 		objects: canvasAuthoredObjects,
 	})
-	const canvasPolicyDocument = {
-		...canvasDocument,
-		objects: canvasEffectiveHierarchy.entries.map((entry) =>
-			entry.visible && entry.locked === Boolean(entry.object.locked)
-				? entry.object
-				: {
-						...entry.object,
-						...(entry.visible ? {} : { hidden: true }),
-						...(entry.locked ? { locked: true } : {}),
-					},
-		),
-	}
-	const canvasBlendProjection =
-		projectDesignDocumentBlends(canvasPolicyDocument)
-	const displayedObjects = canvasBlendProjection.objects
+	const displayedObjects = canvasOutputProjection.objects
 	const derivedBlendByObjectId = new Map(
-		(canvasDocument.blends ?? []).flatMap((blend) =>
-			resolveDesignBlend(canvasPolicyDocument, blend).objects.map(
-				(object) => [object.id, blend.id] as const,
-			),
+		canvasOutputProjection.entries.flatMap((entry) =>
+			entry.source.kind === "blend"
+				? [[entry.object.id, entry.source.blendId] as const]
+				: [],
 		),
 	)
 	const authoredCanvasObjectIds = new Set(
@@ -6088,11 +6074,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 									{displayedObjects.map((object) => {
 										const derived = !authoredCanvasObjectIds.has(object.id)
 										const derivedBlendId = derivedBlendByObjectId.get(object.id)
-										const fill = canvasBlendProjection.swatches.find(
+										const fill = canvasOutputProjection.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.fill?.swatchId,
 										)
-										const stroke = canvasBlendProjection.swatches.find(
+										const stroke = canvasOutputProjection.swatches.find(
 											(candidate) =>
 												candidate.id === object.appearance.stroke?.swatchId,
 										)

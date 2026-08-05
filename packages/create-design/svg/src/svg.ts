@@ -1,9 +1,16 @@
-import { contourSvgPath, resolvedRgb } from "@create-design/model"
+import {
+	contourSvgPath,
+	designOutputLayerForEntity,
+	projectDesignOutput,
+	resolvedRgb,
+	type DesignOutputEntry,
+} from "@create-design/model"
 import type {
 	DesignArtboard,
 	DesignDocument,
+	DesignGroup,
+	DesignLayer,
 	DesignObject,
-	DesignSceneChild,
 	DesignSwatch,
 } from "@create-design/source"
 
@@ -43,6 +50,7 @@ const diagnostic = (
 	message: string,
 	severity: SvgDiagnostic["severity"],
 	entityId?: string,
+	layer?: DesignLayer,
 ): SvgDiagnostic =>
 	Object.freeze({
 		code,
@@ -50,6 +58,9 @@ const diagnostic = (
 		severity,
 		stage: "preflight",
 		...(entityId === undefined ? {} : { entityId }),
+		...(layer === undefined
+			? {}
+			: { layerId: layer.id, layerName: layer.name }),
 	})
 
 export function preflightSvgExport(
@@ -58,6 +69,10 @@ export function preflightSvgExport(
 ): SvgPreflightResult {
 	let artboard: DesignArtboard | null = null
 	const diagnostics: SvgDiagnostic[] = []
+	const output = projectDesignOutput(document)
+	const outputSwatches = new Map(
+		output.swatches.map((swatch) => [swatch.id, swatch]),
+	)
 	try {
 		artboard = resolveArtboard(document, target)
 	} catch (error) {
@@ -69,7 +84,7 @@ export function preflightSvgExport(
 			),
 		)
 	}
-	for (const object of document.objects) {
+	for (const { layer, object } of output.entries) {
 		if (object.geometry.kind === "text")
 			diagnostics.push(
 				diagnostic(
@@ -77,11 +92,12 @@ export function preflightSvgExport(
 					`${object.name} is editable text. Expand Text before SVG export so the chosen glyph outlines are explicit.`,
 					"error",
 					object.id,
+					layer,
 				),
 			)
 		for (const paint of [object.appearance.fill, object.appearance.stroke]) {
 			if (paint === undefined) continue
-			const swatch = document.swatches.find(({ id }) => id === paint.swatchId)
+			const swatch = outputSwatches.get(paint.swatchId)
 			if (swatch === undefined) {
 				diagnostics.push(
 					diagnostic(
@@ -89,6 +105,7 @@ export function preflightSvgExport(
 						`${object.name} references missing swatch ${paint.swatchId}.`,
 						"error",
 						object.id,
+						layer,
 					),
 				)
 			} else if (swatch.source.space === "cmyk") {
@@ -98,10 +115,24 @@ export function preflightSvgExport(
 						`${object.name} uses CMYK paint; SVG output uses its deterministic RGB alternate.`,
 						"warning",
 						object.id,
+						layer,
 					),
 				)
 			}
 		}
+	}
+	for (const source of output.diagnostics) {
+		const layer =
+			designOutputLayerForEntity(output, source.blendId) ?? undefined
+		diagnostics.push(
+			diagnostic(
+				`svg.${source.code}`,
+				source.message,
+				source.severity,
+				source.blendId,
+				layer,
+			),
+		)
 	}
 	const frozen = Object.freeze(diagnostics)
 	const summary = Object.freeze({
@@ -122,58 +153,64 @@ export function svgPreflightAllowsOutput(result: SvgPreflightResult): boolean {
 	return result.decision === "ready"
 }
 
-function sceneFor(document: DesignDocument): readonly DesignSceneChild[] {
-	return document.layers.flatMap((layer) => layer.children)
-}
-
 function projectionNodes(
 	document: DesignDocument,
 ): readonly SvgProjectionNode[] {
-	const objects = new Map(document.objects.map((object) => [object.id, object]))
+	const output = projectDesignOutput(document)
 	const groups = new Map(document.groups.map((group) => [group.id, group]))
-	const swatches = new Map(
-		document.swatches.map((swatch) => [swatch.id, swatch]),
-	)
-	const activeGroups = new Set<string>()
-	const projectChild = (child: DesignSceneChild): SvgProjectionNode | null => {
-		if (child.kind === "object") {
-			const object = objects.get(child.id)
-			if (object === undefined || object.hidden) return null
-			const fill =
-				object.appearance.fill === undefined
-					? undefined
-					: swatches.get(object.appearance.fill.swatchId)
-			const stroke =
-				object.appearance.stroke === undefined
-					? undefined
-					: swatches.get(object.appearance.stroke.swatchId)
-			return Object.freeze({
+	const swatches = new Map(output.swatches.map((swatch) => [swatch.id, swatch]))
+	type MutableGroup = {
+		kind: "group"
+		group: DesignGroup
+		children: Array<SvgObjectProjection | MutableGroup>
+	}
+	const root: Array<SvgObjectProjection | MutableGroup> = []
+	const append = (entry: DesignOutputEntry): void => {
+		let children = root
+		for (const groupId of entry.groupIds) {
+			const group = groups.get(groupId)
+			if (group === undefined) continue
+			let node = children.find(
+				(candidate): candidate is MutableGroup =>
+					candidate.kind === "group" && candidate.group.id === groupId,
+			)
+			if (node === undefined) {
+				node = { kind: "group", group, children: [] }
+				children.push(node)
+			}
+			children = node.children
+		}
+		const object = entry.object
+		const fill =
+			object.appearance.fill === undefined
+				? undefined
+				: swatches.get(object.appearance.fill.swatchId)
+		const stroke =
+			object.appearance.stroke === undefined
+				? undefined
+				: swatches.get(object.appearance.stroke.swatchId)
+		children.push(
+			Object.freeze({
 				kind: "object",
 				object,
 				swatches: Object.freeze({
 					...(fill === undefined ? {} : { fill }),
 					...(stroke === undefined ? {} : { stroke }),
 				}),
-			}) satisfies SvgObjectProjection
-		}
-		const group = groups.get(child.id)
-		if (group === undefined || activeGroups.has(group.id)) return null
-		activeGroups.add(group.id)
-		const children = group.children
-			.map(projectChild)
-			.filter((node): node is SvgProjectionNode => node !== null)
-		activeGroups.delete(group.id)
-		return Object.freeze({
-			kind: "group",
-			group,
-			children: Object.freeze(children),
-		}) satisfies SvgGroupProjection
+			}),
+		)
 	}
-	return Object.freeze(
-		sceneFor(document)
-			.map(projectChild)
-			.filter((node): node is SvgProjectionNode => node !== null),
-	)
+	for (const entry of output.entries) append(entry)
+	const freezeNode = (
+		node: SvgObjectProjection | MutableGroup,
+	): SvgProjectionNode =>
+		node.kind === "object"
+			? node
+			: Object.freeze({
+					...node,
+					children: Object.freeze(node.children.map(freezeNode)),
+				})
+	return Object.freeze(root.map(freezeNode))
 }
 
 export function createSvgProjectionGraph(): SvgProjectionGraph {

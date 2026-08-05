@@ -198,6 +198,8 @@ describe("export preflight", () => {
 				code: "common.artwork-outside-requested-artboards",
 				entityId: "object:outside",
 				entityKind: "object",
+				layerId: "layer:artwork",
+				layerName: "Artwork",
 				message:
 					"outside extends outside the requested artboards and will be clipped.",
 				severity: "info",

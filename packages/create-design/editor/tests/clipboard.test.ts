@@ -15,6 +15,51 @@ import { projectDesignObjectContours } from "@create-design/model"
 import { expandDesignShape } from "../src/shape-expansion.ts"
 
 describe("vector clipboard interoperability", () => {
+	it("flattens copied objects in visible hierarchy order", () => {
+		const initial = createInitialDocument()
+		const back = initial.objects[0]!
+		const front = initial.objects[1]!
+		const hidden = { ...back, id: "object:hidden", name: "Hidden" }
+		const document = {
+			...initial,
+			objects: [front, hidden, back],
+			layers: [
+				{
+					id: "layer:back",
+					name: "Back",
+					children: [{ kind: "object" as const, id: back.id }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object" as const, id: hidden.id }],
+				},
+				{
+					id: "layer:front",
+					name: "Front",
+					locked: true,
+					children: [{ kind: "object" as const, id: front.id }],
+				},
+			],
+			groups: [],
+		}
+		const entries = new Map<string, string>()
+
+		expect(
+			writeDesignClipboard(
+				{ setData: (format, value) => entries.set(format, value) },
+				document,
+				[front.id, hidden.id, back.id],
+			),
+		).toBe(2)
+		expect(
+			JSON.parse(entries.get(DESIGN_VECTOR_MIME) ?? "{}").objects.map(
+				(object: { id: string }) => object.id,
+			),
+		).toEqual([back.id, front.id])
+	})
+
 	it("duplicates nested groups in their source layer and rejects cross-layer batches", () => {
 		const document = createInitialDocument()
 		const first = document.objects[0]!
