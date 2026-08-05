@@ -88,7 +88,9 @@ design-tile-content.class {
 	}
 
 	> design-pages-tile button,
-	> design-layers-tile button,
+	> design-layers-tile > layer-breadcrumb > button,
+	> design-layers-tile > layer-tree > layer-tree-row > button,
+	> design-layers-tile > design-live-blends > button,
 	> design-canvas-tile > button,
 	> design-tools-tile > button,
 	> design-export-tile > button,
