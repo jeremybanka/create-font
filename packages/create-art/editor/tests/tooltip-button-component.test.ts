@@ -80,8 +80,6 @@ describe("shared tooltip button", () => {
 		expect(wrapper?.tabIndex).toBe(0)
 		expect(button?.disabled).toBe(true)
 		expect(button?.getAttribute("aria-hidden")).toBe("true")
-		expect(button?.title).toBe(
-			"Load a text service before using text tools.",
-		)
+		expect(button?.title).toBe("Load a text service before using text tools.")
 	})
 })
