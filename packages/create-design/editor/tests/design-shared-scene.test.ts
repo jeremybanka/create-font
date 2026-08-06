@@ -12,6 +12,7 @@ import {
 import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
+import { DESIGN_TOOLS } from "../src/design-tools.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
 import {
 	groupDesignSelection,
@@ -3354,6 +3355,70 @@ describe("create-design shared vector scene", () => {
 		expect(document.querySelector("design-tools-tile")).not.toBeNull()
 		expect(document.querySelector("design-object-tile")).not.toBeNull()
 		expect(document.querySelector("design-appearance-tile")).not.toBeNull()
+	})
+
+	it("presents an accessible icon-only Tools palette with distinct A and B shortcuts", async () => {
+		mountDesign()
+		const toolbar = document.querySelector("design-tools-tile")
+		if (toolbar === null) throw new Error("Tools toolbar was not found.")
+		expect(toolbar.getAttribute("role")).toBe("toolbar")
+		expect(toolbar.getAttribute("aria-label")).toBe("Tools")
+		const buttons = [...toolbar.querySelectorAll<HTMLButtonElement>("button")]
+		expect(buttons).toHaveLength(Object.keys(DESIGN_TOOLS).length)
+		for (const button of buttons) {
+			expect(button.hasAttribute("aria-label")).toBe(true)
+			expect(button.hasAttribute("title")).toBe(button.disabled)
+			expect(button.children).toHaveLength(1)
+			expect(button.firstElementChild?.tagName).toBe("svg")
+		}
+		const direct = toolbar.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const artboard = toolbar.querySelector<HTMLButtonElement>(
+			'button[aria-label="Artboard"]',
+		)
+		if (direct === null || artboard === null)
+			throw new Error("A/B tool controls were not found.")
+		expect(direct.getAttribute("aria-keyshortcuts")).toBe("A")
+		expect(artboard.getAttribute("aria-keyshortcuts")).toBe("B")
+
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }))
+			await Promise.resolve()
+		})
+		expect(direct.getAttribute("aria-pressed")).toBe("true")
+		expect(artboard.getAttribute("aria-pressed")).toBe("false")
+
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "b" }))
+			await Promise.resolve()
+		})
+		expect(direct.getAttribute("aria-pressed")).toBe("false")
+		expect(artboard.getAttribute("aria-pressed")).toBe("true")
+
+		const modified = new KeyboardEvent("keydown", {
+			cancelable: true,
+			ctrlKey: true,
+			key: "b",
+		})
+		await act(async () => {
+			window.dispatchEvent(modified)
+			await Promise.resolve()
+		})
+		expect(modified.defaultPrevented).toBe(false)
+		expect(artboard.getAttribute("aria-pressed")).toBe("true")
+
+		const title = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title field was not found.")
+		await act(async () => {
+			title.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "a" }),
+			)
+			await Promise.resolve()
+		})
+		expect(artboard.getAttribute("aria-pressed")).toBe("true")
 	})
 
 	it("navigates and edits the ordered artboard collection accessibly", async () => {

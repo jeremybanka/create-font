@@ -95,7 +95,6 @@ design-tile-content.class {
 	> design-layers-tile > layer-management > layer-actions > button,
 	> design-layers-tile > design-live-blends > button,
 	> design-canvas-tile > button,
-	> design-tools-tile > button,
 	> design-export-tile > button,
 	> design-appearance-tile > swatch-list > button {
 		border: 1px solid var(--line);
@@ -700,25 +699,46 @@ design-tile-content.class {
 	}
 
 	> design-tools-tile {
-		grid-template-columns: 1fr 1fr;
-		grid-auto-rows: min-content;
+		display: flex;
+		align-content: flex-start;
+		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 4px;
 
-		> button {
-			display: grid;
-			grid-template-columns: auto minmax(0, 1fr) auto;
+		/* @lasertag-disable [selector-crosses-ownership-boundary] TooltipButton intentionally exposes caller-owned button presentation */
+		> tooltip-button > button {
+			display: inline-flex;
 			align-items: center;
-			gap: 6px;
-			padding: 7px;
-			text-align: left;
+			justify-content: center;
+			width: 28px;
+			height: 28px;
+			padding: 0;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: var(--paper);
+			color: var(--ink);
+			cursor: pointer;
 
-			> svg {
-				width: 14px;
-				height: 14px;
-				color: var(--accent);
+			&:hover,
+			&[aria-pressed="true"] {
+				border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+				background: var(--selected);
 			}
 
-			> kbd {
-				color: var(--ink-faint);
+			&:focus-visible {
+				outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+				outline-offset: 1px;
+			}
+
+			&:disabled {
+				opacity: 0.45;
+				cursor: not-allowed;
+			}
+
+			> svg {
+				width: 15px;
+				height: 15px;
+				color: var(--accent);
 			}
 		}
 	}

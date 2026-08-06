@@ -283,8 +283,7 @@ const registrations = [
 		kind: "tools",
 		name: "Tools",
 		description: "Choose a vector drawing or transformation tool.",
-		defaultFill: true,
-		defaultPlacement: { column: 3, fill: true },
+		defaultPlacement: { column: 3 },
 		render: ({ context }) =>
 			createElement(DesignTileContent, { context, kind: "tools" }),
 	},
@@ -355,7 +354,9 @@ export const LEGACY_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v3"
 export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v4"
-export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v5"
+export const RECENT_DESIGN_TILING_STORAGE_KEY =
+	"create-design:tiling-workspace:v5"
+export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v6"
 
 function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
 	const kinds = new Set(
@@ -389,6 +390,18 @@ function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
 	}
 }
 
+function removeToolsFill(layout: TilingLayout): TilingLayout {
+	return {
+		...layout,
+		columns: layout.columns.map((column) => ({
+			...column,
+			tiles: column.tiles.map((tile) =>
+				tile.kind === "tools" && tile.fill ? { ...tile, fill: false } : tile,
+			),
+		})),
+	}
+}
+
 /**
  * Preserve customized layouts while splitting controls out of a visible Object
  * tile. Workspaces that deliberately removed Object keep the new inspectors in
@@ -401,6 +414,7 @@ export function migrateDesignTilingStorage(
 		const destination = `${DESIGN_TILING_STORAGE_KEY}:${suffix}`
 		if (storage.getItem(destination) !== null) continue
 		const legacy =
+			storage.getItem(`${RECENT_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${PREVIOUS_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${OLDEST_DESIGN_TILING_STORAGE_KEY}:${suffix}`)
@@ -408,7 +422,9 @@ export function migrateDesignTilingStorage(
 		if (layout !== null)
 			storage.setItem(
 				destination,
-				serializeTilingLayout(splitObjectInspectorTiles(layout)),
+				serializeTilingLayout(
+					removeToolsFill(splitObjectInspectorTiles(layout)),
+				),
 			)
 	}
 }
