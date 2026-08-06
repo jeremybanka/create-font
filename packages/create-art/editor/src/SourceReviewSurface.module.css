@@ -7,7 +7,6 @@ source-review-surface.class {
 	color: var(--ink);
 
 	> comparison-controls > label > input,
-	> comparison-controls > button,
 	> ul > li > button,
 	> button,
 	> dialog > form > commit-dialog-heading > button,
@@ -19,7 +18,6 @@ source-review-surface.class {
 	}
 
 	> comparison-controls > label > input:focus-visible,
-	> comparison-controls > button:focus-visible,
 	> ul > li > button:focus-visible,
 	> button:focus-visible,
 	> dialog > form > commit-dialog-heading > button:focus-visible,
@@ -61,21 +59,9 @@ source-review-surface.class {
 			color: var(--ink);
 		}
 
-		> button {
+		> tile-button > button[data-source-review-compare] {
 			grid-column: 1 / -1;
 			justify-self: end;
-			padding: 6px 10px;
-			border: 0;
-			border-radius: 6px;
-			background: var(--ink);
-			font-weight: 680;
-			color: var(--ink-inverse);
-			cursor: pointer;
-
-			&:disabled {
-				opacity: 0.4;
-				cursor: default;
-			}
 		}
 	}
 
