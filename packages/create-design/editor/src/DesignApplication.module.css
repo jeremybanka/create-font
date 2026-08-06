@@ -17,9 +17,7 @@
 	--design-canvas-hud-surface: #171815;
 	--design-canvas-hud-line: #272824;
 	--design-canvas-hud-ink: #8e8c85;
-	--design-canvas-artboard-outline: #8e8c85;
-	--design-canvas-artboard-shadow: #000;
-	--design-canvas-artboard-shadow-opacity: 0.36;
+	--design-canvas-artboard-label: #aaa79f;
 	--design-canvas-guide: #36a8e0;
 	--design-canvas-marquee: #8b8b8b;
 	--design-canvas-selection: #e17352;
@@ -631,9 +629,7 @@ design-application.class {
 		--design-canvas-hud-surface: #e8e6df;
 		--design-canvas-hud-line: #c5c1b7;
 		--design-canvas-hud-ink: #69665f;
-		--design-canvas-artboard-outline: #706d65;
-		--design-canvas-artboard-shadow: #3d3b36;
-		--design-canvas-artboard-shadow-opacity: 0.2;
+		--design-canvas-artboard-label: #69665f;
 		--design-canvas-guide: #0577aa;
 		--design-canvas-marquee: #676767;
 		--design-canvas-selection: #ce5d3d;
@@ -667,8 +663,7 @@ design-application.class {
 		--design-canvas-hud-surface: Canvas;
 		--design-canvas-hud-line: CanvasText;
 		--design-canvas-hud-ink: CanvasText;
-		--design-canvas-artboard-outline: CanvasText;
-		--design-canvas-artboard-shadow: CanvasText;
+		--design-canvas-artboard-label: CanvasText;
 		--design-canvas-guide: LinkText;
 		--design-canvas-marquee: CanvasText;
 		--design-canvas-selection: Highlight;

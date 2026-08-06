@@ -436,6 +436,11 @@ export function serializeSvg(projection: SvgDocumentProjection): string {
 		`  <title>${escapeXml(projection.title)}</title>`,
 		`  <defs><clipPath id="${clipId}"><rect x="${number(artboard.x)}" y="${number(artboard.y)}" width="${number(artboard.width)}" height="${number(artboard.height)}"/></clipPath></defs>`,
 		`  <g clip-path="url(#${clipId})">`,
+		...(artboard.backgroundColor === undefined
+			? []
+			: [
+					`    <rect data-create-design-artboard-background="true" x="${number(artboard.x)}" y="${number(artboard.y)}" width="${number(artboard.width)}" height="${number(artboard.height)}" fill="${artboard.backgroundColor}"/>`,
+				]),
 		...children,
 		"  </g>",
 		"</svg>",

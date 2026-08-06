@@ -28,6 +28,25 @@ const withFirstObjectGeometry = (
 }
 
 describe("normalized design document state", () => {
+	it("round-trips optional artboard appearance through normalized state", () => {
+		const initial = createInitialDocument()
+		const appearance = {
+			...initial,
+			artboards: initial.artboards.map((artboard) => ({
+				...artboard,
+				backgroundColor: "#abcdef",
+				borderColor: "#123456",
+			})),
+		}
+		const state = createState(appearance)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(
+			appearance,
+		)
+
+		state.actions.commitDocument(initial)
+		expect(state.silo.getState(state.states.documentSelector)).toEqual(initial)
+	})
+
 	it("reads a fresh document projection through composed selector-family members in a transaction", () => {
 		const initial = createInitialDocument()
 		const state = createState(initial)

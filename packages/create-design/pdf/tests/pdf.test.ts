@@ -17,6 +17,23 @@ import { parsePdfFixture } from "./pdf-parser-fixture.ts"
 import { preflightPdfExport } from "../src/pdf-preflight.ts"
 
 describe("PDF export", () => {
+	it("paints authored artboard background before artwork without editor chrome", () => {
+		const initial = createInitialDocument()
+		const artboard = {
+			...initial.artboards[0]!,
+			backgroundColor: "#804020",
+			borderColor: "#123456",
+		}
+		const content = pdfContentStream(
+			{ ...initial, artboards: [artboard], objects: [] },
+			artboard,
+		)
+		expect(content).toContain("0.502 0.251 0.1255 rg")
+		expect(content).toContain("0 0 612 792 re f")
+		expect(content).not.toContain("#123456")
+		expect(pdfContentStream(initial)).not.toContain("0 0 612 792 re f")
+	})
+
 	it("embeds baseline JPEG pixels under explicit vector clipping", () => {
 		const jpegBase64 =
 			"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/Aaf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/Aaf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Aqf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z"

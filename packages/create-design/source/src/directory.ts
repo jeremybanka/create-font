@@ -7,6 +7,7 @@ import { z } from "zod/v4"
 import {
 	appearanceSchema,
 	artboardIdSchema,
+	designArtboardColorSchema,
 	artboardInsetsSchema,
 	compatibleGeometrySchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
@@ -109,6 +110,8 @@ const currentArtboardFileSchema = z
 		y: finiteNumberSchema,
 		width: positiveNumberSchema,
 		height: positiveNumberSchema,
+		backgroundColor: designArtboardColorSchema.optional(),
+		borderColor: designArtboardColorSchema.optional(),
 		bleed: artboardInsetsSchema.optional(),
 		safeArea: artboardInsetsSchema.optional(),
 	})
@@ -1388,6 +1391,12 @@ export function assembleDesignDocument(
 			y: artboard.y,
 			width: artboard.width,
 			height: artboard.height,
+			...(artboard.backgroundColor === undefined
+				? {}
+				: { backgroundColor: artboard.backgroundColor }),
+			...(artboard.borderColor === undefined
+				? {}
+				: { borderColor: artboard.borderColor }),
 			...(artboard.bleed === undefined ? {} : { bleed: artboard.bleed }),
 			...(artboard.safeArea === undefined
 				? {}

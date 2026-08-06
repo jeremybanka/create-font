@@ -394,6 +394,9 @@ export const artboardInsetsSchema = z
 		left: finiteNumberSchema.nonnegative(),
 	})
 	.strict()
+export const designArtboardColorSchema = z
+	.string()
+	.regex(/^#[0-9a-f]{6}$/iu, "Expected a six-digit hexadecimal color.")
 export const artboardSchema = z
 	.object({
 		id: artboardIdSchema,
@@ -402,6 +405,8 @@ export const artboardSchema = z
 		y: finiteNumberSchema,
 		width: positiveNumberSchema,
 		height: positiveNumberSchema,
+		backgroundColor: designArtboardColorSchema.optional(),
+		borderColor: designArtboardColorSchema.optional(),
 		bleed: artboardInsetsSchema.optional(),
 		safeArea: artboardInsetsSchema.optional(),
 	})

@@ -4,6 +4,7 @@ import {
 	projectDesignOutput,
 } from "@create-design/model"
 import type { DesignArtboard, DesignDocument } from "@create-design/source"
+import { designHexColorChannels } from "@create-design/source"
 
 import { referencePngRasterBackend } from "./raster.ts"
 import type {
@@ -248,13 +249,17 @@ export async function exportPng(
 	const backend = options.backend ?? referencePngRasterBackend
 	const projected = projectedPngDocument(document).document
 	const scale = request.scale ?? 1
-	const background = request.background ?? TRANSPARENT_PNG_BACKGROUND
+	const backgroundFor = (artboard: DesignArtboard): PngBackground =>
+		request.background ??
+		(artboard.backgroundColor === undefined
+			? TRANSPARENT_PNG_BACKGROUND
+			: { kind: "color", ...designHexColorChannels(artboard.backgroundColor) })
 	const samples = request.samples ?? 4
 	const artifacts: PngArtifact[] = []
 	for (const [index, artboard] of preflight.artboards.entries()) {
 		const dimensions = pngDimensions(artboard, scale)
 		const bytes = await backend.rasterize(
-			{ artboard, background, ...dimensions, samples },
+			{ artboard, background: backgroundFor(artboard), ...dimensions, samples },
 			{
 				document: projected,
 				signal: options.signal,

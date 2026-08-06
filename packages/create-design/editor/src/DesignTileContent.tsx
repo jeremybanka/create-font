@@ -26,7 +26,10 @@ import {
 	TileTextField,
 } from "@create-art/editor"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { DESIGN_LAYER_UI_COLORS } from "@create-design/source"
+import {
+	DEFAULT_DESIGN_ARTBOARD_BORDER_COLOR,
+	DESIGN_LAYER_UI_COLORS,
+} from "@create-design/source"
 import type {
 	AppearancePaintTarget,
 	AppearancePaintValue,
@@ -194,8 +197,14 @@ function DesignPagesTile({ context }: { readonly context: DesignTileContext }) {
 						}}
 					>
 						<page-thumbnail
+							data-transparent={candidate.backgroundColor === undefined}
 							style={{
 								aspectRatio: `${candidate.width} / ${candidate.height}`,
+								borderColor:
+									candidate.borderColor ?? DEFAULT_DESIGN_ARTBOARD_BORDER_COLOR,
+								...(candidate.backgroundColor === undefined
+									? {}
+									: { background: candidate.backgroundColor }),
 							}}
 						/>
 						<span>
@@ -208,6 +217,52 @@ function DesignPagesTile({ context }: { readonly context: DesignTileContext }) {
 				))}
 			</artboard-list>
 			<ArtboardNameInput key={artboard.id + artboard.name} context={context} />
+			<artboard-appearance-fields>
+				<label data-field>
+					<span>Background</span>
+					<input
+						type="color"
+						aria-label="Artboard background color"
+						value={artboard.backgroundColor ?? "#ffffff"}
+						onInput={(event) =>
+							context.setArtboardProperty({
+								backgroundColor: event.currentTarget.value,
+							})
+						}
+					/>
+				</label>
+				<button
+					type="button"
+					disabled={artboard.backgroundColor === undefined}
+					onClick={() =>
+						context.setArtboardProperty({ backgroundColor: undefined })
+					}
+				>
+					Transparent
+				</button>
+				<label data-field>
+					<span>Border</span>
+					<input
+						type="color"
+						aria-label="Artboard border color"
+						value={artboard.borderColor ?? DEFAULT_DESIGN_ARTBOARD_BORDER_COLOR}
+						onInput={(event) =>
+							context.setArtboardProperty({
+								borderColor: event.currentTarget.value,
+							})
+						}
+					/>
+				</label>
+				<button
+					type="button"
+					disabled={artboard.borderColor === undefined}
+					onClick={() =>
+						context.setArtboardProperty({ borderColor: undefined })
+					}
+				>
+					Reset border
+				</button>
+			</artboard-appearance-fields>
 			<label data-field>
 				<span>Preset</span>
 				<select
@@ -1233,7 +1288,7 @@ function DesignExportTile({
 	const [svgPreviewEnabled, setSvgPreviewEnabled] = useState(false)
 	const [pngPreviewEnabled, setPngPreviewEnabled] = useState(false)
 	const [pngScale, setPngScale] = useState(1)
-	const [pngBackground, setPngBackground] = useState("transparent")
+	const [pngBackground, setPngBackground] = useState("artboard")
 	const [svgImportDiagnostics, setSvgImportDiagnostics] = useState<
 		readonly SvgDiagnostic[]
 	>([])
@@ -1364,15 +1419,19 @@ function DesignExportTile({
 		() => ({
 			scope: target.scope,
 			scale: pngScale,
-			background:
-				pngBackground === "transparent"
-					? { kind: "transparent" }
-					: {
-							kind: "color",
-							r: Number.parseInt(pngBackground.slice(1, 3), 16),
-							g: Number.parseInt(pngBackground.slice(3, 5), 16),
-							b: Number.parseInt(pngBackground.slice(5, 7), 16),
-						},
+			...(pngBackground === "artboard"
+				? {}
+				: {
+						background:
+							pngBackground === "transparent"
+								? ({ kind: "transparent" } as const)
+								: {
+										kind: "color",
+										r: Number.parseInt(pngBackground.slice(1, 3), 16),
+										g: Number.parseInt(pngBackground.slice(3, 5), 16),
+										b: Number.parseInt(pngBackground.slice(5, 7), 16),
+									},
+					}),
 		}),
 		[pngBackground, pngScale, target.scope],
 	)
@@ -1644,6 +1703,7 @@ function DesignExportTile({
 					value={pngBackground}
 					onChange={(event) => setPngBackground(event.currentTarget.value)}
 				>
+					<option value="artboard">Artboard setting</option>
 					<option value="transparent">Transparent</option>
 					<option value="#ffffff">White</option>
 					<option value="#000000">Black</option>

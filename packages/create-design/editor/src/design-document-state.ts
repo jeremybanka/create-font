@@ -168,6 +168,14 @@ export function createDesignDocumentState(
 		key: "artboardRect",
 		default: null,
 	})
+	const artboardBackgroundColorAtoms = silo.atomFamily<
+		string | undefined,
+		string
+	>({ key: "artboardBackgroundColor", default: undefined })
+	const artboardBorderColorAtoms = silo.atomFamily<string | undefined, string>({
+		key: "artboardBorderColor",
+		default: undefined,
+	})
 	const artboardBleedAtoms = silo.atomFamily<
 		DesignArtboardInsets | undefined,
 		string
@@ -350,10 +358,14 @@ export function createDesignDocumentState(
 				if (name === null || rect === null) return null
 				const bleed = get(artboardBleedAtoms, id)
 				const safeArea = get(artboardSafeAreaAtoms, id)
+				const backgroundColor = get(artboardBackgroundColorAtoms, id)
+				const borderColor = get(artboardBorderColorAtoms, id)
 				return {
 					id,
 					name,
 					...rect,
+					...(backgroundColor === undefined ? {} : { backgroundColor }),
+					...(borderColor === undefined ? {} : { borderColor }),
 					...(bleed === undefined ? {} : { bleed }),
 					...(safeArea === undefined ? {} : { safeArea }),
 				}
@@ -672,6 +684,20 @@ export function createDesignDocumentState(
 			}
 			if (!sameArtboardRect(tools.get(artboardRectAtoms, artboard.id), rect))
 				tools.set(artboardRectAtoms, artboard.id, rect)
+			if (
+				tools.get(artboardBackgroundColorAtoms, artboard.id) !==
+				artboard.backgroundColor
+			)
+				tools.set(
+					artboardBackgroundColorAtoms,
+					artboard.id,
+					artboard.backgroundColor,
+				)
+			if (
+				tools.get(artboardBorderColorAtoms, artboard.id) !==
+				artboard.borderColor
+			)
+				tools.set(artboardBorderColorAtoms, artboard.id, artboard.borderColor)
 			if (tools.get(artboardBleedAtoms, artboard.id) !== artboard.bleed)
 				tools.set(artboardBleedAtoms, artboard.id, artboard.bleed)
 			if (tools.get(artboardSafeAreaAtoms, artboard.id) !== artboard.safeArea)
@@ -682,6 +708,8 @@ export function createDesignDocumentState(
 			if (nextArtboardIds.has(id)) continue
 			tools.dispose(artboardNameAtoms, id)
 			tools.dispose(artboardRectAtoms, id)
+			tools.dispose(artboardBackgroundColorAtoms, id)
+			tools.dispose(artboardBorderColorAtoms, id)
 			tools.dispose(artboardBleedAtoms, id)
 			tools.dispose(artboardSafeAreaAtoms, id)
 		}
@@ -803,6 +831,8 @@ export function createDesignDocumentState(
 		artboardIdsAtom,
 		artboardNameAtoms,
 		artboardRectAtoms,
+		artboardBackgroundColorAtoms,
+		artboardBorderColorAtoms,
 		artboardBleedAtoms,
 		artboardSafeAreaAtoms,
 		swatchIdsAtom,
@@ -848,6 +878,8 @@ export function createDesignDocumentState(
 			artboardIdsAtom,
 			artboardNameAtoms,
 			artboardRectAtoms,
+			artboardBackgroundColorAtoms,
+			artboardBorderColorAtoms,
 			artboardBleedAtoms,
 			artboardSafeAreaAtoms,
 			artboardSelectors,

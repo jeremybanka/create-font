@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react"
 
 export interface DesignCanvasTheme {
-	readonly artboardOutline: string
-	readonly artboardShadow: string
-	readonly artboardShadowOpacity: number
+	readonly artboardLabel: string
 	readonly guide: string
 	readonly handleFill: string
 	readonly marquee: string
@@ -11,9 +9,7 @@ export interface DesignCanvasTheme {
 }
 
 const fallbackTheme: DesignCanvasTheme = Object.freeze({
-	artboardOutline: "#8e8c85",
-	artboardShadow: "#000",
-	artboardShadowOpacity: 0.36,
+	artboardLabel: "#aaa79f",
 	guide: "#36a8e0",
 	handleFill: "#fff",
 	marquee: "#737373",
@@ -27,24 +23,11 @@ export function designCanvasThemeFromStyle(
 ): DesignCanvasTheme {
 	const read = (name: string, fallback: string): string =>
 		styles.getPropertyValue(name).trim() || fallback
-	const opacity = Number(
-		read(
-			"--design-canvas-artboard-shadow-opacity",
-			String(fallbackTheme.artboardShadowOpacity),
-		),
-	)
 	return Object.freeze({
-		artboardOutline: read(
-			"--design-canvas-artboard-outline",
-			fallbackTheme.artboardOutline,
+		artboardLabel: read(
+			"--design-canvas-artboard-label",
+			fallbackTheme.artboardLabel,
 		),
-		artboardShadow: read(
-			"--design-canvas-artboard-shadow",
-			fallbackTheme.artboardShadow,
-		),
-		artboardShadowOpacity: Number.isFinite(opacity)
-			? opacity
-			: fallbackTheme.artboardShadowOpacity,
 		guide: read("--design-canvas-guide", fallbackTheme.guide),
 		handleFill: read("--design-canvas-handle-fill", fallbackTheme.handleFill),
 		marquee: read("--design-canvas-marquee", fallbackTheme.marquee),

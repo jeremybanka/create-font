@@ -185,6 +185,27 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("round-trips optional artboard appearance in only its source unit", () => {
+		const initial = fixture()
+		const document: DesignDocument = {
+			...initial,
+			artboards: initial.artboards.map((artboard) => ({
+				...artboard,
+				backgroundColor: "#fefefe",
+				borderColor: "#123456",
+			})),
+		}
+		const before = split(initial)
+		const after = split(document)
+
+		expect(changedPaths(before, after)).toEqual(["artboards/page.json"])
+		expect(after["artboards/page.json"]).toMatchObject({
+			backgroundColor: "#fefefe",
+			borderColor: "#123456",
+		})
+		expect(assemble(after)).toEqual(document)
+	})
+
 	it("round-trips placed-image identity and explicit mask hierarchy", () => {
 		const initial = fixture()
 		const clip = initial.objects[0]!

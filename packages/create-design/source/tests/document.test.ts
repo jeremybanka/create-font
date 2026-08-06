@@ -7,6 +7,7 @@ import {
 	validateDesignDocument,
 } from "../src/document.ts"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "../src/types.ts"
+import { createInitialDocument } from "../src/initial-document.ts"
 
 const legacyFixture = () => ({
 	format: "create-design.document" as const,
@@ -63,6 +64,25 @@ const legacyFixture = () => ({
 })
 
 describe("editable text source", () => {
+	it("accepts optional solid artboard appearance and rejects invalid colors", () => {
+		const initial = createInitialDocument()
+		const document = {
+			...initial,
+			artboards: initial.artboards.map((artboard) => ({
+				...artboard,
+				backgroundColor: "#abcdef",
+				borderColor: "#767676",
+			})),
+		}
+		expect(validateDesignDocument(document).ok).toBe(true)
+		expect(
+			validateDesignDocument({
+				...document,
+				artboards: [{ ...document.artboards[0]!, backgroundColor: "red" }],
+			}).ok,
+		).toBe(false)
+	})
+
 	it("round-trips point and area text with durable font references", () => {
 		const base = {
 			format: "create-design.document" as const,

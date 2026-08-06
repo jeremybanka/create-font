@@ -78,7 +78,9 @@ import {
 	duplicateDesignArtboard,
 	reorderDesignArtboard,
 	updateDesignArtboard,
+	type DesignArtboardProperties,
 } from "./artboard-operations.ts"
+import { designArtboardCanvasChrome } from "./artboard-canvas-appearance.ts"
 import {
 	duplicateDesignObjects,
 	readDesignClipboard,
@@ -1990,7 +1992,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setStatus(`Deleted ${activeArtboard.name}; global artwork was preserved.`)
 	}, [activeArtboard, commit, document])
 	const setArtboardProperty = useCallback(
-		(property: Partial<Omit<DesignArtboard, "id">>): void => {
+		(property: DesignArtboardProperties): void => {
 			try {
 				commit(
 					updateDesignArtboard(document, activeArtboard.id, property, {
@@ -6662,35 +6664,51 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 									scaleX={worldScale}
 									scaleY={worldScale}
 								>
-									{canvasDocument.artboards.map((artboard) => (
-										<Rect
-											key={artboard.id}
-											name={`design-paper ${artboard.id}`}
-											x={artboard.x}
-											y={artboard.y}
-											width={artboard.width}
-											height={artboard.height}
-											fill="#fff"
-											shadowColor={canvasTheme.artboardShadow}
-											shadowBlur={24 / worldScale}
-											shadowOpacity={canvasTheme.artboardShadowOpacity}
-											shadowOffsetY={9 / worldScale}
-											stroke={
-												artboard.id === canvasActiveArtboardId
-													? canvasTheme.selection
-													: canvasTheme.artboardOutline
-											}
-											strokeWidth={
-												(artboard.id === canvasActiveArtboardId ? 2 : 1) /
-												worldScale
-											}
-											dash={
-												artboard.id === canvasActiveArtboardId
-													? []
-													: [4 / worldScale, 4 / worldScale]
-											}
-										/>
-									))}
+									{canvasDocument.artboards.map((artboard) => {
+										const chrome = designArtboardCanvasChrome(
+											artboard,
+											worldScale,
+											artboard.id === canvasActiveArtboardId,
+										)
+										return (
+											<Group key={artboard.id}>
+												<Rect
+													name={`design-paper ${artboard.id}`}
+													x={artboard.x}
+													y={artboard.y}
+													width={artboard.width}
+													height={artboard.height}
+													{...(chrome.background === undefined
+														? {}
+														: { fill: chrome.background })}
+												/>
+												<Rect {...chrome.border} listening={false} />
+												{chrome.selection === undefined ? null : (
+													<Rect
+														{...chrome.selection}
+														stroke={canvasTheme.selection}
+														listening={false}
+													/>
+												)}
+												<Text
+													{...chrome.label}
+													fill={
+														artboard.id === canvasActiveArtboardId
+															? canvasTheme.selection
+															: canvasTheme.artboardLabel
+													}
+													fontStyle={
+														artboard.id === canvasActiveArtboardId
+															? "bold"
+															: "normal"
+													}
+													ellipsis
+													wrap="none"
+													listening={false}
+												/>
+											</Group>
+										)
+									})}
 									{tool !== "artboard" || canvasActiveArtboard === undefined
 										? null
 										: (

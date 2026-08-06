@@ -9,6 +9,7 @@ import {
 import { createElement } from "react"
 
 import { DesignTileContent } from "./DesignTileContent.tsx"
+import type { DesignArtboardProperties } from "./artboard-operations.ts"
 import type {
 	AppearancePaintTarget,
 	DesignAppearanceSummary,
@@ -69,9 +70,7 @@ export interface DesignTileContext {
 	readonly fitAllArtboards: () => void
 	readonly moveArtworkWithArtboard: boolean
 	readonly reorderArtboard: (direction: -1 | 1) => void
-	readonly setArtboardProperty: (
-		property: Partial<Omit<DesignArtboard, "id">>,
-	) => void
+	readonly setArtboardProperty: (property: DesignArtboardProperties) => void
 	readonly setMoveArtworkWithArtboard: (enabled: boolean) => void
 	readonly setDocumentTitle: (title: string) => void
 	readonly addSwatch: () => void

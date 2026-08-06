@@ -1,4 +1,9 @@
 export {
+	DEFAULT_DESIGN_ARTBOARD_BORDER_COLOR,
+	designArtboardBorderColor,
+	designHexColorChannels,
+} from "./artboard-appearance.ts"
+export {
 	CREATE_DESIGN_SOURCE_FORMAT,
 	CREATE_DESIGN_SOURCE_VERSION,
 	LEGACY_CREATE_DESIGN_SOURCE_VERSION,
@@ -74,6 +79,7 @@ export {
 	artboardIdSchema,
 	artboardInsetsSchema,
 	artboardSchema,
+	designArtboardColorSchema,
 	fontReferenceSchema,
 	textGeometrySchema,
 	textTypographySchema,

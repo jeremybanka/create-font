@@ -23,6 +23,13 @@ export interface DesignArtboardMutation {
 	readonly activeArtboardId: string
 }
 
+export type DesignArtboardProperties = Partial<
+	Omit<DesignArtboard, "id" | "backgroundColor" | "borderColor">
+> & {
+	readonly backgroundColor?: string | undefined
+	readonly borderColor?: string | undefined
+}
+
 const ARTBOARD_GAP = 48
 
 function validBounds(bounds: DesignArtboardBounds): boolean {
@@ -142,12 +149,18 @@ export function duplicateDesignArtboard(
 export function updateDesignArtboard(
 	document: DesignDocument,
 	artboardId: string,
-	properties: Partial<Omit<DesignArtboard, "id">>,
+	properties: DesignArtboardProperties,
 	options: Readonly<{ moveIntersectingArtwork?: boolean }> = {},
 ): DesignDocument {
 	const source = document.artboards.find(({ id }) => id === artboardId)
 	if (source === undefined) throw new Error(`Unknown artboard ${artboardId}.`)
-	const updated = { ...source, ...properties }
+	const candidate = { ...source, ...properties }
+	const { backgroundColor, borderColor, ...rest } = candidate
+	const updated: DesignArtboard = {
+		...rest,
+		...(backgroundColor === undefined ? {} : { backgroundColor }),
+		...(borderColor === undefined ? {} : { borderColor }),
+	}
 	if (!validBounds(updated)) throw new Error("Artboard bounds must be valid.")
 	const delta = { x: updated.x - source.x, y: updated.y - source.y }
 	const movingArtwork =
