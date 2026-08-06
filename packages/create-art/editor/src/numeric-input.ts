@@ -235,17 +235,18 @@ export function stepNumericInput(
 		numberToRational(parsed),
 		numberToRational(direction * multiplier * arrowStep),
 	)
+	const quantized = arrowStep === 1 ? roundRationalToInteger(stepped) : stepped
 	if (
 		Number.isFinite(min) &&
-		compareRational(stepped, numberToRational(min)) < 0
+		compareRational(quantized, numberToRational(min)) < 0
 	)
 		return min
 	if (
 		Number.isFinite(max) &&
-		compareRational(stepped, numberToRational(max)) > 0
+		compareRational(quantized, numberToRational(max)) > 0
 	)
 		return max
-	const result = finalizeRational(stepped)
+	const result = finalizeRational(quantized)
 	return result.ok ? result.value : parsed
 }
 
@@ -330,6 +331,21 @@ function divideRoundToEven(numerator: bigint, denominator: bigint): bigint {
 	if (comparison > 0n || (comparison === 0n && quotient % 2n !== 0n))
 		quotient += 1n
 	return quotient
+}
+
+/** Matches Math.round's positive-infinity tie rule without losing precision. */
+function roundRationalToInteger(value: Rational): Rational {
+	const quotient = value.numerator / value.denominator
+	const remainder = value.numerator % value.denominator
+	const doubledRemainder = (remainder < 0n ? -remainder : remainder) * 2n
+	if (doubledRemainder < value.denominator)
+		return { numerator: quotient, denominator: 1n }
+	if (remainder > 0n || doubledRemainder > value.denominator)
+		return {
+			numerator: quotient + (remainder > 0n ? 1n : -1n),
+			denominator: 1n,
+		}
+	return { numerator: quotient, denominator: 1n }
 }
 
 function decimalToRational(text: string): Rational {

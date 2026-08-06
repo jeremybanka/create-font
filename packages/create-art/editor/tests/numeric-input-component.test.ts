@@ -188,7 +188,7 @@ describe("NumericInput", () => {
 		expect(onCommit).toHaveBeenLastCalledWith(110)
 	})
 
-	it("uses unified 1/10/100 stepping for a 0.001 field", () => {
+	it("quantizes repeated 1/10/100 stepping for a 0.001 field", () => {
 		const { input, onCommit } = mount({
 			value: 1.125,
 			max: 1_000,
@@ -197,17 +197,17 @@ describe("NumericInput", () => {
 		})
 		focus(input)
 		key(input, "ArrowUp")
-		expect(input.value).toBe("2.125")
-		expect(onCommit).toHaveBeenLastCalledWith(2.125)
+		expect(input.value).toBe("2")
+		expect(onCommit).toHaveBeenLastCalledWith(2)
 		key(input, "ArrowUp", { shiftKey: true })
-		expect(input.value).toBe("12.125")
-		expect(onCommit).toHaveBeenLastCalledWith(12.125)
+		expect(input.value).toBe("12")
+		expect(onCommit).toHaveBeenLastCalledWith(12)
 		key(input, "ArrowUp", { ctrlKey: true })
-		expect(input.value).toBe("112.125")
-		expect(onCommit).toHaveBeenLastCalledWith(112.125)
+		expect(input.value).toBe("112")
+		expect(onCommit).toHaveBeenLastCalledWith(112)
 	})
 
-	it("uses unified 1/10/100 stepping for a 0.1 field", () => {
+	it("quantizes descending 1/10/100 stepping for a 0.1 field", () => {
 		const { input, onCommit } = mount({
 			value: 1.1,
 			min: -1_000,
@@ -217,14 +217,43 @@ describe("NumericInput", () => {
 		})
 		focus(input)
 		key(input, "ArrowDown")
-		expect(input.value).toBe("0.1")
-		expect(onCommit).toHaveBeenLastCalledWith(0.1)
+		expect(input.value).toBe("0")
+		expect(onCommit).toHaveBeenLastCalledWith(0)
 		key(input, "ArrowDown", { shiftKey: true })
-		expect(input.value).toBe("-9.9")
-		expect(onCommit).toHaveBeenLastCalledWith(-9.9)
+		expect(input.value).toBe("-10")
+		expect(onCommit).toHaveBeenLastCalledWith(-10)
 		key(input, "ArrowDown", { ctrlKey: true })
-		expect(input.value).toBe("-109.9")
-		expect(onCommit).toHaveBeenLastCalledWith(-109.9)
+		expect(input.value).toBe("-110")
+		expect(onCommit).toHaveBeenLastCalledWith(-110)
+	})
+
+	it("does not emit a commit when a quantized step stays at its bound", () => {
+		const { input, onCommit } = mount({
+			value: 12.5,
+			min: -100,
+			max: 12.5,
+			step: 0.1,
+			arrowStep: 1,
+		})
+		focus(input)
+		key(input, "ArrowUp", { shiftKey: true })
+		expect(input.value).toBe("12.5")
+		expect(onCommit).not.toHaveBeenCalled()
+	})
+
+	it("restores a fractional delta value after a quantized Shift commit", () => {
+		const { input, onCommit } = mount({
+			value: -1.125,
+			min: -100,
+			max: 100,
+			step: 0.001,
+			arrowStep: 1,
+			resetAfterCommit: true,
+		})
+		focus(input)
+		key(input, "ArrowDown", { repeat: true, shiftKey: true })
+		expect(onCommit).toHaveBeenLastCalledWith(-11)
+		expect(input.value).toBe("-1.125")
 	})
 
 	it("commits a correctly rounded repeating result at its bound", () => {

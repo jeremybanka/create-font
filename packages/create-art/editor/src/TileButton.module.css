@@ -49,7 +49,12 @@ tile-button.class {
 		&[data-tone="primary"] {
 			border-color: color-mix(in srgb, var(--accent) 75%, var(--line));
 			background: var(--accent);
-			color: white;
+			color: #161611;
+
+			&:hover:not(:disabled) {
+				border-color: color-mix(in srgb, var(--accent) 85%, var(--line));
+				background: color-mix(in srgb, var(--accent) 88%, white);
+			}
 		}
 
 		&[data-tone="danger"] {

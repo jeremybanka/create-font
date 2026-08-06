@@ -217,15 +217,40 @@ describe("numeric field contracts", () => {
 		expect(stepNumericInput("1 +", 5, -1, 100, -20, 20)).toBe(-20)
 	})
 
-	it("uses unified 1/10/100 stepping for decimal fields", () => {
+	it("quantizes 1/10/100 stepping to whole units", () => {
 		expect(
 			stepNumericInput("1.125", 1.125, 1, 1, -1_000, 1_000, 0.001, 1),
-		).toBe(2.125)
+		).toBe(2)
 		expect(
 			stepNumericInput("1.125", 1.125, 1, 10, -1_000, 1_000, 0.001, 1),
-		).toBe(11.125)
+		).toBe(11)
 		expect(stepNumericInput("1.1", 1.1, -1, 100, -1_000, 1_000, 0.1, 1)).toBe(
-			-98.9,
+			-99,
+		)
+	})
+
+	it("rounds negative and halfway steps with exact Math.round semantics", () => {
+		expect(stepNumericInput("-1.125", -1.125, -1, 1, -100, 100, 0.001, 1)).toBe(
+			-2,
+		)
+		expect(stepNumericInput("1.5", 1.5, 1, 1, -100, 100, 0.1, 1)).toBe(3)
+		expect(stepNumericInput("-1.5", -1.5, -1, 1, -100, 100, 0.1, 1)).toBe(-2)
+	})
+
+	it("quantizes expression drafts, falls back from invalid drafts, and clamps", () => {
+		expect(stepNumericInput("1 / 8", 9.9, 1, 1, -100, 100, "any", 1)).toBe(1)
+		expect(stepNumericInput("1 +", -1.125, 1, 10, -100, 100, 0.001, 1)).toBe(9)
+		expect(stepNumericInput("9.75", 9.75, 1, 10, -100, 12.5, 0.001, 1)).toBe(
+			12.5,
+		)
+		expect(stepNumericInput("-9.75", -9.75, -1, 10, -12.5, 100, 0.001, 1)).toBe(
+			-12.5,
+		)
+	})
+
+	it("preserves explicit fractional Arrow increments", () => {
+		expect(stepNumericInput("1.125", 1.125, 1, 1, -100, 100, 0.001, 0.25)).toBe(
+			1.375,
 		)
 	})
 })

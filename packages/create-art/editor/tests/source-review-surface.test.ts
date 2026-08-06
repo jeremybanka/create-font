@@ -96,6 +96,41 @@ function mount(options = controller()) {
 }
 
 describe("product-neutral source review", () => {
+	it("uses the primary shared button and trims comparison refs", () => {
+		const { host, options } = mount()
+		const inputs = host.querySelectorAll("comparison-controls input")
+		const compare = [...host.querySelectorAll("button")].find(
+			(button) => button.textContent === "Compare",
+		)
+		expect(compare?.closest("tile-button")).not.toBeNull()
+		expect(compare?.dataset.tone).toBe("primary")
+		expect(compare?.type).toBe("button")
+		expect(compare?.disabled).toBe(false)
+		act(() => {
+			const base = inputs[0] as HTMLInputElement
+			const target = inputs[1] as HTMLInputElement
+			base.value = "  feature/base  "
+			target.value = "   "
+			base.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			target.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		act(() => compare?.click())
+		expect(options.onCompare).toHaveBeenCalledExactlyOnceWith(
+			"feature/base",
+			undefined,
+		)
+	})
+
+	it("disables the shared Compare button while loading", () => {
+		const { host } = mount(controller({ loading: true }))
+		const compare = [...host.querySelectorAll("button")].find(
+			(button) => button.textContent === "Compare",
+		)
+		expect(compare?.closest("tile-button")).not.toBeNull()
+		expect(compare?.dataset.tone).toBe("primary")
+		expect(compare?.disabled).toBe(true)
+	})
+
 	it("accepts application kinds and delegates only reviewable rows", () => {
 		const { host, review } = mount()
 		expect(host.textContent).toContain("3 total")

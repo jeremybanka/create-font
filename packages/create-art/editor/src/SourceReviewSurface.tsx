@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import css from "./SourceReviewSurface.module.css"
+import { TileButton } from "./TileButton.tsx"
 import {
 	selectedSourceReviewPaths,
 	sourceReviewChangeKey,
@@ -107,8 +108,10 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 						onInput={(event) => setTargetRef(event.currentTarget.value)}
 					/>
 				</label>
-				<button
+				<TileButton
+					data-source-review-compare
 					type="button"
+					tone="primary"
 					disabled={controller === undefined || controller.loading}
 					onClick={() =>
 						void controller?.onCompare(
@@ -118,7 +121,7 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 					}
 				>
 					Compare
-				</button>
+				</TileButton>
 			</comparison-controls>
 			<comparison-status role="status" aria-live="polite">
 				{controller === undefined
