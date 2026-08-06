@@ -2,6 +2,7 @@ import type { DesignStackCommand } from "./design-hierarchy.ts"
 
 export interface DesignStackShortcutEvent {
 	readonly altKey: boolean
+	readonly code: string
 	readonly ctrlKey: boolean
 	readonly key: string
 	readonly metaKey: boolean
@@ -16,9 +17,9 @@ export function designStackShortcutCommand(
 	const platformMod = macLike ? event.metaKey : event.ctrlKey
 	const otherMod = macLike ? event.ctrlKey : event.metaKey
 	if (!platformMod || otherMod || event.altKey) return null
-	if (event.key === "]" || event.key === "}")
+	if (event.code === "BracketRight" || event.key === "]" || event.key === "}")
 		return event.shiftKey ? "front" : "forward"
-	if (event.key === "[" || event.key === "{")
+	if (event.code === "BracketLeft" || event.key === "[" || event.key === "{")
 		return event.shiftKey ? "back" : "backward"
 	return null
 }

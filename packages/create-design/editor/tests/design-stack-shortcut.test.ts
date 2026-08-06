@@ -10,6 +10,7 @@ function keyboard(
 ): DesignStackShortcutEvent {
 	return {
 		altKey: false,
+		code: "",
 		ctrlKey: false,
 		key: "]",
 		metaKey: false,
@@ -50,6 +51,31 @@ describe("design stacking shortcuts", () => {
 		expect(
 			designStackShortcutCommand(
 				keyboard({ key: "{", metaKey: true, shiftKey: true }),
+				true,
+			),
+		).toBe("back")
+	})
+
+	it("uses physical bracket codes when Shift produces locale-specific keys", () => {
+		expect(
+			designStackShortcutCommand(
+				keyboard({
+					code: "BracketRight",
+					ctrlKey: true,
+					key: "Dead",
+					shiftKey: true,
+				}),
+				false,
+			),
+		).toBe("front")
+		expect(
+			designStackShortcutCommand(
+				keyboard({
+					code: "BracketLeft",
+					key: "«",
+					metaKey: true,
+					shiftKey: true,
+				}),
 				true,
 			),
 		).toBe("back")

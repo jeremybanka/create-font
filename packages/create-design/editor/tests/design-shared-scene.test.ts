@@ -3592,13 +3592,19 @@ describe("create-design shared vector scene", () => {
 			name: "Third stack object",
 			transform: { ...first.transform, e: first.transform.e + 360 },
 		}
+		const fourth = {
+			...first,
+			id: "object:stack-fourth",
+			name: "Fourth stack object",
+			transform: { ...first.transform, e: first.transform.e + 540 },
+		}
 		const initialDocument: DesignDocument = {
 			...base,
-			objects: [first, second, third],
+			objects: [first, second, third, fourth],
 			layers: [
 				{
 					...base.layers[0]!,
-					children: [first, second, third].map(({ id }) => ({
+					children: [first, second, third, fourth].map(({ id }) => ({
 						kind: "object" as const,
 						id,
 					})),
@@ -3607,14 +3613,16 @@ describe("create-design shared vector scene", () => {
 		}
 		const storage = new Map<string, string>()
 		mountDesign({ initialDocument }, storage)
-		const layer = [
-			...document.querySelectorAll<HTMLButtonElement>(
-				'design-layers-tile [data-layer-kind="object"]',
-			),
-		].find((button) => button.textContent?.includes(second.name))
-		if (layer === undefined)
-			throw new Error("Middle stack object was not found.")
-		act(() => layer.click())
+		const selectLayer = (name: string): void => {
+			const layer = [
+				...document.querySelectorAll<HTMLButtonElement>(
+					'design-layers-tile [data-layer-kind="object"]',
+				),
+			].find((button) => button.textContent?.includes(name))
+			if (layer === undefined) throw new Error(`${name} was not found.`)
+			act(() => layer.click())
+		}
+		selectLayer(second.name)
 
 		const platformMod = /Mac|iPhone|iPad|iPod/i.test(navigator.platform)
 			? { metaKey: true }
@@ -3638,7 +3646,7 @@ describe("create-design shared vector scene", () => {
 			) as DesignDocument
 			return saved.layers[0]?.children.map(({ id }) => id) ?? []
 		}
-		const original = [first.id, second.id, third.id]
+		const original = [first.id, second.id, third.id, fourth.id]
 
 		const commandCenter = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Open Command Palette"]',
@@ -3673,34 +3681,46 @@ describe("create-design shared vector scene", () => {
 
 		const forward = await key({ key: "]" })
 		expect(forward.defaultPrevented).toBe(true)
-		expect(order()).toEqual([first.id, third.id, second.id])
-		const noOp = await key({ key: "]" })
-		expect(noOp.defaultPrevented).toBe(true)
-		expect(order()).toEqual([first.id, third.id, second.id])
-		expect(
-			document.querySelector("[data-footer-status]")?.textContent,
-		).toContain("already at that stacking position")
-
+		expect(order()).toEqual([first.id, third.id, second.id, fourth.id])
 		await key({ key: "z" })
 		expect(order()).toEqual(original)
 		const backward = await key({ key: "[" })
 		expect(backward.defaultPrevented).toBe(true)
-		expect(order()).toEqual([second.id, first.id, third.id])
+		expect(order()).toEqual([second.id, first.id, third.id, fourth.id])
 		await key({ key: "z" })
 		expect(order()).toEqual(original)
 
-		const front = await key({ key: "}", shiftKey: true })
+		const front = await key({
+			code: "BracketRight",
+			key: "Dead",
+			shiftKey: true,
+		})
 		expect(front.defaultPrevented).toBe(true)
-		expect(order()).toEqual([first.id, third.id, second.id])
+		expect(order()).toEqual([first.id, third.id, fourth.id, second.id])
+		const noOp = await key({
+			code: "BracketRight",
+			key: "Dead",
+			shiftKey: true,
+		})
+		expect(noOp.defaultPrevented).toBe(true)
+		expect(order()).toEqual([first.id, third.id, fourth.id, second.id])
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("already at that stacking position")
 		await key({ key: "z" })
 		expect(order()).toEqual(original)
-		const back = await key({ key: "[", shiftKey: true })
+		selectLayer(third.name)
+		const back = await key({
+			code: "BracketLeft",
+			key: "«",
+			shiftKey: true,
+		})
 		expect(back.defaultPrevented).toBe(true)
-		expect(order()).toEqual([second.id, first.id, third.id])
+		expect(order()).toEqual([third.id, first.id, second.id, fourth.id])
 		await key({ key: "z" })
 		expect(order()).toEqual(original)
 		await key({ key: "z", shiftKey: true })
-		expect(order()).toEqual([second.id, first.id, third.id])
+		expect(order()).toEqual([third.id, first.id, second.id, fourth.id])
 
 		const title = document.querySelector<HTMLInputElement>(
 			'design-canvas-tile input[aria-label="Document title"]',
