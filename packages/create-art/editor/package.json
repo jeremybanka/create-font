@@ -52,7 +52,7 @@
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"vite": "8.2.0",
-		"vite-plus": "0.2.7",
+		"vite-plus": "0.2.8",
 		"vitest": "4.1.10"
 	},
 	"engines": {
