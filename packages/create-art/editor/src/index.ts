@@ -1,5 +1,10 @@
 export { CommandPalette } from "./CommandPalette.tsx"
 export {
+	TooltipButton,
+	type TooltipButtonProps,
+	type TooltipShortcut,
+} from "./TooltipButton.tsx"
+export {
 	Circle,
 	Group,
 	Image,

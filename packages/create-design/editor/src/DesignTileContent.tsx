@@ -24,6 +24,7 @@ import {
 	TileNumericField,
 	TileSelect,
 	TileTextField,
+	TooltipButton,
 } from "@create-art/editor"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { DESIGN_LAYER_UI_COLORS } from "@create-design/source"
@@ -1196,28 +1197,26 @@ function DesignToolsTile({ context }: { readonly context: DesignTileContext }) {
 					(id === "text" || id === "area-text") &&
 					context.textToolsDisabledReason !== null
 				return (
-					<button
+					<TooltipButton
 						key={id}
-						type="button"
-						title={
-							disabled
-								? (context.textToolsDisabledReason ?? definition.label)
-								: `${definition.label} (${definition.key})`
-						}
-						aria-label={definition.label}
+						label={definition.label}
+						description={definition.description}
 						aria-pressed={context.tool === id}
 						disabled={disabled}
-						aria-description={
+						disabledReason={
 							disabled
 								? (context.textToolsDisabledReason ?? undefined)
 								: undefined
 						}
+						placement="bottom"
+						shortcut={{
+							ariaKeyShortcuts: definition.key,
+							keycaps: [definition.key],
+						}}
 						onClick={() => context.selectTool(id)}
 					>
 						<svg.Icon aria-hidden="true" />
-						<span>{definition.label}</span>
-						<kbd>{definition.key}</kbd>
-					</button>
+					</TooltipButton>
 				)
 			})}
 		</design-tools-tile>

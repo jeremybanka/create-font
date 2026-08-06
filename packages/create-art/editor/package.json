@@ -35,6 +35,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
+		"@floating-ui/dom": "^1.8.0",
 		"@radix-ui/react-icons": "^1.3.2",
 		"konva": "10.3.0",
 		"react-konva": "19.2.5"
