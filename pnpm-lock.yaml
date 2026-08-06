@@ -40,6 +40,12 @@ importers:
       agents.yaml:
         specifier: 0.2.2
         version: 0.2.2
+      create-design:
+        specifier: workspace:*
+        version: link:apps/create-design
+      create-font:
+        specifier: workspace:*
+        version: link:apps/create-font
       dprint:
         specifier: 0.55.2
         version: 0.55.2
@@ -97,9 +103,15 @@ importers:
       '@elysia/static':
         specifier: 1.4.11
         version: 1.4.11(elysia@1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
+      comline:
+        specifier: 0.5.1
+        version: 0.5.1(zod@4.4.3)
       elysia:
         specifier: 1.4.29
         version: 1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@create-font/target':
         specifier: workspace:*

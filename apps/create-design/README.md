@@ -11,6 +11,32 @@ server. The browser application and design interaction model live in
 product-neutral editor foundations live in
 [`@create-art/editor`](../../packages/create-art/editor/README.md).
 
+## CLI workflow
+
+Create a new workspace and its first design with the initializer:
+
+```sh
+npm create design@latest campaign-poster
+cd campaign-poster
+```
+
+The package also supports direct `create-design campaign-poster` invocation.
+Running `create-design second-poster` from an existing create-design workspace
+adds `designs/second-poster` without replacing the workspace. New workspaces
+contain `build` and `dev` package scripts backed by the separate `design`
+project CLI:
+
+```sh
+design check
+design build
+design dev
+```
+
+When a workspace contains multiple projects, pass the design name, for example
+`design build second-poster`. `design build` writes the default PDF artifact to
+`artifacts/<design>/<design>.pdf`; `design export` retains explicit PDF, SVG,
+and PNG output control.
+
 Output targets live in the headless
 [`@create-design/pdf`](../../packages/create-design/pdf/README.md) and
 [`@create-design/svg`](../../packages/create-design/svg/README.md) packages.
@@ -24,14 +50,14 @@ target-specific projection, preflight, and serialization APIs.
 Export every artboard in document order from a validated source project:
 
 ```sh
-create-design export designs/workbench-poster \
+design export designs/workbench-poster \
   --output artifacts/workbench-poster.pdf
 ```
 
 Select particular artboards by stable ID and include their authored bleed:
 
 ```sh
-create-design export designs/workbench-poster \
+design export designs/workbench-poster \
   --output artifacts/workbench-cover.pdf \
   --artboards artboard:cover,artboard:back \
   --include-bleed
@@ -44,7 +70,7 @@ and publishes the completed PDF atomically. Existing files are preserved by
 default; pass `--force` to atomically replace one. Blocking diagnostics and
 invalid source exit with status 1 without publishing partial output. Advisory
 preflight notices are written to stderr while a successful export still exits
-with status 0. Run `create-design export --help` for the complete option list.
+with status 0. Run `design export --help` for the complete option list.
 
 ## Headless SVG export
 
@@ -53,7 +79,7 @@ The same command exports one artboard through the browser editor's deterministic
 `.svg`:
 
 ```sh
-create-design export designs/workbench-poster \
+design export designs/workbench-poster \
   --output artifacts/workbench-poster.svg \
   --artboards artboard:page
 ```

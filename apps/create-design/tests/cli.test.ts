@@ -15,11 +15,8 @@ import {
 } from "@create-design/source"
 import { afterEach, describe, expect, test } from "vitest"
 
-import {
-	parseCreateDesignCli,
-	runCreateDesignCli,
-	type CreateDesignCliIo,
-} from "../src/cli.ts"
+import type { CliIo } from "../src/cli-io.ts"
+import { runDesignCli } from "../src/design-cli.ts"
 import { initializeDesignSourceWorkspace } from "../src/source-service.ts"
 
 const temporaryRoots: string[] = []
@@ -37,7 +34,7 @@ afterEach(async () => {
 })
 
 function captureIo(): Readonly<{
-	io: CreateDesignCliIo
+	io: CliIo
 	stderr: () => string
 	stdout: () => string
 }> {
@@ -55,7 +52,7 @@ function captureIo(): Readonly<{
 
 async function run(arguments_: readonly string[]) {
 	const capture = captureIo()
-	const exitCode = await runCreateDesignCli(arguments_, capture.io)
+	const exitCode = await runDesignCli(["design", ...arguments_], capture.io)
 	return { ...capture, exitCode }
 }
 
@@ -87,39 +84,31 @@ function multipleArtboards(): DesignDocument {
 	}
 }
 
-describe("create-design CLI", () => {
-	test("parses server and PDF export commands without changing server defaults", () => {
-		expect(parseCreateDesignCli([])).toMatchObject({
-			command: "serve",
-			port: 3010,
-		})
-		expect(
-			parseCreateDesignCli([
-				"export",
-				"./project",
-				"--output=./result.pdf",
-				"--artboards=artboard:one,artboard:two,artboard:one",
-				"--include-bleed",
-				"--force",
-			]),
-		).toMatchObject({
-			artboardIds: ["artboard:one", "artboard:two"],
-			command: "export",
-			force: true,
-			includeBleed: true,
-		})
-		expect(() =>
-			parseCreateDesignCli([
-				"export",
-				"--output",
-				"result.pdf",
-				"--port",
-				"80",
-			]),
-		).toThrow("--port is only valid for serve")
-		expect(() => parseCreateDesignCli(["export"])).toThrow(
-			"Export requires --output FILE",
-		)
+describe("design CLI", () => {
+	test("shows project command help by default", async () => {
+		const result = await run([])
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout()).toContain("Build and interactively edit designs")
+		expect(result.stdout()).toContain("build")
+		expect(result.stdout()).toContain("check")
+		expect(result.stdout()).toContain("dev")
+		expect(result.stdout()).toContain("export")
+	})
+
+	test("checks and builds a named design from a workspace", async () => {
+		const workspaceRoot = await temporaryRoot()
+		const designRoot = join(workspaceRoot, "designs", "poster")
+		await initializeDesignSourceWorkspace(designRoot)
+
+		const checked = await run(["check", "poster", "--root", workspaceRoot])
+		expect(checked.exitCode).toBe(0)
+		expect(checked.stderr()).toContain("No source diagnostics found")
+
+		const built = await run(["build", "poster", "--root", workspaceRoot])
+		const output = join(workspaceRoot, "artifacts", "poster", "poster.pdf")
+		expect(built.exitCode).toBe(0)
+		expect(built.stdout()).toContain(output)
+		expect((await readFile(output)).subarray(0, 8).toString()).toBe("%PDF-1.7")
 	})
 
 	test("exports one artboard through the shared headless SVG pipeline", async () => {

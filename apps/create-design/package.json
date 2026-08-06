@@ -1,7 +1,7 @@
 {
 	"name": "create-design",
 	"version": "0.2.2",
-	"description": "CLI and workspace server for create-design source projects",
+	"description": "Create, build, validate, export, and edit create-design source projects",
 	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
@@ -10,7 +10,8 @@
 	},
 	"type": "module",
 	"bin": {
-		"create-design": "./src/cli.ts"
+		"create-design": "./dist/create-design-cli.js",
+		"design": "./dist/design-cli.js"
 	},
 	"files": [
 		"dist",
@@ -47,7 +48,9 @@
 		"@create-design/source": "workspace:*",
 		"@elysia/node": "1.4.6",
 		"@elysia/static": "1.4.11",
-		"elysia": "1.4.29"
+		"comline": "0.5.1",
+		"elysia": "1.4.29",
+		"zod": "4.4.3"
 	},
 	"devDependencies": {
 		"@create-font/target": "workspace:*",
