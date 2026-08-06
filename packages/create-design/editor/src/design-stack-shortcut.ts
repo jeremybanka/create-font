@@ -16,10 +16,10 @@ export function designStackShortcutCommand(
 ): DesignStackCommand | null {
 	const platformMod = macLike ? event.metaKey : event.ctrlKey
 	const otherMod = macLike ? event.ctrlKey : event.metaKey
-	if (!platformMod || otherMod || event.altKey) return null
+	if (!platformMod || otherMod || event.shiftKey) return null
 	if (event.code === "BracketRight" || event.key === "]" || event.key === "}")
-		return event.shiftKey ? "front" : "forward"
+		return event.altKey ? "front" : "forward"
 	if (event.code === "BracketLeft" || event.key === "[" || event.key === "{")
-		return event.shiftKey ? "back" : "backward"
+		return event.altKey ? "back" : "backward"
 	return null
 }

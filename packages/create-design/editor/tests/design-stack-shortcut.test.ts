@@ -20,7 +20,7 @@ function keyboard(
 }
 
 describe("design stacking shortcuts", () => {
-	it("maps all four conventional Control shortcuts off macOS", () => {
+	it("maps all four Control shortcuts off macOS", () => {
 		expect(
 			designStackShortcutCommand(keyboard({ ctrlKey: true, key: "]" }), false),
 		).toBe("forward")
@@ -29,41 +29,41 @@ describe("design stacking shortcuts", () => {
 		).toBe("backward")
 		expect(
 			designStackShortcutCommand(
-				keyboard({ ctrlKey: true, key: "]", shiftKey: true }),
+				keyboard({ altKey: true, ctrlKey: true, key: "]" }),
 				false,
 			),
 		).toBe("front")
 		expect(
 			designStackShortcutCommand(
-				keyboard({ ctrlKey: true, key: "[", shiftKey: true }),
+				keyboard({ altKey: true, ctrlKey: true, key: "[" }),
 				false,
 			),
 		).toBe("back")
 	})
 
-	it("accepts shifted bracket key values on Mac-like platforms", () => {
+	it("maps Option-Command brackets on Mac-like platforms", () => {
 		expect(
 			designStackShortcutCommand(
-				keyboard({ key: "}", metaKey: true, shiftKey: true }),
+				keyboard({ altKey: true, key: "]", metaKey: true }),
 				true,
 			),
 		).toBe("front")
 		expect(
 			designStackShortcutCommand(
-				keyboard({ key: "{", metaKey: true, shiftKey: true }),
+				keyboard({ altKey: true, key: "[", metaKey: true }),
 				true,
 			),
 		).toBe("back")
 	})
 
-	it("uses physical bracket codes when Shift produces locale-specific keys", () => {
+	it("uses physical bracket codes when Option/Alt produces locale-specific keys", () => {
 		expect(
 			designStackShortcutCommand(
 				keyboard({
+					altKey: true,
 					code: "BracketRight",
 					ctrlKey: true,
 					key: "Dead",
-					shiftKey: true,
 				}),
 				false,
 			),
@@ -71,17 +71,17 @@ describe("design stacking shortcuts", () => {
 		expect(
 			designStackShortcutCommand(
 				keyboard({
+					altKey: true,
 					code: "BracketLeft",
 					key: "«",
 					metaKey: true,
-					shiftKey: true,
 				}),
 				true,
 			),
 		).toBe("back")
 	})
 
-	it("rejects the non-platform modifier, mixed modifiers, Alt, and other keys", () => {
+	it("rejects the non-platform modifier, mixed modifiers, Shift, and other keys", () => {
 		expect(
 			designStackShortcutCommand(keyboard({ ctrlKey: true }), true),
 		).toBeNull()
@@ -96,7 +96,7 @@ describe("design stacking shortcuts", () => {
 		).toBeNull()
 		expect(
 			designStackShortcutCommand(
-				keyboard({ altKey: true, ctrlKey: true }),
+				keyboard({ ctrlKey: true, shiftKey: true }),
 				false,
 			),
 		).toBeNull()

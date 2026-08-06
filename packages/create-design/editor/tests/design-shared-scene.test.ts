@@ -3667,6 +3667,15 @@ describe("create-design shared vector scene", () => {
 		expect(forwardCommand?.querySelector("kbd")?.textContent).toBe(
 			`${/Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? "⌘" : "Ctrl"}+]`,
 		)
+		await act(async () => {
+			search.value = "Bring to Front"
+			search.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const frontCommand = document.getElementById("command-stack-front")
+		expect(frontCommand?.querySelector("kbd")?.textContent).toBe(
+			`${/Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? "⌥+⌘" : "Alt+Ctrl"}+]`,
+		)
 		const paletteGuard = await key({ key: "]" })
 		expect(paletteGuard.defaultPrevented).toBe(false)
 		expect(order()).toEqual(original)
@@ -3691,16 +3700,16 @@ describe("create-design shared vector scene", () => {
 		expect(order()).toEqual(original)
 
 		const front = await key({
+			altKey: true,
 			code: "BracketRight",
 			key: "Dead",
-			shiftKey: true,
 		})
 		expect(front.defaultPrevented).toBe(true)
 		expect(order()).toEqual([first.id, third.id, fourth.id, second.id])
 		const noOp = await key({
+			altKey: true,
 			code: "BracketRight",
 			key: "Dead",
-			shiftKey: true,
 		})
 		expect(noOp.defaultPrevented).toBe(true)
 		expect(order()).toEqual([first.id, third.id, fourth.id, second.id])
@@ -3711,9 +3720,9 @@ describe("create-design shared vector scene", () => {
 		expect(order()).toEqual(original)
 		selectLayer(third.name)
 		const back = await key({
+			altKey: true,
 			code: "BracketLeft",
 			key: "«",
-			shiftKey: true,
 		})
 		expect(back.defaultPrevented).toBe(true)
 		expect(order()).toEqual([third.id, first.id, second.id, fourth.id])
@@ -3782,7 +3791,7 @@ describe("create-design shared vector scene", () => {
 		if (artboard === null || layer === undefined)
 			throw new Error("Design artboard or source layer was not found.")
 		expect(artboard.getAttribute("aria-keyshortcuts")).toBe(
-			"X Shift+X Meta+X Control+X Meta+] Control+] Meta+[ Control+[ Meta+Shift+] Control+Shift+] Meta+Shift+[ Control+Shift+[",
+			"X Shift+X Meta+X Control+X Meta+] Control+] Meta+[ Control+[ Alt+Meta+] Alt+Control+] Alt+Meta+[ Alt+Control+[",
 		)
 		act(() => layer.click())
 
