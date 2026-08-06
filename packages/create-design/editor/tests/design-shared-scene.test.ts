@@ -3476,6 +3476,349 @@ describe("create-design shared vector scene", () => {
 		expect(saved.objects).toHaveLength(2)
 	})
 
+	it.each([
+		["Rectangle", "rectangle"],
+		["Ellipse", "ellipse"],
+	] as const)(
+		"keeps %s hover hints, live edges, and committed geometry on the same snap targets",
+		async (label, kind) => {
+			const initial = createInitialDocument()
+			const initialDocument: DesignDocument = {
+				...initial,
+				objects: [],
+				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+				guides: [
+					{ id: "guide:left", axis: "x", value: 120 },
+					{ id: "guide:top", axis: "y", value: 160 },
+					{ id: "guide:right", axis: "x", value: 300 },
+					{ id: "guide:bottom", axis: "y", value: 320 },
+				],
+			}
+			const storage = new Map<string, string>()
+			const stage = mountDesign({ initialDocument }, storage)
+			const canvas = stage.container().querySelector("canvas")
+			const paper = stage.findOne(".design-paper")
+			const tool = document.querySelector<HTMLButtonElement>(
+				`button[aria-label="${label}"]`,
+			)
+			if (canvas === null || paper === undefined || tool === null)
+				throw new Error(`${label} creation controls were not found.`)
+			const world = paper.getParent().getAbsoluteTransform()
+			const fire = (
+				type: string,
+				point: Readonly<{ x: number; y: number }>,
+				pointerId = 81,
+			): void => {
+				const screen = world.point(point)
+				canvas.dispatchEvent(
+					new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: screen.x,
+						clientY: screen.y,
+						isPrimary: true,
+						pointerId,
+						pointerType: "mouse",
+					}),
+				)
+			}
+			act(() => tool.click())
+			const beforeHover = storage.get(DESIGN_STORAGE_KEY)
+			act(() => fire("pointermove", { x: 122, y: 162 }))
+			expect(stage.find(".active-snap")).toHaveLength(2)
+			expect(document.querySelector("[data-footer-status]")?.textContent).toBe(
+				"Snap: Guide.",
+			)
+			expect(storage.get(DESIGN_STORAGE_KEY)).toBe(beforeHover)
+			act(() =>
+				stage
+					.container()
+					.dispatchEvent(new PointerEvent("pointerleave", { pointerId: 81 })),
+			)
+
+			await act(async () => {
+				fire("pointerdown", { x: 122, y: 162 })
+				fire("pointermove", { x: 298, y: 318 })
+				expect(stage.find(".active-snap")).toHaveLength(2)
+				fire("pointerup", { x: 298, y: 318 })
+				await Promise.resolve()
+			})
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			expect(saved.objects).toHaveLength(1)
+			const geometry = saved.objects[0]?.geometry
+			expect(geometry?.kind).toBe(kind)
+			if (geometry?.kind === "rectangle")
+				expect(geometry).toMatchObject({
+					x: 120,
+					y: 160,
+					width: 180,
+					height: 160,
+				})
+			else if (geometry?.kind === "ellipse")
+				expect(geometry).toMatchObject({
+					centerX: 210,
+					centerY: 240,
+					radiusX: 90,
+					radiusY: 80,
+				})
+			expect(stage.find(".active-snap")).toHaveLength(0)
+		},
+	)
+
+	it("snaps Pen nodes and new Artboard bounds without changing existing edit gestures", async () => {
+		const initial = createInitialDocument()
+		const initialDocument: DesignDocument = {
+			...initial,
+			objects: [],
+			layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+			guides: [
+				{ id: "guide:pen-x1", axis: "x", value: 120 },
+				{ id: "guide:pen-y1", axis: "y", value: 160 },
+				{ id: "guide:pen-x2", axis: "x", value: 300 },
+				{ id: "guide:pen-y2", axis: "y", value: 320 },
+				{ id: "guide:board-x1", axis: "x", value: 700 },
+				{ id: "guide:board-y1", axis: "y", value: 100 },
+				{ id: "guide:board-x2", axis: "x", value: 850 },
+				{ id: "guide:board-y2", axis: "y", value: 250 },
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const paper = stage.findOne(".design-paper")
+		if (canvas === null || paper === undefined)
+			throw new Error("Creation canvas was not found.")
+		const world = paper.getParent().getAbsoluteTransform()
+		const fire = (
+			type: string,
+			point: Readonly<{ x: number; y: number }>,
+			pointerId: number,
+		): void => {
+			const screen = world.point(point)
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: screen.x,
+					clientY: screen.y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const artboard = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Artboard"]',
+		)
+		if (pen === null || artboard === null)
+			throw new Error("Pen or Artboard tool was not found.")
+		act(() => pen.click())
+		await act(async () => {
+			fire("pointerdown", { x: 122, y: 162 }, 91)
+			fire("pointerup", { x: 122, y: 162 }, 91)
+			await Promise.resolve()
+		})
+		expect(document.querySelector("[data-footer-status]")?.textContent).toBe(
+			"Pen tool",
+		)
+		await act(async () => {
+			fire("pointerdown", { x: 298, y: 318 }, 92)
+			fire("pointerup", { x: 298, y: 318 }, 92)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (saved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Snapped Pen path was not committed.")
+		expect(saved.objects[0].geometry.contours[0]?.points).toMatchObject([
+			{ x: 120, y: 160 },
+			{ x: 300, y: 320 },
+		])
+
+		act(() => artboard.click())
+		await act(async () => {
+			fire("pointerdown", { x: 702, y: 102 }, 93)
+			fire("pointermove", { x: 848, y: 248 }, 93)
+			fire("pointerup", { x: 848, y: 248 }, 93)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.artboards).toHaveLength(2)
+		expect(saved.artboards[1]).toMatchObject({
+			x: 700,
+			y: 100,
+			width: 150,
+			height: 150,
+		})
+	})
+
+	it.each([
+		{
+			label: "Shift",
+			modifiers: { shiftKey: true },
+			expected: { x: 120, y: 160, width: 178, height: 178 },
+		},
+		{
+			label: "Shift+Alt",
+			modifiers: { shiftKey: true, altKey: true },
+			expected: { x: -58, y: -18, width: 356, height: 356 },
+		},
+	] as const)(
+		"keeps $label constraint previews and commits identical when one pointer axis snaps",
+		async ({ modifiers, expected }) => {
+			const initial = createInitialDocument()
+			const initialDocument: DesignDocument = {
+				...initial,
+				objects: [],
+				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+				guides: [
+					{ id: "guide:start-x", axis: "x", value: 120 },
+					{ id: "guide:start-y", axis: "y", value: 160 },
+					{ id: "guide:end-x", axis: "x", value: 300 },
+				],
+			}
+			const storage = new Map<string, string>()
+			const stage = mountDesign({ initialDocument }, storage)
+			const canvas = stage.container().querySelector("canvas")
+			const paper = stage.findOne(".design-paper")
+			const rectangle = document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Rectangle"]',
+			)
+			if (canvas === null || paper === undefined || rectangle === null)
+				throw new Error("Constrained creation controls were not found.")
+			const world = paper.getParent().getAbsoluteTransform()
+			const fire = (
+				type: "pointerdown" | "pointermove" | "pointerup",
+				point: Readonly<{ x: number; y: number }>,
+			): void => {
+				const screen = world.point(point)
+				canvas.dispatchEvent(
+					new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: screen.x,
+						clientY: screen.y,
+						isPrimary: true,
+						pointerId: 95,
+						pointerType: "mouse",
+						...modifiers,
+					}),
+				)
+			}
+			act(() => rectangle.click())
+			act(() => {
+				fire("pointerdown", { x: 120, y: 160 })
+				fire("pointermove", { x: 298, y: 250 })
+			})
+			const previewData = stage.findOne(".shape-placement-preview")?.data()
+			expect(previewData).toBeDefined()
+			expect(stage.find(".active-snap")).toHaveLength(0)
+			await act(async () => {
+				fire("pointerup", { x: 298, y: 250 })
+				await Promise.resolve()
+			})
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			expect(saved.objects[0]?.geometry).toMatchObject({
+				kind: "rectangle",
+				...expected,
+			})
+			const vertices = (data: string | undefined): readonly string[] => [
+				...new Set(
+					(data?.match(/-?\d+(?:\.\d+)?/gu) ?? [])
+						.reduce<string[]>((points, value, index, values) => {
+							if (index % 2 === 0) points.push(`${value},${values[index + 1]}`)
+							return points
+						}, [])
+						.toSorted(),
+				),
+			]
+			expect(vertices(stage.findOne(".design-object")?.data())).toEqual(
+				vertices(previewData),
+			)
+		},
+	)
+
+	it("lets creation gestures pass through a guide's hit target", async () => {
+		const initial = createInitialDocument()
+		const initialDocument: DesignDocument = {
+			...initial,
+			objects: [],
+			layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+			guides: [
+				{ id: "guide:left", axis: "x", value: 120 },
+				{ id: "guide:top", axis: "y", value: 160 },
+				{ id: "guide:right", axis: "x", value: 300 },
+				{ id: "guide:bottom", axis: "y", value: 320 },
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		const paper = stage.findOne(".design-paper")
+		const guide = stage
+			.find(".design-guide")
+			.find((node: { name(): string }) => node.name().includes("guide:left"))
+		const rectangle = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Rectangle"]',
+		)
+		if (paper === undefined || guide === undefined || rectangle === null)
+			throw new Error("Guide-hit creation controls were not found.")
+		const world = paper.getParent().getAbsoluteTransform()
+		const pointer = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			point: Readonly<{ x: number; y: number }>,
+		): PointerEvent => {
+			const screen = world.point(point)
+			return new PointerEvent(type, {
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: screen.x,
+				clientY: screen.y,
+				isPrimary: true,
+				pointerId: 96,
+				pointerType: "mouse",
+			})
+		}
+		act(() => rectangle.click())
+		await act(async () => {
+			const down = pointer("pointerdown", { x: 122, y: 162 })
+			stage.setPointersPositions(down)
+			guide.fire("pointerdown", { evt: down }, true)
+			const move = pointer("pointermove", { x: 298, y: 318 })
+			stage.setPointersPositions(move)
+			stage.fire("pointermove", { evt: move }, true)
+			const up = pointer("pointerup", { x: 298, y: 318 })
+			stage.setPointersPositions(up)
+			stage.fire("pointerup", { evt: up }, true)
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.guides).toEqual(initialDocument.guides)
+		expect(saved.objects[0]?.geometry).toMatchObject({
+			kind: "rectangle",
+			x: 120,
+			y: 160,
+			width: 180,
+			height: 160,
+		})
+	})
+
 	it("authors mixed multi-object paints atomically with accessible appearance controls", async () => {
 		const storage = new Map<string, string>()
 		mountDesign({}, storage)

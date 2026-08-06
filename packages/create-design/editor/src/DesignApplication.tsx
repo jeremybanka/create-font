@@ -114,6 +114,8 @@ import {
 	releaseDesignPointer,
 	snapDesignObject,
 	snapDesignObjects,
+	snapDesignPoint,
+	type DesignPointSnapResult,
 	type DesignSnapSettings,
 	type DesignSnapMatch,
 } from "./design-canvas.ts"
@@ -548,6 +550,26 @@ function designSnapGuides(
 					},
 				]),
 	]
+}
+
+function shapeAlignedPointSnap(
+	snap: DesignPointSnapResult,
+	preview: Extract<VectorGesturePreview, { readonly kind: "shape" }>,
+): DesignPointSnapResult {
+	const matches = snap.matches.filter(({ axis, target }) => {
+		const bounds = preview.bounds
+		return axis === "x"
+			? Math.abs(bounds.minX - target) < 1e-7 ||
+					Math.abs(bounds.maxX - target) < 1e-7
+			: Math.abs(bounds.minY - target) < 1e-7 ||
+					Math.abs(bounds.maxY - target) < 1e-7
+	})
+	return {
+		...snap,
+		x: matches.find(({ axis }) => axis === "x")?.target ?? null,
+		y: matches.find(({ axis }) => axis === "y")?.target ?? null,
+		matches,
+	}
 }
 
 function initialDesignLoad(
@@ -1104,6 +1126,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const helpButtonRef = useRef<HTMLButtonElement>(null)
 	const gestureRef = useRef<CanvasGesture | null>(null)
+	const creationSnapStatusRef = useRef(false)
 	const groupClickCandidateRef = useRef<GroupClickCandidate | null>(null)
 	const groupPointerPressRef = useRef<GroupPointerPress | null>(null)
 	const pendingGroupEntryRef = useRef<string | null>(null)
@@ -2175,6 +2198,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setGesturePreview(null)
 		setPenPoints([])
 		setActiveSnapGuides([])
+		creationSnapStatusRef.current = false
 		setPreviewArtboardDocument(null)
 		previewArtboardDocumentRef.current = null
 		setGuidePreview(null)
@@ -5409,33 +5433,76 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const gesturePointer = (
 		event: KonvaEventObject<PointerEvent>,
 		snaps: readonly VectorSnapGuide[] = [],
+		worldOverride?: CanvasPoint,
+		rawWorldOverride?: CanvasPoint,
 	) => {
 		const screen = event.target.getStage()?.getPointerPosition() ?? {
 			x: event.evt.offsetX,
 			y: event.evt.offsetY,
 		}
-		const world = pagePoint(event)
+		const rawWorld = pagePoint(event)
+		const world = worldOverride ?? rawWorld
 		return {
 			world,
-			rawWorld: world,
+			rawWorld: rawWorldOverride ?? rawWorld,
 			screen,
 			modifiers: gestureModifiers(event.evt),
 			snaps,
 		}
+	}
+	const resolveCreationPoint = (point: CanvasPoint): DesignPointSnapResult =>
+		snapDesignPoint(point, effectivePolicyDocument, worldScale, snapSettings)
+	const clearCreationSnapHint = (restoreToolStatus = true): void => {
+		setActiveSnapGuides([])
+		if (restoreToolStatus && creationSnapStatusRef.current)
+			setStatus(`${DESIGN_TOOLS[tool].label} tool`)
+		creationSnapStatusRef.current = false
+	}
+	const showCreationSnapHint = (
+		snap: DesignPointSnapResult,
+		preview?: Extract<VectorGesturePreview, { readonly kind: "shape" }>,
+	): void => {
+		const displayed =
+			preview === undefined ? snap : shapeAlignedPointSnap(snap, preview)
+		const guides = designSnapGuides(displayed, activeArtboard)
+		setActiveSnapGuides(guides)
+		if (guides.length === 0) {
+			if (creationSnapStatusRef.current)
+				setStatus(`${DESIGN_TOOLS[tool].label} tool`)
+			creationSnapStatusRef.current = false
+			return
+		}
+		const labels = [
+			...new Set(
+				displayed.matches
+					.filter(({ axis }) => guides.some((guide) => guide.axis === axis))
+					.map(({ label }) => label),
+			),
+		]
+		setStatus(`Snap: ${labels.join(" · ")}.`)
+		creationSnapStatusRef.current = true
 	}
 	const beginVectorGesture = (
 		event: KonvaEventObject<PointerEvent>,
 		down: VectorGestureDownInput,
 		originals?: readonly DesignObject[],
 		copySelection?: readonly string[],
+		creationSnap?: DesignPointSnapResult,
 	): void => {
+		const creationGuides =
+			creationSnap === undefined
+				? []
+				: designSnapGuides(creationSnap, activeArtboard)
 		const transition = reduceVectorGesture(
 			null,
 			{
 				...down,
 				type: "pointer-down",
 				pointerId: event.evt.pointerId,
-				pointer: gesturePointer(event),
+				pointer:
+					creationSnap === undefined
+						? gesturePointer(event)
+						: gesturePointer(event, creationGuides, creationSnap.point),
 			} as VectorGestureDown,
 			gesturePolicy,
 		)
@@ -5462,6 +5529,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					? { kind: "transform", originals, state: transition.state }
 					: { kind: "move", originals, copy, state: transition.state }
 		setGesturePreview(transition.preview)
+		if (creationSnap !== undefined) showCreationSnapHint(creationSnap)
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
 
@@ -5640,24 +5708,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			hit = hits[(current + 1) % hits.length]
 		}
 		if (hit === undefined) {
+			const snap = resolveCreationPoint(point)
+			const start = snap.point
 			const id = `artboard:${nextId()}`
 			gestureRef.current = {
 				kind: "artboard",
 				pointerId: event.evt.pointerId,
 				mode: "create",
-				start: point,
+				start,
 				original: {
 					id,
 					name: `Artboard ${document.artboards.length + 1}`,
-					x: point.x,
-					y: point.y,
+					x: start.x,
+					y: start.y,
 					width: 1,
 					height: 1,
 				},
 				resizeX: 1,
 				resizeY: 1,
 			}
+			showCreationSnapHint(snap)
 		} else {
+			clearCreationSnapHint(false)
 			setActiveArtboardId(hit.id)
 			const tolerance = 8 / worldScale
 			const resizeX =
@@ -5739,6 +5811,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<PointerEvent>,
 		guide: DesignGuide,
 	): void => {
+		if (
+			tool === "pen" ||
+			tool === "rect" ||
+			tool === "ellipse" ||
+			tool === "artboard"
+		)
+			return
 		event.cancelBubble = true
 		setSelectedGuideId(guide.id)
 		if (guide.locked) {
@@ -5787,7 +5866,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (tool === "rect" || tool === "ellipse") {
-			beginVectorGesture(event, { tool })
+			beginVectorGesture(
+				event,
+				{ tool },
+				undefined,
+				undefined,
+				resolveCreationPoint(point),
+			)
 			return
 		}
 		if (tool === "text") {
@@ -5837,7 +5922,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				finishPen(true)
 				return
 			}
-			beginVectorGesture(event, { tool: "pen" })
+			beginVectorGesture(
+				event,
+				{ tool: "pen" },
+				undefined,
+				undefined,
+				resolveCreationPoint(point),
+			)
 			return
 		}
 		if (tool === "direct") {
@@ -5873,7 +5964,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const pointerMove = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
-		if (gesture === null) return
+		if (gesture === null) {
+			const creationTool =
+				tool === "pen" ||
+				tool === "rect" ||
+				tool === "ellipse" ||
+				tool === "artboard"
+			if (
+				!creationTool ||
+				(tool !== "artboard" && activeLayerUnavailableReason)
+			) {
+				clearCreationSnapHint()
+				return
+			}
+			showCreationSnapHint(resolveCreationPoint(pagePoint(event)))
+			return
+		}
 		if (gesture.kind === "pan") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			const pointer = event.target.getStage()?.getPointerPosition()
@@ -5905,7 +6011,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "artboard") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			previewArtboardGesture(gesture, pagePoint(event))
+			const point = pagePoint(event)
+			if (gesture.mode === "create") {
+				const snap = resolveCreationPoint(point)
+				previewArtboardGesture(gesture, snap.point)
+				showCreationSnapHint(snap)
+			} else previewArtboardGesture(gesture, point)
 			return
 		}
 		if (gesture.kind === "guide") {
@@ -5942,12 +6053,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (groupPress.secondClick && !groupPress.dragged) return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
+		const creationSnap =
+			(tool === "rect" || tool === "ellipse") &&
+			gesture.kind === "vector" &&
+			(gesture.state.tool === "rect" || gesture.state.tool === "ellipse")
+				? resolveCreationPoint(pagePoint(event))
+				: undefined
+		const creationGuides =
+			creationSnap === undefined
+				? []
+				: designSnapGuides(creationSnap, activeArtboard)
 		const transition = reduceVectorGesture(
 			gesture.state,
 			{
 				type: "pointer-move",
 				pointerId: event.evt.pointerId,
-				pointer: gesturePointer(event),
+				pointer:
+					creationSnap === undefined
+						? gesturePointer(event)
+						: gesturePointer(event, creationGuides, creationSnap.point),
 			},
 			gesturePolicy,
 		)
@@ -5955,6 +6079,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		const nextGesture = { ...gesture, state: transition.state }
 		gestureRef.current = nextGesture
 		setGesturePreview(transition.preview)
+		if (creationSnap !== undefined && transition.preview?.kind === "shape")
+			showCreationSnapHint(creationSnap, transition.preview)
 		if (nextGesture.kind !== "move" && nextGesture.kind !== "transform") return
 		const resolved = resolveDesignGestureObject(
 			effectivePolicyDocument,
@@ -6013,8 +6139,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "artboard") {
 			if (gesture.pointerId !== event.evt.pointerId) return
+			if (
+				gesture.mode === "create" &&
+				previewArtboardDocumentRef.current !== null
+			) {
+				const snap = resolveCreationPoint(pagePoint(event))
+				previewArtboardGesture(gesture, snap.point)
+			}
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			gestureRef.current = null
+			creationSnapStatusRef.current = false
+			setActiveSnapGuides([])
 			const preview = previewArtboardDocumentRef.current
 			previewArtboardDocumentRef.current = null
 			setPreviewArtboardDocument(null)
@@ -6058,23 +6193,37 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setPreviewObjects([])
 			setGesturePreview(null)
 			setActiveSnapGuides([])
+			creationSnapStatusRef.current = false
 			return
 		}
 		if (gesture.state.pointerId !== event.evt.pointerId) return
 		if (gesture.kind === "transform") setTransformCursor(null)
+		const creationSnap =
+			(tool === "rect" || tool === "ellipse") &&
+			gesture.kind === "vector" &&
+			(gesture.state.tool === "rect" || gesture.state.tool === "ellipse")
+				? resolveCreationPoint(pagePoint(event))
+				: undefined
+		const creationGuides =
+			creationSnap === undefined
+				? activeSnapGuides
+				: designSnapGuides(creationSnap, activeArtboard)
 		const transition = reduceVectorGesture(
 			gesture.state,
 			{
 				type: "pointer-up",
 				pointerId: event.evt.pointerId,
-				pointer: gesturePointer(event, activeSnapGuides),
+				pointer:
+					creationSnap === undefined
+						? gesturePointer(event, activeSnapGuides)
+						: gesturePointer(event, creationGuides, creationSnap.point),
 			},
 			gesturePolicy,
 		)
 		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 		gestureRef.current = null
 		setGesturePreview(null)
-		setActiveSnapGuides([])
+		clearCreationSnapHint()
 		if (transition.intent?.kind === "pen-node") {
 			const intent = transition.intent
 			const points = [
@@ -6296,6 +6445,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setPreviewObjects([])
 			setGesturePreview(null)
 			setActiveSnapGuides([])
+			creationSnapStatusRef.current = false
 			setPreviewArtboardDocument(null)
 			previewArtboardDocumentRef.current = null
 			setGuidePreview(null)
@@ -6309,6 +6459,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const pointerCancel = (event: KonvaEventObject<PointerEvent>): void => {
 		cancelPointer(event.evt.pointerId, event.evt.currentTarget)
+	}
+	const pointerLeave = (): void => {
+		clearCreationSnapHint(gestureRef.current === null)
 	}
 	useEffect(() => {
 		const element = artboardWrapRef.current
@@ -6643,6 +6796,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							onPointerDown={pointerDown}
 							onPointerMove={pointerMove}
 							onPointerUp={pointerUp}
+							onPointerLeave={pointerLeave}
 							onPointerCancel={pointerCancel}
 							onLostPointerCapture={pointerCancel}
 							onWheel={(event: KonvaEventObject<WheelEvent>) => {

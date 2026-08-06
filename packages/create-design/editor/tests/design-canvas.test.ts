@@ -13,6 +13,7 @@ import {
 	releaseDesignPointer,
 	snapDesignObject,
 	snapDesignObjects,
+	snapDesignPoint,
 } from "../src/design-canvas.ts"
 import { createInitialDocument } from "../src/document.ts"
 import { designHierarchySelectionBounds } from "../src/design-hierarchy.ts"
@@ -442,6 +443,52 @@ describe("design canvas adapter", () => {
 		}
 		expect(snapDesignObject(moving, scene, 1).x).toBe(115)
 		expect(snapDesignObject(moving, scene, 2).x).toBeNull()
+	})
+
+	it("snaps creation points by category priority, identity, and zoom", () => {
+		const anchor = rectangle("anchor", 98, 20, 118, 40)
+		const scene = {
+			artboards: [] as const,
+			objects: [anchor],
+			guides: [
+				{ id: "guide:z", axis: "x" as const, value: 102 },
+				{ id: "guide:a", axis: "y" as const, value: 102 },
+				{ id: "guide:z", axis: "y" as const, value: 98 },
+			],
+		}
+		const snapped = snapDesignPoint({ x: 100, y: 100 }, scene, 1)
+		expect(snapped.point).toEqual({ x: 102, y: 102 })
+		expect(snapped.matches.map(({ category, id }) => [category, id])).toEqual([
+			["guides", "guide:z"],
+			["guides", "guide:a"],
+		])
+		expect(snapDesignPoint({ x: 100, y: 100 }, scene, 4).point).toEqual({
+			x: 100,
+			y: 100,
+		})
+	})
+
+	it("honors creation-point categories and hidden or locked references", () => {
+		const hidden = { ...rectangle("hidden", 50, 50, 60, 60), hidden: true }
+		const locked = { ...rectangle("locked", 70, 70, 80, 80), locked: true }
+		const scene = { artboards: [], guides: [], objects: [hidden, locked] }
+		expect(snapDesignPoint({ x: 52, y: 52 }, scene, 1).matches).toEqual([])
+		expect(snapDesignPoint({ x: 68, y: 68 }, scene, 1).point).toEqual({
+			x: 70,
+			y: 70,
+		})
+		const disabled = snapDesignPoint({ x: 68, y: 68 }, scene, 1, {
+			thresholdPixels: 7,
+			enabled: {
+				artboards: true,
+				guides: true,
+				objectBounds: false,
+				anchors: false,
+				controlPoints: false,
+			},
+		})
+		expect(disabled.point).toEqual({ x: 68, y: 68 })
+		expect(disabled.matches).toEqual([])
 	})
 
 	it("snaps multi-selected objects rigidly from their combined bounds", () => {

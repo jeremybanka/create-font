@@ -197,6 +197,13 @@ export interface DesignGroupSnapResult {
 	readonly matches: readonly DesignSnapMatch[]
 }
 
+export interface DesignPointSnapResult {
+	readonly point: CanvasPoint
+	readonly x: number | null
+	readonly y: number | null
+	readonly matches: readonly DesignSnapMatch[]
+}
+
 export type DesignSnapCategory =
 	| "artboards"
 	| "guides"
@@ -418,6 +425,52 @@ export function snapDesignObject(
 		x: result.x,
 		y: result.y,
 		matches: result.matches,
+	}
+}
+
+/** Snap a document-space pointer to the closest enabled target on each axis. */
+export function snapDesignPoint(
+	point: CanvasPoint,
+	sceneInput: DesignSnapScene | DesignDocument | DesignArtboard,
+	worldScale: number,
+	settings: DesignSnapSettings = DEFAULT_DESIGN_SNAP_SETTINGS,
+	excludedObjectIds: ReadonlySet<string> = new Set(),
+): DesignPointSnapResult {
+	if (!(worldScale > 0)) return { point, x: null, y: null, matches: [] }
+	const threshold = designSnapThreshold(settings.thresholdPixels, worldScale)
+	const scene = snapScene(sceneInput)
+	const xSnap = rankAxisCandidate(
+		point.x,
+		designSnapTargets(scene, "x", settings, excludedObjectIds),
+		threshold,
+	)
+	const ySnap = rankAxisCandidate(
+		point.y,
+		designSnapTargets(scene, "y", settings, excludedObjectIds),
+		threshold,
+	)
+	const matches: DesignSnapMatch[] = []
+	if (xSnap !== null)
+		matches.push({
+			axis: "x",
+			category: xSnap.category,
+			id: xSnap.id,
+			label: xSnap.label,
+			target: xSnap.value,
+		})
+	if (ySnap !== null)
+		matches.push({
+			axis: "y",
+			category: ySnap.category,
+			id: ySnap.id,
+			label: ySnap.label,
+			target: ySnap.value,
+		})
+	return {
+		point: { x: xSnap?.value ?? point.x, y: ySnap?.value ?? point.y },
+		x: xSnap?.value ?? null,
+		y: ySnap?.value ?? null,
+		matches,
 	}
 }
 
