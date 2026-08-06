@@ -6836,7 +6836,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														? {}
 														: { fill: chrome.background })}
 												/>
-												<Rect {...chrome.border} listening={false} />
+												<Rect
+													{...chrome.border}
+													name="design-artboard-border"
+													listening={false}
+												/>
 												{chrome.selection === undefined ? null : (
 													<Rect
 														{...chrome.selection}
@@ -7107,6 +7111,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															fillEnabled={fill !== undefined}
 															selected={selection.includes(object.id)}
 															selectionStroke={objectLayerUiColor}
+															selectionStrokeWidth={1 / worldScale}
 															onPointerDown={(event) =>
 																startObjectGesture(event, object)
 															}
@@ -7178,6 +7183,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																	selection.includes(object.id)
 														}
 														selectionStroke={objectLayerUiColor}
+														selectionStrokeWidth={1 / worldScale}
 														listening={
 															!object.locked &&
 															(!derived || derivedBlendId !== undefined)
@@ -7258,6 +7264,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												hitStrokeWidth={12 / worldScale}
 												selected={selected}
 												selectionStroke={layerUiColorForObject(object.id)}
+												selectionStrokeWidth={1 / worldScale}
 												listening={!entry.locked}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
@@ -7448,6 +7455,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											bounds={gesturePreview.bounds}
 											inverseScale={1 / worldScale}
 											color={canvasTheme.marquee}
+											strokeWidth={1 / worldScale}
 											handles={[]}
 										/>
 									) : null}
@@ -7461,6 +7469,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														bounds={bounds}
 														inverseScale={1 / worldScale}
 														color={selectionLayerColors[index]!}
+														strokeWidth={1 / worldScale}
 														handles={[]}
 														listening={false}
 													/>
@@ -7472,6 +7481,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												bounds={selectionBounds}
 												inverseScale={1 / worldScale}
 												color={aggregateSelectionColor}
+												strokeWidth={1 / worldScale}
 												fillOpacity={
 													selectionVisualObjects.length > 1 ? 0 : 0.06
 												}

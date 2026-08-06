@@ -25,6 +25,7 @@ export function VectorContourPath({
 	name,
 	selected = false,
 	selectionStroke = "#e17352",
+	selectionStrokeWidth = 1,
 	...props
 }: {
 	readonly object: VectorObject
@@ -44,6 +45,7 @@ export function VectorContourPath({
 	readonly listening?: boolean
 	readonly selected?: boolean
 	readonly selectionStroke?: string
+	readonly selectionStrokeWidth?: number
 	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void
 	readonly onDoubleClick?: (
 		event: KonvaEventObject<MouseEvent | TouchEvent>,
@@ -52,17 +54,27 @@ export function VectorContourPath({
 	readonly onPointerLeave?: (event: KonvaEventObject<PointerEvent>) => void
 }) {
 	const { onDoubleClick, ...pathProps } = props
+	const data = vectorObjectPath(object)
 	return (
-		<Path
-			{...pathProps}
-			name={`vector-contour-path ${name}`}
-			data={vectorObjectPath(object)}
-			{...(selected && pathProps.stroke === undefined
-				? { stroke: selectionStroke }
-				: {})}
-			onDblClick={(event) => onDoubleClick?.(event)}
-			onDblTap={(event) => onDoubleClick?.(event)}
-		/>
+		<>
+			<Path
+				{...pathProps}
+				name={`vector-contour-path ${name}`}
+				data={data}
+				onDblClick={(event) => onDoubleClick?.(event)}
+				onDblTap={(event) => onDoubleClick?.(event)}
+			/>
+			{selected ? (
+				<Path
+					name="vector-contour-selection"
+					data={data}
+					fillEnabled={false}
+					stroke={selectionStroke}
+					strokeWidth={selectionStrokeWidth}
+					listening={false}
+				/>
+			) : null}
+		</>
 	)
 }
 
@@ -397,6 +409,7 @@ export function VectorSelectionBounds({
 	yAxis = "down",
 	draggable = false,
 	fillOpacity = 0.06,
+	strokeWidth = 1.5 * inverseScale,
 	onHandlePointerDown,
 	onHandleDragStart,
 	onHandleDragMove,
@@ -416,6 +429,7 @@ export function VectorSelectionBounds({
 	readonly yAxis?: "up" | "down"
 	readonly draggable?: boolean
 	readonly fillOpacity?: number
+	readonly strokeWidth?: number
 	readonly onHandlePointerDown?: (
 		handle: VectorTransformHandle,
 		event: KonvaEventObject<PointerEvent>,
@@ -462,7 +476,7 @@ export function VectorSelectionBounds({
 				fill={color}
 				opacity={fillOpacity}
 				stroke={color}
-				strokeWidth={1.5 * inverseScale}
+				strokeWidth={strokeWidth}
 				draggable={draggable}
 				onPointerDown={(event) => onHandlePointerDown?.("move", event)}
 				onDragStart={(event) => onHandleDragStart?.("move", event)}

@@ -66,6 +66,6 @@ export function designArtboardCanvasChrome(
 			fontSize: 12 * pixel,
 			text: artboard.name,
 		}),
-		...(active ? { selection: outsideStroke(artboard, 2 * pixel, pixel) } : {}),
+		...(active ? { selection: outsideStroke(artboard, pixel, pixel) } : {}),
 	})
 }

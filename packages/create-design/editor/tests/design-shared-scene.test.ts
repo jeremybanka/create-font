@@ -495,9 +495,12 @@ describe("create-design shared vector scene", () => {
 		expect(contours).toHaveLength(1)
 		expect(contours[0]!.fillEnabled()).toBe(false)
 		expect(contours[0]!.listening()).toBe(true)
-		expect(contours[0]!.stroke()).toBe(
+		expect(contours[0]!.stroke()).toBeUndefined()
+		const contourSelection = stage.findOne(".vector-contour-selection")
+		expect(contourSelection.stroke()).toBe(
 			designLayerUiColorCss(initial.layers[0]!.uiColor),
 		)
+		expect(contourSelection.listening()).toBe(false)
 		expect(stage.find(".design-object")).toHaveLength(1)
 		const contentRow = document.querySelector<HTMLElement>(
 			`design-layers-tile [data-tree-key="object:${source.objects[0]!.id}"]`,
@@ -1282,7 +1285,19 @@ describe("create-design shared vector scene", () => {
 			const handle = stage.findOne(`.transform-handle-${name}`)
 			return handle.width() * handle.getAbsoluteScale().x
 		}
+		const screenStrokeWidth = (name: string) => {
+			const node = stage.findOne(name)
+			return node.strokeWidth() * node.getAbsoluteScale().x
+		}
 		for (const name of handleNames) expect(screenWidth(name)).toBeCloseTo(10)
+		const objectPath = stage.findOne(".design-object")
+		const selectionPath = stage.findOne(".vector-contour-selection")
+		expect(selectionPath).not.toBe(objectPath)
+		expect(selectionPath.listening()).toBe(false)
+		expect(selectionPath.getZIndex()).toBeGreaterThan(objectPath.getZIndex())
+		expect(screenStrokeWidth(".transform-selection-box")).toBeCloseTo(1)
+		expect(screenStrokeWidth(".vector-contour-selection")).toBeCloseTo(1)
+		expect(screenStrokeWidth(".design-artboard-border")).toBeCloseTo(1)
 
 		const cursorByHandle = {
 			nw: "nwse-resize",
@@ -1318,6 +1333,9 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		for (const name of handleNames) expect(screenWidth(name)).toBeCloseTo(10)
+		expect(screenStrokeWidth(".transform-selection-box")).toBeCloseTo(1)
+		expect(screenStrokeWidth(".vector-contour-selection")).toBeCloseTo(1)
+		expect(screenStrokeWidth(".design-artboard-border")).toBeCloseTo(1)
 
 		const help = document.querySelector<HTMLButtonElement>(
 			'button[aria-controls="design-contextual-help"]',

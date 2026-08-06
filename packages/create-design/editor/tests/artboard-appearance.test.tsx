@@ -41,7 +41,11 @@ describe("artboard appearance", () => {
 		expect(normal.label.fontSize).toBe(12)
 		expect(zoomed.label.fontSize).toBe(3)
 		expect(zoomed.label.y).toBe(artboard.y - 19 / 4)
+		expect(normal.border.strokeWidth).toBe(1)
+		expect(zoomed.border.strokeWidth).toBe(1 / 4)
 		expect(normal.selection).toBeDefined()
+		expect(normal.selection!.strokeWidth).toBe(1)
+		expect(zoomed.selection!.strokeWidth).toBe(1 / 4)
 		expect(
 			normal.selection!.x + normal.selection!.strokeWidth / 2,
 		).toBeLessThan(artboard.x)
