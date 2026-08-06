@@ -14,8 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  node-artifacts:
-    name: Artifacts
+  Build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -25,35 +24,57 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target
-          key: node-package-artifacts-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
-          restore-keys: node-package-artifacts-${{ runner.os }}-
+          key: node-build-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
+          restore-keys: |
+            node-build-${{ runner.os }}-
+            node-package-artifacts-${{ runner.os }}-
       - name: Verify Node test shard ownership
         run: node scripts/node-test-shards.ts verify
-      - run: pnpm run build
-      - name: Archive package artifacts
-        run: >-
-          tar -czf "$RUNNER_TEMP/node-package-artifacts.tgz"
-          apps/*/dist
-          packages/*/*/dist
-          packages/dprint-plugin-fea/plugin.wasm
-          packages/dprint-plugin-fea/manifest.json
-      - name: Upload package artifacts
+      - name: Build workspace
+        run: pnpm run build
+      - name: Archive package declarations
+        shell: bash
+        run: |
+          mapfile -d '' declaration_files < <(
+            find packages \
+              -path '*/dist/*' \
+              -type f \
+              \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) \
+              -print0
+          )
+          ((${#declaration_files[@]} > 0))
+          tar -czf "$RUNNER_TEMP/node-package-declarations.tgz" \
+            "${declaration_files[@]}"
+      - name: Upload package declarations
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: node-package-artifacts
-          path: ${{ runner.temp }}/node-package-artifacts.tgz
+          name: node-package-declarations
+          path: ${{ runner.temp }}/node-package-declarations.tgz
           if-no-files-found: error
           retention-days: 1
 
+  ESLint:
+    if: ${{ always() }}
+    needs: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require successful build
+        if: ${{ needs.Build.result != 'success' }}
+        run: exit 1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/download-node-declarations
+      - run: pnpm run check:eslint
+
   node-shared-foundations:
     name: Foundations
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
       - run: node scripts/node-test-shards.ts shared-foundations
 
   node-feature-syntax-core:
@@ -73,13 +94,12 @@ jobs:
 
   node-source-formats:
     name: Source formats
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
       - run: node scripts/node-test-shards.ts source-formats
 
   node-state-model:
@@ -93,68 +113,78 @@ jobs:
 
   node-editor:
     name: Editor
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
       - run: node scripts/node-test-shards.ts editor
 
   node-design-application:
     name: Design
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
       - run: node scripts/node-test-shards.ts design-application
 
   node-create-font-interfaces:
     name: Create Font
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
+      - name: Build Create Font packages
+        run: >-
+          pnpm
+          --filter create-font...
+          --filter '!dprint-plugin-fea'
+          --filter '!@create-font/fea-rs-wasm'
+          build
       - run: node scripts/node-test-shards.ts create-font-interfaces
 
   node-create-font-source-pipeline:
     name: Font pipeline
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
       - run: node scripts/node-test-shards.ts create-font-source-pipeline
 
   node-filesystem-integration:
     name: Filesystem
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
+      - name: Build Font editor packages
+        run: pnpm --filter @create-font/editor... build
       - run: node scripts/node-test-shards.ts filesystem-integration
 
   Bun:
     name: Bun compatibility
-    needs: node-artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/download-node-artifacts
+      - uses: ./.github/actions/setup-node-test-runtime
+      - name: Build Create Font packages
+        run: >-
+          pnpm
+          --filter create-font...
+          --filter '!dprint-plugin-fea'
+          --filter '!@create-font/fea-rs-wasm'
+          build
       - run: node apps/create-font/scripts/build-development.ts
       - run: >-
           mise exec bun@1.3.14 --
