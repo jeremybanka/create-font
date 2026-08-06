@@ -534,16 +534,15 @@ function DesignLayersTile({
 			].join(" · ")
 		}
 		if (row.kind === "group") {
-			const entries = descendantIds(
-				groups.get(row.key.slice("group:".length))?.children ?? [],
-			).flatMap((id) => {
+			const group = groups.get(row.key.slice("group:".length))
+			const entries = descendantIds(group?.children ?? []).flatMap((id) => {
 				const entry = effective.byObjectId.get(id)
 				return entry === undefined ? [] : [entry]
 			})
 			const hidden = entries.find(({ visible }) => !visible)
 			const locked = entries.find((entry) => entry.locked)
 			return [
-				"Group",
+				group?.clippingPathId === undefined ? "Group" : "Clipping mask",
 				`${row.descendantCount ?? 0} descendants`,
 				...(hidden === undefined
 					? []
@@ -563,7 +562,12 @@ function DesignLayersTile({
 		}
 		const entry = effective.byObjectId.get(row.object!.id)
 		return [
-			"Object",
+			entry?.clippingForGroupId === null ||
+			entry?.clippingForGroupId === undefined
+				? row.object?.geometry.kind === "image"
+					? "Placed image"
+					: "Object"
+				: "Clipping path",
 			...(entry?.hiddenBy === null || entry?.hiddenBy === undefined
 				? ["Visible"]
 				: [
@@ -706,6 +710,10 @@ function DesignLayersTile({
 			<layer-tree role="tree" aria-label="Document layers">
 				{rows.map((row, index) => {
 					const branch = row.hasChildren
+					const clippingPath =
+						row.kind === "object" &&
+						(effective.byObjectId.get(row.object!.id)?.clippingForGroupId ??
+							null) !== null
 					const selected =
 						row.kind === "group"
 							? context.selectedGroupId === row.key.slice("group:".length)
@@ -740,6 +748,7 @@ function DesignLayersTile({
 							tabIndex={focusedKey === row.key ? 0 : -1}
 							data-layer-kind={row.kind}
 							data-tree-key={row.key}
+							data-clipping-path={clippingPath ? "true" : undefined}
 							draggable={row.kind !== "layer"}
 							data-dragging={draggedKey === row.key ? "true" : undefined}
 							data-drop-target={dropKey === row.key ? "true" : undefined}
@@ -888,6 +897,8 @@ function DesignLayersTile({
 										{rowLayer.locked ? <svg.LockClosed /> : <svg.LockOpen />}
 									</button>
 								</layer-row-controls>
+							) : clippingPath ? (
+								<small data-clipping-path-badge>Clip</small>
 							) : null}
 						</layer-tree-row>
 					)

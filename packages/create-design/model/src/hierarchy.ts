@@ -16,6 +16,10 @@ export type DesignEffectiveHierarchyEntry = Readonly<{
 	object: DesignObject
 	layer: DesignLayer
 	groupIds: readonly string[]
+	/** Mask ancestors that clip this painted object, outermost first. */
+	maskGroupIds: readonly string[]
+	/** Present when this object is a non-painting clipping-path child. */
+	clippingForGroupId: string | null
 	visible: boolean
 	locked: boolean
 	hiddenBy: DesignEffectiveStateBlocker | null
@@ -57,12 +61,27 @@ export function projectDesignEffectiveHierarchy(
 		child: DesignSceneChild,
 		layer: DesignLayer,
 		groupIds: readonly string[],
+		maskGroupIds: readonly string[],
+		clippingForGroupId: string | null = null,
 	): void => {
 		if (child.kind === "group") {
 			const group: DesignGroup | undefined = groups.get(child.id)
 			if (group === undefined) return
-			for (const descendant of group.children)
-				visit(descendant, layer, [...groupIds, group.id])
+			for (const descendant of group.children) {
+				const clipping =
+					descendant.kind === "object" && descendant.id === group.clippingPathId
+						? group.id
+						: null
+				visit(
+					descendant,
+					layer,
+					[...groupIds, group.id],
+					clipping === null && group.clippingPathId !== undefined
+						? [...maskGroupIds, group.id]
+						: maskGroupIds,
+					clipping,
+				)
+			}
 			return
 		}
 		const object = objects.get(child.id)
@@ -81,6 +100,8 @@ export function projectDesignEffectiveHierarchy(
 			object,
 			layer,
 			groupIds,
+			maskGroupIds,
+			clippingForGroupId,
 			visible: hiddenBy === null,
 			locked: lockedBy !== null,
 			hiddenBy,
@@ -89,13 +110,13 @@ export function projectDesignEffectiveHierarchy(
 	}
 
 	for (const layer of document.layers)
-		for (const child of layer.children) visit(child, layer, [])
+		for (const child of layer.children) visit(child, layer, [], [])
 
 	return {
 		entries,
 		byObjectId: new Map(entries.map((entry) => [entry.object.id, entry])),
 		visibleObjects: entries.flatMap((entry) =>
-			entry.visible ? [entry.object] : [],
+			entry.visible && entry.clippingForGroupId === null ? [entry.object] : [],
 		),
 		editableObjects: entries.flatMap((entry) =>
 			entry.visible && !entry.locked ? [entry.object] : [],

@@ -18,6 +18,8 @@ import {
 	splitDesignDocument,
 	type DesignDocument,
 	type DesignFontReference,
+	type DesignImageResource,
+	type AssetIndexFile,
 	type FontIndexFile,
 } from "@create-design/source"
 import type {
@@ -50,6 +52,8 @@ function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
 		ok: true,
 		document: result.value,
 		fonts: [],
+		images: [],
+		imageDiagnostics: [],
 		revision: state.revision,
 	}
 }
@@ -107,7 +111,11 @@ export function designSourceTransaction(
 	const artboardPaths = collectionPaths(state, `artboards/index.json`)
 	const layerPaths = collectionPaths(state, `scene/layers/index.json`)
 	const groupPaths = collectionPaths(state, `scene/groups/index.json`)
+	const assetIndex = state.units.get("assets/index.json")?.value as
+		| AssetIndexFile
+		| undefined
 	const split = splitDesignDocument(document, {
+		...(assetIndex === undefined ? {} : { assetIndex }),
 		artboardPath: ({ id }) =>
 			artboardPaths.get(id) ?? defaultArtboardUnitPath(id),
 		layerPath: ({ id }) => layerPaths.get(id) ?? defaultLayerUnitPath(id),
@@ -119,6 +127,9 @@ export function designSourceTransaction(
 	}
 	const next = {
 		...(split.value as Readonly<Record<string, JsonValue>>),
+		...(state.units.get("assets/index.json")?.value === undefined
+			? {}
+			: { "assets/index.json": state.units.get("assets/index.json")!.value }),
 		...(state.units.get("fonts/index.json")?.value === undefined
 			? {}
 			: { "fonts/index.json": state.units.get("fonts/index.json")!.value }),
@@ -187,13 +198,74 @@ export async function loadDesignSourceFonts(
 	)
 }
 
+export async function loadDesignSourceImages(
+	client: DesignSourceFontClient,
+	state: SourceSyncState,
+	document: DesignDocument,
+): Promise<
+	Readonly<{
+		images: readonly DesignImageResource[]
+		diagnostics: readonly string[]
+	}>
+> {
+	const descriptors = new Map(
+		[...(state.assets?.values() ?? [])].map((asset) => [asset.id, asset]),
+	)
+	const sources = new Map(
+		document.objects.flatMap((object) =>
+			object.geometry.kind === "image" &&
+			object.geometry.source.kind === "embedded"
+				? [[object.geometry.source.id, object.geometry] as const]
+				: [],
+		),
+	)
+	const images: DesignImageResource[] = []
+	const diagnostics: string[] = []
+	await Promise.all(
+		[...sources].map(async ([id, geometry]) => {
+			const descriptor = descriptors.get(id)
+			if (descriptor === undefined) {
+				diagnostics.push(`Embedded image asset ${id} is missing.`)
+				return
+			}
+			try {
+				const content = await client.readAsset(descriptor.path)
+				images.push({
+					id,
+					mediaType: geometry.mediaType,
+					bytes: new Uint8Array(
+						await new Response(content.bytes).arrayBuffer(),
+					),
+				})
+			} catch (error) {
+				diagnostics.push(
+					`Could not read embedded image ${id}: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}),
+	)
+	return {
+		images: images.toSorted((left, right) => left.id.localeCompare(right.id)),
+		diagnostics: diagnostics.toSorted(),
+	}
+}
+
 async function hydrateDesignSourceUpdate(
 	client: DesignSourceFontClient,
 	state: SourceSyncState,
 ): Promise<DesignExternalSourceUpdate> {
 	const update = assemble(state)
 	if (!update.ok) return update
-	return { ...update, fonts: await loadDesignSourceFonts(client, state) }
+	const [fonts, imageLoad] = await Promise.all([
+		loadDesignSourceFonts(client, state),
+		loadDesignSourceImages(client, state, update.document),
+	])
+	return {
+		...update,
+		fonts,
+		images: imageLoad.images,
+		imageDiagnostics: imageLoad.diagnostics,
+	}
 }
 
 function fontMediaType(extension: string): string {
@@ -300,6 +372,95 @@ export async function installDesignSourceFont(
 	}
 }
 
+export async function installDesignSourceImage(
+	client: DesignSourceAssetClient,
+	state: SourceSyncState,
+	id: string,
+	bytes: Uint8Array,
+	fileName: string,
+	mediaType: "image/jpeg" | "image/png",
+): Promise<
+	Readonly<{
+		resource: DesignImageResource
+		result: Awaited<ReturnType<DesignSourceAssetClient["writeAssets"]>>
+	}>
+> {
+	const hash = new Uint8Array(
+		await crypto.subtle.digest("SHA-256", bytes.slice().buffer),
+	)
+	const sha256 = [...hash]
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("")
+	const existingValue = state.units.get("assets/index.json")?.value
+	const parsed =
+		existingValue === undefined
+			? null
+			: (existingValue as unknown as AssetIndexFile)
+	const previous = parsed?.entries.find((entry) => entry.id === id)
+	const extension = mediaType === "image/png" ? "png" : "jpg"
+	const slug = id
+		.slice("asset:".length)
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9._-]+/gu, "-")
+	const fileSlug = fileName
+		.replace(/\.[^.]+$/u, "")
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9._-]+/gu, "-")
+	const path =
+		previous?.path ??
+		`assets/${fileSlug || slug || "image"}-${slug}.${extension}`
+	const digest = `sha256:${sha256}` as const
+	const operationId = crypto.randomUUID()
+	const staged = await client.stageAsset(
+		operationId,
+		{
+			byteLength: bytes.byteLength,
+			digest,
+			id,
+			mediaType,
+			path,
+		},
+		bytes.slice().buffer,
+	)
+	const entries = [
+		...(parsed?.entries.filter((entry) => entry.id !== id) ?? []),
+		{
+			byteLength: bytes.byteLength,
+			id,
+			mediaType,
+			path,
+			sha256,
+		},
+	].toSorted((left, right) => left.id.localeCompare(right.id))
+	const currentIndex = state.units.get("assets/index.json")
+	try {
+		const result = await client.writeAssets({
+			idempotencyKey: operationId,
+			assetWrites: [
+				{
+					expectedDigest: state.assets?.get(path)?.digest ?? null,
+					stagingToken: staged.stagingToken,
+				},
+			],
+			writes: [
+				{
+					expectedRevision: currentIndex?.revision ?? null,
+					path: "assets/index.json",
+					value: {
+						format: "create-design.asset-index",
+						version: 1,
+						entries,
+					} as unknown as JsonValue,
+				},
+			],
+		})
+		return { resource: { id, mediaType, bytes }, result }
+	} catch (error) {
+		await client.discardAssetStage(staged.stagingToken).catch(() => undefined)
+		throw error
+	}
+}
+
 function websocketUrl(): string {
 	const url = new URL(`/api/source/events`, window.location.href)
 	url.protocol = url.protocol === `https:` ? `wss:` : `ws:`
@@ -393,12 +554,43 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	socket.addEventListener(`close`, () => status(`recovering`))
 
 	const fonts = initial.fonts
+	const images = initial.images ?? []
 
 	return {
 		...(workspace === undefined ? {} : { displayName: workspace }),
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
 		...(fonts.length === 0 ? {} : { fonts }),
+		...(images.length === 0 ? {} : { images }),
+		...((initial.imageDiagnostics?.length ?? 0) === 0
+			? {}
+			: { imageDiagnostics: initial.imageDiagnostics }),
+		async installImage(id, bytes, fileName, mediaType) {
+			const installed = await installDesignSourceImage(
+				client,
+				state,
+				id,
+				bytes,
+				fileName,
+				mediaType,
+			)
+			const { result } = installed
+			const applied = applySourceSyncDelta(state, {
+				type: "source.changed",
+				previousRevision: result.previousRevision,
+				revision: result.revision,
+				removedPaths: result.removedPaths,
+				removedAssetPaths: result.removedAssetPaths,
+				units: result.units,
+				assets: result.assets,
+			})
+			if (applied.kind === "gap") await recover(false)
+			else {
+				state = applied.state
+				sourceGeneration += 1
+			}
+			return installed.resource
+		},
 		async installFont(reference, bytes, fileName, _mediaType) {
 			const installed = await installDesignSourceFont(
 				client,

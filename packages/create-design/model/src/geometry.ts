@@ -98,6 +98,19 @@ export function geometryContours(
 	// it as authored vector geometry here would silently discard editability.
 	if (geometry.kind === "text") return []
 	if (geometry.kind === "path") return geometry.contours
+	if (geometry.kind === "image") {
+		return [
+			rectangleContour(
+				{
+					minX: 0,
+					minY: 0,
+					maxX: geometry.intrinsicWidth,
+					maxY: geometry.intrinsicHeight,
+				},
+				`${identityPrefix}:contour:0`,
+			),
+		]
+	}
 	if (geometry.kind === "rectangle") {
 		return [
 			rectangleContour(

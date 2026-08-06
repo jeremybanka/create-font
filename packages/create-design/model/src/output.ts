@@ -16,6 +16,7 @@ export type DesignOutputEntry = Readonly<{
 	object: DesignObject
 	layer: DesignLayer
 	groupIds: readonly string[]
+	maskGroupIds: readonly string[]
 	source:
 		| Readonly<{ kind: "object"; objectId: string }>
 		| Readonly<{ kind: "blend"; blendId: string }>
@@ -77,6 +78,7 @@ export function projectDesignOutput(
 				object,
 				layer: placement.layer,
 				groupIds: placement.groupIds,
+				maskGroupIds: placement.maskGroupIds,
 				source: { kind: "blend", blendId: blend.id },
 			})
 	}
@@ -84,12 +86,13 @@ export function projectDesignOutput(
 	const entries = blendProjection.objects.flatMap((object) => {
 		const authored = hierarchyByObjectId.get(object.id)
 		if (authored !== undefined)
-			return authored.visible
+			return authored.visible && authored.clippingForGroupId === null
 				? [
 						{
 							object,
 							layer: authored.layer,
 							groupIds: authored.groupIds,
+							maskGroupIds: authored.maskGroupIds,
 							source: {
 								kind: "object" as const,
 								objectId: object.id,

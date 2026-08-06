@@ -35,6 +35,14 @@ export function shapeExpansionEligibility(
 			eligible: false,
 			reason: "The selected object is already ordinary path geometry.",
 		}
+	if (
+		object.geometry.kind !== "rectangle" &&
+		object.geometry.kind !== "ellipse"
+	)
+		return {
+			eligible: false,
+			reason: "Only live rectangles and ellipses can expand as shapes.",
+		}
 	return { eligible: true, object }
 }
 
@@ -46,7 +54,11 @@ export function expandDesignShape(
 	object: DesignObject,
 	nextId: () => string,
 ): DesignObject {
-	if (object.geometry.kind === "path") return object
+	if (
+		object.geometry.kind !== "rectangle" &&
+		object.geometry.kind !== "ellipse"
+	)
+		return object
 	return {
 		...object,
 		geometry: {

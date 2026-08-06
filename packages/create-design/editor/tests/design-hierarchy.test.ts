@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import {
 	appendDesignHierarchyObjects,
+	designHierarchySelectionBounds,
 	designSelectInteraction,
 	designSelectionUnitAtObject,
 	groupDesignSelection,
+	makeDesignClippingMask,
 	moveDesignHierarchyNode,
 	normalizeDesignSelection,
 	removeDesignHierarchyObjects,
@@ -15,7 +17,11 @@ import {
 import { createInitialDocument } from "../src/document.ts"
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createDesignPersistenceState } from "../src/persistence.ts"
-import { translateObject } from "@create-design/model"
+import {
+	projectDesignEffectiveHierarchy,
+	translateObject,
+	visibleObjectBounds,
+} from "@create-design/model"
 
 const fixture = () => {
 	const document = createInitialDocument()
@@ -184,6 +190,41 @@ describe("design hierarchy commands", () => {
 		])
 		expect(movedGroup?.selection).toEqual(["object:coral", "object:front"])
 		expect(movedGroup?.document.groups[0]).toBe(grouped.document.groups[0])
+	})
+
+	it("moves a clipping contour as a regular member and releases its old mask", () => {
+		const document = fixture()
+		const masked = makeDesignClippingMask(
+			document,
+			["object:coral", "object:middle"],
+			() => "movable-clip",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const reordered = moveDesignHierarchyNode(
+			masked.document,
+			{ kind: "object", id: "object:middle" },
+			{ kind: "group", id: "group:movable-clip" },
+			0,
+		)
+		expect(reordered?.document.groups[0]).toMatchObject({
+			clippingPathId: "object:middle",
+			children: [
+				{ kind: "object", id: "object:middle" },
+				{ kind: "object", id: "object:coral" },
+			],
+		})
+
+		const moved = moveDesignHierarchyNode(
+			reordered!.document,
+			{ kind: "object", id: "object:middle" },
+			{ kind: "layer", id: document.layers[0]!.id },
+			1,
+		)
+		expect(moved?.document.groups[0]).not.toHaveProperty("clippingPathId")
+		expect(moved?.document.layers[0]?.children).toContainEqual({
+			kind: "object",
+			id: "object:middle",
+		})
 	})
 
 	it("rejects cycles and hidden or locked hierarchy move boundaries before mutation", () => {
@@ -431,6 +472,67 @@ describe("design hierarchy commands", () => {
 		state.silo.undo(state.documentTimeline)
 		expect(state.silo.getState(state.states.documentSelector)).toEqual(
 			grouped.document,
+		)
+	})
+
+	it("turns a clipped member hit into one rigid clipping-mask interaction", () => {
+		const document = fixture()
+		const masked = makeDesignClippingMask(
+			document,
+			["object:coral", "object:middle"],
+			() => "selection",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const eligibleObjectIds = new Set(
+			projectDesignEffectiveHierarchy(masked.document).editableObjects.map(
+				({ id }) => id,
+			),
+		)
+		const interaction = designSelectInteraction(
+			masked.document,
+			[],
+			"object:coral",
+			null,
+			false,
+			eligibleObjectIds,
+		)
+
+		expect(interaction?.unit).toMatchObject({
+			kind: "group",
+			id: "group:selection",
+			objectIds: ["object:coral", "object:middle"],
+		})
+		expect(interaction?.objects.map(({ id }) => id)).toEqual([
+			"object:coral",
+			"object:middle",
+		])
+	})
+
+	it("uses a complete clipping contour as the mask group's outer bounds", () => {
+		const document = fixture()
+		const overflow = {
+			...document,
+			objects: document.objects.map((object) =>
+				object.id === "object:coral"
+					? translateObject(object, 500, 300)
+					: object,
+			),
+		}
+		const masked = makeDesignClippingMask(
+			overflow,
+			["object:coral", "object:middle"],
+			() => "bounds",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const clippingPath = masked.document.objects.find(
+			({ id }) => id === "object:middle",
+		)!
+		const selected = masked.document.objects.filter(({ id }) =>
+			masked.selection.includes(id),
+		)
+
+		expect(designHierarchySelectionBounds(masked.document, selected)).toEqual(
+			visibleObjectBounds(clippingPath),
 		)
 	})
 

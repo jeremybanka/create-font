@@ -1,9 +1,10 @@
-import type { DesignDocument } from "@create-design/source"
+import type { DesignDocument, DesignImageResource } from "@create-design/source"
 
 import type { DesignSourceSession } from "./source-session.ts"
 
 export type DesignEditorBrowserOptions = Readonly<{
 	initialDocument?: DesignDocument
+	imageResources?: readonly DesignImageResource[]
 	sourceSession?: DesignSourceSession
 }>
 
@@ -17,4 +18,4 @@ export declare function mountDesignEditor(
 	options?: DesignEditorBrowserOptions,
 ): MountedDesignEditor
 
-export type { DesignDocument, DesignSourceSession }
+export type { DesignDocument, DesignImageResource, DesignSourceSession }

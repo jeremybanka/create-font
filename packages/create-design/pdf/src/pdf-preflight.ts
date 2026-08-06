@@ -16,12 +16,19 @@ import {
 	projectDesignOutput,
 	type Bounds,
 } from "@create-design/model"
-import type { DesignArtboard, DesignDocument } from "@create-design/source"
+import type {
+	DesignArtboard,
+	DesignDocument,
+	DesignImageResource,
+} from "@create-design/source"
 import type { DesignTextService } from "@create-design/text"
 
 export const PDF_EXPORT_CAPABILITIES = Object.freeze([
 	"artboard.bleed",
 	"artboard.clip",
+	"image.placement",
+	"image.jpeg",
+	"mask.clipping-group",
 	"paint.cmyk",
 	"paint.fill.even-odd",
 	"paint.rgb",
@@ -150,6 +157,7 @@ export function preflightPdfExport(
 	target: PdfExportTarget,
 	preferences: ExportPreflightPreferences = {},
 	textService?: DesignTextService,
+	imageResources: ReadonlyMap<string, DesignImageResource> = new Map(),
 ): ExportPreflightResult {
 	const output = projectDesignOutput(document)
 	const result = runExportPreflight(
@@ -162,7 +170,46 @@ export function preflightPdfExport(
 		Object.freeze({
 			...PDF_PREFLIGHT_ADAPTER,
 			inspectObject({ object }) {
-				if (object.hidden || object.geometry.kind !== "text") return []
+				if (object.hidden) return []
+				if (object.geometry.kind === "image") {
+					const action = Object.freeze({
+						kind: "select-entity" as const,
+						entityKind: "object",
+						entityId: object.id,
+					})
+					if (object.geometry.mediaType !== "image/jpeg")
+						return [
+							Object.freeze({
+								action,
+								capability: "image.jpeg",
+								code: "pdf.image.unsupported-media-type",
+								entityId: object.id,
+								entityKind: "object",
+								message: `${object.name} uses ${object.geometry.mediaType}; PDF export supports baseline JPEG placement.`,
+								severity: "error" as const,
+								target: "pdf",
+							}),
+						]
+					const resource = imageResources.get(object.geometry.source.id)
+					if (resource === undefined)
+						return [
+							Object.freeze({
+								action,
+								capability: "image.placement",
+								code: "pdf.image.missing-resource",
+								entityId: object.id,
+								entityKind: "object",
+								message:
+									object.geometry.source.kind === "linked"
+										? `${object.name} is missing linked image ${object.geometry.source.href}; relink it before PDF export.`
+										: `${object.name} is missing embedded asset ${object.geometry.source.id}.`,
+								severity: "error" as const,
+								target: "pdf",
+							}),
+						]
+					return []
+				}
+				if (object.geometry.kind !== "text") return []
 				const action = Object.freeze({
 					kind: "select-entity" as const,
 					entityKind: "object",

@@ -12,6 +12,102 @@ import {
 import { parseSvgFixture } from "./svg-parser-fixture.ts"
 
 describe("SVG export", () => {
+	it("embeds placed pixels and applies the same explicit clipping group", () => {
+		const initial = createInitialDocument()
+		const clip = initial.objects[0]!
+		const image = {
+			id: "object:image",
+			name: "Portrait",
+			geometry: {
+				kind: "image" as const,
+				source: { kind: "embedded" as const, id: "asset:portrait" },
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 2,
+				intrinsicHeight: 1,
+			},
+			transform: { a: 20, b: 0, c: 0, d: 20, e: 12, f: 18 },
+			appearance: {},
+		}
+		const document = {
+			...initial,
+			objects: [image, clip],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:mask" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:mask",
+					name: "Portrait mask",
+					children: [
+						{ kind: "object" as const, id: image.id },
+						{ kind: "object" as const, id: clip.id },
+					],
+					clippingPathId: clip.id,
+				},
+			],
+		}
+		const imageResources = new Map([
+			[
+				"asset:portrait",
+				{
+					id: "asset:portrait",
+					mediaType: "image/jpeg" as const,
+					bytes: new Uint8Array([1, 2]),
+				},
+			],
+		])
+		const options = { imageResources }
+		const svg = new TextDecoder().decode(
+			exportSvg(document, undefined, options),
+		)
+		expect(preflightSvgExport(document, undefined, options).decision).toBe(
+			"ready",
+		)
+		expect(svg).toContain('href="data:image/jpeg;base64,AQI="')
+		expect(svg).toContain('clip-path="url(#group:mask:clip)"')
+		expect(svg).toContain('<clipPath id="group:mask:clip">')
+		expect(svg.match(new RegExp(`id="${clip.id}"`, "g"))).toBeNull()
+	})
+
+	it("keeps linked-image identity as an external SVG href", () => {
+		const initial = createInitialDocument()
+		const image = {
+			id: "object:linked",
+			name: "Linked",
+			geometry: {
+				kind: "image" as const,
+				source: {
+					kind: "linked" as const,
+					id: "asset:linked",
+					href: "../images/linked.jpg?revision=4&proof=true",
+				},
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 40,
+				intrinsicHeight: 30,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {},
+		}
+		const document = {
+			...initial,
+			objects: [image],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: image.id }],
+				},
+			],
+			groups: [],
+		}
+		const svg = new TextDecoder().decode(exportSvg(document))
+		expect(svg).toContain(
+			'href="../images/linked.jpg?revision=4&amp;proof=true"',
+		)
+		expect(preflightSvgExport(document).decision).toBe("ready")
+	})
 	it("matches effective layer visibility, locking, nesting, and paint order", () => {
 		const initial = createInitialDocument()
 		const source = initial.objects[0]!

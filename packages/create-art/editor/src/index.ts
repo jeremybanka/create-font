@@ -2,6 +2,7 @@ export { CommandPalette } from "./CommandPalette.tsx"
 export {
 	Circle,
 	Group,
+	Image,
 	Layer,
 	Line,
 	Path,

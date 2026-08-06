@@ -32,6 +32,7 @@ export const layerIdSchema = z.string().regex(/^layer:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
 export const guideIdSchema = z.string().regex(/^guide:.+/u)
 export const artboardIdSchema = z.string().regex(/^artboard:.+/u)
+export const assetIdSchema = z.string().regex(/^asset:.+/u)
 export const contourIdSchema = z.string().min(1)
 export const pointIdSchema = z.string().min(1)
 
@@ -184,11 +185,35 @@ export const textGeometrySchema = z
 			.optional(),
 	})
 	.strict()
+const imageSourceSchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("embedded"), id: assetIdSchema }).strict(),
+	z
+		.object({
+			kind: z.literal("linked"),
+			id: assetIdSchema,
+			href: z.string().min(1),
+			expectedDigest: z
+				.string()
+				.regex(/^sha256:[0-9a-f]{64}$/u)
+				.optional(),
+		})
+		.strict(),
+])
+export const imageGeometrySchema = z
+	.object({
+		kind: z.literal("image"),
+		source: imageSourceSchema,
+		mediaType: z.enum(["image/jpeg", "image/png"]),
+		intrinsicWidth: positiveNumberSchema,
+		intrinsicHeight: positiveNumberSchema,
+	})
+	.strict()
 export const geometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
 	textGeometrySchema,
+	imageGeometrySchema,
 ])
 export const previousGeometrySchema = z.discriminatedUnion("kind", [
 	previousPathGeometrySchema,
@@ -200,6 +225,7 @@ export const compatibleGeometrySchema = z.discriminatedUnion("kind", [
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
 	textGeometrySchema,
+	imageGeometrySchema,
 ])
 const legacyGeometrySchema = z.discriminatedUnion("kind", [
 	legacyPathGeometrySchema,
@@ -346,6 +372,7 @@ export const groupSchema = z
 		id: groupIdSchema,
 		name: z.string(),
 		children: z.array(sceneChildSchema),
+		clippingPathId: designObjectIdSchema.optional(),
 	})
 	.strict()
 export const layerSchema = z
@@ -625,6 +652,34 @@ function relationalDiagnostics(
 					),
 				)
 			groups.set(group.id, group)
+			if (group.clippingPathId !== undefined) {
+				const directChild = group.children.some(
+					(child) =>
+						child.kind === "object" && child.id === group.clippingPathId,
+				)
+				const clippingObject = document.objects.find(
+					(object) => object.id === group.clippingPathId,
+				)
+				if (!directChild)
+					errors.push(
+						diagnostic(
+							"directory.hierarchy",
+							`$.groups[${index}].clippingPathId`,
+							`Mask group ${group.id} must identify one of its direct object children as the clipping path.`,
+						),
+					)
+				else if (
+					clippingObject?.geometry.kind === "image" ||
+					clippingObject?.geometry.kind === "text"
+				)
+					errors.push(
+						diagnostic(
+							"directory.hierarchy",
+							`$.groups[${index}].clippingPathId`,
+							`Mask group ${group.id} requires vector clipping geometry.`,
+						),
+					)
+			}
 		}
 		const visitedObjects: string[] = []
 		const structuralObjects = new Set<string>()

@@ -13,13 +13,20 @@ import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
-import { groupDesignSelection } from "../src/design-hierarchy.ts"
+import {
+	groupDesignSelection,
+	makeDesignClippingMask,
+} from "../src/design-hierarchy.ts"
 import {
 	createDesignTextObject,
 	designTextBrowserFontFamily,
 	designTextCssFontFamily,
 } from "../src/design-text.ts"
-import { objectBounds } from "@create-design/model"
+import {
+	objectBounds,
+	translateObject,
+	visibleObjectBounds,
+} from "@create-design/model"
 import type {
 	PathfinderWorkerClient,
 	PathfinderWorkerOutcome,
@@ -452,6 +459,121 @@ describe("create-design shared vector scene", () => {
 			(box: { opacity(): number }) => box.opacity() === 0,
 		)
 		expect(aggregate?.stroke()).toBe(readDesignCanvasTheme().marquee)
+	})
+
+	it("hits and drags a clipping contour only along its padded edge", async () => {
+		const initial = createInitialDocument()
+		const source = {
+			...initial,
+			objects: [
+				initial.objects[0]!,
+				{ ...initial.objects[1]!, appearance: {} },
+			],
+		}
+		const masked = makeDesignClippingMask(
+			source,
+			source.objects.map(({ id }) => id),
+			() => "selection-outline",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const group = masked.document.groups.find(
+			({ id }) => id === "group:selection-outline",
+		)
+		if (group?.clippingPathId === undefined)
+			throw new Error("Expected a clipping contour.")
+		const stage = mountDesign({ initialDocument: masked.document })
+		const contourRow = document.querySelector<HTMLElement>(
+			`design-layers-tile [data-tree-key="object:${group.clippingPathId}"]`,
+		)
+		if (contourRow === null)
+			throw new Error("Clipping contour row did not render.")
+
+		act(() => contourRow.click())
+		expect(contourRow.getAttribute("aria-selected")).toBe("true")
+		const contours = stage.find(".design-clipping-selection")
+		expect(contours).toHaveLength(1)
+		expect(contours[0]!.fillEnabled()).toBe(false)
+		expect(contours[0]!.listening()).toBe(true)
+		expect(contours[0]!.stroke()).toBe(
+			designLayerUiColorCss(initial.layers[0]!.uiColor),
+		)
+		expect(stage.find(".design-object")).toHaveLength(1)
+		const contentRow = document.querySelector<HTMLElement>(
+			`design-layers-tile [data-tree-key="object:${source.objects[0]!.id}"]`,
+		)
+		if (contentRow === null)
+			throw new Error("Masked content row did not render.")
+		act(() => contentRow.click())
+		const hit = stage.findOne(".design-clipping-hit")
+		expect(hit).toBeDefined()
+		expect(hit.fillEnabled()).toBe(false)
+		expect(hit.stroke()).toBe("rgb(0 0 0 / 0.001)")
+		expect(hit.hitStrokeWidth()).toBeGreaterThan(hit.strokeWidth())
+		let pointer = { x: 300, y: 240 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const before = hit.getClientRect()
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			next: { x: number; y: number },
+		) => {
+			pointer = next
+			hit.fire(
+				type,
+				{
+					evt: new PointerEvent(type, {
+						bubbles: true,
+						button: 0,
+						buttons: type === "pointerup" ? 0 : 1,
+						clientX: next.x,
+						clientY: next.y,
+						isPrimary: true,
+						pointerId: 91,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			fire("pointerdown", pointer)
+			fire("pointermove", { x: 337, y: 269 })
+			fire("pointerup", { x: 337, y: 269 })
+			await Promise.resolve()
+		})
+		const after = stage.findOne(".design-clipping-selection").getClientRect()
+		expect({ x: after.x, y: after.y }).not.toEqual({ x: before.x, y: before.y })
+	})
+
+	it("uses clipping contour bounds for a clipping mask transform box", () => {
+		const initial = createInitialDocument()
+		const content = translateObject(initial.objects[0]!, 500, 300)
+		const clippingPath = initial.objects[1]!
+		const source = { ...initial, objects: [content, clippingPath] }
+		const masked = makeDesignClippingMask(
+			source,
+			source.objects.map(({ id }) => id),
+			() => "transform-bounds",
+		)
+		if (masked === null) throw new Error("Expected clipping mask to succeed.")
+		const stage = mountDesign({ initialDocument: masked.document })
+		const groupRow = document.querySelector<HTMLElement>(
+			'design-layers-tile [data-tree-key="group:group:transform-bounds"]',
+		)
+		const clippingBounds = visibleObjectBounds(clippingPath)
+		if (groupRow === null || clippingBounds === null)
+			throw new Error("Clipping-mask transform fixture did not render.")
+
+		act(() => groupRow.click())
+		const aggregate = stage
+			.find(".transform-selection-box")
+			.find((box: { opacity(): number }) => box.opacity() === 0)
+		expect(aggregate).toBeDefined()
+		expect({
+			minX: aggregate!.x(),
+			minY: aggregate!.y(),
+			maxX: aggregate!.x() + aggregate!.width(),
+			maxY: aggregate!.y() + aggregate!.height(),
+		}).toEqual(clippingBounds)
 	})
 
 	it("cancels an in-flight object gesture when its layer becomes locked", async () => {

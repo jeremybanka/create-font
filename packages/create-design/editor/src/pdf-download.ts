@@ -6,7 +6,7 @@ import {
 	type ExportPreflightResult,
 } from "@create-design/pdf"
 import { preflightPdfExport } from "@create-design/pdf"
-import type { DesignDocument } from "./types.ts"
+import type { DesignDocument, DesignImageResource } from "./types.ts"
 
 export interface PdfDownloadEnvironment {
 	readonly activate: (url: string, filename: string) => void
@@ -33,18 +33,22 @@ export function browserPdfDownloadEnvironment(): PdfDownloadEnvironment {
 
 export function createPdfDownloadManager(
 	environment: PdfDownloadEnvironment = browserPdfDownloadEnvironment(),
-	options: Readonly<{ textService?: DesignTextService }> = {},
+	options: Readonly<{
+		textService?: DesignTextService
+		imageResources?: ReadonlyMap<string, DesignImageResource>
+	}> = {},
 ) {
 	const serialize =
 		environment.serialize ??
 		((document: DesignDocument, target: PdfExportTarget) =>
-			exportPdf(
-				document,
-				target,
-				options.textService === undefined
+			exportPdf(document, target, {
+				...(options.textService === undefined
 					? {}
-					: { textService: options.textService },
-			))
+					: { textService: options.textService }),
+				...(options.imageResources === undefined
+					? {}
+					: { imageResources: options.imageResources }),
+			}))
 	let generation = 0
 	let disposed = false
 
@@ -63,6 +67,7 @@ export function createPdfDownloadManager(
 				target,
 				preferences,
 				options.textService,
+				options.imageResources,
 			)
 		},
 		async request(
@@ -77,6 +82,7 @@ export function createPdfDownloadManager(
 				target,
 				preferences,
 				options.textService,
+				options.imageResources,
 			)
 			if (!exportPreflightAllowsOutput(preflight)) return false
 			let bytes: Uint8Array

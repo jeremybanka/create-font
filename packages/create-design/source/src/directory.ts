@@ -186,6 +186,7 @@ export const groupFileSchema = z
 		id: groupIdSchema,
 		name: z.string(),
 		children: z.array(sceneChildSchema),
+		clippingPathId: designObjectIdSchema.optional(),
 	})
 	.strict()
 const inlineObjectFileSchema = z
@@ -666,6 +667,7 @@ export function formatSourceUnit(
 }
 
 export interface SplitDesignDocumentOptions {
+	readonly assetIndex?: AssetIndexFile
 	readonly artboardPath?: (
 		artboard: DesignDocument["artboards"][number],
 		index: number,
@@ -858,11 +860,13 @@ export function splitDesignDocument(
 				left.id.localeCompare(right.id),
 			),
 		} satisfies ObjectIndexFile,
-		[designSourcePaths.assetIndex]: {
-			format: "create-design.asset-index",
-			version: 1,
-			entries: [],
-		} satisfies AssetIndexFile,
+		[designSourcePaths.assetIndex]:
+			options.assetIndex ??
+			({
+				format: "create-design.asset-index",
+				version: 1,
+				entries: [],
+			} satisfies AssetIndexFile),
 		[designSourcePaths.fontIndex]: {
 			format: "create-design.font-index",
 			version: 1,
@@ -1241,7 +1245,28 @@ export function assembleDesignDocument(
 			id: file.id,
 			name: file.name,
 			children: file.children,
+			...(file.clippingPathId === undefined
+				? {}
+				: { clippingPathId: file.clippingPathId }),
 		})
+	}
+	const embeddedAssets = new Set(
+		(assetIndex?.entries ?? []).map(({ id }) => id),
+	)
+	for (const [objectId, object] of objects) {
+		if (
+			object.geometry.kind === "image" &&
+			object.geometry.source.kind === "embedded" &&
+			!embeddedAssets.has(object.geometry.source.id)
+		)
+			errors.push(
+				diagnostic(
+					"directory.reference",
+					"$.geometry.source.id",
+					`Placed image ${objectId} references missing embedded asset ${object.geometry.source.id}.`,
+					objectIndex?.entries.find(({ id }) => id === objectId)?.path,
+				),
+			)
 	}
 
 	const orderedObjects: DesignObject[] = []

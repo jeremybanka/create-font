@@ -238,6 +238,39 @@ describe("Design Layers tree", () => {
 		expect(active?.textContent).toContain("Inner group")
 	})
 
+	it("marks clipping contours as selectable, draggable layer-tree members", () => {
+		const document = fixture()
+		const masked = {
+			...document,
+			groups: document.groups.map((group) =>
+				group.id === "group:inner"
+					? { ...group, clippingPathId: "object:nested" }
+					: group,
+			),
+		}
+		const value = context(masked)
+		const host = mount(value)
+		expandAll(host)
+		const row = host.querySelector<HTMLElement>(
+			'[data-tree-key="object:object:nested"]',
+		)
+		if (row === null) throw new Error("Clipping contour row did not render.")
+
+		expect(row.getAttribute("data-clipping-path")).toBe("true")
+		expect(row.hasAttribute("draggable")).toBe(true)
+		expect(row.getAttribute("aria-label")).toContain("Clipping path")
+		expect(row.querySelector("[data-clipping-path-badge]")?.textContent).toBe(
+			"Clip",
+		)
+		act(() => row.click())
+		expect(value.selectHierarchyObject).toHaveBeenCalledWith(
+			expect.objectContaining({ id: "object:nested" }),
+			"layer:back",
+			["group:outer", "group:inner"],
+			false,
+		)
+	})
+
 	it("exposes separate layer state toggles and active-layer authoring controls", () => {
 		const value = context()
 		const host = mount(value)

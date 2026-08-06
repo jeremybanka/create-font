@@ -143,6 +143,18 @@ export function nearestDesignObject(
 				candidates.push({ object, distancePixels: 0, index })
 			continue
 		}
+		if (object.geometry.kind === "image") {
+			const bounds = visibleObjectBounds(object)
+			if (
+				bounds !== null &&
+				point.x >= bounds.minX &&
+				point.x <= bounds.maxX &&
+				point.y >= bounds.minY &&
+				point.y <= bounds.maxY
+			)
+				candidates.push({ object, distancePixels: 0, index })
+			continue
+		}
 		const strokeVisible =
 			object.appearance.stroke !== undefined &&
 			object.appearance.stroke.width > 0
@@ -390,11 +402,12 @@ export function snapDesignObject(
 	settingsOrThreshold:
 		| DesignSnapSettings
 		| number = DEFAULT_DESIGN_SNAP_SETTINGS,
+	interactionBounds: Bounds | null = visibleObjectBounds(object),
 ): DesignSnapResult {
-	const bounds = visibleObjectBounds(object)
-	if (bounds === null || !(worldScale > 0)) return { object, x: null, y: null }
+	if (interactionBounds === null || !(worldScale > 0))
+		return { object, x: null, y: null }
 	const result = snapBoundsTranslation(
-		bounds,
+		interactionBounds,
 		sceneInput,
 		worldScale,
 		settingsOrThreshold,
@@ -436,12 +449,12 @@ export function snapDesignObjects(
 	settingsOrThreshold:
 		| DesignSnapSettings
 		| number = DEFAULT_DESIGN_SNAP_SETTINGS,
+	selectionBounds: Bounds | null = combinedVisibleBounds(objects),
 ): DesignGroupSnapResult {
-	const bounds = combinedVisibleBounds(objects)
-	if (bounds === null || !(worldScale > 0))
+	if (selectionBounds === null || !(worldScale > 0))
 		return { objects, x: null, y: null, matches: [] }
 	const result = snapBoundsTranslation(
-		bounds,
+		selectionBounds,
 		sceneInput,
 		worldScale,
 		settingsOrThreshold,

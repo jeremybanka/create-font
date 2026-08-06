@@ -2,6 +2,7 @@ import type {
 	DesignArtboard,
 	DesignDocument,
 	DesignGroup,
+	DesignImageResource,
 	DesignObject,
 	DesignSwatch,
 } from "@create-design/source"
@@ -48,12 +49,14 @@ export interface SvgObjectProjection {
 		fill?: DesignSwatch
 		stroke?: DesignSwatch
 	}>
+	readonly imageResource?: DesignImageResource
 }
 
 export interface SvgGroupProjection {
 	readonly kind: "group"
 	readonly group: DesignGroup
 	readonly children: readonly SvgProjectionNode[]
+	readonly clippingObject?: DesignObject
 }
 
 export type SvgProjectionNode = SvgObjectProjection | SvgGroupProjection
@@ -69,6 +72,10 @@ export interface SvgProjectionGraph {
 		document: DesignDocument,
 		target?: SvgExportTarget,
 	): SvgDocumentProjection
+}
+
+export interface SvgProjectionOptions {
+	readonly imageResources?: ReadonlyMap<string, DesignImageResource>
 }
 
 export interface SvgImportOptions {

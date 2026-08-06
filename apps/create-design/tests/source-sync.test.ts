@@ -30,6 +30,7 @@ import { createDesignServerApp } from "../src/server.ts"
 import {
 	designSourceTransaction,
 	installDesignSourceFont,
+	installDesignSourceImage,
 	loadDesignSourceFonts,
 } from "../src/source-sync.ts"
 import { createTextFontFixtureBytes } from "./fixtures/text-font.ts"
@@ -65,6 +66,50 @@ function initialState(document = createInitialDocument()) {
 }
 
 describe(`create-design source synchronization`, () => {
+	test(`installs an embedded image through the asset index transaction`, async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-image-install-`))
+		roots.push(root)
+		const app = await createDesignServerApp({ root })
+		vi.stubGlobal(`fetch`, (input: RequestInfo | URL, init?: RequestInit) =>
+			app.handle(input instanceof Request ? input : new Request(input, init)),
+		)
+		const client = createSourceRpcClient(`http://localhost`)
+		const state = sourceSyncStateFromSnapshot(await client.readSnapshot())
+		const bytes = new Uint8Array([255, 216, 255, 217])
+
+		const installed = await installDesignSourceImage(
+			client,
+			state,
+			`asset:fixture`,
+			bytes,
+			`Picture.jpg`,
+			`image/jpeg`,
+		)
+
+		expect(installed.resource).toEqual({
+			id: `asset:fixture`,
+			mediaType: `image/jpeg`,
+			bytes,
+		})
+		expect(
+			new Uint8Array(await readFile(join(root, `assets/picture-fixture.jpg`))),
+		).toEqual(bytes)
+		expect(
+			JSON.parse(await readFile(join(root, `assets/index.json`), `utf8`)),
+		).toMatchObject({
+			entries: [
+				{
+					byteLength: bytes.byteLength,
+					id: `asset:fixture`,
+					mediaType: `image/jpeg`,
+					path: `assets/picture-fixture.jpg`,
+				},
+			],
+			format: `create-design.asset-index`,
+			version: 1,
+		})
+	})
+
 	test(`installs a font through the real RPC as one atomic transaction`, async () => {
 		const root = await mkdtemp(join(tmpdir(), `create-design-font-install-`))
 		roots.push(root)

@@ -185,6 +185,90 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("round-trips placed-image identity and explicit mask hierarchy", () => {
+		const initial = fixture()
+		const clip = initial.objects[0]!
+		const image = {
+			id: "object:placed",
+			name: "Placed portrait",
+			geometry: {
+				kind: "image" as const,
+				source: { kind: "embedded" as const, id: "asset:portrait" },
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 640,
+				intrinsicHeight: 480,
+			},
+			transform: { a: 0.5, b: 0, c: 0, d: 0.5, e: 72, f: 96 },
+			appearance: {},
+		}
+		const document: DesignDocument = {
+			...initial,
+			objects: [image, clip, initial.objects[1]!],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [
+						{ kind: "group", id: "group:portrait-mask" },
+						{ kind: "object", id: initial.objects[1]!.id },
+					],
+				},
+			],
+			groups: [
+				{
+					id: "group:portrait-mask",
+					name: "Portrait mask",
+					children: [
+						{ kind: "object", id: image.id },
+						{ kind: "object", id: clip.id },
+					],
+					clippingPathId: clip.id,
+				},
+			],
+		}
+		const assetIndex = {
+			format: "create-design.asset-index" as const,
+			version: 1 as const,
+			entries: [
+				{
+					id: "asset:portrait",
+					path: "assets/portrait.jpg",
+					mediaType: "image/jpeg",
+					byteLength: 1234,
+					sha256: "1".repeat(64),
+				},
+			],
+		}
+		const files = split(document, { assetIndex })
+		expect(files[designSourcePaths.assetIndex]).toEqual(assetIndex)
+		expect(assemble(files)).toEqual(document)
+	})
+
+	it("preserves a missing linked image as recoverable document structure", () => {
+		const initial = fixture()
+		const linked = {
+			id: "object:linked",
+			name: "Missing logo",
+			geometry: {
+				kind: "image" as const,
+				source: {
+					kind: "linked" as const,
+					id: "asset:linked-logo",
+					href: "../brand/logo.jpg",
+					expectedDigest: `sha256:${"a".repeat(64)}` as const,
+				},
+				mediaType: "image/jpeg" as const,
+				intrinsicWidth: 300,
+				intrinsicHeight: 120,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 10, f: 20 },
+			appearance: {},
+		}
+		const document = appendObjects(initial, linked)
+		const result = assembleDesignDocument(split(document))
+		expect(result).toMatchObject({ ok: true })
+		if (result.ok)
+			expect(result.value.objects.at(-1)?.geometry).toEqual(linked.geometry)
+	})
 	it("round-trips point and area text through canonical object units", () => {
 		const document = fixture()
 		const typography = {

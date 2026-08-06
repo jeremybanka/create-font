@@ -87,6 +87,7 @@ export interface ExportPreflightPreferences {
 
 const VECTOR_CAPABILITIES = Object.freeze({
 	ellipse: "vector.ellipse",
+	image: "image.placement",
 	openPathFill: "vector.open-path-fill",
 	openPathStroke: "vector.open-path-stroke",
 	path: "vector.path",

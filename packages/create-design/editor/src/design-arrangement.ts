@@ -4,8 +4,10 @@ import {
 	translateObject,
 } from "@create-design/model"
 import { visibleObjectBounds } from "@create-design/model"
-import { selectionBounds } from "./design-selection.ts"
-import { designSelectionUnits } from "./design-hierarchy.ts"
+import {
+	designHierarchySelectionBounds,
+	designSelectionUnits,
+} from "./design-hierarchy.ts"
 import { scaleDesignTextObject } from "./design-text.ts"
 import type { DesignArtboard, DesignDocument, DesignObject } from "./types.ts"
 
@@ -37,7 +39,8 @@ const selected = (document: DesignDocument, ids: readonly string[]) => {
 	)
 }
 
-const boundsOf = (objects: readonly DesignObject[]) => selectionBounds(objects)
+const boundsOf = (document: DesignDocument, objects: readonly DesignObject[]) =>
+	designHierarchySelectionBounds(document, objects)
 
 const targetBounds = (
 	document: DesignDocument,
@@ -57,7 +60,7 @@ const targetBounds = (
 		const key = document.objects.find((object) => object.id === keyObjectId)
 		return key === undefined ? null : visibleObjectBounds(key)
 	}
-	return boundsOf(objects)
+	return boundsOf(document, objects)
 }
 
 export function alignDesignObjects(
@@ -88,7 +91,7 @@ export function alignDesignObjects(
 				const object = byId.get(id)
 				return object === undefined ? [] : [object]
 			})
-			const bounds = boundsOf(members)
+			const bounds = boundsOf(document, members)
 			if (bounds === null) return []
 			const dx =
 				alignment === "left"
@@ -141,7 +144,7 @@ export function distributeDesignObjects(
 				const object = byId.get(id)
 				return object === undefined ? [] : [object]
 			})
-			const bounds = boundsOf(members)
+			const bounds = boundsOf(document, members)
 			return bounds === null ? [] : [{ objects: members, bounds, index }]
 		})
 		.toSorted((left, right) => {
@@ -218,7 +221,7 @@ export function transformDesignSelection(
 	)
 		return null
 	const objects = selected(document, objectIds)
-	const bounds = boundsOf(objects)
+	const bounds = boundsOf(document, objects)
 	if (objects.length === 0 || bounds === null) return null
 	const width = bounds.maxX - bounds.minX
 	const height = bounds.maxY - bounds.minY
@@ -245,7 +248,7 @@ export function transformDesignSelection(
 		input.rotation === undefined
 			? scaled
 			: scaled.map((object) => rotateObject(object, anchor, input.rotation!))
-	const projected = boundsOf(rotated)
+	const projected = boundsOf(document, rotated)
 	if (projected === null) return null
 	const positioned = originPoint(projected, input.origin)
 	const dx = input.x === undefined ? 0 : input.x - positioned.x

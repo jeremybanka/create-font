@@ -41,6 +41,10 @@ type TextGeometry = Omit<
 	Extract<DesignGeometry, Readonly<{ kind: "text" }>>,
 	"kind"
 >
+type ImageGeometry = Omit<
+	Extract<DesignGeometry, Readonly<{ kind: "image" }>>,
+	"kind"
+>
 type GeometryKind = DesignGeometry["kind"]
 type ObjectContourKey = readonly [objectId: string, contourId: string]
 type PointReference = readonly [pointId: string, occurrence: number]
@@ -225,6 +229,10 @@ export function createDesignDocumentState(
 		key: "textGeometry",
 		default: null,
 	})
+	const imageGeometryAtoms = silo.atomFamily<ImageGeometry | null, string>({
+		key: "imageGeometry",
+		default: null,
+	})
 	const pathFillRuleAtoms = silo.atomFamily<DesignFillRule | undefined, string>(
 		{ key: "pathFillRule", default: undefined },
 	)
@@ -253,6 +261,10 @@ export function createDesignDocumentState(
 		readonly DesignSceneChild[] | null,
 		string
 	>({ key: "groupChildren", default: null })
+	const groupClippingPathAtoms = silo.atomFamily<string | undefined, string>({
+		key: "groupClippingPath",
+		default: undefined,
+	})
 	const layerNameAtoms = silo.atomFamily<string | null, string>({
 		key: "layerName",
 		default: null,
@@ -294,6 +306,10 @@ export function createDesignDocumentState(
 		if (kind === "text") {
 			const text = get(textGeometryAtoms, objectId)
 			return text === null ? null : { kind, ...text }
+		}
+		if (kind === "image") {
+			const image = get(imageGeometryAtoms, objectId)
+			return image === null ? null : { kind, ...image }
 		}
 		const contourIds = get(objectContourIdsAtoms, objectId)
 		if (contourIds === null) return null
@@ -406,9 +422,15 @@ export function createDesignDocumentState(
 			({ get }) => {
 				const name = get(groupNameAtoms, id)
 				const children = get(groupChildrenAtoms, id)
+				const clippingPathId = get(groupClippingPathAtoms, id)
 				return name === null || children === null
 					? null
-					: { id, name, children }
+					: {
+							id,
+							name,
+							children,
+							...(clippingPathId === undefined ? {} : { clippingPathId }),
+						}
 			},
 	})
 	const layerSelectors = silo.selectorFamily<DesignLayer | null, string>({
@@ -513,6 +535,8 @@ export function createDesignDocumentState(
 			tools.dispose(ellipseGeometryAtoms, objectId)
 		if (previousKind === "text" && geometry.kind !== "text")
 			tools.dispose(textGeometryAtoms, objectId)
+		if (previousKind === "image" && geometry.kind !== "image")
+			tools.dispose(imageGeometryAtoms, objectId)
 		if (previousKind !== geometry.kind)
 			tools.set(objectKindAtoms, objectId, geometry.kind)
 
@@ -538,6 +562,16 @@ export function createDesignDocumentState(
 				JSON.stringify(previous) !== JSON.stringify(text)
 			)
 				tools.set(textGeometryAtoms, objectId, text)
+			return
+		}
+		if (geometry.kind === "image") {
+			const { kind: _, ...image } = geometry
+			const previous = tools.get(imageGeometryAtoms, objectId)
+			if (
+				previous === null ||
+				JSON.stringify(previous) !== JSON.stringify(image)
+			)
+				tools.set(imageGeometryAtoms, objectId, image)
 			return
 		}
 
@@ -608,6 +642,7 @@ export function createDesignDocumentState(
 		if (kind === "rectangle") tools.dispose(rectangleGeometryAtoms, objectId)
 		if (kind === "ellipse") tools.dispose(ellipseGeometryAtoms, objectId)
 		if (kind === "text") tools.dispose(textGeometryAtoms, objectId)
+		if (kind === "image") tools.dispose(imageGeometryAtoms, objectId)
 		tools.dispose(objectKindAtoms, objectId)
 		tools.dispose(objectNameAtoms, objectId)
 		tools.dispose(objectTransformAtoms, objectId)
@@ -733,6 +768,8 @@ export function createDesignDocumentState(
 				!sameSceneChildren(currentChildren, group.children)
 			)
 				tools.set(groupChildrenAtoms, group.id, group.children)
+			if (tools.get(groupClippingPathAtoms, group.id) !== group.clippingPathId)
+				tools.set(groupClippingPathAtoms, group.id, group.clippingPathId)
 		}
 		if (!sameStrings(tools.get(groupIdsAtom), groupIds))
 			tools.set(groupIdsAtom, groupIds)
@@ -740,6 +777,7 @@ export function createDesignDocumentState(
 			if (nextGroupIds.has(id)) continue
 			tools.dispose(groupNameAtoms, id)
 			tools.dispose(groupChildrenAtoms, id)
+			tools.dispose(groupClippingPathAtoms, id)
 		}
 
 		const previousGuideIds = tools.get(guideIdsAtom)
@@ -781,6 +819,8 @@ export function createDesignDocumentState(
 		objectKindAtoms,
 		rectangleGeometryAtoms,
 		ellipseGeometryAtoms,
+		textGeometryAtoms,
+		imageGeometryAtoms,
 		pathFillRuleAtoms,
 		objectContourIdsAtoms,
 		contourClosedAtoms,
@@ -795,6 +835,7 @@ export function createDesignDocumentState(
 		groupIdsAtom,
 		groupNameAtoms,
 		groupChildrenAtoms,
+		groupClippingPathAtoms,
 		guideIdsAtom,
 		guideAtoms,
 	]
@@ -825,6 +866,8 @@ export function createDesignDocumentState(
 			objectKindAtoms,
 			rectangleGeometryAtoms,
 			ellipseGeometryAtoms,
+			textGeometryAtoms,
+			imageGeometryAtoms,
 			pathFillRuleAtoms,
 			objectContourIdsAtoms,
 			contourClosedAtoms,
@@ -842,6 +885,7 @@ export function createDesignDocumentState(
 			groupIdsAtom,
 			groupNameAtoms,
 			groupChildrenAtoms,
+			groupClippingPathAtoms,
 			groupSelectors,
 			guideIdsAtom,
 			guideAtoms,

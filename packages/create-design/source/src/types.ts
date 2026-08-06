@@ -89,8 +89,40 @@ export type DesignTextGeometry = Readonly<{
 	}>
 }>
 
+export type DesignImageSource = Readonly<
+	| {
+			readonly kind: "embedded"
+			/** Stable identity in the source project's `assets/index.json`. */
+			readonly id: string
+	  }
+	| {
+			readonly kind: "linked"
+			/** Stable identity retained when a link is missing or is relinked. */
+			readonly id: string
+			readonly href: string
+			readonly expectedDigest?: `sha256:${string}`
+	  }
+>
+
+/** A placed raster whose local bounds are its authored intrinsic dimensions. */
+export type DesignImageGeometry = Readonly<{
+	readonly kind: "image"
+	readonly source: DesignImageSource
+	readonly mediaType: "image/jpeg" | "image/png"
+	readonly intrinsicWidth: number
+	readonly intrinsicHeight: number
+}>
+
+/** Runtime bytes resolved without changing the durable placed-image identity. */
+export type DesignImageResource = Readonly<{
+	readonly id: string
+	readonly mediaType: "image/jpeg" | "image/png"
+	readonly bytes: Uint8Array
+}>
+
 export type DesignGeometry =
 	| DesignTextGeometry
+	| DesignImageGeometry
 	| Readonly<{
 			readonly kind: "path"
 			/** Fill containment semantics. Legacy paths without this field are even-odd. */
@@ -202,6 +234,8 @@ export interface DesignGroup {
 	readonly id: string
 	readonly name: string
 	readonly children: readonly DesignSceneChild[]
+	/** A direct vector-object child used as this group's non-painting clip. */
+	readonly clippingPathId?: string
 }
 
 /** A named top-level paint-order and editing boundary. */
