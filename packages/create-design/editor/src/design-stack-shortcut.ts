@@ -1,0 +1,24 @@
+import type { DesignStackCommand } from "./design-hierarchy.ts"
+
+export interface DesignStackShortcutEvent {
+	readonly altKey: boolean
+	readonly ctrlKey: boolean
+	readonly key: string
+	readonly metaKey: boolean
+	readonly shiftKey: boolean
+}
+
+/** Resolves conventional, platform-specific stacking shortcuts. */
+export function designStackShortcutCommand(
+	event: DesignStackShortcutEvent,
+	macLike: boolean,
+): DesignStackCommand | null {
+	const platformMod = macLike ? event.metaKey : event.ctrlKey
+	const otherMod = macLike ? event.ctrlKey : event.metaKey
+	if (!platformMod || otherMod || event.altKey) return null
+	if (event.key === "]" || event.key === "}")
+		return event.shiftKey ? "front" : "forward"
+	if (event.key === "[" || event.key === "{")
+		return event.shiftKey ? "back" : "backward"
+	return null
+}

@@ -3582,6 +3582,152 @@ describe("create-design shared vector scene", () => {
 		])
 	})
 
+	it("routes stacking shortcuts through commands, guards, no-op edges, and history", async () => {
+		const base = createInitialDocument()
+		const first = base.objects[0]!
+		const second = base.objects[1]!
+		const third = {
+			...first,
+			id: "object:stack-third",
+			name: "Third stack object",
+			transform: { ...first.transform, e: first.transform.e + 360 },
+		}
+		const initialDocument: DesignDocument = {
+			...base,
+			objects: [first, second, third],
+			layers: [
+				{
+					...base.layers[0]!,
+					children: [first, second, third].map(({ id }) => ({
+						kind: "object" as const,
+						id,
+					})),
+				},
+			],
+		}
+		const storage = new Map<string, string>()
+		mountDesign({ initialDocument }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes(second.name))
+		if (layer === undefined)
+			throw new Error("Middle stack object was not found.")
+		act(() => layer.click())
+
+		const platformMod = /Mac|iPhone|iPad|iPod/i.test(navigator.platform)
+			? { metaKey: true }
+			: { ctrlKey: true }
+		const key = async (options: KeyboardEventInit): Promise<KeyboardEvent> => {
+			const event = new KeyboardEvent("keydown", {
+				bubbles: true,
+				cancelable: true,
+				...platformMod,
+				...options,
+			})
+			await act(async () => {
+				window.dispatchEvent(event)
+				await Promise.resolve()
+			})
+			return event
+		}
+		const order = (): readonly string[] => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			return saved.layers[0]?.children.map(({ id }) => id) ?? []
+		}
+		const original = [first.id, second.id, third.id]
+
+		const commandCenter = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Command Palette"]',
+		)
+		if (commandCenter === null) throw new Error("Command center was not found.")
+		act(() => commandCenter.click())
+		const search = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Search commands"]',
+		)
+		if (search === null) throw new Error("Command search was not found.")
+		await act(async () => {
+			search.value = "Bring Forward"
+			search.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const forwardCommand = document.getElementById("command-stack-forward")
+		expect(forwardCommand?.textContent).toContain("Bring Forward")
+		expect(forwardCommand?.querySelector("kbd")?.textContent).toBe(
+			`${/Mac|iPhone|iPad|iPod/i.test(navigator.platform) ? "⌘" : "Ctrl"}+]`,
+		)
+		const paletteGuard = await key({ key: "]" })
+		expect(paletteGuard.defaultPrevented).toBe(false)
+		expect(order()).toEqual(original)
+		await act(async () => {
+			search.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => resolve()),
+			)
+		})
+
+		const forward = await key({ key: "]" })
+		expect(forward.defaultPrevented).toBe(true)
+		expect(order()).toEqual([first.id, third.id, second.id])
+		const noOp = await key({ key: "]" })
+		expect(noOp.defaultPrevented).toBe(true)
+		expect(order()).toEqual([first.id, third.id, second.id])
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("already at that stacking position")
+
+		await key({ key: "z" })
+		expect(order()).toEqual(original)
+		const backward = await key({ key: "[" })
+		expect(backward.defaultPrevented).toBe(true)
+		expect(order()).toEqual([second.id, first.id, third.id])
+		await key({ key: "z" })
+		expect(order()).toEqual(original)
+
+		const front = await key({ key: "}", shiftKey: true })
+		expect(front.defaultPrevented).toBe(true)
+		expect(order()).toEqual([first.id, third.id, second.id])
+		await key({ key: "z" })
+		expect(order()).toEqual(original)
+		const back = await key({ key: "[", shiftKey: true })
+		expect(back.defaultPrevented).toBe(true)
+		expect(order()).toEqual([second.id, first.id, third.id])
+		await key({ key: "z" })
+		expect(order()).toEqual(original)
+		await key({ key: "z", shiftKey: true })
+		expect(order()).toEqual([second.id, first.id, third.id])
+
+		const title = document.querySelector<HTMLInputElement>(
+			'design-canvas-tile input[aria-label="Document title"]',
+		)
+		if (title === null) throw new Error("Document title field was not found.")
+		title.focus()
+		const beforeEditable = order()
+		const editable = new KeyboardEvent("keydown", {
+			bubbles: true,
+			cancelable: true,
+			...platformMod,
+			key: "]",
+		})
+		title.dispatchEvent(editable)
+		expect(editable.defaultPrevented).toBe(false)
+		expect(order()).toEqual(beforeEditable)
+
+		const help = document.querySelector<HTMLButtonElement>(
+			'button[aria-controls="design-contextual-help"]',
+		)
+		if (help === null) throw new Error("Canvas Help was not found.")
+		act(() => help.click())
+		expect(document.querySelector("canvas-help")?.textContent).toContain(
+			"changes stacking",
+		)
+	})
+
 	it("routes X paint shortcuts with exact modifier, focus, selection, and history semantics", async () => {
 		const base = createInitialDocument()
 		const first = base.objects[0]!
@@ -3616,7 +3762,7 @@ describe("create-design shared vector scene", () => {
 		if (artboard === null || layer === undefined)
 			throw new Error("Design artboard or source layer was not found.")
 		expect(artboard.getAttribute("aria-keyshortcuts")).toBe(
-			"X Shift+X Meta+X Control+X",
+			"X Shift+X Meta+X Control+X Meta+] Control+] Meta+[ Control+[ Meta+Shift+] Control+Shift+] Meta+Shift+[ Control+Shift+[",
 		)
 		act(() => layer.click())
 

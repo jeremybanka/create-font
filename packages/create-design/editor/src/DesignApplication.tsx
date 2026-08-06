@@ -158,6 +158,7 @@ import {
 	type DesignHierarchyScope,
 	type DesignStackCommand,
 } from "./design-hierarchy.ts"
+import { designStackShortcutCommand } from "./design-stack-shortcut.ts"
 import {
 	createDesignLayer,
 	deleteDesignLayer,
@@ -659,7 +660,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Drag to create a text frame · Type in the native editor · Escape exits text editing"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
-	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
+	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · ${MOD_KEY_LABEL}+[ / ] changes stacking · Shift+${MOD_KEY_LABEL}+[ / ] sends to back/front · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
 }
 
 const DESIGN_TRANSFORM_HANDLES = [
@@ -4337,18 +4338,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			},
 			...(
 				[
-					["forward", "Bring Forward"],
-					["backward", "Send Backward"],
-					["front", "Bring to Front"],
-					["back", "Send to Back"],
+					["forward", "Bring Forward", `${MOD_KEY_LABEL}+]`],
+					["backward", "Send Backward", `${MOD_KEY_LABEL}+[`],
+					["front", "Bring to Front", `Shift+${MOD_KEY_LABEL}+]`],
+					["back", "Send to Back", `Shift+${MOD_KEY_LABEL}+[`],
 				] as const
-			).map(([command, displayName]) => ({
+			).map(([command, displayName, shortcut]) => ({
 				id: `stack-${command}`,
 				displayName,
 				category: "Object",
 				description:
 					"Change stacking only among siblings in the current group or layer.",
 				icon: "ShuffleIcon" as const,
+				shortcut,
 				disabled: selection.length === 0,
 				disabledReason: "Select an object first.",
 				do: () => stackSelection(command),
@@ -4919,6 +4921,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			const mod = event.metaKey || event.ctrlKey
 			const key = event.key.toLowerCase()
+			const stackCommand = designStackShortcutCommand(event, MAC_LIKE)
+			if (stackCommand !== null) {
+				event.preventDefault()
+				stackSelection(stackCommand)
+				return
+			}
 			// Leave Mod-X to the browser so it can dispatch the `cut` event.
 			if (mod && key === "x") return
 			if (mod && event.key.toLowerCase() === "a") {
@@ -5121,6 +5129,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedGuideId,
 		selection,
 		snapSettings,
+		stackSelection,
 		swapSingleObjectAppearance,
 		tool,
 		ungroupSelection,
@@ -6613,7 +6622,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						role="application"
 						aria-label="Design artboard"
 						aria-describedby="design-selection-status"
-						aria-keyshortcuts="X Shift+X Meta+X Control+X"
+						aria-keyshortcuts="X Shift+X Meta+X Control+X Meta+] Control+] Meta+[ Control+[ Meta+Shift+] Control+Shift+] Meta+Shift+[ Control+Shift+["
 						tabIndex={-1}
 					>
 						<span id="design-selection-status" data-screen-reader>
