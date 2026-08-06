@@ -59,6 +59,39 @@ async function decode(
 }
 
 describe("deterministic PNG output", () => {
+	it("uses authored artboard color by default and permits an explicit override", async () => {
+		const initial = createInitialDocument()
+		const document = {
+			...initial,
+			artboards: [
+				{
+					...initial.artboards[0]!,
+					width: 1,
+					height: 1,
+					backgroundColor: "#123456",
+				},
+			],
+			objects: [],
+			layers: [{ ...initial.layers[0]!, children: [] }],
+		}
+		const authored = await exportPng(document, {
+			scope: { kind: "all" },
+			samples: 1,
+		})
+		const transparent = await exportPng(document, {
+			scope: { kind: "all" },
+			samples: 1,
+			background: { kind: "transparent" },
+		})
+
+		expect((await decode(authored.artifacts[0]!.bytes)).rgba).toEqual(
+			new Uint8Array([0x12, 0x34, 0x56, 0xff]),
+		)
+		expect((await decode(transparent.artifacts[0]!.bytes)).rgba).toEqual(
+			new Uint8Array([0, 0, 0, 0]),
+		)
+	})
+
 	it("rasterizes hierarchy order with hidden layers omitted and locked layers visible", async () => {
 		const initial = createInitialDocument()
 		const source = initial.objects[0]!

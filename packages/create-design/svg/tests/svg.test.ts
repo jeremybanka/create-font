@@ -12,6 +12,29 @@ import {
 import { parseSvgFixture } from "./svg-parser-fixture.ts"
 
 describe("SVG export", () => {
+	it("exports an authored artboard background before artwork and omits chrome", () => {
+		const initial = createInitialDocument()
+		const artboard = {
+			...initial.artboards[0]!,
+			backgroundColor: "#abcdef",
+			borderColor: "#123456",
+		}
+		const svg = new TextDecoder().decode(
+			exportSvg({ ...initial, artboards: [artboard] }),
+		)
+		const background = 'data-create-design-artboard-background="true"'
+		expect(svg).toContain(background)
+		expect(svg).toContain('fill="#abcdef"')
+		expect(svg.indexOf(background)).toBeLessThan(
+			svg.indexOf(initial.objects[0]!.id),
+		)
+		expect(svg).not.toContain("#123456")
+		expect(svg).not.toContain(artboard.name)
+
+		const transparent = new TextDecoder().decode(exportSvg(initial))
+		expect(transparent).not.toContain(background)
+	})
+
 	it("embeds placed pixels and applies the same explicit clipping group", () => {
 		const initial = createInitialDocument()
 		const clip = initial.objects[0]!

@@ -277,6 +277,10 @@ export interface DesignArtboard {
 	readonly y: number
 	readonly width: number
 	readonly height: number
+	/** Optional authored solid background. Absence means transparent. */
+	readonly backgroundColor?: string
+	/** Editor-only chrome color. Absence resolves to the neutral default. */
+	readonly borderColor?: string
 	readonly bleed?: DesignArtboardInsets
 	readonly safeArea?: DesignArtboardInsets
 }

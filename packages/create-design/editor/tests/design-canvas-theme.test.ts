@@ -18,9 +18,7 @@ afterEach(() => {
 describe("design canvas theme", () => {
 	it("reads every imperative canvas overlay from CSS tokens", () => {
 		const tokens = new Map([
-			["--design-canvas-artboard-outline", "#706d65"],
-			["--design-canvas-artboard-shadow", "#3d3b36"],
-			["--design-canvas-artboard-shadow-opacity", "0.2"],
+			["--design-canvas-artboard-label", "#69665f"],
 			["--design-canvas-guide", "#0577aa"],
 			["--design-canvas-handle-fill", "#fff"],
 			["--design-canvas-marquee", "#676767"],
@@ -31,9 +29,7 @@ describe("design canvas theme", () => {
 				getPropertyValue: (name) => tokens.get(name) ?? "",
 			}),
 		).toEqual({
-			artboardOutline: "#706d65",
-			artboardShadow: "#3d3b36",
-			artboardShadowOpacity: 0.2,
+			artboardLabel: "#69665f",
 			guide: "#0577aa",
 			handleFill: "#fff",
 			marquee: "#676767",

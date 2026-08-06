@@ -39,6 +39,7 @@ import type {
 	DesignPoint,
 	DesignSwatch,
 } from "@create-design/source"
+import { designHexColorChannels } from "@create-design/source"
 
 const number = (value: number): string => Number(value.toFixed(4)).toString()
 
@@ -199,6 +200,7 @@ export interface PdfObjectProjection {
 
 export interface PdfPageProjection {
 	readonly artboardId: string
+	readonly backgroundColor?: string
 	readonly bleedBox?: readonly [number, number, number, number]
 	readonly x: number
 	readonly y: number
@@ -361,6 +363,17 @@ function exportRequest(
 	return isArtboard(target)
 		? { scope: { kind: "active", artboardId: target.id } }
 		: target
+}
+
+function artboardBackgroundCommands(
+	artboard: DesignArtboard,
+): readonly string[] {
+	if (artboard.backgroundColor === undefined) return []
+	const { r, g, b } = designHexColorChannels(artboard.backgroundColor)
+	return [
+		`${number(r / 255)} ${number(g / 255)} ${number(b / 255)} rg`,
+		`${number(artboard.x)} ${number(artboard.y)} ${number(artboard.width)} ${number(artboard.height)} re f`,
+	]
 }
 
 export function resolvePdfArtboards(
@@ -553,6 +566,7 @@ export function createPdfProjectionGraph(
 		if (
 			cached !== undefined &&
 			cached.artboardId === artboard.id &&
+			cached.backgroundColor === artboard.backgroundColor &&
 			cached.x === artboard.x &&
 			cached.y === artboard.y &&
 			cached.width === artboard.width &&
@@ -575,6 +589,9 @@ export function createPdfProjectionGraph(
 		const transform = documentToPdfTransform(artboard)
 		const projection = Object.freeze({
 			artboardId: artboard.id,
+			...(artboard.backgroundColor === undefined
+				? {}
+				: { backgroundColor: artboard.backgroundColor }),
 			...(bleed === undefined
 				? {}
 				: {
@@ -598,6 +615,7 @@ export function createPdfProjectionGraph(
 						"q",
 						`0 0 ${number(mediaWidth)} ${number(mediaHeight)} re W n`,
 						`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e + left)} ${number(transform.f + bottom)} cm`,
+						...artboardBackgroundCommands(artboard),
 					].join("\n"),
 				),
 			),
@@ -792,6 +810,7 @@ export function pdfContentStream(
 		`q`,
 		`0 0 ${number(artboard.width)} ${number(artboard.height)} re W n`,
 		`${number(transform.a)} ${number(transform.b)} ${number(transform.c)} ${number(transform.d)} ${number(transform.e)} ${number(transform.f)} cm`,
+		...artboardBackgroundCommands(artboard),
 	]
 	for (const entry of output.entries) {
 		const object = entry.object
