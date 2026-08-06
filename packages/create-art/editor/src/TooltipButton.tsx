@@ -179,6 +179,7 @@ export function TooltipButton({
 				aria-keyshortcuts={
 					shortcut?.ariaKeyShortcuts ?? buttonProps["aria-keyshortcuts"]
 				}
+				title={explainedDisabled ? disabledReason : undefined}
 				disabled={disabled}
 				onFocus={(event) => {
 					dispatch("focus")

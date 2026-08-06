@@ -3367,7 +3367,7 @@ describe("create-design shared vector scene", () => {
 		expect(buttons).toHaveLength(Object.keys(DESIGN_TOOLS).length)
 		for (const button of buttons) {
 			expect(button.hasAttribute("aria-label")).toBe(true)
-			expect(button.hasAttribute("title")).toBe(false)
+			expect(button.hasAttribute("title")).toBe(button.disabled)
 			expect(button.children).toHaveLength(1)
 			expect(button.firstElementChild?.tagName).toBe("svg")
 		}
