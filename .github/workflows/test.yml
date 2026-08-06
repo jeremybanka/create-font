@@ -140,7 +140,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/setup-node-test-runtime
       - name: Build Create Font packages
-        run: pnpm --filter create-font... build
+        run: >-
+          pnpm
+          --filter create-font...
+          --filter '!dprint-plugin-fea'
+          --filter '!@create-font/fea-rs-wasm'
+          build
       - run: node scripts/node-test-shards.ts create-font-interfaces
 
   node-create-font-source-pipeline:
@@ -174,7 +179,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/setup-node-test-runtime
       - name: Build Create Font packages
-        run: pnpm --filter create-font... build
+        run: >-
+          pnpm
+          --filter create-font...
+          --filter '!dprint-plugin-fea'
+          --filter '!@create-font/fea-rs-wasm'
+          build
       - run: node apps/create-font/scripts/build-development.ts
       - run: >-
           mise exec bun@1.3.14 --
