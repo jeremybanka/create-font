@@ -5,7 +5,7 @@ import {
 } from "@create-art/editor"
 
 export const BASE_CANVAS_SCALE = 0.18
-export const MIN_CANVAS_ZOOM = 0.25
+export const MIN_CANVAS_ZOOM = 0.05
 export const MAX_CANVAS_ZOOM = 10
 
 export type { CanvasView, CanvasViewport } from "@create-art/editor"
