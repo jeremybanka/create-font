@@ -80,6 +80,7 @@ import {
 	editorContourPaintPaths,
 	nearestEditorSegment,
 } from "./geometry.ts"
+import { createCurvatureComb } from "./curvature-comb.ts"
 import css from "./GlyphCanvas.module.css"
 import { IS_MAC_LIKE } from "./editor-tools-and-hotkeys.ts"
 import { keyboardStepMultiplier } from "@create-art/editor"
@@ -425,6 +426,10 @@ export function GlyphCanvas({
 	const showNodes = useO(workspace.ui.showNodes)
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const showMeasures = useO(workspace.ui.showMeasures)
+	const showCurvature = useO(workspace.ui.showCurvature)
+	const curvatureGain = useO(workspace.ui.curvatureGain)
+	const curvatureOpacity = useO(workspace.ui.curvatureOpacity)
+	const curvatureSide = useO(workspace.ui.curvatureSide)
 	const selectedRuleIds = useO(workspace.ui.selectedRuleIds)
 	const setSelectedRuleIds = useI(workspace.ui.selectedRuleIds)
 	const visualDebug = useO(workspace.ui.visualDebug)
@@ -789,6 +794,23 @@ export function GlyphCanvas({
 	const transformBounds = boundsOfControls(selectedControls)
 	const combinedPreview = combinedEditorPathPreview(visibleContours)
 	const contourPaintPaths = editorContourPaintPaths(visibleContours)
+	const curvatureComb = useMemo(
+		() =>
+			showCurvature
+				? createCurvatureComb(visibleContours, {
+						gain: curvatureGain,
+						side: curvatureSide,
+						unitsPerEm: metadata.unitsPerEm,
+					})
+				: [],
+		[
+			curvatureGain,
+			curvatureSide,
+			metadata.unitsPerEm,
+			showCurvature,
+			visibleContours,
+		],
+	)
 	const liveFontVectorObject =
 		activeGlyphId === null
 			? null
@@ -5173,6 +5195,24 @@ export function GlyphCanvas({
 													]
 												},
 											)}
+										</Group>
+									)}
+									{curvatureComb.length === 0 ? null : (
+										<Group
+											name="curvature-comb"
+											opacity={curvatureOpacity}
+											listening={false}
+										>
+											{curvatureComb.map((cell, index) => (
+												<Path
+													key={`curvature-comb:${index}`}
+													name="curvature-comb-cell"
+													data={cell.path}
+													fill={cell.color}
+													strokeEnabled={false}
+													listening={false}
+												/>
+											))}
 										</Group>
 									)}
 									<Path

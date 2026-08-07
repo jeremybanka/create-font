@@ -28,9 +28,16 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 	const location = useO(workspace.ui.previewLocation)
 	const showNodes = useO(workspace.ui.showNodes)
 	const showMeasures = useO(workspace.ui.showMeasures)
+	const showCurvature = useO(workspace.ui.showCurvature)
+	const curvatureGain = useO(workspace.ui.curvatureGain)
+	const curvatureOpacity = useO(workspace.ui.curvatureOpacity)
+	const curvatureSide = useO(workspace.ui.curvatureSide)
 	const fontFeaturesEnabled = useO(workspace.ui.fontFeaturesEnabled)
 	const setShowNodes = useI(workspace.ui.showNodes)
 	const setShowMeasures = useI(workspace.ui.showMeasures)
+	const setCurvatureGain = useI(workspace.ui.curvatureGain)
+	const setCurvatureOpacity = useI(workspace.ui.curvatureOpacity)
+	const setCurvatureSide = useI(workspace.ui.curvatureSide)
 	const view = useO(workspace.ui.canvasView)
 	const setView = useI(workspace.ui.canvasView)
 	const viewport = useO(workspace.ui.canvasViewport)
@@ -161,6 +168,80 @@ export function CanvasToolbar({ workspace }: CanvasToolbarProps) {
 					</button>
 				)}
 			</toolbar-section>
+
+			{editingTextIndex === null ? null : (
+				<toolbar-section>
+					<h2>Curvature</h2>
+					<button
+						type="button"
+						data-curvature
+						aria-label="Toggle curvature comb"
+						aria-pressed={showCurvature}
+						onClick={workspace.actions.toggleCurvature}
+					>
+						<span>Comb</span>
+						<small>{showCurvature ? "On" : "Off"}</small>
+					</button>
+					{showCurvature ? (
+						<>
+							<axis-control>
+								<label htmlFor={`${instanceId}:curvature-gain`}>
+									<span>Gain</span>
+									<small>Height</small>
+								</label>
+								<input
+									id={`${instanceId}:curvature-gain`}
+									type="range"
+									min={0.1}
+									max={3}
+									step={0.1}
+									value={curvatureGain}
+									aria-label="Curvature gain"
+									onInput={(event) =>
+										setCurvatureGain(event.currentTarget.valueAsNumber)
+									}
+								/>
+								<output>{curvatureGain.toFixed(1)}×</output>
+							</axis-control>
+							<axis-control>
+								<label htmlFor={`${instanceId}:curvature-opacity`}>
+									<span>Opacity</span>
+									<small>Fill</small>
+								</label>
+								<input
+									id={`${instanceId}:curvature-opacity`}
+									type="range"
+									min={0.1}
+									max={1}
+									step={0.05}
+									value={curvatureOpacity}
+									aria-label="Curvature opacity"
+									onInput={(event) =>
+										setCurvatureOpacity(event.currentTarget.valueAsNumber)
+									}
+								/>
+								<output>{Math.round(curvatureOpacity * 100)}%</output>
+							</axis-control>
+							<button
+								type="button"
+								data-curvature-side
+								aria-label="Toggle curvature side"
+								aria-pressed={curvatureSide === "signed"}
+								onClick={() =>
+									setCurvatureSide((side) =>
+										side === "outside" ? "signed" : "outside",
+									)
+								}
+							>
+								<span>Side</span>
+								<small>
+									{curvatureSide === "outside" ? "Outer" : "Signed"}
+								</small>
+							</button>
+						</>
+					) : null}
+				</toolbar-section>
+			)}
 		</canvas-toolbar>
 	)
 }

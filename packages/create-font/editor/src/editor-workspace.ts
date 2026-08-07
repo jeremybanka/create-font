@@ -18,6 +18,7 @@ import type { RegularAtomToken } from "atom.io"
 import { makeDemoFont } from "./demo-font.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
 import type { CanvasView } from "./canvas-view.ts"
+import type { CurvatureSide } from "./curvature-comb.ts"
 import { createFontFaviconPreview } from "./document-metadata.ts"
 import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
 import { createLiveFontCompiler } from "./live-font-compilation.ts"
@@ -226,6 +227,22 @@ export function createEditorWorkspace(
 	const showMeasuresAtom = font.silo.atom<boolean>({
 		key: "showMeasures",
 		default: true,
+	})
+	const showCurvatureAtom = font.silo.atom<boolean>({
+		key: "showCurvature",
+		default: false,
+	})
+	const curvatureGainAtom = font.silo.atom<number>({
+		key: "curvatureGain",
+		default: 1,
+	})
+	const curvatureOpacityAtom = font.silo.atom<number>({
+		key: "curvatureOpacity",
+		default: 0.7,
+	})
+	const curvatureSideAtom = font.silo.atom<CurvatureSide>({
+		key: "curvatureSide",
+		default: "outside",
 	})
 	const selectedRuleIdsAtom = font.silo.atom<readonly RuleId[]>({
 		key: "selectedRuleIds",
@@ -1113,6 +1130,10 @@ export function createEditorWorkspace(
 			previewLocation: previewLocationSelector,
 			showNodes: showNodesAtom,
 			showMeasures: showMeasuresAtom,
+			showCurvature: showCurvatureAtom,
+			curvatureGain: curvatureGainAtom,
+			curvatureOpacity: curvatureOpacityAtom,
+			curvatureSide: curvatureSideAtom,
 			selectedRuleIds: selectedRuleIdsAtom,
 			constrainProportions: constrainProportionsAtom,
 			canvasView: canvasViewAtom,
@@ -1130,6 +1151,12 @@ export function createEditorWorkspace(
 			faviconPreview: faviconPreviewSelector,
 		},
 		actions: {
+			toggleCurvature(): void {
+				font.silo.setState(
+					showCurvatureAtom,
+					!font.silo.getState(showCurvatureAtom),
+				)
+			},
 			registerTextCanvasFocusRestorer(restorer: () => void): () => void {
 				restoreTextCanvasFocus = restorer
 				return () => {
