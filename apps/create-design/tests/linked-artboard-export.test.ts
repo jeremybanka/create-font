@@ -51,8 +51,27 @@ describe("headless linked-artboard exports", () => {
 		temporaryPaths.push(workspace)
 		const sourceRoot = join(workspace, "designs", "source")
 		const targetRoot = join(workspace, "designs", "target")
-		const source = createInitialDocument()
-		const target = createInitialDocument()
+		const sourceInitial = createInitialDocument()
+		const source = {
+			...sourceInitial,
+			artboards: [{ ...sourceInitial.artboards[0]!, width: 32, height: 24 }],
+			objects: sourceInitial.objects.map((object, index) => ({
+				...object,
+				geometry: {
+					kind: "rectangle" as const,
+					x: index * 16,
+					y: 0,
+					width: 16,
+					height: 24,
+				},
+				transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			})),
+		}
+		const targetInitial = createInitialDocument()
+		const target = {
+			...targetInitial,
+			artboards: [{ ...targetInitial.artboards[0]!, width: 32, height: 24 }],
+		}
 		const link = {
 			...target.objects[0]!,
 			id: "object:portable-link",
@@ -78,7 +97,7 @@ describe("headless linked-artboard exports", () => {
 		})
 
 		const resources = await loadDesignLinkedArtboardResources(targetRoot)
-		expect(resources).toHaveLength(1)
+		expect(resources).toHaveLength(2)
 		const resolution = resolveDesignArtboardLinks(
 			{
 				...target,
@@ -116,5 +135,55 @@ describe("headless linked-artboard exports", () => {
 		await expect(
 			exportDesignPng({ root: targetRoot, output: pngOutput }),
 		).resolves.toMatchObject({ preflight: { decision: "ready" } })
+	})
+
+	test("blocks a recursive workspace reference with a cycle-specific export diagnostic", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "design-links-cycle-"))
+		temporaryPaths.push(workspace)
+		const firstRoot = join(workspace, "designs", "first")
+		const secondRoot = join(workspace, "designs", "second")
+		const initial = createInitialDocument()
+		const linkedDocument = (projectId: string) => {
+			const link = {
+				...initial.objects[0]!,
+				id: `object:link-to-${projectId}`,
+				geometry: {
+					kind: "artboard-link" as const,
+					projectId,
+					artboardId: initial.artboards[0]!.id,
+					width: initial.artboards[0]!.width,
+					height: initial.artboards[0]!.height,
+				},
+			}
+			return {
+				...initial,
+				objects: [link],
+				layers: [
+					{
+						...initial.layers[0]!,
+						children: [{ kind: "object" as const, id: link.id }],
+					},
+				],
+			}
+		}
+		await writeDocument(firstRoot, linkedDocument("second"))
+		await writeDocument(secondRoot, linkedDocument("first"))
+		const output = join(tmpdir(), `linked-cycle-${crypto.randomUUID()}.svg`)
+		temporaryPaths.push(output)
+		await expect(
+			exportDesignSvg({
+				root: firstRoot,
+				output,
+				artboardIds: [initial.artboards[0]!.id],
+			}),
+		).rejects.toMatchObject({
+			name: "DesignSvgPreflightError",
+			preflight: {
+				decision: "blocked",
+				diagnostics: expect.arrayContaining([
+					expect.objectContaining({ code: "svg.artboard-link.cycle" }),
+				]),
+			},
+		})
 	})
 })

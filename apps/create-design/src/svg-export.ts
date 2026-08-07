@@ -17,7 +17,10 @@ import {
 	type SvgDiagnostic,
 	type SvgPreflightResult,
 } from "@create-design/svg"
-import { resolveDesignArtboardLinks } from "@create-design/model"
+import {
+	resolveDesignArtboardLinks,
+	type DesignArtboardLinkDiagnostic,
+} from "@create-design/model"
 import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
@@ -142,6 +145,35 @@ async function writeSvgAtomically(
 	}
 }
 
+function withSvgLinkDiagnostics(
+	preflight: SvgPreflightResult,
+	diagnostics: readonly DesignArtboardLinkDiagnostic[],
+): SvgPreflightResult {
+	const cycles: readonly SvgDiagnostic[] = diagnostics.flatMap((diagnostic) =>
+		diagnostic.code !== "artboard-link.cycle"
+			? []
+			: [
+					Object.freeze({
+						code: "svg.artboard-link.cycle",
+						entityId: diagnostic.objectId,
+						message: diagnostic.message,
+						severity: "error" as const,
+						stage: "preflight" as const,
+					}),
+				],
+	)
+	if (cycles.length === 0) return preflight
+	return Object.freeze({
+		...preflight,
+		decision: "blocked",
+		diagnostics: Object.freeze([...preflight.diagnostics, ...cycles]),
+		summary: Object.freeze({
+			...preflight.summary,
+			errors: preflight.summary.errors + cycles.length,
+		}),
+	})
+}
+
 export async function exportDesignSvg(
 	options: DesignSvgExportOptions,
 ): Promise<DesignSvgExportResult> {
@@ -205,10 +237,9 @@ export async function exportDesignSvg(
 		throw new Error("SVG export requires one artboard.")
 	const target = { artboardId }
 	const projectionOptions = { imageResources }
-	const preflight = preflightSvgExport(
-		links.document,
-		target,
-		projectionOptions,
+	const preflight = withSvgLinkDiagnostics(
+		preflightSvgExport(links.document, target, projectionOptions),
+		links.diagnostics,
 	)
 	if (!svgPreflightAllowsOutput(preflight))
 		throw new DesignSvgPreflightError(preflight)

@@ -18,7 +18,10 @@ import {
 	type PngExportRequest,
 	type PngPreflightResult,
 } from "@create-design/png"
-import { resolveDesignArtboardLinks } from "@create-design/model"
+import {
+	resolveDesignArtboardLinks,
+	type DesignArtboardLinkDiagnostic,
+} from "@create-design/model"
 import {
 	assembleDesignDocument,
 	type DesignSourceDiagnostic,
@@ -152,6 +155,34 @@ function batchOutput(
 	)
 }
 
+function withPngLinkDiagnostics(
+	preflight: PngPreflightResult,
+	diagnostics: readonly DesignArtboardLinkDiagnostic[],
+): PngPreflightResult {
+	const cycles: readonly PngDiagnostic[] = diagnostics.flatMap((diagnostic) =>
+		diagnostic.code !== "artboard-link.cycle"
+			? []
+			: [
+					Object.freeze({
+						code: "png.artboard-link.cycle",
+						entityId: diagnostic.objectId,
+						message: diagnostic.message,
+						severity: "error" as const,
+					}),
+				],
+	)
+	if (cycles.length === 0) return preflight
+	return Object.freeze({
+		...preflight,
+		decision: "blocked",
+		diagnostics: Object.freeze([...preflight.diagnostics, ...cycles]),
+		summary: Object.freeze({
+			...preflight.summary,
+			errors: preflight.summary.errors + cycles.length,
+		}),
+	})
+}
+
 export async function exportDesignPng(
 	options: DesignPngExportOptions,
 ): Promise<DesignPngExportResult> {
@@ -187,7 +218,10 @@ export async function exportDesignPng(
 			: { background: options.background }),
 		...(options.scale === undefined ? {} : { scale: options.scale }),
 	}
-	const preflight = preflightPngExport(links.document, request)
+	const preflight = withPngLinkDiagnostics(
+		preflightPngExport(links.document, request),
+		links.diagnostics,
+	)
 	if (preflight.decision === "blocked")
 		throw new DesignPngPreflightError(preflight)
 	const result = await exportPng(links.document, request)

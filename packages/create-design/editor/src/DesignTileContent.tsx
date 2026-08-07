@@ -1379,14 +1379,8 @@ function DesignExportTile({
 			.filter(({ id }) => selectedArtboardIds.includes(id))
 			.map(({ id }) => id)
 		return valid.length === 0 ? [context.activeArtboard.id] : valid
-	}, [
-		context.activeArtboard.id,
-		exportDocument.artboards,
-		selectedArtboardIds,
-	])
-	const startId = exportDocument.artboards.some(
-		({ id }) => id === rangeStartId,
-	)
+	}, [context.activeArtboard.id, exportDocument.artboards, selectedArtboardIds])
+	const startId = exportDocument.artboards.some(({ id }) => id === rangeStartId)
 		? rangeStartId
 		: context.activeArtboard.id
 	const endId = exportDocument.artboards.some(({ id }) => id === rangeEndId)

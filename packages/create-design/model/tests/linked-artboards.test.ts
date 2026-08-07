@@ -1,7 +1,11 @@
-import { createInitialDocument } from "@create-design/source"
+import {
+	createInitialDocument,
+	DEFAULT_DESIGN_STROKE_STYLE,
+} from "@create-design/source"
 import { describe, expect, test } from "vitest"
 
 import { resolveDesignArtboardLinks } from "../src/linked-artboards.ts"
+import { projectDesignOutput } from "../src/output.ts"
 
 describe("linked artboards", () => {
 	test("resolves workspace-relative artboard references and preserves atomic identity", () => {
@@ -222,6 +226,235 @@ describe("linked artboards", () => {
 		)
 		expect(maskedGroup?.clippingPathId).toBeDefined()
 		expect(maskedGroup?.clippingPathId).not.toBe("object:clip")
+	})
+
+	test("projects an authored artboard background behind clipped children", () => {
+		const initial = createInitialDocument()
+		const artboard = {
+			...initial.artboards[0]!,
+			x: 50,
+			y: 75,
+			width: 20,
+			height: 10,
+			backgroundColor: "#123456",
+		}
+		const foreground = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 55,
+				y: 77,
+				width: 5,
+				height: 4,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const source = {
+			...initial,
+			artboards: [artboard],
+			objects: [foreground],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: foreground.id }],
+				},
+			],
+		}
+		const target = createInitialDocument()
+		const transform = { a: 2, b: 0.25, c: -0.5, d: 3, e: 11, f: 13 }
+		const link = {
+			...target.objects[0]!,
+			id: "object:background-link",
+			transform,
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "source-design",
+				artboardId: artboard.id,
+				width: artboard.width,
+				height: artboard.height,
+			},
+		}
+		const resolution = resolveDesignArtboardLinks(
+			{
+				...target,
+				objects: [link],
+				layers: [
+					{
+						...target.layers[0]!,
+						children: [{ kind: "object", id: link.id }],
+					},
+				],
+			},
+			[{ projectId: "source-design", revision: "r1", document: source }],
+		)
+		const root = resolution.document.groups.find(
+			({ name }) => name === link.name,
+		)!
+		const backgroundId = root.children[1]?.id
+		const background = resolution.document.objects.find(
+			({ id }) => id === backgroundId,
+		)!
+		expect(root.children.map(({ id }) => id)).toEqual([
+			root.clippingPathId,
+			background.id,
+			expect.stringContaining(encodeURIComponent(foreground.id)),
+		])
+		expect(background).toMatchObject({
+			geometry: { kind: "rectangle", x: 0, y: 0, width: 20, height: 10 },
+			transform,
+		})
+		expect(
+			resolution.document.swatches.find(
+				({ id }) => id === background.appearance.fill?.swatchId,
+			),
+		).toMatchObject({ source: { space: "rgb", r: 0x12, g: 0x34, b: 0x56 } })
+		expect(resolution.linkObjectIdByProjectedId.get(background.id)).toBe(
+			link.id,
+		)
+
+		const transparent = resolveDesignArtboardLinks(
+			{
+				...target,
+				objects: [link],
+				layers: [
+					{
+						...target.layers[0]!,
+						children: [{ kind: "object", id: link.id }],
+					},
+				],
+			},
+			[
+				{
+					projectId: "source-design",
+					revision: "r2",
+					document: {
+						...source,
+						artboards: [{ ...artboard, backgroundColor: undefined }],
+					},
+				},
+			],
+		)
+		expect(
+			transparent.document.objects.some(({ name }) =>
+				name.endsWith(" background"),
+			),
+		).toBe(false)
+	})
+
+	test("preserves link-level hidden and locked state in the runtime projection", () => {
+		const source = createInitialDocument()
+		const target = createInitialDocument()
+		const linkedDocument = (hidden: boolean, locked: boolean) => {
+			const link = {
+				...target.objects[0]!,
+				id: "object:stateful-link",
+				hidden,
+				locked,
+				geometry: {
+					kind: "artboard-link" as const,
+					projectId: "source-design",
+					artboardId: source.artboards[0]!.id,
+					width: source.artboards[0]!.width,
+					height: source.artboards[0]!.height,
+				},
+			}
+			return resolveDesignArtboardLinks(
+				{
+					...target,
+					objects: [link],
+					layers: [
+						{
+							...target.layers[0]!,
+							children: [{ kind: "object", id: link.id }],
+						},
+					],
+				},
+				[{ projectId: "source-design", revision: "r1", document: source }],
+			).document
+		}
+		const hidden = linkedDocument(true, false)
+		expect(hidden.objects.every((object) => object.hidden === true)).toBe(true)
+		expect(projectDesignOutput(hidden).objects).toEqual([])
+
+		const locked = linkedDocument(false, true)
+		expect(projectDesignOutput(locked).objects.length).toBeGreaterThan(0)
+		expect(
+			projectDesignOutput(locked).objects.every(
+				(object) => object.locked === true,
+			),
+		).toBe(true)
+		expect(source.objects.every((object) => object.locked !== true)).toBe(true)
+	})
+
+	test("retains stroke paint that crosses the source artboard edge", () => {
+		const initial = createInitialDocument()
+		const artboard = { ...initial.artboards[0]!, width: 10, height: 10 }
+		const stroke = {
+			...initial.objects[0]!,
+			id: "object:outside-centerline",
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:outside-centerline",
+						closed: false,
+						points: [
+							{ id: "point:outside:0", x: -1, y: 0 },
+							{ id: "point:outside:1", x: -1, y: 10 },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 4,
+				},
+			},
+		}
+		const source = {
+			...initial,
+			artboards: [artboard],
+			objects: [stroke],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: stroke.id }],
+				},
+			],
+		}
+		const target = createInitialDocument()
+		const link = {
+			...target.objects[0]!,
+			id: "object:edge-link",
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "source-design",
+				artboardId: artboard.id,
+				width: artboard.width,
+				height: artboard.height,
+			},
+		}
+		const resolution = resolveDesignArtboardLinks(
+			{
+				...target,
+				objects: [link],
+				layers: [
+					{
+						...target.layers[0]!,
+						children: [{ kind: "object", id: link.id }],
+					},
+				],
+			},
+			[{ projectId: "source-design", revision: "r1", document: source }],
+		)
+		expect(
+			projectDesignOutput(resolution.document).objects.some(
+				({ name }) => name === stroke.name,
+			),
+		).toBe(true)
 	})
 
 	test("keeps a selectable fallback and reports a missing source", () => {

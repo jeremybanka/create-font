@@ -413,16 +413,38 @@ export function objectFillContainsPoint(
 	point: Point,
 ): boolean {
 	if (object.appearance.fill === undefined) return false
-	let totalWinding = 0
-	for (const contour of projectDesignObjectContours(object)) {
-		if (contour.points.length < 3) continue
-		const result = windingNumber(point, flattenDesignContour(contour))
-		if (result.classification === "boundary") return true
-		totalWinding += result.winding
-	}
-	return designObjectFillRule(object) === "evenodd"
-		? Math.abs(totalWinding) % 2 === 1
-		: totalWinding !== 0
+	return objectGeometryContainsPoint(object, point)
+}
+
+/** Tests closed geometry containment independently from whether it is painted. */
+export function objectGeometryContainsPoint(
+	object: DesignObject,
+	point: Point,
+): boolean {
+	return createDesignObjectGeometryHitTest(object).containsPoint(point)
+}
+
+/** Precomputes flattened geometry for repeated clipping and hit-test probes. */
+export function createDesignObjectGeometryHitTest(
+	object: DesignObject,
+): Readonly<{ containsPoint(point: Point): boolean }> {
+	const contours = projectDesignObjectContours(object)
+		.filter(({ points }) => points.length >= 3)
+		.map((contour) => flattenDesignContour(contour))
+	const fillRule = designObjectFillRule(object)
+	return Object.freeze({
+		containsPoint(point: Point): boolean {
+			let totalWinding = 0
+			for (const contour of contours) {
+				const result = windingNumber(point, contour)
+				if (result.classification === "boundary") return true
+				totalWinding += result.winding
+			}
+			return fillRule === "evenodd"
+				? Math.abs(totalWinding) % 2 === 1
+				: totalWinding !== 0
+		},
+	})
 }
 
 export function objectStrokeDistance(

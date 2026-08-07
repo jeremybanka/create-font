@@ -8143,8 +8143,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													<VectorContourPath
 														key={object.id}
 														name={`design-object ${object.id}`}
-													object={projectDesignVectorRenderObject(
-														resolvedCanvasDocument,
+														object={projectDesignVectorRenderObject(
+															resolvedCanvasDocument,
 															object,
 														)}
 														{...(fill === undefined

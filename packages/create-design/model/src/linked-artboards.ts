@@ -9,9 +9,10 @@ import type {
 	DesignSwatch,
 	DesignTransform,
 } from "@create-design/source"
+import { designHexColorChannels } from "@create-design/source"
 
-import { objectBounds } from "./geometry.ts"
 import { projectDesignOutput, type DesignOutputEntry } from "./output.ts"
+import { visibleObjectBounds } from "./painted-geometry.ts"
 
 export type DesignArtboardLinkDiagnostic = Readonly<{
 	code:
@@ -154,7 +155,7 @@ export function resolveDesignArtboardLinks(
 			)
 			const output = projectDesignOutput(source.document)
 			const entries = output.entries.filter(({ object }) =>
-				intersects(objectBounds(object), artboard),
+				intersects(visibleObjectBounds(object), artboard),
 			)
 			const scope = `linked:${encodeURIComponent(link.id)}:${encodeURIComponent(key)}`
 			const rootGroupId = namespace(scope, "group:root")
@@ -180,6 +181,10 @@ export function resolveDesignArtboardLinks(
 				e: -artboard.x,
 				f: -artboard.y,
 			})
+			const linkState = {
+				...(link.hidden === true ? { hidden: true } : {}),
+				...(link.locked === true ? { locked: true } : {}),
+			}
 			const projectObject = (object: DesignObject): DesignObject => {
 				const previous = projectedObjects.get(object.id)
 				if (previous !== undefined) return previous
@@ -246,6 +251,7 @@ export function resolveDesignArtboardLinks(
 									},
 								}),
 					},
+					...linkState,
 				}
 				projectedObjects.set(object.id, projected)
 				linkObjectIdByProjectedId.set(id, link.id)
@@ -274,11 +280,35 @@ export function resolveDesignArtboardLinks(
 				},
 				transform: link.transform,
 				appearance: {},
+				...linkState,
 			}
 			projectedObjects.set("__artboard-clip__", artboardClip)
 			linkObjectIdByProjectedId.set(artboardClip.id, link.id)
 			root.clippingPathId = artboardClip.id
 			root.children.push({ kind: "object", id: artboardClip.id })
+			const backgroundSwatchId = namespace(
+				scope,
+				"__runtime__:swatch:artboard-background",
+			)
+			if (artboard.backgroundColor !== undefined) {
+				const background: DesignObject = {
+					id: namespace(scope, "__runtime__:object:artboard-background"),
+					name: `${artboard.name} background`,
+					geometry: {
+						kind: "rectangle",
+						x: 0,
+						y: 0,
+						width: artboard.width,
+						height: artboard.height,
+					},
+					transform: link.transform,
+					appearance: { fill: { swatchId: backgroundSwatchId } },
+					...linkState,
+				}
+				projectedObjects.set("__artboard-background__", background)
+				linkObjectIdByProjectedId.set(background.id, link.id)
+				root.children.push({ kind: "object", id: background.id })
+			}
 			const ensureGroup = (
 				groupId: string,
 				parent: MutableGroup,
@@ -330,12 +360,24 @@ export function resolveDesignArtboardLinks(
 						: { clippingPathId: group.clippingPathId }),
 				}),
 			)
-			const swatches: readonly DesignSwatch[] = output.swatches.map(
-				(swatch) => ({
+			const swatches: readonly DesignSwatch[] = [
+				...(artboard.backgroundColor === undefined
+					? []
+					: [
+							{
+								id: backgroundSwatchId,
+								name: `${artboard.name} background`,
+								source: {
+									space: "rgb" as const,
+									...designHexColorChannels(artboard.backgroundColor),
+								},
+							},
+						]),
+				...output.swatches.map((swatch) => ({
 					...swatch,
 					id: swatchIds.get(swatch.id) ?? namespace(scope, swatch.id),
-				}),
-			)
+				})),
+			]
 			current = {
 				...current,
 				swatches: [...current.swatches, ...swatches],

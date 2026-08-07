@@ -1,7 +1,7 @@
 import {
 	designObjectFillRule,
+	createDesignObjectGeometryHitTest,
 	flattenDesignContour,
-	objectFillContainsPoint,
 	objectStrokeDistance,
 	projectDesignOutput,
 	projectDesignObjectContours,
@@ -16,13 +16,17 @@ import type { PngRasterBackend } from "./types.ts"
 function orderedObjects(document: DesignDocument): Readonly<{
 	objects: readonly Readonly<{
 		object: DesignObject
-		masks: readonly DesignObject[]
+		masks: readonly ReturnType<typeof createDesignObjectGeometryHitTest>[]
 	}>[]
 	swatches: ReturnType<typeof projectDesignOutput>["swatches"]
 }> {
 	const projection = projectDesignOutput(document)
 	const groups = new Map(document.groups.map((group) => [group.id, group]))
 	const objects = new Map(document.objects.map((object) => [object.id, object]))
+	const maskHitTests = new Map<
+		string,
+		ReturnType<typeof createDesignObjectGeometryHitTest>
+	>()
 	return {
 		objects: projection.entries.map((entry) => ({
 			object: entry.object,
@@ -30,7 +34,12 @@ function orderedObjects(document: DesignDocument): Readonly<{
 				const clippingPathId = groups.get(groupId)?.clippingPathId
 				const mask =
 					clippingPathId === undefined ? undefined : objects.get(clippingPathId)
-				return mask === undefined ? [] : [mask]
+				if (mask === undefined) return []
+				const current = maskHitTests.get(mask.id)
+				if (current !== undefined) return [current]
+				const hitTest = createDesignObjectGeometryHitTest(mask)
+				maskHitTests.set(mask.id, hitTest)
+				return [hitTest]
 			}),
 		})),
 		swatches: projection.swatches,
@@ -55,7 +64,7 @@ function paintSpan(
 	from: number,
 	to: number,
 	color: Readonly<{ r: number; g: number; b: number }>,
-	masks: readonly DesignObject[],
+	masks: readonly ReturnType<typeof createDesignObjectGeometryHitTest>[],
 ): void {
 	const start = Math.max(0, Math.ceil(from - 0.5))
 	const end = Math.min(superWidth, Math.ceil(to - 0.5))
@@ -64,7 +73,7 @@ function paintSpan(
 			x: artboard.x + ((column + 0.5) / superWidth) * artboard.width,
 			y: artboard.y + ((row + 0.5) / superHeight) * artboard.height,
 		}
-		if (!masks.every((mask) => objectFillContainsPoint(mask, point))) continue
+		if (!masks.every((mask) => mask.containsPoint(point))) continue
 		const offset = (row * superWidth + column) * 4
 		buffer[offset] = byte(color.r)
 		buffer[offset + 1] = byte(color.g)
@@ -203,11 +212,7 @@ export const referencePngRasterBackend: PngRasterBackend = {
 							x: artboard.x + ((column + 0.5) / superWidth) * artboard.width,
 							y: artboard.y + ((row + 0.5) / superHeight) * artboard.height,
 						}
-						if (
-							!projected.masks.every((mask) =>
-								objectFillContainsPoint(mask, point),
-							)
-						)
+						if (!projected.masks.every((mask) => mask.containsPoint(point)))
 							continue
 						if (objectStrokeDistance(projected.object, point) > 1e-7) continue
 						const offset = (row * superWidth + column) * 4

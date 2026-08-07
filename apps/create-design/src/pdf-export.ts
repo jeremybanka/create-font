@@ -19,7 +19,10 @@ import {
 	type ExportPreflightResult,
 	type PdfExportRequest,
 } from "@create-design/pdf"
-import { resolveDesignArtboardLinks } from "@create-design/model"
+import {
+	resolveDesignArtboardLinks,
+	type DesignArtboardLinkDiagnostic,
+} from "@create-design/model"
 import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
@@ -165,6 +168,38 @@ function pdfRequest(options: DesignPdfExportOptions): PdfExportRequest {
 	}
 }
 
+function withPdfLinkDiagnostics(
+	preflight: ExportPreflightResult,
+	diagnostics: readonly DesignArtboardLinkDiagnostic[],
+): ExportPreflightResult {
+	const cycles: readonly ExportDiagnostic[] = diagnostics.flatMap(
+		(diagnostic) =>
+			diagnostic.code !== "artboard-link.cycle"
+				? []
+				: [
+						Object.freeze({
+							capability: "workspace.artboard-link",
+							code: "pdf.artboard-link.cycle",
+							entityId: diagnostic.objectId,
+							entityKind: "object",
+							message: diagnostic.message,
+							severity: "error" as const,
+							target: "pdf",
+						}),
+					],
+	)
+	if (cycles.length === 0) return preflight
+	return Object.freeze({
+		...preflight,
+		decision: "blocked",
+		diagnostics: Object.freeze([...preflight.diagnostics, ...cycles]),
+		summary: Object.freeze({
+			...preflight.summary,
+			errors: preflight.summary.errors + cycles.length,
+		}),
+	})
+}
+
 async function loadDesignDocument(root: string): Promise<{
 	document: DesignDocument
 	imageResources: ReadonlyMap<string, DesignImageResource>
@@ -267,14 +302,17 @@ export async function exportDesignPdf(
 	for (const resource of links.fontResources)
 		textService.registerFont(resource.reference, resource.bytes)
 	const request = pdfRequest(options)
-	const preflight = preflightPdfExport(
-		links.document,
-		request,
-		{
-			enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
-		},
-		textService,
-		imageResources,
+	const preflight = withPdfLinkDiagnostics(
+		preflightPdfExport(
+			links.document,
+			request,
+			{
+				enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
+			},
+			textService,
+			imageResources,
+		),
+		links.diagnostics,
 	)
 	if (!exportPreflightAllowsOutput(preflight))
 		throw new DesignPdfPreflightError(preflight)
