@@ -92,9 +92,12 @@ import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
 import {
 	canvasDimmerPercent,
 	canvasDimmerTokens,
-	DESIGN_CANVAS_DIMMER_STORAGE_KEY,
+	browserPrefersLightColorScheme,
 	normalizeCanvasDimmer,
-	readCanvasDimmer,
+	readCanvasDimmerPreference,
+	resolveCanvasDimmer,
+	subscribeToPreferredColorScheme,
+	writeCanvasDimmerPreference,
 } from "./canvas-dimmer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
@@ -1011,8 +1014,15 @@ type DesignApplicationContentProps = Omit<
 
 function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const { pathfinderWorkerClient, sourceSession } = props
-	const [canvasDimmer, setCanvasDimmer] = useState(() =>
-		readCanvasDimmer(browserLocalStorage()),
+	const [canvasDimmerPreference, setCanvasDimmerPreference] = useState(() =>
+		readCanvasDimmerPreference(browserLocalStorage()),
+	)
+	const [prefersLightColorScheme, setPrefersLightColorScheme] = useState(
+		browserPrefersLightColorScheme,
+	)
+	const canvasDimmer = resolveCanvasDimmer(
+		canvasDimmerPreference,
+		prefersLightColorScheme,
 	)
 	const [applicationElement, setApplicationElement] =
 		useState<HTMLElement | null>(null)
@@ -1061,16 +1071,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [moveArtworkWithArtboard, setMoveArtworkWithArtboardState] = useState(
 		initialMoveArtworkWithArtboard,
 	)
+	useEffect(
+		() => subscribeToPreferredColorScheme(setPrefersLightColorScheme),
+		[],
+	)
 	useEffect(() => {
-		try {
-			browserLocalStorage()?.setItem(
-				DESIGN_CANVAS_DIMMER_STORAGE_KEY,
-				String(canvasDimmer),
-			)
-		} catch {
-			// The in-session preference remains usable when storage is blocked.
-		}
-	}, [canvasDimmer])
+		writeCanvasDimmerPreference(browserLocalStorage(), canvasDimmerPreference)
+	}, [canvasDimmerPreference])
 	const [previewArtboardDocument, setPreviewArtboardDocument] =
 		useState<DesignDocument | null>(null)
 	const pathCommandSelectionsRef = useRef(
@@ -6705,6 +6712,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			className={css.class}
 			ref={setApplicationElement}
 			data-canvas-dimmer={canvasDimmer}
+			data-canvas-dimmer-source={canvasDimmerPreference.kind}
 			style={
 				{
 					"--design-canvas-surface": dimmerTokens.surface,
@@ -6762,9 +6770,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							value={canvasDimmer}
 							aria-valuetext={`${canvasDimmerPercent(canvasDimmer)}%, ${dimmerTokens.surface}`}
 							onInput={(event) =>
-								setCanvasDimmer(
-									normalizeCanvasDimmer(event.currentTarget.valueAsNumber),
-								)
+								setCanvasDimmerPreference({
+									kind: "explicit",
+									value: normalizeCanvasDimmer(
+										event.currentTarget.valueAsNumber,
+									),
+								})
 							}
 						/>
 						<span aria-hidden="true">Light</span>

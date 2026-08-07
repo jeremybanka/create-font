@@ -239,6 +239,77 @@ function clipboardEvent(
 }
 
 describe("create-design shared vector scene", () => {
+	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
+		let prefersLight = true
+		const listeners = new Set<EventListenerOrEventListenerObject>()
+		vi.stubGlobal(
+			"matchMedia",
+			(query: string) =>
+				({
+					get matches() {
+						return query === "(prefers-color-scheme: light)" && prefersLight
+					},
+					media: query,
+					onchange: null,
+					addEventListener: (
+						type: string,
+						listener: EventListenerOrEventListenerObject,
+					) => {
+						if (type === "change" && query === "(prefers-color-scheme: light)")
+							listeners.add(listener)
+					},
+					removeEventListener: (
+						_type: string,
+						listener: EventListenerOrEventListenerObject,
+					) => {
+						listeners.delete(listener)
+					},
+					addListener: () => undefined,
+					removeListener: () => undefined,
+					dispatchEvent: () => true,
+				}) satisfies MediaQueryList,
+		)
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const slider = document.querySelector<HTMLInputElement>(
+			"#design-canvas-dimmer",
+		)
+		const application =
+			document.querySelector<HTMLElement>("design-application")
+		if (slider === null || application === null)
+			throw new Error("Dimmer control was not found.")
+		expect(slider.value).toBe("217")
+		expect(application.dataset.canvasDimmerSource).toBe("system")
+		expect(storage.has(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe(false)
+
+		const publishScheme = async (light: boolean): Promise<void> => {
+			prefersLight = light
+			await act(async () => {
+				for (const listener of listeners) {
+					const event = new MediaQueryListEvent("change", { matches: light })
+					if (typeof listener === "function") listener(event)
+					else listener.handleEvent(event)
+				}
+				await Promise.resolve()
+			})
+		}
+		await publishScheme(false)
+		expect(slider.value).toBe("17")
+		expect(storage.has(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe(false)
+
+		await act(async () => {
+			slider.value = "128"
+			slider.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		expect(application.dataset.canvasDimmerSource).toBe("explicit")
+		expect(storage.get(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe("128")
+
+		await publishScheme(true)
+		expect(slider.value).toBe("128")
+		expect(storage.get(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe("128")
+	})
+
 	it("renders and effect-persists the canvas Dimmer without an Export header shortcut", async () => {
 		const storage = new Map([[DESIGN_CANVAS_DIMMER_STORAGE_KEY, "128"]])
 		mountDesign({}, storage)

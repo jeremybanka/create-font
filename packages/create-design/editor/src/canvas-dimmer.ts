@@ -1,17 +1,27 @@
 export const DESIGN_CANVAS_DIMMER_STORAGE_KEY = "create-design:canvas-dimmer:v1"
 
-export const DEFAULT_DESIGN_CANVAS_DIMMER = 17
+export const DARK_DESIGN_CANVAS_DIMMER = 17
+export const LIGHT_DESIGN_CANVAS_DIMMER = 217
 
-export function normalizeCanvasDimmer(value: unknown): number {
+export type CanvasDimmerPreference =
+	| Readonly<{ kind: "system" }>
+	| Readonly<{ kind: "explicit"; value: number }>
+
+const COLOR_SCHEME_QUERY = "(prefers-color-scheme: light)"
+
+function parseCanvasDimmer(value: unknown): number | null {
 	const number =
 		typeof value === "number"
 			? value
 			: typeof value === "string" && value.trim() !== ""
 				? Number(value)
 				: Number.NaN
-	if (!Number.isFinite(number) || number < 0 || number > 255)
-		return DEFAULT_DESIGN_CANVAS_DIMMER
+	if (!Number.isFinite(number) || number < 0 || number > 255) return null
 	return Math.round(number)
+}
+
+export function normalizeCanvasDimmer(value: unknown): number {
+	return parseCanvasDimmer(value) ?? DARK_DESIGN_CANVAS_DIMMER
 }
 
 export function canvasDimmerHex(value: number): string {
@@ -23,17 +33,66 @@ export function canvasDimmerPercent(value: number): number {
 	return Math.round((normalizeCanvasDimmer(value) / 255) * 100)
 }
 
-export function readCanvasDimmer(
+export function readCanvasDimmerPreference(
 	storage: Pick<Storage, "getItem"> | null,
-): number {
-	if (storage === null) return DEFAULT_DESIGN_CANVAS_DIMMER
+): CanvasDimmerPreference {
+	if (storage === null) return { kind: "system" }
 	try {
 		const stored = storage.getItem(DESIGN_CANVAS_DIMMER_STORAGE_KEY)
-		return stored === null
-			? DEFAULT_DESIGN_CANVAS_DIMMER
-			: normalizeCanvasDimmer(stored)
+		const value = stored === null ? null : parseCanvasDimmer(stored)
+		return value === null ? { kind: "system" } : { kind: "explicit", value }
 	} catch {
-		return DEFAULT_DESIGN_CANVAS_DIMMER
+		return { kind: "system" }
+	}
+}
+
+export function resolveCanvasDimmer(
+	preference: CanvasDimmerPreference,
+	prefersLight: boolean,
+): number {
+	return preference.kind === "explicit"
+		? preference.value
+		: prefersLight
+			? LIGHT_DESIGN_CANVAS_DIMMER
+			: DARK_DESIGN_CANVAS_DIMMER
+}
+
+export function writeCanvasDimmerPreference(
+	storage: Pick<Storage, "setItem"> | null,
+	preference: CanvasDimmerPreference,
+): boolean {
+	if (storage === null || preference.kind !== "explicit") return false
+	try {
+		storage.setItem(DESIGN_CANVAS_DIMMER_STORAGE_KEY, String(preference.value))
+		return true
+	} catch {
+		return false
+	}
+}
+
+export function browserPrefersLightColorScheme(): boolean {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+		return true
+	try {
+		return window.matchMedia(COLOR_SCHEME_QUERY).matches
+	} catch {
+		return true
+	}
+}
+
+export function subscribeToPreferredColorScheme(
+	listener: (prefersLight: boolean) => void,
+): () => void {
+	if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+		return () => undefined
+	try {
+		const query = window.matchMedia(COLOR_SCHEME_QUERY)
+		const publish = (): void => listener(query.matches)
+		query.addEventListener("change", publish)
+		publish()
+		return () => query.removeEventListener("change", publish)
+	} catch {
+		return () => undefined
 	}
 }
 
