@@ -18,12 +18,14 @@ import {
 	type PngExportRequest,
 	type PngPreflightResult,
 } from "@create-design/png"
+import { resolveDesignArtboardLinks } from "@create-design/model"
 import {
 	assembleDesignDocument,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
 import { createDesignSourceService } from "./source-service.ts"
+import { loadDesignLinkedArtboardResources } from "./linked-artboard-export.ts"
 
 export interface DesignPngExportOptions {
 	readonly artboardIds?: readonly string[]
@@ -170,6 +172,10 @@ export async function exportDesignPng(
 		Object.fromEntries(snapshot.units.map(({ path, value }) => [path, value])),
 	)
 	if (!assembled.ok) throw new DesignPngSourceError(assembled.errors)
+	const links = resolveDesignArtboardLinks(
+		assembled.value,
+		await loadDesignLinkedArtboardResources(canonicalRoot),
+	)
 	const scope: PngExportRequest["scope"] =
 		options.artboardIds === undefined
 			? { kind: "all" }
@@ -181,10 +187,10 @@ export async function exportDesignPng(
 			: { background: options.background }),
 		...(options.scale === undefined ? {} : { scale: options.scale }),
 	}
-	const preflight = preflightPngExport(assembled.value, request)
+	const preflight = preflightPngExport(links.document, request)
 	if (preflight.decision === "blocked")
 		throw new DesignPngPreflightError(preflight)
-	const result = await exportPng(assembled.value, request)
+	const result = await exportPng(links.document, request)
 	const outputs = result.artifacts.map((artifact, index) =>
 		result.artifacts.length === 1
 			? output

@@ -19,6 +19,7 @@ import {
 	type ExportPreflightResult,
 	type PdfExportRequest,
 } from "@create-design/pdf"
+import { resolveDesignArtboardLinks } from "@create-design/model"
 import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
@@ -33,6 +34,7 @@ import {
 } from "@create-design/text"
 
 import { createDesignSourceService } from "./source-service.ts"
+import { loadDesignLinkedArtboardResources } from "./linked-artboard-export.ts"
 
 export interface DesignPdfExportOptions {
 	readonly artboardIds?: readonly string[]
@@ -248,11 +250,25 @@ export async function exportDesignPdf(
 	assertOutputOutsideRoot(root, output)
 	const canonicalRoot = await realpath(root)
 	assertOutputOutsideRoot(canonicalRoot, await canonicalFuturePath(output))
-	const { document, imageResources, revision, textService } =
-		await loadDesignDocument(canonicalRoot)
+	const {
+		document,
+		imageResources: localImages,
+		revision,
+		textService,
+	} = await loadDesignDocument(canonicalRoot)
+	const links = resolveDesignArtboardLinks(
+		document,
+		await loadDesignLinkedArtboardResources(canonicalRoot),
+	)
+	const imageResources = new Map([
+		...localImages,
+		...links.imageResources.map((resource) => [resource.id, resource] as const),
+	])
+	for (const resource of links.fontResources)
+		textService.registerFont(resource.reference, resource.bytes)
 	const request = pdfRequest(options)
 	const preflight = preflightPdfExport(
-		document,
+		links.document,
 		request,
 		{
 			enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
@@ -262,7 +278,10 @@ export async function exportDesignPdf(
 	)
 	if (!exportPreflightAllowsOutput(preflight))
 		throw new DesignPdfPreflightError(preflight)
-	const bytes = exportPdf(document, request, { imageResources, textService })
+	const bytes = exportPdf(links.document, request, {
+		imageResources,
+		textService,
+	})
 	await writePdfAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		byteLength: bytes.byteLength,

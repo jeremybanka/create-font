@@ -137,6 +137,12 @@ export type DesignImageResource = Readonly<{
 	readonly bytes: Uint8Array
 }>
 
+/** Runtime font bytes resolved without changing the durable font reference. */
+export type DesignFontResource = Readonly<{
+	readonly reference: DesignFontReference
+	readonly bytes: Uint8Array
+}>
+
 export type DesignGeometry =
 	| DesignTextGeometry
 	| DesignImageGeometry
@@ -325,6 +331,9 @@ export type DesignLinkedArtboardResource = Readonly<{
 	readonly projectId: string
 	readonly revision: string
 	readonly document: DesignDocument
+	/** Runtime-only assets travel with the source design and are namespaced on projection. */
+	readonly images?: readonly DesignImageResource[]
+	readonly fonts?: readonly DesignFontResource[]
 }>
 
 export type DesignSourceDiagnosticCode =

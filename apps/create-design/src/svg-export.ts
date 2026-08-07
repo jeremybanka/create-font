@@ -17,6 +17,7 @@ import {
 	type SvgDiagnostic,
 	type SvgPreflightResult,
 } from "@create-design/svg"
+import { resolveDesignArtboardLinks } from "@create-design/model"
 import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
@@ -24,6 +25,7 @@ import {
 } from "@create-design/source"
 
 import { createDesignSourceService } from "./source-service.ts"
+import { loadDesignLinkedArtboardResources } from "./linked-artboard-export.ts"
 
 export interface DesignSvgExportOptions {
 	readonly artboardIds?: readonly string[]
@@ -190,6 +192,12 @@ export async function exportDesignSvg(
 				)
 			: [],
 	)
+	const links = resolveDesignArtboardLinks(
+		assembled.value,
+		await loadDesignLinkedArtboardResources(canonicalRoot),
+	)
+	for (const resource of links.imageResources)
+		imageResources.set(resource.id, resource)
 	const artboardId =
 		options.artboardIds?.[0] ?? assembled.value.artboards[0]?.id
 	if (artboardId === undefined)
@@ -197,13 +205,13 @@ export async function exportDesignSvg(
 	const target = { artboardId }
 	const projectionOptions = { imageResources }
 	const preflight = preflightSvgExport(
-		assembled.value,
+		links.document,
 		target,
 		projectionOptions,
 	)
 	if (!svgPreflightAllowsOutput(preflight))
 		throw new DesignSvgPreflightError(preflight)
-	const bytes = exportSvg(assembled.value, target, projectionOptions)
+	const bytes = exportSvg(links.document, target, projectionOptions)
 	await writeSvgAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		artboardId,
