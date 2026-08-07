@@ -18,6 +18,7 @@ export interface PreviewTileProps {
 }
 
 const DEFAULT_TEXT = "Hamburgefontsiv"
+const PREVIEW_TEXT_COLUMNS = 26 * 2 + 13
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	const compilation = useO(workspace.liveFont.compilation)
@@ -151,6 +152,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<option value="cicero">Cicero translation</option>
 						<option value="pi">1,000 digits of pi</option>
 						<option value="nato">NATO alphabet</option>
+						<option value="moby">Moby-Dick opening</option>
 					</select>
 				</label>
 				{sample === "noise" ? (
@@ -232,7 +234,9 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<span>Text</span>
 						<textarea
 							aria-label="Preview text"
+							cols={PREVIEW_TEXT_COLUMNS}
 							rows={2}
+							wrap="soft"
 							value={text}
 							onInput={(event) => {
 								setSample("custom")

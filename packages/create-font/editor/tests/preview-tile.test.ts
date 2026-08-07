@@ -16,6 +16,10 @@ describe("preview tile model", () => {
 			"Alfa Bravo Charlie Delta Echo Foxtrot",
 		)
 		expect(PREVIEW_SAMPLES.nato).toContain("X-ray Yankee Zulu")
+		expect(PREVIEW_SAMPLES.moby).toMatch(/^Call me Ishmael\./)
+		expect(PREVIEW_SAMPLES.moby).toContain(
+			"I account it high time to get to sea as soon as I can.",
+		)
 	})
 
 	it("generates stable noise exclusively from the supplied glyphs", () => {
