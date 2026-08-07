@@ -19,6 +19,7 @@ import {
 	type DesignDocument,
 	type DesignFontReference,
 	type DesignImageResource,
+	type DesignLinkedArtboardResource,
 	type AssetIndexFile,
 	type FontIndexFile,
 } from "@create-design/source"
@@ -461,25 +462,67 @@ export async function installDesignSourceImage(
 	}
 }
 
-function websocketUrl(): string {
-	const url = new URL(`/api/source/events`, window.location.href)
+export type DesignWorkspaceInventory = Readonly<{
+	name: string
+	activeProjectId: string
+	projects: readonly Readonly<{ id: string; name: string; path: string }>[]
+}>
+
+export async function readDesignWorkspace(): Promise<DesignWorkspaceInventory> {
+	const response = await fetch("/api/workspace")
+	if (!response.ok) throw new Error("Could not read the design workspace.")
+	return (await response.json()) as DesignWorkspaceInventory
+}
+
+function projectOrigin(projectId: string): string {
+	return `/projects/${encodeURIComponent(projectId)}`
+}
+
+function websocketUrl(origin = ""): string {
+	const url = new URL(`${origin}/api/source/events`, window.location.href)
 	url.protocol = url.protocol === `https:` ? `wss:` : `ws:`
 	return url.href
 }
 
-export async function connectDesignSourceSession(): Promise<DesignSourceSession> {
-	const client = createSourceRpcClient()
-	const [snapshot, workspace] = await Promise.all([
+async function loadLinkedArtboards(
+	workspace: DesignWorkspaceInventory,
+	activeProjectId: string,
+): Promise<readonly DesignLinkedArtboardResource[]> {
+	return Promise.all(
+		workspace.projects
+			.filter(({ id }) => id !== activeProjectId)
+			.map(async ({ id }) => {
+				const snapshot = await createSourceRpcClient(
+					projectOrigin(id),
+				).readSnapshot()
+				const state = sourceSyncStateFromSnapshot(snapshot)
+				const update = assemble(state)
+				if (!update.ok)
+					throw new Error(`Linked design ${id} contains invalid source.`)
+				return {
+					projectId: id,
+					revision: update.revision,
+					document: update.document,
+				}
+			}),
+	)
+}
+
+export async function connectDesignSourceSession(
+	options: Readonly<{
+		projectId?: string
+		workspace?: DesignWorkspaceInventory
+	}> = {},
+): Promise<DesignSourceSession> {
+	const workspace = options.workspace ?? (await readDesignWorkspace())
+	const projectId = options.projectId ?? workspace.activeProjectId
+	if (!workspace.projects.some(({ id }) => id === projectId))
+		throw new Error(`Design ${projectId} is not available in this workspace.`)
+	const origin = projectOrigin(projectId)
+	const client = createSourceRpcClient(origin)
+	const [snapshot, linkedArtboards] = await Promise.all([
 		client.readSnapshot(),
-		fetch(`/api/workspace`)
-			.then(async (response) => {
-				if (!response.ok) return undefined
-				const value = (await response.json()) as { name?: unknown }
-				return typeof value.name === `string` && value.name.trim().length > 0
-					? value.name
-					: undefined
-			})
-			.catch(() => undefined),
+		loadLinkedArtboards(workspace, projectId),
 	])
 	let state = sourceSyncStateFromSnapshot(snapshot)
 	const initial = await hydrateDesignSourceUpdate(client, state)
@@ -496,14 +539,19 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 		(update: DesignExternalSourceUpdate) => void
 	>()
 	const statusListeners = new Set<(status: DesignSourceStatus) => void>()
+	const linkedArtboardListeners = new Set<
+		(resources: readonly DesignLinkedArtboardResource[]) => void
+	>()
 	const sourceChangeListeners = new Set<() => void>()
 	const localOperations = new Set<string>()
 	let externalConflict = false
 	let pendingSaves = 0
 	let tail: Promise<unknown> = Promise.resolve()
 	let sourceGeneration = 0
+	let disposed = false
+	const sockets = new Set<WebSocket>()
 	const status = (value: DesignSourceStatus): void => {
-		for (const listener of statusListeners) listener(value)
+		if (!disposed) for (const listener of statusListeners) listener(value)
 	}
 	const recover = async (
 		notify: boolean,
@@ -514,14 +562,16 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 		const generation = sourceGeneration
 		const update = await hydrateDesignSourceUpdate(client, state)
 		if (generation !== sourceGeneration) return recover(notify)
-		if (notify) {
+		if (notify && !disposed) {
 			for (const listener of documentListeners) listener(update)
 		}
 		status(`connected`)
 		return update
 	}
-	const socket = new WebSocket(websocketUrl())
+	const socket = new WebSocket(websocketUrl(origin))
+	sockets.add(socket)
 	socket.addEventListener(`message`, (message) => {
+		if (disposed) return
 		void (async () => {
 			const event = JSON.parse(String(message.data)) as SourceChangedEvent
 			for (const listener of sourceChangeListeners) listener()
@@ -552,16 +602,43 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 	})
 	socket.addEventListener(`open`, () => status(`connected`))
 	socket.addEventListener(`close`, () => status(`recovering`))
+	for (const project of workspace.projects) {
+		if (project.id === projectId) continue
+		const linkedSocket = new WebSocket(websocketUrl(projectOrigin(project.id)))
+		sockets.add(linkedSocket)
+		linkedSocket.addEventListener("message", () => {
+			if (disposed) return
+			void (async () => {
+				const nextLinks = await loadLinkedArtboards(workspace, projectId)
+				if (disposed) return
+				for (const listener of linkedArtboardListeners) listener(nextLinks)
+			})().catch(() => status("conflict"))
+		})
+	}
 
 	const fonts = initial.fonts
 	const images = initial.images ?? []
 
 	return {
-		...(workspace === undefined ? {} : { displayName: workspace }),
+		displayName:
+			workspace.projects.find(({ id }) => id === projectId)?.name ?? projectId,
+		projectId,
+		workspaceProjects: workspace.projects,
+		linkedArtboards,
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
 		...(fonts.length === 0 ? {} : { fonts }),
 		...(images.length === 0 ? {} : { images }),
+		dispose() {
+			if (disposed) return
+			disposed = true
+			for (const activeSocket of sockets) activeSocket.close()
+			sockets.clear()
+			documentListeners.clear()
+			statusListeners.clear()
+			linkedArtboardListeners.clear()
+			sourceChangeListeners.clear()
+		},
 		...((initial.imageDiagnostics?.length ?? 0) === 0
 			? {}
 			: { imageDiagnostics: initial.imageDiagnostics }),
@@ -690,6 +767,10 @@ export async function connectDesignSourceSession(): Promise<DesignSourceSession>
 		subscribeDocument(listener) {
 			documentListeners.add(listener)
 			return () => documentListeners.delete(listener)
+		},
+		subscribeLinkedArtboards(listener) {
+			linkedArtboardListeners.add(listener)
+			return () => linkedArtboardListeners.delete(listener)
 		},
 		subscribeStatus(listener) {
 			statusListeners.add(listener)

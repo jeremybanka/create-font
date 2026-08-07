@@ -2311,6 +2311,57 @@ describe("create-design shared vector scene", () => {
 		}
 	}
 
+	it("refreshes linked artboards without replacing selection or authored history", async () => {
+		let publishLinks:
+			| ((
+					resources: readonly import("@create-design/source").DesignLinkedArtboardResource[],
+			  ) => void)
+			| undefined
+		const source = createInitialDocument()
+		const session = sourceSession({
+			linkedArtboards: [
+				{ projectId: "source", revision: "one", document: source },
+			],
+			subscribeLinkedArtboards(listener) {
+				publishLinks = listener
+				return () => undefined
+			},
+		})
+		mountDesign({
+			initialDocument: session.initialDocument,
+			sourceSession: session,
+		})
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "a",
+					ctrlKey: true,
+					bubbles: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toContain("2 objects selected")
+		await act(async () => {
+			publishLinks?.([
+				{
+					projectId: "source",
+					revision: "two",
+					document: {
+						...source,
+						title: "Externally updated source",
+					},
+				},
+			])
+			await Promise.resolve()
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toContain("2 objects selected")
+	})
+
 	it("keeps every Type entry point inert when the workspace has no fonts", async () => {
 		const storage = new Map<string, string>()
 		const session = sourceSession({ fonts: [] })

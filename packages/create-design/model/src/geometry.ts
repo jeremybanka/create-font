@@ -165,6 +165,19 @@ export function geometryContours(
 			),
 		]
 	}
+	if (geometry.kind === "artboard-link") {
+		return [
+			rectangleContour(
+				{
+					minX: 0,
+					minY: 0,
+					maxX: geometry.width,
+					maxY: geometry.height,
+				},
+				`${identityPrefix}:contour:0`,
+			),
+		]
+	}
 	if (geometry.kind === "rectangle") {
 		return [
 			rectangleContour(

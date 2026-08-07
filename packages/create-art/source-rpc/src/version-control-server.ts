@@ -9,6 +9,7 @@ import {
 } from "./contracts.ts"
 
 export type SourceVersionControlRpcOptions = Readonly<{
+	name?: string
 	service?: SourceVersionControlService
 }>
 
@@ -37,7 +38,9 @@ function versionControlErrorResponse(error: unknown) {
 export function createSourceVersionControlRpc(
 	options: SourceVersionControlRpcOptions,
 ) {
-	return new Elysia({ name: `create-art-source-version-control-rpc` })
+	return new Elysia({
+		name: options.name ?? `create-art-source-version-control-rpc`,
+	})
 		.get(
 			`/source/comparison`,
 			async ({ query }) => {

@@ -8,6 +8,12 @@ import type { ElysiaAdapter } from "elysia/adapter"
 import { runtimeElysiaAdapter } from "./elysia-adapter.ts"
 import { createDesignSourceService } from "./source-service.ts"
 import { coordinateDesignSourceVersionControl } from "./version-control.ts"
+import {
+	discoverDesignProjects,
+	isSafeDesignProjectId,
+	selectDesignProject,
+	type DesignProject,
+} from "./workspace.ts"
 
 export const CREATE_DESIGN_RPC_VERSION = 2 as const
 
@@ -15,19 +21,47 @@ export type CreateDesignServerOptions = Readonly<{
 	adapter?: ElysiaAdapter
 	assets?: string
 	root: string
+	design?: string
 }>
+
+async function sourcePlugin(
+	project: DesignProject,
+	adapter: ElysiaAdapter,
+	mountId: string,
+) {
+	const storedSource = await createDesignSourceService(project.root)
+	const { assets, source, versionControl } =
+		coordinateDesignSourceVersionControl(project.root, storedSource)
+	return createSourceRpc({
+		adapter,
+		assets,
+		name: `create-design-source:${project.name}:${mountId}`,
+		source,
+		versionControl,
+	})
+}
 
 export async function createDesignServerApp(
 	options: CreateDesignServerOptions,
 ) {
 	const root = resolve(options.root)
-	const storedSource = await createDesignSourceService(root)
-	const {
-		assets: sourceAssets,
-		source,
-		versionControl,
-	} = coordinateDesignSourceVersionControl(root, storedSource)
+	if (options.design !== undefined && !isSafeDesignProjectId(options.design))
+		throw new Error("Design route identities cannot contain path segments.")
 	const adapter = options.adapter ?? runtimeElysiaAdapter
+	const direct = await selectDesignProject(root, options.design).catch(
+		() => undefined,
+	)
+	const discovered = await discoverDesignProjects(root)
+	const projects =
+		discovered.length > 0
+			? discovered
+			: direct === undefined
+				? [{ name: basename(root), path: ".", root }]
+				: [direct]
+	const active =
+		(options.design === undefined
+			? direct
+			: projects.find(({ name }) => name === options.design)) ?? projects[0]!
 	const app = new Elysia({
 		adapter,
 		name: `create-design-server`,
@@ -37,16 +71,20 @@ export async function createDesignServerApp(
 				ok: true as const,
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
-			.get(`/workspace`, () => ({ name: basename(root) }))
-			.use(
-				createSourceRpc({
-					adapter,
-					assets: sourceAssets,
-					source,
-					versionControl,
-				}),
-			),
+			.get(`/workspace`, () => ({
+				name: discovered.length === 0 ? basename(active.root) : basename(root),
+				activeProjectId: active.name,
+				projects: projects.map(({ name, path }) => ({ id: name, name, path })),
+			})),
 	)
+	const activePlugin = await sourcePlugin(active, adapter, "default")
+	app.group(`/api`, (group) => group.use(activePlugin))
+	for (const project of projects) {
+		const plugin = await sourcePlugin(project, adapter, "workspace")
+		app.group(`/projects/${encodeURIComponent(project.name)}/api`, (group) =>
+			group.use(plugin),
+		)
+	}
 	if (options.assets === undefined) return app
 	return app.use(
 		await staticPlugin({

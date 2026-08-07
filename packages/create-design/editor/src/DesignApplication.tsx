@@ -193,6 +193,7 @@ import {
 } from "./design-layer-operations.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import { placeDesignImage } from "./placed-images.ts"
+import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
@@ -218,6 +219,7 @@ import {
 	projectDesignObjectContours,
 	projectDesignEffectiveHierarchy,
 	projectDesignOutput,
+	resolveDesignArtboardLinks,
 	rotateObject,
 	scaleObject,
 	translateObject,
@@ -303,6 +305,7 @@ import type {
 	DesignGeometry,
 	DesignGuide,
 	DesignImageResource,
+	DesignLinkedArtboardResource,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -643,7 +646,7 @@ function initialDesignPersistence(
 		sourceSession?.initialRevision ?? null,
 	)
 	if (sourceSession === undefined) return state
-	const storage = browserLocalStorage()
+	const storage = browserLocalStorage(sourceSession.projectId)
 	if (storage === null) return state
 	const draft = readDesignRecoveryDraft(storage)
 	if (draft === null) return state
@@ -655,9 +658,21 @@ function initialDesignPersistence(
 	return reduceDesignPersistence(state, { type: "recovery-found", draft })
 }
 
-function browserLocalStorage(): Storage | null {
+function browserLocalStorage(namespace?: string): Storage | null {
 	try {
-		return typeof localStorage === "undefined" ? null : localStorage
+		if (typeof localStorage === "undefined") return null
+		if (namespace === undefined) return localStorage
+		const prefix = `create-design:project:${encodeURIComponent(namespace)}:`
+		return {
+			get length() {
+				return localStorage.length
+			},
+			clear: () => undefined,
+			getItem: (key) => localStorage.getItem(prefix + key),
+			key: (index) => localStorage.key(index),
+			removeItem: (key) => localStorage.removeItem(prefix + key),
+			setItem: (key, value) => localStorage.setItem(prefix + key, value),
+		}
 	} catch {
 		return null
 	}
@@ -934,6 +949,7 @@ export type DesignApplicationProps = Readonly<{
 	initialDocument?: DesignDocument
 	pathfinderWorkerClient?: PathfinderWorkerClient
 	sourceSession?: DesignSourceSession
+	onProjectChange?: (projectId: string) => void
 	textService?: DesignTextService
 }>
 
@@ -1060,6 +1076,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[canvasDimmer],
 	)
 	const canvasTheme = useDesignCanvasTheme(applicationElement, canvasDimmer)
+	const projectStorage = browserLocalStorage(sourceSession?.projectId)
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
 	const document = useO(editorState.states.documentSelector)
@@ -1080,6 +1097,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [imageResources, setImageResources] = useState<
 		readonly DesignImageResource[]
 	>(() => props.imageResources ?? sourceSession?.images ?? [])
+	const [linkedArtboards, setLinkedArtboards] = useState<
+		readonly DesignLinkedArtboardResource[]
+	>(() => sourceSession?.linkedArtboards ?? [])
+	const linkResources = useMemo(
+		() => [
+			...linkedArtboards,
+			...(sourceSession?.projectId === undefined
+				? []
+				: [
+						{
+							projectId: sourceSession.projectId,
+							revision: persistence.durableRevision ?? "local",
+							document,
+						},
+					]),
+		],
+		[
+			document,
+			linkedArtboards,
+			persistence.durableRevision,
+			sourceSession?.projectId,
+		],
+	)
+	const linkedResolution = useMemo(
+		() => resolveDesignArtboardLinks(document, linkResources),
+		[document, linkResources],
+	)
+	const exportableDocument = linkedResolution.document
 	const canvasImages = useDesignCanvasImages(document, imageResources)
 	const [selectedBlendId, setSelectedBlendId] = useState<string | null>(null)
 	const [editingTextId, setEditingTextId] = useState<string | null>(null)
@@ -2023,6 +2068,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 		},
 		[activeArtboard, activeHierarchyScope, commit, nextId, sourceSession],
+	)
+	const placeLinkedArtboard = useCallback(
+		(
+			resource: DesignLinkedArtboardResource,
+			artboard: DesignArtboard,
+		): void => {
+			const placed = placeDesignLinkedArtboard(
+				documentRef.current,
+				resource,
+				artboard,
+				activeArtboard,
+				activeHierarchyScope,
+				nextId,
+			)
+			commit(placed.document)
+			setSelectedBlendId(null)
+			setDirectSelection([])
+			setSelection([placed.object.id])
+			setStatus(
+				`Placed live artboard ${artboard.name} from ${resource.projectId}.`,
+			)
+		},
+		[activeArtboard, activeHierarchyScope, commit, nextId],
 	)
 	const chooseImageFile = useCallback((): void => {
 		const input = globalThis.document.createElement("input")
@@ -3561,13 +3629,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			preferences: ExportPreflightPreferences = {},
 		): void => {
 			const preflight = pdfDownloadManager.preflight(
-				document,
+				exportableDocument,
 				target,
 				preferences,
 			)
 			if (!exportPreflightAllowsOutput(preflight)) {
 				// A refused request still supersedes any older async serialization.
-				void pdfDownloadManager.request(document, target, preferences)
+				void pdfDownloadManager.request(exportableDocument, target, preferences)
 				openTile("export")
 				setStatus(
 					`PDF export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
@@ -3575,26 +3643,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			setStatus(`Preparing ${document.title}.pdf…`)
-			void pdfDownloadManager.request(document, target, preferences).then(
-				(downloaded) => {
-					if (downloaded)
+			void pdfDownloadManager
+				.request(exportableDocument, target, preferences)
+				.then(
+					(downloaded) => {
+						if (downloaded)
+							setStatus(
+								`Exported ${document.title}.pdf with ${document.objects.length} vector objects.`,
+							)
+					},
+					(error) =>
 						setStatus(
-							`Exported ${document.title}.pdf with ${document.objects.length} vector objects.`,
-						)
-				},
-				(error) =>
-					setStatus(
-						`PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
-					),
-			)
+							`PDF export failed: ${error instanceof Error ? error.message : String(error)}`,
+						),
+				)
 		},
-		[activeArtboard, document, openTile, pdfDownloadManager],
+		[
+			activeArtboard,
+			document,
+			exportableDocument,
+			openTile,
+			pdfDownloadManager,
+		],
 	)
 	const exportSvgDocument = useCallback(
 		(target: SvgExportTarget): void => {
-			const preflight = svgDownloadManager.preflight(document, target)
+			const preflight = svgDownloadManager.preflight(exportableDocument, target)
 			if (preflight.decision === "blocked") {
-				void svgDownloadManager.request(document, target)
+				void svgDownloadManager.request(exportableDocument, target)
 				openTile("export")
 				setStatus(
 					`SVG export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
@@ -3602,7 +3678,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			setStatus(`Preparing ${document.title}.svg…`)
-			void svgDownloadManager.request(document, target).then(
+			void svgDownloadManager.request(exportableDocument, target).then(
 				(downloaded) => {
 					if (downloaded)
 						setStatus(
@@ -3615,13 +3691,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					),
 			)
 		},
-		[document, openTile, svgDownloadManager],
+		[document, exportableDocument, openTile, svgDownloadManager],
 	)
 	const exportPngDocument = useCallback(
 		(request: PngExportRequest): void => {
-			const preflight = pngDownloadManager.preflight(document, request)
+			const preflight = pngDownloadManager.preflight(
+				exportableDocument,
+				request,
+			)
 			if (preflight.decision === "blocked") {
-				void pngDownloadManager.request(document, request)
+				void pngDownloadManager.request(exportableDocument, request)
 				openTile("export")
 				setStatus(
 					`PNG export blocked by ${preflight.summary.errors} preflight error${preflight.summary.errors === 1 ? "" : "s"}.`,
@@ -3631,7 +3710,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setStatus(
 				`Rasterizing ${preflight.artboards.length} PNG ${preflight.artboards.length === 1 ? "image" : "images"}…`,
 			)
-			void pngDownloadManager.request(document, request).then(
+			void pngDownloadManager.request(exportableDocument, request).then(
 				(downloaded) => {
 					if (downloaded)
 						setStatus(
@@ -3644,7 +3723,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					),
 			)
 		},
-		[document, openTile, pngDownloadManager],
+		[exportableDocument, openTile, pngDownloadManager],
 	)
 	const importSvgDocument = useCallback(
 		(source: string): SvgImportResult => {
@@ -4634,6 +4713,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				disabledReason: "Connect a source workspace before placing an image.",
 				do: chooseImageFile,
 			},
+			...linkedArtboards.flatMap((resource) =>
+				resource.document.artboards.map((artboard) => ({
+					id: `place-linked-artboard-${resource.projectId}-${artboard.id}`,
+					displayName: `Place ${artboard.name} from ${resource.projectId}`,
+					category: "File",
+					description:
+						"Place a portable live object that follows its source artboard.",
+					icon: "Link1Icon" as const,
+					do: () => placeLinkedArtboard(resource, artboard),
+				})),
+			),
 			{
 				id: "export-pdf",
 				displayName: "Export PDF",
@@ -5164,6 +5254,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			expansionEligibility,
 			blendEligibility,
 			chooseImageFile,
+			linkedArtboards,
+			placeLinkedArtboard,
 			makeBlend,
 			makeClippingMask,
 			exportDocument,
@@ -5219,7 +5311,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				updatedAt: Date.now(),
 			}
 			updatePersistence({ type: "edit", recoveryDraft })
-			const storage = browserLocalStorage()
+			const storage = projectStorage
 			if (storage !== null) writeDesignRecoveryDraft(storage, recoveryDraft)
 		}
 		window.document.title = `${document.title} — create-design`
@@ -5268,7 +5360,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	useEffect(() => {
 		if (sourceSession === undefined) return
-		const storage = browserLocalStorage()
+		const storage = projectStorage
 		if (storage === null) return
 		if (persistence.status === "saved") {
 			clearDesignRecoveryDraft(storage)
@@ -5287,6 +5379,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		persistence.status,
 		sourceSession,
 	])
+
+	useEffect(() => {
+		return sourceSession?.subscribeLinkedArtboards?.(setLinkedArtboards)
+	}, [sourceSession])
 
 	useEffect(() => {
 		if (sourceSession === undefined) return
@@ -5310,13 +5406,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			registerHeadlessTextFontResources(update.fonts)
 			setImageResources(update.images ?? [])
+			if (update.linkedArtboards !== undefined)
+				setLinkedArtboards(update.linkedArtboards)
 			serializedDocumentRef.current = JSON.stringify(update.document)
 			editorState.actions.loadExternalDocument({
 				document: update.document,
 				durableRevision: update.revision,
 			})
 			setSelection([])
-			const storage = browserLocalStorage()
+			const storage = projectStorage
 			if (storage !== null) clearDesignRecoveryDraft(storage)
 		}
 		return sourceSession.subscribeDocument((update) =>
@@ -5340,7 +5438,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			event.returnValue = ""
 		}
 		const pageHide = (): void => {
-			const storage = browserLocalStorage()
+			const storage = projectStorage
 			if (storage === null) return
 			writeDesignRecoveryDraft(storage, {
 				version: 1,
@@ -7263,10 +7361,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
-	const canvasOutputProjection = projectDesignOutput({
-		...canvasDocument,
-		objects: canvasAuthoredObjects,
-	})
+	const resolvedCanvasDocument = resolveDesignArtboardLinks(
+		{
+			...canvasDocument,
+			objects: canvasAuthoredObjects,
+		},
+		linkResources,
+	).document
+	const canvasOutputProjection = projectDesignOutput(resolvedCanvasDocument)
 	const displayedObjects = canvasOutputProjection.objects
 	const derivedBlendByObjectId = new Map(
 		canvasOutputProjection.entries.flatMap((entry) =>
@@ -7331,7 +7433,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setSelection([])
 	}
 	const discardDraft = (): void => {
-		const storage = browserLocalStorage()
+		const storage = projectStorage
 		if (storage !== null) clearDesignRecoveryDraft(storage)
 		if (sourceSession === undefined)
 			updatePersistence({ type: "discard-draft" })
@@ -7350,13 +7452,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			registerHeadlessTextFontResources(update.fonts)
 			setImageResources(update.images ?? [])
+			if (update.linkedArtboards !== undefined)
+				setLinkedArtboards(update.linkedArtboards)
 			serializedDocumentRef.current = JSON.stringify(update.document)
 			editorState.actions.loadExternalDocument({
 				document: update.document,
 				durableRevision: update.revision,
 			})
 			setSelection([])
-			const storage = browserLocalStorage()
+			const storage = projectStorage
 			if (storage !== null) clearDesignRecoveryDraft(storage)
 		} catch (error) {
 			updatePersistence({
@@ -7379,6 +7483,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		link.download = `${document.title.replaceAll(/[^a-z0-9]+/gi, "-").replaceAll(/^-|-$/g, "") || "untitled"}-conflicted-copy.json`
 		link.click()
 		URL.revokeObjectURL(url)
+	}
+	const switchWorkspaceProject = (projectId: string): void => {
+		if (projectId === sourceSession?.projectId) return
+		if (
+			persistenceNeedsUnloadWarning(persistence) &&
+			!window.confirm(
+				"This design still has unsaved work. Switch designs and keep its recovery draft?",
+			)
+		)
+			return
+		props.onProjectChange?.(projectId)
 	}
 
 	return (
@@ -7414,10 +7529,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						<circle cx="18" cy="10" r="5" />
 					</svg>
 					<project-identity>
-						<strong title={sourceSession?.displayName ?? "Untitled design"}>
-							{sourceSession?.displayName ?? "Untitled design"}
-						</strong>
-						<span>create-design</span>
+						{(sourceSession?.workspaceProjects?.length ?? 0) < 2 ? (
+							<strong title={sourceSession?.displayName ?? "Untitled design"}>
+								{sourceSession?.displayName ?? "Untitled design"}
+							</strong>
+						) : (
+							<label>
+								<select
+									aria-label="Active workspace design"
+									value={sourceSession?.projectId}
+									onChange={(event) =>
+										switchWorkspaceProject(event.currentTarget.value)
+									}
+								>
+									{sourceSession?.workspaceProjects?.map((project) => (
+										<option key={project.id} value={project.id}>
+											{project.name}
+										</option>
+									))}
+								</select>
+							</label>
+						)}
+						<span>
+							{sourceSession?.workspaceProjects?.length ?? 1} design
+							{(sourceSession?.workspaceProjects?.length ?? 1) === 1
+								? ""
+								: "s"}{" "}
+							· create-design
+						</span>
 					</project-identity>
 				</brand-lockup>
 				<command-center>
@@ -7463,6 +7602,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			</header>
 
 			<main>
+				{linkedResolution.diagnostics.length === 0 ? null : (
+					<link-diagnostics
+						role="status"
+						aria-label="Linked artboard diagnostics"
+					>
+						<strong>Linked artwork needs attention</strong>
+						<ul>
+							{linkedResolution.diagnostics.map((diagnostic) => (
+								<li key={`${diagnostic.objectId}:${diagnostic.code}`}>
+									{diagnostic.message}
+								</li>
+							))}
+						</ul>
+					</link-diagnostics>
+				)}
 				{sourceSession === undefined ||
 				(persistence.status !== "recoverable-draft" &&
 					persistence.status !== "conflicted" &&

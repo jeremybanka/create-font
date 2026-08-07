@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { describe, expect, test } from "vitest"
 
 import { createDesignServerApp } from "../src/server.ts"
+import { initializeDesignSourceWorkspace } from "../src/source-service.ts"
 
 describe(`create-design workspace RPC`, () => {
 	test(`opens a trusted directory and serves a coherent source snapshot`, async () => {
@@ -21,6 +22,14 @@ describe(`create-design workspace RPC`, () => {
 		expect(workspace.status).toBe(200)
 		expect(await workspace.json()).toEqual({
 			name: root.split(`/`).at(-1),
+			activeProjectId: root.split(`/`).at(-1),
+			projects: [
+				{
+					id: root.split(`/`).at(-1),
+					name: root.split(`/`).at(-1),
+					path: ".",
+				},
+			],
 		})
 
 		const response = await app.handle(
@@ -54,5 +63,30 @@ describe(`create-design workspace RPC`, () => {
 		const application = await app.handle(new Request(`http://localhost/`))
 		expect(application.status).toBe(200)
 		expect(await application.text()).toContain(`create-design`)
+	})
+
+	test("serves isolated source sessions for every discovered design", async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-workspace-`))
+		await Promise.all([
+			initializeDesignSourceWorkspace(join(root, "designs", "alpha")),
+			initializeDesignSourceWorkspace(join(root, "designs", "beta")),
+		])
+		const app = await createDesignServerApp({ root })
+		const inventory = await app.handle(
+			new Request("http://localhost/api/workspace"),
+		)
+		expect(await inventory.json()).toMatchObject({
+			activeProjectId: "alpha",
+			projects: [{ id: "alpha" }, { id: "beta" }],
+		})
+		for (const id of ["alpha", "beta"]) {
+			const response = await app.handle(
+				new Request(`http://localhost/projects/${id}/api/source/snapshot`),
+			)
+			expect(response.status).toBe(200)
+			expect(await response.json()).toMatchObject({
+				revision: expect.any(String),
+			})
+		}
 	})
 })

@@ -2,6 +2,7 @@ import type {
 	DesignDocument,
 	DesignFontReference,
 	DesignImageResource,
+	DesignLinkedArtboardResource,
 	DesignSourceDiagnostic,
 } from "@create-design/source"
 
@@ -26,6 +27,7 @@ export type DesignExternalSourceUpdate =
 			fonts: readonly DesignSourceFontResource[]
 			images?: readonly DesignImageResource[]
 			imageDiagnostics?: readonly string[]
+			linkedArtboards?: readonly DesignLinkedArtboardResource[]
 			revision: string
 	  }>
 	| Readonly<{
@@ -35,12 +37,16 @@ export type DesignExternalSourceUpdate =
 	  }>
 
 export interface DesignSourceSession {
+	readonly projectId?: string
+	readonly workspaceProjects?: readonly Readonly<{ id: string; name: string }>[]
 	readonly displayName?: string
 	readonly initialDocument: DesignDocument
 	readonly initialRevision: string
 	readonly fonts?: readonly DesignSourceFontResource[]
 	readonly images?: readonly DesignImageResource[]
 	readonly imageDiagnostics?: readonly string[]
+	readonly linkedArtboards?: readonly DesignLinkedArtboardResource[]
+	dispose?(): void
 	installImage?(
 		id: string,
 		bytes: Uint8Array,
@@ -58,6 +64,9 @@ export interface DesignSourceSession {
 	save(document: DesignDocument): Promise<Readonly<{ revision: string }>>
 	subscribeDocument(
 		listener: (update: DesignExternalSourceUpdate) => void,
+	): () => void
+	subscribeLinkedArtboards?(
+		listener: (resources: readonly DesignLinkedArtboardResource[]) => void,
 	): () => void
 	subscribeStatus(listener: (status: DesignSourceStatus) => void): () => void
 }

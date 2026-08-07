@@ -18,6 +18,8 @@ export type {
 	DesignImageGeometry,
 	DesignImageResource,
 	DesignImageSource,
+	DesignLinkedArtboardGeometry,
+	DesignLinkedArtboardResource,
 	DesignLayer,
 	DesignLayerUiColor,
 	DesignObject,

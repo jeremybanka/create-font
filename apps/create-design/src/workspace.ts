@@ -65,3 +65,15 @@ export async function selectDesignProject(
 		`Multiple design projects are available; select one by name (${projects.map((project) => project.name).join(", ")}).`,
 	)
 }
+
+/** Validates an untrusted route identity before it can become a filesystem path. */
+export function isSafeDesignProjectId(value: string): boolean {
+	return (
+		value.length > 0 &&
+		value !== "." &&
+		value !== ".." &&
+		!value.includes("/") &&
+		!value.includes("\\") &&
+		!value.includes("%")
+	)
+}

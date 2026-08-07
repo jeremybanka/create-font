@@ -35,6 +35,8 @@ export { createSourceVersionControlRpc } from "./version-control-server.ts"
 export type SourceRpcOptions = Readonly<{
 	adapter?: ElysiaAdapter
 	assets?: SourceAssetService
+	/** Unique plugin identity when several source sessions share one server. */
+	name?: string
 	source?: SourceService
 	unavailableMessage?: string
 	versionControl?: SourceVersionControlService
@@ -128,7 +130,7 @@ export function createSourceRpc(options: SourceRpcOptions) {
 	})
 	return new Elysia({
 		...(options.adapter === undefined ? {} : { adapter: options.adapter }),
-		name: `create-art-source-rpc`,
+		name: options.name ?? `create-art-source-rpc`,
 	})
 		.ws(`/source/events`, {
 			open(ws) {
@@ -302,8 +304,13 @@ export function createSourceRpc(options: SourceRpcOptions) {
 		.use(
 			createSourceVersionControlRpc(
 				options.versionControl === undefined
-					? {}
-					: { service: options.versionControl },
+					? {
+							name: `${options.name ?? "create-art-source-rpc"}:version-control`,
+						}
+					: {
+							name: `${options.name ?? "create-art-source-rpc"}:version-control`,
+							service: options.versionControl,
+						},
 			),
 		)
 		.get(

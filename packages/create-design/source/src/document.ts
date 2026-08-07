@@ -216,12 +216,25 @@ export const imageGeometrySchema = z
 		intrinsicHeight: positiveNumberSchema,
 	})
 	.strict()
+export const linkedArtboardGeometrySchema = z
+	.object({
+		kind: z.literal("artboard-link"),
+		projectId: z
+			.string()
+			.min(1)
+			.regex(/^[^/\\]+$/u, "Expected a workspace project identity."),
+		artboardId: artboardIdSchema,
+		width: positiveNumberSchema,
+		height: positiveNumberSchema,
+	})
+	.strict()
 export const geometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
 	textGeometrySchema,
 	imageGeometrySchema,
+	linkedArtboardGeometrySchema,
 ])
 export const previousGeometrySchema = z.discriminatedUnion("kind", [
 	previousPathGeometrySchema,
@@ -234,6 +247,7 @@ export const compatibleGeometrySchema = z.discriminatedUnion("kind", [
 	ellipseGeometrySchema,
 	textGeometrySchema,
 	imageGeometrySchema,
+	linkedArtboardGeometrySchema,
 ])
 const legacyGeometrySchema = z.discriminatedUnion("kind", [
 	legacyPathGeometrySchema,

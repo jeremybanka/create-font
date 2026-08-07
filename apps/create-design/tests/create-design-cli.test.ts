@@ -9,6 +9,7 @@ import { MAX_ILLUSTRATOR_FILE_BYTES } from "@create-design/ai"
 import { runCreateDesignCli } from "../src/create-design-cli.ts"
 import { createDesignWorkspace } from "../src/create.ts"
 import { discoverDesignProjects } from "../src/workspace.ts"
+import { isSafeDesignProjectId } from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
 
@@ -110,6 +111,12 @@ describe("create-design CLI", () => {
 				(project) => project.name,
 			),
 		).toEqual(["first-design", "second-design"])
+	})
+
+	it("rejects path traversal identities used by workspace routes", () => {
+		expect(isSafeDesignProjectId("poster")).toBe(true)
+		expect(isSafeDesignProjectId("../outside")).toBe(false)
+		expect(isSafeDesignProjectId("poster%2foutside")).toBe(false)
 	})
 
 	it("installs a new workspace with the explicitly selected package manager", async () => {
