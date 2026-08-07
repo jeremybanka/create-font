@@ -10,6 +10,7 @@ import {
 	previewColorDefault,
 	type PreviewSampleId,
 } from "./preview-tile.ts"
+import { PREVIEW_TEXT_WRAP_COLUMNS } from "./text-layout.ts"
 import css from "./PreviewTile.module.css"
 
 export interface PreviewTileProps {
@@ -18,7 +19,6 @@ export interface PreviewTileProps {
 }
 
 const DEFAULT_TEXT = "Hamburgefontsiv"
-const PREVIEW_TEXT_COLUMNS = 26 * 2 + 13
 
 export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 	const compilation = useO(workspace.liveFont.compilation)
@@ -234,7 +234,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<span>Text</span>
 						<textarea
 							aria-label="Preview text"
-							cols={PREVIEW_TEXT_COLUMNS}
+							cols={PREVIEW_TEXT_WRAP_COLUMNS}
 							rows={2}
 							wrap="soft"
 							value={text}

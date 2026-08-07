@@ -188,6 +188,7 @@ import {
 import {
 	layoutTextRun,
 	nearestCaretIndex,
+	PREVIEW_TEXT_WRAP_COLUMNS,
 	textSelectionRects,
 } from "./text-layout.ts"
 import {
@@ -585,7 +586,10 @@ export function GlyphCanvas({
 		width,
 	])
 	const layout = useMemo(
-		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
+		() =>
+			layoutTextRun(run, metrics, metadata.unitsPerEm, {
+				maxColumns: PREVIEW_TEXT_WRAP_COLUMNS,
+			}),
 		[run, metadata.unitsPerEm, metrics],
 	)
 	const editingPosition = layout.glyphs.find(
