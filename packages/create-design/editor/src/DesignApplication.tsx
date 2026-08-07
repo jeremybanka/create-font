@@ -51,7 +51,7 @@ import {
 	useRef,
 	useState,
 } from "react"
-import type { ReactNode, ComponentProps } from "react"
+import type { CSSProperties, ReactNode, ComponentProps } from "react"
 import { StoreProvider, useO, useTL } from "atom.io/react"
 
 import {
@@ -89,6 +89,13 @@ import {
 import { swatchCss } from "@create-design/model"
 import { canvasToDocumentPoint } from "@create-design/model"
 import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
+import {
+	canvasDimmerPercent,
+	canvasDimmerTokens,
+	DESIGN_CANVAS_DIMMER_STORAGE_KEY,
+	normalizeCanvasDimmer,
+	readCanvasDimmer,
+} from "./canvas-dimmer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
 	createInitialDocument,
@@ -1004,7 +1011,16 @@ type DesignApplicationContentProps = Omit<
 
 function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const { pathfinderWorkerClient, sourceSession } = props
-	const canvasTheme = useDesignCanvasTheme()
+	const [canvasDimmer, setCanvasDimmer] = useState(() =>
+		readCanvasDimmer(browserLocalStorage()),
+	)
+	const [applicationElement, setApplicationElement] =
+		useState<HTMLElement | null>(null)
+	const dimmerTokens = useMemo(
+		() => canvasDimmerTokens(canvasDimmer),
+		[canvasDimmer],
+	)
+	const canvasTheme = useDesignCanvasTheme(applicationElement, canvasDimmer)
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
 	const document = useO(editorState.states.documentSelector)
@@ -1045,6 +1061,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [moveArtworkWithArtboard, setMoveArtworkWithArtboardState] = useState(
 		initialMoveArtworkWithArtboard,
 	)
+	useEffect(() => {
+		try {
+			browserLocalStorage()?.setItem(
+				DESIGN_CANVAS_DIMMER_STORAGE_KEY,
+				String(canvasDimmer),
+			)
+		} catch {
+			// The in-session preference remains usable when storage is blocked.
+		}
+	}, [canvasDimmer])
 	const [previewArtboardDocument, setPreviewArtboardDocument] =
 		useState<DesignDocument | null>(null)
 	const pathCommandSelectionsRef = useRef(
@@ -6675,7 +6701,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	return (
 		// This internal provider child intentionally renders the public component root.
 		// eslint-disable-next-line lasertag/render-tag-with-own-name
-		<design-application className={css.class}>
+		<design-application
+			className={css.class}
+			ref={setApplicationElement}
+			data-canvas-dimmer={canvasDimmer}
+			style={
+				{
+					"--design-canvas-surface": dimmerTokens.surface,
+					"--design-canvas-grid-line": dimmerTokens.gridLine,
+					"--design-canvas-ruler-surface": dimmerTokens.rulerSurface,
+					"--design-canvas-ruler-line": dimmerTokens.rulerLine,
+					"--design-canvas-ruler-ink": dimmerTokens.rulerInk,
+					"--design-canvas-hud-surface": dimmerTokens.hudSurface,
+					"--design-canvas-hud-line": dimmerTokens.hudLine,
+					"--design-canvas-hud-ink": dimmerTokens.hudInk,
+					"--design-canvas-artboard-label": dimmerTokens.artboardLabel,
+					"--design-canvas-guide": dimmerTokens.guide,
+					"--design-canvas-marquee": dimmerTokens.marquee,
+					"--design-canvas-selection": dimmerTokens.selection,
+					"--design-canvas-handle-fill": dimmerTokens.handleFill,
+				} as CSSProperties
+			}
+		>
 			<header>
 				<brand-lockup>
 					<svg viewBox="0 0 28 28" aria-hidden="true">
@@ -6703,17 +6750,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					</button>
 				</command-center>
 				<header-actions>
-					<button
-						type="button"
-						data-export
-						aria-label="Open Export options"
-						onClick={() => {
-							openTile("export")
-							setStatus("Opened Export options.")
-						}}
-					>
-						Export…
-					</button>
+					<dimmer-control>
+						<label htmlFor="design-canvas-dimmer">Dimmer</label>
+						<span aria-hidden="true">Dark</span>
+						<input
+							id="design-canvas-dimmer"
+							type="range"
+							min={0}
+							max={255}
+							step={1}
+							value={canvasDimmer}
+							aria-valuetext={`${canvasDimmerPercent(canvasDimmer)}%, ${dimmerTokens.surface}`}
+							onInput={(event) =>
+								setCanvasDimmer(
+									normalizeCanvasDimmer(event.currentTarget.valueAsNumber),
+								)
+							}
+						/>
+						<span aria-hidden="true">Light</span>
+						<output htmlFor="design-canvas-dimmer">
+							{canvasDimmerPercent(canvasDimmer)}%
+						</output>
+					</dimmer-control>
 				</header-actions>
 			</header>
 

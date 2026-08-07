@@ -35,19 +35,24 @@ export function designCanvasThemeFromStyle(
 	})
 }
 
-export function readDesignCanvasTheme(): DesignCanvasTheme {
+export function readDesignCanvasTheme(
+	target?: Element | null,
+): DesignCanvasTheme {
 	if (
 		typeof document === "undefined" ||
 		typeof getComputedStyle === "undefined"
 	)
 		return fallbackTheme
-	return designCanvasThemeFromStyle(getComputedStyle(document.documentElement))
+	return designCanvasThemeFromStyle(
+		getComputedStyle(target ?? document.documentElement),
+	)
 }
 
 export function subscribeToDesignCanvasTheme(
 	listener: (theme: DesignCanvasTheme) => void,
+	target?: Element | null,
 ): () => void {
-	const publish = (): void => listener(readDesignCanvasTheme())
+	const publish = (): void => listener(readDesignCanvasTheme(target))
 	if (
 		typeof window === "undefined" ||
 		typeof window.matchMedia !== "function"
@@ -55,15 +60,26 @@ export function subscribeToDesignCanvasTheme(
 		publish()
 		return () => undefined
 	}
-	const query = window.matchMedia(COLOR_SCHEME_QUERY)
-	query.addEventListener("change", publish)
+	const queries = [
+		window.matchMedia(COLOR_SCHEME_QUERY),
+		window.matchMedia("(forced-colors: active)"),
+	]
+	for (const query of queries) query.addEventListener("change", publish)
 	publish()
-	return () => query.removeEventListener("change", publish)
+	return () => {
+		for (const query of queries) query.removeEventListener("change", publish)
+	}
 }
 
-/** Keeps Konva's imperative colors synchronized with live CSS media queries. */
-export function useDesignCanvasTheme(): DesignCanvasTheme {
-	const [theme, setTheme] = useState(readDesignCanvasTheme)
-	useEffect(() => subscribeToDesignCanvasTheme(setTheme), [])
+/** Keeps Konva's imperative colors synchronized with live CSS and preferences. */
+export function useDesignCanvasTheme(
+	target?: Element | null,
+	revision?: unknown,
+): DesignCanvasTheme {
+	const [theme, setTheme] = useState(() => readDesignCanvasTheme(target))
+	useEffect(
+		() => subscribeToDesignCanvasTheme(setTheme, target),
+		[target, revision],
+	)
 	return theme
 }
