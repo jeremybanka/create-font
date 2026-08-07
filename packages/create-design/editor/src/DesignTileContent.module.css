@@ -95,7 +95,6 @@ design-tile-content.class {
 	> design-layers-tile > layer-management > layer-actions > button,
 	> design-layers-tile > design-live-blends > button,
 	> design-canvas-tile > button,
-	> design-export-tile > button,
 	> design-appearance-tile > swatch-list > button {
 		border: 1px solid var(--line);
 		border-radius: 5px;
@@ -490,8 +489,7 @@ design-tile-content.class {
 		}
 	}
 
-	> design-canvas-tile,
-	> design-export-tile {
+	> design-canvas-tile {
 		> strong {
 			color: var(--ink-muted);
 		}
@@ -572,26 +570,96 @@ design-tile-content.class {
 	}
 
 	> design-export-tile {
+		--tile-control-font-size: 8px;
+		--tile-label-font-size: 8px;
+		--tile-field-height: 27px;
+		container: export-tile / inline-size;
 		grid-auto-rows: min-content;
+		gap: 8px;
 
-		> [data-field] {
+		> export-heading {
+			display: grid;
+			gap: 2px;
+
+			> strong {
+				font-size: 11px;
+				color: var(--ink);
+			}
+			> span {
+				line-height: 1.35;
+				color: var(--ink-faint);
+			}
+		}
+
+		> export-format-panel {
+			display: grid;
+			gap: 9px;
+			min-width: 0;
+			padding: 9px;
+			border: 1px solid var(--line);
+			border-radius: 8px;
+			background: color-mix(in srgb, var(--paper) 82%, transparent);
+		}
+
+		> export-format-panel > export-format-heading {
+			display: flex;
+			gap: 5px;
+			align-items: baseline;
+			justify-content: space-between;
+
+			> strong {
+				font-size: 10px;
+				color: var(--ink);
+			}
+			> span {
+				flex: none;
+				font-size: 8px;
+				color: var(--ink-faint);
+			}
+		}
+
+		> export-format-panel > p {
+			margin: 0;
+			line-height: 1.4;
+			color: var(--ink-faint);
+		}
+
+		> export-format-panel > [data-field] {
 			display: grid;
 			gap: 3px;
 			color: var(--ink-muted);
 
-			> select {
+			> select,
+			> input[type="file"] {
+				box-sizing: border-box;
 				min-width: 0;
 				width: 100%;
-				padding: 5px;
+				padding: 6px;
 				border: 1px solid var(--line);
-				border-radius: 4px;
+				border-radius: 5px;
 				background: var(--paper);
 				font-size: 8px;
 				color: var(--ink);
+
+				&:focus-visible {
+					outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+					outline-offset: 1px;
+				}
+			}
+
+			> input[type="file"]::file-selector-button {
+				padding: 4px 6px;
+				margin: -3px 6px -3px -3px;
+				border: 1px solid var(--line-strong);
+				border-radius: 4px;
+				background: var(--panel);
+				font: inherit;
+				color: var(--ink);
+				cursor: pointer;
 			}
 		}
 
-		> fieldset[data-export-selection] {
+		> export-format-panel > fieldset[data-export-selection] {
 			display: grid;
 			gap: 4px;
 			margin: 0;
@@ -606,11 +674,14 @@ design-tile-content.class {
 			}
 		}
 
-		> export-range {
+		> export-format-panel > export-range,
+		> export-format-panel > export-field-row {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 5px;
+		}
 
+		> export-format-panel > export-range {
 			> label {
 				display: grid;
 				gap: 3px;
@@ -628,17 +699,26 @@ design-tile-content.class {
 			}
 		}
 
-		> label[data-live-preview],
-		> label[data-include-bleed],
-		> label[data-outside-artwork-lint] {
+		> export-format-panel > label[data-live-preview],
+		> export-format-panel > label[data-include-bleed],
+		> export-format-panel > label[data-outside-artwork-lint] {
 			display: flex;
 			align-items: center;
 			gap: 6px;
 			color: var(--ink-muted);
 			cursor: pointer;
+
+			> input {
+				accent-color: var(--accent);
+			}
 		}
 
-		> details[data-export-preflight] {
+		> export-format-panel > compact-export-diagnostics {
+			display: contents;
+		}
+
+		> export-format-panel > details[data-export-preflight],
+		> export-format-panel > compact-export-diagnostics > details[data-export-preflight] {
 			display: grid;
 			gap: 6px;
 			padding: 7px;
@@ -657,42 +737,72 @@ design-tile-content.class {
 					color: var(--ink-muted);
 				}
 			}
+		}
 
-			> section {
+		> export-format-panel > details[data-export-preflight] > section {
+			display: grid;
+			gap: 4px;
+
+			> ul {
 				display: grid;
 				gap: 4px;
+				margin: 0;
+				padding: 0;
+				list-style: none;
 
-				> ul {
+				> li {
 					display: grid;
 					gap: 4px;
-					margin: 0;
-					padding: 0;
-					list-style: none;
+					padding: 5px;
+					border-inline-start: 2px solid var(--line);
+					background: var(--paper);
 
-					> li {
-						display: grid;
-						gap: 4px;
-						padding: 5px;
-						border-inline-start: 2px solid var(--line);
-						background: var(--paper);
-
-						&[data-severity="error"] {
-							border-inline-start-color: #c45b4f;
-						}
-
-						&[data-severity="warning"] {
-							border-inline-start-color: var(--accent);
-						}
-
-						> span > strong {
-							text-transform: capitalize;
-						}
-
-						> button {
-							justify-self: start;
-							padding: 3px 5px;
-						}
+					&[data-severity="error"] {
+						border-inline-start-color: var(--danger, #c45b4f);
 					}
+
+					&[data-severity="warning"] {
+						border-inline-start-color: var(--warning);
+					}
+
+					> span > strong {
+						text-transform: capitalize;
+					}
+				}
+			}
+		}
+
+		> export-format-panel > compact-export-diagnostics > details[data-export-preflight]
+			> ul {
+			display: grid;
+			gap: 4px;
+			padding: 0;
+			margin: 0;
+			list-style: none;
+
+			> li {
+				display: grid;
+				grid-template-columns: auto minmax(0, 1fr);
+				gap: 2px 6px;
+				padding: 6px;
+				border-inline-start: 3px solid var(--line-strong);
+				background: var(--paper);
+
+				&[data-severity="error"] {
+					border-inline-start-color: var(--danger, #c45b4f);
+				}
+				&[data-severity="warning"] {
+					border-inline-start-color: var(--warning);
+				}
+				> strong {
+					text-transform: capitalize;
+				}
+				> span {
+					min-width: 0;
+				}
+				> small {
+					grid-column: 2;
+					color: var(--ink-faint);
 				}
 			}
 		}
@@ -1584,6 +1694,15 @@ design-tile-content.class {
 				text-align: center;
 			}
 		}
+	}
+}
+
+@container export-tile (width <= 225px) {
+	design-tile-content.class
+		> design-export-tile > export-format-panel > export-field-row,
+	design-tile-content.class
+		> design-export-tile > export-format-panel > export-range {
+		grid-template-columns: 1fr;
 	}
 }
 

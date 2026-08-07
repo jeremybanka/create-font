@@ -5,7 +5,7 @@ import css from "./TileButton.module.css"
 export type TileButtonTone = "default" | "primary" | "danger"
 
 export type TileButtonProps = Omit<
-	React.ButtonHTMLAttributes<HTMLButtonElement>,
+	React.ComponentPropsWithRef<"button">,
 	"size"
 > &
 	Readonly<{

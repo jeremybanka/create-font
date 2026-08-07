@@ -123,12 +123,16 @@ describe("product-neutral source review", () => {
 
 	it("disables the shared Compare button while loading", () => {
 		const { host } = mount(controller({ loading: true }))
-		const compare = [...host.querySelectorAll("button")].find(
-			(button) => button.textContent === "Compare",
+		const compare = host.querySelector<HTMLButtonElement>(
+			"button[data-source-review-compare]",
 		)
 		expect(compare?.closest("tile-button")).not.toBeNull()
 		expect(compare?.dataset.tone).toBe("primary")
 		expect(compare?.disabled).toBe(true)
+		expect(compare?.textContent).toBe("Comparing…")
+		expect(
+			host.querySelector("comparison-status")?.getAttribute("data-state"),
+		).toBe("loading")
 	})
 
 	it("accepts application kinds and delegates only reviewable rows", () => {
@@ -142,8 +146,27 @@ describe("product-neutral source review", () => {
 		)
 		expect(object?.disabled).toBe(false)
 		expect(structure?.disabled).toBe(true)
+		expect(object?.querySelector("span")?.title).toBe("Poster")
 		act(() => object?.click())
 		expect(review).toHaveBeenCalledExactlyOnceWith(changes[0])
+	})
+
+	it("hides zero-value counts and exposes full truncated row context", () => {
+		const { host } = mount()
+		const counts = host.querySelector("change-counts")
+		expect(counts?.textContent).toContain("1 added")
+		expect(counts?.textContent).toContain("2 modified")
+		expect(counts?.textContent).not.toContain("deleted")
+		const unavailable = [...host.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Document structure"),
+		)
+		expect(unavailable?.getAttribute("aria-label")).toBe(
+			"Document structure; modified; review unavailable",
+		)
+		expect(unavailable?.querySelector("span")?.title).toBe("Document structure")
+		expect(
+			host.querySelector('tile-button > button[data-tone="primary"]'),
+		).not.toBeNull()
 	})
 
 	it("deduplicates paths when selected semantic groups overlap", () => {

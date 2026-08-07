@@ -1,97 +1,127 @@
 source-review-surface.class {
+	container: source-review / inline-size;
 	display: grid;
-	gap: 12px;
+	gap: 10px;
 	min-width: 0;
-	padding: 12px;
+	padding: 10px;
 	font: 560 11px/1.35 var(--ui-font);
 	color: var(--ink);
 
-	> comparison-controls > label > input,
-	> ul > li > button,
-	> button,
-	> dialog > form > commit-dialog-heading > button,
-	> dialog > form > selection-actions > button,
-	> dialog > form > commit-dialog-actions > button,
-	> dialog > form > ul > li > label > input,
-	> dialog > form > label > textarea {
-		font: inherit;
-	}
-
-	> comparison-controls > label > input:focus-visible,
-	> ul > li > button:focus-visible,
-	> button:focus-visible,
-	> dialog > form > commit-dialog-heading > button:focus-visible,
-	> dialog > form > selection-actions > button:focus-visible,
-	> dialog > form > commit-dialog-actions > button:focus-visible,
-	> dialog > form > ul > li > label > input:focus-visible,
-	> dialog > form > label > textarea:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 1px;
-	}
-
-	> comparison-controls {
+	> source-review-section {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 8px;
+		gap: 9px;
+		min-width: 0;
+		padding: 9px;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--paper) 82%, transparent);
+	}
 
-		> label {
-			display: grid;
-			gap: 5px;
-			min-width: 0;
+	> source-review-section > source-review-heading {
+		display: flex;
+		gap: 4px 8px;
+		align-items: baseline;
+		justify-content: space-between;
+		min-width: 0;
 
-			> span {
-				font-size: 9px;
-				font-weight: 720;
-				letter-spacing: 0.075em;
-				text-transform: uppercase;
-				color: var(--ink-muted);
-			}
-		}
-
-		> label > input {
-			box-sizing: border-box;
-			width: 100%;
-			min-width: 0;
-			padding: 6px 7px;
-			border: 1px solid var(--line);
-			border-radius: 5px;
-			background: var(--paper);
+		> strong {
+			font-size: 11px;
 			color: var(--ink);
 		}
 
-		> tile-button > button[data-source-review-compare] {
-			grid-column: 1 / -1;
-			justify-self: end;
+		> small {
+			overflow: hidden;
+			font-size: 8px;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			color: var(--ink-faint);
 		}
 	}
 
-	> comparison-status {
+	> source-review-section > comparison-controls {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 7px;
+
+		> label {
+			display: grid;
+			gap: 4px;
+			min-width: 0;
+
+			> span {
+				font-size: 8px;
+				font-weight: 700;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				color: var(--ink-muted);
+			}
+
+			> input {
+				box-sizing: border-box;
+				width: 100%;
+				min-width: 0;
+				height: 27px;
+				padding: 5px 7px;
+				border: 1px solid var(--line);
+				border-radius: 5px;
+				background: var(--paper);
+				font: inherit;
+				color: var(--ink);
+
+				&:hover:not(:disabled) {
+					border-color: var(--line-strong);
+				}
+				&:focus-visible {
+					outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+					outline-offset: 1px;
+				}
+			}
+		}
+
+		/* @lasertag-disable [selector-crosses-ownership-boundary] The comparison action is placed by this workflow. */
+		> tile-button > button[data-source-review-compare] {
+			grid-column: 1 / -1;
+			justify-self: stretch;
+		}
+	}
+
+	> source-review-section > comparison-status {
 		display: block;
-		padding: 8px 9px;
-		border: 1px solid var(--line);
-		border-radius: 6px;
-		background: color-mix(in srgb, var(--paper) 88%, transparent);
-		font-size: 10px;
+		padding: 7px 8px;
+		border-inline-start: 3px solid var(--line-strong);
+		border-radius: 4px;
+		background: var(--paper);
+		font-size: 9px;
 		color: var(--ink-muted);
+
+		&[data-state="error"] {
+			border-inline-start-color: var(--danger, #c45b4f);
+		}
+		&[data-state="loading"] {
+			border-inline-start-color: var(--accent);
+		}
+		&[data-state="ready"], &[data-state="empty"] {
+			border-inline-start-color: var(--success);
+		}
 	}
 
 	> source-review-extension {
 		display: contents;
 	}
 
-	> change-counts {
+	> source-review-section > change-counts {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 5px;
+		gap: 4px;
 		align-items: center;
 
 		> data,
 		> span {
-			padding: 3px 6px;
+			padding: 2px 6px;
 			border: 1px solid var(--line);
 			border-radius: 999px;
 			background: var(--paper);
-			font-size: 9px;
+			font-size: 8px;
 			font-variant-numeric: tabular-nums;
 			color: var(--ink-muted);
 		}
@@ -100,23 +130,42 @@ source-review-surface.class {
 			font-weight: 720;
 			color: var(--ink);
 		}
+		> span::before {
+			content: "";
+			display: inline-block;
+			width: 5px;
+			height: 5px;
+			margin-inline-end: 4px;
+			border: 1px solid currentcolor;
+			border-radius: 50%;
+		}
+		> span[data-change="modified"]::before {
+			border-style: dashed;
+			color: var(--warning);
+		}
+		> span[data-change="added"]::before {
+			color: var(--success);
+		}
+		> span[data-change="deleted"]::before {
+			border-radius: 1px;
+			color: var(--danger, #c43d4d);
+		}
 	}
 
-	> empty-changes {
+	> source-review-section > empty-changes {
 		display: flex;
 		gap: 7px;
 		align-items: center;
-		padding: 12px;
+		padding: 10px;
 		border: 1px dashed var(--line-strong);
-		border-radius: 7px;
+		border-radius: 6px;
 		color: var(--ink-muted);
-
 		> svg {
 			color: var(--success);
 		}
 	}
 
-	> ul,
+	> source-review-section > ul,
 	> dialog > form > ul {
 		display: grid;
 		gap: 3px;
@@ -125,90 +174,74 @@ source-review-surface.class {
 		list-style: none;
 	}
 
-	> ul {
+	> source-review-section > ul {
 		max-height: 240px;
 		overflow: auto;
 	}
 
-	> ul > li > button {
+	> source-review-section > ul > li > button {
 		display: grid;
-		grid-template-columns: 14px minmax(0, 1fr) auto;
-		gap: 8px;
+		grid-template-columns: 12px minmax(0, 1fr) auto;
+		gap: 7px;
 		width: 100%;
+		min-width: 0;
 		align-items: center;
-		padding: 7px 8px;
-		border: 0;
+		padding: 7px;
+		border: 1px solid transparent;
 		border-radius: 6px;
 		background: transparent;
+		font: inherit;
 		text-align: left;
 		color: var(--ink);
 		cursor: pointer;
 
 		&:hover:not(:disabled) {
+			border-color: var(--line);
 			background: var(--hover);
 		}
-
+		&:focus-visible {
+			outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+			outline-offset: 1px;
+		}
 		&:disabled {
 			cursor: default;
 		}
-
 		> span {
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}
-
 		> small {
-			font-size: 9px;
+			font-size: 8px;
 			text-transform: capitalize;
 			color: var(--ink-faint);
 		}
+		> i {
+			display: block;
+			width: 7px;
+			height: 7px;
+			border: 2px solid currentcolor;
+			border-radius: 50%;
+		}
 	}
 
-	> ul > li > button > i {
-		display: block;
-		width: 8px;
-		height: 8px;
-		border: 2px solid currentcolor;
-		border-radius: 50%;
-	}
-
-	> ul > li[data-change="added"] > button > i {
+	> source-review-section > ul > li[data-change="added"] > button > i {
 		color: var(--success);
 	}
-
-	> ul > li[data-change="modified"] > button > i {
+	> source-review-section > ul > li[data-change="modified"] > button > i {
 		border-style: dashed;
 		color: var(--warning);
 	}
-
-	> ul > li[data-change="deleted"] > button > i {
+	> source-review-section > ul > li[data-change="deleted"] > button > i {
 		border-radius: 1px;
-		color: #c43d4d;
+		color: var(--danger, #c43d4d);
 	}
 
-	> button {
-		justify-self: stretch;
-		padding: 7px 10px;
-		border: 1px solid var(--line-strong);
-		border-radius: 6px;
-		background: var(--paper);
-		font-weight: 680;
-		color: var(--ink);
-		cursor: pointer;
-
-		&:hover:not(:disabled) {
-			background: var(--hover);
-		}
-
-		&:disabled {
-			opacity: 0.4;
-			cursor: default;
-		}
+	> source-review-section > tile-button > button {
+		width: 100%;
 	}
-
-	> small {
-		font-size: 9px;
+	> source-review-section > small {
+		font-size: 8px;
 		color: var(--ink-faint);
 	}
 
@@ -233,7 +266,6 @@ source-review-surface.class {
 			gap: 14px;
 			padding: 18px;
 		}
-
 		> form > commit-dialog-heading,
 		> form > commit-dialog-actions,
 		> form > selection-actions {
@@ -242,61 +274,21 @@ source-review-surface.class {
 			align-items: center;
 			justify-content: space-between;
 		}
-
 		> form > commit-dialog-heading {
 			padding-bottom: 12px;
 			border-bottom: 1px solid var(--line);
-
 			> strong {
 				font-size: 15px;
 			}
-
-			> button {
-				display: grid;
-				place-items: center;
-				width: 28px;
-				height: 28px;
-				padding: 0;
-				border: 0;
-				border-radius: 5px;
-				background: transparent;
-				color: var(--ink-muted);
-				cursor: pointer;
-			}
 		}
-
 		> form > selection-actions {
 			justify-content: flex-start;
 		}
-
-		> form > commit-dialog-heading > button,
-		> form > selection-actions > button,
-		> form > commit-dialog-actions > button {
-			padding: 7px 10px;
-			border: 1px solid var(--line-strong);
-			border-radius: 6px;
-			background: var(--paper);
-			color: var(--ink);
-			cursor: pointer;
-
-			&:disabled {
-				opacity: 0.4;
-				cursor: default;
-			}
-		}
-
 		> form > commit-dialog-actions {
 			justify-content: flex-end;
 			padding-top: 12px;
 			border-top: 1px solid var(--line);
-
-			> button:last-child {
-				border-color: var(--ink);
-				background: var(--ink);
-				color: var(--ink-inverse);
-			}
 		}
-
 		> form > ul > li > label {
 			display: grid;
 			grid-template-columns: auto minmax(0, 1fr) auto;
@@ -307,7 +299,6 @@ source-review-surface.class {
 			border-radius: 6px;
 			background: color-mix(in srgb, var(--paper) 88%, transparent);
 		}
-
 		> form > label:not(:has(input[type="checkbox"])) {
 			display: grid;
 			gap: 6px;
@@ -315,11 +306,9 @@ source-review-surface.class {
 			font-weight: 680;
 			color: var(--ink-muted);
 		}
-
 		> form > ul > li > label > input[type="checkbox"] {
 			accent-color: var(--accent);
 		}
-
 		> form > label > textarea {
 			box-sizing: border-box;
 			width: 100%;
@@ -329,17 +318,61 @@ source-review-surface.class {
 			border: 1px solid var(--line-strong);
 			border-radius: 7px;
 			background: var(--paper);
+			font: inherit;
 			color: var(--ink);
 		}
-
+		> form > label > textarea:focus-visible {
+			outline: 2px solid color-mix(in srgb, var(--accent) 78%, transparent);
+			outline-offset: 1px;
+		}
 		> form > p {
 			margin: 0;
 			font-size: 10px;
 			color: var(--ink-muted);
 		}
-
 		> form > p[role="alert"] {
-			color: #c43d4d;
+			color: var(--danger, #c43d4d);
+		}
+	}
+}
+
+@container source-review (width <= 225px) {
+	source-review-surface.class > source-review-section > comparison-controls {
+		grid-template-columns: 1fr;
+	}
+
+	source-review-surface.class
+		> source-review-section > comparison-controls > tile-button > button[data-source-review-compare] {
+		grid-column: 1;
+	}
+
+	source-review-surface.class > source-review-section > source-review-heading {
+		display: grid;
+	}
+}
+
+@media (forced-colors: active) {
+	source-review-surface.class {
+		> source-review-section,
+		> source-review-section > comparison-status,
+		> source-review-section > change-counts > data,
+		> source-review-section > change-counts > span {
+			border-color: CanvasText;
+			background: Canvas;
+			color: CanvasText;
+		}
+		> source-review-section > comparison-status[data-state="error"] {
+			border-inline-start-color: Mark;
+		}
+		> source-review-section > comparison-status[data-state="loading"] {
+			border-inline-start-color: Highlight;
+		}
+		> source-review-section > comparison-status[data-state="ready"],
+		> source-review-section > comparison-status[data-state="empty"] {
+			border-inline-start-color: Highlight;
+		}
+		> source-review-section > ul > li > button:focus-visible {
+			outline-color: Highlight;
 		}
 	}
 }

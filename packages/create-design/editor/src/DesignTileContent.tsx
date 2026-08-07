@@ -1278,11 +1278,83 @@ function DesignToolsTile({ context }: { readonly context: DesignTileContext }) {
 	)
 }
 
+type CompactExportDiagnostic = Readonly<{
+	code: string
+	message: string
+	severity: string
+	stage?: string
+}>
+
+function CompactExportDiagnostics({
+	diagnostics,
+	label,
+	live = false,
+}: Readonly<{
+	diagnostics: readonly CompactExportDiagnostic[]
+	label: string
+	live?: boolean
+}>) {
+	const groups = new Map<
+		string,
+		Readonly<{ diagnostic: CompactExportDiagnostic; count: number }>
+	>()
+	for (const diagnostic of diagnostics) {
+		const key = `${diagnostic.severity}\0${diagnostic.stage ?? ""}\0${diagnostic.message}`
+		const group = groups.get(key)
+		groups.set(key, {
+			diagnostic,
+			count: (group?.count ?? 0) + 1,
+		})
+	}
+	const errors = diagnostics.filter(
+		({ severity }) => severity === "error",
+	).length
+	const warnings = diagnostics.filter(
+		({ severity }) => severity === "warning",
+	).length
+	return (
+		<compact-export-diagnostics>
+			<details
+				data-export-preflight
+				data-decision={errors > 0 ? "blocked" : "ready"}
+				open={errors > 0}
+				aria-live={live ? "polite" : undefined}
+			>
+				<summary>
+					<strong>{label}</strong>
+					<span>
+						{errors > 0 ? `${errors} error${errors === 1 ? "" : "s"}` : null}
+						{errors > 0 && warnings > 0 ? " · " : null}
+						{warnings > 0
+							? `${warnings} warning${warnings === 1 ? "" : "s"}`
+							: errors === 0
+								? `${diagnostics.length} notice${diagnostics.length === 1 ? "" : "s"}`
+								: null}
+					</span>
+				</summary>
+				<ul aria-label={`${label} details`}>
+					{[...groups.values()].map(({ count, diagnostic }) => (
+						<li
+							key={`${diagnostic.code}:${diagnostic.stage ?? ""}:${diagnostic.message}`}
+							data-severity={diagnostic.severity}
+						>
+							<strong>{diagnostic.stage ?? diagnostic.severity}</strong>
+							<span>{diagnostic.message}</span>
+							{count === 1 ? null : <small>Applies to {count} items</small>}
+						</li>
+					))}
+				</ul>
+			</details>
+		</compact-export-diagnostics>
+	)
+}
+
 function DesignExportTile({
 	context,
 }: {
 	readonly context: DesignTileContext
 }) {
+	const [format, setFormat] = useState<"pdf" | "svg" | "png">("pdf")
 	const [previewEnabled, setPreviewEnabled] = useState(false)
 	const [svgPreviewEnabled, setSvgPreviewEnabled] = useState(false)
 	const [pngPreviewEnabled, setPngPreviewEnabled] = useState(false)
@@ -1440,307 +1512,350 @@ function DesignExportTile({
 	)
 	return (
 		<design-export-tile>
-			<strong>Portable Document Format</strong>
-			<span>
-				RGB and CMYK vector fills and strokes are preserved through
-				mondrian.pdf.
-			</span>
-			<label data-field>
-				<span>Pages</span>
-				<select
-					data-export-scope
-					value={scope}
-					onChange={(event) =>
-						setScope(
-							event.currentTarget.value as PdfExportRequest["scope"]["kind"],
-						)
-					}
+			<export-heading>
+				<strong>Export</strong>
+				<span>Prepare, inspect, and save the current design.</span>
+			</export-heading>
+			<TileButtonGroup aria-label="Export format" compact>
+				{(["pdf", "svg", "png"] as const).map((id) => (
+					<TileButton
+						key={id}
+						compact
+						aria-pressed={format === id}
+						aria-controls={format === id ? `export-${id}-panel` : undefined}
+						onClick={() => setFormat(id)}
+					>
+						{id.toUpperCase()}
+					</TileButton>
+				))}
+			</TileButtonGroup>
+			{format !== "pdf" ? null : (
+				<export-format-panel
+					id="export-pdf-panel"
+					role="region"
+					aria-label="PDF export options"
 				>
-					<option value="active">Active artboard</option>
-					<option value="all">All artboards</option>
-					<option value="selected">Selected artboards</option>
-					<option value="range">Artboard range</option>
-				</select>
-			</label>
-			{scope !== "selected" ? null : (
-				<fieldset data-export-selection>
-					<legend>Selected artboards</legend>
-					{context.document.artboards.map((artboard) => (
-						<label key={artboard.id}>
-							<input
-								type="checkbox"
-								checked={selectedIds.includes(artboard.id)}
-								onChange={(event) =>
-									setSelectedArtboardIds((current) =>
-										event.currentTarget.checked
-											? [...new Set([...current, artboard.id])]
-											: current.filter((id) => id !== artboard.id),
-									)
-								}
-							/>
-							<span>{artboard.name}</span>
-						</label>
-					))}
-				</fieldset>
-			)}
-			{scope !== "range" ? null : (
-				<export-range>
-					<label data-field>
-						<span>From</span>
-						<select
-							value={startId}
-							onChange={(event) => setRangeStartId(event.currentTarget.value)}
-						>
-							{context.document.artboards.map((artboard) => (
-								<option key={artboard.id} value={artboard.id}>
-									{artboard.name}
-								</option>
-							))}
-						</select>
-					</label>
-					<label data-field>
-						<span>To</span>
-						<select
-							value={endId}
-							onChange={(event) => setRangeEndId(event.currentTarget.value)}
-						>
-							{context.document.artboards.map((artboard) => (
-								<option key={artboard.id} value={artboard.id}>
-									{artboard.name}
-								</option>
-							))}
-						</select>
-					</label>
-				</export-range>
-			)}
-			<label data-include-bleed>
-				<input
-					type="checkbox"
-					checked={includeBleed}
-					onChange={(event) => setIncludeBleed(event.currentTarget.checked)}
-				/>
-				<span>Include authored bleed</span>
-			</label>
-			<label data-outside-artwork-lint>
-				<input
-					type="checkbox"
-					checked={checkOutsideArtwork}
-					onChange={(event) =>
-						setCheckOutsideArtwork(event.currentTarget.checked)
-					}
-				/>
-				<span>Check artwork outside exported artboards</span>
-			</label>
-			{preflight.diagnostics.length === 0 ? null : (
-				<details
-					aria-live="polite"
-					data-export-preflight
-					data-decision={preflight.decision}
-					open={preflight.decision === "blocked"}
-				>
-					<summary>
-						<strong>Preflight</strong>
+					<export-format-heading>
+						<strong>Portable Document Format</strong>
 						<span>
-							{preflight.summary.errors} errors · {preflight.summary.warnings}{" "}
-							warnings · {preflight.summary.infos} notices
+							{pageCount} page{pageCount === 1 ? "" : "s"}
 						</span>
-					</summary>
-					{diagnosticGroups.map(([key, group]) => (
-						<section key={key} aria-label={`${group.label} diagnostics`}>
-							<strong>{group.label}</strong>
-							<ul>
-								{group.diagnostics.map((diagnostic, index) => (
-									<li
-										key={`${diagnostic.code}:${diagnostic.entityId ?? diagnostic.artboardId ?? index}`}
-										data-severity={diagnostic.severity}
-									>
-										<span>
-											<strong>{diagnostic.severity}</strong>{" "}
-											{diagnostic.message}
-										</span>
-										{diagnostic.action?.kind === "select-entity" &&
-										diagnostic.action.entityKind === "object" ? (
-											<button
-												type="button"
-												onClick={() => followDiagnostic(diagnostic)}
+					</export-format-heading>
+					<p>
+						RGB and CMYK vector fills and strokes are preserved through
+						mondrian.pdf.
+					</p>
+					<TileSelect
+						label="Pages"
+						data-export-scope
+						value={scope}
+						onChange={(event) =>
+							setScope(
+								event.currentTarget.value as PdfExportRequest["scope"]["kind"],
+							)
+						}
+					>
+						<option value="active">Active artboard</option>
+						<option value="all">All artboards</option>
+						<option value="selected">Selected artboards</option>
+						<option value="range">Artboard range</option>
+					</TileSelect>
+					{scope !== "selected" ? null : (
+						<fieldset data-export-selection>
+							<legend>Selected artboards</legend>
+							{context.document.artboards.map((artboard) => (
+								<label key={artboard.id}>
+									<input
+										type="checkbox"
+										checked={selectedIds.includes(artboard.id)}
+										onChange={(event) =>
+											setSelectedArtboardIds((current) =>
+												event.currentTarget.checked
+													? [...new Set([...current, artboard.id])]
+													: current.filter((id) => id !== artboard.id),
+											)
+										}
+									/>
+									<span>{artboard.name}</span>
+								</label>
+							))}
+						</fieldset>
+					)}
+					{scope !== "range" ? null : (
+						<export-range>
+							<label data-field>
+								<span>From</span>
+								<select
+									value={startId}
+									onChange={(event) =>
+										setRangeStartId(event.currentTarget.value)
+									}
+								>
+									{context.document.artboards.map((artboard) => (
+										<option key={artboard.id} value={artboard.id}>
+											{artboard.name}
+										</option>
+									))}
+								</select>
+							</label>
+							<label data-field>
+								<span>To</span>
+								<select
+									value={endId}
+									onChange={(event) => setRangeEndId(event.currentTarget.value)}
+								>
+									{context.document.artboards.map((artboard) => (
+										<option key={artboard.id} value={artboard.id}>
+											{artboard.name}
+										</option>
+									))}
+								</select>
+							</label>
+						</export-range>
+					)}
+					<label data-include-bleed>
+						<input
+							type="checkbox"
+							checked={includeBleed}
+							onChange={(event) => setIncludeBleed(event.currentTarget.checked)}
+						/>
+						<span>Include authored bleed</span>
+					</label>
+					<label data-outside-artwork-lint>
+						<input
+							type="checkbox"
+							checked={checkOutsideArtwork}
+							onChange={(event) =>
+								setCheckOutsideArtwork(event.currentTarget.checked)
+							}
+						/>
+						<span>Check artwork outside exported artboards</span>
+					</label>
+					{preflight.diagnostics.length === 0 ? null : (
+						<details
+							aria-live="polite"
+							data-export-preflight
+							data-decision={preflight.decision}
+							open={preflight.decision === "blocked"}
+						>
+							<summary>
+								<strong>Preflight</strong>
+								<span>
+									{preflight.summary.errors} errors ·{" "}
+									{preflight.summary.warnings} warnings ·{" "}
+									{preflight.summary.infos} notices
+								</span>
+							</summary>
+							{diagnosticGroups.map(([key, group]) => (
+								<section key={key} aria-label={`${group.label} diagnostics`}>
+									<strong>{group.label}</strong>
+									<ul>
+										{group.diagnostics.map((diagnostic, index) => (
+											<li
+												key={`${diagnostic.code}:${diagnostic.entityId ?? diagnostic.artboardId ?? index}`}
+												data-severity={diagnostic.severity}
 											>
-												Select object
-											</button>
-										) : diagnostic.action?.kind === "activate-artboard" &&
-										  context.document.artboards.some(
-												({ id }) => id === diagnostic.artboardId,
-										  ) ? (
-											<button
-												type="button"
-												onClick={() => followDiagnostic(diagnostic)}
-											>
-												Show artboard
-											</button>
-										) : null}
-									</li>
-								))}
-							</ul>
-						</section>
-					))}
-				</details>
+												<span>
+													<strong>{diagnostic.severity}</strong>{" "}
+													{diagnostic.message}
+												</span>
+												{diagnostic.action?.kind === "select-entity" &&
+												diagnostic.action.entityKind === "object" ? (
+													<TileButton
+														compact
+														type="button"
+														onClick={() => followDiagnostic(diagnostic)}
+													>
+														Select object
+													</TileButton>
+												) : diagnostic.action?.kind === "activate-artboard" &&
+												  context.document.artboards.some(
+														({ id }) => id === diagnostic.artboardId,
+												  ) ? (
+													<TileButton
+														compact
+														type="button"
+														onClick={() => followDiagnostic(diagnostic)}
+													>
+														Show artboard
+													</TileButton>
+												) : null}
+											</li>
+										))}
+									</ul>
+								</section>
+							))}
+						</details>
+					)}
+					<TileButton
+						type="button"
+						tone="primary"
+						style={{ width: "100%" }}
+						disabled={!canExport}
+						onClick={() => context.exportDocument(target, preflightPreferences)}
+					>
+						Export {pageCount} page{pageCount === 1 ? "" : "s"} as PDF
+					</TileButton>
+					<label data-live-preview>
+						<input
+							type="checkbox"
+							checked={previewEnabled}
+							onChange={(event) =>
+								setPreviewEnabled(event.currentTarget.checked)
+							}
+						/>
+						<span>Live PDF proof</span>
+					</label>
+					{previewEnabled ? (
+						<PdfPreview
+							document={context.document}
+							target={target}
+							preflightPreferences={preflightPreferences}
+							{...(context.textService === undefined
+								? {}
+								: { textService: context.textService })}
+						/>
+					) : null}
+				</export-format-panel>
 			)}
-			<button
-				type="button"
-				disabled={!canExport}
-				onClick={() => context.exportDocument(target, preflightPreferences)}
-			>
-				Export {pageCount} page{pageCount === 1 ? "" : "s"} as PDF
-			</button>
-			<label data-live-preview>
-				<input
-					type="checkbox"
-					checked={previewEnabled}
-					onChange={(event) => setPreviewEnabled(event.currentTarget.checked)}
-				/>
-				<span>Live PDF proof</span>
-			</label>
-			{previewEnabled ? (
-				<PdfPreview
-					document={context.document}
-					target={target}
-					preflightPreferences={preflightPreferences}
-					{...(context.textService === undefined
-						? {}
-						: { textService: context.textService })}
-				/>
-			) : null}
-			<hr />
-			<strong>Scalable Vector Graphics</strong>
-			<span>
-				Export or import the supported vector subset through the same headless
-				SVG pipeline used by preview and the CLI.
-			</span>
-			{svgPreflight.diagnostics.length === 0 ? null : (
-				<ul aria-label="SVG export diagnostics" data-export-preflight>
-					{svgPreflight.diagnostics.map((diagnostic, index) => (
-						<li
-							key={`${diagnostic.code}:${diagnostic.entityId ?? "document"}:${index}`}
-							data-severity={diagnostic.severity}
-						>
-							<strong>{diagnostic.severity}</strong> {diagnostic.message}
-						</li>
-					))}
-				</ul>
-			)}
-			<button
-				type="button"
-				disabled={svgPreflight.decision === "blocked"}
-				onClick={() => context.exportSvgDocument(svgTarget)}
-			>
-				Export active artboard as SVG
-			</button>
-			<label data-field>
-				<span>Import SVG into active artboard</span>
-				<input
-					type="file"
-					accept="image/svg+xml,.svg"
-					onChange={(event) => {
-						const file = event.currentTarget.files?.[0]
-						if (file === undefined) return
-						void file.text().then((source) => {
-							const result = context.importSvgDocument(source)
-							setSvgImportDiagnostics(result.diagnostics)
-						})
-						event.currentTarget.value = ""
-					}}
-				/>
-			</label>
-			{svgImportDiagnostics.length === 0 ? null : (
-				<ul
-					aria-live="polite"
-					aria-label="SVG import diagnostics"
-					data-export-preflight
+			{format !== "svg" ? null : (
+				<export-format-panel
+					id="export-svg-panel"
+					role="region"
+					aria-label="SVG export options"
 				>
-					{svgImportDiagnostics.map((diagnostic, index) => (
-						<li
-							key={`${diagnostic.code}:${index}`}
-							data-severity={diagnostic.severity}
-						>
-							<strong>{diagnostic.stage}</strong> {diagnostic.message}
-						</li>
-					))}
-				</ul>
+					<export-format-heading>
+						<strong>Scalable Vector Graphics</strong>
+						<span>Active artboard</span>
+					</export-format-heading>
+					<p>
+						Export or import the supported vector subset through the same
+						headless SVG pipeline used by preview and the CLI.
+					</p>
+					{svgPreflight.diagnostics.length === 0 ? null : (
+						<CompactExportDiagnostics
+							diagnostics={svgPreflight.diagnostics}
+							label="SVG preflight"
+						/>
+					)}
+					<TileButton
+						type="button"
+						tone="primary"
+						style={{ width: "100%" }}
+						disabled={svgPreflight.decision === "blocked"}
+						onClick={() => context.exportSvgDocument(svgTarget)}
+					>
+						Export active artboard as SVG
+					</TileButton>
+					<label data-field>
+						<span>Import SVG into active artboard</span>
+						<input
+							type="file"
+							accept="image/svg+xml,.svg"
+							onChange={(event) => {
+								const file = event.currentTarget.files?.[0]
+								if (file === undefined) return
+								void file.text().then((source) => {
+									const result = context.importSvgDocument(source)
+									setSvgImportDiagnostics(result.diagnostics)
+								})
+								event.currentTarget.value = ""
+							}}
+						/>
+					</label>
+					{svgImportDiagnostics.length === 0 ? null : (
+						<CompactExportDiagnostics
+							diagnostics={svgImportDiagnostics}
+							label="Import feedback"
+							live
+						/>
+					)}
+					<label data-live-preview>
+						<input
+							type="checkbox"
+							checked={svgPreviewEnabled}
+							onChange={(event) =>
+								setSvgPreviewEnabled(event.currentTarget.checked)
+							}
+						/>
+						<span>Live SVG proof</span>
+					</label>
+					{svgPreviewEnabled ? (
+						<SvgPreview document={context.document} target={svgTarget} />
+					) : null}
+				</export-format-panel>
 			)}
-			<label data-live-preview>
-				<input
-					type="checkbox"
-					checked={svgPreviewEnabled}
-					onChange={(event) =>
-						setSvgPreviewEnabled(event.currentTarget.checked)
-					}
-				/>
-				<span>Live SVG proof</span>
-			</label>
-			{svgPreviewEnabled ? (
-				<SvgPreview document={context.document} target={svgTarget} />
-			) : null}
-			<hr />
-			<strong>Portable Network Graphics</strong>
-			<span>
-				Rasterize the chosen artboard scope through the same deterministic,
-				headless pipeline used by the CLI and live proof.
-			</span>
-			<label data-field>
-				<span>Scale</span>
-				<select
-					value={pngScale}
-					onChange={(event) => setPngScale(Number(event.currentTarget.value))}
+			{format !== "png" ? null : (
+				<export-format-panel
+					id="export-png-panel"
+					role="region"
+					aria-label="PNG export options"
 				>
-					<option value={1}>1×</option>
-					<option value={2}>2×</option>
-					<option value={4}>4×</option>
-				</select>
-			</label>
-			<label data-field>
-				<span>Background</span>
-				<select
-					value={pngBackground}
-					onChange={(event) => setPngBackground(event.currentTarget.value)}
-				>
-					<option value="artboard">Artboard setting</option>
-					<option value="transparent">Transparent</option>
-					<option value="#ffffff">White</option>
-					<option value="#000000">Black</option>
-				</select>
-			</label>
-			{pngPreflight.diagnostics.length === 0 ? null : (
-				<ul aria-label="PNG export diagnostics" data-export-preflight>
-					{pngPreflight.diagnostics.map((diagnostic, index) => (
-						<li
-							key={`${diagnostic.code}:${diagnostic.artboardId ?? "document"}:${diagnostic.entityId ?? index}`}
-							data-severity={diagnostic.severity}
+					<export-format-heading>
+						<strong>Portable Network Graphics</strong>
+						<span>
+							{pngPreflight.artboards.length} artboard
+							{pngPreflight.artboards.length === 1 ? "" : "s"}
+						</span>
+					</export-format-heading>
+					<p>
+						Rasterize the chosen artboard scope through the same deterministic,
+						headless pipeline used by the CLI and live proof.
+					</p>
+					<export-field-row>
+						<TileSelect
+							label="Scale"
+							value={pngScale}
+							onChange={(event) =>
+								setPngScale(Number(event.currentTarget.value))
+							}
 						>
-							<strong>{diagnostic.severity}</strong> {diagnostic.message}
-						</li>
-					))}
-				</ul>
+							<option value={1}>1×</option>
+							<option value={2}>2×</option>
+							<option value={4}>4×</option>
+						</TileSelect>
+						<TileSelect
+							label="Background"
+							value={pngBackground}
+							onChange={(event) => setPngBackground(event.currentTarget.value)}
+						>
+							<option value="artboard">Artboard setting</option>
+							<option value="transparent">Transparent</option>
+							<option value="#ffffff">White</option>
+							<option value="#000000">Black</option>
+						</TileSelect>
+					</export-field-row>
+					{pngPreflight.diagnostics.length === 0 ? null : (
+						<CompactExportDiagnostics
+							diagnostics={pngPreflight.diagnostics}
+							label="PNG preflight"
+						/>
+					)}
+					<TileButton
+						type="button"
+						tone="primary"
+						style={{ width: "100%" }}
+						disabled={pngPreflight.decision === "blocked"}
+						onClick={() => context.exportPngDocument(pngRequest)}
+					>
+						Export {pngPreflight.artboards.length} artboard
+						{pngPreflight.artboards.length === 1 ? "" : "s"} as PNG
+					</TileButton>
+					<label data-live-preview>
+						<input
+							type="checkbox"
+							checked={pngPreviewEnabled}
+							onChange={(event) =>
+								setPngPreviewEnabled(event.currentTarget.checked)
+							}
+						/>
+						<span>Live PNG proof (opt in)</span>
+					</label>
+					{pngPreviewEnabled ? (
+						<PngPreview document={context.document} request={pngRequest} />
+					) : null}
+				</export-format-panel>
 			)}
-			<button
-				type="button"
-				disabled={pngPreflight.decision === "blocked"}
-				onClick={() => context.exportPngDocument(pngRequest)}
-			>
-				Export {pngPreflight.artboards.length} artboard
-				{pngPreflight.artboards.length === 1 ? "" : "s"} as PNG
-			</button>
-			<label data-live-preview>
-				<input
-					type="checkbox"
-					checked={pngPreviewEnabled}
-					onChange={(event) =>
-						setPngPreviewEnabled(event.currentTarget.checked)
-					}
-				/>
-				<span>Live PNG proof (opt in)</span>
-			</label>
-			{pngPreviewEnabled ? (
-				<PngPreview document={context.document} request={pngRequest} />
-			) : null}
 		</design-export-tile>
 	)
 }

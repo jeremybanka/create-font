@@ -87,63 +87,99 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 	)
 	const selectedPaths = selectedSourceReviewPaths(changes, selected)
 	const remaining = changes.length - selectedChanges.length
+	const statusState =
+		controller === undefined
+			? "unavailable"
+			: controller.loading
+				? "loading"
+				: controller.error !== undefined
+					? "error"
+					: comparison === undefined
+						? "idle"
+						: changes.length === 0
+							? "empty"
+							: "ready"
 
 	return (
 		<source-review-surface className={css.class}>
-			<comparison-controls>
-				<label>
-					<span>Reference ref</span>
-					<input
-						value={baseRef}
-						aria-label="Reference Git ref"
-						onInput={(event) => setBaseRef(event.currentTarget.value)}
-					/>
-				</label>
-				<label>
-					<span>Target ref</span>
-					<input
-						value={targetRef}
-						placeholder="Working source"
-						aria-label="Target Git ref, blank for working source"
-						onInput={(event) => setTargetRef(event.currentTarget.value)}
-					/>
-				</label>
-				<TileButton
-					data-source-review-compare
-					type="button"
-					tone="primary"
-					disabled={controller === undefined || controller.loading}
-					onClick={() =>
-						void controller?.onCompare(
-							baseRef.trim(),
-							targetRef.trim() || undefined,
-						)
-					}
+			<source-review-section data-section="comparison">
+				<source-review-heading>
+					<strong>Compare sources</strong>
+					<small>Choose a reference and target</small>
+				</source-review-heading>
+				<comparison-controls>
+					<label>
+						<span>Reference ref</span>
+						<input
+							value={baseRef}
+							aria-label="Reference Git ref"
+							onInput={(event) => setBaseRef(event.currentTarget.value)}
+						/>
+					</label>
+					<label>
+						<span>Target ref</span>
+						<input
+							value={targetRef}
+							placeholder="Working source"
+							aria-label="Target Git ref, blank for working source"
+							onInput={(event) => setTargetRef(event.currentTarget.value)}
+						/>
+					</label>
+					<TileButton
+						data-source-review-compare
+						type="button"
+						tone="primary"
+						disabled={controller === undefined || controller.loading}
+						onClick={() =>
+							void controller?.onCompare(
+								baseRef.trim(),
+								targetRef.trim() || undefined,
+							)
+						}
+					>
+						{controller?.loading ? "Comparing…" : "Compare"}
+					</TileButton>
+				</comparison-controls>
+				<comparison-status
+					role="status"
+					aria-live="polite"
+					data-state={statusState}
 				>
-					Compare
-				</TileButton>
-			</comparison-controls>
-			<comparison-status role="status" aria-live="polite">
-				{controller === undefined
-					? "Version control is unavailable in this editor session."
-					: controller.loading
-						? "Loading source changes…"
-						: controller.error !== undefined
-							? controller.error
-							: comparison === undefined
-								? "No comparison loaded."
-								: `${comparison.base.label} → ${comparison.target.label}`}
-			</comparison-status>
+					{controller === undefined
+						? "Version control is unavailable in this editor session."
+						: controller.loading
+							? "Loading source changes…"
+							: controller.error !== undefined
+								? controller.error
+								: comparison === undefined
+									? "No comparison loaded."
+									: `${comparison.base.label} → ${comparison.target.label}`}
+				</comparison-status>
+			</source-review-section>
 			{visualComparison === undefined ? null : (
 				<source-review-extension>{visualComparison}</source-review-extension>
 			)}
 			{comparison === undefined ? null : (
-				<>
+				<source-review-section data-section="changes">
+					<source-review-heading>
+						<strong>Review changes</strong>
+						<small>
+							{changes.length === 0
+								? "Up to date"
+								: `${changes.length} source unit${changes.length === 1 ? "" : "s"}`}
+						</small>
+					</source-review-heading>
 					<change-counts aria-label={`${changes.length} source changes`}>
 						<data value={counts.total}>{counts.total} total</data>
-						<span>{counts.added} added</span>
-						<span>{counts.modified} modified</span>
-						<span>{counts.deleted} deleted</span>
+						{counts.added === 0 ? null : (
+							<span data-change="added">{counts.added} added</span>
+						)}
+						{counts.modified === 0 ? null : (
+							<span data-change="modified">{counts.modified} modified</span>
+						)}
+						{counts.deleted === 0 ? null : (
+							<span data-change="deleted">{counts.deleted} deleted</span>
+						)}
 					</change-counts>
 					{changes.length === 0 ? (
 						<empty-changes>
@@ -155,6 +191,11 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 							{changes.map((change) => {
 								const reviewable =
 									review !== undefined && (review.canReview?.(change) ?? true)
+								const renderedChange = renderChange?.(change) ?? change.label
+								const renderedLabel =
+									typeof renderedChange === "string"
+										? renderedChange
+										: change.label
 								return (
 									<li
 										key={sourceReviewChangeKey(change)}
@@ -166,15 +207,15 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 											aria-label={
 												reviewable
 													? (review.reviewLabel?.(change) ??
-														`Review ${change.label}`)
-													: undefined
+														`Review ${renderedLabel}`)
+													: `${renderedLabel}; ${change.change}; review unavailable`
 											}
 											onClick={() =>
 												reviewable ? review.review(change) : undefined
 											}
 										>
 											<i aria-hidden="true" />
-											<span>{renderChange?.(change) ?? change.label}</span>
+											<span title={renderedLabel}>{renderedChange}</span>
 											<small>{change.change}</small>
 										</button>
 									</li>
@@ -182,22 +223,23 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 							})}
 						</ul>
 					)}
-					<button
+					<TileButton
 						ref={startCommitRef}
 						type="button"
+						tone="primary"
 						disabled={
 							changes.length === 0 || comparison.target.kind !== "working"
 						}
 						onClick={openCommit}
 					>
 						Start Commit
-					</button>
+					</TileButton>
 					{comparison.target.kind !== "working" ? (
 						<small>
 							Commits are only available for the working-source comparison.
 						</small>
 					) : null}
-				</>
+				</source-review-section>
 			)}
 			{!commitOpen || comparison === undefined ? null : (
 				<dialog
@@ -215,27 +257,33 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 							<strong id={commitTitleId}>
 								{step === "select" ? "Select source units" : "Commit message"}
 							</strong>
-							<button
+							<TileButton
 								ref={closeCommitRef}
 								type="button"
+								iconOnly
 								aria-label="Close commit dialog"
 								onClick={closeCommit}
 							>
 								<svg.Cross aria-hidden="true" />
-							</button>
+							</TileButton>
 						</commit-dialog-heading>
 						{step === "select" ? (
 							<>
 								<selection-actions>
-									<button
+									<TileButton
+										compact
 										type="button"
 										onClick={() => setSelected(new Set(keys))}
 									>
 										Select all
-									</button>
-									<button type="button" onClick={() => setSelected(new Set())}>
+									</TileButton>
+									<TileButton
+										compact
+										type="button"
+										onClick={() => setSelected(new Set())}
+									>
 										Clear
-									</button>
+									</TileButton>
 								</selection-actions>
 								<ul>
 									{changes.map((change) => {
@@ -265,16 +313,17 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 									remain uncommitted.
 								</p>
 								<commit-dialog-actions>
-									<button type="button" onClick={closeCommit}>
+									<TileButton type="button" onClick={closeCommit}>
 										Cancel
-									</button>
-									<button
+									</TileButton>
+									<TileButton
 										type="button"
+										tone="primary"
 										disabled={selectedChanges.length === 0}
 										onClick={() => setStep("message")}
 									>
 										Continue
-									</button>
+									</TileButton>
 								</commit-dialog-actions>
 							</>
 						) : (
@@ -301,15 +350,16 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 									<p role="alert">{commitError}</p>
 								)}
 								<commit-dialog-actions>
-									<button
+									<TileButton
 										type="button"
 										disabled={committing}
 										onClick={() => setStep("select")}
 									>
 										Back
-									</button>
-									<button
+									</TileButton>
+									<TileButton
 										type="button"
+										tone="primary"
 										disabled={committing || message.trim().length === 0}
 										onClick={() => {
 											setCommitting(true)
@@ -336,7 +386,7 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 										}}
 									>
 										{committing ? "Committing…" : "Commit selected units"}
-									</button>
+									</TileButton>
 								</commit-dialog-actions>
 							</>
 						)}
