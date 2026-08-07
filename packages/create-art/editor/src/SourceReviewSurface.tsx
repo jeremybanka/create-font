@@ -206,7 +206,8 @@ export function SourceReviewSurface<Change extends SourceReviewChange>({
 											disabled={!reviewable}
 											aria-label={
 												reviewable
-													? `${review.reviewLabel?.(change) ?? `Review ${renderedLabel}`}; ${change.change}`
+													? (review.reviewLabel?.(change) ??
+														`Review ${renderedLabel}`)
 													: `${renderedLabel}; ${change.change}; review unavailable`
 											}
 											onClick={() =>

@@ -73,7 +73,7 @@ describe("create-design Version Control tile", () => {
 		expect(host.textContent).toContain("Coordinated design structure")
 		expect(host.textContent).toContain("Asset inventory and binary files")
 		const object = host.querySelector<HTMLButtonElement>(
-			'button[aria-label="Review Design object: Poster; modified"]',
+			'button[aria-label="Review Design object: Poster"]',
 		)
 		const asset = [...host.querySelectorAll("button")].find((button) =>
 			button.textContent?.includes("Assets"),

@@ -139,7 +139,7 @@ describe("product-neutral source review", () => {
 		const { host, review } = mount()
 		expect(host.textContent).toContain("3 total")
 		const object = host.querySelector<HTMLButtonElement>(
-			'button[aria-label="Inspect Poster; modified"]',
+			'button[aria-label="Inspect Poster"]',
 		)
 		const structure = [...host.querySelectorAll("button")].find((button) =>
 			button.textContent?.includes("Document structure"),
