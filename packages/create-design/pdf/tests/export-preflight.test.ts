@@ -126,6 +126,31 @@ const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 })
 
 describe("export preflight", () => {
+	it("blocks unresolved portable artboard references", () => {
+		const link: DesignObject = {
+			...rectangle("object:link", 10, 50),
+			geometry: {
+				kind: "artboard-link",
+				projectId: "missing-design",
+				artboardId: "artboard:missing",
+				width: 50,
+				height: 20,
+			},
+		}
+		const result = preflightPdfExport(documentWith(link), {
+			scope: { kind: "all" },
+		})
+		expect(result).toMatchObject({
+			decision: "blocked",
+			summary: { errors: 1 },
+		})
+		expect(result.diagnostics[0]).toMatchObject({
+			capability: "workspace.artboard-link",
+			code: "pdf.unsupported-artboard-link",
+			entityId: link.id,
+		})
+	})
+
 	it("blocks unloaded text and reports canonical area overset", () => {
 		const document = documentWith(areaText())
 		const unloaded = preflightPdfExport(document, { scope: { kind: "all" } })

@@ -1119,6 +1119,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [linkedArtboards, setLinkedArtboards] = useState<
 		readonly DesignLinkedArtboardResource[]
 	>(() => sourceSession?.linkedArtboards ?? [])
+	const linkedArtboardRevisionKey = linkedArtboards
+		.map(({ projectId, revision }) => `${projectId}:${revision}`)
+		.join("\0")
 	const linkResources = useMemo(
 		() => [
 			...linkedArtboards,
@@ -1134,6 +1137,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		],
 		[
 			document,
+			linkedArtboardRevisionKey,
 			linkedArtboards,
 			persistence.durableRevision,
 			sourceSession?.projectId,
@@ -1141,7 +1145,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const linkedResolution = useMemo(
 		() => resolveDesignArtboardLinks(document, linkResources),
-		[document, linkResources],
+		[document, linkedArtboardRevisionKey, linkResources],
 	)
 	const exportableDocument = linkedResolution.document
 	const runtimeImageResources = useMemo(
@@ -4431,6 +4435,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		blendDiagnosticMessages: blendDiagnostics,
 		distributeSelection,
 		document,
+		exportDocumentSnapshot: exportableDocument,
 		expandSelection,
 		expansionDisabledReason: expansionEligibility.eligible
 			? null

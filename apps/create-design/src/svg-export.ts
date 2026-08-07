@@ -21,6 +21,7 @@ import { resolveDesignArtboardLinks } from "@create-design/model"
 import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
+	type DesignImageResource,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
@@ -165,7 +166,7 @@ export async function exportDesignSvg(
 		({ path }) => path === "assets/index.json",
 	)
 	const assetIndex = assetIndexFileSchema.safeParse(assetIndexUnit?.value)
-	const imageResources = new Map(
+	const imageResources = new Map<string, DesignImageResource>(
 		assetIndex.success
 			? await Promise.all(
 					assetIndex.data.entries

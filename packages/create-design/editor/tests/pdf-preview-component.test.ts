@@ -268,6 +268,47 @@ describe("PDF preview tile", () => {
 				enabledLints: ["common.artwork-outside-requested-artboards"],
 			},
 		)
+
+		const durableLink = {
+			...document.objects[0]!,
+			id: "object:portable-link",
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "source",
+				artboardId: document.artboards[0]!.id,
+				width: document.artboards[0]!.width,
+				height: document.artboards[0]!.height,
+			},
+		}
+		const resolvedHost = window.document.createElement("div")
+		act(() =>
+			render(
+				h(DesignTileContent, {
+					context: {
+						...context,
+						document: {
+							...document,
+							objects: [durableLink],
+							layers: [
+								{
+									...document.layers[0]!,
+									children: [{ kind: "object", id: durableLink.id }],
+								},
+							],
+						},
+						exportDocumentSnapshot: document,
+					},
+					kind: "export",
+				}),
+				resolvedHost,
+			),
+		)
+		expect(resolvedHost.textContent).not.toContain("unavailable")
+		const resolvedPdfButton = [...resolvedHost.querySelectorAll("button")].find(
+			(button) => button.textContent?.includes("as PDF"),
+		)!
+		expect(resolvedPdfButton.disabled).toBe(false)
+		act(() => render(null, resolvedHost))
 		act(() => render(null, host))
 	})
 })

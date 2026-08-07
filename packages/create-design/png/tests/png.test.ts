@@ -174,6 +174,58 @@ describe("deterministic PNG output", () => {
 		])
 	})
 
+	it("clips group contents to their clipping paths", async () => {
+		const initial = createInitialDocument()
+		const rectangle = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 0,
+				y: 0,
+				width: 2,
+				height: 1,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const clip = {
+			...rectangle,
+			id: "object:clip",
+			geometry: { ...rectangle.geometry, width: 1 },
+		}
+		const content = { ...rectangle, id: "object:content" }
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 2, height: 1 }],
+			objects: [clip, content],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:clipped" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:clipped",
+					name: "Clipped",
+					clippingPathId: clip.id,
+					children: [
+						{ kind: "object" as const, id: clip.id },
+						{ kind: "object" as const, id: content.id },
+					],
+				},
+			],
+		}
+		const exported = await exportPng(document, {
+			scope: { kind: "all" },
+			samples: 1,
+		})
+		const image = await decode(exported.artifacts[0]!.bytes)
+
+		expect([image.width, image.height]).toEqual([2, 1])
+		expect([...image.rgba.subarray(0, 4)]).toEqual([218, 94, 67, 255])
+		expect([...image.rgba.subarray(4, 8)]).toEqual([0, 0, 0, 0])
+	})
+
 	it("encodes canonical metadata-free RGBA bytes", async () => {
 		const bytes = encodeRgbaPng(1, 1, new Uint8Array([12, 34, 56, 78]))
 		expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])

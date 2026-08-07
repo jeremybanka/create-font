@@ -12,6 +12,36 @@ import {
 import { parseSvgFixture } from "./svg-parser-fixture.ts"
 
 describe("SVG export", () => {
+	it("blocks unresolved portable artboard references instead of exporting a fallback rectangle", () => {
+		const initial = createInitialDocument()
+		const link = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "missing-design",
+				artboardId: "artboard:missing",
+				width: 120,
+				height: 80,
+			},
+		}
+		const preflight = preflightSvgExport({
+			...initial,
+			objects: [link],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object", id: link.id }],
+			})),
+		})
+		expect(preflight).toMatchObject({
+			decision: "blocked",
+			summary: { errors: 1 },
+		})
+		expect(preflight.diagnostics[0]).toMatchObject({
+			code: "svg.artboard-link.unresolved",
+			entityId: link.id,
+		})
+	})
+
 	it("exports an authored artboard background before artwork and omits chrome", () => {
 		const initial = createInitialDocument()
 		const artboard = {

@@ -129,6 +129,8 @@ export interface DesignTileContext {
 	readonly blendDiagnosticMessages: readonly string[]
 	readonly directSelectionSummary: string
 	readonly document: DesignDocument
+	/** Runtime projection used only for export preflight and previews. */
+	readonly exportDocumentSnapshot?: DesignDocument
 	readonly activeLayerId: string
 	readonly activeGroupScope: readonly string[]
 	readonly selectedGroupId: string | null
