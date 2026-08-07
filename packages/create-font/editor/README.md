@@ -181,6 +181,12 @@ partial or invalid values to application state.
   cloned toolbar instances remain synchronized. Saved version-one layouts are
   migrated with one toolbar instance automatically; after migration it can be
   moved, cloned, or removed like any other tile.
+- Turn on the curvature comb while editing to see a color-mapped perpendicular
+  visualization of cubic curvature. Gain controls its height, opacity controls
+  its fill, and Side switches between the contour-oriented outside view and
+  signed curve normals. The visualization updates with every live node and
+  handle gesture. Use Command/Control-Shift-X to toggle it from the canvas or
+  command palette.
 
 The canvas always spans the application beneath the tiled panes. Four stable
 logical columns page through one to four available edge slots as the viewport

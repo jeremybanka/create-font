@@ -20,6 +20,7 @@ import {
 import { AppAnchor } from "./AppAnchor.tsx"
 import { CommandPalette } from "@create-art/editor"
 import { useEditorDocumentMetadata } from "./document-metadata.ts"
+import { isCurvatureShortcut } from "./curvature-comb.ts"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import {
 	formatHotkey,
@@ -162,6 +163,7 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
+	const showCurvature = useO(workspace.ui.showCurvature)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
 	const toolContextForHistory = (
 		history: TimelineMeta | null,
@@ -215,23 +217,43 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
-			if (
-				tilingStatus.management ||
-				!isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)
-			)
+			if (tilingStatus.management) return
+			if (isCurvatureShortcut(event, IS_MAC_LIKE)) {
+				event.preventDefault()
+				workspace.actions.toggleCurvature()
 				return
-			event.preventDefault()
-			openCommandPalette()
+			}
+			if (isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)) {
+				event.preventDefault()
+				openCommandPalette()
+			}
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [tilingStatus.management])
+	}, [tilingStatus.management, workspace])
 
 	const commandsForHistory = (
 		history: TimelineMeta | null,
 	): readonly PaletteCommand[] => {
 		const toolContext = toolContextForHistory(history)
 		return [
+			{
+				id: "toggle-curvature-comb",
+				displayName: "Toggle Curvature Comb",
+				category: "View",
+				description:
+					"Show a perpendicular, color-mapped visualization of cubic curvature.",
+				icon: "Half2Icon",
+				keywords: ["speed punk", "bezier", "continuity", "comb"],
+				shortcut: `${MOD_KEY_LABEL}+Shift+X`,
+				checked: showCurvature,
+				disabled: routeName !== "canvas" || editingTextIndex === null,
+				disabledReason:
+					routeName !== "canvas"
+						? "Open the canvas to use the curvature comb."
+						: "Double-click a glyph to enter outline editing.",
+				do: workspace.actions.toggleCurvature,
+			},
 			{
 				id: "toggle-diff-view",
 				displayName: "Toggle Diff View",

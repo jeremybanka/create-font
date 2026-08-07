@@ -88,6 +88,14 @@ These packages are the current implementation layers. Each application
 composes its source workspace server with the browser entry supplied by its
 product editor. Headless libraries never import an editor package.
 
+## Acknowledgements
+
+The create-font curvature comb is inspired by Yanone's wonderful
+[Speed Punk](https://github.com/yanone/speedpunk), the Apache-2.0 curvature
+visualization that made Bézier continuity both legible and beautiful. The
+implementation here is rewritten for create-font's TypeScript geometry and live
+editing model. I ♥️ YN.
+
 ## License policy
 
 The project draws a deliberate line between **using our public building blocks**
