@@ -15,13 +15,16 @@ export interface NumericInputProps {
 	readonly "aria-label": string
 	readonly "aria-describedby"?: string
 	readonly appearance?: "roomy" | "strong"
-	readonly value: number
+	readonly value: number | null
 	readonly id?: string
 	readonly min?: number
 	readonly max?: number
 	readonly step?: NumericStep
 	/** The unmodified Arrow key increment. */
 	readonly arrowStep?: number
+	/** Starting point used when stepping a blank or mixed controlled value. */
+	readonly fallbackValue?: number
+	readonly placeholder?: string
 	readonly disabled?: boolean
 	readonly readOnly?: boolean
 	/** Restore the controlled value after emitting a relative/delta commit. */
@@ -30,7 +33,8 @@ export interface NumericInputProps {
 }
 
 export function NumericInput(props: NumericInputProps) {
-	const committedText = formatNumericInput(props.value)
+	const committedText =
+		props.value === null ? "" : formatNumericInput(props.value)
 	const [draft, setDraft] = useState(committedText)
 	const [error, setError] = useState<string | null>(null)
 	const [announcement, setAnnouncement] = useState<string | null>(null)
@@ -56,6 +60,10 @@ export function NumericInput(props: NumericInputProps) {
 		validateNumericInput(text, { min, max, step })
 	const commit = (reason: "enter" | "blur"): boolean => {
 		if (!editing.current) return true
+		if (props.value === null && draft.trim() === "") {
+			reset()
+			return true
+		}
 		const result = validate(draft)
 		if (!result.ok) {
 			if (reason === "enter") {
@@ -91,8 +99,8 @@ export function NumericInput(props: NumericInputProps) {
 				aria-readonly={props.readOnly || undefined}
 				aria-valuemin={Number.isFinite(min) ? min : undefined}
 				aria-valuemax={Number.isFinite(max) ? max : undefined}
-				aria-valuenow={props.value}
-				aria-valuetext={draft}
+				aria-valuenow={props.value ?? undefined}
+				aria-valuetext={draft || props.placeholder}
 				aria-invalid={error === null ? undefined : true}
 				aria-errormessage={error === null ? undefined : errorId}
 				aria-describedby={
@@ -101,6 +109,7 @@ export function NumericInput(props: NumericInputProps) {
 						.join(" ") || undefined
 				}
 				value={draft}
+				placeholder={props.placeholder}
 				onFocus={() => {
 					if (props.readOnly) return
 					editing.current = true
@@ -123,7 +132,9 @@ export function NumericInput(props: NumericInputProps) {
 						event.preventDefault()
 						const value = stepNumericInput(
 							draft,
-							props.value,
+							props.value ??
+								props.fallbackValue ??
+								Math.min(max, Math.max(min, 0)),
 							event.key === "ArrowUp" ? 1 : -1,
 							keyboardStepMultiplier(event, IS_MAC_LIKE),
 							min,

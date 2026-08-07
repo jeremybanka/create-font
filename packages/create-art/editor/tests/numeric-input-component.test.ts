@@ -241,6 +241,23 @@ describe("NumericInput", () => {
 		expect(onCommit).not.toHaveBeenCalled()
 	})
 
+	it("preserves a mixed placeholder and steps from its explicit fallback", () => {
+		const { input, onCommit } = mount({
+			value: null,
+			min: 0,
+			max: 100,
+			fallbackValue: 4,
+			placeholder: "Mixed",
+		})
+		expect(input.value).toBe("")
+		expect(input.placeholder).toBe("Mixed")
+		expect(input.getAttribute("aria-valuenow")).toBeNull()
+		focus(input)
+		key(input, "ArrowUp", { shiftKey: true })
+		expect(onCommit).toHaveBeenCalledWith(14)
+		expect(input.value).toBe("14")
+	})
+
 	it("restores a fractional delta value after a quantized Shift commit", () => {
 		const { input, onCommit } = mount({
 			value: -1.125,

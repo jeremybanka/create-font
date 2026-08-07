@@ -25,6 +25,7 @@ import {
 	TileSelect,
 	TileTextField,
 	TooltipButton,
+	NumericInput,
 } from "@create-art/editor"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
@@ -2925,10 +2926,6 @@ function AppearancePaintControl({
 	)
 }
 
-function numberPropertyValue(value: number | null | "mixed"): string {
-	return typeof value === "number" ? String(value) : ""
-}
-
 function propertyPlaceholder(value: unknown): string | undefined {
 	return value === "mixed" ? "Mixed" : value === null ? "No stroke" : undefined
 }
@@ -2984,26 +2981,29 @@ function StrokePropertiesEditor({
 		label: string,
 		property: "width" | "miterLimit" | "dashOffset",
 		minimum?: number,
-	) => (
-		<label data-stroke-field>
-			<span>{label}</span>
-			<input
-				type="number"
-				step="any"
-				{...(minimum === undefined ? {} : { min: minimum })}
-				value={numberPropertyValue(style[property])}
-				placeholder={propertyPlaceholder(style[property])}
-				aria-label={`Stroke ${label.toLowerCase()}`}
-				aria-describedby="stroke-properties-eligibility"
-				disabled={disabled}
-				onInput={(event) => {
-					const value = event.currentTarget.valueAsNumber
-					if (Number.isFinite(value))
-						context.applyStrokeProperties({ [property]: value })
-				}}
-			/>
-		</label>
-	)
+	) => {
+		const value = style[property]
+		const placeholder = propertyPlaceholder(value)
+		return (
+			<label data-stroke-field>
+				<span>{label}</span>
+				<NumericInput
+					value={typeof value === "number" ? value : null}
+					step="any"
+					arrowStep={1}
+					fallbackValue={minimum ?? 0}
+					{...(minimum === undefined ? {} : { min: minimum })}
+					{...(placeholder === undefined ? {} : { placeholder })}
+					aria-label={`Stroke ${label.toLowerCase()}`}
+					aria-describedby="stroke-properties-eligibility"
+					disabled={disabled}
+					onCommit={(nextValue) =>
+						context.applyStrokeProperties({ [property]: nextValue })
+					}
+				/>
+			</label>
+		)
+	}
 	const select = <Property extends "cap" | "join">(
 		label: string,
 		property: Property,

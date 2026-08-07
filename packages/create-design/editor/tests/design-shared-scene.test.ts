@@ -11,6 +11,7 @@ import {
 } from "../src/DesignApplication.tsx"
 import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
+import { DESIGN_CANVAS_DIMMER_STORAGE_KEY } from "../src/canvas-dimmer.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { DESIGN_TOOLS } from "../src/design-tools.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
@@ -238,6 +239,109 @@ function clipboardEvent(
 }
 
 describe("create-design shared vector scene", () => {
+	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
+		let prefersLight = true
+		const listeners = new Set<EventListenerOrEventListenerObject>()
+		vi.stubGlobal(
+			"matchMedia",
+			(query: string) =>
+				({
+					get matches() {
+						return query === "(prefers-color-scheme: light)" && prefersLight
+					},
+					media: query,
+					onchange: null,
+					addEventListener: (
+						type: string,
+						listener: EventListenerOrEventListenerObject,
+					) => {
+						if (type === "change" && query === "(prefers-color-scheme: light)")
+							listeners.add(listener)
+					},
+					removeEventListener: (
+						_type: string,
+						listener: EventListenerOrEventListenerObject,
+					) => {
+						listeners.delete(listener)
+					},
+					addListener: () => undefined,
+					removeListener: () => undefined,
+					dispatchEvent: () => true,
+				}) satisfies MediaQueryList,
+		)
+		const storage = new Map<string, string>()
+		mountDesign({}, storage)
+		const slider = document.querySelector<HTMLInputElement>(
+			"#design-canvas-dimmer",
+		)
+		const application =
+			document.querySelector<HTMLElement>("design-application")
+		if (slider === null || application === null)
+			throw new Error("Dimmer control was not found.")
+		expect(slider.value).toBe("217")
+		expect(application.dataset.canvasDimmerSource).toBe("system")
+		expect(storage.has(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe(false)
+
+		const publishScheme = async (light: boolean): Promise<void> => {
+			prefersLight = light
+			await act(async () => {
+				for (const listener of listeners) {
+					const event = new MediaQueryListEvent("change", { matches: light })
+					if (typeof listener === "function") listener(event)
+					else listener.handleEvent(event)
+				}
+				await Promise.resolve()
+			})
+		}
+		await publishScheme(false)
+		expect(slider.value).toBe("17")
+		expect(storage.has(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe(false)
+
+		await act(async () => {
+			slider.value = "128"
+			slider.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		expect(application.dataset.canvasDimmerSource).toBe("explicit")
+		expect(storage.get(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe("128")
+
+		await publishScheme(true)
+		expect(slider.value).toBe("128")
+		expect(storage.get(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe("128")
+	})
+
+	it("renders and effect-persists the canvas Dimmer without an Export header shortcut", async () => {
+		const storage = new Map([[DESIGN_CANVAS_DIMMER_STORAGE_KEY, "128"]])
+		mountDesign({}, storage)
+		const application =
+			document.querySelector<HTMLElement>("design-application")
+		const slider = document.querySelector<HTMLInputElement>(
+			"#design-canvas-dimmer",
+		)
+		if (application === null || slider === null)
+			throw new Error("Dimmer control was not found.")
+		expect(document.querySelector("[data-export]")).toBeNull()
+		expect(document.querySelector("design-export-tile")).not.toBeNull()
+		expect(slider.type).toBe("range")
+		expect(slider.min).toBe("0")
+		expect(slider.max).toBe("255")
+		expect(slider.value).toBe("128")
+		expect(slider.getAttribute("aria-valuetext")).toBe("50%, #808080")
+		expect(application.style.getPropertyValue("--design-canvas-surface")).toBe(
+			"#808080",
+		)
+
+		await act(async () => {
+			slider.value = "255"
+			slider.dispatchEvent(new InputEvent("input", { bubbles: true }))
+			await Promise.resolve()
+		})
+		expect(application.style.getPropertyValue("--design-canvas-surface")).toBe(
+			"#ffffff",
+		)
+		expect(storage.get(DESIGN_CANVAS_DIMMER_STORAGE_KEY)).toBe("255")
+	})
+
 	it("inherits layer visibility and locking across canvas interaction and creation", async () => {
 		const initial = createInitialDocument()
 		const hiddenObject = initial.objects[0]!
@@ -339,7 +443,8 @@ describe("create-design shared vector scene", () => {
 		})
 		expect(stage.find(".vector-selection-bounds")).toHaveLength(1)
 		expect(stage.findOne(".transform-selection-box").stroke()).toBe(
-			readDesignCanvasTheme().marquee,
+			readDesignCanvasTheme(document.querySelector("design-application"))
+				.marquee,
 		)
 		expect(
 			document.querySelector("[data-footer-status]")?.textContent,
@@ -459,7 +564,10 @@ describe("create-design shared vector scene", () => {
 		const aggregate = boxes.find(
 			(box: { opacity(): number }) => box.opacity() === 0,
 		)
-		expect(aggregate?.stroke()).toBe(readDesignCanvasTheme().marquee)
+		expect(aggregate?.stroke()).toBe(
+			readDesignCanvasTheme(document.querySelector("design-application"))
+				.marquee,
+		)
 	})
 
 	it("hits and drags a clipping contour only along its padded edge", async () => {
@@ -4672,8 +4780,20 @@ describe("create-design shared vector scene", () => {
 		const setNumber = async (label: string, value: string): Promise<void> => {
 			await act(async () => {
 				const field = input(label)
+				field.focus()
 				field.value = value
 				field.dispatchEvent(new InputEvent("input", { bubbles: true }))
+				await Promise.resolve()
+			})
+			await act(async () => {
+				const field = input(label)
+				field.dispatchEvent(
+					new KeyboardEvent("keydown", {
+						bubbles: true,
+						cancelable: true,
+						key: "Enter",
+					}),
+				)
 				await Promise.resolve()
 			})
 		}
@@ -4705,6 +4825,20 @@ describe("create-design shared vector scene", () => {
 			await Promise.resolve()
 		})
 		await setNumber("dash offset", "-2")
+		await act(async () => {
+			const width = input("width")
+			width.focus()
+			width.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					cancelable: true,
+					key: "ArrowUp",
+					shiftKey: true,
+				}),
+			)
+			width.blur()
+			await Promise.resolve()
+		})
 
 		const saved = JSON.parse(
 			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
@@ -4714,7 +4848,7 @@ describe("create-design shared vector scene", () => {
 				?.appearance.stroke,
 		).toEqual({
 			swatchId: "swatch:ink",
-			width: 6,
+			width: 16,
 			cap: "round",
 			join: "bevel",
 			miterLimit: 8,
@@ -4725,16 +4859,45 @@ describe("create-design shared vector scene", () => {
 			.find(".design-object")
 			.find(
 				(node: { getAttr(name: string): unknown }) =>
-					node.getAttr("strokeWidth") === 6,
+					node.getAttr("strokeWidth") === 16,
 			)
 		expect(rendered?.getAttrs()).toMatchObject({
-			strokeWidth: 6,
+			strokeWidth: 16,
 			lineCap: "round",
 			lineJoin: "bevel",
 			miterLimit: 8,
 			dash: [7, 3, 2],
 			dashOffset: -2,
 		})
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					ctrlKey: true,
+					key: "z",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(input("width").value).toBe("6")
+		expect(
+			JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}").objects.find(
+				(object: DesignObject) => object.appearance.stroke !== undefined,
+			)?.appearance.stroke?.width,
+		).toBe(6)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					ctrlKey: true,
+					key: "z",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(input("width").value).toBe("16")
 	})
 
 	it("exposes why selection appearance controls are disabled", () => {
