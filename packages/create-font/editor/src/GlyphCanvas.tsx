@@ -48,7 +48,12 @@ import {
 	selectionOwnsEditorSegment,
 	SEGMENT_HIT_RADIUS_PX,
 } from "./canvas-hit-testing.ts"
-import { BASE_CANVAS_SCALE, initializeCanvasView } from "./canvas-view.ts"
+import {
+	BASE_CANVAS_SCALE,
+	initializeCanvasView,
+	MAX_CANVAS_ZOOM,
+	MIN_CANVAS_ZOOM,
+} from "./canvas-view.ts"
 import { canvasToolCursor, reduceCanvasWheel } from "@create-art/editor"
 import {
 	incidentStraightProjectionCandidates,
@@ -189,6 +194,7 @@ import {
 import {
 	layoutTextRun,
 	nearestCaretIndex,
+	PREVIEW_TEXT_WRAP_COLUMNS,
 	textSelectionRects,
 } from "./text-layout.ts"
 import {
@@ -590,7 +596,10 @@ export function GlyphCanvas({
 		width,
 	])
 	const layout = useMemo(
-		() => layoutTextRun(run, metrics, metadata.unitsPerEm),
+		() =>
+			layoutTextRun(run, metrics, metadata.unitsPerEm, {
+				maxColumns: PREVIEW_TEXT_WRAP_COLUMNS,
+			}),
 		[run, metadata.unitsPerEm, metrics],
 	)
 	const editingPosition = layout.glyphs.find(
@@ -4289,8 +4298,8 @@ export function GlyphCanvas({
 						setView((current) =>
 							reduceCanvasWheel(current, event.evt, pointer, {
 								baseScale: BASE_CANVAS_SCALE,
-								minZoom: 0.25,
-								maxZoom: 10,
+								minZoom: MIN_CANVAS_ZOOM,
+								maxZoom: MAX_CANVAS_ZOOM,
 							}),
 						)
 					}}

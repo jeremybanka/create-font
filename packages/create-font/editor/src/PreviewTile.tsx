@@ -10,6 +10,7 @@ import {
 	previewColorDefault,
 	type PreviewSampleId,
 } from "./preview-tile.ts"
+import { PREVIEW_TEXT_WRAP_COLUMNS } from "./text-layout.ts"
 import css from "./PreviewTile.module.css"
 
 export interface PreviewTileProps {
@@ -151,6 +152,7 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<option value="cicero">Cicero translation</option>
 						<option value="pi">1,000 digits of pi</option>
 						<option value="nato">NATO alphabet</option>
+						<option value="moby">Moby-Dick opening</option>
 					</select>
 				</label>
 				{sample === "noise" ? (
@@ -232,7 +234,9 @@ export function PreviewTile({ workspace, tileId }: PreviewTileProps) {
 						<span>Text</span>
 						<textarea
 							aria-label="Preview text"
+							cols={PREVIEW_TEXT_WRAP_COLUMNS}
 							rows={2}
+							wrap="soft"
 							value={text}
 							onInput={(event) => {
 								setSample("custom")

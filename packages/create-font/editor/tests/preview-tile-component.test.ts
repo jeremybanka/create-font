@@ -218,6 +218,10 @@ describe("PreviewTile", () => {
 		)
 			throw new Error("Preview sample controls were not rendered.")
 
+		expect(text.getAttribute("cols")).toBe("65")
+		expect(text.getAttribute("wrap")).toBe("soft")
+		change(sample, "moby")
+		expect(text.value).toMatch(/^Call me Ishmael\./)
 		change(sample, "pi")
 		expect(text.value.replace(".", "")).toHaveLength(1_000)
 		change(sample, "noise")

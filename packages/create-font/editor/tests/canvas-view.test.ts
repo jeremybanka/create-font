@@ -58,8 +58,9 @@ describe("canvas viewport", () => {
 		).toBe(manipulated)
 	})
 
-	it("clamps zoom from 25% through 1000%", () => {
+	it("clamps zoom from 5% through 1000%", () => {
 		const current = { x: 72, y: 72, zoom: 1 }
+		expect(MIN_CANVAS_ZOOM).toBe(0.05)
 		expect(
 			zoomCanvasView(current, Number.POSITIVE_INFINITY, { x: 400, y: 300 })
 				.zoom,

@@ -53,7 +53,10 @@ preview-tile.class {
 			}
 
 			> textarea {
+				max-width: 65ch;
 				resize: vertical;
+				white-space: pre-wrap;
+				overflow-wrap: break-word;
 			}
 
 			> output {
