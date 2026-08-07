@@ -143,8 +143,12 @@ describe("PDF preview tile", () => {
 			scope.value = "all"
 			scope.dispatchEvent(new Event("change", { bubbles: true }))
 		})
-		expect(host.querySelector("button")?.textContent).toContain("2 pages")
-		act(() => host.querySelector<HTMLButtonElement>("button")!.click())
+		const pdfExport = [...host.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Export 2 pages as PDF"),
+		)!
+		expect(pdfExport.closest("tile-button")).not.toBeNull()
+		expect(pdfExport.dataset.tone).toBe("primary")
+		act(() => pdfExport.click())
 		expect(exportDocument).toHaveBeenCalledWith(
 			{
 				includeBleed: false,
@@ -164,6 +168,40 @@ describe("PDF preview tile", () => {
 			checkbox.click()
 		})
 		expect(host.querySelector("pdf-preview")).toBeNull()
+
+		const formatButtons = [
+			...host.querySelectorAll<HTMLButtonElement>(
+				'tile-button-group[aria-label="Export format"] button',
+			),
+		]
+		expect(formatButtons.map(({ textContent }) => textContent)).toEqual([
+			"PDF",
+			"SVG",
+			"PNG",
+		])
+		expect(formatButtons[0]?.getAttribute("aria-pressed")).toBe("true")
+		act(() => formatButtons[1]?.click())
+		expect(
+			host.querySelector('[role="region"][aria-label="PDF export options"]'),
+		).toBeNull()
+		expect(
+			host.querySelector('[role="region"][aria-label="SVG export options"]'),
+		).not.toBeNull()
+		expect(
+			[...host.querySelectorAll("button")]
+				.find((button) =>
+					button.textContent?.includes("Export active artboard"),
+				)
+				?.closest("tile-button"),
+		).not.toBeNull()
+		act(() => formatButtons[2]?.click())
+		expect(
+			host.querySelector('[role="region"][aria-label="PNG export options"]'),
+		).not.toBeNull()
+		expect(host.querySelectorAll("export-field-row tile-select")).toHaveLength(
+			2,
+		)
+		act(() => formatButtons[0]?.click())
 
 		const outsideObject = {
 			...document.objects[0]!,
