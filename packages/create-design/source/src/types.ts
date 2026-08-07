@@ -305,7 +305,7 @@ export interface DesignArtboard {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 6
+	readonly version: 7
 	readonly title: string
 	/** Ordered export rectangles, independent from the global scene hierarchy. */
 	readonly artboards: readonly DesignArtboard[]

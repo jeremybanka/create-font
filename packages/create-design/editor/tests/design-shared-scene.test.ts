@@ -3459,6 +3459,54 @@ describe("create-design shared vector scene", () => {
 		})
 	})
 
+	it("isolates recovery drafts by workspace and project identity", () => {
+		const storage = new Map<string, string>()
+		const draft: DesignRecoveryDraft = {
+			version: 1,
+			baseRevision: "source:one",
+			document: { ...createInitialDocument(), title: "Other workspace" },
+			updatedAt: 42,
+		}
+		const otherKey = `create-design:project:${encodeURIComponent("workspace:other:poster")}:${DESIGN_RECOVERY_STORAGE_KEY}`
+		storage.set(otherKey, JSON.stringify(draft))
+		const session = sourceSession({
+			projectId: "poster",
+			workspaceId: "workspace:current",
+		})
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		expect(document.querySelector("persistence-alert")).toBeNull()
+		expect(storage.get(otherKey)).toBe(JSON.stringify(draft))
+	})
+
+	it("migrates the legacy recovery key for an unambiguous workspace", () => {
+		const storage = new Map<string, string>()
+		const draft: DesignRecoveryDraft = {
+			version: 1,
+			baseRevision: "source:one",
+			document: { ...createInitialDocument(), title: "Legacy recovery" },
+			updatedAt: 42,
+		}
+		storage.set(DESIGN_RECOVERY_STORAGE_KEY, JSON.stringify(draft))
+		const session = sourceSession({
+			allowLegacyRecovery: true,
+			projectId: "poster",
+			workspaceId: "workspace:current",
+		})
+		mountDesign(
+			{ initialDocument: session.initialDocument, sourceSession: session },
+			storage,
+		)
+		const scopedKey = `create-design:project:${encodeURIComponent("workspace:current:poster")}:${DESIGN_RECOVERY_STORAGE_KEY}`
+		expect(storage.has(DESIGN_RECOVERY_STORAGE_KEY)).toBe(false)
+		expect(storage.get(scopedKey)).toBe(JSON.stringify(draft))
+		expect(document.querySelector("persistence-alert")?.textContent).toContain(
+			"has not been saved",
+		)
+	})
+
 	it("clears an identical stale recovery draft without prompting or warning", () => {
 		const storage = new Map<string, string>()
 		const session = sourceSession()

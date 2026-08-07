@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -21,6 +21,7 @@ describe(`create-design workspace RPC`, () => {
 		)
 		expect(workspace.status).toBe(200)
 		expect(await workspace.json()).toEqual({
+			id: expect.stringMatching(/^workspace:[0-9a-f]{64}$/u),
 			name: root.split(`/`).at(-1),
 			activeProjectId: root.split(`/`).at(-1),
 			projects: [
@@ -88,5 +89,22 @@ describe(`create-design workspace RPC`, () => {
 				revision: expect.any(String),
 			})
 		}
+	})
+
+	test("does not expose unsafe or symlink-like route identities", async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-workspace-`))
+		await initializeDesignSourceWorkspace(join(root, "designs", "safe"))
+		await mkdir(join(root, "designs", "unsafe%name"), { recursive: true })
+		await writeFile(
+			join(root, "designs", "unsafe%name", "create-design.json"),
+			"{}",
+		)
+		const app = await createDesignServerApp({ root })
+		const inventory = await app.handle(
+			new Request("http://localhost/api/workspace"),
+		)
+		expect(await inventory.json()).toMatchObject({
+			projects: [{ id: "safe" }],
+		})
 	})
 })

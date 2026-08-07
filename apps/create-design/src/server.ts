@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { basename, resolve } from "node:path"
 
 import { staticPlugin } from "@elysia/static"
@@ -53,15 +54,34 @@ export async function createDesignServerApp(
 	)
 	const discovered = await discoverDesignProjects(root)
 	const projects =
-		discovered.length > 0
-			? discovered
-			: direct === undefined
-				? [{ name: basename(root), path: ".", root }]
-				: [direct]
-	const active =
-		(options.design === undefined
+		direct?.root === root
+			? [direct]
+			: discovered.length > 0
+				? discovered
+				: direct === undefined
+					? [{ name: basename(root), path: ".", root }]
+					: [direct]
+	const mountedProjects = (
+		await Promise.all(
+			projects.map(async (project) => {
+				const plugin = await sourcePlugin(project, adapter, "workspace").catch(
+					() => undefined,
+				)
+				return plugin === undefined ? null : { project, plugin }
+			}),
+		)
+	).filter((value) => value !== null)
+	const requestedActive =
+		options.design === undefined
 			? direct
-			: projects.find(({ name }) => name === options.design)) ?? projects[0]!
+			: projects.find(({ name }) => name === options.design)
+	const activeMount =
+		mountedProjects.find(
+			({ project }) => project.root === requestedActive?.root,
+		) ?? mountedProjects[0]
+	if (activeMount === undefined)
+		throw new Error("No valid design projects are available in this workspace.")
+	const active = activeMount.project
 	const app = new Elysia({
 		adapter,
 		name: `create-design-server`,
@@ -72,15 +92,19 @@ export async function createDesignServerApp(
 				rpcVersion: CREATE_DESIGN_RPC_VERSION,
 			}))
 			.get(`/workspace`, () => ({
+				id: `workspace:${createHash("sha256").update(root).digest("hex")}`,
 				name: discovered.length === 0 ? basename(active.root) : basename(root),
 				activeProjectId: active.name,
-				projects: projects.map(({ name, path }) => ({ id: name, name, path })),
+				projects: mountedProjects.map(({ project: { name, path } }) => ({
+					id: name,
+					name,
+					path,
+				})),
 			})),
 	)
 	const activePlugin = await sourcePlugin(active, adapter, "default")
 	app.group(`/api`, (group) => group.use(activePlugin))
-	for (const project of projects) {
-		const plugin = await sourcePlugin(project, adapter, "workspace")
+	for (const { project, plugin } of mountedProjects) {
 		app.group(`/projects/${encodeURIComponent(project.name)}/api`, (group) =>
 			group.use(plugin),
 		)

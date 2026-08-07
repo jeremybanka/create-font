@@ -463,6 +463,7 @@ export async function installDesignSourceImage(
 }
 
 export type DesignWorkspaceInventory = Readonly<{
+	id: string
 	name: string
 	activeProjectId: string
 	projects: readonly Readonly<{ id: string; name: string; path: string }>[]
@@ -472,6 +473,17 @@ export async function readDesignWorkspace(): Promise<DesignWorkspaceInventory> {
 	const response = await fetch("/api/workspace")
 	if (!response.ok) throw new Error("Could not read the design workspace.")
 	return (await response.json()) as DesignWorkspaceInventory
+}
+
+export function resolveDesignWorkspaceProjectId(
+	workspace: DesignWorkspaceInventory,
+	requestedProjectId: string | null | undefined,
+): string {
+	return requestedProjectId !== null &&
+		requestedProjectId !== undefined &&
+		workspace.projects.some(({ id }) => id === requestedProjectId)
+		? requestedProjectId
+		: workspace.activeProjectId
 }
 
 function projectOrigin(projectId: string): string {
@@ -484,11 +496,11 @@ function websocketUrl(origin = ""): string {
 	return url.href
 }
 
-async function loadLinkedArtboards(
+export async function loadDesignLinkedArtboards(
 	workspace: DesignWorkspaceInventory,
 	activeProjectId: string,
 ): Promise<readonly DesignLinkedArtboardResource[]> {
-	return Promise.all(
+	const results = await Promise.allSettled(
 		workspace.projects
 			.filter(({ id }) => id !== activeProjectId)
 			.map(async ({ id }) => {
@@ -506,6 +518,9 @@ async function loadLinkedArtboards(
 				}
 			}),
 	)
+	return results.flatMap((result) =>
+		result.status === "fulfilled" ? [result.value] : [],
+	)
 }
 
 export async function connectDesignSourceSession(
@@ -522,7 +537,7 @@ export async function connectDesignSourceSession(
 	const client = createSourceRpcClient(origin)
 	const [snapshot, linkedArtboards] = await Promise.all([
 		client.readSnapshot(),
-		loadLinkedArtboards(workspace, projectId),
+		loadDesignLinkedArtboards(workspace, projectId),
 	])
 	let state = sourceSyncStateFromSnapshot(snapshot)
 	const initial = await hydrateDesignSourceUpdate(client, state)
@@ -548,6 +563,7 @@ export async function connectDesignSourceSession(
 	let pendingSaves = 0
 	let tail: Promise<unknown> = Promise.resolve()
 	let sourceGeneration = 0
+	let linkedGeneration = 0
 	let disposed = false
 	const sockets = new Set<WebSocket>()
 	const status = (value: DesignSourceStatus): void => {
@@ -608,9 +624,10 @@ export async function connectDesignSourceSession(
 		sockets.add(linkedSocket)
 		linkedSocket.addEventListener("message", () => {
 			if (disposed) return
+			const generation = ++linkedGeneration
 			void (async () => {
-				const nextLinks = await loadLinkedArtboards(workspace, projectId)
-				if (disposed) return
+				const nextLinks = await loadDesignLinkedArtboards(workspace, projectId)
+				if (disposed || generation !== linkedGeneration) return
 				for (const listener of linkedArtboardListeners) listener(nextLinks)
 			})().catch(() => status("conflict"))
 		})
@@ -624,6 +641,8 @@ export async function connectDesignSourceSession(
 			workspace.projects.find(({ id }) => id === projectId)?.name ?? projectId,
 		projectId,
 		workspaceProjects: workspace.projects,
+		workspaceId: workspace.id,
+		allowLegacyRecovery: workspace.projects.length === 1,
 		linkedArtboards,
 		initialDocument: initial.document,
 		initialRevision: initial.revision,
@@ -632,6 +651,7 @@ export async function connectDesignSourceSession(
 		dispose() {
 			if (disposed) return
 			disposed = true
+			linkedGeneration += 1
 			for (const activeSocket of sockets) activeSocket.close()
 			sockets.clear()
 			documentListeners.clear()

@@ -17,7 +17,12 @@ export async function discoverDesignProjects(
 	)
 	const projects: DesignProject[] = []
 	for (const entry of entries) {
-		if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+		if (
+			!entry.isDirectory() ||
+			entry.isSymbolicLink() ||
+			!isSafeDesignProjectId(entry.name)
+		)
+			continue
 		const root = join(designsRoot, entry.name)
 		const manifest = await stat(join(root, "create-design.json")).catch(
 			() => undefined,

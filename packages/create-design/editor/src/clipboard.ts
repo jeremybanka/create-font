@@ -336,7 +336,7 @@ function parseDesignPayload(value: string): DesignClipboardPayload | null {
 			parsed.version === 3
 				? validateDesignDocument({
 						...envelope,
-						version: 6,
+						version: 7,
 						artboards: [
 							{
 								id: "artboard:clipboard",

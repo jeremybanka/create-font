@@ -309,7 +309,7 @@ describe("create-design recovery storage", () => {
 		}
 		expect(readDesignRecoveryDraft(storage)).toMatchObject({
 			document: {
-				version: 6,
+				version: 7,
 				artboards: [
 					{
 						id: "artboard:page",

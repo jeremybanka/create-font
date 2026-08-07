@@ -402,7 +402,7 @@ describe("complete design document codec", () => {
 		})
 	})
 
-	it("migrates every shipped v1 field into the explicit v6 model", () => {
+	it("migrates every shipped v1 field into the explicit v7 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)
 		expect(decoded).toEqual({
@@ -496,6 +496,34 @@ describe("complete design document codec", () => {
 		expect(decoded.value.objects).toEqual(previous.objects)
 		expect(decoded.value.layers[0]).not.toHaveProperty("hidden")
 		expect(decoded.value.layers[0]).not.toHaveProperty("locked")
+	})
+
+	it("migrates v6 documents while reserving linked artboards for v7", () => {
+		const current = createInitialDocument()
+		const previous = { ...current, version: 6 as const }
+		expect(decodeDesignDocument(previous)).toEqual({
+			ok: true,
+			value: current,
+		})
+		expect(
+			decodeDesignDocument({
+				...previous,
+				objects: previous.objects.map((object, index) =>
+					index === 0
+						? {
+								...object,
+								geometry: {
+									kind: "artboard-link",
+									projectId: "source",
+									artboardId: "artboard:page",
+									width: 100,
+									height: 100,
+								},
+							}
+						: object,
+				),
+			}),
+		).toMatchObject({ ok: false })
 	})
 
 	it("preserves canonical v1 IDs, ordering, colors, geometry, appearance, transforms, flags, guides, and page properties", () => {

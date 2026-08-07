@@ -27,11 +27,15 @@ import {
 } from "../../../packages/create-design/editor/src/design-text.ts"
 import { exportDesignPdf } from "../src/pdf-export.ts"
 import { createDesignServerApp } from "../src/server.ts"
+import { initializeDesignSourceWorkspace } from "../src/source-service.ts"
 import {
 	designSourceTransaction,
 	installDesignSourceFont,
 	installDesignSourceImage,
+	loadDesignLinkedArtboards,
 	loadDesignSourceFonts,
+	resolveDesignWorkspaceProjectId,
+	type DesignWorkspaceInventory,
 } from "../src/source-sync.ts"
 import { createTextFontFixtureBytes } from "./fixtures/text-font.ts"
 
@@ -66,6 +70,43 @@ function initialState(document = createInitialDocument()) {
 }
 
 describe(`create-design source synchronization`, () => {
+	test("recovers an unavailable URL project identity to the workspace default", () => {
+		const workspace: DesignWorkspaceInventory = {
+			id: "workspace:test",
+			name: "Test",
+			activeProjectId: "alpha",
+			projects: [
+				{ id: "alpha", name: "Alpha", path: "designs/alpha" },
+				{ id: "beta", name: "Beta", path: "designs/beta" },
+			],
+		}
+		expect(resolveDesignWorkspaceProjectId(workspace, "beta")).toBe("beta")
+		expect(resolveDesignWorkspaceProjectId(workspace, "missing")).toBe("alpha")
+	})
+
+	test("keeps a valid design usable when an unrelated sibling is invalid", async () => {
+		const root = await mkdtemp(join(tmpdir(), `create-design-linked-load-`))
+		roots.push(root)
+		await Promise.all([
+			initializeDesignSourceWorkspace(join(root, "designs", "alpha")),
+			initializeDesignSourceWorkspace(join(root, "designs", "beta")),
+		])
+		await writeFile(join(root, "designs", "beta", "document.json"), "{}")
+		const app = await createDesignServerApp({ root })
+		vi.stubGlobal(`fetch`, (input: RequestInfo | URL, init?: RequestInit) => {
+			const request =
+				input instanceof Request
+					? input
+					: new Request(new URL(String(input), "http://localhost"), init)
+			return app.handle(request)
+		})
+		const response = await fetch("http://localhost/api/workspace")
+		const workspace = (await response.json()) as DesignWorkspaceInventory
+		await expect(
+			loadDesignLinkedArtboards(workspace, "alpha"),
+		).resolves.toEqual([])
+	})
+
 	test(`installs an embedded image through the asset index transaction`, async () => {
 		const root = await mkdtemp(join(tmpdir(), `create-design-image-install-`))
 		roots.push(root)

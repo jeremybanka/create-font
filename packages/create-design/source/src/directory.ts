@@ -9,7 +9,6 @@ import {
 	artboardIdSchema,
 	designArtboardColorSchema,
 	artboardInsetsSchema,
-	compatibleGeometrySchema,
 	CREATE_DESIGN_DOCUMENT_FORMAT,
 	CREATE_DESIGN_DOCUMENT_VERSION,
 	DEFAULT_ARTBOARD_ID,
@@ -18,9 +17,11 @@ import {
 	designBlendSchema,
 	finiteNumberSchema,
 	guideSchema,
+	linkedArtboardGeometrySchema,
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_FIVE_DESIGN_DOCUMENT_VERSION,
 	VERSION_FOUR_DESIGN_DOCUMENT_VERSION,
 	VERSION_THREE_DESIGN_DOCUMENT_VERSION,
 	VERSION_TWO_DESIGN_DOCUMENT_VERSION,
@@ -33,6 +34,7 @@ import {
 	textGeometrySchema,
 	validateDesignDocument,
 	versionTwoAppearanceSchema,
+	versionSixGeometrySchema,
 } from "./document.ts"
 import { diagnostic, failure, success } from "./result.ts"
 import {
@@ -51,8 +53,9 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
-export const CREATE_DESIGN_SOURCE_VERSION = 4 as const
-export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 3 as const
+export const CREATE_DESIGN_SOURCE_VERSION = 5 as const
+export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 4 as const
+export const VERSION_THREE_CREATE_DESIGN_SOURCE_VERSION = 3 as const
 export const VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION = 2 as const
 export const LEGACY_CREATE_DESIGN_SOURCE_VERSION = 1 as const
 
@@ -70,6 +73,7 @@ export const projectFileSchema = z
 		sourceVersion: z.union([
 			z.literal(LEGACY_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION),
+			z.literal(VERSION_THREE_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(PREVIOUS_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(CREATE_DESIGN_SOURCE_VERSION),
 		]),
@@ -79,6 +83,7 @@ export const projectFileSchema = z
 			z.literal(VERSION_TWO_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_FOUR_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_THREE_DESIGN_DOCUMENT_VERSION),
+			z.literal(VERSION_FIVE_DESIGN_DOCUMENT_VERSION),
 			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
@@ -198,7 +203,20 @@ const inlineObjectFileSchema = z
 		version: z.literal(1),
 		id: designObjectIdSchema,
 		name: z.string(),
-		geometry: compatibleGeometrySchema,
+		geometry: versionSixGeometrySchema,
+		transform: transformSchema,
+		appearance: appearanceSchema,
+		hidden: z.boolean().optional(),
+		locked: z.boolean().optional(),
+	})
+	.strict()
+const linkedArtboardObjectFileSchema = z
+	.object({
+		format: z.literal("create-design.object"),
+		version: z.literal(3),
+		id: designObjectIdSchema,
+		name: z.string(),
+		geometry: linkedArtboardGeometrySchema,
 		transform: transformSchema,
 		appearance: appearanceSchema,
 		hidden: z.boolean().optional(),
@@ -287,6 +305,7 @@ const legacyObjectFileSchema = z
 	}))
 export const objectFileSchema = z
 	.union([
+		linkedArtboardObjectFileSchema,
 		externalObjectFileSchema,
 		inlineObjectFileSchema,
 		versionTwoObjectFileSchema,
@@ -735,7 +754,12 @@ function objectFile(object: DesignObject, objectPath: string): ObjectFile {
 	})()
 	return {
 		format: "create-design.object",
-		version: object.geometry.kind === "text" ? 2 : 1,
+		version:
+			object.geometry.kind === "text"
+				? 2
+				: object.geometry.kind === "artboard-link"
+					? 3
+					: 1,
 		id: object.id,
 		name: object.name,
 		geometry,
@@ -1121,7 +1145,8 @@ export function assembleDesignDocument(
 			),
 		)
 	if (
-		project?.sourceVersion !== CREATE_DESIGN_SOURCE_VERSION &&
+		project !== null &&
+		project.sourceVersion < PREVIOUS_CREATE_DESIGN_SOURCE_VERSION &&
 		layerIndex !== null &&
 		(layerIndex.entries.length !== 1 ||
 			layerIndex.entries[0]?.id !== DEFAULT_LAYER_ID)
@@ -1130,7 +1155,7 @@ export function assembleDesignDocument(
 			diagnostic(
 				"directory.unsupported",
 				"$.entries",
-				`Source versions before ${CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
+				`Source versions before ${PREVIOUS_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
 				designSourcePaths.layerIndex,
 			),
 		)
@@ -1200,6 +1225,19 @@ export function assembleDesignDocument(
 					"directory.entity_id",
 					"$.id",
 					`Object unit ID ${file.id} does not match indexed ID ${entry.id}.`,
+					entry.path,
+				),
+			)
+		if (
+			file.geometry.kind === "artboard-link" &&
+			project !== null &&
+			project.sourceVersion < CREATE_DESIGN_SOURCE_VERSION
+		)
+			errors.push(
+				diagnostic(
+					"directory.unsupported",
+					"$.geometry.kind",
+					`Source version ${project.sourceVersion} does not support linked artboards.`,
 					entry.path,
 				),
 			)

@@ -646,9 +646,24 @@ function initialDesignPersistence(
 		sourceSession?.initialRevision ?? null,
 	)
 	if (sourceSession === undefined) return state
-	const storage = browserLocalStorage(sourceSession.projectId)
+	const namespace =
+		sourceSession.projectId === undefined
+			? undefined
+			: `${sourceSession.workspaceId ?? "legacy-workspace"}:${sourceSession.projectId}`
+	const storage = browserLocalStorage(namespace)
 	if (storage === null) return state
-	const draft = readDesignRecoveryDraft(storage)
+	let draft = readDesignRecoveryDraft(storage)
+	if (draft === null && sourceSession.allowLegacyRecovery) {
+		const legacyStorage = browserLocalStorage()
+		if (legacyStorage !== null) {
+			const legacyDraft = readDesignRecoveryDraft(legacyStorage)
+			if (legacyDraft !== null) {
+				draft = legacyDraft
+				writeDesignRecoveryDraft(storage, legacyDraft)
+				clearDesignRecoveryDraft(legacyStorage)
+			}
+		}
+	}
 	if (draft === null) return state
 	const durableDocument = initialDocument ?? createInitialDocument()
 	if (!isDesignRecoveryDraftNewer(draft, durableDocument)) {
@@ -1076,7 +1091,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[canvasDimmer],
 	)
 	const canvasTheme = useDesignCanvasTheme(applicationElement, canvasDimmer)
-	const projectStorage = browserLocalStorage(sourceSession?.projectId)
+	const projectStorage = browserLocalStorage(
+		sourceSession?.projectId === undefined
+			? undefined
+			: `${sourceSession.workspaceId ?? "legacy-workspace"}:${sourceSession.projectId}`,
+	)
 	const { editorState, initialLoad } = props
 	const versionControl = useDesignVersionControl(sourceSession?.versionControl)
 	const document = useO(editorState.states.documentSelector)

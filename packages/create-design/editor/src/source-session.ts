@@ -37,7 +37,9 @@ export type DesignExternalSourceUpdate =
 	  }>
 
 export interface DesignSourceSession {
+	readonly allowLegacyRecovery?: boolean
 	readonly projectId?: string
+	readonly workspaceId?: string
 	readonly workspaceProjects?: readonly Readonly<{ id: string; name: string }>[]
 	readonly displayName?: string
 	readonly initialDocument: DesignDocument
