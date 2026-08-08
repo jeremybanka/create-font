@@ -5,10 +5,8 @@ import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { StoreProvider } from "atom.io/react"
 
-import {
-	GlyphCanvas,
-	offsetCornerProfileSettings,
-} from "../src/GlyphCanvas.tsx"
+import { offsetCornerProfileSettings } from "../src/corner-profile-drag.ts"
+import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 

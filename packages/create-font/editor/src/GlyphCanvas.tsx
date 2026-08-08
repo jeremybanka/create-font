@@ -39,6 +39,7 @@ import {
 	type AnimationFramePublisher,
 } from "./animation-frame-publisher.ts"
 import { transformHandleCursor, type TransformHandle } from "./canvas-cursor.ts"
+import { offsetCornerProfileSettings } from "./corner-profile-drag.ts"
 import {
 	CONTROL_HIT_RADIUS_PX,
 	editorControlHitCandidates,
@@ -285,24 +286,6 @@ interface CornerProfileDrag {
 		Readonly<{ profile: "circular" | "squircle"; amount: number }>
 	>
 	readonly startDistance: number
-}
-
-export function offsetCornerProfileSettings(
-	settings: ReadonlyMap<
-		PointId,
-		Readonly<{ profile: "circular" | "squircle"; amount: number }>
-	>,
-	delta: number,
-) {
-	return new Map(
-		[...settings].map(
-			([pointId, setting]) =>
-				[
-					pointId,
-					{ ...setting, amount: Math.max(0, setting.amount + delta) },
-				] as const,
-		),
-	)
 }
 
 interface HandleDrag {
