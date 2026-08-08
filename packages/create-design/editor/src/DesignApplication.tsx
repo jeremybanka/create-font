@@ -243,6 +243,7 @@ import {
 	importDesignVectorClipboard,
 	importDesignObjects,
 	projectDesignVectorObject,
+	projectDesignVectorRenderObject,
 } from "./design-vector-adapter.ts"
 import { createPdfDownloadManager } from "./pdf-download.ts"
 import { createSvgDownloadManager } from "./svg-download.ts"
@@ -7463,7 +7464,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													) : (
 														<VectorContourPath
 															name={`design-object ${object.id}`}
-															object={projectDesignVectorObject(
+															object={projectDesignVectorRenderObject(
 																canvasDocument,
 																canonicalObject,
 															)}
@@ -7516,7 +7517,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													<VectorContourPath
 														key={object.id}
 														name={`design-object ${object.id}`}
-														object={projectDesignVectorObject(
+														object={projectDesignVectorRenderObject(
 															canvasDocument,
 															object,
 														)}
@@ -7615,7 +7616,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											<VectorContourPath
 												key={`clipping-selection:${object.id}`}
 												name={`${selected ? "design-clipping-selection" : "design-clipping-hit"} ${object.id}`}
-												object={projectDesignVectorObject(
+												object={projectDesignVectorRenderObject(
 													canvasDocument,
 													object,
 												)}

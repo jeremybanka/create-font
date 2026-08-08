@@ -153,6 +153,43 @@ describe("@create-font/source", () => {
 		).toBe(true)
 	})
 
+	test("rejects live-corner metadata on soft nodes", () => {
+		const file = toEditorFontFile(makeGeometricOEditorFont())
+		if (!file.ok) throw new Error("fixture did not convert")
+		const invalid = mutableFile(file.value)
+		const point = invalid.glyphs[0]?.layers[0]?.contours[0]?.points[0]
+		if (point === undefined) throw new Error("fixture node is missing")
+		point.mode = "soft"
+		point.corner = { profile: "squircle", amount: 12 }
+
+		const result = decodeEditorFontSource(JSON.stringify(invalid))
+		expect(result).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "source.schema",
+					path: "$.glyphs[0].layers[0].contours[0].points[0].corner",
+					message: "Corner profiles require a hard node.",
+				}),
+			]),
+		})
+		const glyphUnit = invalid.glyphs[0]
+		if (glyphUnit === undefined) throw new Error("fixture glyph is missing")
+		expect(
+			validateSourceUnit("glyph", glyphUnit, "glyphs/notdef.json"),
+		).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "source.schema",
+					unitPath: "glyphs/notdef.json",
+					path: "$.layers[0].contours[0].points[0].corner",
+					message: "Corner profiles require a hard node.",
+				}),
+			]),
+		})
+	})
+
 	test("round trips glyph-scoped measuring rules", () => {
 		const source = makeGeometricOEditorFont()
 		const withRules: EditorFontSource = {

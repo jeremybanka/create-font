@@ -5,7 +5,10 @@ import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { StoreProvider } from "atom.io/react"
 
-import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
+import {
+	GlyphCanvas,
+	offsetCornerProfileSettings,
+} from "../src/GlyphCanvas.tsx"
 import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 
@@ -27,7 +30,7 @@ afterEach(() => {
 	vi.restoreAllMocks()
 })
 
-function mountEligibleCorner() {
+function mountEligibleCorner(initialAmount?: number) {
 	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
 		function (this: HTMLCanvasElement) {
 			const context = {
@@ -65,7 +68,18 @@ function mountEligibleCorner() {
 										outgoing: _outgoing,
 										...hard
 									} = point
-									return { ...hard, mode: "hard" as const }
+									return {
+										...hard,
+										mode: "hard" as const,
+										...(initialAmount === undefined
+											? {}
+											: {
+													corner: {
+														profile: "circular" as const,
+														amount: initialAmount,
+													},
+												}),
+									}
 								}),
 							})),
 						})),
@@ -100,6 +114,104 @@ function mountEligibleCorner() {
 }
 
 describe("GlyphCanvas corner profiles", () => {
+	it("offsets differing selected amounts without unifying their profiles", () => {
+		const result = offsetCornerProfileSettings(
+			new Map([
+				[
+					"point:glyph:O:a" as const,
+					{ profile: "circular" as const, amount: 20 },
+				],
+				[
+					"point:glyph:O:b" as const,
+					{ profile: "squircle" as const, amount: 75 },
+				],
+			]),
+			5,
+		)
+		expect([...result.values()]).toEqual([
+			{ profile: "circular", amount: 25 },
+			{ profile: "squircle", amount: 80 },
+		])
+	})
+
+	it("keeps the draggable handle under the pointer across live React previews", () => {
+		const { point, stage, workspace } = mountEligibleCorner(100)
+		const commit = vi.spyOn(workspace.font.actions, "setCornerProfiles")
+		const selector = `#corner-profile:${point.pointId}`
+		const handle = stage.findOne(selector)
+		if (handle === undefined) throw new Error("Corner handle was not rendered.")
+		const origin = handle.position()
+		const radialLength = Math.hypot(origin.x - point.x, origin.y - point.y)
+		const target = {
+			x: origin.x + (origin.x - point.x) / radialLength,
+			y: origin.y + (origin.y - point.y) / radialLength,
+		}
+		act(() => {
+			handle.fire("dragstart", { evt: {} })
+			handle.position(target)
+			handle.fire("dragmove", { evt: {} })
+		})
+		const liveHandle = stage.findOne(selector)
+		if (liveHandle === undefined)
+			throw new Error("Corner handle disappeared during preview.")
+		expect(liveHandle.position()).toEqual(target)
+		expect(commit).not.toHaveBeenCalled()
+		act(() => liveHandle.fire("dragend", { evt: {} }))
+		expect(commit).toHaveBeenCalledOnce()
+		expect(commit.mock.calls[0]?.[0].corners[0]?.amount).toBeCloseTo(101, 5)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.every(
+					(layer) => (layer.contours[0]?.points[0]?.corner?.amount ?? 0) > 0,
+				),
+		).toBe(true)
+	})
+
+	it("cancels a corner drag on Escape, pointer cancellation, or lost capture", () => {
+		const { host, point, stage, workspace } = mountEligibleCorner(100)
+		const commit = vi.spyOn(workspace.font.actions, "setCornerProfiles")
+		const selector = `#corner-profile:${point.pointId}`
+		const canvasRoot = host.querySelector("glyph-canvas")
+		if (canvasRoot === null)
+			throw new Error("Glyph canvas root was not rendered.")
+		for (const cancel of [
+			"escape",
+			"pointercancel",
+			"lostpointercapture",
+		] as const) {
+			const handle = stage.findOne(selector)
+			if (handle === undefined)
+				throw new Error("Corner handle was not rendered.")
+			const origin = handle.position()
+			act(() => {
+				handle.fire("dragstart", { evt: {} })
+				handle.position({ x: origin.x + 8, y: origin.y + 5 })
+				handle.fire("dragmove", { evt: {} })
+			})
+			const liveHandle = stage.findOne(selector)
+			if (liveHandle === undefined)
+				throw new Error("Corner handle disappeared during preview.")
+			act(() => {
+				if (cancel === "escape")
+					canvasRoot.dispatchEvent(
+						new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+					)
+				else liveHandle.fire(cancel, { evt: { pointerId: 91 } })
+				liveHandle.fire("dragend", { evt: {} })
+			})
+			expect(commit, cancel).not.toHaveBeenCalled()
+		}
+		expect(commit).not.toHaveBeenCalled()
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.every(
+					(layer) => layer.contours[0]?.points[0]?.corner?.amount === 100,
+				),
+		).toBe(true)
+	})
+
 	it("renders the inset handle and commits one undoable accessible control edit", () => {
 		const { host, point, stage, workspace } = mountEligibleCorner()
 		expect(stage.findOne(`#corner-profile:${point.pointId}`)).toBeDefined()
@@ -109,7 +221,7 @@ describe("GlyphCanvas corner profiles", () => {
 		const profile = fieldset?.querySelector<HTMLSelectElement>(
 			'select[aria-label="Corner profile"]',
 		)
-		if (fieldset === null || profile === null)
+		if (fieldset === null || profile === undefined || profile === null)
 			throw new Error("Corner profile controls were not rendered.")
 		expect(fieldset.getAttribute("aria-label")).toContain("1 selected corner")
 		const commit = vi.spyOn(workspace.font.actions, "setCornerProfiles")

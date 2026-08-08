@@ -73,6 +73,8 @@ export interface CornerProfileResolution<Id extends string = string> {
 
 export interface LoweredCornerContour<Id extends string = string> {
 	readonly points: readonly CubicContourPoint<string>[]
+	/** Authored source point for each lowered point, in matching array order. */
+	readonly sourcePointIds: readonly Id[]
 	readonly closed: boolean
 	readonly corners: readonly CornerProfileResolution<Id>[]
 }
@@ -494,7 +496,7 @@ export function lowerCornerProfiles<Id extends string>(
 			"Circular subdivisions must be an integer from 1 through 64.",
 			{ circularSubdivisions },
 		)
-	const createId =
+	const requestedId =
 		options.createId ??
 		((sourceId: Id, part: string) => `${sourceId}::corner:${part}`)
 	const ids = new Set<string>()
@@ -511,6 +513,21 @@ export function lowerCornerProfiles<Id extends string>(
 				{ pointId: point.id },
 			)
 		ids.add(point.id)
+	}
+	const allocatedIds = new Set(ids)
+	const createId = (
+		sourceId: Id,
+		part: "entry" | "exit" | `circular:${number}` | `squircle:${number}`,
+	): string => {
+		const base = requestedId(sourceId, part)
+		let candidate = base
+		let suffix = 1
+		while (allocatedIds.has(candidate)) {
+			candidate = `${base}::derived:${suffix}`
+			suffix += 1
+		}
+		allocatedIds.add(candidate)
+		return candidate
 	}
 	const pointCount = contour.points.length
 	const segmentCount = Math.max(0, pointCount - (contour.closed ? 0 : 1))
@@ -659,6 +676,9 @@ export function lowerCornerProfiles<Id extends string>(
 	return {
 		closed: contour.closed,
 		points: expanded.flat(),
+		sourcePointIds: expanded.flatMap((points, index) =>
+			points.map(() => contour.points[index]!.id),
+		),
 		corners: contour.points.map((point, index) => {
 			const setting = point.corner ?? { profile: "sharp", amount: 0 }
 			return {

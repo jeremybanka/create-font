@@ -1,5 +1,6 @@
 import {
 	cornerProfileEligibility,
+	DEFAULT_GEOMETRY_TOLERANCES,
 	lowerCornerProfiles,
 	type CornerContourPoint,
 } from "@create-art/vector-geometry"
@@ -2870,6 +2871,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 								contours.push(contour)
 								continue
 							}
+							const authoredIndexById = new Map(
+								authored.map((point, index) => [point.id, index] as const),
+							)
 							const lowered = lowerCornerProfiles(
 								{ closed: true, points: authored },
 								{
@@ -2879,6 +2883,26 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 										`point:${glyphId}:corner:${sourceId.slice("point:".length)}:${part}`,
 								},
 							)
+							const collapsed = lowered.corners.filter(
+								(corner) =>
+									corner.setting.profile !== "sharp" &&
+									corner.setting.amount > 0 &&
+									corner.appliedAmount <= DEFAULT_GEOMETRY_TOLERANCES.distance,
+							)
+							if (collapsed.length > 0) {
+								for (const corner of collapsed) {
+									errors.push(
+										projectionError(
+											"geometry.corner_collapsed",
+											`${path}.contours[${contourId}].points[${corner.pointId}].corner`,
+											"Live corner has no usable incident span after clamping.",
+											corner.pointId,
+										),
+									)
+								}
+								contours.push(contour)
+								continue
+							}
 							const nodes = lowered.points
 							for (
 								let segmentIndex = 0;
@@ -2887,7 +2911,36 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							) {
 								const start = nodes[segmentIndex]!
 								const end = nodes[(segmentIndex + 1) % nodes.length]!
-								const sourceId = start.id as PointId
+								const sourceIndex = authoredIndexById.get(
+									lowered.sourcePointIds[segmentIndex]!,
+								)
+								const endSourceIndex = authoredIndexById.get(
+									lowered.sourcePointIds[(segmentIndex + 1) % nodes.length]!,
+								)
+								if (sourceIndex === undefined || endSourceIndex === undefined) {
+									errors.push(
+										projectionError(
+											"geometry.corner_source_missing",
+											`${path}.cornerSegments[${segmentIndex}]`,
+											"Lowered corner segment lost its authored source mapping.",
+										),
+									)
+									continue
+								}
+								const sourceId = authored[sourceIndex]!.id
+								const cornerSegment = sourceIndex === endSourceIndex
+								const plan = cornerSegment
+									? null
+									: get(segmentPlanSelectors, [
+											masterId,
+											glyphId,
+											contourId,
+											sourceIndex,
+										])
+								if (plan !== null && !plan.ok) {
+									errors.push(...plan.errors)
+									continue
+								}
 								const startPoint = projectPoint(
 									start.point,
 									true,
@@ -2898,15 +2951,25 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 									contour.push(startPoint)
 									flattenedPoints.push(startPoint)
 								}
-								if (start.outgoing === undefined && end.incoming === undefined)
-									continue
+								const curved = cornerSegment || plan?.value.curved === true
+								if (!curved) continue
 								const cubic: CubicBezier = {
 									p0: start.point,
 									c1: start.outgoing ?? start.point,
 									c2: end.incoming ?? end.point,
 									p3: end.point,
 								}
-								const quadratics = quadraticsAtDepth(cubic, 4)
+								const subdivisionDepth = cornerSegment
+									? 4
+									: plan!.value.subdivisionDepth
+								const quadratics =
+									start.outgoing === undefined && end.incoming === undefined
+										? straightQuadraticsAtDepth(
+												cubic.p0,
+												cubic.p3,
+												subdivisionDepth,
+											)
+										: quadraticsAtDepth(cubic, subdivisionDepth)
 								for (let index = 0; index < quadratics.length; index += 1) {
 									const quadratic = quadratics[index]!
 									const control = projectPoint(
@@ -5478,6 +5541,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				get(glyphContourIdsAtoms, [input.masterId, input.glyphId]) ?? []
 			const plans: {
 				readonly masterId: MasterId
+				readonly contourId: ContourId
 				readonly pointId: PointId
 				readonly profile: "sharp" | "circular" | "squircle"
 				readonly amount: number
@@ -5537,63 +5601,91 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						throw new TypeError(
 							`Corner ${corner.pointId} requires a closed contour in every master.`,
 						)
-					if (corner.profile !== "sharp" && corner.amount > 0) {
-						const authored = ids.map((candidateId, candidateIndex) => {
-							const result = get(layerNodeSelectors, [
-								masterId,
-								input.glyphId,
-								candidateId,
-							])
-							if (!result.ok)
-								throw new TypeError(
-									`Corner geometry is unavailable in ${masterId}.`,
-								)
-							return {
-								id: candidateId,
-								point: { x: result.value.x, y: result.value.y },
-								...(result.value.incoming === undefined
-									? {}
-									: {
-											incoming: {
-												x: result.value.x + result.value.incoming.x,
-												y: result.value.y + result.value.incoming.y,
-											},
-										}),
-								...(result.value.outgoing === undefined
-									? {}
-									: {
-											outgoing: {
-												x: result.value.x + result.value.outgoing.x,
-												y: result.value.y + result.value.outgoing.y,
-											},
-										}),
-								...(candidateIndex === pointIndex
-									? {
-											corner: {
-												profile: corner.profile,
-												amount: corner.amount,
-											},
-										}
-									: result.value.corner === undefined
-										? {}
-										: { corner: result.value.corner }),
-							} satisfies CornerContourPoint<PointId>
-						})
-						const eligibility = cornerProfileEligibility(
-							{ closed: true, points: authored },
-							pointIndex,
-						)
-						if (!eligibility.eligible)
-							throw new TypeError(
-								`Corner ${corner.pointId} is geometrically ineligible in ${masterId} (${eligibility.reason}).`,
-							)
-					}
 					plans.push({
 						masterId,
+						contourId: contourId!,
 						pointId: pointId!,
 						profile: corner.profile,
 						amount: corner.amount,
 					})
+				}
+			}
+			const contourPlans = new Map<string, typeof plans>()
+			for (const plan of plans) {
+				const key = `${plan.masterId}/${plan.contourId}`
+				const grouped = contourPlans.get(key)
+				if (grouped === undefined) contourPlans.set(key, [plan])
+				else grouped.push(plan)
+			}
+			for (const grouped of contourPlans.values()) {
+				const { masterId, contourId } = grouped[0]!
+				const ids =
+					get(contourPointIdsAtoms, [masterId, input.glyphId, contourId]) ?? []
+				const updates = new Map(grouped.map((plan) => [plan.pointId, plan]))
+				const authored = ids.map((candidateId) => {
+					const result = get(layerNodeSelectors, [
+						masterId,
+						input.glyphId,
+						candidateId,
+					])
+					if (!result.ok)
+						throw new TypeError(
+							`Corner geometry is unavailable in ${masterId}.`,
+						)
+					const update = updates.get(candidateId)
+					const corner =
+						update === undefined
+							? result.value.corner
+							: update.profile === "sharp" || update.amount === 0
+								? undefined
+								: { profile: update.profile, amount: update.amount }
+					return {
+						id: candidateId,
+						point: { x: result.value.x, y: result.value.y },
+						...(result.value.incoming === undefined
+							? {}
+							: {
+									incoming: {
+										x: result.value.x + result.value.incoming.x,
+										y: result.value.y + result.value.incoming.y,
+									},
+								}),
+						...(result.value.outgoing === undefined
+							? {}
+							: {
+									outgoing: {
+										x: result.value.x + result.value.outgoing.x,
+										y: result.value.y + result.value.outgoing.y,
+									},
+								}),
+						...(corner === undefined ? {} : { corner }),
+					} satisfies CornerContourPoint<PointId>
+				})
+				const lowered = lowerCornerProfiles(
+					{ closed: true, points: authored },
+					{ circularSubdivisions: 4, squircleSubdivisions: 4 },
+				)
+				for (const plan of grouped) {
+					if (plan.profile === "sharp" || plan.amount === 0) continue
+					const pointIndex = ids.indexOf(plan.pointId)
+					const eligibility = cornerProfileEligibility(
+						{ closed: true, points: authored },
+						pointIndex,
+					)
+					if (!eligibility.eligible)
+						throw new TypeError(
+							`Corner ${plan.pointId} is geometrically ineligible in ${masterId} (${eligibility.reason}).`,
+						)
+					const resolution = lowered.corners.find(
+						(candidate) => candidate.pointId === plan.pointId,
+					)
+					if (
+						resolution === undefined ||
+						resolution.appliedAmount <= DEFAULT_GEOMETRY_TOLERANCES.distance
+					)
+						throw new TypeError(
+							`Corner ${plan.pointId} has no usable incident span in ${masterId}.`,
+						)
 				}
 			}
 			for (const plan of plans) {

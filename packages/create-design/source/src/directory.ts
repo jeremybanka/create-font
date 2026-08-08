@@ -303,6 +303,50 @@ export const objectFileSchema = z
 		...(file.hidden === undefined ? {} : { hidden: file.hidden }),
 		...(file.locked === undefined ? {} : { locked: file.locked }),
 	}))
+	.superRefine((file, context) => {
+		if (file.geometry.kind !== "path") return
+		for (const [contourIndex, contour] of file.geometry.contours.entries()) {
+			for (const [pointIndex, point] of contour.points.entries()) {
+				if (point.corner === undefined) continue
+				const path = [
+					"geometry",
+					"contours",
+					contourIndex,
+					"points",
+					pointIndex,
+					"corner",
+				]
+				const effectiveMode =
+					point.mode ??
+					(point.incoming === undefined && point.outgoing === undefined
+						? "hard"
+						: "soft")
+				if (effectiveMode !== "hard")
+					context.addIssue({
+						code: "custom",
+						path,
+						message: "Corner profiles require a hard node.",
+					})
+				if (contour.points.length < 3)
+					context.addIssue({
+						code: "custom",
+						path,
+						message:
+							"Corner profiles require a contour with at least three points.",
+					})
+				else if (
+					!contour.closed &&
+					(pointIndex === 0 || pointIndex === contour.points.length - 1)
+				)
+					context.addIssue({
+						code: "custom",
+						path,
+						message:
+							"Corner profiles cannot be applied to an open contour endpoint.",
+					})
+			}
+		}
+	})
 
 const indexEntry = <Id extends z.ZodType>(id: Id, path: z.ZodType<string>) =>
 	z.object({ id, path }).strict()

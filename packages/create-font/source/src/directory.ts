@@ -245,6 +245,47 @@ const currentGlyphFileSchema = z
 		layers: z.array(glyphLayerSchema),
 	})
 	.strict()
+	.superRefine((glyph, context) => {
+		for (const [layerIndex, layer] of glyph.layers.entries()) {
+			for (const [contourIndex, contour] of layer.contours.entries()) {
+				for (const [pointIndex, point] of contour.points.entries()) {
+					if (point.corner === undefined) continue
+					const path = [
+						"layers",
+						layerIndex,
+						"contours",
+						contourIndex,
+						"points",
+						pointIndex,
+						"corner",
+					]
+					if (point.mode !== "hard")
+						context.addIssue({
+							code: "custom",
+							path,
+							message: "Corner profiles require a hard node.",
+						})
+					if (contour.points.length < 3)
+						context.addIssue({
+							code: "custom",
+							path,
+							message:
+								"Corner profiles require a contour with at least three points.",
+						})
+					else if (
+						!contour.closed &&
+						(pointIndex === 0 || pointIndex === contour.points.length - 1)
+					)
+						context.addIssue({
+							code: "custom",
+							path,
+							message:
+								"Corner profiles cannot be applied to an open contour endpoint.",
+						})
+				}
+			}
+		}
+	})
 
 const legacyContourSchema = z
 	.object({

@@ -10,6 +10,7 @@ import {
 	createFontVectorAdapter,
 	createFontVectorDocumentAdapter,
 	fontOutlineClipboardFromVector,
+	projectAppliedFontIntent,
 } from "../src/font-vector-adapter.ts"
 import { vectorDocumentAdapterContract } from "../../../create-art/editor/tests/vector-document-adapter.contract.ts"
 
@@ -34,14 +35,31 @@ describe("font layer vector adapter", () => {
 					? glyph
 					: {
 							...glyph,
-							layers: glyph.layers.map((candidateLayer) => ({
+							layers: glyph.layers.map((candidateLayer, layerIndex) => ({
 								...candidateLayer,
 								contours: candidateLayer.contours.map(
 									(candidateContour, index) => ({
 										...candidateContour,
 										points: candidateContour.points.map(
 											(candidate, pointIndex) => {
-												if (index !== 0 || pointIndex !== 0) return candidate
+												if (index !== 0) return candidate
+												if (pointIndex === 1) {
+													const { outgoing: _outgoing, ...withoutOutgoing } =
+														candidate
+													return layerIndex === 0
+														? {
+																...withoutOutgoing,
+																mode: "hard" as const,
+																outgoing: { x: 30, y: 20 },
+															}
+														: { ...withoutOutgoing, mode: "hard" as const }
+												}
+												if (pointIndex === 2) {
+													const { incoming: _incoming, ...withoutIncoming } =
+														candidate
+													return withoutIncoming
+												}
+												if (pointIndex !== 0) return candidate
 												const {
 													incoming: _incoming,
 													outgoing: _outgoing,
@@ -72,6 +90,21 @@ describe("font layer vector adapter", () => {
 			glyphId: glyph.id,
 			masterId: layer.masterId,
 		})
+		const intent = {
+			kind: "set-corner-profile",
+			objectId: glyph.id,
+			corners: [
+				{
+					contourId: contour.id,
+					pointId: point.id,
+					profile: "circular",
+					amount: 12,
+				},
+			],
+		} as const
+		const adjacentPoint = contour.points[1]
+		if (adjacentPoint === undefined)
+			throw new Error("Adjacent corner fixture is missing.")
 		expect(
 			adapter.apply({
 				kind: "set-corner-profile",
@@ -81,11 +114,52 @@ describe("font layer vector adapter", () => {
 						contourId: contour.id,
 						pointId: point.id,
 						profile: "circular",
-						amount: 12,
+						amount: 1e-7,
+					},
+					{
+						contourId: contour.id,
+						pointId: adjacentPoint.id,
+						profile: "squircle",
+						amount: 1e12,
 					},
 				],
 			}),
-		).toEqual({ ok: true })
+		).toEqual({
+			ok: false,
+			error: expect.stringContaining("no usable incident span"),
+		})
+		expect(
+			adapter.apply({
+				...intent,
+				corners: [{ ...intent.corners[0]!, contourId: "contour:stale" }],
+			}),
+		).toEqual({
+			ok: false,
+			error: expect.stringContaining("does not belong to contour"),
+		})
+		workspace.font.silo.setState(workspace.ui.activeMasterId, layer.masterId)
+		const canvasLayer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		if (canvasLayer === null)
+			throw new Error("Active layer fixture is missing.")
+		const canvasContour = canvasLayer.contours[0]
+		const canvasPoint = canvasContour?.nodes[0]
+		if (canvasContour === undefined || canvasPoint === undefined)
+			throw new Error("Active layer corner fixture is missing.")
+		const canvasIntent = {
+			...intent,
+			corners: [
+				{
+					...intent.corners[0]!,
+					contourId: canvasContour.id,
+					pointId: canvasPoint.pointId,
+				},
+			],
+		} as const
+		expect(adapter.apply(intent)).toEqual({ ok: true })
+		expect(
+			projectAppliedFontIntent(canvasLayer, canvasIntent).contours[0]?.nodes[0]
+				?.corner,
+		).toEqual({ profile: "circular", amount: 12 })
 		const projected = workspace.font.read.editorGlyphSource(glyph.id)
 		expect(
 			projected?.layers.every(

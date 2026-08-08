@@ -10,6 +10,8 @@ import {
 } from "@create-art/editor"
 import {
 	cornerProfileEligibility,
+	DEFAULT_GEOMETRY_TOLERANCES,
+	lowerCornerProfiles,
 	type CornerContourPoint,
 } from "@create-art/vector-geometry"
 
@@ -121,6 +123,37 @@ export function projectDesignVectorObject(
 	}
 }
 
+/** Output-parity render projection; authored topology remains separate for controls. */
+export function projectDesignVectorRenderObject(
+	document: Pick<DesignDocument, "swatches">,
+	object: DesignObject,
+): VectorObject {
+	const projected = projectDesignVectorObject(document, object)
+	return {
+		...projected,
+		contours: projectDesignObjectContours(object).map((contour) => ({
+			id: contour.id,
+			closed: contour.closed,
+			nodes: contour.points.map((point) => ({
+				id: point.id,
+				mode:
+					point.mode ??
+					(point.incoming === undefined && point.outgoing === undefined
+						? "hard"
+						: "soft"),
+				x: point.x,
+				y: point.y,
+				...(point.incoming === undefined
+					? {}
+					: { incoming: { ...point.incoming } }),
+				...(point.outgoing === undefined
+					? {}
+					: { outgoing: { ...point.outgoing } }),
+			})),
+		})),
+	}
+}
+
 function projectDesignVectorSnapshot(
 	document: DesignDocument,
 	selection: DesignVectorSelection,
@@ -143,7 +176,9 @@ function projectDesignClipboardObject(
 	document: DesignDocument,
 	object: DesignObject,
 ): VectorObject {
-	const projected = projectDesignVectorObject(document, object)
+	// Clipboard geometry is baked to document space so non-uniform affine
+	// transforms cannot distort a scalar live-corner amount on round-trip.
+	const projected = projectDesignVectorRenderObject(document, object)
 	return {
 		...projected,
 		contours: projected.contours.map((contour) => ({
@@ -276,7 +311,10 @@ export function createDesignVectorAdapter(
 				if (object.geometry.kind !== "path")
 					return reject("Corner profiles require authored path geometry.")
 				const updates = new Map(
-					intent.corners.map((item) => [item.pointId, item]),
+					intent.corners.map((item) => [
+						`${item.contourId}/${item.pointId}`,
+						item,
+					]),
 				)
 				if (updates.size === 0) return reject("No corners were selected.")
 				for (const update of updates.values()) {
@@ -307,39 +345,51 @@ export function createDesignVectorAdapter(
 								: "soft")) !== "hard"
 					)
 						return reject(`Point ${update.pointId} is not a hard corner.`)
-					if (update.profile !== "sharp" && update.amount > 0) {
-						const authored = contour.points.map(
-							(candidate, candidateIndex) =>
-								({
-									id: candidate.id,
-									point: { x: candidate.x, y: candidate.y },
-									...(candidate.incoming === undefined
-										? {}
-										: {
-												incoming: {
-													x: candidate.x + candidate.incoming.x,
-													y: candidate.y + candidate.incoming.y,
-												},
-											}),
-									...(candidate.outgoing === undefined
-										? {}
-										: {
-												outgoing: {
-													x: candidate.x + candidate.outgoing.x,
-													y: candidate.y + candidate.outgoing.y,
-												},
-											}),
-									...(candidateIndex === index
-										? {
-												corner: {
-													profile: update.profile,
-													amount: update.amount,
-												},
-											}
-										: candidate.corner === undefined
-											? {}
-											: { corner: candidate.corner }),
-								}) satisfies CornerContourPoint<string>,
+				}
+				for (const contour of object.geometry.contours) {
+					const contourUpdates = contour.points.flatMap((point) => {
+						const update = updates.get(`${contour.id}/${point.id}`)
+						return update === undefined ? [] : [update]
+					})
+					if (contourUpdates.length === 0) continue
+					const authored = contour.points.map((candidate) => {
+						const update = updates.get(`${contour.id}/${candidate.id}`)
+						const corner =
+							update === undefined
+								? candidate.corner
+								: update.profile === "sharp" || update.amount === 0
+									? undefined
+									: { profile: update.profile, amount: update.amount }
+						return {
+							id: candidate.id,
+							point: { x: candidate.x, y: candidate.y },
+							...(candidate.incoming === undefined
+								? {}
+								: {
+										incoming: {
+											x: candidate.x + candidate.incoming.x,
+											y: candidate.y + candidate.incoming.y,
+										},
+									}),
+							...(candidate.outgoing === undefined
+								? {}
+								: {
+										outgoing: {
+											x: candidate.x + candidate.outgoing.x,
+											y: candidate.y + candidate.outgoing.y,
+										},
+									}),
+							...(corner === undefined ? {} : { corner }),
+						} satisfies CornerContourPoint<string>
+					})
+					const lowered = lowerCornerProfiles({
+						closed: true,
+						points: authored,
+					})
+					for (const update of contourUpdates) {
+						if (update.profile === "sharp" || update.amount === 0) continue
+						const index = contour.points.findIndex(
+							(candidate) => candidate.id === update.pointId,
 						)
 						const eligibility = cornerProfileEligibility(
 							{ closed: true, points: authored },
@@ -348,6 +398,16 @@ export function createDesignVectorAdapter(
 						if (!eligibility.eligible)
 							return reject(
 								`Point ${update.pointId} is geometrically ineligible (${eligibility.reason}).`,
+							)
+						const resolution = lowered.corners.find(
+							(candidate) => candidate.pointId === update.pointId,
+						)
+						if (
+							resolution === undefined ||
+							resolution.appliedAmount <= DEFAULT_GEOMETRY_TOLERANCES.distance
+						)
+							return reject(
+								`Point ${update.pointId} has no usable incident span after clamping.`,
 							)
 					}
 				}
@@ -360,7 +420,7 @@ export function createDesignVectorAdapter(
 							contours: object.geometry.contours.map((contour) => ({
 								...contour,
 								points: contour.points.map((point) => {
-									const update = updates.get(point.id)
+									const update = updates.get(`${contour.id}/${point.id}`)
 									if (update === undefined) return point
 									const { corner: _corner, ...sharp } = point
 									return update.profile === "sharp" || update.amount === 0

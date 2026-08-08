@@ -599,6 +599,41 @@ function relationalDiagnostics(
 					seenContours.add(contour.id)
 				}
 				for (const [pointIndex, point] of contour.points.entries()) {
+					if (point.corner !== undefined) {
+						const pointPath = `$.objects[${index}].geometry.contours[${contourIndex}].points[${pointIndex}]`
+						const effectiveMode =
+							point.mode ??
+							(point.incoming === undefined && point.outgoing === undefined
+								? "hard"
+								: "soft")
+						if (effectiveMode !== "hard")
+							errors.push(
+								diagnostic(
+									"document.schema",
+									`${pointPath}.corner`,
+									"Corner profiles require a hard node.",
+								),
+							)
+						if (contour.points.length < 3)
+							errors.push(
+								diagnostic(
+									"document.schema",
+									`${pointPath}.corner`,
+									"Corner profiles require a contour with at least three points.",
+								),
+							)
+						else if (
+							!contour.closed &&
+							(pointIndex === 0 || pointIndex === contour.points.length - 1)
+						)
+							errors.push(
+								diagnostic(
+									"document.schema",
+									`${pointPath}.corner`,
+									"Corner profiles cannot be applied to an open contour endpoint.",
+								),
+							)
+					}
 					if (point.id === undefined) continue
 					if (seenPoints.has(point.id))
 						errors.push(

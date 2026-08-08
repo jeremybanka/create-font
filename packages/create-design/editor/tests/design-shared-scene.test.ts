@@ -5642,7 +5642,7 @@ describe("create-design shared vector scene", () => {
 		const profile = fieldset?.querySelector<HTMLSelectElement>(
 			'select[aria-label="Corner profile"]',
 		)
-		if (fieldset === null || profile === null)
+		if (fieldset === null || profile === undefined || profile === null)
 			throw new Error("Corner profile controls were not rendered.")
 		expect(fieldset.getAttribute("aria-label")).toContain("1 selected corner")
 		await act(async () => {

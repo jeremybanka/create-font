@@ -307,18 +307,26 @@ describe("complete design document codec", () => {
 										: {
 												...contour,
 												closed: true,
-												points: contour.points.map((point, pointIndex) =>
-													pointIndex !== 0
-														? point
-														: {
-																...point,
-																mode: "hard" as const,
-																corner: {
-																	profile: "squircle" as const,
-																	amount: 18,
+												points: [
+													...contour.points.map((point, pointIndex) =>
+														pointIndex !== 0
+															? point
+															: {
+																	...point,
+																	mode: "hard" as const,
+																	corner: {
+																		profile: "squircle" as const,
+																		amount: 18,
+																	},
 																},
-															},
-												),
+													),
+													{
+														id: "point:corner-third",
+														x: 24,
+														y: 84,
+														mode: "hard" as const,
+													},
+												],
 											},
 								),
 							},
@@ -336,6 +344,61 @@ describe("complete design document codec", () => {
 		).toMatchObject({
 			mode: "hard",
 			corner: { profile: "squircle", amount: 18 },
+		})
+	})
+
+	it.each([
+		["an explicitly soft node", "soft" as const],
+		["a node inferred soft from its handles", undefined],
+	])("rejects live-corner metadata on %s", (_, mode) => {
+		const decoded = decodeDesignDocument(canonicalV1Fixture())
+		if (!decoded.ok) throw new Error("Expected the fixture to migrate.")
+		const path = decoded.value.objects[1]
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected an identified path fixture.")
+		const document = {
+			...decoded.value,
+			objects: decoded.value.objects.map((object) =>
+				object.id !== path.id || object.geometry.kind !== "path"
+					? object
+					: {
+							...object,
+							geometry: {
+								...object.geometry,
+								contours: object.geometry.contours.map((contour, index) =>
+									index !== 0
+										? contour
+										: {
+												...contour,
+												closed: true,
+												points: contour.points.map((point, pointIndex) =>
+													pointIndex !== 0
+														? point
+														: {
+																...point,
+																...(mode === undefined ? {} : { mode }),
+																corner: {
+																	profile: "circular" as const,
+																	amount: 12,
+																},
+															},
+												),
+											},
+								),
+							},
+						},
+			),
+		}
+		const result = validateDesignDocument(document)
+		expect(result).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "document.schema",
+					path: "$.objects[1].geometry.contours[0].points[0].corner",
+					message: "Corner profiles require a hard node.",
+				}),
+			]),
 		})
 	})
 

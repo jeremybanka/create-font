@@ -1767,6 +1767,33 @@ function diagnoseStructure(
 						)
 					}
 					layerPointIds.add(point.id)
+					if (point.corner !== undefined) {
+						const cornerPath = `${contourPath}.points[${pointIndex}].corner`
+						if (point.mode !== "hard")
+							add(
+								context,
+								"source.schema",
+								cornerPath,
+								"Corner profiles require a hard node.",
+							)
+						if (contour.points.length < 3)
+							add(
+								context,
+								"source.schema",
+								cornerPath,
+								"Corner profiles require a contour with at least three points.",
+							)
+						else if (
+							!contour.closed &&
+							(pointIndex === 0 || pointIndex === contour.points.length - 1)
+						)
+							add(
+								context,
+								"source.schema",
+								cornerPath,
+								"Corner profiles cannot be applied to an open contour endpoint.",
+							)
+					}
 					if (point.mode !== "soft") continue
 					if (point.incoming === undefined && point.outgoing === undefined) {
 						add(

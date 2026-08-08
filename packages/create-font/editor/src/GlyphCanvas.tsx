@@ -271,8 +271,38 @@ interface CornerProfilePreview {
 	readonly pointIds: ReadonlySet<PointId>
 	readonly draggedPointId: PointId
 	readonly handlePosition: Readonly<{ x: number; y: number }>
-	readonly profile: "circular" | "squircle"
-	readonly amount: number
+	readonly settings: ReadonlyMap<
+		PointId,
+		Readonly<{ profile: "circular" | "squircle"; amount: number }>
+	>
+}
+
+interface CornerProfileDrag {
+	readonly pointIds: ReadonlySet<PointId>
+	readonly draggedPointId: PointId
+	readonly originalSettings: ReadonlyMap<
+		PointId,
+		Readonly<{ profile: "circular" | "squircle"; amount: number }>
+	>
+	readonly startDistance: number
+}
+
+export function offsetCornerProfileSettings(
+	settings: ReadonlyMap<
+		PointId,
+		Readonly<{ profile: "circular" | "squircle"; amount: number }>
+	>,
+	delta: number,
+) {
+	return new Map(
+		[...settings].map(
+			([pointId, setting]) =>
+				[
+					pointId,
+					{ ...setting, amount: Math.max(0, setting.amount + delta) },
+				] as const,
+		),
+	)
 }
 
 interface HandleDrag {
@@ -564,6 +594,7 @@ export function GlyphCanvas({
 	}
 	const pointDragRef = useRef<PointDrag | null>(null)
 	const handleDragRef = useRef<HandleDrag | null>(null)
+	const cornerProfileDragRef = useRef<CornerProfileDrag | null>(null)
 	const directDragPointerRef = useRef<number | null>(null)
 	const directDragStartPointerRef = useRef<Readonly<{
 		x: number
@@ -745,10 +776,9 @@ export function GlyphCanvas({
 						x,
 						...(cornerProfilePreview?.pointIds.has(point.pointId)
 							? {
-									corner: {
-										profile: cornerProfilePreview.profile,
-										amount: cornerProfilePreview.amount,
-									},
+									corner:
+										cornerProfilePreview.settings.get(point.pointId) ??
+										point.corner,
 								}
 							: {}),
 						y,
@@ -1525,6 +1555,12 @@ export function GlyphCanvas({
 	}
 	const cancelDirectDrag = (pointerId?: number): boolean =>
 		cancelPointDrag(pointerId) || cancelHandleDrag(pointerId)
+	const cancelCornerProfileDrag = (): boolean => {
+		if (cornerProfileDragRef.current === null) return false
+		cornerProfileDragRef.current = null
+		setCornerProfilePreview(null)
+		return true
+	}
 	const reportGeometryCommitError = (error: unknown): void => {
 		setClipboardStatus(
 			error instanceof Error
@@ -1940,6 +1976,30 @@ export function GlyphCanvas({
 				profile,
 				amount: profile === "sharp" ? 0 : Math.max(0, amount),
 			})),
+		})
+	}
+	const setSelectedFontCornerProfileSettings = (
+		settings: ReadonlyMap<
+			PointId,
+			Readonly<{ profile: "circular" | "squircle"; amount: number }>
+		>,
+	): boolean => {
+		if (activeGlyphId === null || selectedCornerControls.length === 0)
+			return false
+		return applyActiveFontVectorIntent({
+			kind: "set-corner-profile",
+			objectId: activeGlyphId,
+			corners: selectedCornerControls.map(({ contour, point }) => {
+				const setting = settings.get(point.pointId) ?? {
+					profile: "circular" as const,
+					amount: 0,
+				}
+				return {
+					contourId: contour.id,
+					pointId: point.pointId,
+					...setting,
+				}
+			}),
 		})
 	}
 
@@ -3739,7 +3799,8 @@ export function GlyphCanvas({
 			aria-keyshortcuts="Escape BracketLeft BracketRight Enter Delete Backspace Alt+Delete Alt+Backspace Meta+A Control+A Meta+C Control+C Meta+X Control+X Meta+V Control+V Shift+A E ArrowUp ArrowDown ArrowLeft ArrowRight"
 			tabIndex={0}
 			onContextMenu={(event: React.MouseEvent<HTMLElement>) => {
-				if (cancelDirectDrag()) event.preventDefault()
+				if (cancelDirectDrag() || cancelCornerProfileDrag())
+					event.preventDefault()
 			}}
 			onCopy={(event: React.ClipboardEvent<HTMLElement>) => {
 				if (
@@ -3992,6 +4053,10 @@ export function GlyphCanvas({
 					return
 				}
 				const currentGroupDrag = groupDragRef.current
+				if (event.key === "Escape" && cancelCornerProfileDrag()) {
+					event.preventDefault()
+					return
+				}
 				if (
 					event.key === "Escape" &&
 					(cancelPointDrag() || cancelHandleDrag())
@@ -4466,6 +4531,7 @@ export function GlyphCanvas({
 							cancelShapeGesture()
 						cancelTransform()
 						cancelDirectDrag(event.evt.pointerId)
+						cancelCornerProfileDrag()
 					}}
 					onLostPointerCapture={(event: KonvaEventObject<PointerEvent>) => {
 						if (penGestureRef.current?.pointerId === event.evt.pointerId)
@@ -4474,6 +4540,7 @@ export function GlyphCanvas({
 							cancelShapeGesture()
 						cancelTransform()
 						cancelDirectDrag(event.evt.pointerId)
+						cancelCornerProfileDrag()
 					}}
 					onMouseUp={() => {
 						if (momentaryPreview) return
@@ -6037,58 +6104,98 @@ export function GlyphCanvas({
 																						onPointerDown={(event) => {
 																							event.cancelBubble = true
 																						}}
+																						onPointerCancel={() => {
+																							cancelCornerProfileDrag()
+																						}}
+																						onLostPointerCapture={() => {
+																							cancelCornerProfileDrag()
+																						}}
 																						onDragStart={(event) => {
-																							setCornerProfilePreview({
-																								pointIds: new Set(
-																									selectedCornerControls.map(
-																										({
-																											point: selectedPoint,
-																										}) => selectedPoint.pointId,
-																									),
+																							const pointIds = new Set(
+																								selectedCornerControls.map(
+																									({ point: selectedPoint }) =>
+																										selectedPoint.pointId,
 																								),
+																							)
+																							const handlePosition = {
+																								x: event.target.x(),
+																								y: event.target.y(),
+																							}
+																							const originalSettings = new Map(
+																								selectedCornerControls.map(
+																									({ point: selectedPoint }) =>
+																										[
+																											selectedPoint.pointId,
+																											{
+																												profile:
+																													selectedPoint.corner
+																														?.profile ??
+																													"circular",
+																												amount:
+																													selectedPoint.corner
+																														?.amount ?? 0,
+																											},
+																										] as const,
+																								),
+																							)
+																							const drag: CornerProfileDrag = {
+																								pointIds,
 																								draggedPointId: point.pointId,
-																								handlePosition: {
-																									x: event.target.x(),
-																									y: event.target.y(),
-																								},
-																								profile:
-																									point.corner?.profile ??
-																									"circular",
-																								amount:
-																									point.corner?.amount ?? 0,
+																								originalSettings,
+																								startDistance: Math.hypot(
+																									handlePosition.x - point.x,
+																									handlePosition.y - point.y,
+																								),
+																							}
+																							cornerProfileDragRef.current =
+																								drag
+																							setCornerProfilePreview({
+																								...drag,
+																								handlePosition,
+																								settings: drag.originalSettings,
 																							})
 																						}}
 																						onDragMove={(event) => {
-																							setCornerProfilePreview(
-																								(preview) =>
-																									preview === null
-																										? null
-																										: {
-																												...preview,
-																												handlePosition: {
-																													x: event.target.x(),
-																													y: event.target.y(),
-																												},
-																												amount: Math.hypot(
-																													event.target.x() -
-																														point.x,
-																													event.target.y() -
-																														point.y,
-																												),
-																											},
-																							)
+																							const drag =
+																								cornerProfileDragRef.current
+																							if (drag === null) return
+																							const handlePosition = {
+																								x: event.target.x(),
+																								y: event.target.y(),
+																							}
+																							const delta =
+																								Math.hypot(
+																									handlePosition.x - point.x,
+																									handlePosition.y - point.y,
+																								) - drag.startDistance
+																							setCornerProfilePreview({
+																								...drag,
+																								handlePosition,
+																								settings:
+																									offsetCornerProfileSettings(
+																										drag.originalSettings,
+																										delta,
+																									),
+																							})
 																						}}
 																						onDragEnd={(event) => {
-																							const amount = Math.hypot(
-																								event.target.x() - point.x,
-																								event.target.y() - point.y,
-																							)
-																							setSelectedFontCornerProfiles(
-																								point.corner?.profile ??
-																									"circular",
-																								amount,
-																							)
+																							const drag =
+																								cornerProfileDragRef.current
+																							cornerProfileDragRef.current =
+																								null
 																							setCornerProfilePreview(null)
+																							if (drag === null) return
+																							const delta =
+																								Math.hypot(
+																									event.target.x() - point.x,
+																									event.target.y() - point.y,
+																								) - drag.startDistance
+																							setSelectedFontCornerProfileSettings(
+																								offsetCornerProfileSettings(
+																									drag.originalSettings,
+																									delta,
+																								),
+																							)
 																						}}
 																					/>
 																				)

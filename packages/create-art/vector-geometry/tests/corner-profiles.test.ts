@@ -170,6 +170,27 @@ describe("corner profile lowering", () => {
 		)
 	})
 
+	it("allocates deterministic derived IDs around authored collisions", () => {
+		const contour = square("circular")
+		const collided = {
+			...contour,
+			points: contour.points.map((point, index) =>
+				index === 0 ? { ...point, id: "b::corner:entry" } : point,
+			),
+		}
+		const first = lowerCornerProfiles(collided)
+		const second = lowerCornerProfiles(collided)
+		expect(new Set(first.points.map((point) => point.id)).size).toBe(
+			first.points.length,
+		)
+		expect(first.points.map((point) => point.id)).toEqual(
+			second.points.map((point) => point.id),
+		)
+		expect(first.points.some((point) => point.id.includes("::derived:1"))).toBe(
+			true,
+		)
+	})
+
 	it("safely clamps adjacent large requests on tiny incidents", () => {
 		const tiny: CornerContour = {
 			closed: true,
@@ -301,10 +322,11 @@ describe("corner profile lowering", () => {
 				],
 			}),
 		).toThrowError(expect.objectContaining({ code: "NON_FINITE_COORDINATE" }))
-		expect(() =>
-			lowerCornerProfiles(square(), {
-				createId: () => "duplicate",
-			}),
-		).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }))
+		const allocated = lowerCornerProfiles(square("squircle"), {
+			createId: () => "duplicate",
+		})
+		expect(new Set(allocated.points.map((point) => point.id)).size).toBe(
+			allocated.points.length,
+		)
 	})
 })

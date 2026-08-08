@@ -94,10 +94,40 @@ export interface FontVectorAdapter {
 	readonly paste: (input: PasteContoursInput) => FontVectorEditResult
 }
 
-function projectAppliedFontIntent(
+export function projectAppliedFontIntent(
 	layer: EditorCanvasLayer,
 	intent: VectorEditIntent,
 ): EditorCanvasLayer {
+	if (intent.kind === "set-corner-profile") {
+		const corners = new Map(
+			intent.corners.map((corner) => [
+				`${corner.contourId}/${corner.pointId}`,
+				corner,
+			]),
+		)
+		return {
+			...layer,
+			contours: layer.contours.map((contour) => ({
+				...contour,
+				nodes: contour.nodes.map((node) => {
+					const corner = corners.get(`${contour.id}/${node.pointId}`)
+					if (corner === undefined) return node
+					const { corner: _corner, ...sharp } = node
+					return {
+						...sharp,
+						...(corner.profile === "sharp" || corner.amount <= 0
+							? {}
+							: {
+									corner: {
+										profile: corner.profile,
+										amount: corner.amount,
+									},
+								}),
+					}
+				}),
+			})),
+		}
+	}
 	if (intent.kind === "transform-controls") {
 		const points = new Map(intent.points.map((point) => [point.pointId, point]))
 		const handles = new Map(
@@ -350,6 +380,22 @@ function applyFontVectorIntent(
 		if (intent.kind === "set-corner-profile") {
 			if (intent.objectId !== context.glyphId)
 				return { ok: false, error: "Corner profiles target the active glyph." }
+			const activeLayer = workspace.font.read
+				.editorGlyphSource(context.glyphId)
+				?.layers.find((layer) => layer.masterId === context.masterId)
+			for (const corner of intent.corners) {
+				const contour = activeLayer?.contours.find(
+					(candidate) => candidate.id === corner.contourId,
+				)
+				if (
+					contour === undefined ||
+					!contour.points.some((point) => point.id === corner.pointId)
+				)
+					return {
+						ok: false,
+						error: `Point ${corner.pointId} does not belong to contour ${corner.contourId} in the active master.`,
+					}
+			}
 			workspace.font.actions.setCornerProfiles({
 				masterId: context.masterId,
 				glyphId: context.glyphId,
