@@ -187,6 +187,7 @@ import { placeDesignImage } from "./placed-images.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
+	designLocalRadialDelta,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -395,7 +396,7 @@ type CanvasGesture =
 			readonly anchor: CanvasPoint
 			readonly original: DesignDocument
 			readonly objectId: string
-			readonly localUnitsPerDocumentUnit: number
+			readonly transform: DesignObject["transform"]
 			readonly corners: readonly Readonly<{
 				readonly contourId: string
 				readonly pointId: string
@@ -5850,11 +5851,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		const object = document.objects.find(({ id }) => id === objectId)
 		if (object?.geometry.kind !== "path") return
 		const contours = object.geometry.contours
-		const determinant =
-			object.transform.a * object.transform.d -
-			object.transform.b * object.transform.c
-		const localUnitsPerDocumentUnit =
-			Math.abs(determinant) <= 1e-12 ? 1 : 1 / Math.sqrt(Math.abs(determinant))
 		const corners = targets.flatMap((target) => {
 			const contour = contours.find(
 				(candidate) => candidate.id === target.contourId,
@@ -5883,7 +5879,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			anchor,
 			original: document,
 			objectId,
-			localUnitsPerDocumentUnit,
+			transform: object.transform,
 			corners,
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -6157,16 +6153,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gesture: Extract<CanvasGesture, { readonly kind: "corner" }>,
 		current: CanvasPoint,
 	) => {
-		const startDistance = Math.hypot(
-			gesture.start.x - gesture.anchor.x,
-			gesture.start.y - gesture.anchor.y,
-		)
-		const currentDistance = Math.hypot(
-			current.x - gesture.anchor.x,
-			current.y - gesture.anchor.y,
-		)
 		const delta =
-			(currentDistance - startDistance) * gesture.localUnitsPerDocumentUnit
+			designLocalRadialDelta(
+				gesture.transform,
+				gesture.anchor,
+				gesture.start,
+				current,
+			) ?? 0
 		return applyDesignVectorIntent(
 			gesture.original,
 			selection,

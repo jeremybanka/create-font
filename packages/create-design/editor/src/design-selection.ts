@@ -4,16 +4,38 @@ import type {
 	VectorNode,
 } from "@create-art/editor"
 
-import {
-	designObjectFromVector,
-	projectDesignVectorObject,
-} from "./design-vector-adapter.ts"
+import { projectDesignVectorObject } from "./design-vector-adapter.ts"
 import type { Bounds } from "@create-design/model"
 import {
 	projectDesignEffectiveHierarchy,
 	visibleObjectBounds,
 } from "@create-design/model"
 import type { DesignDocument, DesignObject } from "./types.ts"
+
+export function designLocalRadialDelta(
+	transform: DesignObject["transform"],
+	anchor: CanvasPoint,
+	start: CanvasPoint,
+	current: CanvasPoint,
+): number | null {
+	const determinant = transform.a * transform.d - transform.b * transform.c
+	if (Math.abs(determinant) <= Number.EPSILON) return null
+	const toLocal = (point: CanvasPoint): CanvasPoint => {
+		const x = point.x - transform.e
+		const y = point.y - transform.f
+		return {
+			x: (transform.d * x - transform.c * y) / determinant,
+			y: (-transform.b * x + transform.a * y) / determinant,
+		}
+	}
+	const localAnchor = toLocal(anchor)
+	const localStart = toLocal(start)
+	const localCurrent = toLocal(current)
+	return (
+		Math.hypot(localCurrent.x - localAnchor.x, localCurrent.y - localAnchor.y) -
+		Math.hypot(localStart.x - localAnchor.x, localStart.y - localAnchor.y)
+	)
+}
 
 export type DesignDirectSelectionTarget =
 	| Readonly<{
@@ -349,7 +371,7 @@ function selectedControls(
 	return { points, handles }
 }
 
-/** Bakes transformed path coordinates once and updates every selected control atomically. */
+/** Updates selected controls in local space while preserving the object transform. */
 export function translateDirectSelection(
 	document: DesignDocument,
 	selection: readonly DesignDirectSelectionTarget[],
@@ -364,39 +386,57 @@ export function translateDirectSelection(
 		const projected = projectDesignVectorObject(document, object)
 		const controls = selectedControls(object.id, projected.contours, selection)
 		if (controls.points.size === 0 && controls.handles.size === 0) return object
+		const determinant =
+			object.transform.a * object.transform.d -
+			object.transform.b * object.transform.c
+		if (Math.abs(determinant) <= Number.EPSILON) return object
+		const localDelta = {
+			x:
+				(object.transform.d * delta.x - object.transform.c * delta.y) /
+				determinant,
+			y:
+				(-object.transform.b * delta.x + object.transform.a * delta.y) /
+				determinant,
+		}
 		changed = true
-		return designObjectFromVector(object, {
-			...projected,
-			contours: projected.contours.map((contour) => ({
-				...contour,
-				nodes: contour.nodes.map((node) => ({
-					...node,
-					...(controls.points.has(node.id)
-						? { x: node.x + delta.x, y: node.y + delta.y }
-						: {}),
-					...(node.incoming === undefined ||
-					controls.points.has(node.id) ||
-					!controls.handles.has(`${node.id}:incoming`)
-						? {}
-						: {
-								incoming: {
-									x: node.incoming.x + delta.x,
-									y: node.incoming.y + delta.y,
-								},
-							}),
-					...(node.outgoing === undefined ||
-					controls.points.has(node.id) ||
-					!controls.handles.has(`${node.id}:outgoing`)
-						? {}
-						: {
-								outgoing: {
-									x: node.outgoing.x + delta.x,
-									y: node.outgoing.y + delta.y,
-								},
-							}),
+		return {
+			...object,
+			geometry: {
+				...object.geometry,
+				contours: object.geometry.contours.map((contour) => ({
+					...contour,
+					points: contour.points.map((point) => ({
+						...point,
+						...(controls.points.has(point.id)
+							? {
+									x: point.x + localDelta.x,
+									y: point.y + localDelta.y,
+								}
+							: {}),
+						...(point.incoming === undefined ||
+						controls.points.has(point.id) ||
+						!controls.handles.has(`${point.id}:incoming`)
+							? {}
+							: {
+									incoming: {
+										x: point.incoming.x + localDelta.x,
+										y: point.incoming.y + localDelta.y,
+									},
+								}),
+						...(point.outgoing === undefined ||
+						controls.points.has(point.id) ||
+						!controls.handles.has(`${point.id}:outgoing`)
+							? {}
+							: {
+									outgoing: {
+										x: point.outgoing.x + localDelta.x,
+										y: point.outgoing.y + localDelta.y,
+									},
+								}),
+					})),
 				})),
-			})),
-		})
+			},
+		}
 	})
 	return changed ? { ...document, objects } : document
 }
