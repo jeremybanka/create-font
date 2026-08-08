@@ -709,6 +709,8 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Click to insert point text · Type in the native editor · Escape exits text editing"
 	if (tool === "area-text")
 		return "Drag to create a text frame · Type in the native editor · Escape exits text editing"
+	if (tool === "direct")
+		return "Click path nodes to edit them · Select a live rectangle to convert it explicitly before editing its corners · Drag inset corner handles to change the corner amount"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
 	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · ${MOD_KEY_LABEL}+[ / ] changes stacking · ${ALT_KEY_LABEL}+${MOD_KEY_LABEL}+[ / ] sends to back/front · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
@@ -1580,6 +1582,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			? [{ object, contour, point }]
 			: []
 	})
+	const selectedLiveRectangle =
+		tool === "direct" &&
+		selectedObjects.length === 1 &&
+		selectedObjects[0]?.geometry.kind === "rectangle" &&
+		!selectedObjects[0].hidden &&
+		!selectedObjects[0].locked &&
+		effectiveEditableObjectIds.has(selectedObjects[0].id)
+			? selectedObjects[0]
+			: null
 	const selectedUnavailableEntry = selection
 		.map((id) => effectiveHierarchy.byObjectId.get(id))
 		.find(
@@ -2709,6 +2720,41 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setSelection([expanded.id])
 		setStatus(`Expanded ${expanded.name} to ordinary path geometry.`)
 	}, [commit, document, expansionEligibility, nextId])
+
+	const editSelectedRectangleCorners = useCallback((): void => {
+		if (
+			selectedLiveRectangle === null ||
+			!expansionEligibility.eligible ||
+			expansionEligibility.object.id !== selectedLiveRectangle.id
+		) {
+			setStatus(
+				"Select one unlocked live rectangle before editing its corners.",
+			)
+			return
+		}
+		const expanded = expandDesignShape(selectedLiveRectangle, nextId)
+		if (expanded.geometry.kind !== "path") return
+		const nextDirectSelection: readonly DesignDirectSelectionTarget[] =
+			expanded.geometry.contours.flatMap((contour) =>
+				contour.points.map((point) => ({
+					kind: "node" as const,
+					objectId: expanded.id,
+					contourId: contour.id,
+					pointId: point.id,
+				})),
+			)
+		commit({
+			...document,
+			objects: document.objects.map((object) =>
+				object.id === expanded.id ? expanded : object,
+			),
+		})
+		setSelection([expanded.id])
+		setDirectSelection(nextDirectSelection)
+		setStatus(
+			`Converted ${expanded.name} to a path. ${nextDirectSelection.length} corners selected; drag the inset handles or choose a profile. Undo restores the live rectangle.`,
+		)
+	}, [commit, document, expansionEligibility, nextId, selectedLiveRectangle])
 
 	const expandStrokeSelection = useCallback((): void => {
 		if (!strokeEligibility.eligible) {
@@ -6129,6 +6175,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				},
 			)
 			if (target === null) {
+				const liveShape = nearestDesignObject(
+					displayedObjects,
+					point,
+					worldScale,
+					0,
+					interactionBoundsForObject,
+				)
+				if (liveShape?.object.geometry.kind === "rectangle") {
+					setSelection([liveShape.object.id])
+					setDirectSelection([])
+					setStatus(
+						`${liveShape.object.name} is a live rectangle. Choose Convert to Path & Edit Corners to reveal its inset corner handles.`,
+					)
+					return
+				}
 				if (!gestureModifiers(event.evt).additive) {
 					setSelection([])
 					setDirectSelection([])
@@ -7993,6 +8054,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 									</fieldset>
 								)
 							})()}
+					{selectedLiveRectangle === null ? null : (
+						<fieldset
+							aria-label={`Enable corner editing for ${selectedLiveRectangle.name}`}
+							data-live-rectangle-corner-controls
+						>
+							<legend>Corner editing</legend>
+							<p>
+								This rectangle is still a live shape. Corner profiles use
+								editable path nodes.
+							</p>
+							<button type="button" onClick={editSelectedRectangleCorners}>
+								Convert to Path &amp; Edit Corners
+							</button>
+							<small>
+								Keeps its position and appearance. Undo restores the live
+								rectangle.
+							</small>
+						</fieldset>
+					)}
 					<canvas-help-controls>
 						<button
 							ref={helpButtonRef}
