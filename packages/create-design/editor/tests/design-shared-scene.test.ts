@@ -5784,6 +5784,107 @@ describe("create-design shared vector scene", () => {
 		).not.toBeNull()
 	})
 
+	it("commits corner profiles from the native release when the stage sample is stale", async () => {
+		const initial = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: initial }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || direct === null || canvas === null)
+			throw new Error("Corner gesture controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const conversion = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-live-rectangle-corner-controls]",
+		)
+		const convert = conversion?.querySelector<HTMLButtonElement>("button")
+		if (convert === undefined || convert === null)
+			throw new Error("Live rectangle conversion was not found.")
+		await act(async () => {
+			convert.click()
+			await Promise.resolve()
+		})
+		const handle = stage.findOne(".vector-corner-profile-handle")
+		if (handle === undefined) throw new Error("Corner handle was not rendered.")
+
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => captured.add(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation((pointerId) => {
+			captured.delete(pointerId)
+		})
+		const staleStagePoint = handle.getAbsolutePosition()
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(
+			() => staleStagePoint,
+		)
+		const pointerId = 183
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			clientX: staleStagePoint.x,
+			clientY: staleStagePoint.y,
+			isPrimary: true,
+			pointerId,
+			pointerType: "mouse",
+		})
+		Object.defineProperty(pointerDown, "currentTarget", { value: canvas })
+		await act(async () => {
+			handle.fire("pointerdown", { evt: pointerDown }, true)
+			window.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: staleStagePoint.x + 18,
+					clientY: staleStagePoint.y + 18,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (saved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Expected converted path geometry.")
+		expect(
+			saved.objects[0].geometry.contours[0]?.points.map(
+				(point) => point.corner?.amount ?? 0,
+			),
+		).toEqual([
+			expect.any(Number),
+			expect.any(Number),
+			expect.any(Number),
+			expect.any(Number),
+		])
+		expect(
+			saved.objects[0].geometry.contours[0]?.points.every(
+				(point) => (point.corner?.amount ?? 0) > 0,
+			),
+		).toBe(true)
+	})
+
 	it("synchronizes direct node selection across canvas, inspector, and accessibility state", async () => {
 		const initial = createInitialDocument()
 		const storage = new Map<string, string>()

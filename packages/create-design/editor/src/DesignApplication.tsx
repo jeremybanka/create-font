@@ -6447,11 +6447,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (gesture.kind === "corner") {
-			if (gesture.pointerId !== event.evt.pointerId) return
-			const result = resolveCornerGesture(gesture, pagePoint(event))
+			if (gesture.pointerId !== event.pointerId) return
+			const result = resolveCornerGesture(gesture, releasePoint)
 			gestureRef.current = null
 			previewObjectsRef.current = []
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			releaseDesignPointer(captureTarget, event.pointerId)
 			setPreviewObjects([])
 			if (!result.ok) {
 				setStatus(result.error)
