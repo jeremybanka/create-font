@@ -3612,14 +3612,30 @@ describe("create-design shared vector scene", () => {
 	it("creates an artboard with a distinct canvas gesture and undoes it atomically", async () => {
 		const storage = new Map<string, string>()
 		const stage = mountDesign({}, storage)
+		const captured = new Set<number>()
 		vi.spyOn(
 			HTMLCanvasElement.prototype,
 			"setPointerCapture",
-		).mockImplementation(() => undefined)
+		).mockImplementation((pointerId) => {
+			captured.add(pointerId)
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
 		vi.spyOn(
 			HTMLCanvasElement.prototype,
 			"releasePointerCapture",
-		).mockImplementation(() => undefined)
+		).mockImplementation(function (this: HTMLCanvasElement, pointerId) {
+			captured.delete(pointerId)
+			this.dispatchEvent(
+				new PointerEvent("lostpointercapture", {
+					bubbles: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		})
 		const artboardTool = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Artboard"]',
 		)
@@ -3643,7 +3659,7 @@ describe("create-design shared vector scene", () => {
 		}
 		await act(async () => {
 			fire("pointerdown", 80, 100)
-			fire("pointermove", 180, 200)
+			fire("pointermove", 140, 160)
 			fire("pointerup", 180, 200)
 			await Promise.resolve()
 		})
@@ -3653,6 +3669,9 @@ describe("create-design shared vector scene", () => {
 		expect(saved.artboards).toHaveLength(2)
 		expect(saved.objects).toHaveLength(2)
 		expect(stage.find(".design-paper")).toHaveLength(2)
+		expect(saved.artboards[1]?.width).toBeGreaterThan(60)
+		expect(saved.artboards[1]?.height).toBeGreaterThan(60)
+		expect(captured.size).toBe(0)
 
 		await act(async () => {
 			window.dispatchEvent(
@@ -3665,6 +3684,128 @@ describe("create-design shared vector scene", () => {
 		) as DesignDocument
 		expect(saved.artboards).toHaveLength(1)
 		expect(saved.objects).toHaveLength(2)
+	})
+
+	it("durably commits repeated Select drags before synchronous capture loss", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => {
+			captured.add(pointerId)
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(function (this: HTMLCanvasElement, pointerId) {
+			captured.delete(pointerId)
+			this.dispatchEvent(
+				new PointerEvent("lostpointercapture", {
+					bubbles: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		})
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		let pointer = { x: 260, y: 220 }
+		if (canvas === null) throw new Error("Design canvas was not found.")
+
+		const objectNode = () =>
+			stage
+				.find(".design-object")
+				.find((candidate: { name(): string }) =>
+					candidate.name().includes(source.objects[0]!.id),
+				)
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: Readonly<{ x: number; y: number }>,
+			pointerId: number,
+		): void => {
+			pointer = at
+			const event = new PointerEvent(type, {
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: at.x,
+				clientY: at.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			objectNode()?.fire(type, { evt: event }, true)
+		}
+		const read = (): DesignDocument =>
+			JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}") as DesignDocument
+
+		for (let index = 0; index < 20; index += 1) {
+			const before = read().objects[0]!.transform
+			const start = { x: 260 + index, y: 220 + index }
+			await act(async () => {
+				fire("pointerdown", start, 100 + index)
+				fire("pointermove", { x: start.x + 7, y: start.y + 6 }, 100 + index)
+				fire(
+					"pointerup",
+					index === 19
+						? { x: 1_200, y: 900 }
+						: { x: start.x + 13, y: start.y + 11 },
+					100 + index,
+				)
+				await Promise.resolve()
+			})
+			expect(read().objects[0]!.transform).not.toEqual(before)
+			expect(captured.size).toBe(0)
+		}
+
+		const committed = read()
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		const undone = read()
+		expect(undone.objects[0]!.transform).not.toEqual(
+			committed.objects[0]!.transform,
+		)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					ctrlKey: true,
+					key: "z",
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(read()).toEqual(committed)
+
+		const beforeCancel = read()
+		await act(async () => {
+			fire("pointerdown", { x: 300, y: 250 }, 151)
+			fire("pointermove", { x: 380, y: 330 }, 151)
+			canvas.dispatchEvent(
+				new PointerEvent("pointercancel", {
+					bubbles: true,
+					pointerId: 151,
+					pointerType: "mouse",
+				}),
+			)
+			captured.delete(151)
+			fire("pointerup", { x: 400, y: 350 }, 151)
+			await Promise.resolve()
+		})
+		expect(read()).toEqual(beforeCancel)
+		expect(captured.size).toBe(0)
 	})
 
 	it.each([
@@ -5241,6 +5382,110 @@ describe("create-design shared vector scene", () => {
 		expect(saved.objects[0].geometry.contours[0]?.points).toEqual(
 			originalPoints,
 		)
+	})
+
+	it("commits Direct Selection from the raw release before capture loss", async () => {
+		const initial = createInitialDocument()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		const storage = new Map<string, string>()
+		const stage = mountDesign(
+			{ initialDocument: { ...initial, objects: [expanded] } },
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === null || direct === null || canvas === null)
+			throw new Error("Direct Selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(".vector-node")
+		const paper = stage.findOne(".design-paper")
+		if (node === undefined || paper === undefined)
+			throw new Error("Direct Selection geometry was not rendered.")
+
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => {
+			captured.add(pointerId)
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(function (this: HTMLCanvasElement, pointerId) {
+			captured.delete(pointerId)
+			this.dispatchEvent(
+				new PointerEvent("lostpointercapture", {
+					bubbles: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		})
+		let pointer = node.getAbsolutePosition()
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: Readonly<{ x: number; y: number }>,
+		): void => {
+			pointer = at
+			const event = new PointerEvent(type, {
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: at.x,
+				clientY: at.y,
+				isPrimary: true,
+				pointerId: 173,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			node.fire(type, { evt: event }, true)
+		}
+		const start = { ...pointer }
+		const end = { x: start.x + 31, y: start.y + 23 }
+		const documentTransform = paper
+			.getParent()
+			.getAbsoluteTransform()
+			.copy()
+			.invert()
+		const worldStart = documentTransform.point(start)
+		const worldEnd = documentTransform.point(end)
+		await act(async () => {
+			fire("pointerdown", start)
+			fire("pointermove", { x: start.x + 9, y: start.y + 7 })
+			fire("pointerup", end)
+			await Promise.resolve()
+		})
+
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (
+			saved.objects[0]?.geometry.kind !== "path" ||
+			expanded.geometry.kind !== "path"
+		)
+			throw new Error("Expected saved path geometry.")
+		const original = expanded.geometry.contours[0]!.points[0]!
+		const committed = saved.objects[0].geometry.contours[0]!.points[0]!
+		expect(committed.x).toBeCloseTo(original.x + worldEnd.x - worldStart.x)
+		expect(committed.y).toBeCloseTo(original.y + worldEnd.y - worldStart.y)
+		expect(captured.size).toBe(0)
 	})
 
 	it("nudges a multi-object selection as one atomic undo entry", async () => {

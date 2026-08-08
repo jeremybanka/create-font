@@ -6142,6 +6142,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}
 
 	const pointerUp = (event: KonvaEventObject<PointerEvent>): void => {
+		// Successful branches must detach first: explicit capture release can
+		// synchronously emit lostpointercapture into the cancellation listener.
 		const gesture = gestureRef.current
 		const groupPress = groupPointerPressRef.current
 		if (gesture === null) {
@@ -6159,16 +6161,25 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "pan") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			gestureRef.current = null
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			return
 		}
 		if (gesture.kind === "direct") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			const current = pagePoint(event)
+			const changed =
+				previewObjectsRef.current.length === 0
+					? []
+					: translateDirectSelection(gesture.original, gesture.selection, {
+							x: current.x - gesture.start.x,
+							y: current.y - gesture.start.y,
+						}).objects.filter(
+							(object, index) => object !== gesture.original.objects[index],
+						)
 			gestureRef.current = null
-			const changed = previewObjectsRef.current
 			previewObjectsRef.current = []
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			setPreviewObjects([])
 			if (changed.length > 0) {
 				const byId = new Map(changed.map((object) => [object.id, object]))
@@ -6184,19 +6195,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "artboard") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			if (
-				gesture.mode === "create" &&
-				previewArtboardDocumentRef.current !== null
-			) {
-				const snap = resolveCreationPoint(pagePoint(event))
-				previewArtboardGesture(gesture, snap.point)
+			if (previewArtboardDocumentRef.current !== null) {
+				if (gesture.mode === "create") {
+					const snap = resolveCreationPoint(pagePoint(event))
+					previewArtboardGesture(gesture, snap.point)
+				} else previewArtboardGesture(gesture, pagePoint(event))
 			}
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			const preview = previewArtboardDocumentRef.current
 			gestureRef.current = null
 			creationSnapStatusRef.current = false
 			setActiveSnapGuides([])
-			const preview = previewArtboardDocumentRef.current
 			previewArtboardDocumentRef.current = null
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			setPreviewArtboardDocument(null)
 			if (preview !== null && preview !== document) {
 				commit(preview)
@@ -6212,16 +6222,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "guide") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+			const current = pagePoint(event)
+			const value =
+				gesture.value +
+				(gesture.axis === "x"
+					? current.x - gesture.start.x
+					: current.y - gesture.start.y)
 			gestureRef.current = null
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			setGuidePreview(null)
 			commit(
 				updateDesignGuide(gesture.original, gesture.id, {
-					value: gesture.value,
+					value,
 				}),
 			)
 			setStatus(
-				`Moved ${gesture.axis === "x" ? "vertical" : "horizontal"} guide to ${Number(gesture.value.toFixed(2))} pt.`,
+				`Moved ${gesture.axis === "x" ? "vertical" : "horizontal"} guide to ${Number(value.toFixed(2))} pt.`,
 			)
 			return
 		}
@@ -6230,8 +6246,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			groupPress.secondClick &&
 			!groupPress.dragged
 		) {
-			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			gestureRef.current = null
+			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			groupPointerPressRef.current = null
 			pendingGroupEntryRef.current = groupPress.groupId
 			previewObjectsRef.current = []
@@ -6265,8 +6281,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			},
 			gesturePolicy,
 		)
-		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 		gestureRef.current = null
+		releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 		setGesturePreview(null)
 		clearCreationSnapHint()
 		if (transition.intent?.kind === "pen-node") {
@@ -6471,6 +6487,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
+			gestureRef.current = null
 			groupPointerPressRef.current = null
 			pendingGroupEntryRef.current = null
 			if (
@@ -6485,7 +6502,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					gesturePolicy,
 				)
 			releaseDesignPointer(captureTarget, pointerId)
-			gestureRef.current = null
 			previewObjectsRef.current = []
 			setPreviewObjects([])
 			setGesturePreview(null)
