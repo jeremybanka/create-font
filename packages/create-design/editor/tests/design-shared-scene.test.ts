@@ -3900,6 +3900,206 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
+	it("commits a flick when capture fails and Konva misses native pointer-up", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const artboard = document.querySelector<HTMLElement>(
+			'[role="application"][aria-label="Design artboard"]',
+		)
+		const paper = stage.findOne(".design-paper")
+		const start = { x: 260, y: 220 }
+		const end = { x: 391, y: 307 }
+		const pageOffset = { x: 67, y: 37 }
+		if (canvas === null || artboard === null || paper === undefined)
+			throw new Error("Design canvas was not found.")
+		vi.spyOn(artboard, "getBoundingClientRect").mockReturnValue({
+			bottom: 837,
+			height: 800,
+			left: pageOffset.x,
+			right: 1_267,
+			top: pageOffset.y,
+			width: 1_200,
+			x: pageOffset.x,
+			y: pageOffset.y,
+			toJSON: () => undefined,
+		})
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue(start)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => {
+			throw new DOMException("Pointer capture unavailable")
+		})
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			true,
+		)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		act(() => {
+			for (const checkbox of document.querySelectorAll<HTMLInputElement>(
+				'design-canvas-tile snap-options input[type="checkbox"]',
+			))
+				if (checkbox.checked) checkbox.click()
+		})
+		const object = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(source.objects[0]!.id),
+			)
+		const down = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			clientX: start.x + pageOffset.x,
+			clientY: start.y + pageOffset.y,
+			isPrimary: true,
+			pointerId: 202,
+			pointerType: "mouse",
+		})
+		Object.defineProperty(down, "currentTarget", { value: canvas })
+		const documentTransform = paper
+			.getParent()
+			.getAbsoluteTransform()
+			.copy()
+			.invert()
+		const worldStart = documentTransform.point(start)
+		const worldEnd = documentTransform.point(end)
+
+		await act(async () => {
+			object?.fire("pointerdown", { evt: down }, true)
+			// A high-velocity release can reach the browser without Konva routing a
+			// Stage pointer-up. The native boundary still has to finalize the drag.
+			window.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: end.x + pageOffset.x,
+					clientY: end.y + pageOffset.y,
+					isPrimary: true,
+					pointerId: 202,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]!.transform.e).toBeCloseTo(
+			source.objects[0]!.transform.e + worldEnd.x - worldStart.x,
+		)
+		expect(saved.objects[0]!.transform.f).toBeCloseTo(
+			source.objects[0]!.transform.f + worldEnd.y - worldStart.y,
+		)
+	})
+
+	it("finalizes a native flick once before Konva and synchronous capture loss", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const artboard = document.querySelector<HTMLElement>(
+			'[role="application"][aria-label="Design artboard"]',
+		)
+		const start = { x: 260, y: 220 }
+		const end = { x: 382, y: 301 }
+		const pageOffset = { x: 61, y: 31 }
+		if (canvas === null || artboard === null)
+			throw new Error("Design canvas was not found.")
+		vi.spyOn(artboard, "getBoundingClientRect").mockReturnValue({
+			bottom: 831,
+			height: 800,
+			left: pageOffset.x,
+			right: 1_261,
+			top: pageOffset.y,
+			width: 1_200,
+			x: pageOffset.x,
+			y: pageOffset.y,
+			toJSON: () => undefined,
+		})
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue(start)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			true,
+		)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation((pointerId) => {
+			canvas.dispatchEvent(
+				new PointerEvent("lostpointercapture", {
+					bubbles: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		})
+		act(() => {
+			for (const checkbox of document.querySelectorAll<HTMLInputElement>(
+				'design-canvas-tile snap-options input[type="checkbox"]',
+			))
+				if (checkbox.checked) checkbox.click()
+		})
+		const object = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(source.objects[0]!.id),
+			)
+		const down = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			clientX: start.x + pageOffset.x,
+			clientY: start.y + pageOffset.y,
+			isPrimary: true,
+			pointerId: 203,
+			pointerType: "mouse",
+		})
+		Object.defineProperty(down, "currentTarget", { value: canvas })
+
+		await act(async () => {
+			object?.fire("pointerdown", { evt: down }, true)
+			// Window capture finalizes first, explicit capture release emits a nested
+			// lostpointercapture, then the same native event reaches Konva's canvas.
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: end.x + pageOffset.x,
+					clientY: end.y + pageOffset.y,
+					isPrimary: true,
+					pointerId: 203,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const committed = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(committed.objects[0]!.transform).not.toEqual(
+			source.objects[0]!.transform,
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}")).toEqual(source)
+	})
+
 	it.each([
 		["Rectangle", "rectangle"],
 		["Ellipse", "ellipse"],
