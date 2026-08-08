@@ -6153,10 +6153,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
 	}
 
-	const finishPointer = (
-		event: PointerEvent,
-		captureTarget: unknown,
-	): void => {
+	const finishPointer = (event: PointerEvent, captureTarget: unknown): void => {
 		// Successful branches must detach first: explicit capture release can
 		// synchronously emit lostpointercapture into the cancellation listener.
 		const gesture = gestureRef.current
