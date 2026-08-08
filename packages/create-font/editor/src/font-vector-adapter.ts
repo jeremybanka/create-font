@@ -28,6 +28,20 @@ export interface FontVectorContext {
 	readonly masterId: MasterId
 }
 
+function durableFontCorner(node: {
+	readonly corner?: Readonly<{
+		readonly profile: "sharp" | "circular" | "squircle"
+		readonly amount: number
+	}>
+}): Readonly<{ profile: "circular" | "squircle"; amount: number }> | undefined {
+	const corner = node.corner
+	return corner === undefined ||
+		corner.profile === "sharp" ||
+		corner.amount <= 0
+		? undefined
+		: { profile: corner.profile, amount: corner.amount }
+}
+
 export function fontOutlineClipboardFromVector(
 	payload: VectorClipboardPayload,
 	masterId: MasterId,
@@ -38,6 +52,7 @@ export function fontOutlineClipboardFromVector(
 	for (const [objectIndex, object] of payload.objects.entries()) {
 		for (const [contourIndex, contour] of object.contours.entries()) {
 			const contourPoints = contour.nodes.map((node, pointIndex) => {
+				const corner = durableFontCorner(node)
 				const key = `${objectIndex}/${contourIndex}/${pointIndex}`
 				points.push({
 					key,
@@ -46,7 +61,11 @@ export function fontOutlineClipboardFromVector(
 					...(node.incoming === undefined ? {} : { incoming: node.incoming }),
 					...(node.outgoing === undefined ? {} : { outgoing: node.outgoing }),
 				})
-				return { key, mode: node.mode }
+				return {
+					key,
+					mode: node.mode,
+					...(contour.closed && corner !== undefined ? { corner } : {}),
+				}
 			})
 			if (contourPoints.length > 0)
 				contours.push({ closed: contour.closed, points: contourPoints })
@@ -150,6 +169,9 @@ function projectAppliedFontIntent(
 						y: node.y,
 						...(node.incoming === undefined ? {} : { incoming: node.incoming }),
 						...(node.outgoing === undefined ? {} : { outgoing: node.outgoing }),
+						...(durableFontCorner(node) === undefined
+							? {}
+							: { corner: durableFontCorner(node)! }),
 					})),
 				},
 			],
@@ -229,6 +251,7 @@ export function projectFontContoursVectorObject(
 				...(node.outgoing === undefined
 					? {}
 					: { outgoing: { ...node.outgoing } }),
+				...(node.corner === undefined ? {} : { corner: { ...node.corner } }),
 			})),
 		})),
 	}
@@ -324,6 +347,20 @@ function applyFontVectorIntent(
 	intent: VectorEditIntent,
 ): FontVectorEditResult {
 	try {
+		if (intent.kind === "set-corner-profile") {
+			if (intent.objectId !== context.glyphId)
+				return { ok: false, error: "Corner profiles target the active glyph." }
+			workspace.font.actions.setCornerProfiles({
+				masterId: context.masterId,
+				glyphId: context.glyphId,
+				corners: intent.corners.map((corner) => ({
+					pointId: corner.pointId as PointId,
+					profile: corner.profile,
+					amount: corner.amount,
+				})),
+			})
+			return { ok: true }
+		}
 		if (intent.kind === "transform-controls") {
 			workspace.font.actions.transformControls({
 				glyphId: context.glyphId,
@@ -358,11 +395,16 @@ function applyFontVectorIntent(
 			]
 			if (intent.contour.nodes.length === 1 && !intent.contour.closed) {
 				const point = intent.contour.nodes[0]!
+				const corner = durableFontCorner(point)
 				workspace.font.actions.createContour({
 					masterId: context.masterId,
 					glyphId: context.glyphId,
 					contourId: intent.contour.id as ContourId,
-					point: { id: point.id as PointId, mode: point.mode },
+					point: {
+						id: point.id as PointId,
+						mode: point.mode,
+						...(corner === undefined ? {} : { corner }),
+					},
 					coordinates: variants.map((variant) => {
 						const node = variant.nodes.find(
 							(candidate) => candidate.id === point.id,
@@ -391,10 +433,14 @@ function applyFontVectorIntent(
 					contour: {
 						id: intent.contour.id as ContourId,
 						closed: intent.contour.closed,
-						points: intent.contour.nodes.map((node) => ({
-							id: node.id as PointId,
-							mode: node.mode,
-						})),
+						points: intent.contour.nodes.map((node) => {
+							const corner = durableFontCorner(node)
+							return {
+								id: node.id as PointId,
+								mode: node.mode,
+								...(corner === undefined ? {} : { corner }),
+							}
+						}),
 					},
 					layers: variants.map((variant) => ({
 						masterId: variant.variantId as MasterId,

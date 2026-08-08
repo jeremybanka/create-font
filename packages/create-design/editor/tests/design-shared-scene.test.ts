@@ -5587,6 +5587,99 @@ describe("create-design shared vector scene", () => {
 		).toHaveLength(0)
 	})
 
+	it("mounts accessible corner controls and commits one undoable profile edit", async () => {
+		const initial = createInitialDocument()
+		const storage = new Map<string, string>()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		const stage = mountDesign(
+			{ initialDocument: { ...initial, objects: [expanded] } },
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(".vector-node")
+		if (node === undefined) throw new Error("Direct node was not rendered.")
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 81,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(pointerDown)
+			node.fire("pointerdown", { evt: pointerDown }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 81,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		const fieldset = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-corner-profile-controls]",
+		)
+		const profile = fieldset?.querySelector<HTMLSelectElement>(
+			'select[aria-label="Corner profile"]',
+		)
+		if (fieldset === null || profile === null)
+			throw new Error("Corner profile controls were not rendered.")
+		expect(fieldset.getAttribute("aria-label")).toContain("1 selected corner")
+		await act(async () => {
+			profile.value = "circular"
+			profile.dispatchEvent(new Event("change", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const savedCorner = () => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const object = saved.objects?.[0]
+			return object?.geometry.kind === "path"
+				? object.geometry.contours[0]?.points[0]?.corner
+				: undefined
+		}
+		expect(savedCorner()).toEqual({ profile: "circular", amount: 12 })
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedCorner()).toBeUndefined()
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(savedCorner()).toEqual({ profile: "circular", amount: 12 })
+	})
+
 	it("synchronizes direct node selection across canvas, inspector, and accessibility state", async () => {
 		const initial = createInitialDocument()
 		const storage = new Map<string, string>()

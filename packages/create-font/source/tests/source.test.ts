@@ -108,6 +108,51 @@ function expectFailure(
 }
 
 describe("@create-font/source", () => {
+	test("round trips optional live-corner metadata in master-local outlines", () => {
+		const original = makeGeometricOEditorFont()
+		const source: EditorFontSource = {
+			...original,
+			glyphs: original.glyphs.map((glyph, glyphIndex) =>
+				glyphIndex !== 1
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer) => ({
+								...layer,
+								contours: layer.contours.map((contour, contourIndex) => ({
+									...contour,
+									points: contour.points.map((point, pointIndex) =>
+										contourIndex === 0 && pointIndex === 0
+											? {
+													...point,
+													mode: "hard" as const,
+													corner: {
+														profile: "circular" as const,
+														amount: 24,
+													},
+												}
+											: point,
+									),
+								})),
+							})),
+						},
+			),
+		}
+		const encoded = encodeEditorFontSource(source)
+		expect(encoded.ok).toBe(true)
+		if (!encoded.ok) return
+		const decoded = decodeEditorFontSource(encoded.value)
+		expect(decoded.ok).toBe(true)
+		if (!decoded.ok) return
+		expect(
+			decoded.value.glyphs[1]?.layers.every(
+				(layer) =>
+					layer.contours[0]?.points[0]?.corner?.profile === "circular" &&
+					layer.contours[0]?.points[0]?.corner?.amount === 24,
+			),
+		).toBe(true)
+	})
+
 	test("round trips glyph-scoped measuring rules", () => {
 		const source = makeGeometricOEditorFont()
 		const withRules: EditorFontSource = {

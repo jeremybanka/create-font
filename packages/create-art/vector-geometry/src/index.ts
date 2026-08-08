@@ -21,6 +21,21 @@ export {
 	type WindingResult,
 } from "./contours.ts"
 export {
+	cornerProfileEligibility,
+	lowerCornerProfiles,
+	type CornerContour,
+	type CornerContourPoint,
+	type CornerConvexity,
+	type CornerEligibility,
+	type CornerIneligibilityReason,
+	type CornerProfile,
+	type CornerProfileResolution,
+	type CornerProfileSetting,
+	type CubicContourPoint,
+	type LowerCornerProfilesOptions,
+	type LoweredCornerContour,
+} from "./corner-profiles.ts"
+export {
 	cubicBounds,
 	evaluateCubic,
 	flattenCubic,

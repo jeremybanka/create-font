@@ -201,6 +201,13 @@ const layerPointSchema = z
 		y: finiteNumberSchema,
 		incoming: handleSchema.optional(),
 		outgoing: handleSchema.optional(),
+		corner: z
+			.object({
+				profile: z.enum(["circular", "squircle"]),
+				amount: finiteNumberSchema.positive(),
+			})
+			.strict()
+			.optional(),
 	})
 	.strict()
 const contourSchema = z

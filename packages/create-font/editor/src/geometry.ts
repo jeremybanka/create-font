@@ -1,3 +1,4 @@
+import { lowerCornerProfiles } from "@create-art/vector-geometry"
 import {
 	evaluateCubicCurve,
 	normalizeEditorLocation,
@@ -46,10 +47,15 @@ export interface ContourStartDirection {
 }
 
 export interface EditorOutlineNode {
+	readonly pointId?: PointId
 	readonly x: number
 	readonly y: number
 	readonly incoming?: EditorHandleVectorSource
 	readonly outgoing?: EditorHandleVectorSource
+	readonly corner?: Readonly<{
+		readonly profile: "circular" | "squircle"
+		readonly amount: number
+	}>
 }
 
 export interface UnitVector {
@@ -300,13 +306,58 @@ export function editorContourToPath(
 	contour: readonly EditorOutlineNode[],
 	closed = true,
 ): string {
-	const start = contour[0]
+	const renderContour = contour.some(({ corner }) => corner !== undefined)
+		? lowerCornerProfiles({
+				closed,
+				points: contour.map((node, index) => ({
+					id: node.pointId ?? `point:${index}`,
+					point: { x: node.x, y: node.y },
+					...(node.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: node.x + node.incoming.x,
+									y: node.y + node.incoming.y,
+								},
+							}),
+					...(node.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: node.x + node.outgoing.x,
+									y: node.y + node.outgoing.y,
+								},
+							}),
+					...(node.corner === undefined ? {} : { corner: node.corner }),
+				})),
+			}).points.map((node) => ({
+				x: node.point.x,
+				y: node.point.y,
+				...(node.incoming === undefined
+					? {}
+					: {
+							incoming: {
+								x: node.incoming.x - node.point.x,
+								y: node.incoming.y - node.point.y,
+							},
+						}),
+				...(node.outgoing === undefined
+					? {}
+					: {
+							outgoing: {
+								x: node.outgoing.x - node.point.x,
+								y: node.outgoing.y - node.point.y,
+							},
+						}),
+			}))
+		: contour
+	const start = renderContour[0]
 	if (start === undefined) return ""
 	const commands = [`M ${format(start.x)} ${format(start.y)}`]
-	const segmentCount = Math.max(0, contour.length - (closed ? 0 : 1))
+	const segmentCount = Math.max(0, renderContour.length - (closed ? 0 : 1))
 	for (let index = 0; index < segmentCount; index += 1) {
-		const from = contour[index]
-		const to = contour[(index + 1) % contour.length]
+		const from = renderContour[index]
+		const to = renderContour[(index + 1) % renderContour.length]
 		if (from === undefined || to === undefined) continue
 		if (from.outgoing === undefined && to.incoming === undefined) {
 			commands.push(`L ${format(to.x)} ${format(to.y)}`)

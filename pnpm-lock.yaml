@@ -530,6 +530,9 @@ importers:
       '@create-art/editor':
         specifier: workspace:*
         version: link:../../create-art/editor
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../../create-art/vector-geometry
       '@create-font/states':
         specifier: workspace:*
         version: link:../states

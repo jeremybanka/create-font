@@ -275,6 +275,78 @@ export function VectorControlHandles({
 	)
 }
 
+/** Zoom-invariant direct-manipulation control for one selected hard corner. */
+export function VectorCornerHandle({
+	node,
+	previous,
+	next,
+	position,
+	inverseScale,
+	color,
+	listening = false,
+	draggable = false,
+	onPointerDown,
+	onDragStart,
+	onDragMove,
+	onDragEnd,
+}: {
+	readonly node: VectorNode
+	readonly previous: VectorNode
+	readonly next: VectorNode
+	readonly position?: Readonly<{ x: number; y: number }>
+	readonly inverseScale: number
+	readonly color: string
+	readonly listening?: boolean
+	readonly draggable?: boolean
+	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void
+	readonly onDragStart?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onDragMove?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onDragEnd?: (event: KonvaEventObject<DragEvent>) => void
+}) {
+	if (node.mode !== "hard") return null
+	const before = { x: previous.x - node.x, y: previous.y - node.y }
+	const after = { x: next.x - node.x, y: next.y - node.y }
+	const beforeLength = Math.hypot(before.x, before.y)
+	const afterLength = Math.hypot(after.x, after.y)
+	if (beforeLength <= 1e-6 || afterLength <= 1e-6) return null
+	const direction = {
+		x: before.x / beforeLength + after.x / afterLength,
+		y: before.y / beforeLength + after.y / afterLength,
+	}
+	const directionLength = Math.hypot(direction.x, direction.y)
+	if (directionLength <= 1e-4) return null
+	const visualInset = Math.min(
+		18 * inverseScale,
+		beforeLength * 0.3,
+		afterLength * 0.3,
+	)
+	const point =
+		position ??
+		({
+			x: node.x + (direction.x / directionLength) * visualInset,
+			y: node.y + (direction.y / directionLength) * visualInset,
+		} as const)
+	return (
+		<Circle
+			id={`corner-profile:${node.id}`}
+			name="vector-corner-profile-handle"
+			x={point.x}
+			y={point.y}
+			radius={5 * inverseScale}
+			fill="#fff"
+			stroke={color}
+			strokeWidth={1.5 * inverseScale}
+			hitStrokeWidth={16 * inverseScale}
+			listening={listening}
+			draggable={draggable}
+			onPointerDown={(event) => onPointerDown?.(event)}
+			onDragStart={(event) => onDragStart?.(event)}
+			onDragMove={(event) => onDragMove?.(event)}
+			onDragEnd={(event) => onDragEnd?.(event)}
+		/>
+	)
+}
+
 export function VectorPenPreview({
 	preview,
 	preceding = [],

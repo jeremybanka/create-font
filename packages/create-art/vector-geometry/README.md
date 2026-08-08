@@ -7,8 +7,8 @@ import UI, document-model, canvas, or PDF types.
 
 ## Contract
 
-The public boundary uses only immutable `Point`, `Cubic`, `Contour`, and
-`Bounds` values:
+The public boundary uses immutable geometry values and metadata-neutral corner
+records:
 
 - `flattenCubic`, `evaluateCubic`, `splitCubic`, and `cubicBounds`
 - `intersectSegments`, `intersectPolylines`, `selfIntersections`, and
@@ -18,6 +18,7 @@ The public boundary uses only immutable `Point`, `Cubic`, `Contour`, and
 - `resolveFilledContours`, `booleanContours`, and `partitionContours`
 - `offsetContour` and `boundsOfPoints`
 - `expandStroke` and `fitCubicContour`
+- `cornerProfileEligibility` and `lowerCornerProfiles`
 
 Every tolerance is an absolute, caller-visible value. Pass any subset of
 `GeometryTolerances` to override the defaults:
@@ -118,6 +119,37 @@ from the source, or reverses closed-contour winding is split and refitted
 locally until it is safe. Turns at or above 30 degrees are exact anchors by
 default, while smooth closed contours receive deterministic quarter-length
 anchors.
+
+`lowerCornerProfiles` is the application-neutral live-corner boundary. Its
+durable vocabulary is `sharp`, `circular`, and `squircle`; an absent setting is
+canonically sharp. Amounts are coordinate-space distances consumed along both
+incidents. Open endpoints, degenerate or collinear incidents, invalid amounts,
+and explicit sharp settings remain ordinary authored points. Convex and
+concave turns are both eligible.
+
+Every source span is measured once with the package's deterministic cubic
+flattening. When adjacent requests would overlap, their allowances are reduced
+proportionally, and a corner takes the smaller allowance from its two incident
+spans. This is intentionally conservative and guarantees ordered trim
+parameters for line and cubic incidents. Generated point IDs are stable
+derivatives of the authored point ID; callers with a branded ID space can
+provide `createId`.
+
+A circular profile between straight incidents is a true circular arc lowered
+to cubics of at most 90 degrees. Each cubic uses
+`4/3 * tan(sweep / 4)` times the radius for its controls. For a 90-degree arc,
+the standard approximation's maximum radial error is about `0.000273 * radius`
+(0.0273%); smaller sweeps have lower error. Curved incidents retain endpoint
+tangency but generally cannot define one exact circle through both trim points,
+so their circular profile uses a deterministic tangent-preserving cubic.
+
+Squircle profiles sample a Lamé superellipse in the corner's affine incident
+basis. The exponent defaults to 4 and is caller-configurable above 1; exponent
+2 is circle-like, while larger values make the shoulder fuller. Lowering uses
+four fixed cubic subdivisions by default (configurable from 1 through 64).
+This is a deterministic construction approximation, not a Hausdorff error
+bound; consumers should increase the subdivision count when tighter output is
+required.
 
 `normalizeContours` infers ordinary hole nesting with nonzero point
 classification. Touching and partially overlapping contours are kept

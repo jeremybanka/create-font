@@ -946,7 +946,7 @@ function parseLayerPoint(
 	if (record === null) return { id: "point:", mode: "hard", x: 0, y: 0 }
 	checkShape(
 		record,
-		["id", "mode", "x", "y", "incoming", "outgoing"],
+		["id", "mode", "x", "y", "incoming", "outgoing", "corner"],
 		path,
 		context,
 	)
@@ -975,6 +975,35 @@ function parseLayerPoint(
 	}
 	const incoming = parseHandle("incoming")
 	const outgoing = parseHandle("outgoing")
+	let corner: EditorLayerPointSource["corner"]
+	if (Object.hasOwn(record, "corner")) {
+		const cornerPath = `${path}.corner`
+		const value = objectValue(record.corner, cornerPath, context)
+		if (value !== null) {
+			checkShape(value, ["profile", "amount"], cornerPath, context)
+			const profileValue = requiredString(value, "profile", cornerPath, context)
+			const profile =
+				profileValue === "circular" || profileValue === "squircle"
+					? profileValue
+					: "circular"
+			if (profileValue !== "circular" && profileValue !== "squircle")
+				add(
+					context,
+					"source.string",
+					`${cornerPath}.profile`,
+					'Expected corner profile "circular" or "squircle".',
+				)
+			const amount = requiredNumber(value, "amount", cornerPath, context)
+			if (!(amount > 0))
+				add(
+					context,
+					"source.number",
+					`${cornerPath}.amount`,
+					"Expected a positive corner amount.",
+				)
+			corner = { profile, amount }
+		}
+	}
 	return {
 		id: requiredId<PointId>(record, "id", "point:", path, context),
 		mode,
@@ -982,6 +1011,7 @@ function parseLayerPoint(
 		y: requiredNumber(record, "y", path, context),
 		...(incoming === undefined ? {} : { incoming }),
 		...(outgoing === undefined ? {} : { outgoing }),
+		...(corner === undefined ? {} : { corner }),
 	}
 }
 
@@ -1861,6 +1891,7 @@ function normalizeStateSource(source: EditorFontSource): EditorFontSource {
 							...(point.outgoing === undefined
 								? {}
 								: { outgoing: point.outgoing }),
+							...(point.corner === undefined ? {} : { corner: point.corner }),
 						})),
 					})),
 				})),

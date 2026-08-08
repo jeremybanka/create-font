@@ -73,8 +73,16 @@ export const pointSchema = z
 		id: pointIdSchema,
 		x: finiteNumberSchema,
 		y: finiteNumberSchema,
+		mode: z.enum(["soft", "hard"]).optional(),
 		incoming: vectorSchema.optional(),
 		outgoing: vectorSchema.optional(),
+		corner: z
+			.object({
+				profile: z.enum(["circular", "squircle"]),
+				amount: finiteNumberSchema.positive(),
+			})
+			.strict()
+			.optional(),
 	})
 	.strict()
 export const contourSchema = z

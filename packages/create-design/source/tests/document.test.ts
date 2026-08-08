@@ -283,6 +283,62 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
+	it("round-trips optional live-corner metadata without a source-version bump", () => {
+		const decoded = decodeDesignDocument(canonicalV1Fixture())
+		if (!decoded.ok) throw new Error("Expected the fixture to migrate.")
+		const path = decoded.value.objects[1]
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected an identified path fixture.")
+		const points = path.geometry.contours[0]?.points
+		if (points === undefined || points[0] === undefined)
+			throw new Error("Expected a path point fixture.")
+		const document = {
+			...decoded.value,
+			objects: decoded.value.objects.map((object) =>
+				object.id !== path.id || object.geometry.kind !== "path"
+					? object
+					: {
+							...object,
+							geometry: {
+								...object.geometry,
+								contours: object.geometry.contours.map((contour, index) =>
+									index !== 0
+										? contour
+										: {
+												...contour,
+												closed: true,
+												points: contour.points.map((point, pointIndex) =>
+													pointIndex !== 0
+														? point
+														: {
+																...point,
+																mode: "hard" as const,
+																corner: {
+																	profile: "squircle" as const,
+																	amount: 18,
+																},
+															},
+												),
+											},
+								),
+							},
+						},
+			),
+		}
+		const result = parseDesignDocumentText(JSON.stringify(document))
+		expect(result).toMatchObject({ ok: true })
+		if (!result.ok) return
+		const restored = result.value.objects[1]
+		expect(
+			restored?.geometry.kind === "path"
+				? restored.geometry.contours[0]?.points[0]
+				: undefined,
+		).toMatchObject({
+			mode: "hard",
+			corner: { profile: "squircle", amount: 18 },
+		})
+	})
+
 	it("migrates every shipped v1 field into the explicit v6 model", () => {
 		const legacy = legacyFixture()
 		const decoded = decodeDesignDocument(legacy)

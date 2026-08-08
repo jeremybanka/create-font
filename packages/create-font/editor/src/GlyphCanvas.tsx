@@ -153,6 +153,7 @@ import {
 import {
 	VectorContourPath,
 	VectorControlHandles,
+	VectorCornerHandle,
 	VectorPenPreview,
 	VectorSelectionBounds,
 	VectorShapePreview,
@@ -264,6 +265,14 @@ interface DraggedHandle {
 	readonly handle: EditorHandleKind
 	readonly storageVector: Readonly<{ x: number; y: number }>
 	readonly vector: Readonly<{ x: number; y: number }>
+}
+
+interface CornerProfilePreview {
+	readonly pointIds: ReadonlySet<PointId>
+	readonly draggedPointId: PointId
+	readonly handlePosition: Readonly<{ x: number; y: number }>
+	readonly profile: "circular" | "squircle"
+	readonly amount: number
 }
 
 interface HandleDrag {
@@ -442,6 +451,8 @@ export function GlyphCanvas({
 	const compatibilityOffsetPixels = useO(workspace.ui.compatibilityGhostOffset)
 	const [draggedPoint, setDraggedPoint] = useState<DraggedPoint | null>(null)
 	const [draggedHandle, setDraggedHandle] = useState<DraggedHandle | null>(null)
+	const [cornerProfilePreview, setCornerProfilePreview] =
+		useState<CornerProfilePreview | null>(null)
 	const [activeSnaps, setActiveSnaps] = useState<readonly ActiveSnap[]>([])
 	const [joinTarget, setJoinTarget] = useState<OpenEndpointTarget | null>(null)
 	const [shiftHeld, setShiftHeld] = useState(false)
@@ -621,6 +632,7 @@ export function GlyphCanvas({
 					y: point.y,
 					...(point.incoming === undefined ? {} : { incoming: point.incoming }),
 					...(point.outgoing === undefined ? {} : { outgoing: point.outgoing }),
+					...(point.corner === undefined ? {} : { corner: point.corner }),
 				})),
 			})) ?? []
 		)
@@ -654,6 +666,7 @@ export function GlyphCanvas({
 						...(point.outgoing === undefined
 							? {}
 							: { outgoing: point.outgoing }),
+						...(point.corner === undefined ? {} : { corner: point.corner }),
 					})),
 				})) ?? []
 		)
@@ -687,6 +700,7 @@ export function GlyphCanvas({
 						...(point.outgoing === undefined
 							? {}
 							: { outgoing: point.outgoing }),
+						...(point.corner === undefined ? {} : { corner: point.corner }),
 					})),
 				})) ?? []
 		)
@@ -729,6 +743,14 @@ export function GlyphCanvas({
 					let next = {
 						...point,
 						x,
+						...(cornerProfilePreview?.pointIds.has(point.pointId)
+							? {
+									corner: {
+										profile: cornerProfilePreview.profile,
+										amount: cornerProfilePreview.amount,
+									},
+								}
+							: {}),
 						y,
 						...(incoming === undefined
 							? {}
@@ -784,7 +806,13 @@ export function GlyphCanvas({
 					),
 				}
 			}),
-		[contours, draggedHandle, draggedPoint, transformPreview],
+		[
+			contours,
+			cornerProfilePreview,
+			draggedHandle,
+			draggedPoint,
+			transformPreview,
+		],
 	)
 	const allPoints = visibleContours.flatMap((contour) => contour.nodes)
 	const selectedNodeIds = new Set(
@@ -794,6 +822,15 @@ export function GlyphCanvas({
 	)
 	const selectedPoints = allPoints.filter((point) =>
 		selectedNodeIds.has(point.pointId),
+	)
+	const selectedCornerControls = visibleContours.flatMap((contour) =>
+		!contour.closed || contour.nodes.length < 3
+			? []
+			: contour.nodes.flatMap((point) =>
+					selectedNodeIds.has(point.pointId) && point.mode === "hard"
+						? [{ contour, point }]
+						: [],
+				),
 	)
 	const selectedPoint = selectedPoints.at(-1)
 	const selectedControls = resolveSelectionControls(allPoints, selection)
@@ -1887,6 +1924,23 @@ export function GlyphCanvas({
 		if (result.ok) return true
 		reportGeometryCommitError(new TypeError(result.error))
 		return false
+	}
+	const setSelectedFontCornerProfiles = (
+		profile: "sharp" | "circular" | "squircle",
+		amount: number,
+	): boolean => {
+		if (activeGlyphId === null || selectedCornerControls.length === 0)
+			return false
+		return applyActiveFontVectorIntent({
+			kind: "set-corner-profile",
+			objectId: activeGlyphId,
+			corners: selectedCornerControls.map(({ contour, point }) => ({
+				contourId: contour.id,
+				pointId: point.pointId,
+				profile,
+				amount: profile === "sharp" ? 0 : Math.max(0, amount),
+			})),
+		})
 	}
 
 	const commitTangentSlide = (resolution: TangentSlideResolution): void => {
@@ -5933,6 +5987,113 @@ export function GlyphCanvas({
 																		onHandleDragMove={moveSharedHandle}
 																		onHandleDragEnd={finishSharedHandle}
 																	/>
+																	{activeTool === "select" &&
+																	isSelected(nodeTarget) &&
+																	contour.closed &&
+																	point.mode === "hard"
+																		? (() => {
+																				const previous =
+																					contour.nodes[
+																						(pointIndex -
+																							1 +
+																							contour.nodes.length) %
+																							contour.nodes.length
+																					]
+																				const next =
+																					contour.nodes[
+																						(pointIndex + 1) %
+																							contour.nodes.length
+																					]
+																				if (
+																					previous === undefined ||
+																					next === undefined
+																				)
+																					return null
+																				return (
+																					<VectorCornerHandle
+																						node={{
+																							id: point.pointId,
+																							...point,
+																						}}
+																						previous={{
+																							id: previous.pointId,
+																							...previous,
+																						}}
+																						next={{
+																							id: next.pointId,
+																							...next,
+																						}}
+																						{...(cornerProfilePreview?.draggedPointId ===
+																						point.pointId
+																							? {
+																									position:
+																										cornerProfilePreview.handlePosition,
+																								}
+																							: {})}
+																						inverseScale={inverseScale}
+																						color={palette.accent}
+																						listening
+																						draggable
+																						onPointerDown={(event) => {
+																							event.cancelBubble = true
+																						}}
+																						onDragStart={(event) => {
+																							setCornerProfilePreview({
+																								pointIds: new Set(
+																									selectedCornerControls.map(
+																										({
+																											point: selectedPoint,
+																										}) => selectedPoint.pointId,
+																									),
+																								),
+																								draggedPointId: point.pointId,
+																								handlePosition: {
+																									x: event.target.x(),
+																									y: event.target.y(),
+																								},
+																								profile:
+																									point.corner?.profile ??
+																									"circular",
+																								amount:
+																									point.corner?.amount ?? 0,
+																							})
+																						}}
+																						onDragMove={(event) => {
+																							setCornerProfilePreview(
+																								(preview) =>
+																									preview === null
+																										? null
+																										: {
+																												...preview,
+																												handlePosition: {
+																													x: event.target.x(),
+																													y: event.target.y(),
+																												},
+																												amount: Math.hypot(
+																													event.target.x() -
+																														point.x,
+																													event.target.y() -
+																														point.y,
+																												),
+																											},
+																							)
+																						}}
+																						onDragEnd={(event) => {
+																							const amount = Math.hypot(
+																								event.target.x() - point.x,
+																								event.target.y() - point.y,
+																							)
+																							setSelectedFontCornerProfiles(
+																								point.corner?.profile ??
+																									"circular",
+																								amount,
+																							)
+																							setCornerProfilePreview(null)
+																						}}
+																					/>
+																				)
+																			})()
+																		: null}
 																	{pointIndex === 0 && direction !== null ? (
 																		<Line
 																			key={`direction:${point.pointId}`}
@@ -6083,6 +6244,59 @@ export function GlyphCanvas({
 					</Layer>
 				</Stage>
 			</canvas-surface>
+			{activeTool !== "select" || selectedCornerControls.length === 0
+				? null
+				: (() => {
+						const first = selectedCornerControls[0]!.point.corner
+						const profile = first?.profile ?? "sharp"
+						const amount = first?.amount ?? 0
+						return (
+							<fieldset
+								aria-label={`Corner profile controls for ${selectedCornerControls.length} selected corner${selectedCornerControls.length === 1 ? "" : "s"}`}
+								data-corner-profile-controls
+							>
+								<legend>Corner profile</legend>
+								<label>
+									Profile
+									<select
+										aria-label="Corner profile"
+										value={profile}
+										onChange={(event) => {
+											const next = event.currentTarget.value as
+												| "sharp"
+												| "circular"
+												| "squircle"
+											setSelectedFontCornerProfiles(
+												next,
+												amount > 0 ? amount : 12,
+											)
+										}}
+									>
+										<option value="sharp">Sharp / right angle</option>
+										<option value="circular">Circular</option>
+										<option value="squircle">Squircle</option>
+									</select>
+								</label>
+								<label>
+									Amount
+									<input
+										type="number"
+										aria-label="Corner amount in local geometry units"
+										min={0}
+										step={1}
+										value={amount}
+										disabled={profile === "sharp"}
+										onChange={(event) =>
+											setSelectedFontCornerProfiles(
+												profile,
+												event.currentTarget.valueAsNumber,
+											)
+										}
+									/>
+								</label>
+							</fieldset>
+						)
+					})()}
 			{activeTool === "transform" && hasRotationAffordance ? (
 				<span
 					className="sr-only"

@@ -28,8 +28,15 @@ export interface DesignPoint {
 	readonly id: string
 	readonly x: number
 	readonly y: number
+	/** Explicit when handle geometry alone cannot distinguish a hard node. */
+	readonly mode?: "soft" | "hard"
 	readonly incoming?: Readonly<{ readonly x: number; readonly y: number }>
 	readonly outgoing?: Readonly<{ readonly x: number; readonly y: number }>
+	/** Lossless live-corner source; omitted for an authored sharp corner. */
+	readonly corner?: Readonly<{
+		readonly profile: "circular" | "squircle"
+		readonly amount: number
+	}>
 }
 
 export interface DesignContour {

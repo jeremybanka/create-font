@@ -40,6 +40,7 @@
 	},
 	"dependencies": {
 		"@create-art/editor": "workspace:*",
+		"@create-art/vector-geometry": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
 		"react": "19.2.8",
