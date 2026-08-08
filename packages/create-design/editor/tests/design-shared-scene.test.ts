@@ -3808,6 +3808,98 @@ describe("create-design shared vector scene", () => {
 		expect(captured.size).toBe(0)
 	})
 
+	it("commits a same-frame Select drag from the raw pointer-up position", async () => {
+		const source = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const artboard = document.querySelector<HTMLElement>(
+			'[role="application"][aria-label="Design artboard"]',
+		)
+		const paper = stage.findOne(".design-paper")
+		const start = { x: 260, y: 220 }
+		const pageOffset = { x: 73, y: 41 }
+		if (canvas === null || artboard === null || paper === undefined)
+			throw new Error("Design canvas was not found.")
+		vi.spyOn(artboard, "getBoundingClientRect").mockReturnValue({
+			bottom: 841,
+			height: 800,
+			left: pageOffset.x,
+			right: 1_273,
+			top: pageOffset.y,
+			width: 1_200,
+			x: pageOffset.x,
+			y: pageOffset.y,
+			toJSON: () => undefined,
+		})
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue(start)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			true,
+		)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		act(() => {
+			for (const checkbox of document.querySelectorAll<HTMLInputElement>(
+				'design-canvas-tile snap-options input[type="checkbox"]',
+			))
+				if (checkbox.checked) checkbox.click()
+		})
+		const object = stage
+			.find(".design-object")
+			.find((candidate: { name(): string }) =>
+				candidate.name().includes(source.objects[0]!.id),
+			)
+		const fire = (
+			type: "pointerdown" | "pointerup",
+			at: Readonly<{ x: number; y: number }>,
+		): void => {
+			const event = new PointerEvent(type, {
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: at.x + pageOffset.x,
+				clientY: at.y + pageOffset.y,
+				isPrimary: true,
+				pointerId: 201,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			object?.fire(type, { evt: event }, true)
+		}
+
+		const end = { x: start.x + 83, y: start.y + 57 }
+		const documentTransform = paper
+			.getParent()
+			.getAbsoluteTransform()
+			.copy()
+			.invert()
+		const worldStart = documentTransform.point(start)
+		const worldEnd = documentTransform.point(end)
+		await act(async () => {
+			fire("pointerdown", start)
+			// Deliberately do not dispatch pointermove or update Konva's cached
+			// pointer. A rapid native release must still own its final coordinates.
+			fire("pointerup", end)
+			await Promise.resolve()
+		})
+
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]!.transform.e).toBeCloseTo(
+			source.objects[0]!.transform.e + worldEnd.x - worldStart.x,
+		)
+		expect(saved.objects[0]!.transform.f).toBeCloseTo(
+			source.objects[0]!.transform.f + worldEnd.y - worldStart.y,
+		)
+	})
+
 	it.each([
 		["Rectangle", "rectangle"],
 		["Ellipse", "ellipse"],

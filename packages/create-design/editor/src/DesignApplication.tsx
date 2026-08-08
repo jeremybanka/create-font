@@ -2155,6 +2155,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		},
 		[canvasView, viewOptions],
 	)
+	const screenPointFromClient = useCallback(
+		(point: Readonly<{ clientX: number; clientY: number }>): CanvasPoint => {
+			const bounds = artboardWrapRef.current?.getBoundingClientRect()
+			return {
+				x: point.clientX - (bounds?.left ?? 0),
+				y: point.clientY - (bounds?.top ?? 0),
+			}
+		},
+		[],
+	)
 	const createGuideFromRuler = useCallback(
 		(
 			axis: "x" | "y",
@@ -5480,11 +5490,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		snaps: readonly VectorSnapGuide[] = [],
 		worldOverride?: CanvasPoint,
 		rawWorldOverride?: CanvasPoint,
+		screenOverride?: CanvasPoint,
 	) => {
-		const screen = event.target.getStage()?.getPointerPosition() ?? {
-			x: event.evt.offsetX,
-			y: event.evt.offsetY,
-		}
+		const screen = screenOverride ??
+			event.target.getStage()?.getPointerPosition() ?? {
+				x: event.evt.offsetX,
+				y: event.evt.offsetY,
+			}
 		const rawWorld = pagePoint(event)
 		const world = worldOverride ?? rawWorld
 		return {
@@ -6146,6 +6158,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		// synchronously emit lostpointercapture into the cancellation listener.
 		const gesture = gestureRef.current
 		const groupPress = groupPointerPressRef.current
+		// Konva's stage pointer cache can still contain pointerdown or an earlier
+		// pointermove when a press, drag, and release land in one browser frame.
+		// The native release event is authoritative for the final sample.
+		const releaseScreen = screenPointFromClient(event.evt)
+		const releasePoint = documentPointFromClient(event.evt)
 		if (gesture === null) {
 			if (groupPress?.pointerId !== event.evt.pointerId) return
 			if (groupPress.secondClick)
@@ -6161,22 +6178,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "pan") {
 			if (gesture.pointerId !== event.evt.pointerId) return
+			setCanvasView({
+				...gesture.original,
+				x: gesture.original.x + releaseScreen.x - gesture.start.x,
+				y: gesture.original.y + releaseScreen.y - gesture.start.y,
+			})
 			gestureRef.current = null
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			return
 		}
 		if (gesture.kind === "direct") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			const current = pagePoint(event)
-			const changed =
-				previewObjectsRef.current.length === 0
-					? []
-					: translateDirectSelection(gesture.original, gesture.selection, {
-							x: current.x - gesture.start.x,
-							y: current.y - gesture.start.y,
-						}).objects.filter(
-							(object, index) => object !== gesture.original.objects[index],
-						)
+			const changed = translateDirectSelection(
+				gesture.original,
+				gesture.selection,
+				{
+					x: releasePoint.x - gesture.start.x,
+					y: releasePoint.y - gesture.start.y,
+				},
+			).objects.filter(
+				(object, index) => object !== gesture.original.objects[index],
+			)
 			gestureRef.current = null
 			previewObjectsRef.current = []
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -6197,9 +6219,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			if (previewArtboardDocumentRef.current !== null) {
 				if (gesture.mode === "create") {
-					const snap = resolveCreationPoint(pagePoint(event))
+					const snap = resolveCreationPoint(releasePoint)
 					previewArtboardGesture(gesture, snap.point)
-				} else previewArtboardGesture(gesture, pagePoint(event))
+				} else previewArtboardGesture(gesture, releasePoint)
 			}
 			const preview = previewArtboardDocumentRef.current
 			gestureRef.current = null
@@ -6222,12 +6244,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "guide") {
 			if (gesture.pointerId !== event.evt.pointerId) return
-			const current = pagePoint(event)
 			const value =
 				gesture.value +
 				(gesture.axis === "x"
-					? current.x - gesture.start.x
-					: current.y - gesture.start.y)
+					? releasePoint.x - gesture.start.x
+					: releasePoint.y - gesture.start.y)
 			gestureRef.current = null
 			releaseDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 			setGuidePreview(null)
@@ -6241,6 +6262,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			return
 		}
+		if (
+			groupPress?.pointerId === event.evt.pointerId &&
+			Math.hypot(
+				releaseScreen.x - groupPress.startScreen.x,
+				releaseScreen.y - groupPress.startScreen.y,
+			) >=
+				(groupPress.secondClick
+					? GROUP_DOUBLE_CLICK_SLOP_PIXELS
+					: GROUP_DRAG_THRESHOLD_PIXELS)
+		)
+			groupPress.dragged = true
 		if (
 			groupPress?.pointerId === event.evt.pointerId &&
 			groupPress.secondClick &&
@@ -6263,7 +6295,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			(tool === "rect" || tool === "ellipse") &&
 			gesture.kind === "vector" &&
 			(gesture.state.tool === "rect" || gesture.state.tool === "ellipse")
-				? resolveCreationPoint(pagePoint(event))
+				? resolveCreationPoint(releasePoint)
 				: undefined
 		const creationGuides =
 			creationSnap === undefined
@@ -6276,8 +6308,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				pointerId: event.evt.pointerId,
 				pointer:
 					creationSnap === undefined
-						? gesturePointer(event, activeSnapGuides)
-						: gesturePointer(event, creationGuides, creationSnap.point),
+						? gesturePointer(
+								event,
+								activeSnapGuides,
+								releasePoint,
+								releasePoint,
+								releaseScreen,
+							)
+						: gesturePointer(
+								event,
+								creationGuides,
+								creationSnap.point,
+								releasePoint,
+								releaseScreen,
+							),
 			},
 			gesturePolicy,
 		)
