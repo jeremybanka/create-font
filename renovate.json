@@ -29,13 +29,16 @@
 			"ignoreUnstable": true
 		},
 		{
-			"groupName": "vite-plus",
-			"matchDepNames": ["vite", "vitest", "vite-plus", "viteplus"],
+			"groupName": "vite toolchain",
 			"matchPackageNames": [
+				"vite",
+				"vite-node",
 				"vite-plus",
 				"viteplus",
-				"@voidzero-dev/vite-plus-core",
-				"@voidzero-dev/vite-plus-test"
+				"vitest",
+				"@vitejs/**",
+				"@vitest/**",
+				"@voidzero-dev/vite-plus-*"
 			]
 		},
 		{
