@@ -4434,6 +4434,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		...(versionControl === undefined ? {} : { versionControl }),
 		zoom: canvasView.zoom,
 	}
+	const activeArtboardIndex = document.artboards.findIndex(
+		({ id }) => id === activeArtboard.id,
+	)
+	const activeLayerIndex = document.layers.findIndex(
+		({ id }) => id === activeLayerId,
+	)
+	const selectedGuide =
+		selectedGuideId === null
+			? undefined
+			: document.guides.find(({ id }) => id === selectedGuideId)
 
 	const commands = useMemo<readonly PaletteCommand[]>(
 		() => [
@@ -4459,6 +4469,131 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					do: () => selectTool(id),
 				}
 			}),
+			{
+				id: "artboard-create",
+				displayName: "Create Artboard",
+				category: "Artboard",
+				description: "Create and activate a new artboard.",
+				icon: "PlusIcon",
+				do: createArtboard,
+			},
+			{
+				id: "artboard-duplicate",
+				displayName: "Duplicate Artboard",
+				category: "Artboard",
+				description: "Duplicate the active artboard and its settings.",
+				icon: "SquareIcon",
+				do: duplicateArtboard,
+			},
+			{
+				id: "artboard-delete",
+				displayName: "Delete Artboard",
+				category: "Artboard",
+				description:
+					"Delete the active artboard while preserving global artwork.",
+				icon: "HobbyKnifeIcon",
+				disabled: document.artboards.length === 1,
+				...(document.artboards.length === 1
+					? { disabledReason: "A document must keep at least one artboard." }
+					: {}),
+				do: deleteArtboard,
+			},
+			...(
+				[
+					[-1, "Move Artboard Up"],
+					[1, "Move Artboard Down"],
+				] as const
+			).map(([direction, displayName]) => ({
+				id: `artboard-move-${direction === -1 ? "up" : "down"}`,
+				displayName,
+				category: "Artboard",
+				description: "Change the active artboard order.",
+				icon: "ShuffleIcon" as const,
+				disabled:
+					direction === -1
+						? activeArtboardIndex === 0
+						: activeArtboardIndex === document.artboards.length - 1,
+				...((
+					direction === -1
+						? activeArtboardIndex === 0
+						: activeArtboardIndex === document.artboards.length - 1
+				)
+					? {
+							disabledReason: `The active artboard is already at the ${direction === -1 ? "top" : "bottom"}.`,
+						}
+					: {}),
+				do: () => reorderArtboard(direction),
+			})),
+			{
+				id: "canvas-focus-active-artboard",
+				displayName: "Fit Active Artboard",
+				category: "Canvas",
+				description: "Center and fit the active artboard in the canvas.",
+				icon: "TransformIcon",
+				do: focusActiveArtboard,
+			},
+			{
+				id: "canvas-fit-all-artboards",
+				displayName: "Fit All Artboards",
+				category: "Canvas",
+				description: "Center and fit every artboard in the canvas.",
+				icon: "TransformIcon",
+				do: fitAllArtboards,
+			},
+			{
+				id: "layer-create",
+				displayName: "Create Layer",
+				category: "Layer",
+				description: "Create a new top layer and make it the active target.",
+				icon: "PlusIcon",
+				do: designTileContext.createLayer,
+			},
+			{
+				id: "layer-duplicate",
+				displayName: "Duplicate Active Layer",
+				category: "Layer",
+				description: "Duplicate the active layer and all of its descendants.",
+				icon: "SquareIcon",
+				do: () => designTileContext.duplicateLayer(activeLayerId),
+			},
+			...(
+				[
+					["up", "Move Active Layer Up"],
+					["down", "Move Active Layer Down"],
+				] as const
+			).map(([direction, displayName]) => ({
+				id: `layer-move-${direction}`,
+				displayName,
+				category: "Layer",
+				description: "Change the active layer order.",
+				icon: "ShuffleIcon" as const,
+				disabled:
+					direction === "up"
+						? activeLayerIndex === document.layers.length - 1
+						: activeLayerIndex === 0,
+				...((
+					direction === "up"
+						? activeLayerIndex === document.layers.length - 1
+						: activeLayerIndex === 0
+				)
+					? {
+							disabledReason: `${activeLayer.name} is already at the ${direction === "up" ? "top" : "bottom"}.`,
+						}
+					: {}),
+				do: () => designTileContext.reorderLayer(activeLayerId, direction),
+			})),
+			{
+				id: "layer-delete",
+				displayName: "Delete Active Layer",
+				category: "Layer",
+				description: "Delete the active layer and its descendant artwork.",
+				icon: "HobbyKnifeIcon",
+				disabled: document.layers.length === 1,
+				...(document.layers.length === 1
+					? { disabledReason: "A document must keep at least one layer." }
+					: {}),
+				do: () => designTileContext.deleteLayer(activeLayerId),
+			},
 			...(
 				[
 					["left", "Align Left"],
@@ -4516,6 +4651,75 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					"Export the active artboard as deterministic editable SVG.",
 				icon: "DoubleArrowRightIcon",
 				do: () => exportSvgDocument({ artboardId: activeArtboard.id }),
+			},
+			{
+				id: "export-png",
+				displayName: "Export PNG",
+				category: "File",
+				description: "Export the active artboard as a PNG image at 1× scale.",
+				icon: "DoubleArrowRightIcon",
+				do: () =>
+					exportPngDocument({
+						scope: { kind: "active", artboardId: activeArtboard.id },
+					}),
+			},
+			...(["fill", "stroke"] as const).map((target) => ({
+				id: `appearance-target-${target}`,
+				displayName: `Activate ${target === "fill" ? "Fill" : "Stroke"}`,
+				category: "Appearance",
+				description: `Make ${target} the active paint target.`,
+				icon: "Half2Icon" as const,
+				checked: appearanceTarget === target,
+				do: () => activateAppearanceTarget(target),
+			})),
+			{
+				id: "appearance-swap-fill-stroke",
+				displayName: "Swap Fill and Stroke",
+				category: "Appearance",
+				description:
+					"Swap fill and stroke on the selection or for newly created objects.",
+				icon: "ShuffleIcon",
+				disabled: appearanceDisabledReason !== null,
+				...(appearanceDisabledReason === null
+					? {}
+					: { disabledReason: appearanceDisabledReason }),
+				do: designTileContext.swapAppearancePaints,
+			},
+			{
+				id: "guide-toggle-lock",
+				displayName: selectedGuide?.locked ? "Unlock Guide" : "Lock Guide",
+				category: "Guide",
+				description: "Toggle editing for the selected guide.",
+				icon: "Link1Icon",
+				checked: selectedGuide?.locked === true,
+				disabled: selectedGuide === undefined,
+				...(selectedGuide === undefined
+					? { disabledReason: "Select a guide first." }
+					: {}),
+				do: () => {
+					if (selectedGuide !== undefined)
+						designTileContext.toggleGuideLock(selectedGuide.id)
+				},
+			},
+			{
+				id: "guide-delete",
+				displayName: "Delete Guide",
+				category: "Guide",
+				description: "Delete the selected unlocked guide.",
+				icon: "HobbyKnifeIcon",
+				disabled: selectedGuide === undefined || selectedGuide.locked === true,
+				...(selectedGuide === undefined || selectedGuide.locked === true
+					? {
+							disabledReason:
+								selectedGuide?.locked === true
+									? "Unlock the selected guide before deleting it."
+									: "Select a guide first.",
+						}
+					: {}),
+				do: () => {
+					if (selectedGuide !== undefined)
+						designTileContext.deleteGuide(selectedGuide.id)
+				},
 			},
 			{
 				id: "group-selection",
@@ -4818,6 +5022,84 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				do: duplicateSelection,
 			},
 			{
+				id: "deselect-all",
+				displayName: "Deselect All",
+				category: "Edit",
+				description: "Clear object, point, blend, and guide selection.",
+				icon: "CursorArrowIcon",
+				disabled:
+					selection.length === 0 &&
+					directSelection.length === 0 &&
+					selectedBlend === null &&
+					selectedGuide === undefined,
+				...(selection.length === 0 &&
+				directSelection.length === 0 &&
+				selectedBlend === null &&
+				selectedGuide === undefined
+					? { disabledReason: "Nothing is selected." }
+					: {}),
+				do: () => {
+					setSelection([])
+					setDirectSelection([])
+					setSelectedBlendId(null)
+					setSelectedGuideId(null)
+					setStatus("Selection cleared.")
+				},
+			},
+			{
+				id: "pen-finish-open",
+				displayName: "Finish Open Pen Path",
+				category: "Path",
+				description: "Commit the active Pen draft as an open path.",
+				icon: "Pencil1Icon",
+				shortcut: "Enter",
+				disabled: tool !== "pen" || penPoints.length < 2,
+				...(tool !== "pen" || penPoints.length < 2
+					? {
+							disabledReason:
+								tool !== "pen"
+									? "Activate the Pen tool first."
+									: "Place at least two Pen points.",
+						}
+					: {}),
+				do: () => finishPen(false),
+			},
+			{
+				id: "pen-finish-closed",
+				displayName: "Finish Closed Pen Path",
+				category: "Path",
+				description: "Commit the active Pen draft as a closed path.",
+				icon: "Pencil1Icon",
+				disabled: tool !== "pen" || penPoints.length < 3,
+				...(tool !== "pen" || penPoints.length < 3
+					? {
+							disabledReason:
+								tool !== "pen"
+									? "Activate the Pen tool first."
+									: "Place at least three Pen points.",
+						}
+					: {}),
+				do: () => finishPen(true),
+			},
+			{
+				id: "pathfinder-cancel",
+				displayName: "Cancel Pathfinder",
+				category: "Path",
+				description: "Cancel the active partitioning Pathfinder operation.",
+				icon: "HobbyKnifeIcon",
+				disabled:
+					activePathfinder === null || activePathfinder.cancellationRequested,
+				...(activePathfinder === null || activePathfinder.cancellationRequested
+					? {
+							disabledReason:
+								activePathfinder?.cancellationRequested === true
+									? "Pathfinder cancellation is already in progress."
+									: "No cancellable Pathfinder operation is active.",
+						}
+					: {}),
+				do: cancelPartitionPathfinder,
+			},
+			{
 				id: "delete-selection",
 				displayName: "Delete selection",
 				category: "Edit",
@@ -4853,11 +5135,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			),
 		],
 		[
+			activeArtboard.id,
+			activeArtboardIndex,
+			activeLayer.name,
+			activeLayerId,
+			activeLayerIndex,
 			activePathfinder,
+			activateAppearanceTarget,
 			alignSelection,
+			appearanceDisabledReason,
+			appearanceTarget,
+			cancelPartitionPathfinder,
+			createArtboard,
+			deleteArtboard,
 			deleteSelection,
+			duplicateArtboard,
 			duplicateSelection,
 			distributeSelection,
+			exportPngDocument,
+			finishPen,
+			fitAllArtboards,
+			focusActiveArtboard,
 			groupSelection,
 			expandSelection,
 			expandStrokeSelection,
@@ -4874,6 +5172,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			history.canUndo,
 			navigateDesignHistory,
 			openTile,
+			penPoints.length,
+			reorderArtboard,
 			selectTool,
 			selection.length,
 			selection,
@@ -4884,6 +5184,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			selectedBlend,
 			selectedSwatchId,
 			selectedGroup,
+			selectedGuide,
 			releaseClippingMask,
 			tool,
 			ungroupSelection,
