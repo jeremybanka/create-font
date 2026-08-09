@@ -75,6 +75,7 @@ design-application.class {
 	--tile-overlay-inset-block-end: var(--design-workspace-safe-block-end);
 	--tiling-workspace-z-index: var(--workspace-layer-tiles);
 	--tiling-workspace-management-z-index: var(--workspace-layer-management);
+	--action-hotbar-z-index: 7;
 	--paper: #1b1c19;
 	--panel: #171815;
 	--hover: #292a26;

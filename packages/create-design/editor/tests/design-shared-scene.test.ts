@@ -1291,6 +1291,9 @@ describe("create-design shared vector scene", () => {
 			document.querySelector("artboard-wrap")?.getAttribute("aria-describedby"),
 		).toBe("design-selection-status")
 		expect(document.querySelectorAll('footer [role="status"]')).toHaveLength(1)
+		expect(
+			document.querySelectorAll("action-hotbar > hotbar-slot"),
+		).toHaveLength(12)
 		const firstLayer = document.querySelector<HTMLButtonElement>(
 			'design-layers-tile [data-layer-kind="object"]',
 		)
@@ -1299,6 +1302,29 @@ describe("create-design shared vector scene", () => {
 		expect(
 			document.querySelector('footer [role="status"]')?.textContent,
 		).toContain("1 object selected")
+		act(() =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					code: "Digit2",
+					key: "2",
+				}),
+			),
+		)
+		expect(
+			document
+				.querySelector('action-hotbar button[aria-label="Direct Selection"]')
+				?.getAttribute("aria-pressed"),
+		).toBe("true")
+		act(() =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					code: "Digit1",
+					key: "1",
+				}),
+			),
+		)
 
 		const command = document.querySelector<HTMLButtonElement>(
 			'button[aria-label="Open Command Palette"]',
