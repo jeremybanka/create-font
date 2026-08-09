@@ -185,6 +185,32 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("rejects live-corner metadata on soft nodes in object units", () => {
+		const files = mutable(split(fixture()))
+		const object = unit(files, defaultObjectUnitPath("object:ink"))
+		const geometry = object.geometry as {
+			contours: Array<{ points: Array<Record<string, unknown>> }>
+		}
+		const point = geometry.contours[0]?.points[0]
+		if (point === undefined) throw new Error("fixture point is missing")
+		point.mode = "soft"
+		point.corner = { profile: "circular", amount: 12 }
+
+		expect(
+			validateSourceUnit("object", object, "scene/objects/ink.json"),
+		).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "source.schema",
+					unitPath: "scene/objects/ink.json",
+					path: "$.geometry.contours[0].points[0].corner",
+					message: "Corner profiles require a hard node.",
+				}),
+			]),
+		})
+	})
+
 	it("round-trips optional artboard appearance in only its source unit", () => {
 		const initial = fixture()
 		const document: DesignDocument = {

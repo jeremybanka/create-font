@@ -255,6 +255,9 @@ importers:
 
   packages/create-art/editor:
     dependencies:
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../vector-geometry
       '@floating-ui/dom':
         specifier: ^1.8.0
         version: 1.8.0
@@ -530,6 +533,9 @@ importers:
       '@create-art/editor':
         specifier: workspace:*
         version: link:../../create-art/editor
+      '@create-art/vector-geometry':
+        specifier: workspace:*
+        version: link:../../create-art/vector-geometry
       '@create-font/states':
         specifier: workspace:*
         version: link:../states

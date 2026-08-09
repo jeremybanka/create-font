@@ -21,6 +21,63 @@ import {
 } from "../src/outline-clipboard.ts"
 
 describe("outline clipboard", () => {
+	it("preserves live-corner metadata for complete closed contours", () => {
+		const payload = {
+			format: "create-font.outline" as const,
+			version: 1 as const,
+			masterIds: [razorMasterId],
+			contours: [
+				{
+					closed: true,
+					points: [
+						{
+							key: "0",
+							mode: "hard" as const,
+							corner: { profile: "squircle" as const, amount: 16 },
+						},
+						{ key: "1", mode: "hard" as const },
+						{ key: "2", mode: "hard" as const },
+					],
+				},
+			],
+			layers: [
+				{
+					masterId: razorMasterId,
+					points: [
+						{ key: "0", x: 0, y: 0 },
+						{ key: "1", x: 100, y: 0 },
+						{ key: "2", x: 100, y: 100 },
+					],
+				},
+			],
+		}
+		const parsed = parseOutlineClipboard(serializeOutlineClipboard(payload))
+		expect(parsed).toEqual({ ok: true, value: payload })
+		if (!parsed.ok) return
+		let sequence = 0
+		const prepared = prepareOutlinePaste(
+			parsed.value,
+			razorMasterId,
+			oGlyphId,
+			[razorMasterId],
+			(kind) => `${kind}:corner:${sequence++}`,
+		)
+		expect(prepared.ok).toBe(true)
+		if (!prepared.ok) return
+		expect(prepared.value.contours[0]?.points[0]?.corner).toEqual({
+			profile: "squircle",
+			amount: 16,
+		})
+		const workspace = createEditorWorkspace()
+		workspace.font.actions.pasteContours(prepared.value)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(oGlyphId)
+				?.layers.find((layer) => layer.masterId === razorMasterId)
+				?.contours.at(-1)?.points[0]?.corner,
+		).toEqual({ profile: "squircle", amount: 16 })
+	})
+
 	it("plans only represented source nodes and writes both clipboard formats", () => {
 		const workspace = createEditorWorkspace()
 		const glyph = workspace.font.read.editorGlyphSource(oGlyphId)

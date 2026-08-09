@@ -143,4 +143,54 @@ describe("design geometry", () => {
 			}),
 		).toEqual({ minX: 50, minY: 60, maxX: 200, maxY: 180 })
 	})
+
+	it("lowers durable circular and squircle corners for every output projection", () => {
+		const object: DesignObject = {
+			id: "object:corners",
+			name: "Profiled path",
+			geometry: {
+				kind: "path",
+				fillRule: "nonzero",
+				contours: [
+					{
+						id: "contour:corners",
+						closed: true,
+						points: [
+							{ id: "point:0", x: 0, y: 0 },
+							{
+								id: "point:1",
+								x: 100,
+								y: 0,
+								corner: { profile: "circular", amount: 20 },
+							},
+							{
+								id: "point:2",
+								x: 100,
+								y: 100,
+								corner: { profile: "squircle", amount: 20 },
+							},
+							{ id: "point:3", x: 0, y: 100 },
+						],
+					},
+				],
+			},
+			transform: { a: 2, b: 0, c: 0, d: 2, e: 10, f: 20 },
+			appearance: { fill: { swatchId: "swatch:test" } },
+		}
+		const projected = projectDesignObjectContours(object)[0]!
+		expect(projected.points.length).toBeGreaterThan(4)
+		expect(projected.points.some(({ id }) => id.includes("corner:entry"))).toBe(
+			true,
+		)
+		expect(
+			projected.points.some(
+				({ incoming, outgoing }) =>
+					incoming !== undefined || outgoing !== undefined,
+			),
+		).toBe(true)
+		expect(objectSvgPath(object)).toContain("C")
+		expect(object.geometry.kind === "path" && object.geometry.fillRule).toBe(
+			"nonzero",
+		)
+	})
 })

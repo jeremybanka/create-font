@@ -10,10 +10,313 @@ import {
 	createFontVectorAdapter,
 	createFontVectorDocumentAdapter,
 	fontOutlineClipboardFromVector,
+	projectAppliedFontIntent,
 } from "../src/font-vector-adapter.ts"
 import { vectorDocumentAdapterContract } from "../../../create-art/editor/tests/vector-document-adapter.contract.ts"
 
 describe("font layer vector adapter", () => {
+	it("commits compatible corner metadata across masters as one undoable edit", () => {
+		const original = makeDemoFont()
+		const originalGlyph = original.glyphs.find(
+			(candidate) =>
+				candidate.layers.length > 0 &&
+				candidate.layers.every(
+					(layer) =>
+						layer.contours[0]?.closed === true &&
+						layer.contours[0].points.length >= 3,
+				),
+		)
+		if (originalGlyph === undefined)
+			throw new Error("Compatible corner fixture is missing.")
+		const source = {
+			...original,
+			glyphs: original.glyphs.map((glyph) =>
+				glyph.id !== originalGlyph.id
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((candidateLayer, layerIndex) => ({
+								...candidateLayer,
+								contours: candidateLayer.contours.map(
+									(candidateContour, index) => ({
+										...candidateContour,
+										points: candidateContour.points.map(
+											(candidate, pointIndex) => {
+												if (index !== 0) return candidate
+												if (pointIndex === 1) {
+													const { outgoing: _outgoing, ...withoutOutgoing } =
+														candidate
+													return layerIndex === 0
+														? {
+																...withoutOutgoing,
+																mode: "hard" as const,
+																outgoing: { x: 30, y: 20 },
+															}
+														: { ...withoutOutgoing, mode: "hard" as const }
+												}
+												if (pointIndex === 2) {
+													const { incoming: _incoming, ...withoutIncoming } =
+														candidate
+													return withoutIncoming
+												}
+												if (pointIndex !== 0) return candidate
+												const {
+													incoming: _incoming,
+													outgoing: _outgoing,
+													...hard
+												} = candidate
+												return { ...hard, mode: "hard" as const }
+											},
+										),
+									}),
+								),
+							})),
+						},
+			),
+		}
+		const glyph = source.glyphs.find(({ id }) => id === originalGlyph.id)
+		const layer = glyph?.layers[0]
+		const contour = layer?.contours[0]
+		const point = contour?.points[0]
+		if (
+			glyph === undefined ||
+			layer === undefined ||
+			contour === undefined ||
+			point === undefined
+		)
+			throw new Error("Compatible hard-corner fixture is missing.")
+		const workspace = createEditorWorkspace(source)
+		const adapter = createFontVectorAdapter(workspace, {
+			glyphId: glyph.id,
+			masterId: layer.masterId,
+		})
+		const intent = {
+			kind: "set-corner-profile",
+			objectId: glyph.id,
+			corners: [
+				{
+					contourId: contour.id,
+					pointId: point.id,
+					profile: "circular",
+					amount: 12,
+				},
+			],
+		} as const
+		const adjacentPoint = contour.points[1]
+		if (adjacentPoint === undefined)
+			throw new Error("Adjacent corner fixture is missing.")
+		expect(
+			adapter.apply({
+				kind: "set-corner-profile",
+				objectId: glyph.id,
+				corners: [
+					{
+						contourId: contour.id,
+						pointId: point.id,
+						profile: "circular",
+						amount: 1e-7,
+					},
+					{
+						contourId: contour.id,
+						pointId: adjacentPoint.id,
+						profile: "squircle",
+						amount: 1e12,
+					},
+				],
+			}),
+		).toEqual({
+			ok: false,
+			error: expect.stringContaining("no usable incident span"),
+		})
+		expect(
+			adapter.apply({
+				...intent,
+				corners: [{ ...intent.corners[0]!, contourId: "contour:stale" }],
+			}),
+		).toEqual({
+			ok: false,
+			error: expect.stringContaining("does not belong to contour"),
+		})
+		workspace.font.silo.setState(workspace.ui.activeMasterId, layer.masterId)
+		const canvasLayer = workspace.font.silo.getState(workspace.ui.activeLayer)
+		if (canvasLayer === null)
+			throw new Error("Active layer fixture is missing.")
+		const canvasContour = canvasLayer.contours[0]
+		const canvasPoint = canvasContour?.nodes[0]
+		if (canvasContour === undefined || canvasPoint === undefined)
+			throw new Error("Active layer corner fixture is missing.")
+		const canvasIntent = {
+			...intent,
+			corners: [
+				{
+					...intent.corners[0]!,
+					contourId: canvasContour.id,
+					pointId: canvasPoint.pointId,
+				},
+			],
+		} as const
+		expect(adapter.apply(intent)).toEqual({ ok: true })
+		expect(
+			projectAppliedFontIntent(canvasLayer, canvasIntent).contours[0]?.nodes[0]
+				?.corner,
+		).toEqual({ profile: "circular", amount: 12 })
+		const projected = workspace.font.read.editorGlyphSource(glyph.id)
+		expect(
+			projected?.layers.every(
+				(candidateLayer) =>
+					candidateLayer.contours[0]?.points[0]?.corner?.amount === 12,
+			),
+		).toBe(true)
+		const compilation = workspace.font.read.compilation()
+		expect(compilation.ok).toBe(true)
+		if (compilation.ok) {
+			const compiledGlyph = compilation.source.glyphs.find(
+				(candidate) => candidate.name === glyph.name,
+			)
+			expect(compiledGlyph?.contours[0]?.length).toBeGreaterThan(
+				contour.points.length,
+			)
+			expect(
+				compiledGlyph?.variations.every(
+					(variation) =>
+						variation.deltas.points.length ===
+						compiledGlyph.contours.flat().length,
+				),
+			).toBe(true)
+		}
+		workspace.font.undo(glyph.id)
+		expect(
+			workspace.font.read
+				.editorGlyphSource(glyph.id)
+				?.layers.every(
+					(candidateLayer) =>
+						candidateLayer.contours[0]?.points[0]?.corner === undefined,
+				),
+		).toBe(true)
+		workspace.font.redo(glyph.id)
+		expect(workspace.font.read.compilation().ok).toBe(true)
+	})
+
+	it("atomically rejects a corner that is collinear in one corresponding master", () => {
+		const original = makeDemoFont()
+		const originalGlyph = original.glyphs.find(
+			(candidate) =>
+				candidate.layers.length > 1 &&
+				candidate.layers.every(
+					(layer) =>
+						layer.contours[0]?.closed === true &&
+						layer.contours[0].points.length >= 3,
+				),
+		)
+		if (originalGlyph === undefined)
+			throw new Error("Compatible corner fixture is missing.")
+		const source = {
+			...original,
+			glyphs: original.glyphs.map((glyph) =>
+				glyph.id !== originalGlyph.id
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer, layerIndex) => ({
+								...layer,
+								contours: layer.contours.map((contour, contourIndex) => ({
+									...contour,
+									points: contour.points.map((point, pointIndex, points) => {
+										if (contourIndex !== 0) return point
+										const {
+											incoming: _incoming,
+											outgoing: _outgoing,
+											...hard
+										} = point
+										const hardNode = { ...hard, mode: "hard" as const }
+										if (pointIndex === 0) return { ...hardNode, x: 0, y: 0 }
+										if (pointIndex === 1)
+											return {
+												...hardNode,
+												x: layerIndex === 1 ? 100 : 0,
+												y: layerIndex === 1 ? 0 : 100,
+											}
+										if (pointIndex === points.length - 1)
+											return { ...hardNode, x: -100, y: 0 }
+										return hardNode
+									}),
+								})),
+							})),
+						},
+			),
+		}
+		const glyph = source.glyphs.find(({ id }) => id === originalGlyph.id)!
+		const layer = glyph.layers[0]!
+		const contour = layer.contours[0]!
+		const point = contour.points[0]!
+		const workspace = createEditorWorkspace(source)
+		const result = createFontVectorAdapter(workspace, {
+			glyphId: glyph.id,
+			masterId: layer.masterId,
+		}).apply({
+			kind: "set-corner-profile",
+			objectId: glyph.id,
+			corners: [
+				{
+					contourId: contour.id,
+					pointId: point.id,
+					profile: "circular",
+					amount: 12,
+				},
+			],
+		})
+		expect(result).toEqual({
+			ok: false,
+			error: expect.stringContaining("collinear-incidents"),
+		})
+		expect(
+			workspace.font.read
+				.editorGlyphSource(glyph.id)
+				?.layers.every(
+					(candidateLayer) =>
+						candidateLayer.contours[0]?.points[0]?.corner === undefined,
+				),
+		).toBe(true)
+		const imported = {
+			...source,
+			glyphs: source.glyphs.map((candidate) =>
+				candidate.id !== glyph.id
+					? candidate
+					: {
+							...candidate,
+							layers: candidate.layers.map((candidateLayer) => ({
+								...candidateLayer,
+								contours: candidateLayer.contours.map(
+									(candidateContour, contourIndex) => ({
+										...candidateContour,
+										points: candidateContour.points.map(
+											(candidatePoint, pointIndex) =>
+												contourIndex === 0 && pointIndex === 0
+													? {
+															...candidatePoint,
+															corner: {
+																profile: "circular" as const,
+																amount: 12,
+															},
+														}
+													: candidatePoint,
+										),
+									}),
+								),
+							})),
+						},
+			),
+		}
+		const compilation = createEditorWorkspace(imported).font.read.compilation()
+		expect(compilation.stage).toBe("projection-failed")
+		if (compilation.stage === "projection-failed")
+			expect(
+				compilation.projectionErrors.some(
+					(error) => error.code === "geometry.corner_ineligible",
+				),
+			).toBe(true)
+	})
+
 	it("explicitly discards design appearance at the font outline boundary", () => {
 		const outline = fontOutlineClipboardFromVector(
 			{

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	directSelectionKey,
+	designLocalRadialDelta,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -13,7 +14,10 @@ import {
 	type DesignDirectSelectionTarget,
 } from "../src/design-selection.ts"
 import { createInitialDocument } from "../src/document.ts"
-import { IDENTITY_DESIGN_TRANSFORM } from "@create-design/model"
+import {
+	IDENTITY_DESIGN_TRANSFORM,
+	projectDesignObjectContours,
+} from "@create-design/model"
 import type { DesignDocument, DesignObject } from "../src/types.ts"
 
 const path = (overrides: Partial<DesignObject> = {}): DesignObject => ({
@@ -238,5 +242,71 @@ describe("design selection", () => {
 			y: 10,
 			outgoing: { x: 12, y: 5 },
 		})
+	})
+
+	it("preserves local live-corner scale during transformed direct edits", () => {
+		const transform = { a: 2, b: 0, c: 0, d: 2, e: 7, f: -4 }
+		const object = path({
+			transform,
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:path",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{
+								id: "point:b",
+								x: 100,
+								y: 0,
+								corner: { profile: "circular", amount: 20 },
+							},
+							{ id: "point:c", x: 100, y: 100 },
+						],
+					},
+				],
+			},
+		})
+		const moved = translateDirectSelection(
+			documentWith(object),
+			[
+				{
+					kind: "node",
+					objectId: object.id,
+					contourId: "contour:path",
+					pointId: "point:a",
+				},
+			],
+			{ x: 2, y: 0 },
+		).objects[0]!
+		expect(moved.transform).toEqual(transform)
+		if (moved.geometry.kind !== "path") throw new Error("Expected a path.")
+		expect(moved.geometry.contours[0]?.points[0]?.x).toBe(1)
+		expect(moved.geometry.contours[0]?.points[1]?.corner).toEqual({
+			profile: "circular",
+			amount: 20,
+		})
+		const lowered = projectDesignObjectContours(moved)[0]!
+		const entry = lowered.points.find((point) =>
+			point.id.includes("point:b::corner:entry"),
+		)
+		expect(entry?.x).toBeCloseTo(167)
+	})
+
+	it("computes corner drag distance in local affine space", () => {
+		const transform = { a: 4, b: 1, c: 2, d: 3, e: 7, f: -4 }
+		const project = ({ x, y }: { x: number; y: number }) => ({
+			x: transform.a * x + transform.c * y + transform.e,
+			y: transform.b * x + transform.d * y + transform.f,
+		})
+		expect(
+			designLocalRadialDelta(
+				transform,
+				project({ x: 0, y: 0 }),
+				project({ x: 10, y: 0 }),
+				project({ x: 11, y: 0 }),
+			),
+		).toBeCloseTo(1)
 	})
 })

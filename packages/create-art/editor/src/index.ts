@@ -83,6 +83,8 @@ export {
 	type VectorClipboardReader,
 	type VectorClipboardWriter,
 	type VectorColorDefinition,
+	type VectorCornerProfile,
+	type VectorCornerSetting,
 	type VectorContour,
 	type VectorDocumentAdapter,
 	type VectorEditIntent,
@@ -125,6 +127,7 @@ export {
 export {
 	VectorContourPath,
 	VectorControlHandles,
+	VectorCornerHandle,
 	VectorPenPreview,
 	VectorSelectionBounds,
 	VectorShapePreview,

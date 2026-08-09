@@ -4,6 +4,7 @@ import { vectorDocumentAdapterContract } from "../../../create-art/editor/tests/
 import {
 	createDesignVectorAdapter,
 	importDesignVectorClipboard,
+	projectDesignVectorRenderObject,
 	projectDesignVectorObject,
 } from "../src/design-vector-adapter.ts"
 import { createInitialDocument } from "../src/document.ts"
@@ -16,6 +17,228 @@ const defaultScope = {
 const designVectorAdapter = createDesignVectorAdapter(defaultScope)
 
 describe("design object vector adapter", () => {
+	it("rejects a collinear live corner without partially changing the document", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				fillRule: "nonzero" as const,
+				contours: [
+					{
+						id: "contour:collinear",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{ id: "point:b", x: 100, y: 0 },
+							{ id: "point:c", x: 200, y: 0 },
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "set-corner-profile",
+			objectId: object.id,
+			corners: [
+				{
+					contourId: "contour:collinear",
+					pointId: "point:b",
+					profile: "circular",
+					amount: 12,
+				},
+			],
+		})
+		expect(result).toEqual({
+			ok: false,
+			error: expect.stringContaining("collinear-incidents"),
+		})
+		expect(document.objects[0]).toBe(object)
+	})
+
+	it("rejects an eligible corner whose incident spans clamp below tolerance", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				fillRule: "nonzero" as const,
+				contours: [
+					{
+						id: "contour:tiny",
+						closed: true,
+						points: [
+							{ id: "point:a", x: -2.1e-8, y: 0 },
+							{ id: "point:b", x: 0, y: 0 },
+							{ id: "point:c", x: 0, y: 2.1e-8 },
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "set-corner-profile",
+			objectId: object.id,
+			corners: [
+				{
+					contourId: "contour:tiny",
+					pointId: "point:b",
+					profile: "circular",
+					amount: 12,
+				},
+			],
+		})
+		expect(result).toEqual({
+			ok: false,
+			error: expect.stringContaining("no usable incident span"),
+		})
+		expect(document.objects[0]).toBe(object)
+	})
+
+	it("validates adjacent corner requests as one clamped batch", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:batch",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{ id: "point:b", x: 100, y: 0 },
+							{ id: "point:c", x: 100, y: 100 },
+							{ id: "point:d", x: 0, y: 100 },
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "set-corner-profile",
+			objectId: object.id,
+			corners: [
+				{
+					contourId: "contour:batch",
+					pointId: "point:b",
+					profile: "circular",
+					amount: 1e-7,
+				},
+				{
+					contourId: "contour:batch",
+					pointId: "point:c",
+					profile: "circular",
+					amount: 1e12,
+				},
+			],
+		})
+		expect(result).toEqual({
+			ok: false,
+			error: expect.stringContaining("no usable incident span"),
+		})
+		expect(document.objects[0]).toBe(object)
+	})
+
+	it("persists and sharply restores live-corner metadata without replacing authored IDs", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				fillRule: "nonzero" as const,
+				contours: [
+					{
+						id: "contour:corner",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{ id: "point:b", x: 100, y: 0 },
+							{ id: "point:c", x: 100, y: 100 },
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const rounded = designVectorAdapter.apply(document, [object.id], {
+			kind: "set-corner-profile",
+			objectId: object.id,
+			corners: [
+				{
+					contourId: "contour:corner",
+					pointId: "point:b",
+					profile: "squircle",
+					amount: 18,
+				},
+			],
+		})
+		expect(rounded.ok).toBe(true)
+		if (!rounded.ok) return
+		const roundedObject = rounded.document.objects[0]!
+		expect(
+			roundedObject.geometry.kind === "path"
+				? roundedObject.geometry.contours[0]?.points[1]
+				: null,
+		).toMatchObject({
+			id: "point:b",
+			corner: { profile: "squircle", amount: 18 },
+		})
+		expect(projectDesignObjectContours(roundedObject)[0]!.points.length).toBe(7)
+
+		const sharp = designVectorAdapter.apply(
+			rounded.document,
+			rounded.selection,
+			{
+				kind: "set-corner-profile",
+				objectId: object.id,
+				corners: [
+					{
+						contourId: "contour:corner",
+						pointId: "point:b",
+						profile: "sharp",
+						amount: 0,
+					},
+				],
+			},
+		)
+		expect(sharp.ok).toBe(true)
+		if (!sharp.ok) return
+		const sharpObject = sharp.document.objects[0]!
+		expect(
+			sharpObject.geometry.kind === "path"
+				? sharpObject.geometry.contours[0]?.points[1]?.corner
+				: null,
+		).toBeUndefined()
+	})
+
 	it("flattens vector clipboard payloads in effective hierarchy order", () => {
 		const initial = createInitialDocument()
 		const back = initial.objects[0]!
@@ -216,6 +439,56 @@ describe("design object vector adapter", () => {
 		})
 		expect(payload.objects.map((object) => object.id)).toEqual(["object:cyan"])
 		expect(payload.objects[0]?.style.kind).toBe("fill")
+	})
+
+	it("bakes transformed live corners for render and clipboard parity", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:affine-corner",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{
+								id: "point:b",
+								x: 100,
+								y: 0,
+								corner: { profile: "circular" as const, amount: 20 },
+							},
+							{ id: "point:c", x: 100, y: 100 },
+						],
+					},
+				],
+			},
+			transform: { a: 2, b: 0.25, c: 0.4, d: 1.5, e: 7, f: -4 },
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const output = projectDesignObjectContours(object)[0]!
+		const rendered = projectDesignVectorRenderObject(document, object)
+			.contours[0]!
+		expect(rendered.nodes.map(({ x, y }) => ({ x, y }))).toEqual(
+			output.points.map(({ x, y }) => ({ x, y })),
+		)
+		expect(rendered.nodes.every((node) => node.corner === undefined)).toBe(true)
+		const clipboard = designVectorAdapter.clipboard(document, [object.id])
+		expect(clipboard.objects[0]?.contours[0]?.nodes).toHaveLength(
+			output.points.length,
+		)
+		expect(
+			clipboard.objects[0]?.contours[0]?.nodes.every(
+				(node) => node.corner === undefined,
+			),
+		).toBe(true)
 	})
 
 	it("keeps clipboard coordinates independent of page placement and height", () => {

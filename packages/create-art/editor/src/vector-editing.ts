@@ -5,12 +5,24 @@ export interface VectorPoint {
 
 export type VectorHandleKind = "incoming" | "outgoing"
 export type VectorNodeMode = "soft" | "hard"
+export type VectorCornerProfile = "sharp" | "circular" | "squircle"
+
+/**
+ * Lossless authored corner state. An absent value is the canonical sharp
+ * corner; adapters should remove the value when `profile` is `sharp` or the
+ * amount is zero.
+ */
+export interface VectorCornerSetting {
+	readonly profile: VectorCornerProfile
+	readonly amount: number
+}
 
 export interface VectorNode extends VectorPoint {
 	readonly id: string
 	readonly mode: VectorNodeMode
 	readonly incoming?: VectorPoint
 	readonly outgoing?: VectorPoint
+	readonly corner?: VectorCornerSetting
 }
 
 export interface VectorContour {
@@ -89,6 +101,16 @@ export interface VectorVariantNode extends VectorNode {
 }
 
 export type VectorEditIntent =
+	| Readonly<{
+			readonly kind: "set-corner-profile"
+			readonly objectId: string
+			readonly corners: readonly Readonly<{
+				readonly contourId: string
+				readonly pointId: string
+				readonly profile: VectorCornerProfile
+				readonly amount: number
+			}>[]
+	  }>
 	| Readonly<{
 			readonly kind: "create-object"
 			readonly object: VectorObject
@@ -270,6 +292,14 @@ export function validateVectorObject(object: VectorObject): string | null {
 					.every(Number.isFinite)
 			)
 				return `Vector point ${node.id} has non-finite geometry.`
+			if (
+				node.corner !== undefined &&
+				(node.mode !== "hard" ||
+					node.corner.profile === "sharp" ||
+					!Number.isFinite(node.corner.amount) ||
+					node.corner.amount <= 0)
+			)
+				return `Vector point ${node.id} has invalid corner metadata.`
 		}
 	}
 	return null

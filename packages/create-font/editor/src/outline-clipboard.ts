@@ -23,6 +23,10 @@ const MAX_POINTS = 10_000
 interface ClipboardPoint {
 	readonly key: string
 	readonly mode: "soft" | "hard"
+	readonly corner?: Readonly<{
+		readonly profile: "circular" | "squircle"
+		readonly amount: number
+	}>
 }
 
 interface ClipboardLayerPoint {
@@ -162,7 +166,13 @@ export function prepareOutlineClipboardCopy(
 				const key = `${fragment}/${runIndex}`
 				const endpointOfFragment =
 					!run.closed && (runIndex === 0 || runIndex === run.indexes.length - 1)
-				points.push({ key, mode: endpointOfFragment ? "hard" : point.mode })
+				points.push({
+					key,
+					mode: endpointOfFragment ? "hard" : point.mode,
+					...(run.closed && point.corner !== undefined
+						? { corner: { ...point.corner } }
+						: {}),
+				})
 				const source = point
 				const includeIncoming = run.closed || runIndex > 0
 				const includeOutgoing = run.closed || runIndex < run.indexes.length - 1
@@ -371,12 +381,25 @@ export function parseOutlineClipboard(
 			if (typeof pointValue !== "object" || pointValue === null) {
 				return { ok: false, error: "A clipboard point is malformed." }
 			}
-			const point = pointValue as { key?: unknown; mode?: unknown }
+			const point = pointValue as {
+				key?: unknown
+				mode?: unknown
+				corner?: unknown
+			}
+			const corner = point.corner as
+				| { profile?: unknown; amount?: unknown }
+				| undefined
 			if (
 				typeof point.key !== "string" ||
 				point.key.length === 0 ||
 				keys.has(point.key) ||
-				(point.mode !== "soft" && point.mode !== "hard")
+				(point.mode !== "soft" && point.mode !== "hard") ||
+				(corner !== undefined &&
+					(point.mode !== "hard" ||
+						(corner.profile !== "circular" && corner.profile !== "squircle") ||
+						typeof corner.amount !== "number" ||
+						!Number.isFinite(corner.amount) ||
+						corner.amount <= 0))
 			) {
 				return { ok: false, error: "A clipboard point is malformed." }
 			}
@@ -491,7 +514,11 @@ export function prepareOutlinePaste(
 		points: contour.points.map((point) => {
 			const id = nextId("point") as PointId
 			pointIds.set(point.key, id)
-			return { id, mode: point.mode }
+			return {
+				id,
+				mode: point.mode,
+				...(point.corner === undefined ? {} : { corner: { ...point.corner } }),
+			}
 		}),
 	}))
 	const layers = payload.layers.map((layer) => ({

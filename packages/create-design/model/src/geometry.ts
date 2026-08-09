@@ -1,6 +1,7 @@
 import {
 	boundsOfPoints,
 	cubicBounds,
+	lowerCornerProfiles,
 	type Bounds,
 	type Cubic,
 } from "@create-art/vector-geometry"
@@ -97,7 +98,60 @@ export function geometryContours(
 	// Live text owns a separate authoritative glyph-outline projection. Treating
 	// it as authored vector geometry here would silently discard editability.
 	if (geometry.kind === "text") return []
-	if (geometry.kind === "path") return geometry.contours
+	if (geometry.kind === "path")
+		return geometry.contours.map((contour) => {
+			if (!contour.points.some(({ corner }) => corner !== undefined))
+				return contour
+			const lowered = lowerCornerProfiles({
+				closed: contour.closed,
+				points: contour.points.map((point) => ({
+					id: point.id,
+					point: { x: point.x, y: point.y },
+					...(point.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: point.x + point.incoming.x,
+									y: point.y + point.incoming.y,
+								},
+							}),
+					...(point.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: point.x + point.outgoing.x,
+									y: point.y + point.outgoing.y,
+								},
+							}),
+					...(point.corner === undefined ? {} : { corner: point.corner }),
+				})),
+			})
+			return {
+				id: contour.id,
+				closed: contour.closed,
+				points: lowered.points.map((point) => ({
+					id: point.id,
+					x: point.point.x,
+					y: point.point.y,
+					...(point.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: point.incoming.x - point.point.x,
+									y: point.incoming.y - point.point.y,
+								},
+							}),
+					...(point.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: point.outgoing.x - point.point.x,
+									y: point.outgoing.y - point.point.y,
+								},
+							}),
+				})),
+			}
+		})
 	if (geometry.kind === "image") {
 		return [
 			rectangleContour(
@@ -153,6 +207,7 @@ export function transformDesignPoint(
 ): DesignPoint {
 	return {
 		id: point.id,
+		...(point.mode === undefined ? {} : { mode: point.mode }),
 		x: transform.a * point.x + transform.c * point.y + transform.e,
 		y: transform.b * point.x + transform.d * point.y + transform.f,
 		...(point.incoming === undefined
@@ -161,6 +216,7 @@ export function transformDesignPoint(
 		...(point.outgoing === undefined
 			? {}
 			: { outgoing: transformVector(transform, point.outgoing) }),
+		...(point.corner === undefined ? {} : { corner: { ...point.corner } }),
 	}
 }
 

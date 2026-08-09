@@ -4842,7 +4842,9 @@ describe("create-design shared vector scene", () => {
 		) as DesignDocument
 		expect(
 			saved.objects.find(({ id }) => id === first.id)?.appearance.fill,
-		).toEqual({ swatchId: "swatch:ink" })
+		).toEqual({
+			swatchId: "swatch:ink",
+		})
 
 		const title = document.querySelector<HTMLInputElement>(
 			'design-canvas-tile input[aria-label="Document title"]',
@@ -5585,6 +5587,302 @@ describe("create-design shared vector scene", () => {
 				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
 			),
 		).toHaveLength(0)
+	})
+
+	it("mounts accessible corner controls and commits one undoable profile edit", async () => {
+		const initial = createInitialDocument()
+		const storage = new Map<string, string>()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		const stage = mountDesign(
+			{ initialDocument: { ...initial, objects: [expanded] } },
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(".vector-node")
+		if (node === undefined) throw new Error("Direct node was not rendered.")
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 81,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(pointerDown)
+			node.fire("pointerdown", { evt: pointerDown }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 81,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		const fieldset = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-corner-profile-controls]",
+		)
+		const profile = fieldset?.querySelector<HTMLSelectElement>(
+			'select[aria-label="Corner profile"]',
+		)
+		if (fieldset === null || profile === undefined || profile === null)
+			throw new Error("Corner profile controls were not rendered.")
+		expect(fieldset.getAttribute("aria-label")).toContain("1 selected corner")
+		await act(async () => {
+			profile.value = "circular"
+			profile.dispatchEvent(new Event("change", { bubbles: true }))
+			await Promise.resolve()
+		})
+		const savedCorner = () => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const object = saved.objects?.[0]
+			return object?.geometry.kind === "path"
+				? object.geometry.contours[0]?.points[0]?.corner
+				: undefined
+		}
+		expect(savedCorner()).toEqual({ profile: "circular", amount: 12 })
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedCorner()).toBeUndefined()
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(savedCorner()).toEqual({ profile: "circular", amount: 12 })
+	})
+
+	it("makes live rectangle corner editing explicit and reveals all inset handles", async () => {
+		const initial = createInitialDocument()
+		const original = initial.objects[0]!
+		const originalIndex = initial.objects.findIndex(
+			(object) => object.id === original.id,
+		)
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: initial }, storage)
+		const canvas = stage.container().querySelector("canvas")
+		const paper = stage.findOne(".design-paper")
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (canvas === null || paper === undefined || direct === null)
+			throw new Error("Direct Selection rectangle controls were not found.")
+		const screen = paper
+			.getParent()
+			.getAbsoluteTransform()
+			.point({ x: 200, y: 200 })
+		const fire = (type: "pointerdown" | "pointerup"): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: screen.x,
+					clientY: screen.y,
+					isPrimary: true,
+					pointerId: 182,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		await act(async () => {
+			direct.click()
+			fire("pointerdown")
+			fire("pointerup")
+			await Promise.resolve()
+		})
+		const conversion = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-live-rectangle-corner-controls]",
+		)
+		const convert = conversion?.querySelector<HTMLButtonElement>("button")
+		if (conversion === null || convert === undefined || convert === null)
+			throw new Error("Live rectangle corner conversion was not rendered.")
+		expect(conversion.textContent).toContain(
+			"This rectangle is still a live shape",
+		)
+		expect(convert.textContent).toContain("Convert to Path & Edit Corners")
+		expect(stage.find(".vector-corner-profile-handle")).toHaveLength(0)
+
+		await act(async () => {
+			convert.click()
+			await Promise.resolve()
+		})
+		const nodes = stage.find(".vector-node")
+		const handles = stage.find(".vector-corner-profile-handle")
+		expect(nodes).toHaveLength(4)
+		expect(handles).toHaveLength(4)
+		const nodePositions = nodes.map(
+			(node: { x(): number; y(): number }) => `${node.x()}:${node.y()}`,
+		)
+		for (const handle of handles) {
+			expect(nodePositions).not.toContain(`${handle.x()}:${handle.y()}`)
+		}
+		const profileControls = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-corner-profile-controls]",
+		)
+		expect(profileControls?.getAttribute("aria-label")).toContain(
+			"4 selected corners",
+		)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Undo restores the live rectangle")
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		const converted = saved.objects[originalIndex]
+		expect(converted?.geometry.kind).toBe("path")
+		expect(converted?.id).toBe(original.id)
+		expect(converted?.transform).toEqual(original.transform)
+		expect(converted?.appearance).toEqual(original.appearance)
+		expect(saved.objects.map(({ id }) => id)).toEqual(
+			initial.objects.map(({ id }) => id),
+		)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		const restored = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(restored.objects[originalIndex]).toEqual(original)
+		expect(stage.find(".vector-corner-profile-handle")).toHaveLength(0)
+		expect(
+			document.querySelector("fieldset[data-live-rectangle-corner-controls]"),
+		).not.toBeNull()
+	})
+
+	it("commits corner profiles from the native release when the stage sample is stale", async () => {
+		const initial = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: initial }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || direct === null || canvas === null)
+			throw new Error("Corner gesture controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const conversion = document.querySelector<HTMLFieldSetElement>(
+			"fieldset[data-live-rectangle-corner-controls]",
+		)
+		const convert = conversion?.querySelector<HTMLButtonElement>("button")
+		if (convert === undefined || convert === null)
+			throw new Error("Live rectangle conversion was not found.")
+		await act(async () => {
+			convert.click()
+			await Promise.resolve()
+		})
+		const handle = stage.findOne(".vector-corner-profile-handle")
+		if (handle === undefined) throw new Error("Corner handle was not rendered.")
+
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => captured.add(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation((pointerId) => {
+			captured.delete(pointerId)
+		})
+		const staleStagePoint = handle.getAbsolutePosition()
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(
+			() => staleStagePoint,
+		)
+		const pointerId = 183
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			clientX: staleStagePoint.x,
+			clientY: staleStagePoint.y,
+			isPrimary: true,
+			pointerId,
+			pointerType: "mouse",
+		})
+		Object.defineProperty(pointerDown, "currentTarget", { value: canvas })
+		await act(async () => {
+			handle.fire("pointerdown", { evt: pointerDown }, true)
+			window.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: staleStagePoint.x + 18,
+					clientY: staleStagePoint.y + 18,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		if (saved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Expected converted path geometry.")
+		expect(
+			saved.objects[0].geometry.contours[0]?.points.map(
+				(point) => point.corner?.amount ?? 0,
+			),
+		).toEqual([
+			expect.any(Number),
+			expect.any(Number),
+			expect.any(Number),
+			expect.any(Number),
+		])
+		expect(
+			saved.objects[0].geometry.contours[0]?.points.every(
+				(point) => (point.corner?.amount ?? 0) > 0,
+			),
+		).toBe(true)
 	})
 
 	it("synchronizes direct node selection across canvas, inspector, and accessibility state", async () => {

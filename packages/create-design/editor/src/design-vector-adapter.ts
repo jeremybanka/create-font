@@ -8,6 +8,12 @@ import {
 	type VectorSnapshot,
 	type VectorStyle,
 } from "@create-art/editor"
+import {
+	cornerProfileEligibility,
+	DEFAULT_GEOMETRY_TOLERANCES,
+	lowerCornerProfiles,
+	type CornerContourPoint,
+} from "@create-art/vector-geometry"
 
 import {
 	projectDesignEffectiveHierarchy,
@@ -23,6 +29,7 @@ import {
 import {
 	IDENTITY_DESIGN_TRANSFORM,
 	projectDesignObjectContours,
+	transformDesignPoint,
 } from "@create-design/model"
 import {
 	appendDesignHierarchyObjects,
@@ -73,6 +80,15 @@ export function projectDesignVectorObject(
 	document: Pick<DesignDocument, "swatches">,
 	object: DesignObject,
 ): VectorObject {
+	const contours =
+		object.geometry.kind === "path"
+			? object.geometry.contours.map((contour) => ({
+					...contour,
+					points: contour.points.map((point) =>
+						transformDesignPoint(object.transform, point),
+					),
+				}))
+			: projectDesignObjectContours(object)
 	return {
 		id: object.id,
 		name: object.name,
@@ -83,15 +99,48 @@ export function projectDesignVectorObject(
 				(swatch) => swatch.id === object.appearance.fill?.swatchId,
 			),
 		),
+		contours: contours.map((contour) => ({
+			id: contour.id,
+			closed: contour.closed,
+			nodes: contour.points.map((point) => ({
+				id: point.id,
+				mode:
+					point.mode ??
+					(point.incoming === undefined && point.outgoing === undefined
+						? "hard"
+						: "soft"),
+				x: point.x,
+				y: point.y,
+				...(point.incoming === undefined
+					? {}
+					: { incoming: { ...point.incoming } }),
+				...(point.outgoing === undefined
+					? {}
+					: { outgoing: { ...point.outgoing } }),
+				...(point.corner === undefined ? {} : { corner: { ...point.corner } }),
+			})),
+		})),
+	}
+}
+
+/** Output-parity render projection; authored topology remains separate for controls. */
+export function projectDesignVectorRenderObject(
+	document: Pick<DesignDocument, "swatches">,
+	object: DesignObject,
+): VectorObject {
+	const projected = projectDesignVectorObject(document, object)
+	return {
+		...projected,
 		contours: projectDesignObjectContours(object).map((contour) => ({
 			id: contour.id,
 			closed: contour.closed,
 			nodes: contour.points.map((point) => ({
 				id: point.id,
 				mode:
-					point.incoming === undefined && point.outgoing === undefined
+					point.mode ??
+					(point.incoming === undefined && point.outgoing === undefined
 						? "hard"
-						: "soft",
+						: "soft"),
 				x: point.x,
 				y: point.y,
 				...(point.incoming === undefined
@@ -127,7 +176,9 @@ function projectDesignClipboardObject(
 	document: DesignDocument,
 	object: DesignObject,
 ): VectorObject {
-	const projected = projectDesignVectorObject(document, object)
+	// Clipboard geometry is baked to document space so non-uniform affine
+	// transforms cannot distort a scalar live-corner amount on round-trip.
+	const projected = projectDesignVectorRenderObject(document, object)
 	return {
 		...projected,
 		contours: projected.contours.map((contour) => ({
@@ -158,17 +209,35 @@ const designContours = (object: VectorObject): readonly DesignContour[] =>
 	object.contours.map((contour) => ({
 		id: contour.id,
 		closed: contour.closed,
-		points: contour.nodes.map((node) => ({
-			id: node.id,
-			x: node.x,
-			y: node.y,
-			...(node.incoming === undefined
-				? {}
-				: { incoming: { ...node.incoming } }),
-			...(node.outgoing === undefined
-				? {}
-				: { outgoing: { ...node.outgoing } }),
-		})),
+		points: contour.nodes.map((node) => {
+			const corner =
+				node.corner === undefined ||
+				node.corner.profile === "sharp" ||
+				node.corner.amount <= 0
+					? undefined
+					: {
+							profile: node.corner.profile,
+							amount: node.corner.amount,
+						}
+			return {
+				id: node.id,
+				...(node.mode ===
+				(node.incoming === undefined && node.outgoing === undefined
+					? "hard"
+					: "soft")
+					? {}
+					: { mode: node.mode }),
+				x: node.x,
+				y: node.y,
+				...(node.incoming === undefined
+					? {}
+					: { incoming: { ...node.incoming } }),
+				...(node.outgoing === undefined
+					? {}
+					: { outgoing: { ...node.outgoing } }),
+				...(corner === undefined ? {} : { corner }),
+			}
+		}),
 	}))
 
 export function designObjectFromVector(
@@ -232,6 +301,144 @@ export function createDesignVectorAdapter(
 	return {
 		project: projectDesignVectorSnapshot,
 		apply(document, selection, intent) {
+			if (intent.kind === "set-corner-profile") {
+				const object = document.objects.find(
+					(candidate) => candidate.id === intent.objectId,
+				)
+				if (object === undefined)
+					return reject(`Unknown design object ${intent.objectId}.`)
+				if (object.locked) return reject(`Object ${object.id} is locked.`)
+				if (object.geometry.kind !== "path")
+					return reject("Corner profiles require authored path geometry.")
+				const updates = new Map(
+					intent.corners.map((item) => [
+						`${item.contourId}/${item.pointId}`,
+						item,
+					]),
+				)
+				if (updates.size === 0) return reject("No corners were selected.")
+				for (const update of updates.values()) {
+					if (!Number.isFinite(update.amount) || update.amount < 0)
+						return reject("Corner amounts must be finite and non-negative.")
+					const contour = object.geometry.contours.find(
+						(candidate) => candidate.id === update.contourId,
+					)
+					const index = contour?.points.findIndex(
+						(candidate) => candidate.id === update.pointId,
+					)
+					if (
+						contour === undefined ||
+						index === undefined ||
+						index < 0 ||
+						!contour.closed ||
+						contour.points.length < 3
+					)
+						return reject(
+							`Point ${update.pointId} is not an eligible closed corner.`,
+						)
+					const point = contour.points[index]
+					if (
+						point === undefined ||
+						(point.mode ??
+							(point.incoming === undefined && point.outgoing === undefined
+								? "hard"
+								: "soft")) !== "hard"
+					)
+						return reject(`Point ${update.pointId} is not a hard corner.`)
+				}
+				for (const contour of object.geometry.contours) {
+					const contourUpdates = contour.points.flatMap((point) => {
+						const update = updates.get(`${contour.id}/${point.id}`)
+						return update === undefined ? [] : [update]
+					})
+					if (contourUpdates.length === 0) continue
+					const authored = contour.points.map((candidate) => {
+						const update = updates.get(`${contour.id}/${candidate.id}`)
+						const corner =
+							update === undefined
+								? candidate.corner
+								: update.profile === "sharp" || update.amount === 0
+									? undefined
+									: { profile: update.profile, amount: update.amount }
+						return {
+							id: candidate.id,
+							point: { x: candidate.x, y: candidate.y },
+							...(candidate.incoming === undefined
+								? {}
+								: {
+										incoming: {
+											x: candidate.x + candidate.incoming.x,
+											y: candidate.y + candidate.incoming.y,
+										},
+									}),
+							...(candidate.outgoing === undefined
+								? {}
+								: {
+										outgoing: {
+											x: candidate.x + candidate.outgoing.x,
+											y: candidate.y + candidate.outgoing.y,
+										},
+									}),
+							...(corner === undefined ? {} : { corner }),
+						} satisfies CornerContourPoint<string>
+					})
+					const lowered = lowerCornerProfiles({
+						closed: true,
+						points: authored,
+					})
+					for (const update of contourUpdates) {
+						if (update.profile === "sharp" || update.amount === 0) continue
+						const index = contour.points.findIndex(
+							(candidate) => candidate.id === update.pointId,
+						)
+						const eligibility = cornerProfileEligibility(
+							{ closed: true, points: authored },
+							index,
+						)
+						if (!eligibility.eligible)
+							return reject(
+								`Point ${update.pointId} is geometrically ineligible (${eligibility.reason}).`,
+							)
+						const resolution = lowered.corners.find(
+							(candidate) => candidate.pointId === update.pointId,
+						)
+						if (
+							resolution === undefined ||
+							resolution.appliedAmount <= DEFAULT_GEOMETRY_TOLERANCES.distance
+						)
+							return reject(
+								`Point ${update.pointId} has no usable incident span after clamping.`,
+							)
+					}
+				}
+				return {
+					ok: true,
+					document: replaceAt(document, {
+						...object,
+						geometry: {
+							...object.geometry,
+							contours: object.geometry.contours.map((contour) => ({
+								...contour,
+								points: contour.points.map((point) => {
+									const update = updates.get(`${contour.id}/${point.id}`)
+									if (update === undefined) return point
+									const { corner: _corner, ...sharp } = point
+									return update.profile === "sharp" || update.amount === 0
+										? sharp
+										: {
+												...point,
+												corner: {
+													profile: update.profile,
+													amount: update.amount,
+												},
+											}
+								}),
+							})),
+						},
+					}),
+					selection,
+				}
+			}
 			if (intent.kind === "create-object") {
 				if (!isDesignHierarchyScopeValid(document, scope))
 					return reject("The active design hierarchy scope is unavailable.")

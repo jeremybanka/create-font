@@ -275,6 +275,107 @@ export function VectorControlHandles({
 	)
 }
 
+/** Zoom-invariant direct-manipulation control for one selected hard corner. */
+export function vectorCornerHandlePosition(
+	node: VectorNode,
+	previous: VectorNode,
+	next: VectorNode,
+	inverseScale: number,
+): Readonly<{ x: number; y: number }> | null {
+	if (node.mode !== "hard") return null
+	const beforeChord = { x: previous.x - node.x, y: previous.y - node.y }
+	const afterChord = { x: next.x - node.x, y: next.y - node.y }
+	const beforeChordLength = Math.hypot(beforeChord.x, beforeChord.y)
+	const afterChordLength = Math.hypot(afterChord.x, afterChord.y)
+	if (beforeChordLength <= 1e-6 || afterChordLength <= 1e-6) return null
+	const before =
+		node.incoming !== undefined &&
+		Math.hypot(node.incoming.x, node.incoming.y) > 1e-6
+			? node.incoming
+			: beforeChord
+	const after =
+		node.outgoing !== undefined &&
+		Math.hypot(node.outgoing.x, node.outgoing.y) > 1e-6
+			? node.outgoing
+			: afterChord
+	const beforeLength = Math.hypot(before.x, before.y)
+	const afterLength = Math.hypot(after.x, after.y)
+	const direction = {
+		x: before.x / beforeLength + after.x / afterLength,
+		y: before.y / beforeLength + after.y / afterLength,
+	}
+	const directionLength = Math.hypot(direction.x, direction.y)
+	if (directionLength <= 1e-4) return null
+	const visualInset = Math.min(
+		18 * inverseScale,
+		beforeChordLength * 0.3,
+		afterChordLength * 0.3,
+	)
+	return {
+		x: node.x + (direction.x / directionLength) * visualInset,
+		y: node.y + (direction.y / directionLength) * visualInset,
+	}
+}
+
+export function VectorCornerHandle({
+	node,
+	previous,
+	next,
+	position,
+	inverseScale,
+	color,
+	listening = false,
+	draggable = false,
+	onPointerDown,
+	onPointerCancel,
+	onLostPointerCapture,
+	onDragStart,
+	onDragMove,
+	onDragEnd,
+}: {
+	readonly node: VectorNode
+	readonly previous: VectorNode
+	readonly next: VectorNode
+	readonly position?: Readonly<{ x: number; y: number }>
+	readonly inverseScale: number
+	readonly color: string
+	readonly listening?: boolean
+	readonly draggable?: boolean
+	readonly onPointerDown?: (event: KonvaEventObject<PointerEvent>) => void
+	readonly onPointerCancel?: (event: KonvaEventObject<PointerEvent>) => void
+	readonly onLostPointerCapture?: (
+		event: KonvaEventObject<PointerEvent>,
+	) => void
+	readonly onDragStart?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onDragMove?: (event: KonvaEventObject<DragEvent>) => void
+	readonly onDragEnd?: (event: KonvaEventObject<DragEvent>) => void
+}) {
+	const point =
+		position ?? vectorCornerHandlePosition(node, previous, next, inverseScale)
+	if (point === null) return null
+	return (
+		<Circle
+			id={`corner-profile:${node.id}`}
+			name="vector-corner-profile-handle"
+			x={point.x}
+			y={point.y}
+			radius={5 * inverseScale}
+			fill="#fff"
+			stroke={color}
+			strokeWidth={1.5 * inverseScale}
+			hitStrokeWidth={16 * inverseScale}
+			listening={listening}
+			draggable={draggable}
+			onPointerDown={(event) => onPointerDown?.(event)}
+			onPointerCancel={(event) => onPointerCancel?.(event)}
+			onLostPointerCapture={(event) => onLostPointerCapture?.(event)}
+			onDragStart={(event) => onDragStart?.(event)}
+			onDragMove={(event) => onDragMove?.(event)}
+			onDragEnd={(event) => onDragEnd?.(event)}
+		/>
+	)
+}
+
 export function VectorPenPreview({
 	preview,
 	preceding = [],

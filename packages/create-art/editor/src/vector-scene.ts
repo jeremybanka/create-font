@@ -4,6 +4,7 @@ import type {
 	VectorObject,
 	VectorPoint,
 } from "./vector-editing.ts"
+import { lowerCornerProfiles } from "@create-art/vector-geometry"
 
 export interface VectorBounds {
 	readonly minX: number
@@ -17,7 +18,54 @@ export const VECTOR_ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 const number = (value: number): string => Number(value.toFixed(3)).toString()
 
 export function vectorContourPath(contour: VectorContour): string {
-	const first = contour.nodes[0]
+	const nodes = contour.nodes.some(({ corner }) => corner !== undefined)
+		? lowerCornerProfiles({
+				closed: contour.closed,
+				points: contour.nodes.map((node) => ({
+					id: node.id,
+					point: { x: node.x, y: node.y },
+					...(node.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: node.x + node.incoming.x,
+									y: node.y + node.incoming.y,
+								},
+							}),
+					...(node.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: node.x + node.outgoing.x,
+									y: node.y + node.outgoing.y,
+								},
+							}),
+					...(node.corner === undefined ? {} : { corner: node.corner }),
+				})),
+			}).points.map((node) => ({
+				id: node.id,
+				mode: "hard" as const,
+				x: node.point.x,
+				y: node.point.y,
+				...(node.incoming === undefined
+					? {}
+					: {
+							incoming: {
+								x: node.incoming.x - node.point.x,
+								y: node.incoming.y - node.point.y,
+							},
+						}),
+				...(node.outgoing === undefined
+					? {}
+					: {
+							outgoing: {
+								x: node.outgoing.x - node.point.x,
+								y: node.outgoing.y - node.point.y,
+							},
+						}),
+			}))
+		: contour.nodes
+	const first = nodes[0]
 	if (first === undefined) return ""
 	const commands = [`M ${number(first.x)} ${number(first.y)}`]
 	const segment = (from: VectorNode, to: VectorNode): string => {
@@ -27,14 +75,14 @@ export function vectorContourPath(contour: VectorContour): string {
 		const incoming = to.incoming ?? { x: 0, y: 0 }
 		return `C ${number(from.x + outgoing.x)} ${number(from.y + outgoing.y)} ${number(to.x + incoming.x)} ${number(to.y + incoming.y)} ${number(to.x)} ${number(to.y)}`
 	}
-	for (let index = 1; index < contour.nodes.length; index += 1) {
-		const previous = contour.nodes[index - 1]
-		const point = contour.nodes[index]
+	for (let index = 1; index < nodes.length; index += 1) {
+		const previous = nodes[index - 1]
+		const point = nodes[index]
 		if (previous !== undefined && point !== undefined)
 			commands.push(segment(previous, point))
 	}
-	if (contour.closed && contour.nodes.length > 1) {
-		const last = contour.nodes.at(-1)
+	if (contour.closed && nodes.length > 1) {
+		const last = nodes.at(-1)
 		if (last !== undefined) commands.push(segment(last, first))
 		commands.push("Z")
 	}

@@ -138,6 +138,11 @@ export interface EditorPointSource {
 	 * side. Hard nodes allow independent handles.
 	 */
 	readonly mode: EditorNodeMode
+	/** Live-corner metadata; omitted for the canonical sharp corner. */
+	readonly corner?: Readonly<{
+		readonly profile: "circular" | "squircle"
+		readonly amount: number
+	}>
 }
 
 export interface EditorContourSource {
