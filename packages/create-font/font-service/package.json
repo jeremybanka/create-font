@@ -34,11 +34,11 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"harfbuzzjs": "1.5.0"
+		"harfbuzzjs": "1.6.0"
 	},
 	"devDependencies": {
 		"@create-font/target": "workspace:*",
-		"vitest": "4.1.10"
+		"vitest": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"

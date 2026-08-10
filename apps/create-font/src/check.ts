@@ -57,15 +57,13 @@ export async function checkFontProject(
 	} catch (error) {
 		if (error instanceof SourceValidationError) {
 			const diagnostics = error.issues
-				.map(
-					(issue): FontCheckDiagnostic => ({
-						code: issue.code,
-						message: issue.message,
-						path: issue.unitPath ?? issue.path,
-						range: rangeFromIssuePath(issue.path),
-						severity: "error",
-					}),
-				)
+				.map((issue): FontCheckDiagnostic => ({
+					code: issue.code,
+					message: issue.message,
+					path: issue.unitPath ?? issue.path,
+					range: rangeFromIssuePath(issue.path),
+					severity: "error",
+				}))
 				.toSorted(compareDiagnostics)
 			return { diagnostics, ok: false, root }
 		}
