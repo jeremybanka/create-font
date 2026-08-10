@@ -9,17 +9,17 @@ import {
 	hotbarSlotIndexForKeyboardEvent,
 	swapHotbarSlots,
 	type HotbarSlots,
-} from "./action-hotbar.ts"
-import type { PaletteCommand } from "@create-art/editor"
-import { EditorIcon } from "@create-art/editor"
+} from "./command-assignment.ts"
 import css from "./ActionHotbar.module.css"
+import { EditorIcon } from "./EditorIcon.tsx"
+import type { PaletteCommand } from "./command-palette.ts"
 import { TooltipButton } from "./TooltipButton.tsx"
 
 const svg = {
 	Plus: PlusIcon,
 }
 
-const HOTBAR_SLOT_MIME = "application/x-create-font-hotbar-slot"
+const HOTBAR_SLOT_MIME = "application/x-create-art-hotbar-slot"
 
 export interface ActionHotbarProps {
 	readonly commands: readonly PaletteCommand[]
@@ -95,6 +95,10 @@ export function ActionHotbar({
 			{HOTBAR_KEYS.map((key, index) => {
 				const commandId = slots[index]
 				const command = commands.find((candidate) => candidate.id === commandId)
+				const shortcut = {
+					ariaKeyShortcuts: key,
+					keycaps: [key],
+				}
 				return (
 					<hotbar-slot
 						key={key}
@@ -126,7 +130,7 @@ export function ActionHotbar({
 							<TooltipButton
 								label={`Assign hotbar slot ${key}`}
 								description="Open the Command Palette, then drag a command here or press Mod+Enter and choose this key."
-								hotkey={{ key }}
+								shortcut={shortcut}
 								placement="top"
 								onClick={onOpenCommands}
 							>
@@ -136,7 +140,7 @@ export function ActionHotbar({
 							<TooltipButton
 								label={command.displayName}
 								description={`${command.disabledReason ?? command.description ?? command.category} Assigned to ${key}${command.shortcut === undefined ? "" : `; also ${command.shortcut}`}. Right-click to clear.`}
-								hotkey={{ key }}
+								shortcut={shortcut}
 								placement="top"
 								aria-pressed={command.checked}
 								aria-disabled={command.disabled}

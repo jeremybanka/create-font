@@ -1,4 +1,5 @@
 export { CommandPalette } from "./CommandPalette.tsx"
+export { ActionHotbar, type ActionHotbarProps } from "./ActionHotbar.tsx"
 export {
 	TooltipButton,
 	type TooltipButtonProps,
@@ -33,6 +34,21 @@ export {
 } from "./TileNumericField.tsx"
 export { TileSelect, type TileSelectProps } from "./TileSelect.tsx"
 export { TileTextField, type TileTextFieldProps } from "./TileTextField.tsx"
+export {
+	assignHotbarSlot,
+	assignPaletteCommandToHotbar,
+	HOTBAR_COMMAND_MIME,
+	HOTBAR_KEYS,
+	hotbarSlotIndexForKeyboardEvent,
+	normalizeHotbarSlots,
+	parseHotbarSlots,
+	swapHotbarSlots,
+	type HotbarAssignmentMethod,
+	type HotbarAssignmentResult,
+	type HotbarKey,
+	type HotbarSlot,
+	type HotbarSlots,
+} from "./command-assignment.ts"
 export {
 	filterPaletteCommands,
 	isCommandPaletteKeyboardEvent,

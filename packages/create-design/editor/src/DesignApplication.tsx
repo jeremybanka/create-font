@@ -1,9 +1,12 @@
 import {
+	ActionHotbar,
+	assignPaletteCommandToHotbar,
 	canvasScale,
 	canvasToolCursor,
 	CommandPalette,
 	TilingWorkspace,
 	isCommandPaletteKeyboardEvent,
+	parseHotbarSlots,
 	readVectorClipboard,
 	reduceVectorGesture,
 	reduceCanvasWheel,
@@ -28,6 +31,8 @@ import {
 	type VectorSnapGuide,
 	type VectorTransformHandle,
 	type TileCommandRequest,
+	type HotbarSlots,
+	type TilingWorkspaceStatus,
 } from "@create-art/editor"
 import {
 	Group,
@@ -172,6 +177,10 @@ import {
 	type DesignStackCommand,
 } from "./design-hierarchy.ts"
 import { designStackShortcutCommand } from "./design-stack-shortcut.ts"
+import {
+	DEFAULT_DESIGN_HOTBAR_SLOTS,
+	DESIGN_HOTBAR_STORAGE_KEY,
+} from "./design-action-hotbar.ts"
 import {
 	createDesignLayer,
 	deleteDesignLayer,
@@ -1137,12 +1146,23 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			"",
 	)
 	const [paletteOpen, setPaletteOpen] = useState(false)
+	const [hotbarSlots, setHotbarSlots] = useState<HotbarSlots>(() => {
+		const storage = browserLocalStorage()
+		return (
+			parseHotbarSlots(storage?.getItem(DESIGN_HOTBAR_STORAGE_KEY) ?? null) ??
+			DEFAULT_DESIGN_HOTBAR_SLOTS
+		)
+	})
 	const [helpOpen, setHelpOpen] = useState(false)
 	const [transformCursor, setTransformCursor] = useState<CanvasCursor | null>(
 		null,
 	)
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<DesignTileKind> | null>(null)
+	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
+		dirty: false,
+		management: false,
+	})
 	const [status, setStatus] = useState(
 		`Ready — draw a shape or press ${MOD_KEY_LABEL}+Shift+P for commands.`,
 	)
@@ -1152,6 +1172,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		persistenceLabel(persistence),
 	)
 	const announcedStatusRef = useRef(status)
+	useEffect(() => {
+		try {
+			browserLocalStorage()?.setItem(
+				DESIGN_HOTBAR_STORAGE_KEY,
+				JSON.stringify(hotbarSlots),
+			)
+		} catch {
+			// Hotbar persistence is best-effort in restricted browsing contexts.
+		}
+	}, [hotbarSlots])
 	useEffect(() => {
 		if (announcedStatusRef.current === status) return
 		announcedStatusRef.current = status
@@ -1485,6 +1515,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const openTile = useCallback((kind: DesignTileKind): void => {
 		tileCommandSequence.current += 1
 		setTileCommandRequest({ id: tileCommandSequence.current, kind })
+	}, [])
+	const updateTilingStatus = useCallback((next: TilingWorkspaceStatus) => {
+		setTilingStatus((current) =>
+			current.dirty === next.dirty && current.management === next.management
+				? current
+				: next,
+		)
 	}, [])
 	const openCommandPalette = useCallback((): void => {
 		setHelpOpen(false)
@@ -8148,6 +8185,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					storageKey={DESIGN_TILING_STORAGE_KEY}
 					commandRequest={tileCommandRequest}
 					enabled={!paletteOpen}
+					onStatusChange={updateTilingStatus}
+				/>
+				<ActionHotbar
+					commands={commands}
+					enabled={!paletteOpen && !tilingStatus.management}
+					paletteOpen={paletteOpen}
+					slots={hotbarSlots}
+					onAssignCommand={(commandId, slotIndex) => {
+						setHotbarSlots(
+							(current) =>
+								assignPaletteCommandToHotbar(
+									current,
+									slotIndex,
+									commandId,
+									"drag",
+								).slots,
+						)
+					}}
+					onOpenCommands={openCommandPalette}
+					onSlotsChange={setHotbarSlots}
 				/>
 			</main>
 
@@ -8214,8 +8271,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						command.do()
 						closeCommandPalette()
 					}}
-					onAssign={() => {
-						setStatus("Hotbar assignment is reserved for the full workspace.")
+					onAssign={(command, slotIndex) => {
+						const assignment = assignPaletteCommandToHotbar(
+							hotbarSlots,
+							slotIndex,
+							command.id,
+							"keyboard",
+						)
+						setHotbarSlots(assignment.slots)
+						if (assignment.closePalette) closeCommandPalette()
 					}}
 				/>
 			) : null}

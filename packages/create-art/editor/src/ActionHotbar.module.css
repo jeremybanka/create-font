@@ -12,10 +12,10 @@ action-hotbar.class {
 	background: color-mix(in srgb, var(--panel) 94%, transparent);
 	backdrop-filter: blur(12px);
 	transform: translateX(-50%);
-	z-index: 3;
+	z-index: var(--action-hotbar-z-index, 3);
 
 	&[data-palette-open="true"] {
-		z-index: 41;
+		z-index: var(--action-hotbar-palette-z-index, 41);
 	}
 
 	> hotbar-slot {
@@ -49,7 +49,7 @@ action-hotbar.class {
 
 			&:hover,
 			&[aria-pressed="true"] {
-				border-color: var(--line-selected);
+				border-color: var(--line-selected, var(--accent));
 				background: var(--selected);
 				color: var(--ink);
 			}

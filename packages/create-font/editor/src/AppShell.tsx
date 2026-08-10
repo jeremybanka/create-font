@@ -5,16 +5,14 @@ import { type TimelineMeta, useO, useTL } from "atom.io/react"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { DEFAULT_HOTBAR_SLOTS, HOTBAR_STORAGE_KEY } from "./action-hotbar.ts"
 import {
+	ActionHotbar,
 	assignPaletteCommandToHotbar,
-	DEFAULT_HOTBAR_SLOTS,
-	HOTBAR_STORAGE_KEY,
-	parseHotbarSlots,
-	type HotbarSlots,
-} from "./action-hotbar.ts"
-import { ActionHotbar, type ActionHotbarProps } from "./ActionHotbar.tsx"
-import {
 	isCommandPaletteKeyboardEvent,
+	parseHotbarSlots,
+	type ActionHotbarProps,
+	type HotbarSlots,
 	type PaletteCommand,
 } from "@create-art/editor"
 import { AppAnchor } from "./AppAnchor.tsx"

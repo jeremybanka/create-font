@@ -13,7 +13,17 @@ export const HOTBAR_KEYS = [
 	"=",
 ] as const
 
-export const HOTBAR_COMMAND_MIME = "application/x-create-font-command"
+export type HotbarKey = (typeof HOTBAR_KEYS)[number]
+export type HotbarSlot = string | null
+export type HotbarSlots = readonly HotbarSlot[]
+export type HotbarAssignmentMethod = "drag" | "keyboard"
+
+export interface HotbarAssignmentResult {
+	readonly slots: HotbarSlots
+	readonly closePalette: boolean
+}
+
+export const HOTBAR_COMMAND_MIME = "application/x-create-art-command"
 
 const HOTBAR_CODES = [
 	"Digit1",
@@ -47,4 +57,68 @@ export function hotbarSlotIndexForKeyboardEvent(
 		event.code as (typeof HOTBAR_CODES)[number],
 	)
 	return index < 0 ? null : index
+}
+
+export function normalizeHotbarSlots(value: unknown): HotbarSlots | null {
+	if (!Array.isArray(value) || value.length !== HOTBAR_KEYS.length) return null
+	if (
+		value.some(
+			(slot) =>
+				slot !== null && (typeof slot !== "string" || slot.length === 0),
+		)
+	)
+		return null
+	return value as HotbarSlots
+}
+
+export function parseHotbarSlots(value: string | null): HotbarSlots | null {
+	if (value === null) return null
+	try {
+		return normalizeHotbarSlots(JSON.parse(value))
+	} catch {
+		return null
+	}
+}
+
+export function assignHotbarSlot(
+	slots: HotbarSlots,
+	index: number,
+	commandId: string | null,
+): HotbarSlots {
+	if (index < 0 || index >= HOTBAR_KEYS.length) return slots
+	return slots.map((slot, slotIndex) =>
+		slotIndex === index ? commandId : slot,
+	)
+}
+
+export function assignPaletteCommandToHotbar(
+	slots: HotbarSlots,
+	index: number,
+	commandId: string,
+	method: HotbarAssignmentMethod,
+): HotbarAssignmentResult {
+	return {
+		slots: assignHotbarSlot(slots, index, commandId),
+		closePalette: method === "keyboard",
+	}
+}
+
+export function swapHotbarSlots(
+	slots: HotbarSlots,
+	leftIndex: number,
+	rightIndex: number,
+): HotbarSlots {
+	if (
+		leftIndex < 0 ||
+		leftIndex >= HOTBAR_KEYS.length ||
+		rightIndex < 0 ||
+		rightIndex >= HOTBAR_KEYS.length ||
+		leftIndex === rightIndex
+	)
+		return slots
+	return slots.map((slot, index) => {
+		if (index === leftIndex) return slots[rightIndex] ?? null
+		if (index === rightIndex) return slots[leftIndex] ?? null
+		return slot
+	})
 }
