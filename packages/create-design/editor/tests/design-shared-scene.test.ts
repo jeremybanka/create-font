@@ -1371,6 +1371,84 @@ describe("create-design shared vector scene", () => {
 		expect(document.activeElement).toBe(help)
 	})
 
+	it("exposes the complete workspace action audit through the command palette", async () => {
+		const storage = new Map<string, string>()
+		const initialDocument = createInitialDocument()
+		mountDesign({ initialDocument }, storage)
+		const openPalette = (): void => {
+			const opener = document.querySelector<HTMLButtonElement>(
+				'button[aria-label="Open Command Palette"]',
+			)
+			if (opener === null) throw new Error("Command center was not found.")
+			act(() => opener.click())
+		}
+		const command = (id: string): HTMLButtonElement => {
+			const element = document.getElementById(`command-${id}`)
+			if (!(element instanceof HTMLButtonElement))
+				throw new Error(`Command ${id} was not found.`)
+			return element
+		}
+
+		openPalette()
+		for (const id of [
+			"artboard-create",
+			"artboard-duplicate",
+			"artboard-delete",
+			"artboard-move-up",
+			"artboard-move-down",
+			"canvas-focus-active-artboard",
+			"canvas-fit-all-artboards",
+			"layer-create",
+			"layer-duplicate",
+			"layer-move-up",
+			"layer-move-down",
+			"layer-delete",
+			"export-png",
+			"appearance-target-fill",
+			"appearance-target-stroke",
+			"appearance-swap-fill-stroke",
+			"guide-toggle-lock",
+			"guide-delete",
+			"deselect-all",
+			"pen-finish-open",
+			"pen-finish-closed",
+			"pathfinder-cancel",
+		])
+			expect(command(id)).toBeDefined()
+		expect(command("artboard-delete").getAttribute("aria-disabled")).toBe(
+			"true",
+		)
+		expect(command("guide-delete").textContent).toContain(
+			"Select a guide first.",
+		)
+
+		await act(async () => {
+			command("artboard-create").click()
+			await Promise.resolve()
+		})
+		expect(
+			(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}") as DesignDocument)
+				.artboards,
+		).toHaveLength(initialDocument.artboards.length + 1)
+
+		openPalette()
+		await act(async () => {
+			command("layer-create").click()
+			await Promise.resolve()
+		})
+		expect(
+			(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}") as DesignDocument)
+				.layers,
+		).toHaveLength(initialDocument.layers.length + 1)
+
+		openPalette()
+		act(() => command("appearance-target-stroke").click())
+		openPalette()
+		expect(
+			command("appearance-target-stroke").getAttribute("aria-checked"),
+		).toBe("true")
+	})
+
 	it("renders eight screen-stable transform handles with axis cursors and discoverable help", async () => {
 		const stage = mountDesign()
 		const layer = [
