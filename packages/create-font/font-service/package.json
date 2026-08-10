@@ -38,7 +38,7 @@
 	},
 	"devDependencies": {
 		"@create-font/target": "workspace:*",
-		"vitest": "4.1.10"
+		"vitest": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"

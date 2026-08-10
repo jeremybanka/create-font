@@ -35,7 +35,7 @@
 		"@create-design/source": "workspace:*"
 	},
 	"devDependencies": {
-		"vitest": "4.1.10"
+		"vitest": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"
