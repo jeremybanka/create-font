@@ -59,6 +59,15 @@ source file atomically.
   frame/tag JSON, or a portable complete project JSON.
 - PNG import uses nearest-neighbor sizing and maps pixels to the current indexed
   palette, keeping the source contract deterministic.
+- The application chrome follows the system color scheme by default and can be
+  pinned to Light or Dark from the header or Command Palette.
+- The 12-slot action hotbar runs from `1` through `=`. Open Commands with
+  `Ctrl`/`Cmd` + `Shift` + `P`, then press `Ctrl`/`Cmd` + `Enter` and a hotbar
+  key to assign a command. Hotbar commands can also be dragged, reordered, or
+  removed with the context menu.
+- Commands also expose every workspace tile, drawing tool, frame/layer action,
+  playback control, appearance choice, save, and export operation from one
+  searchable keyboard interface.
 
 The browser maintains a local recovery copy even when no source server is
 available. With the CLI server connected, source edits autosave after a short
@@ -66,8 +75,9 @@ idle period and can also be committed immediately with `Ctrl`/`Cmd` + `S`.
 
 ## Shared foundations
 
-The application imports `@create-art/editor` for the responsive tiling system
-and accessible tile controls. It deliberately keeps its raster document model,
-pixel algorithms, filesystem source contract, and browser canvas implementation
+The application imports `@create-art/editor` for the responsive tiling system,
+accessible tile controls, Command Palette, and assignable action hotbar. It
+deliberately keeps its raster document model, pixel algorithms, filesystem
+source contract, appearance preference, and browser canvas implementation
 inside `create-sprites`; no existing create-font, create-design, or create-art
 package is modified to add product-specific behavior.
