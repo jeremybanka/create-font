@@ -67,6 +67,91 @@ describe("linked artboards", () => {
 		).toBe(true)
 	})
 
+	test("carries link scale into stroke metrics without changing placed geometry", () => {
+		const initial = createInitialDocument()
+		const sourceObject = {
+			...initial.objects[0]!,
+			name: "Scaled stroke source",
+			geometry: {
+				kind: "rectangle" as const,
+				x: 20,
+				y: 30,
+				width: 100,
+				height: 60,
+			},
+			appearance: {
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 10,
+					dashArray: [4, 6],
+					dashOffset: 2,
+				},
+			},
+		}
+		const source = {
+			...initial,
+			objects: [sourceObject],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: sourceObject.id }],
+				},
+			],
+		}
+		const link = {
+			...initial.objects[0]!,
+			id: "object:scaled-link",
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "source-design",
+				artboardId: initial.artboards[0]!.id,
+				width: initial.artboards[0]!.width,
+				height: initial.artboards[0]!.height,
+			},
+			transform: { a: 0, b: 0.5, c: -0.5, d: 0, e: 300, f: 100 },
+		}
+		const target = {
+			...initial,
+			objects: [link],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: link.id }],
+				},
+			],
+		}
+		const resolution = resolveDesignArtboardLinks(target, [
+			{ projectId: "source-design", revision: "r1", document: source },
+		])
+		const projected = resolution.document.objects.find(
+			({ name }) => name === sourceObject.name,
+		)
+
+		expect(projected?.appearance.stroke).toMatchObject({
+			width: 5,
+			dashArray: [2, 3],
+			dashOffset: 1,
+			miterLimit: DEFAULT_DESIGN_STROKE_STYLE.miterLimit,
+		})
+		expect(projected?.transform).toEqual({
+			a: 0,
+			b: 1,
+			c: -1,
+			d: 0,
+			e: 300,
+			f: 100,
+		})
+		if (projected?.geometry.kind !== "rectangle")
+			throw new Error("Expected the live rectangle to remain live.")
+		expect(projected.geometry).toMatchObject({
+			x: sourceObject.geometry.x * 0.5,
+			y: sourceObject.geometry.y * 0.5,
+			width: sourceObject.geometry.width * 0.5,
+			height: sourceObject.geometry.height * 0.5,
+		})
+	})
+
 	test("preserves live text, images, masks, and collision-proof runtime resources", () => {
 		const source = createInitialDocument()
 		const fontBytes = new Uint8Array([1, 2, 3])
