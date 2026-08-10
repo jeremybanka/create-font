@@ -13,6 +13,54 @@ references, relative incoming/outgoing handles, soft/hard node modes, and
 each contour's explicit `closed` state, plus editor-only note and color fields,
 all cross the boundary in the same form emitted by the state graph.
 
+## Glyphs.app import
+
+`importGlyphsSource(text)` reads the text OpenStep property-list form used by
+Glyphs 2 and 3 and returns a validated editor-v5 source. It never throws for
+malformed input: failures and lossy conversions carry stable codes, source
+property paths, and, for syntax errors, line and column positions. The parser
+rejects binary plists, unknown format versions, UTF-8 input over 32 MiB, tokens
+over 1 MiB, more than one million values, and nesting deeper than 256
+collections.
+
+```ts
+import { importGlyphsSource, splitEditorFontSource } from "@create-font/source"
+
+const imported = importGlyphsSource(await file.text())
+if (!imported.ok) throw new Error(imported.errors[0].message)
+
+const directory = splitEditorFontSource(imported.value.source)
+```
+
+The lowering boundary is intentionally explicit about what editor v5 can
+represent:
+
+| Glyphs data                                                                                              | Import behavior                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| family/version, UPM, master metrics and style                                                            | default-master values become native metrics/style; Windows metrics conservatively cover every master's outline and control bounds   |
+| axes, masters, and instances                                                                             | converted to stable native entities and design locations                                                                            |
+| line and cubic path nodes                                                                                | converted to master-local contours with relative handles and smooth/hard modes                                                      |
+| components                                                                                               | recursively expanded per master with affine transforms; component editability is reported as lost                                   |
+| glyph names, export state, notes, widths, and Unicode values                                             | converted to native glyph/layer/cmap data                                                                                           |
+| default-master glyph and class kerning                                                                   | classes expanded to explicit native glyph pairs                                                                                     |
+| classes, prefixes, and features                                                                          | returned as Adobe feature text only when the complete result passes create-font semantic analysis; otherwise omitted with a warning |
+| anchors, guides, backgrounds, special layers, per-master metrics/kerning, and instance export parameters | omitted with source-located warnings because editor v5 has no corresponding field                                                   |
+
+Missing component references, cycles, invalid transforms/nodes, quadratic
+curves, and invalid resulting editor state are errors; the importer never
+silently substitutes geometry. Component expansion preserves appearance but
+does not preserve Glyphs' reusable component relationship. Expansion is
+memoized and rejects nesting beyond 64 references, or any master layer beyond
+10,000 contours or two million points.
+
+Because editor v5 has no reusable component unit, a component-heavy,
+multi-master source can become much larger after faithful expansion. Import and
+`font check` remain bounded, but very large expanded projects can exceed the
+current compiler's default Node heap or stack during `font build`; increasing
+those limits may expose further compiler diagnostics such as non-integral
+variation decomposition. The importer does not silently drop masters or
+components to avoid that downstream limit.
+
 ## Project source directory
 
 The directory is deliberately shaped around the state graph's useful remote

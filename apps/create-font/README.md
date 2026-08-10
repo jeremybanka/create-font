@@ -42,6 +42,33 @@ default master. New workspaces use `npm install` by default. Pass
 `--package-manager=pnpm`, `--package-manager=yarn`, or `--package-manager=bun`
 to choose another installer, or `--no-install` to defer installation.
 
+Import a Glyphs 2 or 3 text source directly into the same native directory
+format with `--from`:
+
+```sh
+npx create-font --from ./MyFamily.glyphs --no-install
+# or choose the project directory name explicitly
+npx create-font my-family --from ./MyFamily.glyphs
+```
+
+Without an explicit name, a filesystem-safe form of the `.glyphs` filename
+becomes the workspace and font directory name. Import finishes parsing,
+lowering, and native source validation before it creates the font directory,
+writes all font JSON units in a private sibling directory, then publishes that
+complete font project with one rename. A newly named workspace is staged as a
+whole when its destination does not exist. When the destination is an existing
+user-owned empty directory, that directory is preserved and workspace metadata
+can precede the atomic font-directory publication. Syntax and lowering failures
+include a source path (and line/column for plist syntax); lossy but usable
+conversions are printed as warnings. Binary plists and `.glyphspackage`
+directories are not accepted—save an editable text `.glyphs` file first.
+Components are expanded to contours; anchors, guides, background/special
+layers, variable kerning beyond the default master, and other unsupported
+authoring metadata are diagnosed rather than silently represented. See the
+`@create-font/source` support table for the complete conversion contract,
+expansion limits, and the current build scalability caveat for very large
+component-heavy, multi-master sources.
+
 `font build [name]` validates the selected directory source, projects it through
 the editor compiler, and emits a deterministic variable TrueType font. Outputs
 stay outside canonical source below
