@@ -8,12 +8,14 @@ import {
 } from "./dev-ports.ts"
 
 describe(`development ports`, () => {
-	it(`allocates the four workspace servers consecutively`, () => {
+	it(`allocates the six workspace servers consecutively`, () => {
 		assert.deepEqual(workspaceDevPorts(DEFAULT_DEV_PORT), {
 			createFontFrontend: 16_384,
 			createFontBackend: 16_385,
 			createDesignFrontend: 16_386,
 			createDesignBackend: 16_387,
+			createFoleyFrontend: 16_388,
+			createFoleyBackend: 16_389,
 		})
 	})
 
@@ -22,7 +24,7 @@ describe(`development ports`, () => {
 			resolveDevPort({
 				argv: [`--port`, `20000`],
 				defaultPort: DEFAULT_DEV_PORT,
-				portCount: 4,
+				portCount: 6,
 			}),
 			20_000,
 		)
@@ -30,7 +32,7 @@ describe(`development ports`, () => {
 			resolveDevPort({
 				argv: [`--port=21000`],
 				defaultPort: DEFAULT_DEV_PORT,
-				portCount: 4,
+				portCount: 6,
 			}),
 			21_000,
 		)
@@ -41,7 +43,7 @@ describe(`development ports`, () => {
 			resolveDevPort({
 				defaultPort: DEFAULT_DEV_PORT,
 				environmentValue: `23000`,
-				portCount: 4,
+				portCount: 6,
 			}),
 			23_000,
 		)
@@ -50,7 +52,7 @@ describe(`development ports`, () => {
 				argv: [`--port=22000`],
 				defaultPort: DEFAULT_DEV_PORT,
 				environmentValue: `23000`,
-				portCount: 4,
+				portCount: 6,
 			}),
 			22_000,
 		)
@@ -62,7 +64,7 @@ describe(`development ports`, () => {
 				resolveDevPort({
 					argv: [`--port=font`],
 					defaultPort: DEFAULT_DEV_PORT,
-					portCount: 4,
+					portCount: 6,
 				}),
 			/--port must be an integer/,
 		)
@@ -71,9 +73,9 @@ describe(`development ports`, () => {
 				resolveDevPort({
 					argv: [`--port=65534`],
 					defaultPort: DEFAULT_DEV_PORT,
-					portCount: 4,
+					portCount: 6,
 				}),
-			/leave room for 4 consecutive TCP ports/,
+			/leave room for 6 consecutive TCP ports/,
 		)
 	})
 })

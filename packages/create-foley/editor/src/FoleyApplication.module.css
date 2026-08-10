@@ -1,0 +1,160 @@
+:global(:root) {
+	--ui-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-family: var(--ui-font);
+	font-synthesis: none;
+	color-scheme: dark;
+}
+
+:global(*) { box-sizing: border-box; }
+:global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; }
+:global(body) { overflow: hidden; background: #0e1110; }
+:global(button), :global(input), :global(select) { font: inherit; }
+
+foley-application.class {
+	--paper: #0e1110;
+	--panel: #151918;
+	--panel-raised: #1a1f1d;
+	--hover: #222826;
+	--selected: #28332f;
+	--line: #2b322f;
+	--line-strong: #3b4641;
+	--line-selected: #5a8875;
+	--ink: #f2f5f3;
+	--ink-muted: #a7b0ac;
+	--ink-faint: #6f7a75;
+	--accent: #63d6a6;
+	--danger: #f1847d;
+	--shadow-subtle: rgb(0 0 0 / 40%);
+	display: grid;
+	grid-template-rows: 52px minmax(0, 1fr) 26px;
+	width: 100%;
+	height: 100%;
+	background: var(--paper);
+	color: var(--ink);
+
+	> header {
+		display: grid;
+		grid-template-columns: minmax(190px, 1fr) minmax(220px, 360px) minmax(190px, 1fr);
+		align-items: center;
+		gap: 14px;
+		padding: 0 10px 0 14px;
+		border-bottom: 1px solid var(--line);
+		background: var(--panel-raised);
+		box-shadow: 0 2px 14px var(--shadow-subtle);
+		z-index: 5;
+
+		> brand-lockup { display: flex; align-items: center; gap: 9px; min-width: 0; }
+		> brand-lockup > svg { width: 27px; height: 27px; color: var(--accent); }
+		> brand-lockup > svg path { fill: none; stroke: currentcolor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+		> brand-lockup > project-identity { display: grid; min-width: 0; }
+		> brand-lockup > project-identity > strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+		> brand-lockup > project-identity > span { margin-top: 2px; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+
+		> command-center { display: flex; justify-content: center; min-width: 0; }
+		> command-center > button {
+			display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+			width: 100%; height: 32px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: 7px;
+			background: var(--paper); color: var(--ink-muted); cursor: pointer;
+		}
+		> command-center > button:hover { border-color: var(--accent); color: var(--ink); }
+		> command-center > button > command-icon { display: grid; place-items: center; width: 13px; height: 13px; }
+		> command-center > button > span { overflow: hidden; text-align: left; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+		> command-center > button > kbd { font-size: 8px; color: var(--ink-faint); }
+
+		> header-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+		> header-actions > span { font-size: 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); }
+		> header-actions > span[data-state="unsaved"] { color: #ffd166; }
+	}
+
+	> main { display: grid; grid-template-columns: 220px minmax(360px, 1fr) 260px; min-height: 0; }
+	> main > aside { min-height: 0; overflow-y: auto; background: var(--panel); }
+	> main > aside:first-child { border-right: 1px solid var(--line); }
+	> main > aside:last-child { border-left: 1px solid var(--line); }
+
+	> main > aside > section-title {
+		position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+		height: 34px; padding: 0 10px; border-bottom: 1px solid var(--line); background: rgb(21 25 24 / 94%); backdrop-filter: blur(8px);
+		font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted);
+	}
+	> main > aside > section-title > small { font-size: 8px; font-weight: 500; color: var(--ink-faint); }
+
+	> main > aside > layer-list { display: grid; padding: 5px; }
+	> main > aside > layer-list > layer-row { display: grid; grid-template-columns: minmax(0, 1fr) 28px; border-radius: 6px; }
+	> main > aside > layer-list > layer-row[data-selected="true"] { background: var(--selected); box-shadow: inset 0 0 0 1px var(--line-selected); }
+	> main > aside > layer-list > layer-row > button { border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+	> main > aside > layer-list > layer-row > button:first-child { display: grid; grid-template-columns: 7px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; padding: 8px; text-align: left; }
+	> main > aside > layer-list > layer-row > button:last-child { display: grid; place-items: center; padding: 0; color: var(--ink-faint); }
+	> main > aside > layer-list > layer-row > button:last-child:hover { color: var(--accent); }
+	> main > aside > layer-list > layer-row > button:first-child > i { width: 7px; height: 28px; border-radius: 4px; }
+	> main > aside > layer-list > layer-row > button:first-child > span { display: grid; min-width: 0; gap: 3px; }
+	> main > aside > layer-list > layer-row > button:first-child > span > strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+	> main > aside > layer-list > layer-row > button:first-child > span > small { font-size: 8px; color: var(--ink-faint); }
+
+	> main > aside > add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 7px; border-top: 1px solid var(--line); }
+	> main > aside > add-grid > button { display: flex; align-items: center; gap: 5px; padding: 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink-muted); font-size: 9px; text-transform: capitalize; cursor: pointer; }
+	> main > aside > add-grid > button:hover { border-color: var(--accent); color: var(--ink); }
+
+	> main > workspace-panel { display: grid; grid-template-rows: 42px 150px minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; background: #101412; }
+	> main > workspace-panel > transport-bar { display: flex; align-items: center; gap: 10px; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+	> main > workspace-panel > transport-bar > button:first-child { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 1px solid var(--accent); border-radius: 50%; background: color-mix(in srgb, var(--accent) 13%, var(--paper)); color: var(--accent); cursor: pointer; }
+	> main > workspace-panel > transport-bar > button:first-child:hover { background: color-mix(in srgb, var(--accent) 24%, var(--paper)); }
+	> main > workspace-panel > transport-bar > time-code { font: 600 12px/1 ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+	> main > workspace-panel > transport-bar > time-code > small { font-size: 8px; color: var(--ink-faint); }
+	> main > workspace-panel > transport-bar > label { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--ink-muted); }
+	> main > workspace-panel > transport-bar > label > input { accent-color: var(--accent); }
+	> main > workspace-panel > transport-bar > meter-group { display: flex; gap: 12px; margin-left: auto; font: 500 8px/1 ui-monospace, monospace; color: var(--ink-faint); }
+
+	> main > workspace-panel > waveform-overview { position: relative; display: block; min-width: 0; overflow: hidden; border-bottom: 1px solid var(--line); background: radial-gradient(circle at 50% 0, #1a2420, #111513 68%); cursor: crosshair; }
+	> main > workspace-panel > waveform-overview::after { content: "MASTER WAVEFORM"; position: absolute; top: 9px; left: 11px; font-size: 7px; letter-spacing: .12em; color: var(--ink-faint); }
+	> main > workspace-panel > waveform-overview > svg { position: absolute; inset: 18px 10px 8px; width: calc(100% - 20px); height: calc(100% - 26px); }
+	> main > workspace-panel > waveform-overview > svg > path { fill: none; stroke: var(--accent); stroke-width: 1.2; opacity: .8; }
+	> main > workspace-panel > waveform-overview > play-head,
+	> main > workspace-panel > foley-timeline > play-head { position: absolute; z-index: 3; top: 0; bottom: 0; width: 1px; background: #fff; box-shadow: 0 0 7px rgb(255 255 255 / 60%); pointer-events: none; }
+	> main > workspace-panel > waveform-overview > play-head::before,
+	> main > workspace-panel > foley-timeline > play-head::before { content: ""; position: absolute; top: 0; left: -3px; border: 4px solid transparent; border-top-color: #fff; }
+
+	> main > workspace-panel > foley-timeline { position: relative; display: grid; grid-auto-rows: 48px; align-content: start; min-height: 0; overflow: auto; padding-top: 24px; background-image: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), rgb(255 255 255 / 4%) calc(12.5% - 1px), rgb(255 255 255 / 4%) 12.5%); }
+	> main > workspace-panel > foley-timeline > time-ruler { position: absolute; inset: 0 0 auto; height: 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+	> main > workspace-panel > foley-timeline > time-ruler > span { position: absolute; top: 7px; padding-left: 4px; border-left: 1px solid var(--line-strong); font: 7px/1 ui-monospace, monospace; color: var(--ink-faint); }
+	> main > workspace-panel > foley-timeline > timeline-lane { position: relative; display: block; min-width: 540px; border-bottom: 1px solid rgb(255 255 255 / 4%); }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip { position: absolute; top: 5px; bottom: 5px; display: grid; align-content: center; gap: 2px; min-width: 8px; overflow: hidden; padding: 0 8px; border: 1px solid; border-radius: 4px; cursor: grab; user-select: none; }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip:active { cursor: grabbing; }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip[data-selected="true"] { box-shadow: 0 0 0 1px #fff, 0 3px 10px rgb(0 0 0 / 40%); }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip[data-muted="true"] { opacity: .35; }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip > strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+	> main > workspace-panel > foley-timeline > timeline-lane > timeline-clip > small { font-size: 7px; color: var(--ink-muted); }
+
+	> main > aside > inspector-fields { display: grid; gap: 9px; padding: 10px; }
+	> main > aside > inspector-fields > field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 7px; }
+	> main > aside > inspector-fields > subsection-title { padding-top: 4px; border-top: 1px solid var(--line); font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+	> main > aside > inspector-fields > action-row { display: flex; gap: 6px; }
+	> main > aside > empty-state { display: grid; place-items: center; min-height: 100px; padding: 20px; font-size: 10px; color: var(--ink-faint); }
+
+	> footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px; border-top: 1px solid var(--line); background: var(--panel-raised); font-size: 8px; color: var(--ink-faint); }
+
+	/* Shared create-art controls inherit the create-family visual tokens. */
+	> main > aside > inspector-fields > :global(tile-text-field),
+	> main > aside > inspector-fields > :global(tile-numeric-field),
+	> main > aside > inspector-fields > :global(tile-select),
+	> main > aside > inspector-fields > :global(tile-checkbox) { min-width: 0; }
+}
+
+@media (width <= 900px) {
+	foley-application.class {
+		> header { grid-template-columns: minmax(150px, 1fr) auto; }
+		> header > command-center { display: none; }
+		> main { grid-template-columns: 190px minmax(360px, 1fr); }
+		> main > aside:last-child { position: absolute; z-index: 4; right: 0; top: 52px; bottom: 26px; width: 250px; box-shadow: -10px 0 30px rgb(0 0 0 / 45%); }
+		> main > workspace-panel { margin-right: 250px; }
+	}
+}
+
+@media (width <= 650px) {
+	foley-application.class {
+		> main { grid-template-columns: 1fr; }
+		> main > aside:first-child { display: none; }
+		> main > workspace-panel { margin-right: 0; }
+		> main > aside:last-child { display: none; }
+		> main > workspace-panel > transport-bar > meter-group { display: none; }
+	}
+}

@@ -31,9 +31,11 @@
 	"include": ["**/*.ts", "*.d.ts"],
 	"exclude": [
 		"apps/create-design",
+		"apps/create-foley",
 		"apps/create-font",
 		"packages/create-art/editor",
 		"packages/create-design/editor",
+		"packages/create-foley/editor",
 		"packages/create-font/editor"
 	]
 }

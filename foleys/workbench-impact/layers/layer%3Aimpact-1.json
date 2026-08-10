@@ -1,0 +1,16 @@
+{
+	"id": "layer:impact-1",
+	"name": "Impact",
+	"generator": "impact",
+	"start": 0,
+	"duration": 0.7,
+	"gain": 0.9,
+	"pan": 0,
+	"pitch": 90,
+	"seed": 2654435769,
+	"muted": false,
+	"solo": false,
+	"waveform": "sine",
+	"envelope": { "attack": 0.003, "decay": 0.24, "sustain": 0.2, "release": 0.18 },
+	"filter": { "highpass": 28, "lowpass": 6500 }
+}

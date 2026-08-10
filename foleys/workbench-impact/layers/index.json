@@ -1,0 +1,7 @@
+{
+	"layers": [
+		{ "id": "layer:impact-1", "path": "layers/layer%3Aimpact-1.json" },
+		{ "id": "layer:crackle-2", "path": "layers/layer%3Acrackle-2.json" },
+		{ "id": "layer:noise-3", "path": "layers/layer%3Anoise-3.json" }
+	]
+}

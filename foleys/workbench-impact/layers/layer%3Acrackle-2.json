@@ -1,0 +1,16 @@
+{
+	"id": "layer:crackle-2",
+	"name": "Debris",
+	"generator": "crackle",
+	"start": 0.04,
+	"duration": 0.9,
+	"gain": 0.38,
+	"pan": 0.12,
+	"pitch": 1800,
+	"seed": 1013904242,
+	"muted": false,
+	"solo": false,
+	"waveform": "sine",
+	"envelope": { "attack": 0.003, "decay": 0.2, "sustain": 0.2, "release": 0.18 },
+	"filter": { "highpass": 80, "lowpass": 9000 }
+}

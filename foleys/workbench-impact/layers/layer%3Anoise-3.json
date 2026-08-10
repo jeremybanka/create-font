@@ -1,0 +1,16 @@
+{
+	"id": "layer:noise-3",
+	"name": "Room tail",
+	"generator": "noise",
+	"start": 0.08,
+	"duration": 1.7,
+	"gain": 0.16,
+	"pan": 0,
+	"pitch": 520,
+	"seed": 3668339987,
+	"muted": false,
+	"solo": false,
+	"waveform": "sine",
+	"envelope": { "attack": 0.003, "decay": 0.2, "sustain": 0.68, "release": 0.4 },
+	"filter": { "highpass": 160, "lowpass": 3200 }
+}

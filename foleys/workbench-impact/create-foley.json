@@ -1,0 +1,11 @@
+{
+	"format": "create-foley.project",
+	"version": 1,
+	"title": "Workbench Impact",
+	"description": "A layered cinematic impact built from deterministic procedural sources.",
+	"duration": 2.4,
+	"sampleRate": 48000,
+	"looping": false,
+	"loopCrossfade": 0.08,
+	"masterGain": 0.9
+}
