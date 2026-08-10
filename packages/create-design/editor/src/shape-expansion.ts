@@ -66,12 +66,10 @@ export function expandDesignShape(
 			contours: geometryContours(object.geometry).map((contour) => ({
 				...contour,
 				id: `contour:${nextId()}`,
-				points: contour.points.map(
-					(point): DesignPoint => ({
-						...point,
-						id: `point:${nextId()}`,
-					}),
-				),
+				points: contour.points.map((point): DesignPoint => ({
+					...point,
+					id: `point:${nextId()}`,
+				})),
 			})),
 		},
 	}
