@@ -8,10 +8,14 @@
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-design/ai"
 	},
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"LICENSE"
+	],
 	"type": "module",
 	"sideEffects": false,
-	"publishConfig": { "access": "public" },
-	"files": ["dist", "src", "README.md", "LICENSE"],
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -20,11 +24,21 @@
 		},
 		"./package.json": "./package.json"
 	},
-	"scripts": { "build": "vp pack", "test": "vp test" },
-	"dependencies": { "@create-design/source": "workspace:*" },
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"@create-design/source": "workspace:*"
+	},
 	"devDependencies": {
 		"@types/node": "25.9.5",
 		"vitest": "4.1.10"
 	},
-	"engines": { "node": ">=22.0.0" }
+	"engines": {
+		"node": ">=22.0.0"
+	}
 }

@@ -3,15 +3,18 @@ import type { DesignDocument } from "@create-design/source"
 export type IllustratorImportDiagnostic = Readonly<{
 	code: string
 	message: string
-	page?: number
+	sourceSpan?: Readonly<{
+		start: number
+		end: number
+		line: number
+		column: number
+	}>
 	severity: "error" | "warning" | "info"
 	stage: "container" | "content"
 }>
 
 export type IllustratorImportOptions = Readonly<{
-	/** Space inserted between imported PDF pages in the global document plane. */
-	artboardGap?: number
-	/** Used for the document title when PDF metadata does not provide one. */
+	/** Used for the document title when Illustrator metadata has no title. */
 	title?: string
 }>
 

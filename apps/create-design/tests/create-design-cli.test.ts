@@ -162,12 +162,27 @@ describe("create-design CLI", () => {
 		expect(stderr).toContain("Package manager must be npm, pnpm, yarn, or bun")
 	})
 
-	it("imports PDF-compatible Illustrator artwork into staged native source", async () => {
+	it("imports native Illustrator source into staged native source", async () => {
 		const cwd = await temporaryRoot()
 		const input = join(cwd, "Brand Logo.ai")
 		await writeFile(
 			input,
-			"%PDF-1.4\n% Adobe Illustrator\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/ArtBox[0 0 100 200]/Contents 4 0 R/Resources<<>>>>endobj\n4 0 obj<</Length 26>>stream\n1 0 0 rg 10 20 30 40 re f\nendstream\nendobj\n5 0 obj<</Producer(Adobe Illustrator)/Title(Poster)>>endobj\n%%EOF\n",
+			[
+				"%!PS-Adobe-3.0",
+				"%%Creator: Adobe Illustrator",
+				"%%Title: (Poster)",
+				"%_/Dictionary :",
+				"%_0 0 /RealPointRelToROrigin %_ (PositionPoint1)",
+				"%_100 -200 /RealPointRelToROrigin %_ (PositionPoint2)",
+				"%_(Artboard 1) /UnicodeString (Name)",
+				"%_; (ArtboardArray)",
+				"%AI5_BeginLayer",
+				"1 1 1 1 0 0 1 0 255 79 79 0 50 0 Lb",
+				"(Artwork) Ln",
+				"1 0 0 0 Xa 10 20 m 40 20 L 40 60 L f",
+				"LB",
+				"%%PageTrailer",
+			].join("\r"),
 		)
 		const previous = process.cwd()
 		process.chdir(cwd)
@@ -183,12 +198,12 @@ describe("create-design CLI", () => {
 			)
 			expect(exitCode).toBe(0)
 			expect(stderr).toBe("")
-			expect(stdout).toContain("Imported 1 artboards and 1 painted objects")
+			expect(stdout).toContain("Imported 1 artboards and 1 objects")
 			const root = join(cwd, "Brand-Logo", "designs", "Brand-Logo")
 			const metadata = JSON.parse(
 				await readFile(join(root, "document.json"), "utf8"),
 			) as { title: string }
-			expect(metadata.title).toBe("Poster")
+			expect(metadata.title).toBe("Brand Logo")
 			const artboardIndex = JSON.parse(
 				await readFile(join(root, "artboards", "index.json"), "utf8"),
 			) as { entries: readonly { path: string }[] }
@@ -201,7 +216,7 @@ describe("create-design CLI", () => {
 		}
 	})
 
-	it("rejects legacy Illustrator input before creating a project", async () => {
+	it("rejects incomplete Illustrator input before creating a project", async () => {
 		const cwd = await temporaryRoot()
 		const input = join(cwd, "legacy.ai")
 		await writeFile(input, "%!PS-Adobe-3.0\n%%Creator: Adobe Illustrator\n")
@@ -217,7 +232,7 @@ describe("create-design CLI", () => {
 				},
 			)
 			expect(exitCode).toBe(1)
-			expect(stderr).toContain("ai.import.not-pdf-compatible")
+			expect(stderr).toContain("ai.source.no-layers")
 			await expect(
 				readFile(join(cwd, "should-not-exist", "package.json")),
 			).rejects.toMatchObject({ code: "ENOENT" })

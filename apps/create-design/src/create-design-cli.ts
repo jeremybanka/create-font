@@ -31,7 +31,7 @@ const createOptions = options(
 	}),
 	{
 		from: {
-			description: "Import a PDF-compatible Adobe Illustrator .ai file.",
+			description: "Import native Adobe Illustrator .ai source.",
 			example: "--from=poster.ai",
 			parse: parseStringOption,
 			required: false,
@@ -124,7 +124,7 @@ export async function runCreateDesignCli(
 			for (const diagnostic of imported.diagnostics)
 				writeLine(
 					io.stderr,
-					`${diagnostic.severity} ${diagnostic.code}${diagnostic.page === undefined ? "" : ` [page ${diagnostic.page}]`}: ${diagnostic.message}`,
+					`${diagnostic.severity} ${diagnostic.code}${diagnostic.sourceSpan === undefined ? "" : ` [line ${diagnostic.sourceSpan.line}, column ${diagnostic.sourceSpan.column}]`}: ${diagnostic.message}`,
 				)
 			if (!imported.ok || imported.document === null) return 1
 		}
@@ -148,7 +148,7 @@ export async function runCreateDesignCli(
 		if (imported !== undefined)
 			writeLine(
 				io.stdout,
-				`Imported ${imported.summary.artboards} artboards and ${imported.summary.objects} painted objects from ${resolve(from!)}.`,
+				`Imported ${imported.summary.artboards} artboards and ${imported.summary.objects} objects from ${resolve(from!)}.`,
 			)
 		writeLine(
 			io.stdout,

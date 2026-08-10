@@ -1,8 +1,9 @@
 # `@create-design/ai`
 
-Headless Adobe Illustrator interchange for create-design. The importer reads the
-visible PDF-compatible representation embedded in modern `.ai` files and lowers
-supported vector artwork into a validated native `DesignDocument`.
+Headless Adobe Illustrator interchange for create-design. The importer decodes
+Illustrator's native, revisable source program from modern `.ai` containers (or
+reads legacy direct Illustrator PostScript), parses a typed canvas-oriented AST,
+then lowers it into one validated `DesignDocument` hierarchy.
 
 ```ts
 import { readFile } from "node:fs/promises"
@@ -13,46 +14,65 @@ if (!imported.ok) console.error(imported.diagnostics)
 else console.log(imported.document)
 ```
 
+PDF pages embedded in `.ai` files are previews and are never treated as artwork.
+If native Illustrator source is absent or corrupt, import fails with an
+actionable diagnostic instead of clipping or duplicating page presentations.
+
+## Architecture and public APIs
+
+- `decodeIllustratorPrivateSource` extracts contiguous `AIPrivateData` blocks,
+  supports Illustrator deflate and zstd containers, and accepts direct
+  Illustrator PostScript. Node versions without zstd support receive a precise
+  compatibility diagnostic.
+- `lexIllustratorSource` losslessly tokenizes the complete source, including
+  whitespace, CR/LF/CRLF comments and pseudo-comments, nested strings, names,
+  numbers, hex data, and structural delimiters. Concatenating token `raw` values
+  reconstructs the original program.
+- `parseIllustratorSource` produces the typed AST: global artboards, layers,
+  groups, compound paths, clipping paths, editable Béziers, process/custom
+  paint, strokes, live text frames, decoded AI11 text resources, source spans,
+  metadata, raw statements, and preserved unknown extensions.
+- `lowerIllustratorSource` performs the explicit Illustrator Y-up to
+  create-design Y-down conversion once. Artboards remain independent export
+  rectangles on the original shared canvas; they never own, clip, translate, or
+  duplicate artwork.
+
 ## Fidelity boundary
 
-This is a visible-artwork interchange boundary, not a decoder for Illustrator's
-private editing data. Each ordered PDF page becomes a create-design artboard.
-The art box is used when present, then the crop box or media box. Pages are laid
-out left-to-right with a 48-point gap because the PDF page tree does not retain
-Illustrator's global artboard positions. Page and Form transforms are composed
-with an explicit PDF Y-up to create-design Y-down transform.
+Native paths, compound holes, clipping groups, layer order/visibility/locks,
+RGB/CMYK/gray and alternate process paint, stroke geometry, artboard positions,
+bleed, and off-artboard artwork are preserved. AI11 point-like live text content,
+positions, point size, and PostScript font selection are represented as native
+text objects. Imported PostScript fonts are external dependencies and must be
+added to `fonts/index.json` before build or export; the importer lists every
+required font in one diagnostic. Character-run paint, paragraph metrics, and
+threaded, multiframe, area, path, or undo-shadow text structures remain
+losslessly available in the source AST and produce explicit fidelity warnings.
 
-| PDF-compatible Illustrator feature                                   | Import behavior                                                                                                                 |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Lines, cubic paths, rectangles, compound paths                       | Editable native paths                                                                                                           |
-| Nonzero/even-odd fill rules                                          | Preserved                                                                                                                       |
-| RGB, CMYK, and gray process paint                                    | Shared native swatches                                                                                                          |
-| Width, cap, join, miter, and dash stroke style                       | Preserved                                                                                                                       |
-| Graphics-state transforms, page rotation/UserUnit, and Form XObjects | Composed into object transforms; Form BBox clipping is preserved                                                                |
-| Clipping paths                                                       | Preserved as nested native clipping groups, including intersecting clips                                                        |
-| PDF optional-content groups                                          | Best-effort ordered native layers, including default visibility; private Illustrator hierarchy and object names are unavailable |
-| Text and fonts                                                       | Skipped with a warning; outline text in Illustrator first                                                                       |
-| Raster images                                                        | Skipped with a warning                                                                                                          |
-| Gradients, patterns, spot/DeviceN/ICC colors                         | Skipped or retain a preceding process paint, with a warning                                                                     |
-| Opacity, masks, and non-normal blend modes                           | Not represented; warned                                                                                                         |
-| Illustrator effects, symbols, brushes, appearance stacks             | Only their visible PDF vector expansion can import                                                                              |
+Placed/raster art, gradients and patterns, opacity/transparency, symbols,
+brushes, effects, overprint, and newer extension operators remain in the
+lossless source layer. Named-ink tints retain their authored operands in the AST
+and lower to a tint-aware process-color approximation. Constructs that affect
+visible scene lowering are diagnosed rather than silently converted to
+page-preview artwork.
 
-The importer accepts PDF 1.0–1.7 AI documents with direct objects and direct
-stream lengths. Streams may be uncompressed or use `FlateDecode`. Legacy
-PostScript-only AI, ordinary PDFs, encrypted PDFs, compressed object/xref
-streams, indirect stream lengths, and unsupported content filters fail with an
-actionable diagnostic before a document is returned. Bounded file, object,
-page, stream, aggregate decoded/token work, path-point, emitted-document,
-metadata, layer, and Form-recursion limits protect CLI imports from untrusted
-or accidentally enormous files. The CLI checks and performs a bounded read of
-the input before parsing.
+The decoder and public parser enforce bounded file, compressed-source,
+decompressed-source, source-character, statement, AI11 text-resource, token,
+point, and nesting work before materializing their corresponding structures.
+Private PDF stream blocks require direct bounded lengths and exact PDF object
+and generation references; duplicate objects, ambiguous descriptors, generation
+mismatches, and missing or noncontiguous block numbering are rejected.
 
-## Development sample smoke test
+## Supplied-sample verification
 
-The untracked reference files supplied with issue 479 were exercised without
-being added to the repository. As of this implementation, `biome.ai` imports 8
-artboards, 47 painted objects, and 18 swatches; `equip.ai` imports 1 artboard,
-22 painted objects, 3 swatches, and its 5 optional-content names; and
-`lasertag.ai` imports 4 PDF pages, 76 painted objects, and 1 process swatch while
-reporting its ICC-color and live-text fidelity warnings. Small generated test
-fixtures cover the same parser paths in the committed suite.
+The untracked issue samples are read during development but never committed.
+Current native-source results are:
+
+- `biome.ai`: 8 original-position artboards, 51 vector objects, 5 clipping groups.
+- `equip.ai`: 1 artboard with 3-point bleed, 22 vector objects, 11 groups, and 5
+  authored layers with their locks.
+- `lasertag.ai`: all 4 exact artboards, 207 vector objects, 45 structural groups,
+  111 source compound paths, and 9 active live-text frames (216 native objects).
+
+Committed synthetic fixtures cover the same private-container, shared-canvas,
+paint, hierarchy, compound, clip, lexer, and direct-source paths.

@@ -1,2 +1,7 @@
 export * from "./import-ai.ts"
+export * from "./illustrator-source-parser.ts"
+export * from "./illustrator-source-lexer.ts"
+export * from "./illustrator-source-types.ts"
+export * from "./lower-illustrator-source.ts"
+export * from "./private-container.ts"
 export * from "./types.ts"

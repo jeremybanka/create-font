@@ -3,7 +3,6 @@
 "create-design": patch
 ---
 
-Import the visible PDF-compatible vector representation of Adobe Illustrator
-files into validated, editable create-design source with explicit fidelity and
-safety diagnostics and staged design-project creation through
-`create-design --from file.ai`.
+Import Adobe Illustrator's native revisable source into a shared canvas
+hierarchy with original artboards, layers, vector paint, clipping, compound
+paths, and live text instead of treating embedded PDF preview pages as artwork.
