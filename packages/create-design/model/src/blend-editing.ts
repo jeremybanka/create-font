@@ -225,9 +225,10 @@ export function expandDesignBlend(
 	if (startIndex < 0 || endIndex < 0) return null
 	const insertionIndex = Math.max(startIndex, endIndex)
 	const laterEndpointId = document.objects[insertionIndex]!.id
-	const sceneInsertions = objects.map(
-		({ id }): DesignSceneChild => ({ kind: "object", id }),
-	)
+	const sceneInsertions = objects.map(({ id }): DesignSceneChild => ({
+		kind: "object",
+		id,
+	}))
 	return {
 		document: {
 			...document,
