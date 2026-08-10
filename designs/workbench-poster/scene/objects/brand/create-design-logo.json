@@ -1,0 +1,15 @@
+{
+	"appearance": {},
+	"format": "create-design.object",
+	"geometry": {
+		"artboardId": "artboard:logo",
+		"height": 128,
+		"kind": "artboard-link",
+		"projectId": "create-design-logo",
+		"width": 128
+	},
+	"id": "object:create-design-logo",
+	"name": "create-design logo",
+	"transform": { "a": 0.5, "b": 0, "c": 0, "d": 0.5, "e": 208, "f": 60 },
+	"version": 3
+}

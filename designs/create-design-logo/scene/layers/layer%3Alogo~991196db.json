@@ -1,0 +1,12 @@
+{
+	"children": [
+		{ "id": "object:artboard-frame", "kind": "object" },
+		{ "id": "object:shape-orbit", "kind": "object" },
+		{ "id": "object:anchor-node", "kind": "object" }
+	],
+	"format": "create-design.layer",
+	"id": "layer:logo",
+	"name": "Logo",
+	"uiColor": "orange",
+	"version": 2
+}

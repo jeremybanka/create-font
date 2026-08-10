@@ -50,6 +50,10 @@ export default defineConfig({
 				target: backend,
 				ws: true,
 			},
+			"/projects": {
+				target: backend,
+				ws: true,
+			},
 		},
 	},
 })

@@ -1,0 +1,25 @@
+{
+	"appearance": {
+		"stroke": {
+			"cap": "round",
+			"dashArray": [],
+			"dashOffset": 0,
+			"join": "round",
+			"miterLimit": 4,
+			"swatchId": "swatch:ink",
+			"width": 12
+		}
+	},
+	"format": "create-design.object",
+	"geometry": {
+		"height": 76,
+		"kind": "rectangle",
+		"width": 72,
+		"x": 22,
+		"y": 28
+	},
+	"id": "object:artboard-frame",
+	"name": "Artboard frame",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
+	"version": 1
+}

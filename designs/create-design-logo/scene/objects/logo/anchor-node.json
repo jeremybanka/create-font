@@ -1,0 +1,15 @@
+{
+	"appearance": { "fill": { "swatchId": "swatch:ink" } },
+	"format": "create-design.object",
+	"geometry": {
+		"centerX": 88,
+		"centerY": 40,
+		"kind": "ellipse",
+		"radiusX": 6,
+		"radiusY": 6
+	},
+	"id": "object:anchor-node",
+	"name": "Anchor node",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
+	"version": 1
+}

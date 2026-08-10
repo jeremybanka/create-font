@@ -1,0 +1,9 @@
+{
+	"format": "create-design.metadata",
+	"guides": [
+		{ "axis": "x", "id": "guide:center-x", "value": 64 },
+		{ "axis": "y", "id": "guide:center-y", "value": 64 }
+	],
+	"title": "create-design logo",
+	"version": 1
+}
