@@ -6,4 +6,5 @@
 ---
 
 Add the create-foley source-first procedural sound-effect designer, browser
-editor, deterministic audio renderer, WAV export, project scaffolder, and CLI.
+editor, deterministic audio renderer, WAV export, project scaffolder, CLI,
+light and dark appearances, customizable action hotbar, and undoable editing.

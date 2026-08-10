@@ -1,10 +1,17 @@
 import {
+	ActionHotbar,
+	assignPaletteCommandToHotbar,
 	CommandPalette,
+	IS_MAC_LIKE,
+	MOD_KEY_LABEL,
+	isCommandPaletteKeyboardEvent,
+	parseHotbarSlots,
 	TileButton,
 	TileCheckbox,
 	TileNumericField,
 	TileSelect,
 	TileTextField,
+	type HotbarSlots,
 	type PaletteCommand,
 } from "@create-art/editor"
 import { encodeWav, renderFoleyProject } from "@create-foley/audio"
@@ -22,34 +29,48 @@ import {
 import {
 	CopyIcon,
 	Cross2Icon,
+	DesktopIcon,
 	DownloadIcon,
 	MagnifyingGlassIcon,
+	MoonIcon,
 	PauseIcon,
 	PlayIcon,
 	PlusIcon,
+	QuestionMarkCircledIcon,
 	ReloadIcon,
 	SpeakerLoudIcon,
 	SpeakerOffIcon,
+	SunIcon,
 } from "@radix-ui/react-icons"
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { createAudioPreview } from "./audio-preview.ts"
+import {
+	DEFAULT_FOLEY_HOTBAR_SLOTS,
+	FOLEY_APPEARANCE_STORAGE_KEY,
+	FOLEY_HOTBAR_STORAGE_KEY,
+	parseFoleyAppearance,
+	resolveFoleyAppearance,
+	type FoleyAppearance,
+} from "./application-preferences.ts"
 import type { FoleyEditorBrowserOptions } from "./browser-api.ts"
 import css from "./FoleyApplication.module.css"
 
 const STORAGE_KEY = "create-foley.recovery.v1"
+const HISTORY_LIMIT = 100
 const COLORS: Readonly<Record<FoleyGenerator, string>> = {
 	impact: "#ff8a5b",
 	whoosh: "#70d6b2",
 	noise: "#8ab4f8",
 	tone: "#d6a5ff",
 	crackle: "#ffd166",
+}
+const svg = {
+	Cross: Cross2Icon,
+	Desktop: DesktopIcon,
+	Moon: MoonIcon,
+	Question: QuestionMarkCircledIcon,
+	Sun: SunIcon,
 }
 
 function download(name: string, bytes: BlobPart, type: string): void {
@@ -62,10 +83,12 @@ function download(name: string, bytes: BlobPart, type: string): void {
 }
 
 function slug(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/gu, "-")
-		.replace(/^-|-$/gu, "") || "foley"
+	return (
+		value
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/gu, "-")
+			.replace(/^-|-$/gu, "") || "foley"
+	)
 }
 
 function updateLayer(
@@ -73,7 +96,12 @@ function updateLayer(
 	id: string,
 	update: (layer: FoleyLayer) => FoleyLayer,
 ): FoleyProject {
-	return { ...project, layers: project.layers.map((layer) => layer.id === id ? update(layer) : layer) }
+	return {
+		...project,
+		layers: project.layers.map((layer) =>
+			layer.id === id ? update(layer) : layer,
+		),
+	}
 }
 
 function Waveform({ samples }: { readonly samples: Float32Array }) {
@@ -83,15 +111,24 @@ function Waveform({ samples }: { readonly samples: Float32Array }) {
 	const columns = 240
 	for (let column = 0; column < columns; column += 1) {
 		const start = Math.floor((column / columns) * samples.length)
-		const end = Math.max(start + 1, Math.floor(((column + 1) / columns) * samples.length))
+		const end = Math.max(
+			start + 1,
+			Math.floor(((column + 1) / columns) * samples.length),
+		)
 		let peak = 0
 		for (let index = start; index < end; index += 1)
 			peak = Math.max(peak, Math.abs(samples[index] ?? 0))
 		const x = (column / (columns - 1)) * width
-		points.push(`${x},${height / 2 - peak * height * 0.44} ${x},${height / 2 + peak * height * 0.44}`)
+		points.push(
+			`${x},${height / 2 - peak * height * 0.44} ${x},${height / 2 + peak * height * 0.44}`,
+		)
 	}
 	return (
-		<svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+		<svg
+			viewBox={`0 0 ${width} ${height}`}
+			preserveAspectRatio="none"
+			aria-hidden="true"
+		>
 			<path d={`M ${points.join(" M ")}`} />
 		</svg>
 	)
@@ -102,23 +139,75 @@ function meterText(value: number): string {
 	return `${(20 * Math.log10(value)).toFixed(1)} dB`
 }
 
+interface FoleyHistory {
+	readonly past: readonly FoleyProject[]
+	readonly present: FoleyProject
+	readonly future: readonly FoleyProject[]
+}
+
+function readInitialProject(
+	initialProject: FoleyProject | undefined,
+): FoleyProject {
+	if (initialProject !== undefined) return initialProject
+	try {
+		const stored = localStorage.getItem(STORAGE_KEY)
+		if (stored !== null) return validateFoleyProject(JSON.parse(stored))
+	} catch {
+		// Recovery is best-effort in restricted browsing contexts.
+	}
+	return createInitialFoleyProject()
+}
+
+function readInitialAppearance(): FoleyAppearance {
+	try {
+		return parseFoleyAppearance(
+			localStorage.getItem(FOLEY_APPEARANCE_STORAGE_KEY),
+		)
+	} catch {
+		return "system"
+	}
+}
+
+function readInitialHotbarSlots(): HotbarSlots {
+	try {
+		return (
+			parseHotbarSlots(localStorage.getItem(FOLEY_HOTBAR_STORAGE_KEY)) ??
+			DEFAULT_FOLEY_HOTBAR_SLOTS
+		)
+	} catch {
+		return DEFAULT_FOLEY_HOTBAR_SLOTS
+	}
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+	return (
+		target instanceof HTMLInputElement ||
+		target instanceof HTMLTextAreaElement ||
+		target instanceof HTMLSelectElement ||
+		(target instanceof HTMLElement && target.isContentEditable)
+	)
+}
+
 export function FoleyApplication({
 	initialProject,
 	onSave,
 }: FoleyEditorBrowserOptions) {
-	const [project, setProject] = useState<FoleyProject>(() => {
-		if (initialProject !== undefined) return initialProject
-		try {
-			const stored = localStorage.getItem(STORAGE_KEY)
-			if (stored !== null) return validateFoleyProject(JSON.parse(stored))
-		} catch { /* Recovery is best-effort. */ }
-		return createInitialFoleyProject()
-	})
+	const [history, setHistory] = useState<FoleyHistory>(() => ({
+		past: [],
+		present: readInitialProject(initialProject),
+		future: [],
+	}))
+	const project = history.present
 	const [selectedId, setSelectedId] = useState(project.layers[0]?.id ?? null)
 	const [playing, setPlaying] = useState(false)
 	const [playhead, setPlayhead] = useState(0)
 	const [paletteOpen, setPaletteOpen] = useState(false)
-	const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">("saved")
+	const [helpOpen, setHelpOpen] = useState(false)
+	const [appearance, setAppearance] = useState(readInitialAppearance)
+	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
+	const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">(
+		"saved",
+	)
 	const [error, setError] = useState<string | null>(null)
 	const startedAt = useRef(0)
 	const startedOffset = useRef(0)
@@ -126,11 +215,92 @@ export function FoleyApplication({
 	const fileInput = useRef<HTMLInputElement>(null)
 	const rendered = useMemo(() => renderFoleyProject(project), [project])
 	const selected = project.layers.find((layer) => layer.id === selectedId)
+	const setProject = useCallback(
+		(
+			update: FoleyProject | ((current: FoleyProject) => FoleyProject),
+		): void => {
+			setHistory((current) => {
+				const next =
+					typeof update === "function" ? update(current.present) : update
+				if (next === current.present) return current
+				return {
+					past: [...current.past, current.present].slice(-HISTORY_LIMIT),
+					present: next,
+					future: [],
+				}
+			})
+		},
+		[],
+	)
+	const undo = useCallback((): void => {
+		setHistory((current) => {
+			const previous = current.past.at(-1)
+			if (previous === undefined) return current
+			return {
+				past: current.past.slice(0, -1),
+				present: previous,
+				future: [current.present, ...current.future].slice(0, HISTORY_LIMIT),
+			}
+		})
+	}, [])
+	const redo = useCallback((): void => {
+		setHistory((current) => {
+			const next = current.future[0]
+			if (next === undefined) return current
+			return {
+				past: [...current.past, current.present].slice(-HISTORY_LIMIT),
+				present: next,
+				future: current.future.slice(1),
+			}
+		})
+	}, [])
 
 	useEffect(() => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(project))
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(project))
+		} catch {
+			// Recovery is best-effort in restricted browsing contexts.
+		}
 		setSaveState("unsaved")
 	}, [project])
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(
+				FOLEY_HOTBAR_STORAGE_KEY,
+				JSON.stringify(hotbarSlots),
+			)
+		} catch {
+			// Hotbar persistence is best-effort in restricted browsing contexts.
+		}
+	}, [hotbarSlots])
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(FOLEY_APPEARANCE_STORAGE_KEY, appearance)
+		} catch {
+			// Appearance persistence is best-effort in restricted browsing contexts.
+		}
+		const query = window.matchMedia("(prefers-color-scheme: light)")
+		const update = (): void => {
+			document.documentElement.dataset.foleyTheme = resolveFoleyAppearance(
+				appearance,
+				query.matches,
+			)
+		}
+		update()
+		query.addEventListener("change", update)
+		return () => query.removeEventListener("change", update)
+	}, [appearance])
+
+	useEffect(() => {
+		if (
+			selectedId !== null &&
+			project.layers.some((layer) => layer.id === selectedId)
+		)
+			return
+		setSelectedId(project.layers[0]?.id ?? null)
+	}, [project.layers, selectedId])
 
 	useEffect(() => {
 		if (!playing) return
@@ -138,7 +308,11 @@ export function FoleyApplication({
 		const tick = (): void => {
 			const elapsed = (performance.now() - startedAt.current) / 1_000
 			const next = startedOffset.current + elapsed
-			setPlayhead(project.looping ? next % project.duration : Math.min(project.duration, next))
+			setPlayhead(
+				project.looping
+					? next % project.duration
+					: Math.min(project.duration, next),
+			)
 			if (!project.looping && next >= project.duration) {
 				setPlaying(false)
 				return
@@ -151,17 +325,48 @@ export function FoleyApplication({
 
 	useEffect(() => {
 		const handle = (event: KeyboardEvent): void => {
-			const editing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement
+			const editing = isEditableTarget(event.target)
 			if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
 				event.preventDefault()
 				void save()
-			} else if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "p") {
+			} else if (
+				!editing &&
+				(event.metaKey || event.ctrlKey) &&
+				event.key.toLowerCase() === "z"
+			) {
 				event.preventDefault()
+				if (event.shiftKey) redo()
+				else undo()
+			} else if (isCommandPaletteKeyboardEvent(event, IS_MAC_LIKE)) {
+				event.preventDefault()
+				setHelpOpen(false)
 				setPaletteOpen(true)
-			} else if (!editing && event.code === "Space") {
+			} else if (helpOpen && event.key === "Escape") {
+				event.preventDefault()
+				setHelpOpen(false)
+			} else if (
+				!paletteOpen &&
+				!helpOpen &&
+				!editing &&
+				(event.metaKey || event.ctrlKey) &&
+				event.key.toLowerCase() === "d"
+			) {
+				event.preventDefault()
+				duplicateSelected()
+			} else if (
+				!paletteOpen &&
+				!helpOpen &&
+				!editing &&
+				event.code === "Space"
+			) {
 				event.preventDefault()
 				void togglePlayback()
-			} else if (!editing && (event.key === "Backspace" || event.key === "Delete")) {
+			} else if (
+				!paletteOpen &&
+				!helpOpen &&
+				!editing &&
+				(event.key === "Backspace" || event.key === "Delete")
+			) {
 				event.preventDefault()
 				removeSelected()
 			}
@@ -208,7 +413,8 @@ export function FoleyApplication({
 		const base = createFoleyLayer(generator, project.layers.length)
 		let id = base.id
 		let suffix = 2
-		while (project.layers.some((layer) => layer.id === id)) id = `${base.id}-${suffix++}`
+		while (project.layers.some((layer) => layer.id === id))
+			id = `${base.id}-${suffix++}`
 		const layer = {
 			...base,
 			id,
@@ -231,12 +437,16 @@ export function FoleyApplication({
 		if (selected === undefined) return
 		let suffix = 2
 		let id = `${selected.id}-copy`
-		while (project.layers.some((layer) => layer.id === id)) id = `${selected.id}-copy-${suffix++}`
+		while (project.layers.some((layer) => layer.id === id))
+			id = `${selected.id}-copy-${suffix++}`
 		const copy = {
 			...selected,
 			id,
 			name: `${selected.name} copy`,
-			start: Math.min(project.duration - selected.duration, selected.start + 0.05),
+			start: Math.min(
+				project.duration - selected.duration,
+				selected.start + 0.05,
+			),
 			seed: (selected.seed + 0x9e37_79b9) >>> 0,
 		}
 		setProject({ ...project, layers: [...project.layers, copy] })
@@ -245,84 +455,351 @@ export function FoleyApplication({
 
 	const exportWav = (): void => {
 		const wav = encodeWav(rendered)
-		download(`${slug(project.title)}.wav`, wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength) as ArrayBuffer, "audio/wav")
+		download(
+			`${slug(project.title)}.wav`,
+			wav.buffer.slice(
+				wav.byteOffset,
+				wav.byteOffset + wav.byteLength,
+			) as ArrayBuffer,
+			"audio/wav",
+		)
 	}
 	const exportJson = (): void =>
-		download(`${slug(project.title)}.create-foley.json`, `${JSON.stringify(project, null, "\t")}\n`, "application/json")
+		download(
+			`${slug(project.title)}.create-foley.json`,
+			`${JSON.stringify(project, null, "\t")}\n`,
+			"application/json",
+		)
 
-	const commands = useMemo<readonly PaletteCommand[]>(() => [
-		...FOLEY_GENERATORS.map((generator) => ({
-			id: `add-${generator}`,
-			displayName: `Add ${generator}`,
-			category: "Layer",
-			icon: "PlusIcon" as const,
-			do: () => addLayer(generator),
-		})),
-		{ id: "play", displayName: playing ? "Stop preview" : "Play preview", category: "Transport", icon: "CircleIcon", shortcut: "Space", do: () => { void togglePlayback() } },
-		{ id: "duplicate", displayName: "Duplicate layer", category: "Layer", icon: "DoubleArrowRightIcon", disabled: selected === undefined, do: duplicateSelected },
-		{ id: "export", displayName: "Export WAV", category: "Output", icon: "StarIcon", do: exportWav },
-	], [playing, project, selected, playhead, rendered])
+	const commands = useMemo<readonly PaletteCommand[]>(
+		() => [
+			{
+				id: "play",
+				displayName: playing ? "Stop preview" : "Play preview",
+				category: "Transport",
+				description: "Preview the procedural mix from the playhead.",
+				icon: "CircleIcon",
+				shortcut: "Space",
+				do: () => {
+					void togglePlayback()
+				},
+			},
+			...FOLEY_GENERATORS.map((generator) => ({
+				id: `add-${generator}`,
+				displayName: `Add ${generator}`,
+				category: "Layer",
+				description: `Add a procedural ${generator} layer at the playhead.`,
+				icon: "PlusIcon" as const,
+				do: () => addLayer(generator),
+			})),
+			{
+				id: "duplicate",
+				displayName: "Duplicate layer",
+				category: "Layer",
+				icon: "DoubleArrowRightIcon",
+				shortcut: `${MOD_KEY_LABEL}+D`,
+				disabled: selected === undefined,
+				disabledReason: "Select a layer to duplicate it.",
+				do: duplicateSelected,
+			},
+			{
+				id: "delete",
+				displayName: "Delete layer",
+				category: "Layer",
+				icon: "HobbyKnifeIcon",
+				shortcut: "Delete",
+				disabled: selected === undefined,
+				disabledReason: "Select a layer to delete it.",
+				do: removeSelected,
+			},
+			{
+				id: "undo",
+				displayName: "Undo",
+				category: "Edit",
+				icon: "DoubleArrowLeftIcon",
+				shortcut: `${MOD_KEY_LABEL}+Z`,
+				disabled: history.past.length === 0,
+				disabledReason: "There is nothing to undo.",
+				do: undo,
+			},
+			{
+				id: "redo",
+				displayName: "Redo",
+				category: "Edit",
+				icon: "DoubleArrowRightIcon",
+				shortcut: `${MOD_KEY_LABEL}+Shift+Z`,
+				disabled: history.future.length === 0,
+				disabledReason: "There is nothing to redo.",
+				do: redo,
+			},
+			{
+				id: "toggle-loop",
+				displayName: "Loop preview",
+				category: "Transport",
+				icon: "ShuffleIcon",
+				checked: project.looping,
+				do: () => setProject({ ...project, looping: !project.looping }),
+			},
+			{
+				id: "export-wav",
+				displayName: "Export WAV",
+				category: "Output",
+				description: "Render a stereo 24-bit WAV file.",
+				icon: "StarIcon",
+				do: exportWav,
+			},
+			{
+				id: "export-source",
+				displayName: "Export source",
+				category: "Output",
+				icon: "Link1Icon",
+				do: exportJson,
+			},
+			{
+				id: "import-source",
+				displayName: "Import source",
+				category: "File",
+				icon: "LinkBreak1Icon",
+				do: () => fileInput.current?.click(),
+			},
+			{
+				id: "save",
+				displayName: "Save project",
+				category: "File",
+				icon: "SquareIcon",
+				shortcut: `${MOD_KEY_LABEL}+S`,
+				do: () => {
+					void save()
+				},
+			},
+			...(["system", "light", "dark"] as const).map((mode) => ({
+				id: `appearance-${mode}`,
+				displayName: `Appearance: ${mode[0]?.toUpperCase()}${mode.slice(1)}`,
+				category: "View",
+				icon: "Half2Icon" as const,
+				checked: appearance === mode,
+				do: () => setAppearance(mode),
+			})),
+			{
+				id: "help",
+				displayName: "Keyboard shortcuts",
+				category: "Help",
+				icon: "DotFilledIcon",
+				do: () => setHelpOpen(true),
+			},
+		],
+		[
+			appearance,
+			history.future.length,
+			history.past.length,
+			playing,
+			project,
+			selected,
+			playhead,
+			rendered,
+		],
+	)
 
 	return (
-		<foley-application className={css.class}>
+		<foley-application className={css.class} data-appearance={appearance}>
 			<header>
 				<brand-lockup>
-					<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 16h4l2-8 4 16 4-20 4 24 3-12h3" /></svg>
-					<project-identity><strong>{project.title}</strong><span>create-foley</span></project-identity>
+					<svg viewBox="0 0 32 32" aria-hidden="true">
+						<path d="M4 16h4l2-8 4 16 4-20 4 24 3-12h3" />
+					</svg>
+					<project-identity>
+						<strong>{project.title}</strong>
+						<span>create-foley</span>
+					</project-identity>
 				</brand-lockup>
 				<command-center>
-					<button type="button" onClick={() => setPaletteOpen(true)}><command-icon><MagnifyingGlassIcon /></command-icon><span>Search commands</span><kbd>⇧⌘P</kbd></button>
+					<button
+						type="button"
+						aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
+						onClick={() => {
+							setHelpOpen(false)
+							setPaletteOpen(true)
+						}}
+					>
+						<command-icon>
+							<MagnifyingGlassIcon />
+						</command-icon>
+						<span>Search commands</span>
+						<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
+					</button>
 				</command-center>
 				<header-actions>
 					<span data-state={saveState}>{saveState}</span>
-					<TileButton compact onClick={() => void save()}>Save</TileButton>
-					<TileButton compact tone="primary" onClick={exportWav}><DownloadIcon /> WAV</TileButton>
+					<appearance-picker title="Appearance">
+						{appearance === "system" ? (
+							<svg.Desktop aria-hidden="true" />
+						) : appearance === "light" ? (
+							<svg.Sun aria-hidden="true" />
+						) : (
+							<svg.Moon aria-hidden="true" />
+						)}
+						<select
+							aria-label="Appearance"
+							value={appearance}
+							onChange={(event) =>
+								setAppearance(event.currentTarget.value as FoleyAppearance)
+							}
+						>
+							<option value="system">System</option>
+							<option value="light">Light</option>
+							<option value="dark">Dark</option>
+						</select>
+					</appearance-picker>
+					<button
+						type="button"
+						data-icon-button
+						aria-label="Keyboard shortcuts"
+						title="Keyboard shortcuts"
+						onClick={() => {
+							setPaletteOpen(false)
+							setHelpOpen(true)
+						}}
+					>
+						<svg.Question />
+					</button>
+					<TileButton compact onClick={() => void save()}>
+						Save
+					</TileButton>
+					<TileButton compact tone="primary" onClick={exportWav}>
+						<DownloadIcon /> WAV
+					</TileButton>
 				</header-actions>
 			</header>
 
 			<main>
 				<aside aria-label="Layer library">
-					<section-title><span>Layers</span><small>{project.layers.length}</small></section-title>
+					<section-title>
+						<span>Layers</span>
+						<small>{project.layers.length}</small>
+					</section-title>
 					<layer-list>
 						{project.layers.map((layer) => (
-							<layer-row key={layer.id} data-selected={layer.id === selectedId || undefined}>
+							<layer-row
+								key={layer.id}
+								data-selected={layer.id === selectedId || undefined}
+							>
 								<button type="button" onClick={() => setSelectedId(layer.id)}>
 									<i style={{ background: COLORS[layer.generator] }} />
-									<span><strong>{layer.name}</strong><small>{layer.generator} · {layer.duration.toFixed(2)}s</small></span>
+									<span>
+										<strong>{layer.name}</strong>
+										<small>
+											{layer.generator} · {layer.duration.toFixed(2)}s
+										</small>
+									</span>
 								</button>
-								<button type="button" aria-label={layer.muted ? `Unmute ${layer.name}` : `Mute ${layer.name}`} onClick={() => setProject(updateLayer(project, layer.id, (value) => ({ ...value, muted: !value.muted })))}>
-									<mute-icon>{layer.muted ? <SpeakerOffIcon /> : <SpeakerLoudIcon />}</mute-icon>
+								<button
+									type="button"
+									aria-label={
+										layer.muted ? `Unmute ${layer.name}` : `Mute ${layer.name}`
+									}
+									onClick={() =>
+										setProject(
+											updateLayer(project, layer.id, (value) => ({
+												...value,
+												muted: !value.muted,
+											})),
+										)
+									}
+								>
+									<mute-icon>
+										{layer.muted ? <SpeakerOffIcon /> : <SpeakerLoudIcon />}
+									</mute-icon>
 								</button>
 							</layer-row>
 						))}
 					</layer-list>
 					<add-grid>
-						{FOLEY_GENERATORS.map((generator) => <button key={generator} type="button" onClick={() => addLayer(generator)}><PlusIcon />{generator}</button>)}
+						{FOLEY_GENERATORS.map((generator) => (
+							<button
+								key={generator}
+								type="button"
+								onClick={() => addLayer(generator)}
+							>
+								<PlusIcon />
+								{generator}
+							</button>
+						))}
 					</add-grid>
 				</aside>
 
 				<workspace-panel>
 					<transport-bar>
-						<button type="button" onClick={() => void togglePlayback()} aria-label={playing ? "Stop" : "Play"}>{playing ? <PauseIcon /> : <PlayIcon />}</button>
-						<time-code>{playhead.toFixed(3)} <small>/ {project.duration.toFixed(3)} s</small></time-code>
-						<label><input type="checkbox" checked={project.looping} onChange={(event) => setProject({ ...project, looping: event.currentTarget.checked })} /> Loop</label>
-						<meter-group><span>Peak {meterText(rendered.peak)}</span><span>RMS {meterText(rendered.rms)}</span></meter-group>
+						<button
+							type="button"
+							onClick={() => void togglePlayback()}
+							aria-label={playing ? "Stop" : "Play"}
+						>
+							{playing ? <PauseIcon /> : <PlayIcon />}
+						</button>
+						<time-code>
+							{playhead.toFixed(3)}{" "}
+							<small>/ {project.duration.toFixed(3)} s</small>
+						</time-code>
+						<label>
+							<input
+								type="checkbox"
+								checked={project.looping}
+								onChange={(event) =>
+									setProject({
+										...project,
+										looping: event.currentTarget.checked,
+									})
+								}
+							/>{" "}
+							Loop
+						</label>
+						<meter-group>
+							<span>Peak {meterText(rendered.peak)}</span>
+							<span>RMS {meterText(rendered.rms)}</span>
+						</meter-group>
 					</transport-bar>
-					<waveform-overview onPointerDown={(event) => {
-						const bounds = event.currentTarget.getBoundingClientRect()
-						setPlayhead(Math.max(0, Math.min(project.duration, ((event.clientX - bounds.left) / bounds.width) * project.duration)))
-					}}>
+					<waveform-overview
+						onPointerDown={(event) => {
+							const bounds = event.currentTarget.getBoundingClientRect()
+							setPlayhead(
+								Math.max(
+									0,
+									Math.min(
+										project.duration,
+										((event.clientX - bounds.left) / bounds.width) *
+											project.duration,
+									),
+								),
+							)
+						}}
+					>
 						<Waveform samples={rendered.left} />
-						<play-head style={{ left: `${(playhead / project.duration) * 100}%` }} />
+						<play-head
+							style={{ left: `${(playhead / project.duration) * 100}%` }}
+						/>
 					</waveform-overview>
 					<foley-timeline>
-						<time-ruler>{Array.from({ length: 9 }, (_, index) => <span key={index} style={{ left: `${index * 12.5}%` }}>{(project.duration * index / 8).toFixed(1)}</span>)}</time-ruler>
+						<time-ruler>
+							{Array.from({ length: 9 }, (_, index) => (
+								<span key={index} style={{ left: `${index * 12.5}%` }}>
+									{((project.duration * index) / 8).toFixed(1)}
+								</span>
+							))}
+						</time-ruler>
 						{project.layers.map((layer) => (
-							<timeline-lane key={layer.id} onClick={() => setSelectedId(layer.id)}>
+							<timeline-lane
+								key={layer.id}
+								onClick={() => setSelectedId(layer.id)}
+							>
 								<timeline-clip
 									data-selected={layer.id === selectedId || undefined}
 									data-muted={layer.muted || undefined}
-									style={{ left: `${(layer.start / project.duration) * 100}%`, width: `${(layer.duration / project.duration) * 100}%`, borderColor: COLORS[layer.generator], background: `color-mix(in srgb, ${COLORS[layer.generator]} 17%, transparent)` }}
+									style={{
+										left: `${(layer.start / project.duration) * 100}%`,
+										width: `${(layer.duration / project.duration) * 100}%`,
+										borderColor: COLORS[layer.generator],
+										background: `color-mix(in srgb, ${COLORS[layer.generator]} 17%, transparent)`,
+									}}
 									onPointerDown={(event) => {
 										event.currentTarget.setPointerCapture(event.pointerId)
 										const startX = event.clientX
@@ -330,74 +807,530 @@ export function FoleyApplication({
 										const lane = event.currentTarget.parentElement
 										const move = (moveEvent: PointerEvent): void => {
 											if (lane === null) return
-											const delta = ((moveEvent.clientX - startX) / lane.clientWidth) * project.duration
-											const next = Math.max(0, Math.min(project.duration - layer.duration, initial + delta))
-											setProject((value) => updateLayer(value, layer.id, (item) => ({ ...item, start: Math.round(next * 1_000) / 1_000 })))
+											const delta =
+												((moveEvent.clientX - startX) / lane.clientWidth) *
+												project.duration
+											const next = Math.max(
+												0,
+												Math.min(
+													project.duration - layer.duration,
+													initial + delta,
+												),
+											)
+											setProject((value) =>
+												updateLayer(value, layer.id, (item) => ({
+													...item,
+													start: Math.round(next * 1_000) / 1_000,
+												})),
+											)
 										}
-										const up = (): void => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up) }
-										window.addEventListener("pointermove", move); window.addEventListener("pointerup", up)
+										const up = (): void => {
+											window.removeEventListener("pointermove", move)
+											window.removeEventListener("pointerup", up)
+										}
+										window.addEventListener("pointermove", move)
+										window.addEventListener("pointerup", up)
 									}}
 								>
-									<strong>{layer.name}</strong><small>{layer.generator}</small>
+									<strong>{layer.name}</strong>
+									<small>{layer.generator}</small>
 								</timeline-clip>
 							</timeline-lane>
 						))}
-						<play-head style={{ left: `${(playhead / project.duration) * 100}%` }} />
+						<play-head
+							style={{ left: `${(playhead / project.duration) * 100}%` }}
+						/>
 					</foley-timeline>
 				</workspace-panel>
 
 				<aside aria-label="Inspector">
-					<section-title><span>Inspector</span>{selected === undefined ? null : <small>{selected.generator}</small>}</section-title>
-					{selected === undefined ? <empty-state>Select or add a layer.</empty-state> : (
+					<section-title>
+						<span>Inspector</span>
+						{selected === undefined ? null : (
+							<small>{selected.generator}</small>
+						)}
+					</section-title>
+					{selected === undefined ? (
+						<empty-state>Select or add a layer.</empty-state>
+					) : (
 						<inspector-fields>
-							<TileTextField label="Name" value={selected.name} onChange={(event) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, name: event.currentTarget.value })))} />
-							<TileSelect label="Generator" value={selected.generator} onChange={(event) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, generator: event.currentTarget.value as FoleyGenerator })))}>{FOLEY_GENERATORS.map((generator) => <option key={generator}>{generator}</option>)}</TileSelect>
+							<TileTextField
+								label="Name"
+								value={selected.name}
+								onChange={(event) =>
+									setProject(
+										updateLayer(project, selected.id, (layer) => ({
+											...layer,
+											name: event.currentTarget.value,
+										})),
+									)
+								}
+							/>
+							<TileSelect
+								label="Generator"
+								value={selected.generator}
+								onChange={(event) =>
+									setProject(
+										updateLayer(project, selected.id, (layer) => ({
+											...layer,
+											generator: event.currentTarget.value as FoleyGenerator,
+										})),
+									)
+								}
+							>
+								{FOLEY_GENERATORS.map((generator) => (
+									<option key={generator}>{generator}</option>
+								))}
+							</TileSelect>
 							<field-row>
-								<TileNumericField label="Start" value={selected.start} min={0} max={project.duration - selected.duration} step="any" onCommit={(start) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, start })))} />
-								<TileNumericField label="Duration" value={selected.duration} min={0.01} max={project.duration - selected.start} step="any" onCommit={(duration) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, duration })))} />
+								<TileNumericField
+									label="Start"
+									value={selected.start}
+									min={0}
+									max={project.duration - selected.duration}
+									step="any"
+									onCommit={(start) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												start,
+											})),
+										)
+									}
+								/>
+								<TileNumericField
+									label="Duration"
+									value={selected.duration}
+									min={0.01}
+									max={project.duration - selected.start}
+									step="any"
+									onCommit={(duration) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												duration,
+											})),
+										)
+									}
+								/>
 							</field-row>
 							<field-row>
-								<TileNumericField label="Gain" value={selected.gain} min={0} max={4} step="any" onCommit={(gain) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, gain })))} />
-								<TileNumericField label="Pan" value={selected.pan} min={-1} max={1} step="any" onCommit={(pan) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, pan })))} />
+								<TileNumericField
+									label="Gain"
+									value={selected.gain}
+									min={0}
+									max={4}
+									step="any"
+									onCommit={(gain) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												gain,
+											})),
+										)
+									}
+								/>
+								<TileNumericField
+									label="Pan"
+									value={selected.pan}
+									min={-1}
+									max={1}
+									step="any"
+									onCommit={(pan) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												pan,
+											})),
+										)
+									}
+								/>
 							</field-row>
-							<TileNumericField label="Pitch / color (Hz)" value={selected.pitch} min={20} max={20_000} step="any" onCommit={(pitch) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, pitch })))} />
-							<TileSelect label="Waveform" value={selected.waveform} disabled={selected.generator !== "tone"} onChange={(event) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, waveform: event.currentTarget.value as FoleyLayer["waveform"] })))}>{FOLEY_WAVEFORMS.map((waveform) => <option key={waveform}>{waveform}</option>)}</TileSelect>
+							<TileNumericField
+								label="Pitch / color (Hz)"
+								value={selected.pitch}
+								min={20}
+								max={20_000}
+								step="any"
+								onCommit={(pitch) =>
+									setProject(
+										updateLayer(project, selected.id, (layer) => ({
+											...layer,
+											pitch,
+										})),
+									)
+								}
+							/>
+							<TileSelect
+								label="Waveform"
+								value={selected.waveform}
+								disabled={selected.generator !== "tone"}
+								onChange={(event) =>
+									setProject(
+										updateLayer(project, selected.id, (layer) => ({
+											...layer,
+											waveform: event.currentTarget
+												.value as FoleyLayer["waveform"],
+										})),
+									)
+								}
+							>
+								{FOLEY_WAVEFORMS.map((waveform) => (
+									<option key={waveform}>{waveform}</option>
+								))}
+							</TileSelect>
 							<subsection-title>Envelope</subsection-title>
 							<field-row>
-								<TileNumericField label="Attack" value={selected.envelope.attack} min={0} max={selected.duration} step="any" onCommit={(attack) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, envelope: { ...layer.envelope, attack } })))} />
-								<TileNumericField label="Decay" value={selected.envelope.decay} min={0} max={selected.duration} step="any" onCommit={(decay) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, envelope: { ...layer.envelope, decay } })))} />
+								<TileNumericField
+									label="Attack"
+									value={selected.envelope.attack}
+									min={0}
+									max={selected.duration}
+									step="any"
+									onCommit={(attack) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												envelope: { ...layer.envelope, attack },
+											})),
+										)
+									}
+								/>
+								<TileNumericField
+									label="Decay"
+									value={selected.envelope.decay}
+									min={0}
+									max={selected.duration}
+									step="any"
+									onCommit={(decay) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												envelope: { ...layer.envelope, decay },
+											})),
+										)
+									}
+								/>
 							</field-row>
 							<field-row>
-								<TileNumericField label="Sustain" value={selected.envelope.sustain} min={0} max={1} step="any" onCommit={(sustain) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, envelope: { ...layer.envelope, sustain } })))} />
-								<TileNumericField label="Release" value={selected.envelope.release} min={0} max={selected.duration} step="any" onCommit={(release) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, envelope: { ...layer.envelope, release } })))} />
+								<TileNumericField
+									label="Sustain"
+									value={selected.envelope.sustain}
+									min={0}
+									max={1}
+									step="any"
+									onCommit={(sustain) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												envelope: { ...layer.envelope, sustain },
+											})),
+										)
+									}
+								/>
+								<TileNumericField
+									label="Release"
+									value={selected.envelope.release}
+									min={0}
+									max={selected.duration}
+									step="any"
+									onCommit={(release) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												envelope: { ...layer.envelope, release },
+											})),
+										)
+									}
+								/>
 							</field-row>
 							<subsection-title>Filter</subsection-title>
 							<field-row>
-								<TileNumericField label="High-pass" value={selected.filter.highpass} min={0} max={20_000} step="any" onCommit={(highpass) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, filter: { ...layer.filter, highpass } })))} />
-								<TileNumericField label="Low-pass" value={selected.filter.lowpass} min={20} max={48_000} step="any" onCommit={(lowpass) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, filter: { ...layer.filter, lowpass } })))} />
+								<TileNumericField
+									label="High-pass"
+									value={selected.filter.highpass}
+									min={0}
+									max={20_000}
+									step="any"
+									onCommit={(highpass) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												filter: { ...layer.filter, highpass },
+											})),
+										)
+									}
+								/>
+								<TileNumericField
+									label="Low-pass"
+									value={selected.filter.lowpass}
+									min={20}
+									max={48_000}
+									step="any"
+									onCommit={(lowpass) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												filter: { ...layer.filter, lowpass },
+											})),
+										)
+									}
+								/>
 							</field-row>
-							<field-row><TileCheckbox label="Mute" checked={selected.muted} onChange={(event) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, muted: event.currentTarget.checked })))} /><TileCheckbox label="Solo" checked={selected.solo} onChange={(event) => setProject(updateLayer(project, selected.id, (layer) => ({ ...layer, solo: event.currentTarget.checked })))} /></field-row>
-							<action-row><TileButton compact onClick={duplicateSelected}><CopyIcon /> Duplicate</TileButton><TileButton compact tone="danger" onClick={removeSelected}><Cross2Icon /> Delete</TileButton></action-row>
+							<field-row>
+								<TileCheckbox
+									label="Mute"
+									checked={selected.muted}
+									onChange={(event) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												muted: event.currentTarget.checked,
+											})),
+										)
+									}
+								/>
+								<TileCheckbox
+									label="Solo"
+									checked={selected.solo}
+									onChange={(event) =>
+										setProject(
+											updateLayer(project, selected.id, (layer) => ({
+												...layer,
+												solo: event.currentTarget.checked,
+											})),
+										)
+									}
+								/>
+							</field-row>
+							<action-row>
+								<TileButton compact onClick={duplicateSelected}>
+									<CopyIcon /> Duplicate
+								</TileButton>
+								<TileButton compact tone="danger" onClick={removeSelected}>
+									<Cross2Icon /> Delete
+								</TileButton>
+							</action-row>
 						</inspector-fields>
 					)}
-					<section-title><span>Project</span></section-title>
+					<section-title>
+						<span>Project</span>
+					</section-title>
 					<inspector-fields>
-						<TileTextField label="Title" value={project.title} onChange={(event) => setProject({ ...project, title: event.currentTarget.value })} />
-						<TileNumericField label="Duration (s)" value={project.duration} min={0.1} max={300} step="any" onCommit={(duration) => setProject({ ...project, duration, layers: project.layers.map((layer) => ({ ...layer, start: Math.min(layer.start, Math.max(0, duration - 0.01)), duration: Math.min(layer.duration, Math.max(0.01, duration - Math.min(layer.start, duration - 0.01))) })) })} />
-						<TileSelect label="Sample rate" value={project.sampleRate} onChange={(event) => setProject({ ...project, sampleRate: Number(event.currentTarget.value) as FoleyProject["sampleRate"] })}>{FOLEY_SAMPLE_RATES.map((rate) => <option key={rate} value={rate}>{rate / 1_000} kHz</option>)}</TileSelect>
-						<TileNumericField label="Master gain" value={project.masterGain} min={0} max={2} step="any" onCommit={(masterGain) => setProject({ ...project, masterGain })} />
-						<TileNumericField label="Loop crossfade (s)" value={project.loopCrossfade} min={0} max={project.duration / 2} step="any" onCommit={(loopCrossfade) => setProject({ ...project, loopCrossfade })} />
-						<action-row><TileButton compact onClick={exportJson}><DownloadIcon /> Source</TileButton><TileButton compact onClick={() => fileInput.current?.click()}><ReloadIcon /> Import</TileButton></action-row>
+						<TileTextField
+							label="Title"
+							value={project.title}
+							onChange={(event) =>
+								setProject({ ...project, title: event.currentTarget.value })
+							}
+						/>
+						<TileNumericField
+							label="Duration (s)"
+							value={project.duration}
+							min={0.1}
+							max={300}
+							step="any"
+							onCommit={(duration) =>
+								setProject({
+									...project,
+									duration,
+									layers: project.layers.map((layer) => ({
+										...layer,
+										start: Math.min(layer.start, Math.max(0, duration - 0.01)),
+										duration: Math.min(
+											layer.duration,
+											Math.max(
+												0.01,
+												duration - Math.min(layer.start, duration - 0.01),
+											),
+										),
+									})),
+								})
+							}
+						/>
+						<TileSelect
+							label="Sample rate"
+							value={project.sampleRate}
+							onChange={(event) =>
+								setProject({
+									...project,
+									sampleRate: Number(
+										event.currentTarget.value,
+									) as FoleyProject["sampleRate"],
+								})
+							}
+						>
+							{FOLEY_SAMPLE_RATES.map((rate) => (
+								<option key={rate} value={rate}>
+									{rate / 1_000} kHz
+								</option>
+							))}
+						</TileSelect>
+						<TileNumericField
+							label="Master gain"
+							value={project.masterGain}
+							min={0}
+							max={2}
+							step="any"
+							onCommit={(masterGain) => setProject({ ...project, masterGain })}
+						/>
+						<TileNumericField
+							label="Loop crossfade (s)"
+							value={project.loopCrossfade}
+							min={0}
+							max={project.duration / 2}
+							step="any"
+							onCommit={(loopCrossfade) =>
+								setProject({ ...project, loopCrossfade })
+							}
+						/>
+						<action-row>
+							<TileButton compact onClick={exportJson}>
+								<DownloadIcon /> Source
+							</TileButton>
+							<TileButton compact onClick={() => fileInput.current?.click()}>
+								<ReloadIcon /> Import
+							</TileButton>
+						</action-row>
 					</inspector-fields>
 				</aside>
+				<ActionHotbar
+					commands={commands}
+					enabled={!paletteOpen && !helpOpen}
+					paletteOpen={paletteOpen}
+					slots={hotbarSlots}
+					onAssignCommand={(commandId, slotIndex) => {
+						setHotbarSlots(
+							(current) =>
+								assignPaletteCommandToHotbar(
+									current,
+									slotIndex,
+									commandId,
+									"drag",
+								).slots,
+						)
+					}}
+					onOpenCommands={() => {
+						setHelpOpen(false)
+						setPaletteOpen(true)
+					}}
+					onSlotsChange={setHotbarSlots}
+				/>
 			</main>
-			<footer><span>{project.sampleRate / 1_000} kHz · 24-bit WAV · stereo</span><span>{error ?? "Deterministic procedural mix"}</span></footer>
-			<input ref={fileInput} hidden type="file" accept="application/json,.json" onChange={(event) => {
-				const file = event.currentTarget.files?.[0]
-				if (file === undefined) return
-				void file.text().then((text) => { const imported = validateFoleyProject(JSON.parse(text)); stop(); setProject(imported); setSelectedId(imported.layers[0]?.id ?? null); setError(null) }).catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
-			}} />
-			{paletteOpen ? <CommandPalette commands={commands} onCancel={() => setPaletteOpen(false)} onAssign={() => {}} onExecute={(command) => { setPaletteOpen(false); command.do() }} /> : null}
+			<footer>
+				<span>{project.sampleRate / 1_000} kHz · 24-bit WAV · stereo</span>
+				<span>{error ?? "Deterministic procedural mix"}</span>
+			</footer>
+			<input
+				ref={fileInput}
+				hidden
+				type="file"
+				accept="application/json,.json"
+				onChange={(event) => {
+					const file = event.currentTarget.files?.[0]
+					if (file === undefined) return
+					void file
+						.text()
+						.then((text) => {
+							const imported = validateFoleyProject(JSON.parse(text))
+							stop()
+							setProject(imported)
+							setSelectedId(imported.layers[0]?.id ?? null)
+							setError(null)
+						})
+						.catch((caught) =>
+							setError(
+								caught instanceof Error ? caught.message : String(caught),
+							),
+						)
+				}}
+			/>
+			{helpOpen ? (
+				<help-overlay
+					onMouseDown={(event) => {
+						if (event.target === event.currentTarget) setHelpOpen(false)
+					}}
+				>
+					<help-dialog
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="foley-shortcuts-title"
+					>
+						<help-heading>
+							<span>
+								<strong id="foley-shortcuts-title">Keyboard shortcuts</strong>
+								<small>create-foley</small>
+							</span>
+							<button
+								type="button"
+								aria-label="Close keyboard shortcuts"
+								onClick={() => setHelpOpen(false)}
+							>
+								<svg.Cross />
+							</button>
+						</help-heading>
+						<shortcut-list>
+							<span>
+								<strong>Preview / stop</strong>
+								<kbd>Space</kbd>
+							</span>
+							<span>
+								<strong>Command palette</strong>
+								<kbd>{MOD_KEY_LABEL}+Shift+P</kbd>
+							</span>
+							<span>
+								<strong>Save project</strong>
+								<kbd>{MOD_KEY_LABEL}+S</kbd>
+							</span>
+							<span>
+								<strong>Undo</strong>
+								<kbd>{MOD_KEY_LABEL}+Z</kbd>
+							</span>
+							<span>
+								<strong>Redo</strong>
+								<kbd>{MOD_KEY_LABEL}+Shift+Z</kbd>
+							</span>
+							<span>
+								<strong>Duplicate layer</strong>
+								<kbd>{MOD_KEY_LABEL}+D</kbd>
+							</span>
+							<span>
+								<strong>Delete layer</strong>
+								<kbd>Delete</kbd>
+							</span>
+							<span>
+								<strong>Run hotbar slot</strong>
+								<kbd>1–0, −, =</kbd>
+							</span>
+						</shortcut-list>
+						<p>
+							Customize the hotbar by dragging a command from the palette, or
+							press {MOD_KEY_LABEL}+Enter on a command and choose a slot key.
+							Right-click a slot to clear it.
+						</p>
+					</help-dialog>
+				</help-overlay>
+			) : null}
+			{paletteOpen ? (
+				<CommandPalette
+					commands={commands}
+					onCancel={() => setPaletteOpen(false)}
+					onAssign={(command, slotIndex) => {
+						const assignment = assignPaletteCommandToHotbar(
+							hotbarSlots,
+							slotIndex,
+							command.id,
+							"keyboard",
+						)
+						setHotbarSlots(assignment.slots)
+						if (assignment.closePalette) setPaletteOpen(false)
+					}}
+					onExecute={(command) => {
+						setPaletteOpen(false)
+						command.do()
+					}}
+				/>
+			) : null}
 		</foley-application>
 	)
 }

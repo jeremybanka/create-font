@@ -11,6 +11,6 @@
 		},
 		"types": ["node"]
 	},
-	"include": ["css.d.ts", "lasertag.d.ts", "scripts", "src"],
+	"include": ["css.d.ts", "lasertag.d.ts", "scripts", "src", "tests"],
 	"exclude": []
 }
