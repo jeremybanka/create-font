@@ -8,12 +8,14 @@ import {
 } from "./dev-ports.ts"
 
 describe(`development ports`, () => {
-	it(`allocates the four workspace servers consecutively`, () => {
+	it(`allocates the six workspace servers consecutively`, () => {
 		assert.deepEqual(workspaceDevPorts(DEFAULT_DEV_PORT), {
 			createFontFrontend: 16_384,
 			createFontBackend: 16_385,
 			createDesignFrontend: 16_386,
 			createDesignBackend: 16_387,
+			createSpritesFrontend: 16_388,
+			createSpritesBackend: 16_389,
 		})
 	})
 

@@ -1,0 +1,9 @@
+[
+	{
+		"id": "tag-run",
+		"name": "Run",
+		"fromFrameId": "frame-1",
+		"toFrameId": "frame-4",
+		"direction": "forward"
+	}
+]

@@ -1,0 +1,52 @@
+[
+	{
+		"id": "ink",
+		"name": "Ink",
+		"value": "#17141fff"
+	},
+	{
+		"id": "aubergine",
+		"name": "Aubergine",
+		"value": "#4a2f45ff"
+	},
+	{
+		"id": "brick",
+		"name": "Brick",
+		"value": "#8f3f45ff"
+	},
+	{
+		"id": "ember",
+		"name": "Ember",
+		"value": "#d46a4cff"
+	},
+	{
+		"id": "sun",
+		"name": "Sun",
+		"value": "#f6c75cff"
+	},
+	{
+		"id": "cream",
+		"name": "Cream",
+		"value": "#f4e9c9ff"
+	},
+	{
+		"id": "moss",
+		"name": "Moss",
+		"value": "#5c7b55ff"
+	},
+	{
+		"id": "mint",
+		"name": "Mint",
+		"value": "#91c788ff"
+	},
+	{
+		"id": "deep-sea",
+		"name": "Deep Sea",
+		"value": "#24566cff"
+	},
+	{
+		"id": "sky",
+		"name": "Sky",
+		"value": "#4c96b8ff"
+	}
+]

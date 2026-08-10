@@ -1,6 +1,7 @@
 # create-font workspace
 
-This repository contains the sibling create-font and create-design products,
+This repository contains the sibling create-font, create-design, and
+create-sprites products,
 along with the create-art libraries they share. The repository name predates
 create-design and still reflects its create-font origin.
 
@@ -43,6 +44,12 @@ design export designs/workbench-poster \
   --output artifacts/workbench-poster.pdf
 ```
 
+Canonical sprite data lives below `sprites/<project>/` as indexed palettes,
+layers, frames, tags, and one reviewable JSON cel per frame/layer intersection.
+The checked-in `sprites/ember-scout` animation is served by create-sprites during
+development. The editor provides pixel tools, onion skinning, live playback,
+and game-ready PNG sprite-sheet export.
+
 See [the architecture](docs/architecture.md) for the durable system boundaries
 and [the roadmap](docs/roadmap.md) for the path from the current libraries to
 the complete toolchain.
@@ -57,6 +64,9 @@ under `packages/`.
 - [`create-design`](apps/create-design/README.md) provides the `create-design`
   initializer, the repository-local `design` CLI, source workspace server, and
   application composition.
+- [`create-sprites`](apps/create-sprites/README.md) provides the sprite project
+  initializer, source server, indexed pixel editor, cel timeline, and PNG
+  sprite-sheet export.
 - [`@create-design/editor`](packages/create-design/editor/README.md) owns the
   create-design browser editor and document interaction model.
 - [`@create-design/model`](packages/create-design/model/README.md) owns headless
@@ -104,10 +114,11 @@ terms are in [`LICENSE`](LICENSE); this section is their plain-English summary.
 
 ### Your work remains yours
 
-Fonts, artwork, PDFs, project data, and other assets you create with create-font
-or create-design are yours. You may use and license them for open or proprietary
-projects, including commercial projects. The same permission covers ordinary
-project files emitted by the initializers and scaffolders.
+Fonts, artwork, sprites, animations, PDFs, project data, and other assets you
+create with create-font, create-design, or create-sprites are yours. You may use
+and license them for open or proprietary projects, including commercial
+projects. The same permission covers ordinary project files emitted by the
+initializers and scaffolders.
 
 That permission does not relicense third-party inputs, the checked-in example
 projects, or software copied into a plugin or extension. It also does not turn an
@@ -135,8 +146,8 @@ the boundary explicitly, including for transitive workspace dependencies.
 
 ### Application forks stay public
 
-`create-font`, `create-design`, `@create-art/editor`, `@create-design/editor`,
-and `@create-font/editor` are licensed under
+`create-font`, `create-design`, `create-sprites`, `@create-art/editor`,
+`@create-design/editor`, and `@create-font/editor` are licensed under
 [AGPL-3.0-or-later](LICENSES/AGPL-3.0-or-later.txt), with an
 [additional output permission](LICENSES/OUTPUT-EXCEPTION.txt). You may use,
 study, modify, redistribute, and sell them. If you distribute a modified
@@ -168,19 +179,22 @@ pnpm dev
 ```
 
 The root workspace also exposes the production-shaped CLI commands through
-`pnpm create-font`, `pnpm font`, `pnpm create-design`, and `pnpm design`.
+`pnpm create-font`, `pnpm font`, `pnpm create-design`, `pnpm design`,
+`pnpm create-sprites`, and `pnpm sprites`.
 
 The development command enables the packages' `development` export condition
-and starts four consecutive servers. The default base port is 16384—the maximum
-OpenType `unitsPerEm`—with create-font on 16384–16385 and create-design on
-16386–16387:
+and starts six consecutive servers. The default base port is 16384—the maximum
+OpenType `unitsPerEm`—with create-font on 16384–16385, create-design on
+16386–16387, and create-sprites on 16388–16389:
 
-|  Port | Server                |
-| ----: | --------------------- |
-| 16384 | create-font browser   |
-| 16385 | create-font API       |
-| 16386 | create-design browser |
-| 16387 | create-design API     |
+|  Port | Server                 |
+| ----: | ---------------------- |
+| 16384 | create-font browser    |
+| 16385 | create-font API        |
+| 16386 | create-design browser  |
+| 16387 | create-design API      |
+| 16388 | create-sprites browser |
+| 16389 | create-sprites API     |
 
 Shift the entire block for a parallel checkout with either form:
 
@@ -189,9 +203,9 @@ pnpm dev -- --port=20000
 CREATE_ART_DEV_PORT=20000 pnpm dev
 ```
 
-`pnpm dev:font` and `pnpm dev:design` run one application's two-server pair;
+`pnpm dev:font`, `pnpm dev:design`, and `pnpm dev:sprites` run one application's two-server pair;
 they accept the same `--port` option and the `CREATE_FONT_DEV_PORT` or
-`CREATE_DESIGN_DEV_PORT` environment variable.
+`CREATE_DESIGN_DEV_PORT`, or `CREATE_SPRITES_DEV_PORT` environment variable.
 
 Node runs each workspace API in watch mode while Vite provides Preact and CSS
 HMR and proxies HTTP and WebSocket API traffic to its paired backend. Each tab

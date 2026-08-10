@@ -1,0 +1,26 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"declaration": false,
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"jsx": "react-jsx",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"paths": {
+			"@create-art/editor": ["./src/shared-editor.ts"]
+		},
+		"types": ["node", "react", "react-dom"]
+	},
+	"include": [
+		"../../packages/create-art/editor/css.d.ts",
+		"../../packages/create-art/editor/lasertag.d.ts",
+		"css.d.ts",
+		"src",
+		"scripts",
+		"public",
+		"tests",
+		"vite.config.ts",
+		"vitest.config.ts"
+	],
+	"exclude": []
+}

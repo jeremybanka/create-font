@@ -27,6 +27,8 @@ process.stdout.write(
 		`create-font API      http://127.0.0.1:${ports.createFontBackend}/`,
 		`create-design UI     http://127.0.0.1:${ports.createDesignFrontend}/`,
 		`create-design API    http://127.0.0.1:${ports.createDesignBackend}/`,
+		`create-sprites UI    http://127.0.0.1:${ports.createSpritesFrontend}/`,
+		`create-sprites API   http://127.0.0.1:${ports.createSpritesBackend}/`,
 	].join(`\n`) + `\n`,
 )
 
@@ -44,6 +46,14 @@ await superviseDevProcesses([
 		[
 			resolve(workspaceRoot, `apps/create-design/scripts/dev.ts`),
 			`--port=${ports.createDesignFrontend}`,
+		],
+		{ cwd: workspaceRoot, stdio: `inherit` },
+	),
+	spawn(
+		process.execPath,
+		[
+			resolve(workspaceRoot, `apps/create-sprites/scripts/dev.ts`),
+			`--port=${ports.createSpritesFrontend}`,
 		],
 		{ cwd: workspaceRoot, stdio: `inherit` },
 	),

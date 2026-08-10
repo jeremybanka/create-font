@@ -1,11 +1,13 @@
 export const DEFAULT_DEV_PORT = 16_384
-export const WORKSPACE_DEV_PORT_COUNT = 4
+export const WORKSPACE_DEV_PORT_COUNT = 6
 
 export type WorkspaceDevPorts = Readonly<{
 	createDesignBackend: number
 	createDesignFrontend: number
 	createFontBackend: number
 	createFontFrontend: number
+	createSpritesBackend: number
+	createSpritesFrontend: number
 }>
 
 export function optionValue(
@@ -59,5 +61,7 @@ export function workspaceDevPorts(basePort: number): WorkspaceDevPorts {
 		createFontBackend: basePort + 1,
 		createDesignFrontend: basePort + 2,
 		createDesignBackend: basePort + 3,
+		createSpritesFrontend: basePort + 4,
+		createSpritesBackend: basePort + 5,
 	}
 }

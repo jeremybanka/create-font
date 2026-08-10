@@ -1,0 +1,16 @@
+[
+	{
+		"id": "scout",
+		"name": "Scout",
+		"visible": true,
+		"locked": false,
+		"opacity": 1
+	},
+	{
+		"id": "sparks",
+		"name": "Sparks",
+		"visible": true,
+		"locked": false,
+		"opacity": 1
+	}
+]

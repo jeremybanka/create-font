@@ -1,0 +1,22 @@
+[
+	{
+		"id": "frame-1",
+		"name": "Contact",
+		"duration": 110
+	},
+	{
+		"id": "frame-2",
+		"name": "Down",
+		"duration": 90
+	},
+	{
+		"id": "frame-3",
+		"name": "Passing",
+		"duration": 110
+	},
+	{
+		"id": "frame-4",
+		"name": "Up",
+		"duration": 90
+	}
+]
