@@ -617,8 +617,8 @@ importers:
   packages/create-font/font-service:
     dependencies:
       harfbuzzjs:
-        specifier: 1.5.0
-        version: 1.5.0
+        specifier: 1.6.0
+        version: 1.6.0
     devDependencies:
       '@create-font/target':
         specifier: workspace:*
@@ -2972,8 +2972,8 @@ packages:
     resolution: {integrity: sha512-7MB+bJLkxu3SowAfBJbjW+c55kNz5tkR45gu2qzrxznezhLeN5YIlJbwUgSzlGc+qWoZ8Ykg71H5ezz69xixrw==}
     engines: {node: '>=20.0.0'}
 
-  harfbuzzjs@1.5.0:
-    resolution: {integrity: sha512-IYrYhWlY6BqSJlzhYbc2sxuFaJQXGpl74+1060SBDnYLt1gyyyUWM9LUbn8c/IWedmFW7Jgi9l+uI5cj0GN+qA==}
+  harfbuzzjs@1.6.0:
+    resolution: {integrity: sha512-fNnYg+CX5MBzckYZpqBJKs9qIVMH9vMhFNo9I81wp1QFu7jI3DOvtf1+VDwH4vsfnCylAFBNSX3gio9uNGPk/w==}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -6212,7 +6212,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  harfbuzzjs@1.5.0: {}
+  harfbuzzjs@1.6.0: {}
 
   has-flag@4.0.0: {}
 
