@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 
 import {
 	directSelectionKey,
+	designCornerAmountFromRadialDrag,
 	designLocalRadialDelta,
+	designLocalRadialDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -308,5 +310,21 @@ describe("design selection", () => {
 				project({ x: 11, y: 0 }),
 			),
 		).toBeCloseTo(1)
+		expect(
+			designLocalRadialDistances(
+				transform,
+				project({ x: 0, y: 0 }),
+				project({ x: 10, y: 0 }),
+				project({ x: 11, y: 0 }),
+			),
+		).toEqual({ start: 10, current: 11 })
+	})
+
+	it("maps the full existing corner amount onto inward handle travel", () => {
+		expect(designCornerAmountFromRadialDrag(120, 18, 18)).toBe(120)
+		expect(designCornerAmountFromRadialDrag(120, 18, 9)).toBe(60)
+		expect(designCornerAmountFromRadialDrag(120, 18, 0)).toBe(0)
+		expect(designCornerAmountFromRadialDrag(120, 18, 1e-12)).toBe(0)
+		expect(designCornerAmountFromRadialDrag(120, 18, 30)).toBe(132)
 	})
 })

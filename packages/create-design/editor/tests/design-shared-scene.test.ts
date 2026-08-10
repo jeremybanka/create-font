@@ -6088,6 +6088,141 @@ describe("create-design shared vector scene", () => {
 		).toBe(true)
 	})
 
+	it("reduces a large committed corner to sharp in one inward drag", async () => {
+		const initial = createInitialDocument()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		if (expanded.geometry.kind !== "path")
+			throw new Error("Expected expanded path geometry.")
+		const profiled: DesignObject = {
+			...expanded,
+			geometry: {
+				...expanded.geometry,
+				contours: expanded.geometry.contours.map((contour, contourIndex) => ({
+					...contour,
+					points: contour.points.map((point, pointIndex) =>
+						contourIndex === 0 && pointIndex === 0
+							? {
+									...point,
+									corner: { profile: "circular" as const, amount: 120 },
+								}
+							: point,
+					),
+				})),
+			},
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign(
+			{ initialDocument: { ...initial, objects: [profiled] } },
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === null || direct === null || canvas === null)
+			throw new Error("Corner drag controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.find(".vector-node")[0]
+		if (node === undefined) throw new Error("Direct node was not rendered.")
+		const selectPointerId = 184
+		const selectDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: selectPointerId,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(selectDown)
+			node.fire("pointerdown", { evt: selectDown }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: selectPointerId,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		const handle = stage.findOne(".vector-corner-profile-handle")
+		if (handle === undefined) throw new Error("Corner handle was not rendered.")
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => captured.add(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation((pointerId) => captured.delete(pointerId))
+		const handlePosition = handle.getAbsolutePosition()
+		const nodePosition = node.getAbsolutePosition()
+		const pointerId = 185
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			clientX: handlePosition.x,
+			clientY: handlePosition.y,
+			isPrimary: true,
+			pointerId,
+			pointerType: "mouse",
+		})
+		Object.defineProperty(pointerDown, "currentTarget", { value: canvas })
+		await act(async () => {
+			stage.setPointersPositions(pointerDown)
+			handle.fire("pointerdown", { evt: pointerDown }, true)
+			window.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: nodePosition.x,
+					clientY: nodePosition.y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		const savedCorner = () => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const object = saved.objects?.[0]
+			return object?.geometry.kind === "path"
+				? object.geometry.contours[0]?.points[0]?.corner
+				: undefined
+		}
+		expect(savedCorner()).toBeUndefined()
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedCorner()).toEqual({ profile: "circular", amount: 120 })
+	})
+
 	it("synchronizes direct node selection across canvas, inspector, and accessibility state", async () => {
 		const initial = createInitialDocument()
 		const storage = new Map<string, string>()
