@@ -143,7 +143,10 @@ export function nearestDesignObject(
 				candidates.push({ object, distancePixels: 0, index })
 			continue
 		}
-		if (object.geometry.kind === "image") {
+		if (
+			object.geometry.kind === "image" ||
+			object.geometry.kind === "artboard-link"
+		) {
 			const bounds = visibleObjectBounds(object)
 			if (
 				bounds !== null &&

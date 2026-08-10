@@ -4435,6 +4435,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		blendDiagnosticMessages: blendDiagnostics,
 		distributeSelection,
 		document,
+		linkedArtboardResources: linkedArtboards,
+		placeLinkedArtboard,
 		exportDocumentSnapshot: exportableDocument,
 		expandSelection,
 		expansionDisabledReason: expansionEligibility.eligible

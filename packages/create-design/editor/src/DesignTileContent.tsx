@@ -623,7 +623,9 @@ function DesignLayersTile({
 			entry?.clippingForGroupId === undefined
 				? row.object?.geometry.kind === "image"
 					? "Placed image"
-					: "Object"
+					: row.object?.geometry.kind === "artboard-link"
+						? `Live linked artboard from ${row.object.geometry.projectId}/${row.object.geometry.artboardId}`
+						: "Object"
 				: "Clipping path",
 			...(entry?.hiddenBy === null || entry?.hiddenBy === undefined
 				? ["Visible"]
@@ -730,6 +732,29 @@ function DesignLayersTile({
 		moveParentChoice.rowKey === selectedHierarchyRow?.key
 			? moveParentChoice.parentKey
 			: (selectedHierarchyRow?.parentKey ?? "")
+	const linkedArtboardChoices = useMemo(
+		() =>
+			(context.linkedArtboardResources ?? []).flatMap((resource) =>
+				resource.document.artboards.map((artboard) => ({
+					key: `${encodeURIComponent(resource.projectId)}/${encodeURIComponent(artboard.id)}`,
+					resource,
+					artboard,
+				})),
+			),
+		[context.linkedArtboardResources],
+	)
+	const [linkedArtboardChoiceKey, setLinkedArtboardChoiceKey] = useState("")
+	const linkedArtboardChoice =
+		linkedArtboardChoices.find(({ key }) => key === linkedArtboardChoiceKey) ??
+		linkedArtboardChoices[0]
+	useEffect(() => {
+		if (
+			linkedArtboardChoiceKey !== "" &&
+			linkedArtboardChoices.some(({ key }) => key === linkedArtboardChoiceKey)
+		)
+			return
+		setLinkedArtboardChoiceKey(linkedArtboardChoices[0]?.key ?? "")
+	}, [linkedArtboardChoiceKey, linkedArtboardChoices])
 	return (
 		<design-layers-tile>
 			<strong>
@@ -741,6 +766,53 @@ function DesignLayersTile({
 					New layer
 				</button>
 			</layer-toolbar>
+			<linked-artboard-placement aria-label="Place live linked artwork">
+				<linked-artboard-heading>
+					<span>
+						<svg.Link aria-hidden="true" />
+						<strong>Live linked artwork</strong>
+					</span>
+					<small>Place an artboard from another workspace design.</small>
+				</linked-artboard-heading>
+				<label>
+					<span>Source artboard</span>
+					<select
+						aria-label="Linked artboard to place"
+						value={linkedArtboardChoice?.key ?? ""}
+						disabled={linkedArtboardChoice === undefined}
+						onChange={(event) =>
+							setLinkedArtboardChoiceKey(event.currentTarget.value)
+						}
+					>
+						{linkedArtboardChoices.length === 0 ? (
+							<option value="">No linked designs available</option>
+						) : (
+							linkedArtboardChoices.map(({ key, resource, artboard }) => (
+								<option key={key} value={key}>
+									{resource.projectId} · {artboard.name}
+								</option>
+							))
+						)}
+					</select>
+				</label>
+				<button
+					type="button"
+					disabled={
+						linkedArtboardChoice === undefined ||
+						context.placeLinkedArtboard === undefined
+					}
+					onClick={() => {
+						if (linkedArtboardChoice === undefined) return
+						context.placeLinkedArtboard?.(
+							linkedArtboardChoice.resource,
+							linkedArtboardChoice.artboard,
+						)
+					}}
+				>
+					<svg.Link aria-hidden="true" />
+					Place live artboard
+				</button>
+			</linked-artboard-placement>
 			{context.activeGroupScope.length === 0 ? null : (
 				<layer-breadcrumb aria-label="Active group editing scope">
 					<button type="button" onClick={() => context.setHierarchyScope([])}>
@@ -954,6 +1026,11 @@ function DesignLayersTile({
 										{rowLayer.locked ? <svg.LockClosed /> : <svg.LockOpen />}
 									</button>
 								</layer-row-controls>
+							) : row.object?.geometry.kind === "artboard-link" ? (
+								<small data-live-link-badge title="Live linked artboard">
+									<svg.Link aria-hidden="true" />
+									Live
+								</small>
 							) : clippingPath ? (
 								<small data-clipping-path-badge>Clip</small>
 							) : null}
@@ -2355,11 +2432,60 @@ function DesignObjectTile({
 					: object?.geometry.kind === "artboard-link"
 						? "Linked artboard"
 						: "Object geometry"
+	const linkedGeometry =
+		object?.geometry.kind === "artboard-link" ? object.geometry : null
+	const linkedSource =
+		linkedGeometry !== null
+			? context.linkedArtboardResources?.find(
+					({ projectId }) => projectId === linkedGeometry.projectId,
+				)
+			: undefined
+	const linkedSourceArtboard =
+		linkedGeometry !== null
+			? linkedSource?.document.artboards.find(
+					({ id }) => id === linkedGeometry.artboardId,
+				)
+			: undefined
 	return (
 		<design-object-tile>
 			<object-selection-summary role="status">
 				{objectSelectionSummary(context, object)}
 			</object-selection-summary>
+			{object?.geometry.kind === "artboard-link" ? (
+				<object-live-link
+					data-source-available={
+						linkedSourceArtboard === undefined ? "false" : "true"
+					}
+				>
+					<object-live-link-heading>
+						<span>
+							<svg.Link aria-hidden="true" />
+							<strong>Live linked artboard</strong>
+						</span>
+						<small>
+							{linkedSourceArtboard === undefined
+								? "Source unavailable"
+								: "Live"}
+						</small>
+					</object-live-link-heading>
+					<dl>
+						<object-live-link-source>
+							<dt>Design</dt>
+							<dd>{object.geometry.projectId}</dd>
+						</object-live-link-source>
+						<object-live-link-source>
+							<dt>Artboard</dt>
+							<dd>
+								{linkedSourceArtboard?.name ?? object.geometry.artboardId}
+							</dd>
+						</object-live-link-source>
+					</dl>
+					<p>
+						Updates with its source and transforms or snaps as one group-like
+						object.
+					</p>
+				</object-live-link>
+			) : null}
 			<TileTextField
 				label="Name"
 				value={object?.name ?? ""}

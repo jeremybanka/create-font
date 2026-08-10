@@ -370,4 +370,93 @@ describe("Design Layers tree", () => {
 			1,
 		)
 	})
+
+	it("places and identifies live linked artboards in the object workflow", () => {
+		const source = createInitialDocument()
+		const sourceArtboard = {
+			...source.artboards[0]!,
+			id: "artboard:brand-mark",
+			name: "Brand mark",
+		}
+		const resource = {
+			projectId: "brand-system",
+			revision: "revision:1",
+			document: { ...source, artboards: [sourceArtboard] },
+		}
+		const link = {
+			...fixture().objects[0]!,
+			id: "object:brand-link",
+			name: "Brand mark link",
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: resource.projectId,
+				artboardId: sourceArtboard.id,
+				width: sourceArtboard.width,
+				height: sourceArtboard.height,
+			},
+			appearance: {},
+		}
+		const target = fixture()
+		const targetWithLink = {
+			...target,
+			objects: [...target.objects, link],
+			layers: target.layers.map((layer) =>
+				layer.id === "layer:back"
+					? {
+							...layer,
+							children: [
+								...layer.children,
+								{ kind: "object" as const, id: link.id },
+							],
+						}
+					: layer,
+			),
+		}
+		const placeLinkedArtboard = vi.fn()
+		const value = context(targetWithLink, {
+			linkedArtboardResources: [resource],
+			placeLinkedArtboard,
+		})
+		const host = mount(value)
+		expandAll(host)
+
+		const choice = host.querySelector<HTMLSelectElement>(
+			'select[aria-label="Linked artboard to place"]',
+		)
+		expect(choice?.textContent).toContain("brand-system · Brand mark")
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>("linked-artboard-placement > button")
+				?.click(),
+		)
+		expect(placeLinkedArtboard).toHaveBeenCalledWith(resource, sourceArtboard)
+		const row = host.querySelector<HTMLElement>(
+			'[data-tree-key="object:object:brand-link"]',
+		)
+		expect(row?.getAttribute("aria-label")).toContain("Live linked artboard")
+		expect(row?.querySelector("[data-live-link-badge]")?.textContent).toContain(
+			"Live",
+		)
+
+		render(
+			h(DesignTileContent, {
+				context: {
+					...value,
+					selectedObject: link,
+					selectedObjectCount: 1,
+				},
+				kind: "object",
+			}),
+			host,
+		)
+		expect(host.querySelector("object-live-link")?.textContent).toContain(
+			"Live linked artboard",
+		)
+		expect(host.querySelector("object-live-link")?.textContent).toContain(
+			"brand-system",
+		)
+		expect(host.querySelector("object-live-link")?.textContent).toContain(
+			"Brand mark",
+		)
+	})
 })
