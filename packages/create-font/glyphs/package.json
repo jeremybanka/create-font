@@ -1,0 +1,49 @@
+{
+	"name": "@create-font/glyphs",
+	"version": "0.0.0",
+	"description": "Glyphs.app source parsing and create-font import",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-font/glyphs"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./parser": {
+			"development": "./src/parser.ts",
+			"types": "./dist/parser.d.mts",
+			"import": "./dist/parser.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"@create-font/source": "workspace:*",
+		"@create-font/states": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

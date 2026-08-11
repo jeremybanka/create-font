@@ -102,6 +102,7 @@ const shards = {
 				`@create-art/source-format`,
 				`@create-design/source`,
 				`@create-font/fea-rs-wasm`,
+				`@create-font/glyphs`,
 				`@create-font/source`,
 				`dprint-plugin-fea`,
 			],

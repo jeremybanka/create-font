@@ -11,6 +11,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path"
 
 import { formatSourceFea } from "@create-art/source-format"
+import type { ImportedGlyphsSource } from "@create-font/glyphs"
 import {
 	CREATE_FONT_SOURCE_FORMAT,
 	CREATE_FONT_SOURCE_VERSION,
@@ -18,7 +19,6 @@ import {
 	splitEditorFontSource,
 	sourceUnitKindForPath,
 	type FontSourceDirectoryFiles,
-	type ImportedGlyphsSource,
 } from "@create-font/source"
 import {
 	CREATE_FONT_EDITOR_FORMAT,

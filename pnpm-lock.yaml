@@ -201,6 +201,9 @@ importers:
       '@create-font/fea-rs-wasm':
         specifier: workspace:*
         version: link:../../packages/create-font/fea-rs-wasm
+      '@create-font/glyphs':
+        specifier: workspace:*
+        version: link:../../packages/create-font/glyphs
       '@create-font/server':
         specifier: workspace:*
         version: link:../../packages/create-font/server
@@ -636,6 +639,19 @@ importers:
       '@create-font/target':
         specifier: workspace:*
         version: link:../target
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)
+
+  packages/create-font/glyphs:
+    dependencies:
+      '@create-font/source':
+        specifier: workspace:*
+        version: link:../source
+      '@create-font/states':
+        specifier: workspace:*
+        version: link:../states
+    devDependencies:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)

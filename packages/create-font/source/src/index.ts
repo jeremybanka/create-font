@@ -28,13 +28,6 @@ export type {
 	FeaSyntaxToken,
 	FeatureSubstitutionIr,
 } from "./fea.ts"
-export { importGlyphsSource } from "./glyphs.ts"
-export type {
-	GlyphsImportDiagnostic,
-	GlyphsImportDiagnosticCode,
-	GlyphsImportResult,
-	ImportedGlyphsSource,
-} from "./glyphs.ts"
 export {
 	canonicalizeEditorFontSource,
 	decodeEditorFontSource,

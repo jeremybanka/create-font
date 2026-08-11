@@ -58,6 +58,7 @@
 		"@create-art/source-rpc": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/fea-rs-wasm": "workspace:*",
+		"@create-font/glyphs": "workspace:*",
 		"@create-font/server": "workspace:*",
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
