@@ -1,7 +1,20 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
+import { randomUUID } from "node:crypto"
+import {
+	mkdir,
+	readFile,
+	readdir,
+	rename,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises"
 import { basename, join, resolve } from "node:path"
 
-import { createInitialDocument } from "@create-design/source"
+import {
+	createInitialDocument,
+	splitDesignDocument,
+	type DesignDocument,
+} from "@create-design/source"
 
 import { type RuntimeAdapter, nodeRuntimeAdapter } from "./runtime.ts"
 import { initializeDesignSourceWorkspace } from "./source-service.ts"
@@ -17,6 +30,7 @@ export function isPackageManager(value: string): value is PackageManager {
 
 export type CreateDesignWorkspaceOptions = Readonly<{
 	cwd?: string
+	document?: DesignDocument
 	install?: boolean
 	name?: string
 	packageManager?: PackageManager
@@ -127,6 +141,14 @@ async function installWorkspace(
 export async function createDesignWorkspace(
 	options: CreateDesignWorkspaceOptions = {},
 ): Promise<CreatedDesignWorkspace> {
+	const importedDocument = options.document
+	if (importedDocument !== undefined) {
+		const validated = splitDesignDocument(importedDocument)
+		if (!validated.ok)
+			throw new Error(
+				`Imported design is not valid create-design source:\n${validated.errors.map(({ message }) => message).join("\n")}`,
+			)
+	}
 	const cwd = resolve(options.cwd ?? process.cwd())
 	const workspaceExists = await isCreateDesignWorkspace(cwd)
 	const requestedName = options.name
@@ -157,11 +179,20 @@ export async function createDesignWorkspace(
 			`Design project ${JSON.stringify(designName)} already exists.`,
 		)
 	await mkdir(join(workspaceRoot, "designs"), { recursive: true })
-	const document = {
+	const document = importedDocument ?? {
 		...createInitialDocument(),
 		title: displayName(designName),
 	}
-	await initializeDesignSourceWorkspace(designRoot, document)
+	const stagedDesignRoot = `${designRoot}.staging-${randomUUID()}`
+	try {
+		await initializeDesignSourceWorkspace(stagedDesignRoot, document)
+		await rename(stagedDesignRoot, designRoot)
+	} catch (error) {
+		await rm(stagedDesignRoot, { force: true, recursive: true }).catch(
+			() => undefined,
+		)
+		throw error
+	}
 
 	const install = options.install ?? workspaceCreated
 	if (install)

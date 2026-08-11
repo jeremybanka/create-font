@@ -1,8 +1,10 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
+
+import { MAX_ILLUSTRATOR_FILE_BYTES } from "@create-design/ai"
 
 import { runCreateDesignCli } from "../src/create-design-cli.ts"
 import { createDesignWorkspace } from "../src/create.ts"
@@ -34,6 +36,24 @@ describe("create-design CLI", () => {
 		expect(exitCode).toBe(0)
 		expect(stdout).toContain("Create a design workspace")
 		expect(stdout).toContain("--package-manager")
+	})
+
+	it("rejects an oversized AI file before reading it", async () => {
+		const root = await temporaryRoot()
+		const input = join(root, "oversized.ai")
+		await writeFile(input, "")
+		await truncate(input, MAX_ILLUSTRATOR_FILE_BYTES + 1)
+		let stderr = ""
+		const exitCode = await runCreateDesignCli(
+			["create-design", "--from", input, "--no-install"],
+			{
+				stderr: { write: (value) => (stderr += value) },
+				stdout: { write: () => undefined },
+			},
+		)
+		expect(exitCode).toBe(1)
+		expect(stderr).toContain(String(MAX_ILLUSTRATOR_FILE_BYTES))
+		expect(stderr).toContain("import limit")
 	})
 
 	it("creates a workspace with one source project and local tool dependency", async () => {
@@ -140,5 +160,84 @@ describe("create-design CLI", () => {
 		)
 		expect(exitCode).toBe(1)
 		expect(stderr).toContain("Package manager must be npm, pnpm, yarn, or bun")
+	})
+
+	it("imports native Illustrator source into staged native source", async () => {
+		const cwd = await temporaryRoot()
+		const input = join(cwd, "Brand Logo.ai")
+		await writeFile(
+			input,
+			[
+				"%!PS-Adobe-3.0",
+				"%%Creator: Adobe Illustrator",
+				"%%Title: (Poster)",
+				"%_/Dictionary :",
+				"%_0 0 /RealPointRelToROrigin %_ (PositionPoint1)",
+				"%_100 -200 /RealPointRelToROrigin %_ (PositionPoint2)",
+				"%_(Artboard 1) /UnicodeString (Name)",
+				"%_; (ArtboardArray)",
+				"%AI5_BeginLayer",
+				"1 1 1 1 0 0 1 0 255 79 79 0 50 0 Lb",
+				"(Artwork) Ln",
+				"1 0 0 0 Xa 10 20 m 40 20 L 40 60 L f",
+				"LB",
+				"%%PageTrailer",
+			].join("\r"),
+		)
+		const previous = process.cwd()
+		process.chdir(cwd)
+		try {
+			let stdout = ""
+			let stderr = ""
+			const exitCode = await runCreateDesignCli(
+				["create-design", "--from", input, "--no-install"],
+				{
+					stderr: { write: (value) => (stderr += value) },
+					stdout: { write: (value) => (stdout += value) },
+				},
+			)
+			expect(exitCode).toBe(0)
+			expect(stderr).toBe("")
+			expect(stdout).toContain("Imported 1 artboards and 1 objects")
+			const root = join(cwd, "Brand-Logo", "designs", "Brand-Logo")
+			const metadata = JSON.parse(
+				await readFile(join(root, "document.json"), "utf8"),
+			) as { title: string }
+			expect(metadata.title).toBe("Brand Logo")
+			const artboardIndex = JSON.parse(
+				await readFile(join(root, "artboards", "index.json"), "utf8"),
+			) as { entries: readonly { path: string }[] }
+			const artboard = JSON.parse(
+				await readFile(join(root, artboardIndex.entries[0]!.path), "utf8"),
+			) as { width: number; height: number }
+			expect(artboard).toMatchObject({ width: 100, height: 200 })
+		} finally {
+			process.chdir(previous)
+		}
+	})
+
+	it("rejects incomplete Illustrator input before creating a project", async () => {
+		const cwd = await temporaryRoot()
+		const input = join(cwd, "legacy.ai")
+		await writeFile(input, "%!PS-Adobe-3.0\n%%Creator: Adobe Illustrator\n")
+		const previous = process.cwd()
+		process.chdir(cwd)
+		try {
+			let stderr = ""
+			const exitCode = await runCreateDesignCli(
+				["create-design", "should-not-exist", "--from", input, "--no-install"],
+				{
+					stderr: { write: (value) => (stderr += value) },
+					stdout: { write: () => undefined },
+				},
+			)
+			expect(exitCode).toBe(1)
+			expect(stderr).toContain("ai.source.no-layers")
+			await expect(
+				readFile(join(cwd, "should-not-exist", "package.json")),
+			).rejects.toMatchObject({ code: "ENOENT" })
+		} finally {
+			process.chdir(previous)
+		}
 	})
 })

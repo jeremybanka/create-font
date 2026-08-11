@@ -26,6 +26,29 @@ adds `designs/second-poster` without replacing the workspace. New workspaces
 contain `build` and `dev` package scripts backed by the separate `design`
 project CLI:
 
+Import an Adobe Illustrator file directly into native source while creating a
+workspace:
+
+```sh
+create-design campaign-poster --from ./campaign.ai --no-install
+```
+
+Omit the design name to derive it from the `.ai` filename. Import parses and
+validates the complete input before project creation, then stages all native
+source beside the destination and renames it into place. A failed import never
+leaves a partial design project. Advisory fidelity diagnostics are written to
+stderr and successful creation continues. The command is CLI-only; the browser
+editor does not currently expose file selection or drag-and-drop import.
+
+Illustrator import decodes the native revisable source—not embedded PDF preview
+pages—into one shared canvas hierarchy with independently positioned artboards.
+It preserves editable paths and compound holes, clipping, process paint,
+strokes, authored layers, off-artboard artwork, bleed, and best-effort live text.
+Unsupported scene constructs are diagnosed and remain in the lossless source
+AST. See
+[`@create-design/ai`](../../packages/create-design/ai/README.md) for the exact
+support matrix, safety limits, and re-save guidance.
+
 ```sh
 design check
 design build

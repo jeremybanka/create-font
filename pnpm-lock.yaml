@@ -95,6 +95,9 @@ importers:
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../../packages/create-art/source-rpc
+      '@create-design/ai':
+        specifier: workspace:*
+        version: link:../../packages/create-design/ai
       '@create-design/editor':
         specifier: workspace:*
         version: link:../../packages/create-design/editor
@@ -359,6 +362,19 @@ importers:
         specifier: 2.0.1-18
         version: 2.0.1-18
     devDependencies:
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)
+
+  packages/create-design/ai:
+    dependencies:
+      '@create-design/source':
+        specifier: workspace:*
+        version: link:../source
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)
