@@ -6,6 +6,7 @@ import {
 	normalizedBounds,
 	objectBounds,
 	objectSvgPath,
+	projectDesignObjectCornerResolutions,
 	projectDesignObjectContours,
 	rectangleContour,
 	rotateObject,
@@ -192,5 +193,85 @@ describe("design geometry", () => {
 		expect(object.geometry.kind === "path" && object.geometry.fillRule).toBe(
 			"nonzero",
 		)
+	})
+
+	it("keeps circular corners isotropic through non-uniform object scaling", () => {
+		const object: DesignObject = {
+			id: "object:isotropic-corners",
+			name: "Wide rounded rectangle",
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:isotropic-corners",
+						closed: true,
+						points: [
+							{ id: "point:0", x: 0, y: 0 },
+							{
+								id: "point:1",
+								x: 100,
+								y: 0,
+								corner: { profile: "circular", amount: 20 },
+							},
+							{ id: "point:2", x: 100, y: 100 },
+							{ id: "point:3", x: 0, y: 100 },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: { fill: { swatchId: "swatch:test" } },
+		}
+		const scaled = scaleObject(object, { x: 0, y: 0 }, 2, 0.5)
+		const points = projectDesignObjectContours(scaled)[0]!.points
+		const entry = points.find(({ id }) => id.includes("point:1::corner:entry"))
+		const exit = points.find(({ id }) => id.includes("point:1::corner:exit"))
+		expect(entry).toMatchObject({ x: 180, y: 0 })
+		expect(exit).toMatchObject({ x: 200, y: 20 })
+	})
+
+	it("reports clamped corner preferences and restores them when space permits", () => {
+		const corner = { profile: "circular" as const, amount: 30 }
+		const object: DesignObject = {
+			id: "object:clamped-corners",
+			name: "Rounded rectangle",
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:clamped-corners",
+						closed: true,
+						points: [
+							{ id: "point:0", x: 0, y: 0, corner },
+							{ id: "point:1", x: 100, y: 0, corner },
+							{ id: "point:2", x: 100, y: 100, corner },
+							{ id: "point:3", x: 0, y: 100, corner },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {},
+		}
+		const constrained = projectDesignObjectCornerResolutions(
+			scaleObject(object, { x: 0, y: 0 }, 2, 0.5),
+		)
+		expect(constrained).toHaveLength(4)
+		expect(
+			constrained.every(
+				({ requestedAmount, appliedAmount, clamped }) =>
+					requestedAmount === 30 && appliedAmount < 30 && clamped,
+			),
+		).toBe(true)
+
+		const restored = projectDesignObjectCornerResolutions(
+			scaleObject(object, { x: 0, y: 0 }, 2, 1),
+		)
+		expect(
+			restored.every(
+				({ requestedAmount, appliedAmount, clamped }) =>
+					requestedAmount === 30 && appliedAmount === 30 && !clamped,
+			),
+		).toBe(true)
 	})
 })

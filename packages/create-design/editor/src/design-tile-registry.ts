@@ -62,6 +62,13 @@ export type DesignTileKind =
 	| "typography"
 	| "appearance"
 
+export type DesignCornerProfileControls = Readonly<{
+	count: number
+	profile: "sharp" | "circular" | "squircle"
+	amount: number
+	amountWarning: string | null
+}>
+
 export interface DesignTileContext {
 	readonly activeArtboard: DesignArtboard
 	readonly activateArtboard: (artboard: DesignArtboard, focus?: boolean) => void
@@ -129,6 +136,11 @@ export interface DesignTileContext {
 	readonly expandBlend: () => void
 	readonly blendDiagnosticMessages: readonly string[]
 	readonly directSelectionSummary: string
+	readonly cornerProfileControls: DesignCornerProfileControls | null
+	readonly setCornerProfiles: (
+		profile: "sharp" | "circular" | "squircle",
+		amount: number,
+	) => void
 	readonly document: DesignDocument
 	readonly linkedArtboardResources?: readonly DesignLinkedArtboardResource[]
 	readonly placeLinkedArtboard?: (

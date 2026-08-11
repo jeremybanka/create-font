@@ -17,6 +17,34 @@ import {
 	expandDesignShape,
 	shapeExpansionEligibility,
 } from "../src/shape-expansion.ts"
+import type { DesignObject } from "../src/types.ts"
+
+const rounded = (value: number): number => Number(value.toFixed(9))
+
+const comparableProjectedGeometry = (object: DesignObject) =>
+	projectDesignObjectContours(object).map((contour) => ({
+		closed: contour.closed,
+		points: contour.points.map((point) => ({
+			x: rounded(point.x),
+			y: rounded(point.y),
+			...(point.incoming === undefined
+				? {}
+				: {
+						incoming: {
+							x: rounded(point.incoming.x),
+							y: rounded(point.incoming.y),
+						},
+					}),
+			...(point.outgoing === undefined
+				? {}
+				: {
+						outgoing: {
+							x: rounded(point.outgoing.x),
+							y: rounded(point.outgoing.y),
+						},
+					}),
+		})),
+	}))
 
 describe("live shape expansion", () => {
 	it.each(["rectangle", "ellipse"] as const)(
@@ -51,16 +79,8 @@ describe("live shape expansion", () => {
 			expect(pdfObjectContentStream(expanded, document.swatches[1])).toBe(
 				pdfObjectContentStream(transformed, document.swatches[1]),
 			)
-			expect(
-				projectDesignObjectContours(expanded).map((contour) => ({
-					closed: contour.closed,
-					points: contour.points.map(({ id: _id, ...point }) => point),
-				})),
-			).toEqual(
-				projectDesignObjectContours(transformed).map((contour) => ({
-					closed: contour.closed,
-					points: contour.points.map(({ id: _id, ...point }) => point),
-				})),
+			expect(comparableProjectedGeometry(expanded)).toEqual(
+				comparableProjectedGeometry(transformed),
 			)
 
 			const vector = projectDesignVectorObject(document, expanded)
@@ -75,6 +95,79 @@ describe("live shape expansion", () => {
 			])
 		},
 	)
+
+	it("expands live corners into ordinary editable cubic path controls", () => {
+		const document = createInitialDocument()
+		const rectangle = document.objects[0]
+		if (rectangle === undefined) throw new Error("Missing rectangle fixture.")
+		let sourceSequence = 0
+		const path = expandDesignShape(
+			rectangle,
+			() => `source:${sourceSequence++}`,
+		)
+		if (path.geometry.kind !== "path") throw new Error("Expected a path.")
+		const live = {
+			...path,
+			transform: { a: 2, b: 0, c: 0, d: 0.5, e: 17, f: -9 },
+			geometry: {
+				...path.geometry,
+				fillRule: "nonzero" as const,
+				contours: path.geometry.contours.map((contour, contourIndex) => ({
+					...contour,
+					points: contour.points.map((point, pointIndex) =>
+						contourIndex === 0 && pointIndex === 0
+							? {
+									...point,
+									corner: { profile: "circular" as const, amount: 40 },
+								}
+							: point,
+					),
+				})),
+			},
+		}
+		expect(
+			shapeExpansionEligibility({ ...document, objects: [live] }, [live.id]),
+		).toMatchObject({ eligible: true })
+
+		let expandedSequence = 0
+		const expanded = expandDesignShape(
+			live,
+			() => `expanded:${expandedSequence++}`,
+		)
+		expect(objectSvgPath(expanded)).toBe(objectSvgPath(live))
+		expect(expanded.transform).toBe(live.transform)
+		expect(expanded.geometry.kind).toBe("path")
+		if (expanded.geometry.kind !== "path") return
+		expect(expanded.geometry.fillRule).toBe("nonzero")
+		expect(expanded.geometry.contours[0]?.points.length).toBeGreaterThan(
+			live.geometry.contours[0]?.points.length ?? 0,
+		)
+		expect(
+			expanded.geometry.contours
+				.flatMap(({ points }) => points)
+				.every(
+					(point) =>
+						point.corner === undefined &&
+						point.id.startsWith("point:expanded:"),
+				),
+		).toBe(true)
+		expect(
+			expanded.geometry.contours
+				.flatMap(({ points }) => points)
+				.some(
+					({ incoming, outgoing }) =>
+						incoming !== undefined || outgoing !== undefined,
+				),
+		).toBe(true)
+		expect(
+			shapeExpansionEligibility({ ...document, objects: [expanded] }, [
+				expanded.id,
+			]),
+		).toMatchObject({
+			eligible: false,
+			reason: expect.stringContaining("already ordinary path"),
+		})
+	})
 
 	it("reports selection, lock, and already-expanded eligibility precisely", () => {
 		const document = createInitialDocument()

@@ -98,60 +98,17 @@ export function geometryContours(
 	// Live text owns a separate authoritative glyph-outline projection. Treating
 	// it as authored vector geometry here would silently discard editability.
 	if (geometry.kind === "text") return []
-	if (geometry.kind === "path")
-		return geometry.contours.map((contour) => {
-			if (!contour.points.some(({ corner }) => corner !== undefined))
-				return contour
-			const lowered = lowerCornerProfiles({
-				closed: contour.closed,
-				points: contour.points.map((point) => ({
-					id: point.id,
-					point: { x: point.x, y: point.y },
-					...(point.incoming === undefined
-						? {}
-						: {
-								incoming: {
-									x: point.x + point.incoming.x,
-									y: point.y + point.incoming.y,
-								},
-							}),
-					...(point.outgoing === undefined
-						? {}
-						: {
-								outgoing: {
-									x: point.x + point.outgoing.x,
-									y: point.y + point.outgoing.y,
-								},
-							}),
-					...(point.corner === undefined ? {} : { corner: point.corner }),
-				})),
-			})
-			return {
-				id: contour.id,
-				closed: contour.closed,
-				points: lowered.points.map((point) => ({
-					id: point.id,
-					x: point.point.x,
-					y: point.point.y,
-					...(point.incoming === undefined
-						? {}
-						: {
-								incoming: {
-									x: point.incoming.x - point.point.x,
-									y: point.incoming.y - point.point.y,
-								},
-							}),
-					...(point.outgoing === undefined
-						? {}
-						: {
-								outgoing: {
-									x: point.outgoing.x - point.point.x,
-									y: point.outgoing.y - point.point.y,
-								},
-							}),
-				})),
-			}
-		})
+	return lowerDesignCornerProfiles(
+		authoredGeometryContours(geometry, identityPrefix),
+	)
+}
+
+function authoredGeometryContours(
+	geometry: DesignGeometry,
+	identityPrefix: string,
+): readonly DesignContour[] {
+	if (geometry.kind === "text") return []
+	if (geometry.kind === "path") return geometry.contours
 	if (geometry.kind === "image") {
 		return [
 			rectangleContour(
@@ -204,6 +161,68 @@ export function geometryContours(
 	]
 }
 
+function lowerDesignCornerProfiles(
+	contours: readonly DesignContour[],
+): readonly DesignContour[] {
+	return contours.map((contour) => {
+		if (!contour.points.some(({ corner }) => corner !== undefined))
+			return contour
+		const lowered = lowerDesignCornerContour(contour)
+		return {
+			id: contour.id,
+			closed: contour.closed,
+			points: lowered.points.map((point) => ({
+				id: point.id,
+				x: point.point.x,
+				y: point.point.y,
+				...(point.incoming === undefined
+					? {}
+					: {
+							incoming: {
+								x: point.incoming.x - point.point.x,
+								y: point.incoming.y - point.point.y,
+							},
+						}),
+				...(point.outgoing === undefined
+					? {}
+					: {
+							outgoing: {
+								x: point.outgoing.x - point.point.x,
+								y: point.outgoing.y - point.point.y,
+							},
+						}),
+			})),
+		}
+	})
+}
+
+function lowerDesignCornerContour(contour: DesignContour) {
+	return lowerCornerProfiles({
+		closed: contour.closed,
+		points: contour.points.map((point) => ({
+			id: point.id,
+			point: { x: point.x, y: point.y },
+			...(point.incoming === undefined
+				? {}
+				: {
+						incoming: {
+							x: point.x + point.incoming.x,
+							y: point.y + point.incoming.y,
+						},
+					}),
+			...(point.outgoing === undefined
+				? {}
+				: {
+						outgoing: {
+							x: point.x + point.outgoing.x,
+							y: point.y + point.outgoing.y,
+						},
+					}),
+			...(point.corner === undefined ? {} : { corner: point.corner }),
+		})),
+	})
+}
+
 function transformVector(
 	transform: DesignTransform,
 	vector: Readonly<{ x: number; y: number }>,
@@ -233,6 +252,34 @@ export function transformDesignPoint(
 	}
 }
 
+export function inverseTransformDesignPoint(
+	transform: DesignTransform,
+	point: DesignPoint,
+): DesignPoint | null {
+	const determinant = transform.a * transform.d - transform.b * transform.c
+	if (Math.abs(determinant) <= Number.EPSILON) return null
+	const inverseVector = (vector: Readonly<{ x: number; y: number }>) => ({
+		x: (transform.d * vector.x - transform.c * vector.y) / determinant,
+		y: (-transform.b * vector.x + transform.a * vector.y) / determinant,
+	})
+	const position = inverseVector({
+		x: point.x - transform.e,
+		y: point.y - transform.f,
+	})
+	return {
+		id: point.id,
+		...(point.mode === undefined ? {} : { mode: point.mode }),
+		...position,
+		...(point.incoming === undefined
+			? {}
+			: { incoming: inverseVector(point.incoming) }),
+		...(point.outgoing === undefined
+			? {}
+			: { outgoing: inverseVector(point.outgoing) }),
+		...(point.corner === undefined ? {} : { corner: { ...point.corner } }),
+	}
+}
+
 /**
  * Projects authored geometry into document-space contours. This is the single
  * intentional bake boundary used by renderers and interoperability adapters.
@@ -240,12 +287,58 @@ export function transformDesignPoint(
 export function projectDesignObjectContours(
 	object: Pick<DesignObject, "id" | "geometry" | "transform">,
 ): readonly DesignContour[] {
-	return geometryContours(object.geometry, object.id).map((contour) => ({
-		...contour,
-		points: contour.points.map((point) =>
-			transformDesignPoint(object.transform, point),
-		),
-	}))
+	return lowerDesignCornerProfiles(
+		authoredGeometryContours(object.geometry, object.id).map((contour) => ({
+			...contour,
+			points: contour.points.map((point) =>
+				transformDesignPoint(object.transform, point),
+			),
+		})),
+	)
+}
+
+export type DesignCornerProfileResolution = Readonly<{
+	contourId: string
+	pointId: string
+	requestedAmount: number
+	appliedAmount: number
+	clamped: boolean
+}>
+
+/** Reports document-space live-corner clamping without changing authored intent. */
+export function projectDesignObjectCornerResolutions(
+	object: Pick<DesignObject, "id" | "geometry" | "transform">,
+): readonly DesignCornerProfileResolution[] {
+	return authoredGeometryContours(object.geometry, object.id).flatMap(
+		(contour) => {
+			if (!contour.points.some(({ corner }) => corner !== undefined)) return []
+			const projected = {
+				...contour,
+				points: contour.points.map((point) =>
+					transformDesignPoint(object.transform, point),
+				),
+			}
+			const authoredCornerIds = new Set(
+				projected.points.flatMap(({ id, corner }) =>
+					corner === undefined ? [] : [id],
+				),
+			)
+			return lowerDesignCornerContour(projected).corners.flatMap(
+				(resolution) =>
+					authoredCornerIds.has(resolution.pointId)
+						? [
+								{
+									contourId: contour.id,
+									pointId: resolution.pointId,
+									requestedAmount: resolution.requestedAmount,
+									appliedAmount: resolution.appliedAmount,
+									clamped: resolution.clamped,
+								},
+							]
+						: [],
+			)
+		},
+	)
 }
 
 const pathNumber = (value: number): string =>

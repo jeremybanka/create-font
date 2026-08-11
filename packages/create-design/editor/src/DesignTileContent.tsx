@@ -2446,6 +2446,7 @@ function DesignObjectTile({
 					({ id }) => id === linkedGeometry.artboardId,
 				)
 			: undefined
+	const cornerControls = context.cornerProfileControls ?? null
 	return (
 		<design-object-tile>
 			<object-selection-summary role="status">
@@ -2587,6 +2588,71 @@ function DesignObjectTile({
 					/>
 				</shape-number-grid>
 			</object-geometry-editor>
+			{cornerControls === null ? null : (
+				<fieldset
+					aria-label={`Corner profile controls for ${cornerControls.count} selected corner${cornerControls.count === 1 ? "" : "s"}`}
+					data-corner-profile-controls
+				>
+					<legend>Corner profiles</legend>
+					<small>
+						Editing {cornerControls.count} hard corner
+						{cornerControls.count === 1 ? "" : "s"}
+					</small>
+					<label>
+						Profile
+						<select
+							aria-label="Corner profile"
+							value={cornerControls.profile}
+							onChange={(event) => {
+								const profile = event.currentTarget.value as
+									| "sharp"
+									| "circular"
+									| "squircle"
+								context.setCornerProfiles(
+									profile,
+									cornerControls.amount > 0 ? cornerControls.amount : 12,
+								)
+							}}
+						>
+							<option value="sharp">Sharp / right angle</option>
+							<option value="circular">Circular</option>
+							<option value="squircle">Squircle</option>
+						</select>
+					</label>
+					<label>
+						Amount
+						<input
+							type="number"
+							aria-label="Corner amount in document geometry units"
+							min={0}
+							step={1}
+							value={cornerControls.amount}
+							disabled={cornerControls.profile === "sharp"}
+							{...(cornerControls.amountWarning === null
+								? {}
+								: {
+										"aria-describedby": "corner-amount-clamp-warning",
+										"data-corner-amount-clamped": true,
+									})}
+							onChange={(event) =>
+								context.setCornerProfiles(
+									cornerControls.profile,
+									event.currentTarget.valueAsNumber,
+								)
+							}
+						/>
+					</label>
+					{cornerControls.amountWarning === null ? null : (
+						<small
+							id="corner-amount-clamp-warning"
+							role="status"
+							data-corner-amount-warning
+						>
+							{cornerControls.amountWarning}
+						</small>
+					)}
+				</fieldset>
+			)}
 			<button
 				type="button"
 				data-expand-shape
@@ -2598,7 +2664,7 @@ function DesignObjectTile({
 			</button>
 			<p id="expand-shape-eligibility">
 				{context.expansionDisabledReason ??
-					"Converts this live shape to ordinary editable cubic path geometry."}
+					"Converts live shape parameters or corner profiles to ordinary editable cubic path geometry."}
 			</p>
 			<button
 				type="button"

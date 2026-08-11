@@ -12,29 +12,41 @@ import {
 } from "@create-design/model"
 import type { DesignDocument, DesignObject } from "./types.ts"
 
-export function designLocalRadialDelta(
-	transform: DesignObject["transform"],
+/** Measures signed document-space travel along the initial inward axis. */
+export function designInwardDistances(
 	anchor: CanvasPoint,
 	start: CanvasPoint,
 	current: CanvasPoint,
-): number | null {
-	const determinant = transform.a * transform.d - transform.b * transform.c
-	if (Math.abs(determinant) <= Number.EPSILON) return null
-	const toLocal = (point: CanvasPoint): CanvasPoint => {
-		const x = point.x - transform.e
-		const y = point.y - transform.f
-		return {
-			x: (transform.d * x - transform.c * y) / determinant,
-			y: (-transform.b * x + transform.a * y) / determinant,
-		}
+): Readonly<{ start: number; current: number }> | null {
+	const inward = {
+		x: start.x - anchor.x,
+		y: start.y - anchor.y,
 	}
-	const localAnchor = toLocal(anchor)
-	const localStart = toLocal(start)
-	const localCurrent = toLocal(current)
-	return (
-		Math.hypot(localCurrent.x - localAnchor.x, localCurrent.y - localAnchor.y) -
-		Math.hypot(localStart.x - localAnchor.x, localStart.y - localAnchor.y)
-	)
+	const startDistance = Math.hypot(inward.x, inward.y)
+	if (startDistance <= Number.EPSILON) return { start: 0, current: 0 }
+	return {
+		start: startDistance,
+		current:
+			((current.x - anchor.x) * inward.x + (current.y - anchor.y) * inward.y) /
+			startDistance,
+	}
+}
+
+/**
+ * Maps the fixed visual handle inset onto the full authored corner amount.
+ * Travel farther inward retains the existing one-unit-per-unit response, while
+ * outward travel reaches canonical sharp state at the authored perimeter and
+ * stays sharp after crossing it.
+ */
+export function designCornerAmountFromInwardDrag(
+	originalAmount: number,
+	startDistance: number,
+	currentDistance: number,
+): number {
+	if (currentDistance >= startDistance || startDistance <= Number.EPSILON)
+		return Math.max(0, originalAmount + currentDistance - startDistance)
+	if (currentDistance <= startDistance * 1e-6) return 0
+	return Math.max(0, originalAmount * (currentDistance / startDistance))
 }
 
 export type DesignDirectSelectionTarget =

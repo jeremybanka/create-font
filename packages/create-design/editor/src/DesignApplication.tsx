@@ -197,7 +197,8 @@ import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
-	designLocalRadialDelta,
+	designCornerAmountFromInwardDrag,
+	designInwardDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -216,6 +217,7 @@ import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
 	objectBounds,
+	projectDesignObjectCornerResolutions,
 	projectDesignObjectContours,
 	projectDesignEffectiveHierarchy,
 	projectDesignOutput,
@@ -408,7 +410,6 @@ type CanvasGesture =
 			readonly anchor: CanvasPoint
 			readonly original: DesignDocument
 			readonly objectId: string
-			readonly transform: DesignObject["transform"]
 			readonly corners: readonly Readonly<{
 				readonly contourId: string
 				readonly pointId: string
@@ -1702,34 +1703,73 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
-	const selectedCornerControls = directSelection.flatMap((target) => {
+	const cornerControlsForObject = (object: DesignObject) =>
+		object.geometry.kind !== "path" ||
+		object.hidden ||
+		object.locked ||
+		!effectiveEditableObjectIds.has(object.id)
+			? []
+			: object.geometry.contours.flatMap((contour) =>
+					!contour.closed || contour.points.length < 3
+						? []
+						: contour.points.flatMap((point) =>
+								(point.mode ??
+									(point.incoming === undefined && point.outgoing === undefined
+										? "hard"
+										: "soft")) === "hard"
+									? [{ object, contour, point }]
+									: [],
+							),
+				)
+	const directCornerControls = directSelection.flatMap((target) => {
 		if (target.kind !== "node") return []
 		const object = document.objects.find(({ id }) => id === target.objectId)
-		if (object?.geometry.kind !== "path" || object.hidden || object.locked)
-			return []
-		const contour = object.geometry.contours.find(
-			({ id }) => id === target.contourId,
-		)
-		const point = contour?.points.find(({ id }) => id === target.pointId)
-		return contour?.closed &&
-			contour.points.length >= 3 &&
-			point !== undefined &&
-			(point.mode ??
-				(point.incoming === undefined && point.outgoing === undefined
-					? "hard"
-					: "soft")) === "hard"
-			? [{ object, contour, point }]
-			: []
+		return object === undefined
+			? []
+			: cornerControlsForObject(object).filter(
+					({ contour, point }) =>
+						contour.id === target.contourId && point.id === target.pointId,
+				)
 	})
-	const selectedLiveRectangle =
-		tool === "direct" &&
-		selectedObjects.length === 1 &&
-		selectedObjects[0]?.geometry.kind === "rectangle" &&
-		!selectedObjects[0].hidden &&
-		!selectedObjects[0].locked &&
-		effectiveEditableObjectIds.has(selectedObjects[0].id)
-			? selectedObjects[0]
-			: null
+	const objectCornerControls =
+		selectedObjects.length === 1
+			? cornerControlsForObject(selectedObjects[0]!)
+			: []
+	const selectedCornerControls =
+		tool === "direct" && directCornerControls.length > 0
+			? directCornerControls
+			: objectCornerControls
+	const cornerResolutionByTarget = new Map<
+		string,
+		ReturnType<typeof projectDesignObjectCornerResolutions>[number]
+	>()
+	const resolvedCornerObjectIds = new Set<string>()
+	for (const { object } of selectedCornerControls) {
+		if (resolvedCornerObjectIds.has(object.id)) continue
+		resolvedCornerObjectIds.add(object.id)
+		for (const resolution of projectDesignObjectCornerResolutions(object))
+			cornerResolutionByTarget.set(
+				`${object.id}/${resolution.contourId}/${resolution.pointId}`,
+				resolution,
+			)
+	}
+	const clampedCornerControls = selectedCornerControls.flatMap(
+		({ object, contour, point }) => {
+			const resolution = cornerResolutionByTarget.get(
+				`${object.id}/${contour.id}/${point.id}`,
+			)
+			return resolution?.clamped ? [resolution] : []
+		},
+	)
+	const minimumAppliedCornerAmount = Math.min(
+		...clampedCornerControls.map(({ appliedAmount }) => appliedAmount),
+	)
+	const cornerAmountWarning =
+		clampedCornerControls.length === 0
+			? null
+			: clampedCornerControls.length === 1
+				? `Limited by this contour: renders at ${Number(minimumAppliedCornerAmount.toFixed(2))} units. Intended size is retained.`
+				: `Limited by this contour: ${clampedCornerControls.length} corners render as small as ${Number(minimumAppliedCornerAmount.toFixed(2))} units. Intended sizes are retained.`
 	const selectedUnavailableEntry = selection
 		.map((id) => effectiveHierarchy.byObjectId.get(id))
 		.find(
@@ -2873,6 +2913,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		const expanded = expandDesignShape(expansionEligibility.object, nextId)
+		const expandedLiveCorners =
+			expansionEligibility.object.geometry.kind === "path"
 		commit({
 			...document,
 			objects: document.objects.map((object) =>
@@ -2880,43 +2922,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			),
 		})
 		setSelection([expanded.id])
-		setStatus(`Expanded ${expanded.name} to ordinary path geometry.`)
-	}, [commit, document, expansionEligibility, nextId])
-
-	const editSelectedRectangleCorners = useCallback((): void => {
-		if (
-			selectedLiveRectangle === null ||
-			!expansionEligibility.eligible ||
-			expansionEligibility.object.id !== selectedLiveRectangle.id
-		) {
-			setStatus(
-				"Select one unlocked live rectangle before editing its corners.",
-			)
-			return
-		}
-		const expanded = expandDesignShape(selectedLiveRectangle, nextId)
-		if (expanded.geometry.kind !== "path") return
-		const nextDirectSelection: readonly DesignDirectSelectionTarget[] =
-			expanded.geometry.contours.flatMap((contour) =>
-				contour.points.map((point) => ({
-					kind: "node" as const,
-					objectId: expanded.id,
-					contourId: contour.id,
-					pointId: point.id,
-				})),
-			)
-		commit({
-			...document,
-			objects: document.objects.map((object) =>
-				object.id === expanded.id ? expanded : object,
-			),
-		})
-		setSelection([expanded.id])
-		setDirectSelection(nextDirectSelection)
-		setStatus(
-			`Converted ${expanded.name} to a path. ${nextDirectSelection.length} corners selected; drag the inset handles or choose a profile. Undo restores the live rectangle.`,
+		setDirectSelection(
+			tool === "direct" && expanded.geometry.kind === "path"
+				? expanded.geometry.contours.flatMap((contour) =>
+						contour.points.map((point): DesignDirectSelectionTarget => ({
+							kind: "node",
+							objectId: expanded.id,
+							contourId: contour.id,
+							pointId: point.id,
+						})),
+					)
+				: [],
 		)
-	}, [commit, document, expansionEligibility, nextId, selectedLiveRectangle])
+		setStatus(
+			expandedLiveCorners
+				? `Expanded ${expanded.name} live corners to ordinary editable cubic path geometry.`
+				: `Expanded ${expanded.name} to ordinary path geometry.`,
+		)
+	}, [commit, document, expansionEligibility, nextId, tool])
 
 	const expandStrokeSelection = useCallback((): void => {
 		if (!strokeEligibility.eligible) {
@@ -4529,6 +4552,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				? selectionTransformDisabledReason
 				: "Edit a live blend through its endpoints or expand it before transforming.",
 		directSelectionSummary: directSelectionDescription(directSelection),
+		cornerProfileControls:
+			selectedCornerControls.length === 0
+				? null
+				: {
+						count: selectedCornerControls.length,
+						profile:
+							selectedCornerControls[0]!.point.corner?.profile ?? "sharp",
+						amount: selectedCornerControls[0]!.point.corner?.amount ?? 0,
+						amountWarning: cornerAmountWarning,
+					},
+		setCornerProfiles: setSelectedCornerProfiles,
 		selectedSwatch,
 		selectedSwatchId,
 		selectedGuideId,
@@ -4942,7 +4976,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				displayName: "Expand Shape",
 				category: "Object",
 				description:
-					"Convert the selected live rectangle or ellipse to ordinary cubic path geometry.",
+					"Convert the selected live shape or live corner profiles to ordinary cubic path geometry.",
 				icon: "HobbyKnifeIcon",
 				disabled: !expansionEligibility.eligible,
 				...(expansionEligibility.eligible
@@ -6384,14 +6418,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		anchor: CanvasPoint,
 	): void => {
 		event.cancelBubble = true
+		const object = document.objects.find(({ id }) => id === objectId)
+		if (object?.geometry.kind !== "path") return
 		const selected = directSelection.flatMap((target) =>
 			target.kind === "node" && target.objectId === objectId
 				? [{ contourId: target.contourId, pointId: target.pointId }]
 				: [],
 		)
-		const targets = selected.length === 0 ? [fallback] : selected
-		const object = document.objects.find(({ id }) => id === objectId)
-		if (object?.geometry.kind !== "path") return
+		const targets =
+			tool === "select"
+				? cornerControlsForObject(object).map(({ contour, point }) => ({
+						contourId: contour.id,
+						pointId: point.id,
+					}))
+				: selected.length === 0
+					? [fallback]
+					: selected
 		const contours = object.geometry.contours
 		const corners = targets.flatMap((target) => {
 			const contour = contours.find(
@@ -6421,7 +6463,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			anchor,
 			original: document,
 			objectId,
-			transform: object.transform,
 			corners,
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -6710,13 +6751,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gesture: Extract<CanvasGesture, { readonly kind: "corner" }>,
 		current: CanvasPoint,
 	) => {
-		const delta =
-			designLocalRadialDelta(
-				gesture.transform,
-				gesture.anchor,
-				gesture.start,
-				current,
-			) ?? 0
+		const distances = designInwardDistances(
+			gesture.anchor,
+			gesture.start,
+			current,
+		) ?? { start: 0, current: 0 }
 		return applyDesignVectorIntent(
 			gesture.original,
 			selection,
@@ -6725,7 +6764,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				objectId: gesture.objectId,
 				corners: gesture.corners.map((corner) => ({
 					...corner,
-					amount: Math.max(0, corner.amount + delta),
+					amount: designCornerAmountFromInwardDrag(
+						corner.amount,
+						distances.start,
+						distances.current,
+					),
 				})),
 			},
 			activeHierarchyScope,
@@ -8321,7 +8364,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											/>
 										)
 									})}
-									{tool !== "direct"
+									{tool !== "direct" && tool !== "select"
 										? null
 										: selectedObjects.flatMap((selected) => {
 												const object = previewById.get(selected.id) ?? selected
@@ -8363,44 +8406,47 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														)
 														return (
 															<Group key={`${object.id}:${node.id}`}>
-																<VectorControlHandles
-																	node={node}
-																	inverseScale={1 / worldScale}
-																	color={layerUiColorForObject(object.id)}
-																	listening
-																	nodeHitRadius={9 / worldScale}
-																	handleHitRadius={{
-																		incoming: 9 / worldScale,
-																		outgoing: 9 / worldScale,
-																	}}
-																	selected={directSelection.some(
-																		(target) =>
-																			target.objectId === object.id &&
-																			target.contourId === contour.id &&
-																			(target.kind === "contour" ||
-																				(target.kind === "node" &&
-																					target.pointId === node.id) ||
-																				(target.kind === "segment" &&
-																					(target.segmentIndex === nodeIndex ||
-																						(target.segmentIndex + 1) %
-																							contour.nodes.length ===
-																							nodeIndex))),
-																	)}
-																	selectedHandles={selectedHandles}
-																	onNodePointerDown={(event) =>
-																		startDirectGesture(event, nodeTarget)
-																	}
-																	onHandlePointerDown={(handle, event) =>
-																		startDirectGesture(event, {
-																			kind: "handle",
-																			objectId: object.id,
-																			contourId: contour.id,
-																			pointId: node.id,
-																			handle,
-																		})
-																	}
-																/>
-																{!nodeSelected ||
+																{tool !== "direct" ? null : (
+																	<VectorControlHandles
+																		node={node}
+																		inverseScale={1 / worldScale}
+																		color={layerUiColorForObject(object.id)}
+																		listening
+																		nodeHitRadius={9 / worldScale}
+																		handleHitRadius={{
+																			incoming: 9 / worldScale,
+																			outgoing: 9 / worldScale,
+																		}}
+																		selected={directSelection.some(
+																			(target) =>
+																				target.objectId === object.id &&
+																				target.contourId === contour.id &&
+																				(target.kind === "contour" ||
+																					(target.kind === "node" &&
+																						target.pointId === node.id) ||
+																					(target.kind === "segment" &&
+																						(target.segmentIndex ===
+																							nodeIndex ||
+																							(target.segmentIndex + 1) %
+																								contour.nodes.length ===
+																								nodeIndex))),
+																		)}
+																		selectedHandles={selectedHandles}
+																		onNodePointerDown={(event) =>
+																			startDirectGesture(event, nodeTarget)
+																		}
+																		onHandlePointerDown={(handle, event) =>
+																			startDirectGesture(event, {
+																				kind: "handle",
+																				objectId: object.id,
+																				contourId: contour.id,
+																				pointId: node.id,
+																				handle,
+																			})
+																		}
+																	/>
+																)}
+																{(tool === "direct" && !nodeSelected) ||
 																!contour.closed ||
 																node.mode !== "hard"
 																	? null
@@ -8579,78 +8625,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							/>
 						)}
 					</artboard-wrap>
-					{tool !== "direct" || selectedCornerControls.length === 0
-						? null
-						: (() => {
-								const first = selectedCornerControls[0]!.point.corner
-								const profile = first?.profile ?? "sharp"
-								const amount = first?.amount ?? 0
-								return (
-									<fieldset
-										aria-label={`Corner profile controls for ${selectedCornerControls.length} selected corner${selectedCornerControls.length === 1 ? "" : "s"}`}
-										data-corner-profile-controls
-									>
-										<legend>Corner profile</legend>
-										<label>
-											Profile
-											<select
-												aria-label="Corner profile"
-												value={profile}
-												onChange={(event) => {
-													const next = event.currentTarget.value as
-														| "sharp"
-														| "circular"
-														| "squircle"
-													setSelectedCornerProfiles(
-														next,
-														amount > 0 ? amount : 12,
-													)
-												}}
-											>
-												<option value="sharp">Sharp / right angle</option>
-												<option value="circular">Circular</option>
-												<option value="squircle">Squircle</option>
-											</select>
-										</label>
-										<label>
-											Amount
-											<input
-												type="number"
-												aria-label="Corner amount in local geometry units"
-												min={0}
-												step={1}
-												value={amount}
-												disabled={profile === "sharp"}
-												onChange={(event) =>
-													setSelectedCornerProfiles(
-														profile,
-														event.currentTarget.valueAsNumber,
-													)
-												}
-											/>
-										</label>
-									</fieldset>
-								)
-							})()}
-					{selectedLiveRectangle === null ? null : (
-						<fieldset
-							aria-label={`Enable corner editing for ${selectedLiveRectangle.name}`}
-							data-live-rectangle-corner-controls
-						>
-							<legend>Corner editing</legend>
-							<p>
-								This rectangle is still a live shape. Corner profiles use
-								editable path nodes.
-							</p>
-							<button type="button" onClick={editSelectedRectangleCorners}>
-								Convert to Path &amp; Edit Corners
-							</button>
-							<small>
-								Keeps its position and appearance. Undo restores the live
-								rectangle.
-							</small>
-						</fieldset>
-					)}
 					<canvas-help-controls>
 						<button
 							ref={helpButtonRef}
