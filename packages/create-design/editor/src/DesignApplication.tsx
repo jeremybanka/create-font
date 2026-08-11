@@ -197,8 +197,8 @@ import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
-	designCornerAmountFromRadialDrag,
-	designLocalRadialDistances,
+	designCornerAmountFromInwardDrag,
+	designLocalInwardDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -6711,7 +6711,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gesture: Extract<CanvasGesture, { readonly kind: "corner" }>,
 		current: CanvasPoint,
 	) => {
-		const distances = designLocalRadialDistances(
+		const distances = designLocalInwardDistances(
 			gesture.transform,
 			gesture.anchor,
 			gesture.start,
@@ -6725,7 +6725,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				objectId: gesture.objectId,
 				corners: gesture.corners.map((corner) => ({
 					...corner,
-					amount: designCornerAmountFromRadialDrag(
+					amount: designCornerAmountFromInwardDrag(
 						corner.amount,
 						distances.start,
 						distances.current,

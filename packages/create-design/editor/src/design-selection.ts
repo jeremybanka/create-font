@@ -12,7 +12,8 @@ import {
 } from "@create-design/model"
 import type { DesignDocument, DesignObject } from "./types.ts"
 
-export function designLocalRadialDistances(
+/** Measures signed travel along the initial authored-corner-to-handle axis. */
+export function designLocalInwardDistances(
 	transform: DesignObject["transform"],
 	anchor: CanvasPoint,
 	start: CanvasPoint,
@@ -31,39 +32,28 @@ export function designLocalRadialDistances(
 	const localAnchor = toLocal(anchor)
 	const localStart = toLocal(start)
 	const localCurrent = toLocal(current)
+	const inward = {
+		x: localStart.x - localAnchor.x,
+		y: localStart.y - localAnchor.y,
+	}
+	const startDistance = Math.hypot(inward.x, inward.y)
+	if (startDistance <= Number.EPSILON) return { start: 0, current: 0 }
 	return {
-		start: Math.hypot(
-			localStart.x - localAnchor.x,
-			localStart.y - localAnchor.y,
-		),
-		current: Math.hypot(
-			localCurrent.x - localAnchor.x,
-			localCurrent.y - localAnchor.y,
-		),
+		start: startDistance,
+		current:
+			((localCurrent.x - localAnchor.x) * inward.x +
+				(localCurrent.y - localAnchor.y) * inward.y) /
+			startDistance,
 	}
 }
 
-export function designLocalRadialDelta(
-	transform: DesignObject["transform"],
-	anchor: CanvasPoint,
-	start: CanvasPoint,
-	current: CanvasPoint,
-): number | null {
-	const distances = designLocalRadialDistances(
-		transform,
-		anchor,
-		start,
-		current,
-	)
-	return distances === null ? null : distances.current - distances.start
-}
-
 /**
- * Maps the fixed visual handle radius onto the full authored corner amount.
- * Outward travel retains the existing one-unit-per-unit response, while inward
- * travel can always reach canonical sharp state at the authored node.
+ * Maps the fixed visual handle inset onto the full authored corner amount.
+ * Travel farther inward retains the existing one-unit-per-unit response, while
+ * outward travel reaches canonical sharp state at the authored perimeter and
+ * stays sharp after crossing it.
  */
-export function designCornerAmountFromRadialDrag(
+export function designCornerAmountFromInwardDrag(
 	originalAmount: number,
 	startDistance: number,
 	currentDistance: number,

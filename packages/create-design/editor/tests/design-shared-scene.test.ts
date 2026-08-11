@@ -6088,7 +6088,7 @@ describe("create-design shared vector scene", () => {
 		).toBe(true)
 	})
 
-	it("reduces a large committed corner to sharp in one inward drag", async () => {
+	it("keeps a large corner sharp when an outward drag crosses the perimeter", async () => {
 		const initial = createInitialDocument()
 		let identity = 0
 		const expanded = expandDesignShape(initial.objects[0]!, () =>
@@ -6175,6 +6175,10 @@ describe("create-design shared vector scene", () => {
 		).mockImplementation((pointerId) => captured.delete(pointerId))
 		const handlePosition = handle.getAbsolutePosition()
 		const nodePosition = node.getAbsolutePosition()
+		const outsidePosition = {
+			x: nodePosition.x - (handlePosition.x - nodePosition.x),
+			y: nodePosition.y - (handlePosition.y - nodePosition.y),
+		}
 		const pointerId = 185
 		const pointerDown = new PointerEvent("pointerdown", {
 			bubbles: true,
@@ -6195,8 +6199,8 @@ describe("create-design shared vector scene", () => {
 					bubbles: true,
 					button: 0,
 					buttons: 0,
-					clientX: nodePosition.x,
-					clientY: nodePosition.y,
+					clientX: outsidePosition.x,
+					clientY: outsidePosition.y,
 					isPrimary: true,
 					pointerId,
 					pointerType: "mouse",

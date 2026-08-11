@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import {
 	directSelectionKey,
-	designCornerAmountFromRadialDrag,
-	designLocalRadialDelta,
-	designLocalRadialDistances,
+	designCornerAmountFromInwardDrag,
+	designLocalInwardDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -296,35 +295,44 @@ describe("design selection", () => {
 		expect(entry?.x).toBeCloseTo(167)
 	})
 
-	it("computes corner drag distance in local affine space", () => {
+	it("computes directional corner drag distance in local affine space", () => {
 		const transform = { a: 4, b: 1, c: 2, d: 3, e: 7, f: -4 }
 		const project = ({ x, y }: { x: number; y: number }) => ({
 			x: transform.a * x + transform.c * y + transform.e,
 			y: transform.b * x + transform.d * y + transform.f,
 		})
 		expect(
-			designLocalRadialDelta(
-				transform,
-				project({ x: 0, y: 0 }),
-				project({ x: 10, y: 0 }),
-				project({ x: 11, y: 0 }),
-			),
-		).toBeCloseTo(1)
-		expect(
-			designLocalRadialDistances(
+			designLocalInwardDistances(
 				transform,
 				project({ x: 0, y: 0 }),
 				project({ x: 10, y: 0 }),
 				project({ x: 11, y: 0 }),
 			),
 		).toEqual({ start: 10, current: 11 })
+		expect(
+			designLocalInwardDistances(
+				transform,
+				project({ x: 0, y: 0 }),
+				project({ x: 10, y: 0 }),
+				project({ x: 0, y: 20 }),
+			),
+		).toEqual({ start: 10, current: 0 })
+		expect(
+			designLocalInwardDistances(
+				transform,
+				project({ x: 0, y: 0 }),
+				project({ x: 10, y: 0 }),
+				project({ x: -11, y: 7 }),
+			),
+		).toEqual({ start: 10, current: -11 })
 	})
 
 	it("maps the full existing corner amount onto inward handle travel", () => {
-		expect(designCornerAmountFromRadialDrag(120, 18, 18)).toBe(120)
-		expect(designCornerAmountFromRadialDrag(120, 18, 9)).toBe(60)
-		expect(designCornerAmountFromRadialDrag(120, 18, 0)).toBe(0)
-		expect(designCornerAmountFromRadialDrag(120, 18, 1e-12)).toBe(0)
-		expect(designCornerAmountFromRadialDrag(120, 18, 30)).toBe(132)
+		expect(designCornerAmountFromInwardDrag(120, 18, 18)).toBe(120)
+		expect(designCornerAmountFromInwardDrag(120, 18, 9)).toBe(60)
+		expect(designCornerAmountFromInwardDrag(120, 18, 0)).toBe(0)
+		expect(designCornerAmountFromInwardDrag(120, 18, -18)).toBe(0)
+		expect(designCornerAmountFromInwardDrag(120, 18, 1e-12)).toBe(0)
+		expect(designCornerAmountFromInwardDrag(120, 18, 30)).toBe(132)
 	})
 })

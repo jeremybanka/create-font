@@ -2,4 +2,5 @@
 "@create-design/editor": patch
 ---
 
-Let live corner handles reduce any committed corner amount to sharp in a single inward drag.
+Make live corner handles increase curvature only when dragged inward and reset
+to sharp when dragged outward through the authored perimeter.
