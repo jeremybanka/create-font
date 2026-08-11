@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
 	createRegistryDefaultLayout,
@@ -64,6 +64,32 @@ function host(): HTMLElement {
 }
 
 describe("TilingWorkspace registry integration", () => {
+	it("replaces the live workspace from an external durable layout", () => {
+		const element = host()
+		const onLayoutChange = vi.fn()
+		const renderWorkspace = (layout: typeof defaultLayout) =>
+			h(TilingWorkspace<"alpha" | "beta", Context>, {
+				context: { betaAvailable: true },
+				registry,
+				defaultLayout,
+				storageKey: `${storageKey}:controlled`,
+				layout,
+				onLayoutChange,
+			})
+		act(() => render(renderWorkspace(defaultLayout), element))
+		const replacement = {
+			...defaultLayout,
+			columns: defaultLayout.columns.map((column) =>
+				column.id === 1 ? { ...column, collapsed: true } : column,
+			),
+		}
+		act(() => render(renderWorkspace(replacement), element))
+		expect(
+			element.querySelector('button[aria-label="Expand column 1"]'),
+		).not.toBeNull()
+		expect(onLayoutChange).toHaveBeenLastCalledWith(replacement)
+	})
+
 	it("keeps keyboard-selected tile-pool options minimally in view", () => {
 		const longRegistrations = Array.from({ length: 6 }, (_, index) => ({
 			kind: `tile-${index}`,

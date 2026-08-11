@@ -95,6 +95,9 @@ importers:
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../../packages/create-art/source-rpc
+      '@create-art/ui-layout':
+        specifier: workspace:*
+        version: link:../../packages/create-art/ui-layout
       '@create-design/ai':
         specifier: workspace:*
         version: link:../../packages/create-design/ai
@@ -198,6 +201,9 @@ importers:
       '@create-art/source-rpc':
         specifier: workspace:*
         version: link:../../packages/create-art/source-rpc
+      '@create-art/ui-layout':
+        specifier: workspace:*
+        version: link:../../packages/create-art/ui-layout
       '@create-font/editor':
         specifier: workspace:*
         version: link:../../packages/create-font/editor
@@ -277,6 +283,9 @@ importers:
 
   packages/create-art/editor:
     dependencies:
+      '@create-art/ui-layout':
+        specifier: workspace:*
+        version: link:../ui-layout
       '@create-art/vector-geometry':
         specifier: workspace:*
         version: link:../vector-geometry
@@ -355,6 +364,25 @@ importers:
       '@types/node':
         specifier: 25.9.5
         version: 25.9.5
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)
+
+  packages/create-art/ui-layout:
+    dependencies:
+      elysia:
+        specifier: 1.4.29
+        version: 1.4.29(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.5
+        version: 25.9.5
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.8(@types/node@25.9.5)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)

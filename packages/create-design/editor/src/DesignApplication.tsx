@@ -4,7 +4,9 @@ import {
 	canvasScale,
 	canvasToolCursor,
 	CommandPalette,
+	parseTilingLayout,
 	TilingWorkspace,
+	UiLayoutControl,
 	isCommandPaletteKeyboardEvent,
 	parseHotbarSlots,
 	readVectorClipboard,
@@ -33,6 +35,8 @@ import {
 	type TileCommandRequest,
 	type HotbarSlots,
 	type TilingWorkspaceStatus,
+	type TilingLayout,
+	type UiLayoutRecordV1,
 } from "@create-art/editor"
 import {
 	Group,
@@ -1261,6 +1265,43 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 		},
 	)
+	const [tilingLayout, setTilingLayout] = useState<
+		TilingLayout<DesignTileKind>
+	>(() => {
+		const storage = browserLocalStorage()
+		return (
+			(parseTilingLayout(
+				storage?.getItem(`${DESIGN_TILING_STORAGE_KEY}:draft:v1`) ?? null,
+			) as TilingLayout<DesignTileKind> | null) ?? DEFAULT_DESIGN_TILING_LAYOUT
+		)
+	})
+	const uiLayout = {
+		version: 1,
+		id: "local",
+		name: "My layout",
+		product: "create-design",
+		state: {
+			tiling: tilingLayout,
+			hotbars: { primary: hotbarSlots, alternate: alternateHotbarSlots },
+			preferences: {
+				canvasDimmer:
+					canvasDimmerPreference.kind === "explicit"
+						? canvasDimmerPreference.value
+						: null,
+			},
+		},
+	} satisfies UiLayoutRecordV1
+	const applyUiLayout = useCallback((record: UiLayoutRecordV1) => {
+		if (record.product !== "create-design") return
+		setTilingLayout(record.state.tiling as TilingLayout<DesignTileKind>)
+		setHotbarSlots(record.state.hotbars.primary as HotbarSlots)
+		setAlternateHotbarSlots(record.state.hotbars.alternate as HotbarSlots)
+		setCanvasDimmerPreference(
+			record.state.preferences.canvasDimmer === null
+				? { kind: "system" }
+				: { kind: "explicit", value: record.state.preferences.canvasDimmer },
+		)
+	}, [])
 	const [helpOpen, setHelpOpen] = useState(false)
 	const [transformCursor, setTransformCursor] = useState<CanvasCursor | null>(
 		null,
@@ -7901,6 +7942,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					</button>
 				</command-center>
 				<header-actions>
+					<UiLayoutControl
+						product="create-design"
+						current={uiLayout}
+						onApply={applyUiLayout}
+					/>
 					<dimmer-control>
 						<label htmlFor="design-canvas-dimmer">Dimmer</label>
 						<span aria-hidden="true">Dark</span>
@@ -9017,6 +9063,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					commandRequest={tileCommandRequest}
 					enabled={!paletteOpen}
 					onStatusChange={updateTilingStatus}
+					layout={tilingLayout}
+					onLayoutChange={setTilingLayout}
 				/>
 				<ActionHotbar
 					alternateSlots={alternateHotbarSlots}

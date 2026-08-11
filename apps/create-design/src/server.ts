@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path"
 
 import { staticPlugin } from "@elysia/static"
 import { createSourceRpc } from "@create-art/source-rpc/server"
+import { createUiLayoutRpc } from "@create-art/ui-layout/server"
 import { Elysia } from "elysia"
 import type { ElysiaAdapter } from "elysia/adapter"
 
@@ -102,6 +103,7 @@ export async function createDesignServerApp(
 				})),
 			})),
 	)
+	app.group(`/api`, (api) => api.use(createUiLayoutRpc({ adapter, root })))
 	const activePlugin = await sourcePlugin(active, adapter, "default")
 	app.group(`/api`, (group) => group.use(activePlugin))
 	for (const { project, plugin } of mountedProjects) {

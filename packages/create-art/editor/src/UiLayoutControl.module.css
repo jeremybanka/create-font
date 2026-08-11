@@ -1,0 +1,49 @@
+ui-layout-control.class {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+
+	> select,
+	> input,
+	> button {
+		min-height: 30px;
+		border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+		border-radius: 6px;
+		background: var(--panel, Canvas);
+		color: inherit;
+		font: inherit;
+	}
+
+	> select:first-of-type {
+		max-width: 190px;
+	}
+	> input {
+		width: 7rem;
+		padding-inline: 7px;
+	}
+	> status-dot {
+		color: var(--warning, #a45b00);
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	> output {
+		max-width: 16rem;
+		font-size: 12px;
+		color: var(--danger, #b42318);
+	}
+}
+
+@media (max-width: 900px) {
+	ui-layout-control.class > input,
+	ui-layout-control.class > select:nth-of-type(2) {
+		display: none;
+	}
+	ui-layout-control.class > status-dot {
+		font-size: 0;
+	}
+	ui-layout-control.class > status-dot::after {
+		content: "●";
+		font-size: 12px;
+	}
+}

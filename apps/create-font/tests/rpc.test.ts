@@ -1,3 +1,7 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import type { CreateFontSourceService } from "@create-font/server"
 import { describe, expect, it, vi } from "vitest"
 
@@ -10,6 +14,32 @@ describe(`create-font RPC`, () => {
 		readUnit: vi.fn(),
 		writeUnit: vi.fn(),
 		writeUnits: vi.fn(),
+	})
+
+	it("mounts UI layouts at the workspace root instead of the selected font root", async () => {
+		const workspaceRoot = await mkdtemp(join(tmpdir(), "font-ui-layout-rpc-"))
+		await mkdir(join(workspaceRoot, "fonts"))
+		await writeFile(join(workspaceRoot, "fonts", "ui.json"), "{")
+		const app = createFontServerApp({
+			root: import.meta.dirname,
+			workspaceRoot,
+		})
+		const response = await app.handle(
+			new Request("http://localhost/api/ui-layouts?product=create-font"),
+		)
+		expect(response.status).toBe(200)
+		const body = (await response.json()) as {
+			sources: readonly {
+				origin: string
+				issues: readonly { file: string; path: string }[]
+			}[]
+		}
+		expect(
+			body.sources.find(({ origin }) => origin === "project")?.issues[0],
+		).toMatchObject({
+			file: join(workspaceRoot, "fonts", "ui.json"),
+			path: "$",
+		})
 	})
 
 	it(`composes health, workspace, and build operations with the editor app`, async () => {

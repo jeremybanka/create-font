@@ -91,6 +91,9 @@ export interface TilingWorkspaceProps<Kind extends string, Context> {
 	readonly commandRequest?: TileCommandRequest<Kind> | null
 	readonly enabled?: boolean
 	readonly onStatusChange?: (status: TilingWorkspaceStatus) => void
+	/** Durable layout replacement supplied by the containing UI-layout manager. */
+	readonly layout?: TilingLayout<Kind>
+	readonly onLayoutChange?: (layout: TilingLayout<Kind>) => void
 }
 
 interface TileShortcut {
@@ -219,6 +222,8 @@ export function TilingWorkspace<Kind extends string, Context>({
 	commandRequest = null,
 	enabled = true,
 	onStatusChange,
+	layout: suppliedLayout,
+	onLayoutChange,
 	parseLayout = parseTilingLayout,
 }: TilingWorkspaceProps<Kind, Context>) {
 	const [initial] = useState(() =>
@@ -267,6 +272,20 @@ export function TilingWorkspace<Kind extends string, Context>({
 		readonly grabOffset: number
 	} | null>(null)
 	const layout = history.present
+	const layoutRef = useRef(layout)
+	layoutRef.current = layout
+	useEffect(() => {
+		if (
+			suppliedLayout !== undefined &&
+			serializeTilingLayout(suppliedLayout) !==
+				serializeTilingLayout(layoutRef.current)
+		) {
+			dispatch({ type: "replace", layout: suppliedLayout })
+		}
+	}, [suppliedLayout])
+	useEffect(() => {
+		onLayoutChange?.(layout as TilingLayout<Kind>)
+	}, [layout, onLayoutChange])
 	const dirty = serializeTilingLayout(layout) !== saved
 	const allocation = columnSlotAllocation(viewportWidth)
 	const visibleColumns = visibleColumnIds(
