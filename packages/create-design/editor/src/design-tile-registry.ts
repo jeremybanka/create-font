@@ -97,6 +97,9 @@ export interface DesignTileContext {
 		target: DesignAlignmentTarget,
 		keyObjectId?: string,
 	) => void
+	readonly alignmentTarget: DesignAlignmentTarget
+	readonly keyObjectId: string | null
+	readonly setAlignmentTarget: (target: DesignAlignmentTarget) => void
 	readonly distributeSelection: (axis: "x" | "y") => void
 	readonly selectionBounds: Readonly<{
 		minX: number

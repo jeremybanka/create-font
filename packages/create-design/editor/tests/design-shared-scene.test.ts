@@ -568,6 +568,18 @@ describe("create-design shared vector scene", () => {
 			readDesignCanvasTheme(document.querySelector("design-application"))
 				.marquee,
 		)
+
+		act(() => rows[0]!.click())
+		boxes = stage.find(".transform-selection-box")
+		const keyBoxes = boxes.filter(
+			(box: { strokeWidth(): number; getAbsoluteScale(): { x: number } }) =>
+				Math.abs(box.strokeWidth() * box.getAbsoluteScale().x - 3) < 0.01,
+		)
+		expect(keyBoxes).toHaveLength(1)
+		expect(keyBoxes[0]!.stroke()).toBe(designLayerUiColorCss("teal"))
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain(`${front.name} is the key object`)
 	})
 
 	it("hits and drags a clipping contour only along its padded edge", async () => {
@@ -5866,6 +5878,47 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
+	it("renders layer-colored contour nodes at Select and Direct Selection sizes", () => {
+		const initial = createInitialDocument()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		const stage = mountDesign({
+			initialDocument: { ...initial, objects: [expanded] },
+		})
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct selection controls were not found.")
+
+		act(() => layer.click())
+		const selectedContourNodes = stage.find(".design-contour-node")
+		expect(selectedContourNodes.length).toBeGreaterThan(0)
+		for (const marker of selectedContourNodes) {
+			expect(marker.width() * marker.getAbsoluteScale().x).toBeCloseTo(3)
+			expect(marker.height() * marker.getAbsoluteScale().y).toBeCloseTo(3)
+			expect(marker.fill()).toBe(designLayerUiColorCss("red"))
+		}
+
+		act(() => direct.click())
+		const directNodes = stage.find(".vector-node")
+		expect(directNodes.length).toBeGreaterThan(0)
+		const theme = readDesignCanvasTheme(
+			document.querySelector("design-application"),
+		)
+		for (const marker of directNodes) {
+			expect(marker.width() * marker.getAbsoluteScale().x).toBeCloseTo(5)
+			expect(marker.height() * marker.getAbsoluteScale().y).toBeCloseTo(5)
+			expect(marker.strokeWidth() * marker.getAbsoluteScale().x).toBeCloseTo(1)
+			expect(marker.fill()).toBe(theme.handleFill)
+		}
+	})
+
 	it("quietly warns when a contour clamps its intended corner amount", () => {
 		const initial = createInitialDocument()
 		let identity = 0
@@ -6327,7 +6380,10 @@ describe("create-design shared vector scene", () => {
 			)
 			await Promise.resolve()
 		})
-		expect(stage.find(".vector-node-selection")).toHaveLength(1)
+		expect(stage.find(".vector-node-selection")).toHaveLength(0)
+		expect(stage.findOne(".vector-node").fill()).toBe(
+			designLayerUiColorCss("red"),
+		)
 		expect(document.querySelector("design-object-tile")?.textContent).toContain(
 			"Direct selection: 1 node",
 		)
@@ -6753,13 +6809,20 @@ describe("create-design shared vector scene", () => {
 			)
 			await Promise.resolve()
 		})
-		expect(stage.find(".vector-node-selection")).toHaveLength(1)
+		expect(stage.find(".vector-node-selection")).toHaveLength(0)
+		expect(stage.findOne(".vector-node").fill()).toBe(
+			designLayerUiColorCss("red"),
+		)
 
 		await act(async () => {
 			expand.click()
 			await Promise.resolve()
 		})
 		expect(stage.find(".vector-node-selection")).toHaveLength(0)
+		expect(stage.findOne(".vector-node").fill()).toBe(
+			readDesignCanvasTheme(document.querySelector("design-application"))
+				.handleFill,
+		)
 		expect(document.querySelector("design-object-tile")?.textContent).toContain(
 			"No direct controls selected.",
 		)

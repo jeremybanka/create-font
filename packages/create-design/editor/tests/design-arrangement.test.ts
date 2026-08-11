@@ -261,4 +261,27 @@ describe("design arrangement", () => {
 		)
 		expect(new Set(deltas).size).toBe(1)
 	})
+
+	it("keeps the rigid unit containing a key object stationary", () => {
+		const document = createInitialDocument()
+		const grouped = groupDesignSelection(
+			document,
+			document.objects.map(({ id }) => id),
+			() => "key-unit",
+		)!
+		const result = alignDesignObjects(
+			grouped.document,
+			grouped.selection,
+			"right",
+			"key-object",
+			document.artboards[0]!,
+			grouped.selection[0],
+		)!
+		expect(result.objects).toEqual(grouped.document.objects)
+		expect(
+			result.objects.every(
+				(object, index) => object === grouped.document.objects[index],
+			),
+		).toBe(true)
+	})
 })

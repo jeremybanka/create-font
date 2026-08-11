@@ -87,6 +87,12 @@ export function alignDesignObjects(
 	)
 	const moved = new Map(
 		units.flatMap((ids) => {
+			if (
+				target === "key-object" &&
+				keyObjectId !== undefined &&
+				ids.includes(keyObjectId)
+			)
+				return []
 			const members = ids.flatMap((id) => {
 				const object = byId.get(id)
 				return object === undefined ? [] : [object]
