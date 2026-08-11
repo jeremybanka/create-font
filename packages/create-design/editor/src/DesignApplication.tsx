@@ -2925,14 +2925,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setDirectSelection(
 			tool === "direct" && expanded.geometry.kind === "path"
 				? expanded.geometry.contours.flatMap((contour) =>
-						contour.points.map(
-							(point): DesignDirectSelectionTarget => ({
-								kind: "node",
-								objectId: expanded.id,
-								contourId: contour.id,
-								pointId: point.id,
-							}),
-						),
+						contour.points.map((point): DesignDirectSelectionTarget => ({
+							kind: "node",
+							objectId: expanded.id,
+							contourId: contour.id,
+							pointId: point.id,
+						})),
 					)
 				: [],
 		)
