@@ -60,13 +60,19 @@ import {
 import { tileRegistryCommands } from "@create-art/editor"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
-import type { EditorWorkspaceProject } from "./browser-api.ts"
+import type {
+	EditorCollaboration,
+	EditorWorkspaceProject,
+} from "./browser-api.ts"
+import { CollaborationPanel } from "./CollaborationPanel.tsx"
+import { CollaborationPresenceLayer } from "./CollaborationPresenceLayer.tsx"
 
 const svg = {
 	MagnifyingGlass: MagnifyingGlassIcon,
 }
 
 export interface AppShellProps {
+	readonly collaboration?: EditorCollaboration
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
 	readonly workspaceProject?: EditorWorkspaceProject
@@ -169,11 +175,15 @@ function readInitialTilingLayout(): TilingLayout<FontTileKind> {
 }
 
 export function AppShell({
+	collaboration,
 	workspace,
 	versionControl,
 	workspaceProject,
 }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
+	const [collaborationSession, setCollaborationSession] = useState(() =>
+		collaboration?.session(),
+	)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
 	const [alternateHotbarSlots, setAlternateHotbarSlots] = useState(
@@ -226,6 +236,7 @@ export function AppShell({
 	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const showCurvature = useO(workspace.ui.showCurvature)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
+	const readOnly = collaborationSession?.role === `viewer`
 	const toolContextForHistory = (
 		history: TimelineMeta | null,
 	): ToolContext => ({
@@ -235,6 +246,8 @@ export function AppShell({
 		activeTool,
 		editingTextIndex,
 		history,
+		kerningActive: activeKerningPair !== null,
+		readOnly,
 		selection,
 		workspace,
 	})
@@ -267,6 +280,16 @@ export function AppShell({
 		setCommandPaletteOpen(false)
 		requestAnimationFrame(() => commandCenterRef.current?.focus())
 	}
+
+	useEffect(() => {
+		setCollaborationSession(collaboration?.session())
+		if (collaboration === undefined) return
+		return collaboration.subscribeSession(setCollaborationSession)
+	}, [collaboration])
+
+	useEffect(() => {
+		if (readOnly) setAddingGlyphs(false)
+	}, [readOnly])
 
 	useEffect(() => {
 		try {
@@ -345,6 +368,10 @@ export function AppShell({
 				description: "Add one or more glyphs to the font.",
 				icon: "PlusIcon",
 				keywords: ["new", "create", "character"],
+				disabled: readOnly,
+				disabledReason: readOnly
+					? "View-only guests cannot change the font."
+					: undefined,
 				do: () => {
 					workspace.actions.navigate("/glyphs")
 					setAddingGlyphs(true)
@@ -376,9 +403,12 @@ export function AppShell({
 					shortcut: formatHotkey(tool.hotkey).join("+"),
 					checked: tool.status(toolContext) === "active",
 					disabled:
-						routeName !== "canvas" || tool.status(toolContext) === "disabled",
-					disabledReason:
-						routeName !== "canvas"
+						readOnly ||
+						routeName !== "canvas" ||
+						tool.status(toolContext) === "disabled",
+					disabledReason: readOnly
+						? "View-only guests cannot change the font."
+						: routeName !== "canvas"
 							? "Open the canvas to use this editor command."
 							: toolDisabledReason(tool, toolContext),
 					do: () => tool.do(toolContext),
@@ -463,6 +493,9 @@ export function AppShell({
 					</button>
 				</command-center>
 				<header-actions>
+					{collaboration === undefined ? null : (
+						<CollaborationPanel collaboration={collaboration} />
+					)}
 					<document-status
 						role="status"
 						aria-live="polite"
@@ -495,12 +528,18 @@ export function AppShell({
 					</view-tabs>
 				</header-actions>
 			</header>
-			<main data-view={routeName}>
+			<main data-view={routeName} aria-readonly={readOnly || undefined}>
+				{readOnly ? (
+					<viewer-notice role="note">
+						View only · You can explore this font, but editing and history are
+						disabled.
+					</viewer-notice>
+				) : null}
 				{routeName === "canvas" ? (
 					<editor-workspace>
 						<GlyphCanvas
 							workspace={workspace}
-							disabled={tilingStatus.management}
+							disabled={tilingStatus.management || readOnly}
 							diffView={diffView}
 							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
@@ -512,9 +551,13 @@ export function AppShell({
 								<HistoryActionHotbar
 									alternateSlots={alternateHotbarSlots}
 									commands={commandsForHistory(history)}
-									enabled={!tilingStatus.management && !commandPaletteOpen}
+									enabled={
+										!readOnly && !tilingStatus.management && !commandPaletteOpen
+									}
 									hotkeysEnabled={
-										routeName === "canvas" && !tilingStatus.management
+										routeName === "canvas" &&
+										!readOnly &&
+										!tilingStatus.management
 									}
 									paletteOpen={commandPaletteOpen}
 									slots={hotbarSlots}
@@ -572,12 +615,13 @@ export function AppShell({
 				) : routeName === "glyphs" ? (
 					<GlyphLibrary
 						workspace={workspace}
+						readOnly={readOnly}
 						addingGlyphs={addingGlyphs}
 						onAddingGlyphsChange={setAddingGlyphs}
 						{...(versionControl === undefined ? {} : { versionControl })}
 					/>
 				) : routeName === "info" ? (
-					<FontInfo workspace={workspace} />
+					<FontInfo workspace={workspace} readOnly={readOnly} />
 				) : (
 					<not-found-view>
 						<strong>View not found</strong>
@@ -585,6 +629,9 @@ export function AppShell({
 					</not-found-view>
 				)}
 			</main>
+			{collaboration === undefined ? null : (
+				<CollaborationPresenceLayer collaboration={collaboration} />
+			)}
 			<footer>
 				<active-context>
 					<strong>

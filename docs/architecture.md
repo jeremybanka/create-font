@@ -228,6 +228,11 @@ The supported Node and Bun boundaries are documented in
 documented in [the transport decision](rpc-transport-decision.md).
 The `@create-font/editor` package owns the font-specific Preact application,
 while `@create-art/editor` owns editor foundations shared with create-design.
+`@create-art/realtime` owns product-neutral multiplayer contracts, signed local
+device identity and admission, optimistic replay, presence, and the
+persist-before-confirm action authority. create-font supplies the registered
+font command union and source persistence adapter; create-design can supply its
+own command model against the same foundation without inheriting font concepts.
 The `create-font` browser entry serves the font editor through Vite during
 development and compiled assets in production. The application discovers
 `fonts/*/create-font.json`, serves
@@ -235,6 +240,55 @@ the selected project through a filesystem-backed source service, hydrates the
 browser from individual source units, and persists coordinated edits through
 conditional multi-unit writes. Watching and reconciliation, immutable release
 assets, and binary serialization remain roadmap work.
+
+## LAN collaboration authority
+
+`font dev --share` keeps the workspace server private on loopback and publishes
+a separate, ephemeral HTTPS endpoint on the LAN. The terminal invitation binds
+the endpoint, process invitation capability, protocol version, and SHA-256 TLS
+certificate fingerprint. `font join` verifies that pin and injects the approved
+session capability from a local loopback gateway, so the browser never needs to
+bypass certificate warnings or retain a host token.
+
+Git `user.name` and `user.email` are friendly identity, not authorization.
+Every installation also owns a persistent Ed25519 device key. A guest signs a
+short-lived identity claim, and the host admits the proven device as editor or
+viewer for the lifetime of that host process. Approval state and bearer
+sessions live only in memory, and guest credentials expire after 12 hours even
+if the process remains alive. Revocation removes the capability and immediately
+disconnects every socket for the device.
+
+The host owns one authoritative atom.io Silo. Guests cannot call source writes,
+Git operations, builds, or arbitrary server APIs. Editors may submit only the
+registered document command union over `atom.io/realtime`; viewers receive the
+same document and presence streams but cannot submit commands. Each operation
+has an idempotency key and base epoch. The authority validates it, reconstructs
+the current state, conditionally persists changed source units, applies it to
+the host Silo, advances the epoch, and only then broadcasts confirmation. A
+stale or rejected operation receives a complete base-plus-action snapshot for
+deterministic recovery. Optimistic operations that merely lost an ordering race
+are replayed against that snapshot and resubmitted with the new continuity
+epoch.
+
+The existing per-glyph timeline family and kerning timeline are shared session
+state. Undo and redo therefore preserve their established scope while
+participating in one global session action order. This first implementation
+does not invent selective or user-centric undo, and it does not persist history
+after the host process exits. Watcher changes that did not originate in the
+active operation become server-authored reconciliation commands. An isolated
+glyph or kerning change clears only its corresponding history scope; structural
+changes conservatively clear all affected scopes. Invalid external source does
+not displace the last valid shared state.
+
+Node uses Socket.IO WebSockets through the same pinned HTTPS server. Bun uses
+Socket.IO long-polling while retaining the same protocol because Bun's
+Node-compatible HTTPS upgrade socket cannot carry the gateway's transparent raw
+upgrade stream; both runtime paths are exercised in CI.
+
+Presence is ephemeral and outside the source history. It reports cursor,
+selection, active glyph, active master, and gesture/tool context. The editor
+renders remote cursors and exposes participant, role, admission, revocation,
+and activity context through accessible controls.
 
 ## Architectural non-goals
 

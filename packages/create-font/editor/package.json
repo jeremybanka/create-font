@@ -40,6 +40,7 @@
 	},
 	"dependencies": {
 		"@create-art/editor": "workspace:*",
+		"@create-art/realtime": "workspace:*",
 		"@create-art/vector-geometry": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",

@@ -239,6 +239,7 @@ describe(`font CLI`, () => {
 		expect(captured.stdout.join(``)).toContain(`font`)
 		expect(captured.stdout.join(``)).toContain(`build`)
 		expect(captured.stdout.join(``)).toContain(`dev`)
+		expect(captured.stdout.join(``)).toContain(`join`)
 	})
 
 	it(`documents the distinctive development server port`, async () => {
@@ -251,6 +252,7 @@ describe(`font CLI`, () => {
 		expect(exitCode).toBe(0)
 		expect(captured.stdout.join(``)).toContain(`Defaults to 16384`)
 		expect(captured.stdout.join(``)).toContain(`--port=16384`)
+		expect(captured.stdout.join(``)).toContain(`--share`)
 	})
 
 	it(`builds a selected font and prints its artifact path`, async () => {

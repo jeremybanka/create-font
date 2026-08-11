@@ -25,6 +25,7 @@ const svg = {
 export interface GlyphLibraryProps {
 	readonly addingGlyphs: boolean
 	readonly onAddingGlyphsChange: (addingGlyphs: boolean) => void
+	readonly readOnly?: boolean
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
 }
@@ -32,6 +33,7 @@ export interface GlyphLibraryProps {
 export function GlyphLibrary({
 	addingGlyphs,
 	onAddingGlyphsChange,
+	readOnly = false,
 	workspace,
 	versionControl,
 }: GlyphLibraryProps) {
@@ -94,6 +96,8 @@ export function GlyphLibrary({
 						ref={addButtonRef}
 						type="button"
 						aria-expanded={addingGlyphs}
+						disabled={readOnly}
+						title={readOnly ? `View-only guests cannot add glyphs.` : undefined}
 						onClick={() => onAddingGlyphsChange(true)}
 					>
 						<svg.Plus aria-hidden="true" />
@@ -122,7 +126,7 @@ export function GlyphLibrary({
 				</glyph-grid>
 			)}
 
-			{addingGlyphs ? (
+			{addingGlyphs && !readOnly ? (
 				<dialog-backdrop
 					role="presentation"
 					onMouseDown={(event: React.MouseEvent<HTMLElement>) => {

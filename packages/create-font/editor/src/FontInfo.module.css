@@ -6,6 +6,7 @@ font-info.class {
 	overflow: auto;
 	background: var(--paper);
 
+	/* @lasertag-expect-error: the React context provider is intentionally DOM-transparent */
 	> info-heading {
 		display: grid;
 		gap: 4px;
@@ -35,6 +36,7 @@ font-info.class {
 		}
 	}
 
+	/* @lasertag-expect-error: the React context provider is intentionally DOM-transparent */
 	> info-layout {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));

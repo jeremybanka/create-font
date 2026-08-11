@@ -192,5 +192,9 @@ jobs:
           apps/create-font/tests/runtime-server-smoke.ts
       - run: >-
           mise exec bun@1.3.14 --
+          bun --conditions=development
+          apps/create-font/tests/runtime-collaboration-smoke.ts
+      - run: >-
+          mise exec bun@1.3.14 --
           bun apps/create-font/dist/font-cli.js
           build workbench-sans --root=.
