@@ -24,7 +24,7 @@ import type {
 	DesignObject,
 } from "./types.ts"
 
-export const DESIGN_MIN_ZOOM = 0.2
+export const DESIGN_MIN_ZOOM = 0.01
 export const DESIGN_MAX_ZOOM = 8
 
 interface PointerCaptureTarget {
