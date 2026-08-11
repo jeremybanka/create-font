@@ -2446,7 +2446,7 @@ function DesignObjectTile({
 					({ id }) => id === linkedGeometry.artboardId,
 				)
 			: undefined
-	const cornerControls = context.cornerProfileControls
+	const cornerControls = context.cornerProfileControls ?? null
 	return (
 		<design-object-tile>
 			<object-selection-summary role="status">
