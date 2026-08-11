@@ -1,7 +1,8 @@
 import type { EditorFontSource } from "@create-font/states"
 import { useEffect } from "react"
 
-import { createGlyphPreview, type GlyphPreview } from "./glyph-preview.ts"
+import { createFaviconGlyphPreview } from "./favicon-preview.ts"
+import type { GlyphPreview } from "./glyph-preview.ts"
 import {
 	type InferredColorPreference,
 	useInferredColorPreference,
@@ -106,12 +107,7 @@ export function createFontFaviconPreview(
 	if (cmapEntry === undefined) return null
 	const glyph = source.glyphs.find((item) => item.id === cmapEntry.glyphId)
 	if (glyph === undefined) return null
-	const preview = createGlyphPreview(
-		glyph,
-		source.defaultMasterId,
-		source.metrics,
-		source.metadata.unitsPerEm,
-	)
+	const preview = createFaviconGlyphPreview(glyph, source.defaultMasterId)
 	return preview === null || preview.path.trim().length === 0 ? null : preview
 }
 

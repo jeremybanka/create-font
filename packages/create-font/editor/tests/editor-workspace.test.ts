@@ -61,6 +61,10 @@ function previewGlyph(workspace: EditorWorkspace, index: number) {
 	return item?.kind === "glyph" ? item.glyph : null
 }
 
+function faviconPreview(workspace: EditorWorkspace) {
+	return workspace.font.silo.getState(workspace.ui.faviconPreview)
+}
+
 const middleMasterId = "master:middle" as const
 
 function makeThreeMasterFont(): EditorFontSource {
@@ -1016,6 +1020,67 @@ describe("editor workspace", () => {
 		expect(workspace.font.silo.getState(workspace.ui.activeLayer)).toBe(
 			layerBefore,
 		)
+	})
+
+	it("reacts the favicon path and crop to live outline, cmap, and default-master changes", () => {
+		const fixture = makeDemoFont()
+		const source = {
+			...fixture,
+			cmap: [...fixture.cmap, { codePoint: 0x61, glyphId: oGlyphId }],
+		}
+		const workspace = createEditorWorkspace(source)
+		const initial = faviconPreview(workspace)
+		const oGlyph = workspace.font.read.editorGlyphSource(oGlyphId)
+		const rightmostPoint = oGlyph?.layers.find(
+			(layer) => layer.masterId === razorMasterId,
+		)?.contours[0]?.points[1]
+		if (initial === null || rightmostPoint === undefined)
+			throw new Error("Missing favicon fixture geometry.")
+
+		workspace.font.actions.movePoints({
+			masterId: razorMasterId,
+			glyphId: oGlyphId,
+			points: [
+				{
+					pointId: rightmostPoint.id,
+					x: rightmostPoint.x + 40,
+					y: rightmostPoint.y,
+				},
+			],
+		})
+		const outlined = faviconPreview(workspace)
+		expect(outlined?.path).not.toBe(initial.path)
+		expect(outlined?.viewBox).not.toBe(initial.viewBox)
+
+		const outlinedSource = workspace.font.read.editorSource()
+		if (outlinedSource === null) throw new Error("Missing editor source.")
+		workspace.actions.replaceSource({
+			...outlinedSource,
+			cmap: outlinedSource.cmap.map((entry) =>
+				entry.codePoint === 0x61 ? { ...entry, glyphId: aGlyphId } : entry,
+			),
+		})
+		const remapped = faviconPreview(workspace)
+		expect(remapped?.path).not.toBe(outlined?.path)
+		expect(remapped?.viewBox).not.toBe(outlined?.viewBox)
+
+		workspace.actions.replaceSource({
+			...source,
+			masters: source.masters.map((master) =>
+				master.id === razorMasterId
+					? {
+							id: master.id,
+							kind: "source" as const,
+							name: master.name,
+							location: {},
+							support: { kind: "non-intermediate" as const },
+						}
+					: { id: master.id, kind: "default" as const, name: master.name },
+			),
+			defaultMasterId: blackMasterId,
+		})
+		const changedMaster = faviconPreview(workspace)
+		expect(changedMaster?.path).not.toBe(initial.path)
 	})
 
 	it("caches editor-source projection independently for each glyph", () => {
