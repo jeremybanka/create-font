@@ -22,6 +22,8 @@ const result = await exportPng(document, {
 - Paint follows the shared flattened layer/group order, with fill before
   stroke. Hidden layers are omitted, locked layers stay output-visible, and CMYK
   colors use the same deterministic sRGB alternate as SVG.
+- Open contours use the shared derived fill region (a straight endpoint
+  closure) but retain authored open topology for stroke caps, joins, and dashes.
 - Valid live contour blends are lowered through the shared model projection;
   incompatible blends block output with the shared blend diagnostics.
 - Color and alpha use half-up 8-bit rounding. Partially covered transparent

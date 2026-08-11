@@ -469,6 +469,48 @@ describe("PDF export", () => {
 		expect(content).not.toMatch(/(^|\n)S($|\n)/)
 	})
 
+	it("implicitly closes an open fill while keeping its combined stroke subpath open", () => {
+		const initial = createInitialDocument()
+		const object: DesignObject = {
+			id: "object:open-combined",
+			name: "Open combined paint",
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:open-combined",
+						closed: false,
+						points: [
+							{ id: "point:open-combined:0", x: 0, y: 0 },
+							{ id: "point:open-combined:1", x: 10, y: 0 },
+							{ id: "point:open-combined:2", x: 10, y: 10 },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {
+				fill: { swatchId: "swatch:coral" },
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 1,
+					cap: "round",
+				},
+			},
+		}
+		const content = pdfObjectContentStream(
+			object,
+			initial.swatches.find(({ id }) => id === "swatch:coral"),
+			initial.swatches.find(({ id }) => id === "swatch:ink"),
+		)
+		expect(content).toContain("0 0 m\n10 0 l\n10 10 l")
+		expect(content).not.toContain("10 10 l\n0 0 l")
+		expect(content).not.toMatch(/(^|\n)h($|\n)/u)
+		expect(content).toMatch(/B\*$/u)
+		expect(object.geometry.contours[0]?.closed).toBe(false)
+	})
+
 	it("exports optional strokes without requiring a fill", () => {
 		const document = createInitialDocument()
 		const object = document.objects[0]!

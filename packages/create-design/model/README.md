@@ -54,3 +54,14 @@ keeps locked-layer artwork output-visible, and lowers live blend steps into the
 later-painted endpoint's layer and group slot. The returned entries retain
 their containing layer and group ancestry for structured output and
 diagnostics; formats without editable layers flatten the entry order exactly.
+
+## Open contour paint projection
+
+Open contours are durable authored geometry. `projectDesignObjectContours()`
+preserves `closed: false` for editing, centerline hit testing, stroke caps,
+dashes, and expansion. Fill-only consumers use
+`projectDesignObjectFillContours()`, which derives a closed region by joining
+the endpoint anchors with a straight segment and ignores only the first
+incoming and last outgoing dangling controls. The derived contour never
+mutates source. This matches SVG and PDF implicit subpath fill closure while
+allowing a fill and stroke on the same path to close only the fill.

@@ -886,6 +886,49 @@ describe("complete design document codec", () => {
 		})
 	})
 
+	it("accepts an open path as canonical complete-document source without rewriting it", () => {
+		const initial = createInitialDocument()
+		const open = {
+			...initial.objects[0]!,
+			id: "object:open",
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:open",
+						closed: false,
+						points: [
+							{
+								id: "point:open:0",
+								x: 10,
+								y: 20,
+								incoming: { x: -4, y: -5 },
+							},
+							{
+								id: "point:open:1",
+								x: 40,
+								y: 50,
+								outgoing: { x: 6, y: 7 },
+							},
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: [open],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object" as const, id: open.id }],
+			})),
+		}
+		expect(parseDesignDocumentText(JSON.stringify(document))).toEqual({
+			ok: true,
+			value: document,
+		})
+	})
+
 	it("rejects fill rules authored before the v5 contract", () => {
 		const canonical = canonicalV1Fixture()
 		const current = decodeDesignDocument(canonical)

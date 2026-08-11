@@ -371,6 +371,95 @@ describe("deterministic PNG output", () => {
 		expect([...rgba.slice(4)]).toEqual([0, 0, 0, 0])
 	})
 
+	it("closes only the fill of an open fill-and-stroke contour", async () => {
+		const initial = createInitialDocument()
+		const open = {
+			...initial.objects[0]!,
+			id: "object:open-fill-stroke",
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:open-fill-stroke",
+						closed: false,
+						points: [
+							{
+								id: "point:open-fill-stroke:0",
+								x: 0,
+								y: 0,
+								incoming: { x: -10, y: -10 },
+							},
+							{ id: "point:open-fill-stroke:1", x: 4, y: 0 },
+							{
+								id: "point:open-fill-stroke:2",
+								x: 4,
+								y: 4,
+								outgoing: { x: 10, y: 10 },
+							},
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {
+				fill: { swatchId: "swatch:coral" },
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 0.6,
+					cap: "butt" as const,
+				},
+			},
+		}
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 4, height: 4 }],
+			objects: [open],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object" as const, id: open.id }],
+			})),
+		}
+		const result = await exportPng(document, {
+			scope: { kind: "all" },
+			scale: 4,
+			samples: 1,
+			background: { kind: "transparent" },
+		})
+		const image = await decode(result.artifacts[0]!.bytes)
+		const pixel = (column: number, row: number) =>
+			Array.from(
+				image.rgba.slice(
+					(row * image.width + column) * 4,
+					(row * image.width + column + 1) * 4,
+				),
+			)
+		const coral = resolvedRgb(
+			initial.swatches.find(({ id }) => id === "swatch:coral")!,
+		)
+		const ink = resolvedRgb(
+			initial.swatches.find(({ id }) => id === "swatch:ink")!,
+		)
+		expect(pixel(4, 3)).toEqual([
+			Math.round(coral.r),
+			Math.round(coral.g),
+			Math.round(coral.b),
+			255,
+		])
+		expect(pixel(3, 4)).toEqual([0, 0, 0, 0])
+		expect(pixel(4, 0)).toEqual([
+			Math.round(ink.r),
+			Math.round(ink.g),
+			Math.round(ink.b),
+			255,
+		])
+		expect(open.geometry.contours[0]?.closed).toBe(false)
+		expect(open.geometry.contours[0]?.points[0]?.incoming).toEqual({
+			x: -10,
+			y: -10,
+		})
+	})
+
 	it("encodes canonical metadata-free RGBA bytes", async () => {
 		const bytes = encodeRgbaPng(1, 1, new Uint8Array([12, 34, 56, 78]))
 		expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])

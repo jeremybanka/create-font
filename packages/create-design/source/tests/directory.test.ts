@@ -194,6 +194,58 @@ function changedPaths(
 }
 
 describe("create-design directory source", () => {
+	it("round-trips open contour topology and dangling endpoint controls losslessly", () => {
+		const document = fixture()
+		const path = document.objects.find(({ id }) => id === "object:ink")
+		if (path?.geometry.kind !== "path")
+			throw new Error("Expected path fixture.")
+		const contour = path.geometry.contours[0]!
+		const openDocument: DesignDocument = {
+			...document,
+			objects: document.objects.map((object) =>
+				object.id !== path.id || object.geometry.kind !== "path"
+					? object
+					: {
+							...object,
+							geometry: {
+								...object.geometry,
+								contours: [
+									{
+										...contour,
+										closed: false,
+										points: [
+											{
+												...contour.points[0]!,
+												incoming: { x: -13, y: 17 },
+											},
+											{
+												...contour.points.at(-1)!,
+												outgoing: { x: 19, y: -23 },
+											},
+										],
+									},
+								],
+							},
+						},
+			),
+		}
+		const files = split(openDocument)
+		expect(files[defaultObjectUnitPath(path.id)]).toMatchObject({
+			geometry: {
+				contours: [
+					{
+						closed: false,
+						points: [
+							{ incoming: { x: -13, y: 17 } },
+							{ outgoing: { x: 19, y: -23 } },
+						],
+					},
+				],
+			},
+		})
+		expect(assemble(files)).toEqual(openDocument)
+	})
+
 	it("rejects live-corner metadata on soft nodes in object units", () => {
 		const files = mutable(split(fixture()))
 		const object = unit(files, defaultObjectUnitPath("object:ink"))

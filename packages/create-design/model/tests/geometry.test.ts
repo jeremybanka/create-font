@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest"
 
 import {
 	bakeDesignObject,
+	closeDesignContourForFill,
+	contourSvgPath,
 	ellipseContour,
 	normalizedBounds,
 	objectBounds,
 	objectSvgPath,
 	projectDesignObjectCornerResolutions,
 	projectDesignObjectContours,
+	projectDesignObjectFillContours,
 	rectangleContour,
 	rotateObject,
 	scaleObject,
@@ -143,6 +146,64 @@ describe("design geometry", () => {
 				appearance: { fill: { swatchId: "swatch:coral" } },
 			}),
 		).toEqual({ minX: 50, minY: 60, maxX: 200, maxY: 180 })
+	})
+
+	it("derives a straight fill closure without changing authored open topology", () => {
+		const contour = {
+			id: "contour:open-fill",
+			closed: false,
+			points: [
+				{
+					id: "point:open-fill:0",
+					x: 0,
+					y: 0,
+					incoming: { x: -50, y: -40 },
+					outgoing: { x: 5, y: 0 },
+				},
+				{ id: "point:open-fill:1", x: 10, y: 0 },
+				{
+					id: "point:open-fill:2",
+					x: 10,
+					y: 10,
+					incoming: { x: 0, y: -5 },
+					outgoing: { x: 60, y: 30 },
+				},
+			],
+		} as const
+		const closed = closeDesignContourForFill(contour)
+		expect(closed).toMatchObject({ closed: true })
+		expect(closed.points[0]).not.toHaveProperty("incoming")
+		expect(closed.points[0]).toHaveProperty("outgoing")
+		expect(closed.points.at(-1)).toHaveProperty("incoming")
+		expect(closed.points.at(-1)).not.toHaveProperty("outgoing")
+		expect(contour.closed).toBe(false)
+		expect(contour.points[0].incoming).toEqual({ x: -50, y: -40 })
+		expect(contourSvgPath(closed)).toMatch(/L 0 0 Z$/u)
+
+		const object: DesignObject = {
+			id: "object:open-fill",
+			name: "Open fill",
+			geometry: { kind: "path", contours: [contour] },
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 20, f: 30 },
+			appearance: {
+				fill: { swatchId: "swatch:fill" },
+				stroke: {
+					swatchId: "swatch:stroke",
+					width: 2,
+					cap: "round",
+					join: "round",
+					miterLimit: 4,
+					dashArray: [],
+					dashOffset: 0,
+				},
+			},
+		}
+		expect(projectDesignObjectContours(object)[0]?.closed).toBe(false)
+		expect(projectDesignObjectFillContours(object)[0]).toMatchObject({
+			closed: true,
+			points: [{ x: 20, y: 30 }, {}, { x: 30, y: 40 }],
+		})
+		expect(objectSvgPath(object)).not.toContain("Z")
 	})
 
 	it("lowers durable circular and squircle corners for every output projection", () => {

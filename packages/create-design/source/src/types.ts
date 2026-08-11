@@ -42,6 +42,10 @@ export interface DesignPoint {
 export interface DesignContour {
 	/** Stable identity for this authored path contour. */
 	readonly id: string
+	/**
+	 * Authored topology. Open contours remain open in source and for stroke
+	 * painting; fill-only consumers derive a straight endpoint closure.
+	 */
 	readonly closed: boolean
 	readonly points: readonly DesignPoint[]
 }

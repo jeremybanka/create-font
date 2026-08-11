@@ -14,3 +14,8 @@ the shared model output projection: visible layers and nested groups flatten in
 canonical back-to-front order, hidden-layer artwork is omitted, and locked
 layers render identically to unlocked layers. Object and blend preflight
 diagnostics include structured containing-layer identity when available.
+
+Open contours remain open PDF subpaths. Fill and clipping operators apply the
+standard implicit straight endpoint closure, while `S`/combined paint keeps
+the stroke open. This lets one authored contour carry a closed fill and an
+open, capped stroke without inserting source nodes or changing `closed`.
