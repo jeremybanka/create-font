@@ -15,6 +15,8 @@ import {
 } from "comline"
 import { z } from "zod/v4"
 
+import { CREATE_DESIGN_CLI_DEV_PORT } from "../../../scripts/dev-ports.ts"
+import { installServerShutdown } from "../../../scripts/server-shutdown.ts"
 import { buildDesignProject } from "./build.ts"
 import { checkDesignProject, formatStylishCheck } from "./check.ts"
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
@@ -132,8 +134,8 @@ const devOptions = options(
 			required: false,
 		},
 		port: {
-			description: "TCP port.",
-			example: "--port=3010",
+			description: `TCP port. Defaults to ${CREATE_DESIGN_CLI_DEV_PORT}.`,
+			example: `--port=${CREATE_DESIGN_CLI_DEV_PORT}`,
 			flag: "p",
 			parse: parseNumberOption,
 			required: false,
@@ -381,15 +383,16 @@ export async function runDesignCli(
 			throw new Error(
 				"Build create-design before starting its workspace server.",
 			)
-		const { url } = await startCreateDesignServer({
+		const { app, url } = await startCreateDesignServer({
 			assets,
 			...(inputs.opts.hostname === undefined
 				? {}
 				: { hostname: inputs.opts.hostname }),
-			...(inputs.opts.port === undefined ? {} : { port: inputs.opts.port }),
+			port: inputs.opts.port ?? CREATE_DESIGN_CLI_DEV_PORT,
 			root: resolve(inputs.opts.root ?? process.cwd()),
 			...(inputs.path[1] === undefined ? {} : { design: inputs.path[1] }),
 		})
+		installServerShutdown({ stop: () => app.stop(true) })
 		writeLine(io.stdout, `design workspace is serving at ${url.href}`)
 		return 0
 	} catch (error) {
@@ -429,4 +432,7 @@ export async function runDesignCli(
 	}
 }
 
-if (isMainModule(import.meta.url)) process.exitCode = await runDesignCli()
+if (isMainModule(import.meta.url)) {
+	const exitCode = await runDesignCli()
+	process.exitCode ??= exitCode
+}

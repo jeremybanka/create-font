@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process"
 import { resolve } from "node:path"
 
 import {
@@ -7,7 +6,7 @@ import {
 	workspaceDevPorts,
 	WORKSPACE_DEV_PORT_COUNT,
 } from "./dev-ports.ts"
-import { superviseDevProcesses } from "./dev-processes.ts"
+import { spawnDevProcess, superviseDevProcesses } from "./dev-processes.ts"
 
 const workspaceRoot = resolve(import.meta.dirname, `..`)
 const ports = workspaceDevPorts(
@@ -31,7 +30,7 @@ process.stdout.write(
 )
 
 await superviseDevProcesses([
-	spawn(
+	spawnDevProcess(
 		process.execPath,
 		[
 			resolve(workspaceRoot, `apps/create-font/scripts/dev.ts`),
@@ -39,7 +38,7 @@ await superviseDevProcesses([
 		],
 		{ cwd: workspaceRoot, stdio: `inherit` },
 	),
-	spawn(
+	spawnDevProcess(
 		process.execPath,
 		[
 			resolve(workspaceRoot, `apps/create-design/scripts/dev.ts`),

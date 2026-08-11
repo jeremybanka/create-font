@@ -1,8 +1,10 @@
-import { spawn } from "node:child_process"
 import { resolve } from "node:path"
 
 import { DEFAULT_DEV_PORT, resolveDevPort } from "../../../scripts/dev-ports.ts"
-import { superviseDevProcesses } from "../../../scripts/dev-processes.ts"
+import {
+	spawnDevProcess,
+	superviseDevProcesses,
+} from "../../../scripts/dev-processes.ts"
 
 const packageRoot = resolve(import.meta.dirname, `..`)
 const workspaceRoot = resolve(packageRoot, `../..`)
@@ -19,7 +21,7 @@ const backendPort = frontendPort + 1
 const vpEntrypoint = resolve(workspaceRoot, `node_modules/vite-plus/bin/vp`)
 
 await superviseDevProcesses([
-	spawn(
+	spawnDevProcess(
 		process.execPath,
 		[
 			`--watch`,
@@ -33,7 +35,7 @@ await superviseDevProcesses([
 			stdio: `inherit`,
 		},
 	),
-	spawn(
+	spawnDevProcess(
 		process.execPath,
 		[
 			vpEntrypoint,

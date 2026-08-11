@@ -1,6 +1,9 @@
 export const DEFAULT_DEV_PORT = 16_384
 export const WORKSPACE_DEV_PORT_COUNT = 4
 
+export const CREATE_FONT_CLI_DEV_PORT = DEFAULT_DEV_PORT
+export const CREATE_DESIGN_CLI_DEV_PORT = DEFAULT_DEV_PORT + 2
+
 export type WorkspaceDevPorts = Readonly<{
 	createDesignBackend: number
 	createDesignFrontend: number

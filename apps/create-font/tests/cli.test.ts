@@ -241,6 +241,18 @@ describe(`font CLI`, () => {
 		expect(captured.stdout.join(``)).toContain(`dev`)
 	})
 
+	it(`documents the distinctive development server port`, async () => {
+		const captured = captureIo()
+		const exitCode = await runFontCli(
+			[`node`, `font`, `dev`, `--help`],
+			captured.io,
+		)
+
+		expect(exitCode).toBe(0)
+		expect(captured.stdout.join(``)).toContain(`Defaults to 16384`)
+		expect(captured.stdout.join(``)).toContain(`--port=16384`)
+	})
+
 	it(`builds a selected font and prints its artifact path`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli(

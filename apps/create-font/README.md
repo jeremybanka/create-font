@@ -90,8 +90,10 @@ discovers `fonts/*/create-font.json`, selects the sole project automatically, an
 serves its validated source units through the workspace RPC. With multiple font
 projects, select one by directory name:
 
-Run `npm exec -- font dev workbench-sans --port=4173` with Node, or invoke the
-same local executable with Bun.
+Run `npm exec -- font dev workbench-sans` with Node, or invoke the same local
+executable with Bun. The server uses the Create Art application group's
+distinctive `http://127.0.0.1:16384/` default; pass `--port` to override it.
+One Ctrl-C gracefully closes the workspace server.
 
 `font serve` remains an alias for `font dev`.
 

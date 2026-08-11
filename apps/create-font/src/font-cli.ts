@@ -11,6 +11,8 @@ import {
 } from "comline"
 import { z } from "zod/v4"
 
+import { CREATE_FONT_CLI_DEV_PORT } from "../../../scripts/dev-ports.ts"
+import { installServerShutdown } from "../../../scripts/server-shutdown.ts"
 import { buildProject } from "./build.ts"
 import { checkFontProject, formatStylishCheck } from "./check.ts"
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
@@ -89,8 +91,8 @@ const devOptions = options(
 			required: false,
 		},
 		port: {
-			description: `TCP port.`,
-			example: `--port=4173`,
+			description: `TCP port. Defaults to ${CREATE_FONT_CLI_DEV_PORT}.`,
+			example: `--port=${CREATE_FONT_CLI_DEV_PORT}`,
 			flag: `p`,
 			parse: parseNumberOption,
 			required: false,
@@ -221,10 +223,11 @@ export async function runFontCli(
 		const source = await createFileSystemSourceService(project.root)
 		const server = startCreateFontServer({
 			...(hostname === undefined ? {} : { hostname }),
-			...(port === undefined ? {} : { port }),
+			port: port ?? CREATE_FONT_CLI_DEV_PORT,
 			root: project.root,
 			source,
 		})
+		installServerShutdown({ stop: () => server.app.stop(true) })
 		writeLine(io.stdout, `font is serving ${project.path} at ${server.url}`)
 		return 0
 	} catch (error) {
@@ -233,4 +236,7 @@ export async function runFontCli(
 	}
 }
 
-if (isMainModule(import.meta.url)) process.exitCode = await runFontCli()
+if (isMainModule(import.meta.url)) {
+	const exitCode = await runFontCli()
+	process.exitCode ??= exitCode
+}

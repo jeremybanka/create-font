@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
 import {
+	CREATE_DESIGN_CLI_DEV_PORT,
+	CREATE_FONT_CLI_DEV_PORT,
 	DEFAULT_DEV_PORT,
 	resolveDevPort,
 	workspaceDevPorts,
@@ -15,6 +17,12 @@ describe(`development ports`, () => {
 			createDesignFrontend: 16_386,
 			createDesignBackend: 16_387,
 		})
+	})
+
+	it(`reserves distinctive single-origin CLI ports`, () => {
+		assert.equal(CREATE_FONT_CLI_DEV_PORT, 16_384)
+		assert.equal(CREATE_DESIGN_CLI_DEV_PORT, 16_386)
+		assert.notEqual(CREATE_FONT_CLI_DEV_PORT, CREATE_DESIGN_CLI_DEV_PORT)
 	})
 
 	it(`accepts spaced and equals-style command line overrides`, () => {
