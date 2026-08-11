@@ -199,10 +199,13 @@ import {
 	directSelectionKey,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
+	isDirectSelectionNodeSelected,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
 	selectableObjectIds,
+	reconcileDesignKeyObject,
+	shouldPromoteDesignKeyObject,
 	toggleDirectSelection,
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
@@ -1114,6 +1117,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const updatePersistence = editorState.actions.updatePersistence
 	const [tool, setTool] = useState<DesignTool>("select")
 	const [selection, setSelection] = useState<readonly string[]>([])
+	const [keyObjectId, setKeyObjectId] = useState<string | null>(null)
+	const [alignmentTarget, setAlignmentTargetState] =
+		useState<DesignAlignmentTarget>("selection")
 	const [imageResources, setImageResources] = useState<
 		readonly DesignImageResource[]
 	>(() => props.imageResources ?? sourceSession?.images ?? [])
@@ -1680,6 +1686,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		() =>
 			new Set(effectiveHierarchy.editableObjects.map((object) => object.id)),
 		[effectiveHierarchy],
+	)
+	useEffect(() => {
+		const reconciled = reconcileDesignKeyObject(
+			keyObjectId,
+			selection,
+			effectiveEditableObjectIds,
+		)
+		if (reconciled === keyObjectId) return
+		setKeyObjectId(reconciled)
+		setAlignmentTargetState((current) =>
+			current === "key-object" ? "selection" : current,
+		)
+	}, [effectiveEditableObjectIds, keyObjectId, selection])
+	const changeAlignmentTarget = useCallback(
+		(target: DesignAlignmentTarget): void => {
+			if (target === "key-object" && keyObjectId === null) {
+				setStatus("Click an already-selected object to make it the key object.")
+				return
+			}
+			if (target !== "key-object") setKeyObjectId(null)
+			setAlignmentTargetState(target)
+		},
+		[keyObjectId],
 	)
 	const activeLayer = document.layers.find(
 		(layer) => layer.id === activeLayerId,
@@ -4375,13 +4404,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setSelectedLayerId(layerId)
 			setGroupScope(parentScope)
 			setSelectedBlendId(null)
-			setSelection((current) =>
-				additive && sameScope
-					? current.includes(object.id)
-						? current.filter((id) => id !== object.id)
-						: [...current, object.id]
-					: [object.id],
-			)
+			if (!additive && sameScope && selection.includes(object.id)) {
+				setKeyObjectId(object.id)
+				setAlignmentTargetState("key-object")
+				setStatus(`${object.name} is the key object for alignment.`)
+			} else
+				setSelection((current) =>
+					additive && sameScope
+						? current.includes(object.id)
+							? current.filter((id) => id !== object.id)
+							: [...current, object.id]
+						: [object.id],
+				)
 			setDirectSelection([])
 		},
 		setHierarchyScope: (nextScope) => {
@@ -4422,6 +4456,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		applyAppearancePaint,
 		applyStrokeProperties,
 		alignSelection,
+		alignmentTarget,
+		keyObjectId,
+		setAlignmentTarget: changeAlignmentTarget,
 		canReviewSourceChange,
 		createArtboard,
 		deleteArtboard,
@@ -4498,18 +4535,23 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				currentGroupScope,
 			)
 			if (unit === null) return
-			setSelection((current) => {
-				const unitIds = new Set(unit.objectIds)
-				const complete = unit.objectIds.every((id) => current.includes(id))
-				if (!additive) return unit.objectIds
-				return complete
-					? current.filter((id) => !unitIds.has(id))
-					: normalizeDesignSelection(
-							document,
-							[...current, ...unit.objectIds],
-							currentGroupScope,
-						)
-			})
+			const complete = unit.objectIds.every((id) => selection.includes(id))
+			if (!additive && complete && selection.includes(object.id)) {
+				setKeyObjectId(object.id)
+				setAlignmentTargetState("key-object")
+				setStatus(`${object.name} is the key object for alignment.`)
+			} else
+				setSelection((current) => {
+					const unitIds = new Set(unit.objectIds)
+					if (!additive) return unit.objectIds
+					return complete
+						? current.filter((id) => !unitIds.has(id))
+						: normalizeDesignSelection(
+								document,
+								[...current, ...unit.objectIds],
+								currentGroupScope,
+							)
+				})
 			setDirectSelection([])
 		},
 		selectSwatch: (swatch) => setSelectedSwatchId(swatch.id),
@@ -6302,13 +6344,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			pendingGroupEntryRef.current = null
 		}
 		const additive = gestureModifiers(event.evt).additive
+		const promotesKey = shouldPromoteDesignKeyObject(
+			selection,
+			interaction.selection,
+			object.id,
+			additive,
+		)
 		setSelection(interaction.selection)
 		setDirectSelection([])
-		setStatus(
-			unit.kind === "group"
-				? `${unit.name} selected as one group. Double-click to edit its contents.`
-				: `${unit.name} selected.`,
-		)
+		if (promotesKey) {
+			setKeyObjectId(object.id)
+			setAlignmentTargetState("key-object")
+			setStatus(`${object.name} is the key object for alignment.`)
+		} else
+			setStatus(
+				unit.kind === "group"
+					? `${unit.name} selected as one group. Double-click to edit its contents.`
+					: `${unit.name} selected.`,
+			)
 		if (additive) return
 		const originals = interaction.objects
 		const locked = interaction.lockedObject
@@ -7526,6 +7579,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		uniqueSelectionLayerColors.size === 1
 			? selectionLayerColors[0]!
 			: canvasTheme.marquee
+	const selectionStrokeWidthForObject = (objectId: string): number =>
+		(keyObjectId === objectId ? 3 : 1) / worldScale
 
 	const recoverDraft = (): void => {
 		const draft = persistence.recoveryDraft
@@ -8075,7 +8130,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																	? objectLayerUiColor
 																	: "#999"
 															}
-															strokeWidth={1 / worldScale}
+															strokeWidth={selectionStrokeWidthForObject(
+																interactionObject.id,
+															)}
 															dash={[4 / worldScale, 3 / worldScale]}
 															listening={false}
 														/>
@@ -8145,7 +8202,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																interactionObject.id,
 															)}
 															selectionStroke={objectLayerUiColor}
-															selectionStrokeWidth={1 / worldScale}
+															selectionStrokeWidth={selectionStrokeWidthForObject(
+																interactionObject.id,
+															)}
 															onPointerDown={(event) =>
 																startObjectGesture(event, interactionObject)
 															}
@@ -8219,7 +8278,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																		selection.includes(object.id)
 														}
 														selectionStroke={objectLayerUiColor}
-														selectionStrokeWidth={1 / worldScale}
+														selectionStrokeWidth={selectionStrokeWidthForObject(
+															interactionObject.id,
+														)}
 														listening={
 															!object.locked &&
 															(!derived ||
@@ -8302,7 +8363,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												hitStrokeWidth={12 / worldScale}
 												selected={selected}
 												selectionStroke={layerUiColorForObject(object.id)}
-												selectionStrokeWidth={1 / worldScale}
+												selectionStrokeWidth={selectionStrokeWidthForObject(
+													object.id,
+												)}
 												listening={!entry.locked}
 												onPointerDown={(event) =>
 													startObjectGesture(event, object)
@@ -8364,6 +8427,37 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											/>
 										)
 									})}
+									{tool !== "select" && tool !== "transform"
+										? null
+										: selectedObjects.flatMap((selected) => {
+												const object = previewById.get(selected.id) ?? selected
+												if (
+													object.hidden ||
+													object.locked ||
+													object.geometry.kind !== "path"
+												)
+													return []
+												const color = layerUiColorForObject(object.id)
+												return projectDesignVectorObject(
+													document,
+													object,
+												).contours.flatMap((contour) =>
+													contour.nodes.map((node) => (
+														<Rect
+															key={`selected-node:${object.id}:${contour.id}:${node.id}`}
+															name="design-contour-node design-contour-node-selected"
+															x={node.x - 1.5 / worldScale}
+															y={node.y - 1.5 / worldScale}
+															width={3 / worldScale}
+															height={3 / worldScale}
+															fill={color}
+															stroke={color}
+															strokeWidth={1 / worldScale}
+															listening={false}
+														/>
+													)),
+												)
+											})}
 									{tool !== "direct" && tool !== "select"
 										? null
 										: selectedObjects.flatMap((selected) => {
@@ -8411,25 +8505,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																		node={node}
 																		inverseScale={1 / worldScale}
 																		color={layerUiColorForObject(object.id)}
+																		fill={canvasTheme.handleFill}
 																		listening
+																		nodeShape="square"
+																		nodeSize={5}
+																		nodeStrokeWidth={1}
+																		selectedFill={layerUiColorForObject(
+																			object.id,
+																		)}
+																		showSelectedNodeHalo={false}
 																		nodeHitRadius={9 / worldScale}
 																		handleHitRadius={{
 																			incoming: 9 / worldScale,
 																			outgoing: 9 / worldScale,
 																		}}
-																		selected={directSelection.some(
-																			(target) =>
-																				target.objectId === object.id &&
-																				target.contourId === contour.id &&
-																				(target.kind === "contour" ||
-																					(target.kind === "node" &&
-																						target.pointId === node.id) ||
-																					(target.kind === "segment" &&
-																						(target.segmentIndex ===
-																							nodeIndex ||
-																							(target.segmentIndex + 1) %
-																								contour.nodes.length ===
-																								nodeIndex))),
+																		selected={isDirectSelectionNodeSelected(
+																			directSelection,
+																			object.id,
+																			contour.id,
+																			node.id,
+																			nodeIndex,
+																			contour.nodes.length,
 																		)}
 																		selectedHandles={selectedHandles}
 																		onNodePointerDown={(event) =>
@@ -8562,6 +8658,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													/>
 												)
 											})}
+									{keyObjectId === null
+										? null
+										: (() => {
+												const keyObject = selectionVisualObjects.find(
+													({ id }) => id === keyObjectId,
+												)
+												const bounds =
+													keyObject === undefined
+														? null
+														: interactionBoundsForObject(keyObject)
+												return bounds === null ? null : (
+													<VectorSelectionBounds
+														bounds={bounds}
+														inverseScale={1 / worldScale}
+														color={layerUiColorForObject(keyObjectId)}
+														strokeWidth={3 / worldScale}
+														handles={[]}
+														listening={false}
+													/>
+												)
+											})()}
 									{selectionBounds === null ? null : (
 										<>
 											<VectorSelectionBounds

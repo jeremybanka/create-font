@@ -87,6 +87,10 @@ export function VectorControlHandles({
 	listening = false,
 	draggable = false,
 	nodeShape = "circle",
+	nodeSize,
+	nodeStrokeWidth,
+	selectedFill,
+	showSelectedNodeHalo = true,
 	endpointNormal,
 	fill = "#fff",
 	stroke = color,
@@ -113,6 +117,14 @@ export function VectorControlHandles({
 	readonly listening?: boolean
 	readonly draggable?: boolean
 	readonly nodeShape?: "circle" | "square" | "endpoint"
+	/** Visible node footprint in physical screen pixels. */
+	readonly nodeSize?: number
+	/** Visible node stroke width in physical screen pixels. */
+	readonly nodeStrokeWidth?: number
+	/** Optional selected-node fill; defaults to the ordinary fill. */
+	readonly selectedFill?: string
+	/** Preserve the legacy selected-node halo unless explicitly disabled. */
+	readonly showSelectedNodeHalo?: boolean
 	readonly endpointNormal?: VectorPoint
 	readonly fill?: string
 	readonly stroke?: string
@@ -157,9 +169,9 @@ export function VectorControlHandles({
 		name: "vector-node outline-point",
 		x: node.x,
 		y: node.y,
-		fill,
+		fill: selected ? (selectedFill ?? fill) : fill,
 		stroke,
-		strokeWidth: (selected ? 2 : 1.5) * inverseScale,
+		strokeWidth: (nodeStrokeWidth ?? (selected ? 2 : 1.5)) * inverseScale,
 		draggable,
 		onPointerDown: (event: KonvaEventObject<PointerEvent>) =>
 			onNodePointerDown?.(event),
@@ -228,7 +240,7 @@ export function VectorControlHandles({
 					</Group>
 				)
 			})}
-			{selected ? (
+			{selected && showSelectedNodeHalo ? (
 				<Circle
 					name="vector-node-selection"
 					x={node.x}
@@ -263,13 +275,13 @@ export function VectorControlHandles({
 			) : nodeShape === "square" ? (
 				<Rect
 					{...nodeProps}
-					width={9 * inverseScale}
-					height={9 * inverseScale}
-					offsetX={4.5 * inverseScale}
-					offsetY={4.5 * inverseScale}
+					width={(nodeSize ?? 9) * inverseScale}
+					height={(nodeSize ?? 9) * inverseScale}
+					offsetX={((nodeSize ?? 9) / 2) * inverseScale}
+					offsetY={((nodeSize ?? 9) / 2) * inverseScale}
 				/>
 			) : (
-				<Circle {...nodeProps} radius={5 * inverseScale} />
+				<Circle {...nodeProps} radius={((nodeSize ?? 10) / 2) * inverseScale} />
 			)}
 		</Group>
 	)

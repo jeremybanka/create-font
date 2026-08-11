@@ -2175,8 +2175,13 @@ function DesignArrangeTile({
 }: {
 	readonly context: DesignTileContext
 }) {
-	const [alignmentTarget, setAlignmentTarget] =
-		useState<DesignAlignmentTarget>("selection")
+	const alignmentTarget = context.alignmentTarget
+	const keyObject =
+		context.keyObjectId === null
+			? null
+			: (context.document.objects.find(
+					({ id }) => id === context.keyObjectId,
+				) ?? null)
 	const transformDisabledReason =
 		context.selectionBounds === null
 			? "Select one or more objects to arrange."
@@ -2200,20 +2205,28 @@ function DesignArrangeTile({
 			<selection-arrangement-controls aria-label="Selection arrangement">
 				<arrangement-heading>
 					<strong>Selection</strong>
-					<span>{selectionCountLabel(context)}</span>
+					<span aria-live="polite">
+						{keyObject === null
+							? selectionCountLabel(context)
+							: `Key: ${keyObject.name}`}
+					</span>
 				</arrangement-heading>
 				<TileSelect
 					label="Align to"
 					value={alignmentTarget}
 					disabled={transformDisabledReason !== null}
 					onChange={(event) =>
-						setAlignmentTarget(
+						context.setAlignmentTarget(
 							event.currentTarget.value as DesignAlignmentTarget,
 						)
 					}
 				>
 					<option value="selection">Selection</option>
-					<option value="key-object">Key object</option>
+					<option value="key-object" disabled={keyObject === null}>
+						{keyObject === null
+							? "Key object (none)"
+							: `Key object: ${keyObject.name}`}
+					</option>
 					<option value="artboard">Active artboard</option>
 				</TileSelect>
 				<TileButtonGroup aria-label="Align selection" compact>
@@ -2238,7 +2251,7 @@ function DesignArrangeTile({
 								context.alignSelection(
 									alignment,
 									alignmentTarget,
-									context.selectedObjectIds.at(-1),
+									context.keyObjectId ?? undefined,
 								)
 							}
 						>

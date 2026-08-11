@@ -4,10 +4,13 @@ import {
 	directSelectionKey,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
+	isDirectSelectionNodeSelected,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
 	selectableObjectIds,
+	reconcileDesignKeyObject,
+	shouldPromoteDesignKeyObject,
 	selectionBounds,
 	toggleDirectSelection,
 	toggleObjectSelection,
@@ -82,6 +85,21 @@ describe("design selection", () => {
 		expect(toggleObjectSelection(["a"], "b", false)).toEqual(["b"])
 		expect(toggleObjectSelection(["a"], "b", true)).toEqual(["a", "b"])
 		expect(toggleObjectSelection(["a", "b"], "a", true)).toEqual(["b"])
+	})
+
+	it("promotes and reconciles an explicit key object", () => {
+		expect(
+			shouldPromoteDesignKeyObject(["a", "b"], ["a", "b"], "a", false),
+		).toBe(true)
+		expect(shouldPromoteDesignKeyObject(["a", "b"], ["b"], "b", false)).toBe(
+			false,
+		)
+		expect(shouldPromoteDesignKeyObject(["a", "b"], ["b"], "b", true)).toBe(
+			false,
+		)
+		expect(reconcileDesignKeyObject("b", ["a", "b"], new Set(["b"]))).toBe("b")
+		expect(reconcileDesignKeyObject("b", ["a"], new Set(["b"]))).toBeNull()
+		expect(reconcileDesignKeyObject("b", ["a", "b"], new Set(["a"]))).toBeNull()
 	})
 
 	it("excludes locked and hidden objects from Select All and marquee", () => {
@@ -182,6 +200,50 @@ describe("design selection", () => {
 			maxY: 15,
 		})
 		expect(marquee.map(directSelectionKey)).toEqual([directSelectionKey(node)])
+	})
+
+	it("derives selected node paint from node, segment, and contour targets", () => {
+		const base = { objectId: "object:path", contourId: "contour:path" }
+		expect(
+			isDirectSelectionNodeSelected(
+				[{ ...base, kind: "node", pointId: "point:a" }],
+				base.objectId,
+				base.contourId,
+				"point:a",
+				0,
+				3,
+			),
+		).toBe(true)
+		expect(
+			isDirectSelectionNodeSelected(
+				[{ ...base, kind: "segment", segmentIndex: 0 }],
+				base.objectId,
+				base.contourId,
+				"point:b",
+				1,
+				3,
+			),
+		).toBe(true)
+		expect(
+			isDirectSelectionNodeSelected(
+				[{ ...base, kind: "segment", segmentIndex: 0 }],
+				base.objectId,
+				base.contourId,
+				"point:c",
+				2,
+				3,
+			),
+		).toBe(false)
+		expect(
+			isDirectSelectionNodeSelected(
+				[{ ...base, kind: "contour" }],
+				base.objectId,
+				base.contourId,
+				"point:c",
+				2,
+				3,
+			),
+		).toBe(true)
 	})
 
 	it("excludes direct targets inherited from hidden or locked layers", () => {

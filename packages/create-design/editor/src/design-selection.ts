@@ -110,6 +110,56 @@ export function toggleObjectSelection(
 		: [...selection, objectId]
 }
 
+/** True when an ordinary click should preserve selection and promote its hit. */
+export function shouldPromoteDesignKeyObject(
+	currentSelection: readonly string[],
+	nextSelection: readonly string[],
+	objectId: string,
+	additive: boolean,
+): boolean {
+	return (
+		!additive &&
+		currentSelection.includes(objectId) &&
+		nextSelection.includes(objectId) &&
+		currentSelection.length === nextSelection.length &&
+		currentSelection.every((id) => nextSelection.includes(id))
+	)
+}
+
+/** Keeps a key only while it remains selected and eligible for interaction. */
+export function reconcileDesignKeyObject(
+	keyObjectId: string | null,
+	selection: readonly string[],
+	eligibleObjectIds: ReadonlySet<string>,
+): string | null {
+	return keyObjectId !== null &&
+		selection.includes(keyObjectId) &&
+		eligibleObjectIds.has(keyObjectId)
+		? keyObjectId
+		: null
+}
+
+/** Resolves selected-node paint for direct node, segment, or contour targets. */
+export function isDirectSelectionNodeSelected(
+	selection: readonly DesignDirectSelectionTarget[],
+	objectId: string,
+	contourId: string,
+	pointId: string,
+	nodeIndex: number,
+	nodeCount: number,
+): boolean {
+	return selection.some(
+		(target) =>
+			target.objectId === objectId &&
+			target.contourId === contourId &&
+			(target.kind === "contour" ||
+				(target.kind === "node" && target.pointId === pointId) ||
+				(target.kind === "segment" &&
+					(target.segmentIndex === nodeIndex ||
+						(target.segmentIndex + 1) % nodeCount === nodeIndex))),
+	)
+}
+
 export function selectableObjectIds(
 	objects: readonly DesignObject[],
 ): readonly string[] {

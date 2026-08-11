@@ -27,24 +27,29 @@ function mountTile(
 	hosts.push(host)
 	const transformSelection = vi.fn()
 	const alignSelection = vi.fn()
+	const setAlignmentTarget = vi.fn()
 	const distributeSelection = vi.fn()
 	const context: DesignTileContext = {
 		alignSelection,
+		alignmentTarget: "selection",
 		deleteSelection: vi.fn(),
 		directSelectionSummary: "No nodes selected",
 		cornerProfileControls: null,
 		setCornerProfiles: vi.fn(),
 		distributeSelection,
+		document: createInitialDocument(),
 		expandSelection: vi.fn(),
 		expansionDisabledReason: "Select one live shape to expand it.",
 		expandStrokeSelection: vi.fn(),
 		selectedObject: null,
 		selectedObjectCount: 3,
 		selectedObjectIds: ["one", "two", "three"],
+		keyObjectId: null,
 		selectionBounds: { minX: 10, minY: 20, maxX: 110, maxY: 220 },
 		selectionTransformDisabledReason: null,
 		setObjectGeometry: vi.fn(),
 		setObjectProperty: vi.fn(),
+		setAlignmentTarget,
 		strokeExpansionDisabledReason: "Select one stroked object to expand it.",
 		tool: "select",
 		transformSelection,
@@ -61,6 +66,7 @@ function mountTile(
 		distributeSelection,
 		host,
 		rerender,
+		setAlignmentTarget,
 		transformSelection,
 	}
 }
@@ -181,8 +187,38 @@ describe("Selection Transform editor", () => {
 			alignLeft?.click()
 			distribute?.click()
 		})
-		expect(alignSelection).toHaveBeenCalledWith("left", "selection", "three")
+		expect(alignSelection).toHaveBeenCalledWith("left", "selection", undefined)
 		expect(distributeSelection).toHaveBeenCalledWith("x")
+	})
+
+	it("synchronizes key-object mode and passes the explicit key ID", () => {
+		const document = createInitialDocument()
+		const keyObject = document.objects[0]!
+		const { alignSelection, host, setAlignmentTarget } = mountArrange({
+			alignmentTarget: "key-object",
+			document,
+			keyObjectId: keyObject.id,
+			selectedObjectIds: document.objects.map(({ id }) => id),
+		})
+		const target = host.querySelector<HTMLSelectElement>("tile-select select")
+		expect(target?.value).toBe("key-object")
+		expect(host.textContent).toContain(`Key: ${keyObject.name}`)
+		act(() =>
+			host
+				.querySelector<HTMLButtonElement>('button[aria-label="Align left"]')
+				?.click(),
+		)
+		expect(alignSelection).toHaveBeenCalledWith(
+			"left",
+			"key-object",
+			keyObject.id,
+		)
+		act(() => {
+			if (target === null) return
+			target.value = "artboard"
+			target.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(setAlignmentTarget).toHaveBeenCalledWith("artboard")
 	})
 
 	it("communicates unavailable locked and undersized selection states", () => {
