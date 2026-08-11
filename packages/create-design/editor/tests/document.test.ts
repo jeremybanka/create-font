@@ -101,7 +101,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 6,
+				version: 7,
 				artboards: [
 					{
 						id: "artboard:page",
@@ -158,7 +158,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 6,
+				version: 7,
 				objects: [
 					{
 						geometry: {
@@ -208,7 +208,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 6,
+				version: 7,
 				objects: [
 					{
 						appearance: {
@@ -250,7 +250,7 @@ describe("design document storage", () => {
 			status: "loaded",
 			migrated: true,
 			document: {
-				version: 6,
+				version: 7,
 				artboards: [
 					{
 						id: "artboard:page",

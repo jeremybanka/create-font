@@ -16,8 +16,9 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 6 as const
-export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 5 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 7 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 6 as const
+export const VERSION_FIVE_DESIGN_DOCUMENT_VERSION = 5 as const
 export const VERSION_FOUR_DESIGN_DOCUMENT_VERSION = 4 as const
 export const VERSION_THREE_DESIGN_DOCUMENT_VERSION = 3 as const
 export const VERSION_TWO_DESIGN_DOCUMENT_VERSION = 2 as const
@@ -216,7 +217,27 @@ export const imageGeometrySchema = z
 		intrinsicHeight: positiveNumberSchema,
 	})
 	.strict()
+export const linkedArtboardGeometrySchema = z
+	.object({
+		kind: z.literal("artboard-link"),
+		projectId: z
+			.string()
+			.min(1)
+			.regex(/^[^/\\]+$/u, "Expected a workspace project identity."),
+		artboardId: artboardIdSchema,
+		width: positiveNumberSchema,
+		height: positiveNumberSchema,
+	})
+	.strict()
 export const geometrySchema = z.discriminatedUnion("kind", [
+	pathGeometrySchema,
+	rectangleGeometrySchema,
+	ellipseGeometrySchema,
+	textGeometrySchema,
+	imageGeometrySchema,
+	linkedArtboardGeometrySchema,
+])
+export const versionSixGeometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
@@ -234,6 +255,7 @@ export const compatibleGeometrySchema = z.discriminatedUnion("kind", [
 	ellipseGeometrySchema,
 	textGeometrySchema,
 	imageGeometrySchema,
+	linkedArtboardGeometrySchema,
 ])
 const legacyGeometrySchema = z.discriminatedUnion("kind", [
 	legacyPathGeometrySchema,
@@ -338,6 +360,9 @@ const versionTwoDesignObjectSchema = previousDesignObjectSchema.extend({
 })
 const versionFourDesignObjectSchema = designObjectSchema.extend({
 	geometry: legacyGeometrySchema,
+})
+const versionSixDesignObjectSchema = designObjectSchema.extend({
+	geometry: versionSixGeometrySchema,
 })
 export const legacyDesignObjectSchema = z
 	.object({
@@ -450,17 +475,22 @@ export const designDocumentSchema = z
 export const versionFiveDesignDocumentSchema = z
 	.object({
 		format: z.literal(CREATE_DESIGN_DOCUMENT_FORMAT),
-		version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+		version: z.literal(VERSION_FIVE_DESIGN_DOCUMENT_VERSION),
 		title: z.string(),
 		artboards: z.array(artboardSchema).min(1),
 		swatches: z.array(swatchSchema),
-		objects: z.array(designObjectSchema),
+		objects: z.array(versionSixDesignObjectSchema),
 		blends: z.array(designBlendSchema).optional(),
 		scene: z.array(sceneChildSchema).optional(),
 		groups: z.array(groupSchema).optional(),
 		guides: z.array(guideSchema),
 	})
 	.strict()
+
+export const versionSixDesignDocumentSchema = designDocumentSchema.extend({
+	version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+	objects: z.array(versionSixDesignObjectSchema),
+})
 
 export const versionTwoDesignDocumentSchema = z
 	.object({
@@ -1100,6 +1130,17 @@ export function migrateDesignDocumentV5(
 	})
 }
 
+export function migrateDesignDocumentV6(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
+	const parsed = versionSixDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return validateDesignDocument({
+		...parsed.data,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+	})
+}
+
 function envelope(value: unknown): DesignSourceResult<{
 	readonly version: number
 }> {
@@ -1149,8 +1190,10 @@ export function decodeDesignDocument(
 			return migrateDesignDocumentV4(value)
 		case VERSION_THREE_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV3(value)
-		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+		case VERSION_FIVE_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV5(value)
+		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV6(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)
 		default:

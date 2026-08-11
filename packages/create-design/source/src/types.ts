@@ -120,6 +120,16 @@ export type DesignImageGeometry = Readonly<{
 	readonly intrinsicHeight: number
 }>
 
+/** A durable, workspace-relative reference to another design's artboard. */
+export type DesignLinkedArtboardGeometry = Readonly<{
+	readonly kind: "artboard-link"
+	readonly projectId: string
+	readonly artboardId: string
+	/** Last known dimensions keep a missing link selectable and recoverable. */
+	readonly width: number
+	readonly height: number
+}>
+
 /** Runtime bytes resolved without changing the durable placed-image identity. */
 export type DesignImageResource = Readonly<{
 	readonly id: string
@@ -130,6 +140,7 @@ export type DesignImageResource = Readonly<{
 export type DesignGeometry =
 	| DesignTextGeometry
 	| DesignImageGeometry
+	| DesignLinkedArtboardGeometry
 	| Readonly<{
 			readonly kind: "path"
 			/** Fill containment semantics. Legacy paths without this field are even-odd. */
@@ -294,7 +305,7 @@ export interface DesignArtboard {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 6
+	readonly version: 7
 	readonly title: string
 	/** Ordered export rectangles, independent from the global scene hierarchy. */
 	readonly artboards: readonly DesignArtboard[]
@@ -308,6 +319,13 @@ export interface DesignDocument {
 	readonly groups: readonly DesignGroup[]
 	readonly guides: readonly DesignGuide[]
 }
+
+/** Runtime source used to resolve durable linked-artboard references. */
+export type DesignLinkedArtboardResource = Readonly<{
+	readonly projectId: string
+	readonly revision: string
+	readonly document: DesignDocument
+}>
 
 export type DesignSourceDiagnosticCode =
 	| "document.format"

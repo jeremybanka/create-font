@@ -6,6 +6,7 @@ export type DesignEditorBrowserOptions = Readonly<{
 	initialDocument?: DesignDocument
 	imageResources?: readonly DesignImageResource[]
 	sourceSession?: DesignSourceSession
+	onProjectChange?: (projectId: string) => void
 }>
 
 export type MountedDesignEditor = Readonly<{

@@ -4,6 +4,7 @@ import {
 	DEFAULT_DESIGN_STROKE_STYLE,
 	DEFAULT_LAYER_ID,
 	CREATE_DESIGN_SOURCE_VERSION,
+	PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
 	VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION,
 	assembleDesignDocument,
 	decodeDesignDocument,
@@ -26,7 +27,7 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 6,
+	version: 7,
 	title: "Directory proof",
 	artboards: [
 		{
@@ -540,7 +541,7 @@ describe("create-design directory source", () => {
 			stroke: { swatchId: "swatch:ink", width: 3 },
 		}
 		const assembled = assemble(files as DesignSourceDirectoryFiles)
-		expect(assembled.version).toBe(6)
+		expect(assembled.version).toBe(7)
 		expect(assembled.objects[0]?.appearance.stroke).toEqual({
 			...DEFAULT_DESIGN_STROKE_STYLE,
 			swatchId: "swatch:ink",
@@ -1186,7 +1187,7 @@ describe("create-design directory source", () => {
 			errors: expect.arrayContaining([
 				expect.objectContaining({
 					code: "directory.unsupported",
-					message: `Source versions before ${CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
+					message: `Source versions before ${PREVIOUS_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
 				}),
 			]),
 		})

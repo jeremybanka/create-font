@@ -45,6 +45,10 @@ type ImageGeometry = Omit<
 	Extract<DesignGeometry, Readonly<{ kind: "image" }>>,
 	"kind"
 >
+type LinkedArtboardGeometry = Omit<
+	Extract<DesignGeometry, Readonly<{ kind: "artboard-link" }>>,
+	"kind"
+>
 type GeometryKind = DesignGeometry["kind"]
 type ObjectContourKey = readonly [objectId: string, contourId: string]
 type PointReference = readonly [pointId: string, occurrence: number]
@@ -241,6 +245,10 @@ export function createDesignDocumentState(
 		key: "imageGeometry",
 		default: null,
 	})
+	const linkedArtboardGeometryAtoms = silo.atomFamily<
+		LinkedArtboardGeometry | null,
+		string
+	>({ key: "linkedArtboardGeometry", default: null })
 	const pathFillRuleAtoms = silo.atomFamily<DesignFillRule | undefined, string>(
 		{ key: "pathFillRule", default: undefined },
 	)
@@ -318,6 +326,10 @@ export function createDesignDocumentState(
 		if (kind === "image") {
 			const image = get(imageGeometryAtoms, objectId)
 			return image === null ? null : { kind, ...image }
+		}
+		if (kind === "artboard-link") {
+			const link = get(linkedArtboardGeometryAtoms, objectId)
+			return link === null ? null : { kind, ...link }
 		}
 		const contourIds = get(objectContourIdsAtoms, objectId)
 		if (contourIds === null) return null
@@ -482,7 +494,7 @@ export function createDesignDocumentState(
 			const groupIds = get(groupIdsAtom)
 			return {
 				format: "create-design.document",
-				version: 6,
+				version: 7,
 				title: get(titleAtom),
 				artboards: get(artboardIdsAtom).map((id) =>
 					required(get(artboardSelectors, id), "artboard", id),
@@ -549,6 +561,8 @@ export function createDesignDocumentState(
 			tools.dispose(textGeometryAtoms, objectId)
 		if (previousKind === "image" && geometry.kind !== "image")
 			tools.dispose(imageGeometryAtoms, objectId)
+		if (previousKind === "artboard-link" && geometry.kind !== "artboard-link")
+			tools.dispose(linkedArtboardGeometryAtoms, objectId)
 		if (previousKind !== geometry.kind)
 			tools.set(objectKindAtoms, objectId, geometry.kind)
 
@@ -584,6 +598,16 @@ export function createDesignDocumentState(
 				JSON.stringify(previous) !== JSON.stringify(image)
 			)
 				tools.set(imageGeometryAtoms, objectId, image)
+			return
+		}
+		if (geometry.kind === "artboard-link") {
+			const { kind: _, ...link } = geometry
+			const previous = tools.get(linkedArtboardGeometryAtoms, objectId)
+			if (
+				previous === null ||
+				JSON.stringify(previous) !== JSON.stringify(link)
+			)
+				tools.set(linkedArtboardGeometryAtoms, objectId, link)
 			return
 		}
 
@@ -655,6 +679,8 @@ export function createDesignDocumentState(
 		if (kind === "ellipse") tools.dispose(ellipseGeometryAtoms, objectId)
 		if (kind === "text") tools.dispose(textGeometryAtoms, objectId)
 		if (kind === "image") tools.dispose(imageGeometryAtoms, objectId)
+		if (kind === "artboard-link")
+			tools.dispose(linkedArtboardGeometryAtoms, objectId)
 		tools.dispose(objectKindAtoms, objectId)
 		tools.dispose(objectNameAtoms, objectId)
 		tools.dispose(objectTransformAtoms, objectId)
@@ -851,6 +877,7 @@ export function createDesignDocumentState(
 		ellipseGeometryAtoms,
 		textGeometryAtoms,
 		imageGeometryAtoms,
+		linkedArtboardGeometryAtoms,
 		pathFillRuleAtoms,
 		objectContourIdsAtoms,
 		contourClosedAtoms,
@@ -900,6 +927,7 @@ export function createDesignDocumentState(
 			ellipseGeometryAtoms,
 			textGeometryAtoms,
 			imageGeometryAtoms,
+			linkedArtboardGeometryAtoms,
 			pathFillRuleAtoms,
 			objectContourIdsAtoms,
 			contourClosedAtoms,

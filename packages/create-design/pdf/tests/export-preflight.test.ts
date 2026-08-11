@@ -85,7 +85,7 @@ const areaText = (): DesignObject => ({
 
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	format: "create-design.document",
-	version: 6,
+	version: 7,
 	title: "Preflight fixture",
 	artboards: [
 		{

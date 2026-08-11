@@ -51,7 +51,7 @@ const path = (
 
 const documentWith = (...objects: readonly DesignObject[]): DesignDocument => ({
 	format: "create-design.document",
-	version: 6,
+	version: 7,
 	title: "Topology",
 	artboards: [
 		{ id: "artboard", name: "Artboard", x: 0, y: 0, width: 500, height: 500 },

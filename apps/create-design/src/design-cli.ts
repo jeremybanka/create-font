@@ -268,7 +268,14 @@ export async function runDesignCli(
 			writeLine(io.stdout, help(designCli.definition))
 			return 0
 		}
-		const project = await selectDesignProject(inputs.opts.root, inputs.path[1])
+		const interactive =
+			inputs.case === "dev" ||
+			inputs.case === "dev/$design" ||
+			inputs.case === "serve" ||
+			inputs.case === "serve/$design"
+		const project = interactive
+			? undefined
+			: await selectDesignProject(inputs.opts.root, inputs.path[1])
 		if (inputs.case === "check" || inputs.case === "check/$design") {
 			if (
 				inputs.opts.format !== undefined &&
@@ -276,7 +283,7 @@ export async function runDesignCli(
 				inputs.opts.format !== "json"
 			)
 				throw new Error("Format must be stylish or json.")
-			const result = await checkDesignProject(project.root)
+			const result = await checkDesignProject(project!.root)
 			writeLine(
 				inputs.opts.format === "json" ? io.stdout : io.stderr,
 				inputs.opts.format === "json"
@@ -290,7 +297,7 @@ export async function runDesignCli(
 			const result = await buildDesignProject({
 				...(artboardIds === undefined ? {} : { artboardIds }),
 				...(inputs.opts["include-bleed"] ? { includeBleed: true } : {}),
-				root: project.root,
+				root: project!.root,
 			})
 			for (const diagnostic of result.preflight.diagnostics)
 				writeLine(io.stderr, formatExportDiagnostic(diagnostic))
@@ -314,7 +321,7 @@ export async function runDesignCli(
 					...(background === undefined ? {} : { background }),
 					force: inputs.opts.force === true,
 					output,
-					root: project.root,
+					root: project!.root,
 					...(inputs.opts.scale === undefined
 						? {}
 						: { scale: inputs.opts.scale }),
@@ -338,7 +345,7 @@ export async function runDesignCli(
 					...(artboardIds === undefined ? {} : { artboardIds }),
 					force: inputs.opts.force === true,
 					output,
-					root: project.root,
+					root: project!.root,
 				})
 				for (const diagnostic of result.preflight.diagnostics)
 					writeLine(io.stderr, formatSvgDiagnostic(diagnostic))
@@ -353,7 +360,7 @@ export async function runDesignCli(
 				force: inputs.opts.force === true,
 				includeBleed,
 				output,
-				root: project.root,
+				root: project!.root,
 			})
 			for (const diagnostic of result.preflight.diagnostics)
 				writeLine(io.stderr, formatExportDiagnostic(diagnostic))
@@ -380,9 +387,10 @@ export async function runDesignCli(
 				? {}
 				: { hostname: inputs.opts.hostname }),
 			...(inputs.opts.port === undefined ? {} : { port: inputs.opts.port }),
-			root: project.root,
+			root: resolve(inputs.opts.root ?? process.cwd()),
+			...(inputs.path[1] === undefined ? {} : { design: inputs.path[1] }),
 		})
-		writeLine(io.stdout, `design is serving ${project.path} at ${url.href}`)
+		writeLine(io.stdout, `design workspace is serving at ${url.href}`)
 		return 0
 	} catch (error) {
 		if (error instanceof DesignPngPreflightError) {

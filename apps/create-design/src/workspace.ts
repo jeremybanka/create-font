@@ -17,7 +17,12 @@ export async function discoverDesignProjects(
 	)
 	const projects: DesignProject[] = []
 	for (const entry of entries) {
-		if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+		if (
+			!entry.isDirectory() ||
+			entry.isSymbolicLink() ||
+			!isSafeDesignProjectId(entry.name)
+		)
+			continue
 		const root = join(designsRoot, entry.name)
 		const manifest = await stat(join(root, "create-design.json")).catch(
 			() => undefined,
@@ -63,5 +68,17 @@ export async function selectDesignProject(
 		throw new Error("No design projects were found below designs/.")
 	throw new Error(
 		`Multiple design projects are available; select one by name (${projects.map((project) => project.name).join(", ")}).`,
+	)
+}
+
+/** Validates an untrusted route identity before it can become a filesystem path. */
+export function isSafeDesignProjectId(value: string): boolean {
+	return (
+		value.length > 0 &&
+		value !== "." &&
+		value !== ".." &&
+		!value.includes("/") &&
+		!value.includes("\\") &&
+		!value.includes("%")
 	)
 }

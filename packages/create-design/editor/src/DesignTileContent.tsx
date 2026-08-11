@@ -2282,6 +2282,30 @@ function objectGeometryFields(
 			},
 		]
 	}
+	if (object?.geometry.kind === "artboard-link") {
+		return [
+			{
+				disabled: true,
+				label: "Local X",
+				value: 0,
+			},
+			{
+				disabled: true,
+				label: "Local Y",
+				value: 0,
+			},
+			{
+				disabled: true,
+				label: "Width",
+				value: object.geometry.width,
+			},
+			{
+				disabled: true,
+				label: "Height",
+				value: object.geometry.height,
+			},
+		]
+	}
 	return ["Local X", "Local Y", "Width", "Height"].map((label) => ({
 		disabled: true,
 		label,
@@ -2333,7 +2357,9 @@ function DesignObjectTile({
 				? "Live ellipse"
 				: object?.geometry.kind === "path"
 					? "Path geometry"
-					: "Object geometry"
+					: object?.geometry.kind === "artboard-link"
+						? "Linked artboard"
+						: "Object geometry"
 	return (
 		<design-object-tile>
 			<object-selection-summary role="status">
@@ -2375,9 +2401,11 @@ function DesignObjectTile({
 				<object-geometry-help>
 					{object?.geometry.kind === "path"
 						? "Edit path coordinates with Direct Selection."
-						: object === null
-							? "Select one object to edit exact geometry."
-							: "Live geometry remains editable until expanded."}
+						: object?.geometry.kind === "artboard-link"
+							? `Portable live reference to ${object.geometry.projectId}/${object.geometry.artboardId}; transform it as one object.`
+							: object === null
+								? "Select one object to edit exact geometry."
+								: "Live geometry remains editable until expanded."}
 				</object-geometry-help>
 				<strong>
 					{object?.geometry.kind === "text"
