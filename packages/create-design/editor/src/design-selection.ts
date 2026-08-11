@@ -12,37 +12,22 @@ import {
 } from "@create-design/model"
 import type { DesignDocument, DesignObject } from "./types.ts"
 
-/** Measures signed travel along the initial authored-corner-to-handle axis. */
-export function designLocalInwardDistances(
-	transform: DesignObject["transform"],
+/** Measures signed document-space travel along the initial inward axis. */
+export function designInwardDistances(
 	anchor: CanvasPoint,
 	start: CanvasPoint,
 	current: CanvasPoint,
 ): Readonly<{ start: number; current: number }> | null {
-	const determinant = transform.a * transform.d - transform.b * transform.c
-	if (Math.abs(determinant) <= Number.EPSILON) return null
-	const toLocal = (point: CanvasPoint): CanvasPoint => {
-		const x = point.x - transform.e
-		const y = point.y - transform.f
-		return {
-			x: (transform.d * x - transform.c * y) / determinant,
-			y: (-transform.b * x + transform.a * y) / determinant,
-		}
-	}
-	const localAnchor = toLocal(anchor)
-	const localStart = toLocal(start)
-	const localCurrent = toLocal(current)
 	const inward = {
-		x: localStart.x - localAnchor.x,
-		y: localStart.y - localAnchor.y,
+		x: start.x - anchor.x,
+		y: start.y - anchor.y,
 	}
 	const startDistance = Math.hypot(inward.x, inward.y)
 	if (startDistance <= Number.EPSILON) return { start: 0, current: 0 }
 	return {
 		start: startDistance,
 		current:
-			((localCurrent.x - localAnchor.x) * inward.x +
-				(localCurrent.y - localAnchor.y) * inward.y) /
+			((current.x - anchor.x) * inward.x + (current.y - anchor.y) * inward.y) /
 			startDistance,
 	}
 }

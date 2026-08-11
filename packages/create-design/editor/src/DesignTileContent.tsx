@@ -2623,7 +2623,7 @@ function DesignObjectTile({
 						Amount
 						<input
 							type="number"
-							aria-label="Corner amount in local geometry units"
+							aria-label="Corner amount in document geometry units"
 							min={0}
 							step={1}
 							value={cornerControls.amount}

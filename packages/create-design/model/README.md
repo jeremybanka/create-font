@@ -40,6 +40,11 @@ removes the live record as one immutable document replacement.
 
 ## Output projection
 
+`projectDesignObjectContours()` lowers live corner profiles after applying the
+object transform. Corner amounts therefore remain document-space distances,
+and circular and squircle profiles retain their 1:1 proportions through
+non-uniform scaling.
+
 `projectDesignOutput()` is the shared flattening boundary for renderers,
 exporters, previews, and interchange. It walks layers and nested groups in
 canonical paint order, omits objects hidden by either their object or layer,

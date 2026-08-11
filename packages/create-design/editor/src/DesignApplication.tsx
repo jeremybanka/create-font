@@ -198,7 +198,7 @@ import {
 	directSelectionDescription,
 	directSelectionKey,
 	designCornerAmountFromInwardDrag,
-	designLocalInwardDistances,
+	designInwardDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -409,7 +409,6 @@ type CanvasGesture =
 			readonly anchor: CanvasPoint
 			readonly original: DesignDocument
 			readonly objectId: string
-			readonly transform: DesignObject["transform"]
 			readonly corners: readonly Readonly<{
 				readonly contourId: string
 				readonly pointId: string
@@ -6433,7 +6432,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			anchor,
 			original: document,
 			objectId,
-			transform: object.transform,
 			corners,
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
@@ -6722,8 +6720,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gesture: Extract<CanvasGesture, { readonly kind: "corner" }>,
 		current: CanvasPoint,
 	) => {
-		const distances = designLocalInwardDistances(
-			gesture.transform,
+		const distances = designInwardDistances(
 			gesture.anchor,
 			gesture.start,
 			current,

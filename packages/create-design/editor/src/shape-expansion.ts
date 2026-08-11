@@ -1,6 +1,8 @@
 import {
 	geometryContours,
+	inverseTransformDesignPoint,
 	objectBounds,
+	projectDesignObjectContours,
 	type Bounds,
 } from "@create-design/model"
 import type { DesignDocument, DesignObject, DesignPoint } from "./types.ts"
@@ -74,12 +76,27 @@ export function expandDesignShape(
 		return object
 	const fillRule =
 		object.geometry.kind === "path" ? object.geometry.fillRule : undefined
+	const projected = projectDesignObjectContours(object)
+	const localContours = projected.map((contour) => ({
+		...contour,
+		points: contour.points.map((point) =>
+			inverseTransformDesignPoint(object.transform, point),
+		),
+	}))
+	const contours = localContours.every((contour) =>
+		contour.points.every((point) => point !== null),
+	)
+		? localContours.map((contour) => ({
+				...contour,
+				points: contour.points as readonly DesignPoint[],
+			}))
+		: geometryContours(object.geometry)
 	return {
 		...object,
 		geometry: {
 			kind: "path",
 			...(fillRule === undefined ? {} : { fillRule }),
-			contours: geometryContours(object.geometry).map((contour) => ({
+			contours: contours.map((contour) => ({
 				...contour,
 				id: `contour:${nextId()}`,
 				points: contour.points.map((point): DesignPoint => ({

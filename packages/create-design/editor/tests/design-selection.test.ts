@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
 	directSelectionKey,
 	designCornerAmountFromInwardDrag,
-	designLocalInwardDistances,
+	designInwardDistances,
 	marqueeDirectSelection,
 	marqueeObjectIds,
 	nearestDirectSelectionTarget,
@@ -245,7 +245,7 @@ describe("design selection", () => {
 		})
 	})
 
-	it("preserves local live-corner scale during transformed direct edits", () => {
+	it("preserves document-space live-corner scale during transformed direct edits", () => {
 		const transform = { a: 2, b: 0, c: 0, d: 2, e: 7, f: -4 }
 		const object = path({
 			transform,
@@ -292,39 +292,19 @@ describe("design selection", () => {
 		const entry = lowered.points.find((point) =>
 			point.id.includes("point:b::corner:entry"),
 		)
-		expect(entry?.x).toBeCloseTo(167)
+		expect(entry?.x).toBeCloseTo(187)
 	})
 
-	it("computes directional corner drag distance in local affine space", () => {
-		const transform = { a: 4, b: 1, c: 2, d: 3, e: 7, f: -4 }
-		const project = ({ x, y }: { x: number; y: number }) => ({
-			x: transform.a * x + transform.c * y + transform.e,
-			y: transform.b * x + transform.d * y + transform.f,
-		})
+	it("computes directional corner drag distance in document space", () => {
 		expect(
-			designLocalInwardDistances(
-				transform,
-				project({ x: 0, y: 0 }),
-				project({ x: 10, y: 0 }),
-				project({ x: 11, y: 0 }),
-			),
-		).toEqual({ start: 10, current: 11 })
+			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 6, y: 8 }),
+		).toEqual({ start: 5, current: 10 })
 		expect(
-			designLocalInwardDistances(
-				transform,
-				project({ x: 0, y: 0 }),
-				project({ x: 10, y: 0 }),
-				project({ x: 0, y: 20 }),
-			),
-		).toEqual({ start: 10, current: 0 })
+			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: -4, y: 3 }),
+		).toEqual({ start: 5, current: 0 })
 		expect(
-			designLocalInwardDistances(
-				transform,
-				project({ x: 0, y: 0 }),
-				project({ x: 10, y: 0 }),
-				project({ x: -11, y: 7 }),
-			),
-		).toEqual({ start: 10, current: -11 })
+			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: -3, y: -4 }),
+		).toEqual({ start: 5, current: -5 })
 	})
 
 	it("maps the full existing corner amount onto inward handle travel", () => {
