@@ -6388,14 +6388,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		anchor: CanvasPoint,
 	): void => {
 		event.cancelBubble = true
+		const object = document.objects.find(({ id }) => id === objectId)
+		if (object?.geometry.kind !== "path") return
 		const selected = directSelection.flatMap((target) =>
 			target.kind === "node" && target.objectId === objectId
 				? [{ contourId: target.contourId, pointId: target.pointId }]
 				: [],
 		)
-		const targets = selected.length === 0 ? [fallback] : selected
-		const object = document.objects.find(({ id }) => id === objectId)
-		if (object?.geometry.kind !== "path") return
+		const targets =
+			tool === "select"
+				? cornerControlsForObject(object).map(({ contour, point }) => ({
+						contourId: contour.id,
+						pointId: point.id,
+					}))
+				: selected.length === 0
+					? [fallback]
+					: selected
 		const contours = object.geometry.contours
 		const corners = targets.flatMap((target) => {
 			const contour = contours.find(

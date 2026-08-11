@@ -6014,7 +6014,7 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".vector-handle").length).toBeGreaterThan(0)
 	})
 
-	it("commits corner profiles from the native release when the stage sample is stale", async () => {
+	it("commits all Select-mode corners from a native release with a stale stage sample", async () => {
 		const initial = createInitialDocument()
 		const storage = new Map<string, string>()
 		const stage = mountDesign({ initialDocument: initial }, storage)
@@ -6093,8 +6093,9 @@ describe("create-design shared vector scene", () => {
 		const amounts = saved.objects[0].geometry.contours[0]?.points.map(
 			(point) => point.corner?.amount ?? 0,
 		)
-		expect(amounts?.filter((amount) => amount > 0)).toHaveLength(1)
-		expect(amounts?.filter((amount) => amount === 0)).toHaveLength(3)
+		expect(amounts).toHaveLength(4)
+		expect(amounts?.every((amount) => amount > 0)).toBe(true)
+		expect(new Set(amounts)).toHaveLength(1)
 	})
 
 	it("keeps a large corner sharp when an outward drag crosses the perimeter", async () => {
