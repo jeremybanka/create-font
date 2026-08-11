@@ -204,9 +204,9 @@ importers:
       '@create-font/fea-rs-wasm':
         specifier: workspace:*
         version: link:../../packages/create-font/fea-rs-wasm
-      '@create-font/glyphs':
+      '@create-font/glyphs-app':
         specifier: workspace:*
-        version: link:../../packages/create-font/glyphs
+        version: link:../../packages/create-font/glyphs-app
       '@create-font/server':
         specifier: workspace:*
         version: link:../../packages/create-font/server
@@ -646,7 +646,7 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(@voidzero-dev/vite-plus-core@0.2.8(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.2)
 
-  packages/create-font/glyphs:
+  packages/create-font/glyphs-app:
     dependencies:
       '@create-font/source':
         specifier: workspace:*

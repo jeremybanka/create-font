@@ -17,7 +17,7 @@ all cross the boundary in the same form emitted by the state graph.
 
 The native directory and document codecs stay format-focused. Glyphs.app text
 parsing, its source AST, and explicit lowering into this format live in
-[`@create-font/glyphs`](../glyphs/README.md).
+[`@create-font/glyphs-app`](../glyphs-app/README.md).
 
 ## Project source directory
 
