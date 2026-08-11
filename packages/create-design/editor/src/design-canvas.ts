@@ -210,7 +210,10 @@ export interface DesignPointSnapResult {
 	readonly x: number | null
 	readonly y: number | null
 	readonly matches: readonly DesignSnapMatch[]
-	readonly line?: Readonly<{ readonly guide: DesignGuide; readonly label: string }>
+	readonly line?: Readonly<{
+		readonly guide: DesignGuide
+		readonly label: string
+	}>
 }
 
 export type DesignSnapCategory =
@@ -606,7 +609,10 @@ function snapBoundsTranslation(
 		? [
 				{ x: bounds.minX, y: bounds.minY },
 				{ x: bounds.maxX, y: bounds.minY },
-				{ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 },
+				{
+					x: (bounds.minX + bounds.maxX) / 2,
+					y: (bounds.minY + bounds.maxY) / 2,
+				},
 				{ x: bounds.minX, y: bounds.maxY },
 				{ x: bounds.maxX, y: bounds.maxY },
 			]

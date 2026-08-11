@@ -31,7 +31,8 @@ export function designGuideAxis(guide: DesignGuide): "x" | "y" | null {
 }
 
 export function designGuideAngle(guide: Pick<DesignGuide, "a" | "b">): number {
-	const degrees = (Math.atan2(guide.b.y - guide.a.y, guide.b.x - guide.a.x) * 180) / Math.PI
+	const degrees =
+		(Math.atan2(guide.b.y - guide.a.y, guide.b.x - guide.a.x) * 180) / Math.PI
 	return ((degrees % 180) + 180) % 180
 }
 
@@ -45,24 +46,37 @@ export function constrainGuidePointToAngle(
 	const angle = Math.atan2(b.y - a.y, b.x - a.x)
 	const increment = (incrementDegrees * Math.PI) / 180
 	const constrained = Math.round(angle / increment) * increment
-	return { x: a.x + Math.cos(constrained) * distance, y: a.y + Math.sin(constrained) * distance }
+	return {
+		x: a.x + Math.cos(constrained) * distance,
+		y: a.y + Math.sin(constrained) * distance,
+	}
 }
 
-export function projectPointToGuide(point: GuidePoint, guide: Pick<DesignGuide, "a" | "b">): GuidePoint {
+export function projectPointToGuide(
+	point: GuidePoint,
+	guide: Pick<DesignGuide, "a" | "b">,
+): GuidePoint {
 	const dx = guide.b.x - guide.a.x
 	const dy = guide.b.y - guide.a.y
 	const lengthSquared = dx * dx + dy * dy
 	if (lengthSquared === 0) return guide.a
-	const t = ((point.x - guide.a.x) * dx + (point.y - guide.a.y) * dy) / lengthSquared
+	const t =
+		((point.x - guide.a.x) * dx + (point.y - guide.a.y) * dy) / lengthSquared
 	return { x: guide.a.x + t * dx, y: guide.a.y + t * dy }
 }
 
-export function distanceToDesignGuide(point: GuidePoint, guide: Pick<DesignGuide, "a" | "b">): number {
+export function distanceToDesignGuide(
+	point: GuidePoint,
+	guide: Pick<DesignGuide, "a" | "b">,
+): number {
 	const projected = projectPointToGuide(point, guide)
 	return Math.hypot(point.x - projected.x, point.y - projected.y)
 }
 
-export function translateDesignGuide(guide: DesignGuide, delta: GuidePoint): DesignGuide {
+export function translateDesignGuide(
+	guide: DesignGuide,
+	delta: GuidePoint,
+): DesignGuide {
 	return {
 		...guide,
 		a: { x: guide.a.x + delta.x, y: guide.a.y + delta.y },
