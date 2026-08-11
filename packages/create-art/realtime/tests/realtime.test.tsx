@@ -1,4 +1,5 @@
 import { multiClient } from "atom.io/realtime-testing"
+import type { Socket } from "socket.io-client"
 import { afterEach, describe, expect, it } from "vitest"
 
 import type {
@@ -11,6 +12,22 @@ import { createCollaborationClient } from "../src/client.ts"
 import { provideAuthoritativeActions } from "../src/server.ts"
 
 type Command = Readonly<{ delta: number }>
+
+function waitForConnection(socket: Socket): Promise<void> {
+	if (socket.connected) return Promise.resolve()
+	return new Promise((resolve, reject) => {
+		const onConnect = () => {
+			socket.off(`connect_error`, onError)
+			resolve()
+		}
+		const onError = (error: Error) => {
+			socket.off(`connect`, onConnect)
+			reject(error)
+		}
+		socket.once(`connect`, onConnect)
+		socket.once(`connect_error`, onError)
+	})
+}
 
 describe(`authoritative realtime actions`, () => {
 	let teardown: (() => Promise<void>) | undefined
@@ -67,6 +84,11 @@ describe(`authoritative realtime actions`, () => {
 		const editor = test.clients.EDITOR_A.init()
 		const secondEditor = test.clients.EDITOR_B.init()
 		const viewer = test.clients.VIEWER.init()
+		await Promise.all(
+			[editor, secondEditor, viewer].map(({ socket }) =>
+				waitForConnection(socket),
+			),
+		)
 		const presence = new Promise<CollaborationPresence>((resolve) => {
 			secondEditor.socket.once(`collaboration:presence`, resolve)
 		})

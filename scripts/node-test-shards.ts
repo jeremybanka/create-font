@@ -82,6 +82,7 @@ const shards = {
 			kind: `package-tests`,
 			packages: [
 				`@create-art/editor`,
+				`@create-art/realtime`,
 				`@create-art/source-rpc`,
 				`@create-art/ui-layout`,
 				`@create-art/vector-geometry`,
