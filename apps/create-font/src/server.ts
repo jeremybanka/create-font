@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+import { lstatSync, realpathSync } from "node:fs"
 import { access, readFile, readdir } from "node:fs/promises"
 import { basename, dirname, extname, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -7,6 +9,7 @@ import { Elysia } from "elysia"
 import { runtimeElysiaAdapter } from "./elysia-adapter.ts"
 import { resolveApplicationAssets } from "./application-assets.ts"
 import { createFontRpc, type CreateFontRpcOptions } from "./rpc.ts"
+import { isSafeFontProjectId } from "./workspace.ts"
 
 const applicationAssets = await resolveApplicationAssets(import.meta.dirname)
 const isBundledApplication = basename(import.meta.dirname) === `dist`
@@ -76,12 +79,103 @@ for (const path of await applicationFilePaths(applicationAssets)) {
 	}
 }
 
-export type CreateFontServerOptions = CreateFontRpcOptions
+export type CreateFontWorkspaceMount = Readonly<{
+	available?: () => boolean
+	id: string
+	name: string
+	path: string
+	root: string
+	source: NonNullable<CreateFontRpcOptions["source"]>
+}>
+
+export type CreateFontServerOptions = CreateFontRpcOptions &
+	Readonly<{
+		activeProjectId?: string
+		projects?: readonly CreateFontWorkspaceMount[]
+		workspaceRoot?: string
+	}>
 
 export function createFontServerApp(options: CreateFontServerOptions = {}) {
 	const adapter = options.adapter ?? runtimeElysiaAdapter
-	return new Elysia({ adapter, name: `create-font-server` })
-		.use(createFontRpc({ ...options, adapter }))
+	const workspaceRoot = resolve(
+		options.workspaceRoot ?? options.root ?? process.cwd(),
+	)
+	const projects = options.projects ?? []
+	for (const project of projects) {
+		if (!isSafeFontProjectId(project.id))
+			throw new Error(`Font route identities cannot contain path segments.`)
+		const expectedPath = `fonts/${project.id}`
+		if (
+			project.path !== expectedPath ||
+			resolve(project.root) !== resolve(workspaceRoot, expectedPath)
+		)
+			throw new Error(
+				`Font routes must stay inside the workspace fonts directory.`,
+			)
+		try {
+			const canonicalWorkspace = realpathSync(workspaceRoot)
+			const canonicalProject = realpathSync(project.root)
+			const canonicalRelative = relative(canonicalWorkspace, canonicalProject)
+			if (
+				lstatSync(project.root).isSymbolicLink() ||
+				canonicalRelative === `..` ||
+				canonicalRelative.startsWith(`..${sep}`) ||
+				resolve(canonicalWorkspace, canonicalRelative) !== canonicalProject
+			)
+				throw new Error(`Font routes cannot escape through symbolic links.`)
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				`code` in error &&
+				(error as NodeJS.ErrnoException).code === `ENOENT`
+			)
+				continue
+			throw error
+		}
+	}
+	const activeProjectId = options.activeProjectId ?? projects[0]?.id
+	if (projects.length > 0 && !projects.some(({ id }) => id === activeProjectId))
+		throw new Error(`The active font is not available in this workspace.`)
+	const workspaceId = `workspace:${createHash(`sha256`).update(workspaceRoot).digest(`hex`)}`
+	const mountIsAvailable = (project: CreateFontWorkspaceMount): boolean => {
+		try {
+			return project.available?.() ?? true
+		} catch {
+			return false
+		}
+	}
+	const workspace = () => {
+		const availableProjects = projects.filter(mountIsAvailable)
+		const availableActiveProjectId = availableProjects.some(
+			({ id }) => id === activeProjectId,
+		)
+			? activeProjectId
+			: availableProjects[0]?.id
+		return availableActiveProjectId === undefined
+			? undefined
+			: {
+					id: workspaceId,
+					name: basename(workspaceRoot),
+					activeProjectId: availableActiveProjectId,
+					projects: availableProjects.map(({ id, name, path }) => ({
+						id,
+						name,
+						path,
+					})),
+				}
+	}
+	const app = new Elysia({ adapter, name: `create-font-server` })
+		.use(
+			createFontRpc({
+				adapter,
+				name: `create-font-rpc:default`,
+				...(options.root === undefined ? {} : { root: options.root }),
+				...(projects.length === 0 && options.source !== undefined
+					? { source: options.source }
+					: {}),
+				...(activeProjectId === undefined ? {} : { workspace }),
+			}),
+		)
 		.get(
 			`/editor/editor.js`,
 			async () =>
@@ -103,6 +197,27 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 				}),
 		)
 		.use(editorApplication)
+	for (const project of projects) {
+		app.group(`/projects/${encodeURIComponent(project.id)}`, (group) =>
+			group
+				.onBeforeHandle(() =>
+					mountIsAvailable(project)
+						? undefined
+						: new Response(`Font project is no longer available.`, {
+								status: 404,
+							}),
+				)
+				.use(
+					createFontRpc({
+						adapter,
+						name: `create-font-rpc:project:${project.id}`,
+						root: project.root,
+						source: project.source,
+					}),
+				),
+		)
+	}
+	return app
 }
 
 export type CreateFontServerApp = ReturnType<typeof createFontServerApp>

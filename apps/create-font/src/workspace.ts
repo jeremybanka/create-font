@@ -1,4 +1,5 @@
-import { readdir, stat } from "node:fs/promises"
+import { lstatSync } from "node:fs"
+import { lstat, readdir } from "node:fs/promises"
 import { join, relative, resolve, sep } from "node:path"
 
 export type FontProject = Readonly<{
@@ -6,6 +7,32 @@ export type FontProject = Readonly<{
 	path: string
 	root: string
 }>
+
+export function isSafeFontProjectId(value: string): boolean {
+	return (
+		value.length > 0 &&
+		value !== `.` &&
+		value !== `..` &&
+		!value.includes(`/`) &&
+		!value.includes(`\\`) &&
+		!value.includes(`\0`)
+	)
+}
+
+export function isFontProjectAvailable(root: string): boolean {
+	try {
+		const project = lstatSync(root)
+		const manifest = lstatSync(join(root, `create-font.json`))
+		return (
+			project.isDirectory() &&
+			!project.isSymbolicLink() &&
+			manifest.isFile() &&
+			!manifest.isSymbolicLink()
+		)
+	} catch {
+		return false
+	}
+}
 
 export async function discoverFontProjects(
 	workspaceRootInput: string = process.cwd(),
@@ -17,12 +44,17 @@ export async function discoverFontProjects(
 	)
 	const projects: FontProject[] = []
 	for (const entry of entries) {
-		if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+		if (
+			!entry.isDirectory() ||
+			entry.isSymbolicLink() ||
+			!isSafeFontProjectId(entry.name)
+		)
+			continue
 		const root = join(fontsRoot, entry.name)
-		const manifest = await stat(join(root, `create-font.json`)).catch(
+		const manifest = await lstat(join(root, `create-font.json`)).catch(
 			() => undefined,
 		)
-		if (!manifest?.isFile()) continue
+		if (!manifest?.isFile() || manifest.isSymbolicLink()) continue
 		projects.push({
 			name: entry.name,
 			path: relative(workspaceRoot, root).split(sep).join(`/`),

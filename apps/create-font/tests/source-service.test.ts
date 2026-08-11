@@ -1,5 +1,13 @@
 import { execFile } from "node:child_process"
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import {
+	cp,
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
@@ -25,7 +33,11 @@ import {
 	createFileSystemSourceService,
 	type SourceProjectLoadDiagnostic,
 } from "../src/source-service.ts"
-import { discoverFontProjects, selectFontProject } from "../src/workspace.ts"
+import {
+	discoverFontProjects,
+	isSafeFontProjectId,
+	selectFontProject,
+} from "../src/workspace.ts"
 
 const temporaryRoots: string[] = []
 const execFileAsync = promisify(execFile)
@@ -74,6 +86,18 @@ afterEach(async () => {
 })
 
 describe(`font workspace discovery`, () => {
+	it.each([
+		[`alpha`, true],
+		[`font family`, true],
+		[`..`, false],
+		[`../alpha`, false],
+		[`alpha/beta`, false],
+		[`alpha\\beta`, false],
+		[``, false],
+	] as const)(`validates route identity %s`, (value, expected) => {
+		expect(isSafeFontProjectId(value)).toBe(expected)
+	})
+
 	it(`discovers and selects projects below fonts/`, async () => {
 		const { workspaceRoot } = await copyDevelopmentFont()
 
@@ -86,6 +110,25 @@ describe(`font workspace discovery`, () => {
 		expect(await selectFontProject(workspaceRoot)).toEqual(
 			expect.objectContaining({ name: `workbench-sans` }),
 		)
+	})
+
+	it(`ignores a symlinked font project that escapes the workspace`, async () => {
+		const workspaceRoot = await mkdtemp(
+			resolve(tmpdir(), `create-font-workspace-symlink-`),
+		)
+		const externalRoot = await mkdtemp(
+			resolve(tmpdir(), `create-font-external-project-`),
+		)
+		temporaryRoots.push(workspaceRoot, externalRoot)
+		await mkdir(resolve(workspaceRoot, `fonts`), { recursive: true })
+		await writeFile(resolve(externalRoot, `create-font.json`), `{}`)
+		await symlink(
+			externalRoot,
+			resolve(workspaceRoot, `fonts`, `escaped`),
+			`dir`,
+		)
+
+		expect(await discoverFontProjects(workspaceRoot)).toEqual([])
 	})
 })
 

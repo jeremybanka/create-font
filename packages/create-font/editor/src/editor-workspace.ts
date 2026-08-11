@@ -1073,7 +1073,8 @@ export function createEditorWorkspace(
 			const url = new URL(anchor.href)
 			if (url.origin !== window.location.origin) return
 			event.preventDefault()
-			history.pushState(null, ``, `${url.pathname}${url.search}${url.hash}`)
+			const search = url.search || window.location.search
+			history.pushState(null, ``, `${url.pathname}${search}${url.hash}`)
 			font.silo.setState(pathnameAtom, url.pathname)
 		}
 		globalThis.document.addEventListener(`click`, navigateFromClick)
@@ -1203,7 +1204,7 @@ export function createEditorWorkspace(
 			},
 			navigate(pathname: Pathname): void {
 				if (typeof window !== "undefined") {
-					history.pushState(null, ``, pathname)
+					history.pushState(null, ``, `${pathname}${window.location.search}`)
 				}
 				font.silo.setState(pathnameAtom, pathname)
 			},
@@ -1223,7 +1224,8 @@ export function createEditorWorkspace(
 					mapping === undefined
 						? undefined
 						: String.fromCodePoint(mapping.codePoint)
-				if (typeof window !== "undefined") history.pushState(null, ``, `/`)
+				if (typeof window !== "undefined")
+					history.pushState(null, ``, `/${window.location.search}`)
 				runEditorUiTransition({
 					kind: "review-glyph",
 					glyphId,

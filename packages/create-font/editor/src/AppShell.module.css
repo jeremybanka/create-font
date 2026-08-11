@@ -53,11 +53,30 @@ app-shell.class {
 				display: flex;
 				align-items: baseline;
 				gap: 8px;
+				min-width: 0;
 
-				> strong {
+				> strong,
+				> label > select {
 					font-size: 13px;
 					font-weight: 720;
 					letter-spacing: -0.015em;
+				}
+
+				> label > select {
+					max-width: 170px;
+					padding: 3px 22px 3px 5px;
+					border: 1px solid transparent;
+					border-radius: 5px;
+					background: transparent;
+					color: inherit;
+					cursor: pointer;
+
+					&:focus-visible {
+						border-color: var(--accent);
+						outline: 2px solid
+							color-mix(in srgb, var(--accent) 35%, transparent);
+						outline-offset: 1px;
+					}
 				}
 
 				> span {

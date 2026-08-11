@@ -2,6 +2,7 @@ import {
 	createFontRpc as createWorkspaceRpc,
 	CREATE_FONT_RPC_VERSION,
 	type CreateFontSourceService,
+	type FontWorkspaceInventory,
 } from "@create-font/server"
 import type { ElysiaAdapter } from "elysia/adapter"
 
@@ -12,8 +13,12 @@ export { CREATE_FONT_RPC_VERSION }
 
 export type CreateFontRpcOptions = Readonly<{
 	adapter?: ElysiaAdapter
+	name?: string
 	root?: string
 	source?: CreateFontSourceService
+	workspace?:
+		| FontWorkspaceInventory
+		| (() => FontWorkspaceInventory | undefined)
 }>
 
 export function createFontRpc(options: CreateFontRpcOptions = {}) {
@@ -21,8 +26,12 @@ export function createFontRpc(options: CreateFontRpcOptions = {}) {
 	return createWorkspaceRpc({
 		adapter,
 		build: () => buildProject(options.root),
+		...(options.name === undefined ? {} : { name: options.name }),
 		...(options.root === undefined ? {} : { root: options.root }),
 		...(options.source === undefined ? {} : { source: options.source }),
+		...(options.workspace === undefined
+			? {}
+			: { workspace: options.workspace }),
 	})
 }
 

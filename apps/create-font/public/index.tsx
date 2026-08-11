@@ -5,6 +5,7 @@ import type {
 import type { EditorFontSource } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type {
+	FontWorkspaceInventory,
 	SourceChangedEvent,
 	SourceComparison,
 	WriteSourceUnitsResult,
@@ -156,6 +157,41 @@ window.__CREATE_FONT_STARTUP_PROFILE__ = () => {
 const mount = document.querySelector<HTMLElement>("#app")
 if (mount === null) throw new Error("Missing #app mount element.")
 const applicationMount = mount
+type BrowserFontWorkspace = FontWorkspaceInventory & Readonly<{ root: string }>
+
+async function readFontWorkspace(): Promise<BrowserFontWorkspace | undefined> {
+	const response = await fetch(`/api/workspace`).catch(() => undefined)
+	if (response === undefined || !response.ok) return undefined
+	const candidate = (await response.json()) as Partial<BrowserFontWorkspace>
+	return typeof candidate.activeProjectId === `string` &&
+		Array.isArray(candidate.projects) &&
+		typeof candidate.id === `string`
+		? (candidate as BrowserFontWorkspace)
+		: undefined
+}
+
+const fontWorkspace = await readFontWorkspace()
+const requestedProjectId = new URL(window.location.href).searchParams.get(
+	`font`,
+)
+const requestedProjectUnavailable =
+	fontWorkspace !== undefined &&
+	requestedProjectId !== null &&
+	!fontWorkspace.projects.some(({ id }) => id === requestedProjectId)
+const activeProjectId =
+	requestedProjectUnavailable || fontWorkspace === undefined
+		? undefined
+		: (requestedProjectId ?? fontWorkspace.activeProjectId)
+if (
+	fontWorkspace !== undefined &&
+	requestedProjectId === null &&
+	activeProjectId !== undefined
+) {
+	const url = new URL(window.location.href)
+	url.searchParams.set(`font`, activeProjectId)
+	window.history.replaceState({ font: activeProjectId }, ``, url)
+}
+
 let bootstrapRoot: Root | null = createRoot(applicationMount)
 const sourceSyncWorker = createSourceSyncWorkerClient()
 let sourceState: SourceSyncState | null = null
@@ -172,7 +208,14 @@ let versionControlState: Readonly<{
 	error?: string
 	loading: boolean
 }> = { loading: false }
-const rpcClient = createFontRpcClient(window.location.origin)
+const rpcClient = createFontRpcClient(
+	activeProjectId === undefined
+		? window.location.origin
+		: new URL(
+				`/projects/${encodeURIComponent(activeProjectId)}`,
+				window.location.origin,
+			).href,
+)
 let comparisonRequestSequence = 0
 let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
@@ -182,8 +225,56 @@ const bufferedSourceEvents: SourceChangedEvent[] = []
 let sourceEventQueue = Promise.resolve()
 let sourceEventReconnectDelay = 250
 let sourceEventsHaveConnected = false
+let sourceEventsDisposed = false
+let activeSourceEvents: { close?: () => void } | null = null
+let sourceEventReconnectTimer: ReturnType<typeof setTimeout> | undefined
+let recoveryDraftLoaded = false
+let projectSwitchPending = false
+
+function recoveryStorageKey(): string | undefined {
+	return fontWorkspace === undefined || activeProjectId === undefined
+		? undefined
+		: `create-font:recovery-draft:v1:${encodeURIComponent(fontWorkspace.id)}:${encodeURIComponent(activeProjectId)}`
+}
+
+function writeRecoveryDraft(source: EditorFontSource): void {
+	const key = recoveryStorageKey()
+	if (key === undefined) return
+	try {
+		localStorage.setItem(key, JSON.stringify(source))
+	} catch {
+		// Recovery is best-effort in restricted browsing contexts.
+	}
+}
+
+function readRecoveryDraft(): EditorFontSource | undefined {
+	const key = recoveryStorageKey()
+	if (key === undefined) return undefined
+	try {
+		const value = localStorage.getItem(key)
+		return value === null ? undefined : (JSON.parse(value) as EditorFontSource)
+	} catch {
+		return undefined
+	}
+}
+
+function clearRecoveryDraft(): void {
+	const key = recoveryStorageKey()
+	if (key === undefined) return
+	try {
+		localStorage.removeItem(key)
+	} catch {
+		// Recovery is best-effort in restricted browsing contexts.
+	}
+}
 
 function retrySource(): void {
+	if (requestedProjectUnavailable && fontWorkspace !== undefined) {
+		const url = new URL(window.location.href)
+		url.searchParams.set(`font`, fontWorkspace.activeProjectId)
+		window.location.assign(url)
+		return
+	}
 	bootstrapState = nextBootstrapState(bootstrapState, { type: `retry` })
 	renderBootstrap()
 	void refreshSource(true)
@@ -272,7 +363,12 @@ function versionControlOptions(): NonNullable<
 }
 
 async function updateMountedEditor(): Promise<void> {
-	if (currentSource === null || currentValidation === null) return
+	if (
+		sourceEventsDisposed ||
+		currentSource === null ||
+		currentValidation === null
+	)
+		return
 	await showSource(currentSource, currentValidation)
 }
 
@@ -296,7 +392,8 @@ async function loadComparison(
 	const response = await rpcClient.api.source.comparison.get({
 		query: { baseRef, ...(targetRef === undefined ? {} : { targetRef }) },
 	})
-	if (requestSequence !== comparisonRequestSequence) return
+	if (sourceEventsDisposed || requestSequence !== comparisonRequestSequence)
+		return
 	if (response.error !== null || response.data === null) {
 		const message = responseErrorMessage(
 			response.error,
@@ -331,6 +428,7 @@ async function commitSourceUnits(
 		message: request.message,
 		paths: request.paths as [string, ...string[]],
 	})
+	if (sourceEventsDisposed) return
 	if (response.error !== null || response.data === null) {
 		throw new Error(
 			responseErrorMessage(
@@ -355,7 +453,9 @@ async function showSource(
 		sources: ReadonlyMap<string, string>
 	}>,
 ): Promise<void> {
+	if (sourceEventsDisposed) return
 	const editorModule = await editorModulePromise
+	if (sourceEventsDisposed) return
 	const initialRender = !renderedSource
 	renderedSource = true
 	currentSource = source
@@ -393,6 +493,15 @@ async function showSource(
 		source,
 		validation,
 		versionControl: versionControlOptions(),
+		...(fontWorkspace === undefined || activeProjectId === undefined
+			? {}
+			: {
+					workspaceProject: {
+						id: activeProjectId,
+						onChange: switchWorkspaceProject,
+						projects: fontWorkspace.projects,
+					},
+				}),
 	}
 	if (mountedEditor === null) {
 		// The bootstrap and editor artifacts intentionally own separate React
@@ -416,13 +525,22 @@ async function showSource(
 }
 
 async function showSourceState(state: SourceSyncState): Promise<void> {
+	if (sourceEventsDisposed) return
 	const assembled = assembleSourceSyncState(state)
-	const processing = sourceSyncWorker.process(state, assembled.source)
+	const recovery = recoveryDraftLoaded ? undefined : readRecoveryDraft()
+	recoveryDraftLoaded = true
+	const rendered = recovery ?? assembled.source
+	if (recovery !== undefined) {
+		sourceDirty = true
+		currentSource = recovery
+	}
+	const processing = sourceSyncWorker.process(state, rendered)
 	const [, validation] = await Promise.all([
 		processing.writes,
 		processing.validation,
 	])
-	await showSource(assembled.source, validation, {
+	if (sourceEventsDisposed) return
+	await showSource(rendered, validation, {
 		entries: assembled.featureEntries,
 		sources: assembled.featureSources,
 	})
@@ -430,6 +548,7 @@ async function showSourceState(state: SourceSyncState): Promise<void> {
 
 const refreshController = createSourceSnapshotRefreshController({
 	async applySnapshot(snapshot, initialLoad) {
+		if (sourceEventsDisposed) return
 		sourceState = sourceSyncStateFromSnapshot(snapshot)
 		startupTimeline.mark(`source-message-received`)
 		await showSourceState(sourceState)
@@ -459,9 +578,11 @@ async function refreshSource(renderSnapshot: boolean): Promise<void> {
 	sourceState = sourceSyncStateFromSnapshot(snapshot)
 }
 
-function markSourceDirty(): void {
+function markSourceDirty(source: EditorFontSource): void {
+	if (sourceEventsDisposed) return
 	dirtySequence += 1
 	sourceDirty = true
+	writeRecoveryDraft(source)
 }
 
 function writeResultFromResponse(
@@ -484,11 +605,13 @@ function writeResultFromResponse(
 }
 
 function saveSource(source: EditorFontSource): Promise<void> {
+	if (sourceEventsDisposed) return Promise.resolve()
 	currentSource = source
 	const saveSequence = dirtySequence
 	saveQueue = saveQueue
 		.catch(() => undefined)
 		.then(async () => {
+			if (sourceEventsDisposed) return
 			const base = sourceState
 			let renderCanonical = false
 			if (base === null) {
@@ -500,6 +623,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 				(error: unknown) => ({ error, ok: false as const }),
 			)
 			const writes = await processing.writes
+			if (sourceEventsDisposed) return
 			if (writes.length !== 0) {
 				const operationId = crypto.randomUUID()
 				const result = writeResultFromResponse(
@@ -511,6 +635,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 						],
 					}),
 				)
+				if (sourceEventsDisposed) return
 				if (
 					sourceState !== null &&
 					sourceState.revision === result.previousRevision
@@ -532,10 +657,12 @@ function saveSource(source: EditorFontSource): Promise<void> {
 				}
 			}
 			const validationResult = await validationPromise
+			if (sourceEventsDisposed) return
 			if (!validationResult.ok) throw validationResult.error
 			currentValidation = validationResult.validation
 			if (dirtySequence !== saveSequence) return
 			sourceDirty = false
+			clearRecoveryDraft()
 			const hadBufferedSourceEvents = bufferedSourceEvents.length > 0
 			await drainSourceEvents()
 			if (renderCanonical && sourceState !== null) {
@@ -548,24 +675,29 @@ function saveSource(source: EditorFontSource): Promise<void> {
 			) {
 				await showSource(currentSource, currentValidation)
 			}
-			void refreshWorkingComparison(
-				versionControlSelection,
-				loadComparison,
-			).catch((error: unknown) => {
-				console.error(
-					`Unable to refresh version-control changes after saving.`,
-					error,
-				)
-			})
+			if (!projectSwitchPending)
+				void refreshWorkingComparison(
+					versionControlSelection,
+					loadComparison,
+				).catch((error: unknown) => {
+					if (sourceEventsDisposed) return
+					console.error(
+						`Unable to refresh version-control changes after saving.`,
+						error,
+					)
+				})
 		})
 	return saveQueue.catch((error: unknown) => {
+		if (sourceEventsDisposed) return
 		console.error(`Unable to save font source.`, error)
 		throw error
 	})
 }
 
 async function drainSourceEvents(): Promise<void> {
+	if (sourceEventsDisposed) return
 	await feaParserReady
+	if (sourceEventsDisposed) return
 	if (sourceDirty || sourceState === null || bufferedSourceEvents.length === 0)
 		return
 	let changed = false
@@ -588,12 +720,14 @@ async function drainSourceEvents(): Promise<void> {
 			versionControlSelection,
 			loadComparison,
 		).catch((error: unknown) => {
+			if (sourceEventsDisposed) return
 			console.error(`Unable to refresh version-control changes.`, error)
 		})
 	}
 }
 
 function enqueueSourceEvent(event: SourceChangedEvent): void {
+	if (sourceEventsDisposed) return
 	bufferedSourceEvents.push(event)
 	queueSourceEventDrain()
 }
@@ -602,6 +736,7 @@ function queueSourceEventDrain(): void {
 	sourceEventQueue = sourceEventQueue
 		.then(drainSourceEvents)
 		.catch((error: unknown) => {
+			if (sourceEventsDisposed) return
 			console.error(`Unable to apply a source update.`, error)
 			if (!renderedSource) {
 				showBootstrapError(
@@ -614,9 +749,12 @@ function queueSourceEventDrain(): void {
 }
 
 function connectSourceEvents(): void {
+	if (sourceEventsDisposed) return
 	const events = rpcClient.api.source.events.subscribe()
+	activeSourceEvents = events as { close?: () => void }
 	events.subscribe((event) => enqueueSourceEvent(event.data))
 	events.on(`open`, () => {
+		if (sourceEventsDisposed) return
 		sourceEventReconnectDelay = 250
 		if (sourceEventsHaveConnected && !sourceDirty) {
 			sourceEventQueue = sourceEventQueue
@@ -629,19 +767,82 @@ function connectSourceEvents(): void {
 		sourceEventsHaveConnected = true
 	})
 	events.on(`close`, () => {
+		if (sourceEventsDisposed) return
 		const delay = sourceEventReconnectDelay
 		sourceEventReconnectDelay = Math.min(sourceEventReconnectDelay * 2, 5_000)
-		setTimeout(connectSourceEvents, delay)
+		sourceEventReconnectTimer = setTimeout(connectSourceEvents, delay)
 	})
 }
 
-renderBootstrap()
-connectSourceEvents()
-void feaParserReady
-	.then(() => refreshSource(true))
-	.then(queueSourceEventDrain)
-	.catch((error: unknown) => {
-		showBootstrapError(
-			error instanceof Error ? error.message : `The font source did not load.`,
+async function switchWorkspaceProject(
+	projectId: string,
+	source: EditorFontSource,
+): Promise<boolean> {
+	if (
+		fontWorkspace === undefined ||
+		projectId === activeProjectId ||
+		!fontWorkspace.projects.some(({ id }) => id === projectId)
+	)
+		return false
+	if (
+		sourceDirty &&
+		!window.confirm(
+			`This font still has unsaved work. Save it before switching fonts?`,
 		)
-	})
+	)
+		return false
+	if (sourceDirty) {
+		projectSwitchPending = true
+		try {
+			await saveSource(source)
+			await saveQueue
+		} catch (error) {
+			projectSwitchPending = false
+			window.alert(
+				error instanceof Error
+					? `Could not switch fonts because saving failed: ${error.message}`
+					: `Could not switch fonts because saving failed.`,
+			)
+			return false
+		}
+	}
+	const url = new URL(window.location.href)
+	url.searchParams.set(`font`, projectId)
+	window.location.assign(url)
+	return true
+}
+
+window.addEventListener(`beforeunload`, (event) => {
+	if (!sourceDirty) return
+	event.preventDefault()
+	event.returnValue = ``
+})
+
+window.addEventListener(`pagehide`, (event) => {
+	if (event.persisted) return
+	sourceEventsDisposed = true
+	if (sourceEventReconnectTimer !== undefined)
+		clearTimeout(sourceEventReconnectTimer)
+	activeSourceEvents?.close?.()
+	sourceSyncWorker.dispose()
+	mountedEditor?.unmount()
+})
+
+renderBootstrap()
+if (requestedProjectUnavailable) {
+	showBootstrapError(
+		`Font ${JSON.stringify(requestedProjectId)} is not available. Try again to open ${fontWorkspace?.activeProjectId ?? `the active font`}.`,
+	)
+} else {
+	connectSourceEvents()
+	void feaParserReady
+		.then(() => refreshSource(true))
+		.then(queueSourceEventDrain)
+		.catch((error: unknown) => {
+			showBootstrapError(
+				error instanceof Error
+					? error.message
+					: `The font source did not load.`,
+			)
+		})
+}
