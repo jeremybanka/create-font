@@ -402,6 +402,215 @@ describe("design object vector adapter", () => {
 		expect(deleted).toMatchObject({ ok: true, selection: [] })
 	})
 
+	it("splits a closed contour into open surviving runs when nodes are deleted", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:split",
+						closed: true,
+						points: [
+							{
+								id: "point:a",
+								x: 0,
+								y: 0,
+								incoming: { x: -5, y: 0 },
+								outgoing: { x: 5, y: 0 },
+							},
+							{ id: "point:b", x: 20, y: 0 },
+							{
+								id: "point:c",
+								x: 40,
+								y: 0,
+								incoming: { x: -5, y: 0 },
+								outgoing: { x: 5, y: 0 },
+							},
+							{
+								id: "point:d",
+								x: 40,
+								y: 20,
+								incoming: { x: 0, y: -5 },
+								outgoing: { x: 0, y: 5 },
+							},
+							{ id: "point:e", x: 20, y: 20 },
+							{
+								id: "point:f",
+								x: 0,
+								y: 20,
+								incoming: { x: 5, y: 0 },
+								outgoing: { x: -5, y: 0 },
+							},
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "delete",
+			objectIds: [],
+			controls: [
+				{
+					kind: "node",
+					objectId: object.id,
+					contourId: "contour:split",
+					pointId: "point:b",
+				},
+				{
+					kind: "node",
+					objectId: object.id,
+					contourId: "contour:split",
+					pointId: "point:e",
+				},
+			],
+			deletePolicy: "break-paths",
+		})
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const edited = result.document.objects.find(({ id }) => id === object.id)
+		if (edited?.geometry.kind !== "path")
+			throw new Error("Expected the edited path to remain.")
+		expect(edited.geometry.contours).toHaveLength(2)
+		expect(
+			edited.geometry.contours.map((contour) => ({
+				closed: contour.closed,
+				points: contour.points.map(({ id }) => id),
+			})),
+		).toEqual([
+			{ closed: false, points: ["point:c", "point:d"] },
+			{ closed: false, points: ["point:f", "point:a"] },
+		])
+		expect(edited.geometry.contours[0]?.points[0]?.incoming).toBeUndefined()
+		expect(edited.geometry.contours[0]?.points.at(-1)?.outgoing).toBeUndefined()
+		expect(edited.geometry.contours[1]?.points[0]?.incoming).toBeUndefined()
+		expect(edited.geometry.contours[1]?.points.at(-1)?.outgoing).toBeUndefined()
+		expect(
+			edited.geometry.contours.flatMap((contour) =>
+				contour.points.map(({ id }) => id),
+			),
+		).not.toContain("point:b")
+		expect(result.selection).toEqual([object.id])
+	})
+
+	it("splits an open contour at each directly deleted interior node", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:open-split",
+						closed: false,
+						points: [
+							{ id: "point:a", x: 0, y: 0 },
+							{ id: "point:b", x: 20, y: 0 },
+							{
+								id: "point:c",
+								x: 40,
+								y: 10,
+								incoming: { x: -5, y: 0 },
+								outgoing: { x: 5, y: 0 },
+							},
+							{ id: "point:d", x: 60, y: 20 },
+							{ id: "point:e", x: 80, y: 20 },
+						],
+					},
+				],
+			},
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "delete",
+			objectIds: [],
+			controls: [
+				{
+					kind: "node",
+					objectId: object.id,
+					contourId: "contour:open-split",
+					pointId: "point:c",
+				},
+			],
+			deletePolicy: "break-paths",
+		})
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const edited = result.document.objects.find(({ id }) => id === object.id)
+		if (edited?.geometry.kind !== "path")
+			throw new Error("Expected the edited open path to remain.")
+		expect(
+			edited.geometry.contours.map((contour) => ({
+				closed: contour.closed,
+				points: contour.points.map(({ id }) => id),
+			})),
+		).toEqual([
+			{ closed: false, points: ["point:a", "point:b"] },
+			{ closed: false, points: ["point:d", "point:e"] },
+		])
+		expect(edited.geometry.contours[1]?.id).toContain(
+			"contour:open-split:split:point:d",
+		)
+	})
+
+	it("removes an object and its hierarchy entry when all direct nodes are deleted", () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object = {
+			...source,
+			geometry: {
+				kind: "path" as const,
+				contours: projectDesignObjectContours(source),
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const document = {
+			...initial,
+			objects: initial.objects.map((candidate) =>
+				candidate.id === object.id ? object : candidate,
+			),
+		}
+		const vector = projectDesignVectorObject(document, object)
+		const result = designVectorAdapter.apply(document, [object.id], {
+			kind: "delete",
+			objectIds: [],
+			controls: vector.contours.flatMap((contour) =>
+				contour.nodes.map((node) => ({
+					kind: "node" as const,
+					objectId: object.id,
+					contourId: contour.id,
+					pointId: node.id,
+				})),
+			),
+			deletePolicy: "break-paths",
+		})
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(result.document.objects.some(({ id }) => id === object.id)).toBe(
+			false,
+		)
+		expect(
+			result.document.layers.some((layer) =>
+				layer.children.some((child) => child.id === object.id),
+			),
+		).toBe(false)
+		expect(result.selection).toEqual([])
+	})
+
 	it("rejects invalid and locked edits without changing the document", () => {
 		const document = createInitialDocument()
 		const object = document.objects[0]

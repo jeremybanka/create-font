@@ -199,12 +199,17 @@ import {
 	setDesignLayerVisibility,
 	toggleOtherDesignLayers,
 } from "./design-layer-operations.ts"
-import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
+import {
+	createDesignPenObject,
+	DESIGN_PEN_DRAG_THRESHOLD_PIXELS,
+	type DesignPenPoint,
+} from "./design-pen.ts"
 import { placeDesignImage } from "./placed-images.ts"
 import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
+	directSelectionVectorControls,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
 	isDirectSelectionNodeSelected,
@@ -2608,6 +2613,52 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setGuidePlot(null)
 		setTransformCursor(null)
 	}, [gesturePolicy])
+	const finishPen = useCallback(
+		(closed = false): DesignObject | null => {
+			if (activeLayerUnavailableReason !== null) {
+				cancelCanvasGesture()
+				setStatus(activeLayerUnavailableReason)
+				return null
+			}
+			const points = penPointsRef.current
+			const object = createDesignPenObject({
+				id: `object:${nextId()}`,
+				name: `Pen path ${document.objects.length + 1}`,
+				appearance: authoredAppearance,
+				points,
+				closed,
+			})
+			if (object === null) {
+				cancelCanvasGesture()
+				return null
+			}
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+					activeHierarchyScope,
+				),
+			)
+			setSelection([object.id])
+			penPointsRef.current = []
+			setPenPoints([])
+			setGesturePreview(null)
+			gestureRef.current = null
+			setStatus(
+				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
+			)
+			return object
+		},
+		[
+			activeHierarchyScope,
+			activeLayerUnavailableReason,
+			cancelCanvasGesture,
+			commit,
+			authoredAppearance,
+			document,
+			nextId,
+		],
+	)
 	useEffect(() => {
 		const activeScopeUnavailable =
 			(activeLayer.hidden || activeLayer.locked) &&
@@ -2687,13 +2738,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus(textToolsDisabledReason)
 				return
 			}
-			cancelCanvasGesture()
+			const finishedPen =
+				tool === "pen" && nextTool !== "pen" && penPointsRef.current.length >= 2
+					? finishPen(false)
+					: null
+			if (finishedPen === null) cancelCanvasGesture()
 			if (editingTextId !== null) {
 				setEditingTextId(null)
 				setTextSelectionRange(null)
 			}
 			if (nextTool !== "direct") setDirectSelection([])
-			if (nextTool === "select" || nextTool === "transform")
+			if (
+				finishedPen === null &&
+				(nextTool === "select" || nextTool === "transform")
+			)
 				setSelection((current) =>
 					normalizeDesignSelection(
 						document,
@@ -2703,7 +2761,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					),
 				)
 			setTool(nextTool)
-			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
+			setStatus(
+				finishedPen === null
+					? `${DESIGN_TOOLS[nextTool].label} tool`
+					: `Created open ${finishedPen.name.toLowerCase()}; ${DESIGN_TOOLS[nextTool].label} tool.`,
+			)
 		},
 		[
 			cancelCanvasGesture,
@@ -2711,7 +2773,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			document,
 			editingTextId,
 			effectiveEditableObjectIds,
+			finishPen,
 			textToolsDisabledReason,
+			tool,
 		],
 	)
 	useEffect(() => {
@@ -2767,6 +2831,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setStatus("Deleted live blend; endpoint objects were retained.")
 			return
 		}
+		if (tool === "direct" && directSelection.length > 0) {
+			const controls = directSelectionVectorControls(document, directSelection)
+			if (
+				controls.length > 0 &&
+				commitVectorIntent({
+					kind: "delete",
+					objectIds: [],
+					controls,
+					deletePolicy: "break-paths",
+				})
+			) {
+				setDirectSelection([])
+				setStatus(
+					`Deleted ${controls.length} selected path control${controls.length === 1 ? "" : "s"}.`,
+				)
+			}
+			return
+		}
 		if (selection.length === 0) return
 		if (selectedUnavailableEntry !== undefined) {
 			setStatus(
@@ -2787,10 +2869,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [
 		commit,
 		commitVectorIntent,
+		directSelection,
 		document,
 		selectedBlend,
 		selectedUnavailableEntry,
 		selection,
+		tool,
 	])
 
 	const duplicateSelection = useCallback((): void => {
@@ -3723,52 +3807,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedBlendId,
 		selection,
 	])
-
-	const finishPen = useCallback(
-		(closed = false): void => {
-			if (activeLayerUnavailableReason !== null) {
-				cancelCanvasGesture()
-				setStatus(activeLayerUnavailableReason)
-				return
-			}
-			const points = penPointsRef.current
-			const object = createDesignPenObject({
-				id: `object:${nextId()}`,
-				name: `Pen path ${document.objects.length + 1}`,
-				appearance: authoredAppearance,
-				points,
-				closed,
-			})
-			if (object === null) {
-				cancelCanvasGesture()
-				return
-			}
-			commit(
-				appendDesignHierarchyObjects(
-					{ ...document, objects: [...document.objects, object] },
-					[object.id],
-					activeHierarchyScope,
-				),
-			)
-			setSelection([object.id])
-			penPointsRef.current = []
-			setPenPoints([])
-			setGesturePreview(null)
-			gestureRef.current = null
-			setStatus(
-				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
-			)
-		},
-		[
-			activeHierarchyScope,
-			activeLayerUnavailableReason,
-			cancelCanvasGesture,
-			commit,
-			authoredAppearance,
-			document,
-			nextId,
-		],
-	)
 
 	const exportDocument = useCallback(
 		(
@@ -6830,6 +6868,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
+	const finishOpenPenOnDoubleClick = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	): void => {
+		if (tool !== "pen" || penPointsRef.current.length < 2) return
+		event.cancelBubble = true
+		const points = penPointsRef.current
+		const previous = points.at(-2)
+		const last = points.at(-1)
+		if (
+			previous === undefined ||
+			last === undefined ||
+			Math.hypot(last.x - previous.x, last.y - previous.y) * worldScale >
+				DESIGN_PEN_DRAG_THRESHOLD_PIXELS
+		)
+			return
+		const deduplicated = points.slice(0, -1)
+		penPointsRef.current = deduplicated
+		setPenPoints(deduplicated)
+		finishPen(false)
+	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
 		if (event.evt.button === 1) {
@@ -8115,6 +8173,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							onPointerLeave={pointerLeave}
 							onPointerCancel={pointerCancel}
 							onLostPointerCapture={pointerCancel}
+							onDblClick={finishOpenPenOnDoubleClick}
+							onDblTap={finishOpenPenOnDoubleClick}
 							onWheel={(event: KonvaEventObject<WheelEvent>) => {
 								event.evt.preventDefault()
 								const pointer =

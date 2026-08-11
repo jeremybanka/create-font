@@ -7743,4 +7743,215 @@ describe("create-design shared vector scene", () => {
 			false,
 		])
 	})
+
+	it("finishes open Pen drafts on double-click and tool switch", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const select = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Select"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (pen === null || select === null || canvas === null)
+			throw new Error("Pen completion controls were not found.")
+		act(() => pen.click())
+		const fire = (
+			type: "pointerdown" | "pointerup",
+			x: number,
+			y: number,
+			pointerId: number,
+			detail = 1,
+		): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					detail,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const click = (
+			x: number,
+			y: number,
+			pointerId: number,
+			detail = 1,
+		): void => {
+			fire("pointerdown", x, y, pointerId, detail)
+			fire("pointerup", x, y, pointerId, detail)
+		}
+		await act(async () => {
+			click(340, 300, 91)
+			click(430, 350, 92)
+			stage.fire(
+				"dblclick",
+				{
+					evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}").objects,
+		).toHaveLength(2)
+		await act(async () => {
+			click(520, 300, 93)
+			click(520, 300, 94)
+			stage.fire(
+				"dblclick",
+				{
+					evt: new MouseEvent("dblclick", { bubbles: true, detail: 2 }),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		let contour = saved.objects.at(-1)?.geometry
+		expect(contour?.kind).toBe("path")
+		if (contour?.kind !== "path") return
+		expect(contour.contours[0]).toMatchObject({ closed: false })
+		expect(contour.contours[0]?.points).toHaveLength(3)
+
+		await act(async () => {
+			click(380, 430, 95)
+			click(500, 470, 96)
+			select.click()
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		contour = saved.objects.at(-1)?.geometry
+		expect(contour?.kind).toBe("path")
+		if (contour?.kind !== "path") return
+		expect(contour.contours[0]).toMatchObject({ closed: false })
+		expect(contour.contours[0]?.points).toHaveLength(2)
+		expect(saved.objects).toHaveLength(4)
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Created open pen path 4; Select tool.")
+	})
+
+	it("deletes a directly selected node without deleting its path object", async () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]!
+		const object: DesignObject = {
+			...source,
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:delete-node",
+						closed: false,
+						points: [
+							{ id: "point:a", x: 100, y: 100 },
+							{ id: "point:b", x: 150, y: 80 },
+							{ id: "point:c", x: 200, y: 120 },
+							{ id: "point:d", x: 250, y: 80 },
+							{ id: "point:e", x: 300, y: 100 },
+						],
+					},
+				],
+			},
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign(
+			{
+				initialDocument: {
+					...initial,
+					objects: [object],
+					layers: initial.layers.map((layer) => ({
+						...layer,
+						children: [{ kind: "object", id: object.id }],
+					})),
+				},
+			},
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct node deletion controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.find(".vector-node")[2]
+		if (node === undefined)
+			throw new Error("Middle path node was not rendered.")
+		const pointerDown = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 97,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			stage.setPointersPositions(pointerDown)
+			node.fire("pointerdown", { evt: pointerDown }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 97,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toBe("1 node")
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete" }))
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		const edited = saved.objects.find(({ id }) => id === object.id)
+		expect(edited).toBeDefined()
+		if (edited?.geometry.kind !== "path") return
+		expect(
+			edited.geometry.contours.map((contour) =>
+				contour.points.map(({ id }) => id),
+			),
+		).toEqual([
+			["point:a", "point:b"],
+			["point:d", "point:e"],
+		])
+		expect(document.querySelector("[data-footer-status]")?.textContent).toBe(
+			"Deleted 1 selected path control.",
+		)
+	})
 })
