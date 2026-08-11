@@ -1,4 +1,13 @@
-import { cubicBounds } from "@create-art/vector-geometry"
+import {
+	cubicBounds,
+	flattenCubic,
+	intersectPolylines,
+	normalizeContour,
+	resolveFilledContours,
+	signedArea,
+	windingNumber,
+	type Contour,
+} from "@create-art/vector-geometry"
 import type { EditorGlyphSource, MasterId } from "@create-font/states"
 
 import {
@@ -10,6 +19,7 @@ import {
 import type { GlyphPreview } from "./glyph-preview.ts"
 
 const FAVICON_FRAME_WIDTH_RATIO = 0.85
+const FAVICON_OUTLINE_FLATNESS = 0.25
 
 type OutlineBounds = Readonly<{
 	xMin: number
@@ -55,6 +65,70 @@ function exactClosedOutlineBounds(
 	return { xMin, yMin, xMax, yMax }
 }
 
+function flattenClosedOutline(contour: readonly EditorOutlineNode[]): Contour {
+	const points = contour.flatMap((_, segmentIndex) => {
+		const cubic = editorSegmentCubic(contour, segmentIndex, true)
+		if (cubic === null) return []
+		const flattened = flattenCubic(cubic, {
+			flatness: FAVICON_OUTLINE_FLATNESS,
+		})
+		return segmentIndex === 0 ? flattened : flattened.slice(1)
+	})
+	return normalizeContour({ closed: true, points }, { orientation: "preserve" })
+}
+
+/**
+ * Assigns winding from geometric containment before resolving the favicon fill.
+ * Intersecting contours are independent positive shapes, while a wholly nested
+ * contour alternates between counter and island. This gives nonzero union the
+ * intended glyph semantics without trusting source contour direction.
+ */
+function resolveFaviconContours(
+	contours: readonly (readonly EditorOutlineNode[])[],
+): readonly Contour[] {
+	const flattened = contours.map(flattenClosedOutline)
+	const parentIndexes = flattened.map((contour, contourIndex) => {
+		const probe = contour.points[0]
+		if (probe === undefined) return null
+		return (
+			flattened
+				.map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+				.filter(
+					({ candidate, candidateIndex }) =>
+						candidateIndex !== contourIndex &&
+						intersectPolylines(contour.points, candidate.points, {
+							firstClosed: true,
+							secondClosed: true,
+						}).length === 0 &&
+						windingNumber(probe, candidate.points).classification === "inside",
+				)
+				.sort(
+					(left, right) =>
+						Math.abs(signedArea(left.candidate.points)) -
+						Math.abs(signedArea(right.candidate.points)),
+				)[0]?.candidateIndex ?? null
+		)
+	})
+	const depths = new Map<number, number>()
+	const depth = (index: number): number => {
+		const known = depths.get(index)
+		if (known !== undefined) return known
+		const parentIndex = parentIndexes[index]
+		const value =
+			parentIndex === null || parentIndex === undefined
+				? 0
+				: depth(parentIndex) + 1
+		depths.set(index, value)
+		return value
+	}
+	const wound = flattened.map((contour, index) =>
+		normalizeContour(contour, {
+			orientation: depth(index) % 2 === 0 ? "counter-clockwise" : "clockwise",
+		}),
+	)
+	return resolveFilledContours(wound, { fillRule: "nonzero" })
+}
+
 /** Creates the deliberately close-cropped lowercase-a favicon preview. */
 export function createFaviconGlyphPreview(
 	glyph: EditorGlyphSource,
@@ -82,8 +156,12 @@ export function createFaviconGlyphPreview(
 		if (!Number.isFinite(side) || side <= 0) return null
 		const centerX = (bounds.xMin + bounds.xMax) / 2
 		const centerY = (bounds.yMin + bounds.yMax) / 2
+		const resolvedContours = resolveFaviconContours(closedContours)
 		const path = editorContourPaintPaths(
-			closedContours.map((nodes) => ({ closed: true, nodes })),
+			resolvedContours.map((contour) => ({
+				closed: true,
+				nodes: contour.points,
+			})),
 		).closedPath
 		if (path.trim().length === 0) return null
 		return {
