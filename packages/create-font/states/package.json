@@ -41,8 +41,8 @@
 		"atom.io": "0.51.1"
 	},
 	"devDependencies": {
-		"@typescript-eslint/parser": "8.66.0",
-		"@typescript-eslint/utils": "8.66.0",
+		"@typescript-eslint/parser": "8.67.0",
+		"@typescript-eslint/utils": "8.67.0",
 		"eslint": "10.8.1",
 		"jiti": "2.7.0",
 		"vitest": "catalog:"
