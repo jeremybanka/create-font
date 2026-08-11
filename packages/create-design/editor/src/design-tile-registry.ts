@@ -66,6 +66,7 @@ export type DesignCornerProfileControls = Readonly<{
 	count: number
 	profile: "sharp" | "circular" | "squircle"
 	amount: number
+	amountWarning: string | null
 }>
 
 export interface DesignTileContext {

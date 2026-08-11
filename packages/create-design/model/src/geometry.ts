@@ -167,30 +167,7 @@ function lowerDesignCornerProfiles(
 	return contours.map((contour) => {
 		if (!contour.points.some(({ corner }) => corner !== undefined))
 			return contour
-		const lowered = lowerCornerProfiles({
-			closed: contour.closed,
-			points: contour.points.map((point) => ({
-				id: point.id,
-				point: { x: point.x, y: point.y },
-				...(point.incoming === undefined
-					? {}
-					: {
-							incoming: {
-								x: point.x + point.incoming.x,
-								y: point.y + point.incoming.y,
-							},
-						}),
-				...(point.outgoing === undefined
-					? {}
-					: {
-							outgoing: {
-								x: point.x + point.outgoing.x,
-								y: point.y + point.outgoing.y,
-							},
-						}),
-				...(point.corner === undefined ? {} : { corner: point.corner }),
-			})),
-		})
+		const lowered = lowerDesignCornerContour(contour)
 		return {
 			id: contour.id,
 			closed: contour.closed,
@@ -216,6 +193,33 @@ function lowerDesignCornerProfiles(
 						}),
 			})),
 		}
+	})
+}
+
+function lowerDesignCornerContour(contour: DesignContour) {
+	return lowerCornerProfiles({
+		closed: contour.closed,
+		points: contour.points.map((point) => ({
+			id: point.id,
+			point: { x: point.x, y: point.y },
+			...(point.incoming === undefined
+				? {}
+				: {
+						incoming: {
+							x: point.x + point.incoming.x,
+							y: point.y + point.incoming.y,
+						},
+					}),
+			...(point.outgoing === undefined
+				? {}
+				: {
+						outgoing: {
+							x: point.x + point.outgoing.x,
+							y: point.y + point.outgoing.y,
+						},
+					}),
+			...(point.corner === undefined ? {} : { corner: point.corner }),
+		})),
 	})
 }
 
@@ -290,6 +294,50 @@ export function projectDesignObjectContours(
 				transformDesignPoint(object.transform, point),
 			),
 		})),
+	)
+}
+
+export type DesignCornerProfileResolution = Readonly<{
+	contourId: string
+	pointId: string
+	requestedAmount: number
+	appliedAmount: number
+	clamped: boolean
+}>
+
+/** Reports document-space live-corner clamping without changing authored intent. */
+export function projectDesignObjectCornerResolutions(
+	object: Pick<DesignObject, "id" | "geometry" | "transform">,
+): readonly DesignCornerProfileResolution[] {
+	return authoredGeometryContours(object.geometry, object.id).flatMap(
+		(contour) => {
+			if (!contour.points.some(({ corner }) => corner !== undefined)) return []
+			const projected = {
+				...contour,
+				points: contour.points.map((point) =>
+					transformDesignPoint(object.transform, point),
+				),
+			}
+			const authoredCornerIds = new Set(
+				projected.points.flatMap(({ id, corner }) =>
+					corner === undefined ? [] : [id],
+				),
+			)
+			return lowerDesignCornerContour(projected).corners.flatMap(
+				(resolution) =>
+					authoredCornerIds.has(resolution.pointId)
+						? [
+								{
+									contourId: contour.id,
+									pointId: resolution.pointId,
+									requestedAmount: resolution.requestedAmount,
+									appliedAmount: resolution.appliedAmount,
+									clamped: resolution.clamped,
+								},
+							]
+						: [],
+			)
+		},
 	)
 }
 

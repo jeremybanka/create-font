@@ -2628,6 +2628,12 @@ function DesignObjectTile({
 							step={1}
 							value={cornerControls.amount}
 							disabled={cornerControls.profile === "sharp"}
+							{...(cornerControls.amountWarning === null
+								? {}
+								: {
+										"aria-describedby": "corner-amount-clamp-warning",
+										"data-corner-amount-clamped": true,
+									})}
 							onChange={(event) =>
 								context.setCornerProfiles(
 									cornerControls.profile,
@@ -2636,6 +2642,15 @@ function DesignObjectTile({
 							}
 						/>
 					</label>
+					{cornerControls.amountWarning === null ? null : (
+						<small
+							id="corner-amount-clamp-warning"
+							role="status"
+							data-corner-amount-warning
+						>
+							{cornerControls.amountWarning}
+						</small>
+					)}
 				</fieldset>
 			)}
 			<button

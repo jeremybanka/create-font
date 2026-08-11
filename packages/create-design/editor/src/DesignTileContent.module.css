@@ -1273,6 +1273,10 @@ design-tile-content.class {
 				font-size: 7px;
 				line-height: 1.35;
 				color: var(--ink-faint);
+
+				&[data-corner-amount-warning] {
+					color: color-mix(in srgb, var(--warning) 62%, var(--ink-faint));
+				}
 			}
 
 			> label {
@@ -1292,6 +1296,14 @@ design-tile-content.class {
 					background: var(--paper);
 					font-size: 8px;
 					color: var(--ink);
+
+					&[data-corner-amount-clamped] {
+						border-color: color-mix(
+							in srgb,
+							var(--warning) 48%,
+							var(--line)
+						);
+					}
 				}
 			}
 		}

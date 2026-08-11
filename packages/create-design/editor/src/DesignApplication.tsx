@@ -217,6 +217,7 @@ import {
 	IDENTITY_DESIGN_TRANSFORM,
 	designObjectFillRule,
 	objectBounds,
+	projectDesignObjectCornerResolutions,
 	projectDesignObjectContours,
 	projectDesignEffectiveHierarchy,
 	projectDesignOutput,
@@ -1738,6 +1739,37 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		tool === "direct" && directCornerControls.length > 0
 			? directCornerControls
 			: objectCornerControls
+	const cornerResolutionByTarget = new Map<
+		string,
+		ReturnType<typeof projectDesignObjectCornerResolutions>[number]
+	>()
+	const resolvedCornerObjectIds = new Set<string>()
+	for (const { object } of selectedCornerControls) {
+		if (resolvedCornerObjectIds.has(object.id)) continue
+		resolvedCornerObjectIds.add(object.id)
+		for (const resolution of projectDesignObjectCornerResolutions(object))
+			cornerResolutionByTarget.set(
+				`${object.id}/${resolution.contourId}/${resolution.pointId}`,
+				resolution,
+			)
+	}
+	const clampedCornerControls = selectedCornerControls.flatMap(
+		({ object, contour, point }) => {
+			const resolution = cornerResolutionByTarget.get(
+				`${object.id}/${contour.id}/${point.id}`,
+			)
+			return resolution?.clamped ? [resolution] : []
+		},
+	)
+	const minimumAppliedCornerAmount = Math.min(
+		...clampedCornerControls.map(({ appliedAmount }) => appliedAmount),
+	)
+	const cornerAmountWarning =
+		clampedCornerControls.length === 0
+			? null
+			: clampedCornerControls.length === 1
+				? `Limited by this contour: renders at ${Number(minimumAppliedCornerAmount.toFixed(2))} units. Intended size is retained.`
+				: `Limited by this contour: ${clampedCornerControls.length} corners render as small as ${Number(minimumAppliedCornerAmount.toFixed(2))} units. Intended sizes are retained.`
 	const selectedUnavailableEntry = selection
 		.map((id) => effectiveHierarchy.byObjectId.get(id))
 		.find(
@@ -4530,6 +4562,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						profile:
 							selectedCornerControls[0]!.point.corner?.profile ?? "sharp",
 						amount: selectedCornerControls[0]!.point.corner?.amount ?? 0,
+						amountWarning: cornerAmountWarning,
 					},
 		setCornerProfiles: setSelectedCornerProfiles,
 		selectedSwatch,

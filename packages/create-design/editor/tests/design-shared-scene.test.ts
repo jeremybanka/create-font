@@ -5866,6 +5866,47 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
+	it("quietly warns when a contour clamps its intended corner amount", () => {
+		const initial = createInitialDocument()
+		let identity = 0
+		const expanded = expandDesignShape(initial.objects[0]!, () =>
+			(identity += 1).toString(),
+		)
+		if (expanded.geometry.kind !== "path") throw new Error("Expected a path.")
+		const profiled: DesignObject = {
+			...expanded,
+			transform: { a: 2, b: 0, c: 0, d: 0.2, e: 0, f: 0 },
+			geometry: {
+				...expanded.geometry,
+				contours: expanded.geometry.contours.map((contour) => ({
+					...contour,
+					points: contour.points.map((point) => ({
+						...point,
+						corner: { profile: "circular" as const, amount: 30 },
+					})),
+				})),
+			},
+		}
+		mountDesign({ initialDocument: { ...initial, objects: [profiled] } })
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		if (layer === null) throw new Error("Profiled path layer was not found.")
+		act(() => layer.click())
+		const amount = document.querySelector<HTMLInputElement>(
+			'input[aria-label="Corner amount in document geometry units"]',
+		)
+		const warning = document.querySelector<HTMLElement>(
+			"[data-corner-amount-warning]",
+		)
+		expect(amount?.dataset.cornerAmountClamped).toBe("true")
+		expect(amount?.getAttribute("aria-describedby")).toBe(
+			"corner-amount-clamp-warning",
+		)
+		expect(warning?.textContent).toContain("4 corners render as small as")
+		expect(warning?.textContent).toContain("Intended sizes are retained")
+	})
+
 	it("expands a live rectangle from Object and reveals Select-mode corner handles", async () => {
 		const initial = createInitialDocument()
 		const original = initial.objects[0]!
