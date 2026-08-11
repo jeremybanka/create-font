@@ -7744,6 +7744,88 @@ describe("create-design shared vector scene", () => {
 		])
 	})
 
+	it("commits a same-frame Pen handle drag when capture loss precedes pointer-up", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const artboard = document.querySelector<HTMLElement>(
+			'artboard-wrap[aria-label="Design artboard"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (pen === null || artboard === null || canvas === null)
+			throw new Error("Pen capture-loss controls were not found.")
+		act(() => pen.click())
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			x: number,
+			y: number,
+			pointerId: number,
+		): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const click = (x: number, y: number, pointerId: number): void => {
+			fire("pointerdown", x, y, pointerId)
+			fire("pointerup", x, y, pointerId)
+		}
+		await act(async () => {
+			click(340, 300, 101)
+			click(430, 350, 102)
+			fire("pointerdown", 520, 300, 103)
+			fire("pointermove", 560, 340, 103)
+			artboard.dispatchEvent(
+				new PointerEvent("lostpointercapture", {
+					bubbles: true,
+					button: 0,
+					buttons: 0,
+					clientX: 560,
+					clientY: 340,
+					isPrimary: true,
+					pointerId: 103,
+					pointerType: "mouse",
+				}),
+			)
+			fire("pointerup", 560, 340, 103)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }))
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		const geometry = saved.objects.at(-1)?.geometry
+		expect(geometry?.kind).toBe("path")
+		if (geometry?.kind !== "path") return
+		expect(geometry.contours[0]).toMatchObject({ closed: false })
+		expect(geometry.contours[0]?.points).toHaveLength(3)
+		expect(geometry.contours[0]?.points[2]).toMatchObject({
+			incoming: expect.any(Object),
+			outgoing: expect.any(Object),
+		})
+	})
+
 	it("finishes open Pen drafts on double-click and tool switch", async () => {
 		const storage = new Map<string, string>()
 		const stage = mountDesign({}, storage)
@@ -7852,6 +7934,24 @@ describe("create-design shared vector scene", () => {
 		expect(
 			document.querySelector("[data-footer-status]")?.textContent,
 		).toContain("Created open pen path 4; Select tool.")
+
+		act(() => pen.click())
+		await act(async () => {
+			click(350, 500, 97)
+			click(450, 500, 98)
+			click(450, 600, 99)
+			click(350, 500, 100)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		contour = saved.objects.at(-1)?.geometry
+		expect(contour?.kind).toBe("path")
+		if (contour?.kind !== "path") return
+		expect(contour.contours[0]).toMatchObject({ closed: true })
+		expect(contour.contours[0]?.points).toHaveLength(3)
+		expect(saved.objects).toHaveLength(5)
 	})
 
 	it("deletes a directly selected node without deleting its path object", async () => {

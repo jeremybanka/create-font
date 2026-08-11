@@ -7743,14 +7743,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	useEffect(() => {
 		const element = artboardWrapRef.current
 		if (element === null) return
-		const listener = (event: PointerEvent): void => {
+		const cancelListener = (event: PointerEvent): void => {
 			cancelPointer(event.pointerId, event.currentTarget)
 		}
-		element.addEventListener("pointercancel", listener, { capture: true })
-		element.addEventListener("lostpointercapture", listener, { capture: true })
+		const lostCaptureListener = (event: PointerEvent): void => {
+			const gesture = gestureRef.current
+			if (
+				event.buttons === 0 &&
+				gesture?.kind === "vector" &&
+				gesture.state.tool === "pen" &&
+				gesture.state.pointerId === event.pointerId
+			) {
+				// Some browsers retire capture before their native pointer-up reaches
+				// Konva on a same-frame Pen drag. Capture loss still carries the
+				// authoritative release coordinates, so finish synchronously before a
+				// cancellation path can clear the already-authored draft points.
+				finishPointerRef.current(event, event.currentTarget)
+				return
+			}
+			cancelListener(event)
+		}
+		element.addEventListener("pointercancel", cancelListener, { capture: true })
+		element.addEventListener("lostpointercapture", lostCaptureListener, {
+			capture: true,
+		})
 		return () => {
-			element.removeEventListener("pointercancel", listener, { capture: true })
-			element.removeEventListener("lostpointercapture", listener, {
+			element.removeEventListener("pointercancel", cancelListener, {
+				capture: true,
+			})
+			element.removeEventListener("lostpointercapture", lostCaptureListener, {
 				capture: true,
 			})
 		}
