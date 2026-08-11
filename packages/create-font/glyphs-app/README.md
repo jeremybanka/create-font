@@ -52,3 +52,8 @@ memoized and rejects nesting beyond 64 references, or any master layer beyond
 
 Parsing never depends on filesystem state. All stages are bounded and return
 structured diagnostics instead of partially publishing a project.
+
+## Trademark
+
+This is an independent interoperability package and is not affiliated with or
+endorsed by Glyphs GmbH. Glyphs is a trademark of Glyphs GmbH.
