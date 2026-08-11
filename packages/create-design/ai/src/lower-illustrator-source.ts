@@ -1,4 +1,7 @@
-import { validateDesignDocument } from "@create-design/source"
+import {
+	CREATE_DESIGN_DOCUMENT_VERSION,
+	validateDesignDocument,
+} from "@create-design/source"
 import type {
 	ColorDefinition,
 	DesignDocument,
@@ -350,7 +353,7 @@ export function lowerIllustratorSource(
 	}))
 	const document: DesignDocument = {
 		format: "create-design.document",
-		version: 6,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
 		title:
 			options.title ?? source.metadata.title ?? "Imported Illustrator document",
 		artboards: source.artboards.map((artboard, index) => ({
