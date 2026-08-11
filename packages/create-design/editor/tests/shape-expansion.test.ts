@@ -76,6 +76,77 @@ describe("live shape expansion", () => {
 		},
 	)
 
+	it("expands live corners into ordinary editable cubic path controls", () => {
+		const document = createInitialDocument()
+		const rectangle = document.objects[0]
+		if (rectangle === undefined) throw new Error("Missing rectangle fixture.")
+		let sourceSequence = 0
+		const path = expandDesignShape(
+			rectangle,
+			() => `source:${sourceSequence++}`,
+		)
+		if (path.geometry.kind !== "path") throw new Error("Expected a path.")
+		const live = {
+			...path,
+			geometry: {
+				...path.geometry,
+				fillRule: "nonzero" as const,
+				contours: path.geometry.contours.map((contour, contourIndex) => ({
+					...contour,
+					points: contour.points.map((point, pointIndex) =>
+						contourIndex === 0 && pointIndex === 0
+							? {
+									...point,
+									corner: { profile: "circular" as const, amount: 40 },
+								}
+							: point,
+					),
+				})),
+			},
+		}
+		expect(
+			shapeExpansionEligibility({ ...document, objects: [live] }, [live.id]),
+		).toMatchObject({ eligible: true })
+
+		let expandedSequence = 0
+		const expanded = expandDesignShape(
+			live,
+			() => `expanded:${expandedSequence++}`,
+		)
+		expect(objectSvgPath(expanded)).toBe(objectSvgPath(live))
+		expect(expanded.geometry.kind).toBe("path")
+		if (expanded.geometry.kind !== "path") return
+		expect(expanded.geometry.fillRule).toBe("nonzero")
+		expect(expanded.geometry.contours[0]?.points.length).toBeGreaterThan(
+			live.geometry.contours[0]?.points.length ?? 0,
+		)
+		expect(
+			expanded.geometry.contours
+				.flatMap(({ points }) => points)
+				.every(
+					(point) =>
+						point.corner === undefined &&
+						point.id.startsWith("point:expanded:"),
+				),
+		).toBe(true)
+		expect(
+			expanded.geometry.contours
+				.flatMap(({ points }) => points)
+				.some(
+					({ incoming, outgoing }) =>
+						incoming !== undefined || outgoing !== undefined,
+				),
+		).toBe(true)
+		expect(
+			shapeExpansionEligibility({ ...document, objects: [expanded] }, [
+				expanded.id,
+			]),
+		).toMatchObject({
+			eligible: false,
+			reason: expect.stringContaining("already ordinary path"),
+		})
+	})
+
 	it("reports selection, lock, and already-expanded eligibility precisely", () => {
 		const document = createInitialDocument()
 		expect(shapeExpansionEligibility(document, [])).toMatchObject({

@@ -1251,6 +1251,51 @@ design-tile-content.class {
 			}
 		}
 
+		> fieldset[data-corner-profile-controls] {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			gap: 6px;
+			margin: 0;
+			padding: 7px;
+			border: 1px solid var(--line);
+			border-radius: 5px;
+			background: color-mix(in srgb, var(--panel) 74%, var(--paper));
+
+			> legend {
+				padding-inline: 3px;
+				font-size: 8px;
+				font-weight: 650;
+				color: var(--ink-muted);
+			}
+
+			> small {
+				grid-column: 1 / -1;
+				font-size: 7px;
+				line-height: 1.35;
+				color: var(--ink-faint);
+			}
+
+			> label {
+				display: grid;
+				gap: 3px;
+				min-width: 0;
+				font-size: 7px;
+				color: var(--ink-faint);
+
+				> select,
+				> input {
+					width: 100%;
+					min-width: 0;
+					height: 26px;
+					border: 1px solid var(--line);
+					border-radius: 4px;
+					background: var(--paper);
+					font-size: 8px;
+					color: var(--ink);
+				}
+			}
+		}
+
 		> button[data-expand-shape],
 		> button[data-expand-stroke] {
 			padding: 7px;

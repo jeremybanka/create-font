@@ -9,16 +9,25 @@ export type ShapeExpansionEligibility =
 	| Readonly<{ eligible: true; object: DesignObject }>
 	| Readonly<{ eligible: false; reason: string }>
 
+const hasLiveCorners = (object: DesignObject): boolean =>
+	object.geometry.kind === "path" &&
+	object.geometry.contours.some((contour) =>
+		contour.points.some(({ corner }) => corner !== undefined),
+	)
+
 export function shapeExpansionEligibility(
 	document: DesignDocument,
 	selection: readonly string[],
 ): ShapeExpansionEligibility {
 	if (selection.length === 0)
-		return { eligible: false, reason: "Select a live rectangle or ellipse." }
+		return {
+			eligible: false,
+			reason: "Select a live shape or a path with live corners.",
+		}
 	if (selection.length > 1)
 		return {
 			eligible: false,
-			reason: "Select exactly one live rectangle or ellipse.",
+			reason: "Select exactly one live shape or live-corner path.",
 		}
 	const object = document.objects.find(
 		(candidate) => candidate.id === selection[0],
@@ -30,18 +39,20 @@ export function shapeExpansionEligibility(
 			eligible: false,
 			reason: "Unlock the selected shape before expanding it.",
 		}
-	if (object.geometry.kind === "path")
+	if (object.geometry.kind === "path" && !hasLiveCorners(object))
 		return {
 			eligible: false,
 			reason: "The selected object is already ordinary path geometry.",
 		}
 	if (
+		object.geometry.kind !== "path" &&
 		object.geometry.kind !== "rectangle" &&
 		object.geometry.kind !== "ellipse"
 	)
 		return {
 			eligible: false,
-			reason: "Only live rectangles and ellipses can expand as shapes.",
+			reason:
+				"Only live shapes and paths with live corners can expand as shapes.",
 		}
 	return { eligible: true, object }
 }
@@ -55,14 +66,19 @@ export function expandDesignShape(
 	nextId: () => string,
 ): DesignObject {
 	if (
-		object.geometry.kind !== "rectangle" &&
-		object.geometry.kind !== "ellipse"
+		(object.geometry.kind === "path" && !hasLiveCorners(object)) ||
+		(object.geometry.kind !== "path" &&
+			object.geometry.kind !== "rectangle" &&
+			object.geometry.kind !== "ellipse")
 	)
 		return object
+	const fillRule =
+		object.geometry.kind === "path" ? object.geometry.fillRule : undefined
 	return {
 		...object,
 		geometry: {
 			kind: "path",
+			...(fillRule === undefined ? {} : { fillRule }),
 			contours: geometryContours(object.geometry).map((contour) => ({
 				...contour,
 				id: `contour:${nextId()}`,

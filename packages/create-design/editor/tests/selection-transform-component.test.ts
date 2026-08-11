@@ -32,6 +32,8 @@ function mountTile(
 		alignSelection,
 		deleteSelection: vi.fn(),
 		directSelectionSummary: "No nodes selected",
+		cornerProfileControls: null,
+		setCornerProfiles: vi.fn(),
 		distributeSelection,
 		expandSelection: vi.fn(),
 		expansionDisabledReason: "Select one live shape to expand it.",

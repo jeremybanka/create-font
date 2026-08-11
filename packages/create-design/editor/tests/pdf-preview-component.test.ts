@@ -79,6 +79,8 @@ describe("PDF preview tile", () => {
 			deleteSelection: vi.fn(),
 			distributeSelection: vi.fn(),
 			directSelectionSummary: "No direct controls selected.",
+			cornerProfileControls: null,
+			setCornerProfiles: vi.fn(),
 			document,
 			expandSelection: vi.fn(),
 			expansionDisabledReason: "Select a live rectangle or ellipse.",

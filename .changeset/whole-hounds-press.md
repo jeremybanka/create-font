@@ -2,5 +2,6 @@
 "@create-design/editor": patch
 ---
 
-Make live corner handles increase curvature only when dragged inward and reset
-to sharp when dragged outward through the authored perimeter.
+Move live-corner controls into the Object panel, expose corner handles in Select
+mode, make handle dragging directional, and let Expand Shape materialize live
+corners as ordinary editable cubic geometry.
