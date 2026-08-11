@@ -113,7 +113,7 @@ export async function verifyRuntimeServer(
 		assert.equal(health.status, 200)
 		assert.deepEqual(await health.json(), {
 			ok: true,
-			rpcVersion: 6,
+			rpcVersion: 7,
 		})
 		progress(`served health`)
 

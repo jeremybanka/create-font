@@ -9,15 +9,17 @@ import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
 import type { EditorVersionControl } from "./version-control.ts"
 import type { EditorFeatureSubstitution } from "./browser-api.ts"
+import type { EditorWorkspaceProject } from "./browser-api.ts"
 import { createSourcePersistenceScheduler } from "./source-persistence.ts"
 
 export type EditorApplicationRootProps = Readonly<{
 	featureSubstitutions?: readonly EditorFeatureSubstitution[]
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
-	onSourceDirty?: () => void
+	onSourceDirty?: (source: EditorFontSource) => void
 	source: EditorFontSource
 	validation?: Readonly<{ ok: boolean; issueCount: number }>
 	versionControl?: EditorVersionControl
+	workspaceProject?: EditorWorkspaceProject
 }>
 
 export function EditorApplicationRoot({
@@ -27,6 +29,7 @@ export function EditorApplicationRoot({
 	source,
 	validation,
 	versionControl,
+	workspaceProject,
 }: EditorApplicationRootProps) {
 	const [workspace] = useState(() =>
 		createEditorWorkspace(source, validation, featureSubstitutions),
@@ -96,7 +99,8 @@ export function EditorApplicationRoot({
 			workspace.font.atoms.documentRevision,
 			() => {
 				if (applyingSource.current) return
-				onSourceDirty?.()
+				const dirtySource = workspace.font.read.editorSource()
+				if (dirtySource !== null) onSourceDirty?.(dirtySource)
 				// Projecting the complete source is synchronous and can take longer than
 				// one frame. Wait for an actual editing pause so a Pen gesture does not
 				// pay that cost after every point.
@@ -115,6 +119,7 @@ export function EditorApplicationRoot({
 				<AppShell
 					workspace={workspace}
 					{...(versionControl === undefined ? {} : { versionControl })}
+					{...(workspaceProject === undefined ? {} : { workspaceProject })}
 				/>
 			</StoreProvider>
 		</editor-application-root>

@@ -19,7 +19,7 @@ import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { startCreateFontServer } from "./server.ts"
 import { createFileSystemSourceService } from "./source-service.ts"
 import { isMainModule } from "./runtime.ts"
-import { selectFontProject } from "./workspace.ts"
+import { discoverFontProjects, selectFontProject } from "./workspace.ts"
 import { buildFeaVsix, installFeaVsix } from "./vsix.ts"
 
 const helpSchema = { help: z.boolean().optional() }
@@ -220,12 +220,37 @@ export async function runFontCli(
 		}
 
 		const { hostname, port } = inputs.opts
-		const source = await createFileSystemSourceService(project.root)
+		const workspaceRoot = inputs.opts.root ?? process.cwd()
+		const discovered = await discoverFontProjects(workspaceRoot)
+		const mounted = (
+			await Promise.all(
+				discovered.map(async (candidate) => {
+					try {
+						return {
+							id: candidate.name,
+							name: candidate.name,
+							path: candidate.path,
+							root: candidate.root,
+							source: await createFileSystemSourceService(candidate.root),
+						}
+					} catch (error) {
+						if (candidate.root === project.root) throw error
+						return null
+					}
+				}),
+			)
+		).filter((candidate) => candidate !== null)
+		const active = mounted.find(({ root }) => root === project.root)
+		if (active === undefined)
+			throw new Error(`The selected font could not be mounted.`)
 		const server = startCreateFontServer({
 			...(hostname === undefined ? {} : { hostname }),
+			activeProjectId: active.id,
 			port: port ?? CREATE_FONT_CLI_DEV_PORT,
-			root: project.root,
-			source,
+			projects: mounted,
+			root: active.root,
+			source: active.source,
+			workspaceRoot,
 		})
 		installServerShutdown({ stop: () => server.app.stop(true) })
 		writeLine(io.stdout, `font is serving ${project.path} at ${server.url}`)

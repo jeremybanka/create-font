@@ -7,6 +7,17 @@ export type FontProject = Readonly<{
 	root: string
 }>
 
+export function isSafeFontProjectId(value: string): boolean {
+	return (
+		value.length > 0 &&
+		value !== `.` &&
+		value !== `..` &&
+		!value.includes(`/`) &&
+		!value.includes(`\\`) &&
+		!value.includes(`\0`)
+	)
+}
+
 export async function discoverFontProjects(
 	workspaceRootInput: string = process.cwd(),
 ): Promise<readonly FontProject[]> {
@@ -17,7 +28,12 @@ export async function discoverFontProjects(
 	)
 	const projects: FontProject[] = []
 	for (const entry of entries) {
-		if (!entry.isDirectory() || entry.isSymbolicLink()) continue
+		if (
+			!entry.isDirectory() ||
+			entry.isSymbolicLink() ||
+			!isSafeFontProjectId(entry.name)
+		)
+			continue
 		const root = join(fontsRoot, entry.name)
 		const manifest = await stat(join(root, `create-font.json`)).catch(
 			() => undefined,

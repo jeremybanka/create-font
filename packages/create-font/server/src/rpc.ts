@@ -21,13 +21,22 @@ import type {
 	WriteSourceUnitsInput,
 } from "./contracts.ts"
 
-export const CREATE_FONT_RPC_VERSION = 6 as const
+export const CREATE_FONT_RPC_VERSION = 7 as const
 
 export type CreateFontRpcOptions = Readonly<{
 	adapter?: ElysiaAdapter
 	build: () => Promise<BuildResult>
+	name?: string
 	root?: string
 	source?: CreateFontSourceService
+	workspace?: FontWorkspaceInventory
+}>
+
+export type FontWorkspaceInventory = Readonly<{
+	id: string
+	name: string
+	activeProjectId: string
+	projects: readonly Readonly<{ id: string; name: string; path: string }>[]
 }>
 
 const sourceServiceUnavailable: SourceServiceUnavailable = {
@@ -77,7 +86,7 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 					readComparison: options.source.readComparison.bind(options.source),
 				}
 	return new Elysia({
-		name: `create-font-rpc`,
+		name: options.name ?? `create-font-rpc`,
 		prefix: `/api`,
 		...(options.adapter === undefined ? {} : { adapter: options.adapter }),
 	})
@@ -85,14 +94,13 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			ok: true as const,
 			rpcVersion: CREATE_FONT_RPC_VERSION,
 		}))
-		.get(`/workspace`, () => ({
-			root,
-		}))
+		.get(`/workspace`, () => ({ root, ...options.workspace }))
 		.post(`/build`, options.build)
 		.use(
-			createSourceVersionControlRpc(
-				versionControl === undefined ? {} : { service: versionControl },
-			),
+			createSourceVersionControlRpc({
+				name: `${options.name ?? `create-font-rpc`}:version-control`,
+				...(versionControl === undefined ? {} : { service: versionControl }),
+			}),
 		)
 		.ws(`/source/events`, {
 			open(ws) {

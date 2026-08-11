@@ -51,6 +51,7 @@ import {
 import { tileRegistryCommands } from "@create-art/editor"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
+import type { EditorWorkspaceProject } from "./browser-api.ts"
 
 const svg = {
 	MagnifyingGlass: MagnifyingGlassIcon,
@@ -59,6 +60,7 @@ const svg = {
 export interface AppShellProps {
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
+	readonly workspaceProject?: EditorWorkspaceProject
 }
 
 interface EditorHistoryBoundaryProps {
@@ -132,7 +134,11 @@ function readInitialHotbarSlots(): HotbarSlots {
 	}
 }
 
-export function AppShell({ workspace, versionControl }: AppShellProps) {
+export function AppShell({
+	workspace,
+	versionControl,
+	workspaceProject,
+}: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
@@ -343,7 +349,35 @@ export function AppShell({ workspace, versionControl }: AppShellProps) {
 						<i />
 					</brand-mark>
 					<project-name>
-						<strong>create-font</strong>
+						{(workspaceProject?.projects.length ?? 0) < 2 ? (
+							<strong>create-font</strong>
+						) : (
+							<label>
+								<select
+									aria-label="Active workspace font"
+									value={workspaceProject?.id}
+									onChange={(event) => {
+										const select = event.currentTarget
+										const source = workspace.font.read.editorSource()
+										if (source !== null && workspaceProject !== undefined)
+											void Promise.resolve(
+												workspaceProject.onChange(
+													event.currentTarget.value,
+													source,
+												),
+											).then((switched) => {
+												if (!switched) select.value = workspaceProject.id
+											})
+									}}
+								>
+									{workspaceProject?.projects.map((project) => (
+										<option key={project.id} value={project.id}>
+											{project.name}
+										</option>
+									))}
+								</select>
+							</label>
+						)}
 						<span>{familyName}</span>
 					</project-name>
 				</brand-lockup>

@@ -21,6 +21,73 @@ afterEach(() => {
 })
 
 describe("atom.io React integration", () => {
+	it("exposes a keyboard-native workspace font selector", () => {
+		const workspace = createEditorWorkspace()
+		workspace.actions.navigate("/glyphs")
+		const changes: string[] = []
+		const host = document.createElement("div")
+		document.body.append(host)
+		hosts.push(host)
+		act(() =>
+			render(
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
+					children: h(AppShell, {
+						workspace,
+						workspaceProject: {
+							id: "alpha",
+							onChange: (id: string) => {
+								changes.push(id)
+								return true
+							},
+							projects: [
+								{ id: "alpha", name: "Alpha", path: "fonts/alpha" },
+								{ id: "beta", name: "Beta", path: "fonts/beta" },
+							],
+						},
+					}),
+				}),
+				host,
+			),
+		)
+		const select = host.querySelector<HTMLSelectElement>(
+			'select[aria-label="Active workspace font"]',
+		)
+		expect(select?.value).toBe("alpha")
+		expect([...select!.options].map(({ text }) => text)).toEqual([
+			"Alpha",
+			"Beta",
+		])
+		act(() => {
+			select!.value = "beta"
+			select!.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(changes).toEqual(["beta"])
+
+		act(() =>
+			render(
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
+					children: h(AppShell, {
+						workspace,
+						workspaceProject: {
+							id: "alpha",
+							onChange: () => false,
+							projects: [{ id: "alpha", name: "Alpha", path: "fonts/alpha" }],
+						},
+					}),
+				}),
+				host,
+			),
+		)
+		expect(
+			host.querySelector('select[aria-label="Active workspace font"]'),
+		).toBeNull()
+		expect(host.querySelector("project-name > strong")?.textContent).toBe(
+			"create-font",
+		)
+	})
+
 	it("owns independently established interaction facts in granular atoms", () => {
 		const workspace = createEditorWorkspace()
 		const factTokens = [
