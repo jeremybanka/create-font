@@ -19,6 +19,9 @@ await build({
 		},
 		minify: true,
 		outDir: outdir,
+		// HarfBuzz's universal wrapper dynamically imports this only in Node.
+		// Keep it external in this browser-only build so Vite does not shim it.
+		rolldownOptions: { external: ["module"] },
 		sourcemap: true,
 		target: "es2024",
 	},
