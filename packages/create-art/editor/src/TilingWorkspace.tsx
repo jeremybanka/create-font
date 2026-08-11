@@ -273,6 +273,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 	} | null>(null)
 	const layout = history.present
 	const layoutRef = useRef(layout)
+	const reportedLayout = useRef(serializeTilingLayout(layout))
 	layoutRef.current = layout
 	useEffect(() => {
 		if (
@@ -284,8 +285,16 @@ export function TilingWorkspace<Kind extends string, Context>({
 		}
 	}, [suppliedLayout])
 	useEffect(() => {
+		if (
+			suppliedLayout !== undefined &&
+			serializeTilingLayout(suppliedLayout) !== serializeTilingLayout(layout)
+		)
+			return
+		const serialized = serializeTilingLayout(layout)
+		if (reportedLayout.current === serialized) return
+		reportedLayout.current = serialized
 		onLayoutChange?.(layout as TilingLayout<Kind>)
-	}, [layout, onLayoutChange])
+	}, [layout, onLayoutChange, suppliedLayout])
 	const dirty = serializeTilingLayout(layout) !== saved
 	const allocation = columnSlotAllocation(viewportWidth)
 	const visibleColumns = visibleColumnIds(

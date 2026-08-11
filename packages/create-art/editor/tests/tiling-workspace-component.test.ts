@@ -77,6 +77,7 @@ describe("TilingWorkspace registry integration", () => {
 				onLayoutChange,
 			})
 		act(() => render(renderWorkspace(defaultLayout), element))
+		onLayoutChange.mockClear()
 		const replacement = {
 			...defaultLayout,
 			columns: defaultLayout.columns.map((column) =>
@@ -87,6 +88,7 @@ describe("TilingWorkspace registry integration", () => {
 		expect(
 			element.querySelector('button[aria-label="Expand column 1"]'),
 		).not.toBeNull()
+		expect(onLayoutChange).toHaveBeenCalledTimes(1)
 		expect(onLayoutChange).toHaveBeenLastCalledWith(replacement)
 	})
 

@@ -29,13 +29,15 @@ import {
 } from "./schema.ts"
 
 export class UiLayoutConflictError extends Error {
-	constructor(
-		readonly expected: string | null,
-		readonly actual: string | null,
-	) {
+	readonly expected: string | null
+	readonly actual: string | null
+
+	constructor(expected: string | null, actual: string | null) {
 		super(
 			"The UI layout file changed since it was loaded. Reload before saving.",
 		)
+		this.expected = expected
+		this.actual = actual
 	}
 }
 

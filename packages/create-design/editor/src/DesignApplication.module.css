@@ -240,8 +240,10 @@ design-application.class {
 
 		> header-actions {
 			display: flex;
+			align-items: center;
 			justify-content: flex-end;
 			gap: 6px;
+			min-width: 0;
 
 			> dimmer-control {
 				display: grid;
@@ -750,6 +752,18 @@ design-application.class {
 
 	design-application.class > main > canvas-rulers {
 		forced-color-adjust: none;
+	}
+}
+
+@media (width <= 1400px) {
+	design-application.class > header > header-actions > dimmer-control {
+		grid-template-columns: minmax(72px, 100px);
+
+		> label,
+		> span,
+		> output {
+			display: none;
+		}
 	}
 }
 
