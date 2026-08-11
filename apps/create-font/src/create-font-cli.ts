@@ -13,7 +13,7 @@ import {
 } from "comline"
 import { z } from "zod/v4"
 
-import { importGlyphsSource } from "@create-font/glyphs"
+import { importGlyphsSource } from "@create-font/glyphs-app"
 
 import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { createFontWorkspace, isPackageManager } from "./create.ts"

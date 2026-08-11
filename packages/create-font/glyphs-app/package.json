@@ -1,12 +1,12 @@
 {
-	"name": "@create-font/glyphs",
+	"name": "@create-font/glyphs-app",
 	"version": "0.0.0",
 	"description": "Glyphs.app source parsing and create-font import",
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
-		"directory": "packages/create-font/glyphs"
+		"directory": "packages/create-font/glyphs-app"
 	},
 	"publishConfig": {
 		"access": "public"

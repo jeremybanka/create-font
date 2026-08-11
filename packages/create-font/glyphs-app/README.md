@@ -1,4 +1,4 @@
-# `@create-font/glyphs`
+# `@create-font/glyphs-app`
 
 Headless Glyphs.app source support for create-font. The package parses editable
 Glyphs 2 and 3 text files into a source-format AST, then explicitly lowers that
@@ -6,8 +6,8 @@ AST into a validated native create-font project.
 
 ```ts
 import { readFile } from "node:fs/promises"
-import { importGlyphsSource } from "@create-font/glyphs"
-import { parseGlyphsSource } from "@create-font/glyphs/parser"
+import { importGlyphsSource } from "@create-font/glyphs-app"
+import { parseGlyphsSource } from "@create-font/glyphs-app/parser"
 
 const text = await readFile("MyFont.glyphs", "utf8")
 const parsed = parseGlyphsSource(text)
@@ -24,8 +24,8 @@ else console.log(imported.value.source)
 - `parseGlyphsSource` parses the bounded OpenStep property-list dialect used by
   Glyphs, validates its declared format version, and retains the complete
   dictionary—including unknown and version-specific properties—alongside the
-  original source text. The `@create-font/glyphs/parser` subpath is independent
-  of create-font lowering at runtime.
+  original source text. The `@create-font/glyphs-app/parser` subpath is
+  independent of create-font lowering at runtime.
 - `lowerGlyphsSource` translates a parsed Glyphs document into create-font's
   editor model. Component expansion, axes, instances, cmap, metrics, kerning,
   feature validation, fidelity warnings, and native-source validation belong to
