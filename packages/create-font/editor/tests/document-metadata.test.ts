@@ -1,6 +1,8 @@
+import type { EditorFontSource } from "@create-font/states"
 import { describe, expect, it } from "vitest"
 
 import {
+	createFontFaviconPreview,
 	createFontFaviconHref,
 	editorDocumentTitle,
 	FALLBACK_FAVICON_HREF,
@@ -10,7 +12,12 @@ import {
 	normalizeCanvasTitle,
 	serializeFaviconSvg,
 } from "../src/document-metadata.ts"
-import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
+import {
+	blackMasterId,
+	makeDemoFont,
+	oGlyphId,
+	razorMasterId,
+} from "../src/demo-font.ts"
 import { readInferredColorPreference } from "../src/inferred-color-preference.ts"
 
 describe(`editor document title`, () => {
@@ -33,6 +40,141 @@ describe(`editor document title`, () => {
 })
 
 describe(`font favicon`, () => {
+	function sourceWithLowercaseO(): EditorFontSource {
+		const source = makeDemoFont()
+		return {
+			...source,
+			cmap: [
+				...source.cmap.filter((entry) => entry.codePoint !== 0x61),
+				{ codePoint: 0x61, glyphId: oGlyphId },
+			],
+		}
+	}
+
+	function withDefaultContour(
+		coordinates: readonly Readonly<{
+			x: number
+			y: number
+			incoming?: Readonly<{ x: number; y: number }>
+			outgoing?: Readonly<{ x: number; y: number }>
+		}>[],
+	): EditorFontSource {
+		const source = sourceWithLowercaseO()
+		return {
+			...source,
+			glyphs: source.glyphs.map((glyph) =>
+				glyph.id !== oGlyphId
+					? glyph
+					: {
+							...glyph,
+							layers: glyph.layers.map((layer) => {
+								if (layer.masterId !== razorMasterId) return layer
+								const template = layer.contours[0]
+								if (template === undefined)
+									throw new Error("Missing contour fixture.")
+								return {
+									...layer,
+									contours: [
+										{
+											...template,
+											points: coordinates.map((coordinate, index) => {
+												const point =
+													template.points[index] ?? template.points[0]
+												if (point === undefined)
+													throw new Error("Missing point fixture.")
+												const {
+													incoming: _incoming,
+													outgoing: _outgoing,
+													corner: _corner,
+													...base
+												} = point
+												return { ...base, ...coordinate }
+											}),
+										},
+									],
+								}
+							}),
+						},
+			),
+		}
+	}
+
+	function previewViewBox(source: EditorFontSource) {
+		const preview = createFontFaviconPreview(source)
+		if (preview === null) throw new Error("Expected a favicon preview.")
+		return preview.viewBox.split(" ").map(Number)
+	}
+
+	it(`uses a centered 85%-width square independent of metrics and advance width`, () => {
+		const source = withDefaultContour([
+			{ x: 100, y: 40 },
+			{ x: 300, y: 40 },
+			{ x: 300, y: 1_040 },
+			{ x: 100, y: 1_040 },
+		])
+		const modified = {
+			...source,
+			metadata: { ...source.metadata, unitsPerEm: 16_384 },
+			metrics: { ...source.metrics, ascender: 20_000, descender: -10_000 },
+			glyphs: source.glyphs.map((glyph) =>
+				glyph.id === oGlyphId
+					? {
+							...glyph,
+							layers: glyph.layers.map((layer) => ({
+								...layer,
+								advanceWidth: 50_000,
+								leftSideBearing: 12_000,
+							})),
+						}
+					: glyph,
+			),
+		}
+
+		expect(previewViewBox(source)).toEqual([115, -625, 170, 170])
+		expect(previewViewBox(modified)).toEqual([115, -625, 170, 170])
+	})
+
+	it(`converts an asymmetric font-space center through SVG y inversion`, () => {
+		const source = withDefaultContour([
+			{ x: -40, y: -260 },
+			{ x: 360, y: -260 },
+			{ x: 360, y: 140 },
+			{ x: -40, y: 140 },
+		])
+
+		expect(previewViewBox(source)).toEqual([-10, -110, 340, 340])
+	})
+
+	it(`uses cubic interior extrema instead of control-handle extents`, () => {
+		const source = withDefaultContour([
+			{ x: 0, y: 0, outgoing: { x: 100, y: 0 } },
+			{ x: 0, y: 100, incoming: { x: 100, y: 0 } },
+		])
+		const [left, top, width, height] = previewViewBox(source)
+
+		expect(left).toBeCloseTo(5.625)
+		expect(top).toBeCloseTo(-81.875)
+		expect(width).toBeCloseTo(63.75)
+		expect(height).toBeCloseTo(63.75)
+	})
+
+	it(`falls back for empty, non-finite, and zero-width drawable outlines`, () => {
+		const empty = withDefaultContour([])
+		const nonFinite = withDefaultContour([
+			{ x: Number.NaN, y: 0 },
+			{ x: 100, y: 100 },
+		])
+		const zeroWidth = withDefaultContour([
+			{ x: 20, y: 0 },
+			{ x: 20, y: 100 },
+		])
+
+		for (const source of [empty, nonFinite, zeroWidth]) {
+			expect(createFontFaviconPreview(source)).toBeNull()
+			expect(createFontFaviconHref(source)).toBe(FALLBACK_FAVICON_HREF)
+		}
+	})
+
 	it(`resolves lowercase a through cmap and updates with outline changes`, () => {
 		const source = makeDemoFont()
 		const mapped = {
@@ -67,6 +209,52 @@ describe(`font favicon`, () => {
 			),
 		}
 		expect(createFontFaviconHref(moved)).not.toBe(href)
+	})
+
+	it(`updates path and frame for cmap and default-master changes`, () => {
+		const source = sourceWithLowercaseO()
+		const oPreview = createFontFaviconPreview(source)
+		const remapped = {
+			...source,
+			cmap: source.cmap.map((entry) =>
+				entry.codePoint === 0x61
+					? { ...entry, glyphId: source.glyphs[1]?.id ?? entry.glyphId }
+					: entry,
+			),
+		}
+		const blackGlyphs = source.glyphs.map((glyph) =>
+			glyph.id !== oGlyphId
+				? glyph
+				: {
+						...glyph,
+						layers: glyph.layers.map((layer) =>
+							layer.masterId !== blackMasterId
+								? layer
+								: {
+										...layer,
+										contours: layer.contours.map((contour, contourIndex) => ({
+											...contour,
+											points: contour.points.map((point, pointIndex) =>
+												contourIndex === 0 && pointIndex === 1
+													? { ...point, x: point.x + 80 }
+													: point,
+											),
+										})),
+									},
+						),
+					},
+		)
+		const defaultMasterChanged = createFontFaviconPreview({
+			...source,
+			glyphs: blackGlyphs,
+			defaultMasterId: blackMasterId,
+		})
+		const remappedPreview = createFontFaviconPreview(remapped)
+
+		expect(remappedPreview?.path).not.toBe(oPreview?.path)
+		expect(remappedPreview?.viewBox).not.toBe(oPreview?.viewBox)
+		expect(defaultMasterChanged?.path).not.toBe(oPreview?.path)
+		expect(defaultMasterChanged?.viewBox).not.toBe(oPreview?.viewBox)
 	})
 
 	it(`falls back safely and escapes serialized SVG attributes`, () => {

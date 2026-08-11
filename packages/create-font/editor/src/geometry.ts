@@ -301,12 +301,12 @@ export function contourEndpointNormal(
 	}
 }
 
-/** Writes an editor contour using node-owned cubic handles. */
-export function editorContourToPath(
+/** Resolves live-corner profiles into the exact nodes used for rendering. */
+export function renderEditorContour(
 	contour: readonly EditorOutlineNode[],
 	closed = true,
-): string {
-	const renderContour = contour.some(({ corner }) => corner !== undefined)
+): readonly EditorOutlineNode[] {
+	return contour.some(({ corner }) => corner !== undefined)
 		? lowerCornerProfiles({
 				closed,
 				points: contour.map((node, index) => ({
@@ -351,6 +351,14 @@ export function editorContourToPath(
 						}),
 			}))
 		: contour
+}
+
+/** Writes an editor contour using node-owned cubic handles. */
+export function editorContourToPath(
+	contour: readonly EditorOutlineNode[],
+	closed = true,
+): string {
+	const renderContour = renderEditorContour(contour, closed)
 	const start = renderContour[0]
 	if (start === undefined) return ""
 	const commands = [`M ${format(start.x)} ${format(start.y)}`]
