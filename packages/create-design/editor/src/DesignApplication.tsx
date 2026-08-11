@@ -180,7 +180,9 @@ import {
 } from "./design-hierarchy.ts"
 import { designStackShortcutCommand } from "./design-stack-shortcut.ts"
 import {
+	DEFAULT_DESIGN_ALTERNATE_HOTBAR_SLOTS,
 	DEFAULT_DESIGN_HOTBAR_SLOTS,
+	DESIGN_ALTERNATE_HOTBAR_STORAGE_KEY,
 	DESIGN_HOTBAR_STORAGE_KEY,
 } from "./design-action-hotbar.ts"
 import {
@@ -1249,6 +1251,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			DEFAULT_DESIGN_HOTBAR_SLOTS
 		)
 	})
+	const [alternateHotbarSlots, setAlternateHotbarSlots] = useState<HotbarSlots>(
+		() => {
+			const storage = browserLocalStorage()
+			return (
+				parseHotbarSlots(
+					storage?.getItem(DESIGN_ALTERNATE_HOTBAR_STORAGE_KEY) ?? null,
+				) ?? DEFAULT_DESIGN_ALTERNATE_HOTBAR_SLOTS
+			)
+		},
+	)
 	const [helpOpen, setHelpOpen] = useState(false)
 	const [transformCursor, setTransformCursor] = useState<CanvasCursor | null>(
 		null,
@@ -1278,6 +1290,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			// Hotbar persistence is best-effort in restricted browsing contexts.
 		}
 	}, [hotbarSlots])
+	useEffect(() => {
+		try {
+			browserLocalStorage()?.setItem(
+				DESIGN_ALTERNATE_HOTBAR_STORAGE_KEY,
+				JSON.stringify(alternateHotbarSlots),
+			)
+		} catch {
+			// Hotbar persistence is best-effort in restricted browsing contexts.
+		}
+	}, [alternateHotbarSlots])
 	useEffect(() => {
 		if (announcedStatusRef.current === status) return
 		announcedStatusRef.current = status
@@ -8997,6 +9019,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					onStatusChange={updateTilingStatus}
 				/>
 				<ActionHotbar
+					alternateSlots={alternateHotbarSlots}
 					commands={commands}
 					enabled={!paletteOpen && !tilingStatus.management}
 					paletteOpen={paletteOpen}
@@ -9012,6 +9035,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								).slots,
 						)
 					}}
+					onAlternateAssignCommand={(commandId, slotIndex) => {
+						setAlternateHotbarSlots(
+							(current) =>
+								assignPaletteCommandToHotbar(
+									current,
+									slotIndex,
+									commandId,
+									"drag",
+								).slots,
+						)
+					}}
+					onAlternateSlotsChange={setAlternateHotbarSlots}
 					onOpenCommands={openCommandPalette}
 					onSlotsChange={setHotbarSlots}
 				/>

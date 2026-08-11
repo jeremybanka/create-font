@@ -64,6 +64,81 @@ function host(): HTMLElement {
 }
 
 describe("TilingWorkspace registry integration", () => {
+	it("keeps keyboard-selected tile-pool options minimally in view", () => {
+		const longRegistrations = Array.from({ length: 6 }, (_, index) => ({
+			kind: `tile-${index}`,
+			name: `Tile ${index}`,
+			description: `Tile ${index} panel.`,
+			defaultPlacement: { column: 1 as const },
+			render: () => h("span", null, `Tile ${index}`),
+		}))
+		const longRegistry = createTileRegistry<string, Context>(longRegistrations)
+		const element = host()
+		act(() => {
+			render(
+				h(TilingWorkspace<string, Context>, {
+					context: { betaAvailable: true },
+					registry: longRegistry,
+					defaultLayout: createRegistryDefaultLayout(longRegistry),
+					storageKey: `${storageKey}:long`,
+				}),
+				element,
+			)
+		})
+		const manage = element.querySelector<HTMLButtonElement>(
+			'button[aria-label="Manage tiles"]',
+		)
+		if (manage === null)
+			throw new Error("Tile management control was not found.")
+		act(() => manage.click())
+		const input = element.querySelector<HTMLInputElement>(
+			'input[aria-label="Search tile types"]',
+		)
+		const results = element.querySelector<HTMLElement>("pool-items")
+		const second = document.getElementById("tile-pool-tile-1")
+		if (input === null || results === null || second === null)
+			throw new Error("Tile pool did not render its options.")
+		results.getBoundingClientRect = () => ({
+			bottom: 300,
+			height: 200,
+			left: 0,
+			right: 300,
+			top: 100,
+			width: 300,
+			x: 0,
+			y: 100,
+			toJSON: () => ({}),
+		})
+		second.getBoundingClientRect = () => ({
+			bottom: 350,
+			height: 70,
+			left: 0,
+			right: 300,
+			top: 280,
+			width: 300,
+			x: 0,
+			y: 280,
+			toJSON: () => ({}),
+		})
+		act(() => {
+			input.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					key: "ArrowDown",
+				}),
+			)
+		})
+		expect(input.getAttribute("aria-activedescendant")).toBe("tile-pool-tile-1")
+		expect(results.scrollTop).toBe(50)
+
+		results.scrollTop = 180
+		act(() => {
+			input.value = "Tile 0"
+			input.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		expect(results.scrollTop).toBe(0)
+	})
+
 	it("opens a missing registered tile and restores focus through a command request", async () => {
 		const element = host()
 		act(() => {

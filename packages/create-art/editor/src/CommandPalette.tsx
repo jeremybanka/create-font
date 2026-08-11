@@ -5,7 +5,7 @@ import {
 	MagnifyingGlassIcon,
 } from "@radix-ui/react-icons"
 import type * as React from "react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import {
 	filterPaletteCommands,
@@ -18,6 +18,7 @@ import {
 	hotbarSlotIndexForKeyboardEvent,
 } from "./command-assignment.ts"
 import css from "./CommandPalette.module.css"
+import { scrollActiveDescendantIntoView } from "./active-descendant-scroll.ts"
 import { EditorIcon } from "./EditorIcon.tsx"
 import { IS_MAC_LIKE, MOD_KEY_LABEL } from "./platform.ts"
 
@@ -48,6 +49,11 @@ export function CommandPalette({
 	const [assignmentCommand, setAssignmentCommand] =
 		useState<PaletteCommand | null>(null)
 	const inputRef = useRef<HTMLInputElement>(null)
+	const resultsRef = useRef<HTMLElement>(null)
+	const [scrollRequest, setScrollRequest] = useState<{
+		readonly id: string
+		readonly sequence: number
+	} | null>(null)
 	const filteredCommands = filterPaletteCommands(commands, query)
 	const activeCommand = filteredCommands.find(
 		(command) => command.id === activeId,
@@ -61,10 +67,25 @@ export function CommandPalette({
 		return () => cancelAnimationFrame(frame)
 	}, [])
 
+	useLayoutEffect(() => {
+		if (scrollRequest === null) return
+		scrollActiveDescendantIntoView(
+			resultsRef.current,
+			document.getElementById(`command-${scrollRequest.id}`),
+		)
+	}, [scrollRequest])
+
 	const updateQuery = (value: string): void => {
 		const matches = filterPaletteCommands(commands, value)
 		setQuery(value)
-		setActiveId(nextCommandId(matches, null, 1))
+		const nextId = nextCommandId(matches, null, 1)
+		setActiveId(nextId)
+		if (resultsRef.current !== null) resultsRef.current.scrollTop = 0
+		if (nextId !== null)
+			setScrollRequest((request) => ({
+				id: nextId,
+				sequence: (request?.sequence ?? 0) + 1,
+			}))
 	}
 	const execute = (command: PaletteCommand | undefined): void => {
 		if (command === undefined || command.disabled) return
@@ -90,13 +111,17 @@ export function CommandPalette({
 		}
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault()
-			setActiveId(
-				nextCommandId(
-					filteredCommands,
-					activeId,
-					event.key === "ArrowDown" ? 1 : -1,
-				),
+			const nextId = nextCommandId(
+				filteredCommands,
+				activeId,
+				event.key === "ArrowDown" ? 1 : -1,
 			)
+			setActiveId(nextId)
+			if (nextId !== null)
+				setScrollRequest((request) => ({
+					id: nextId,
+					sequence: (request?.sequence ?? 0) + 1,
+				}))
 			return
 		}
 		if (event.key === "Enter") {
@@ -154,6 +179,7 @@ export function CommandPalette({
 					</command-assignment>
 				)}
 				<command-results
+					ref={resultsRef}
 					id="command-palette-results"
 					role="listbox"
 					aria-hidden={assignmentCommand === null ? undefined : "true"}

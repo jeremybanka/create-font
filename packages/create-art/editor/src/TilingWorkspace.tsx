@@ -11,9 +11,17 @@ import {
 	QuestionMarkCircledIcon,
 } from "@radix-ui/react-icons"
 import type * as React from "react"
-import { useCallback, useEffect, useReducer, useRef, useState } from "react"
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useReducer,
+	useRef,
+	useState,
+} from "react"
 
 import css from "./TilingWorkspace.module.css"
+import { scrollActiveDescendantIntoView } from "./active-descendant-scroll.ts"
 import {
 	availableTileRegistrations,
 	type TileRegistration,
@@ -231,6 +239,10 @@ export function TilingWorkspace<Kind extends string, Context>({
 	const [poolFocused, setPoolFocused] = useState(false)
 	const [poolQuery, setPoolQuery] = useState("")
 	const [poolIndex, setPoolIndex] = useState(0)
+	const [poolScrollRequest, setPoolScrollRequest] = useState<{
+		readonly kind: string
+		readonly sequence: number
+	} | null>(null)
 	const [helpOpen, setHelpOpen] = useState(false)
 	const [viewportWidth, setViewportWidth] = useState(() =>
 		typeof window === "undefined" ? 1_200 : window.innerWidth,
@@ -244,6 +256,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 	>({})
 	const dragPayload = useRef<DragPayload | null>(null)
 	const poolInputRef = useRef<HTMLInputElement>(null)
+	const poolItemsRef = useRef<HTMLElement>(null)
 	const workspaceRef = useRef<HTMLElement>(null)
 	const columnRefs = useRef(new Map<TileColumnId, HTMLElement>())
 	const scrollRefs = useRef(new Map<TileColumnId, HTMLElement>())
@@ -268,6 +281,14 @@ export function TilingWorkspace<Kind extends string, Context>({
 		poolQuery,
 	)
 	const activeTileDefinition = filteredTileDefinitions[poolIndex]
+
+	useLayoutEffect(() => {
+		if (poolScrollRequest === null) return
+		scrollActiveDescendantIntoView(
+			poolItemsRef.current,
+			document.getElementById(`tile-pool-${poolScrollRequest.kind}`),
+		)
+	}, [poolScrollRequest])
 
 	const selectColumn = (columnId: TileColumnId): void => {
 		setSelectedColumn(columnId)
@@ -366,7 +387,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 			return
 		}
 		const root = workspaceRef.current
-		const hotbar = document.querySelector<HTMLElement>("action-hotbar")
+		const hotbar = document.querySelector<HTMLElement>("action-hotbar-group")
 		if (root === null || hotbar === null) return
 		const hotbarBounds = hotbar.getBoundingClientRect()
 		const workspaceBounds = root.getBoundingClientRect()
@@ -480,7 +501,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 				? null
 				: new ResizeObserver(measureColumnClearance)
 		const root = workspaceRef.current
-		const hotbar = document.querySelector<HTMLElement>("action-hotbar")
+		const hotbar = document.querySelector<HTMLElement>("action-hotbar-group")
 		if (root !== null) observer?.observe(root)
 		if (hotbar !== null) observer?.observe(hotbar)
 		for (const column of columnRefs.current.values()) observer?.observe(column)
@@ -1182,6 +1203,8 @@ export function TilingWorkspace<Kind extends string, Context>({
 								onInput={(event) => {
 									setPoolQuery(event.currentTarget.value)
 									setPoolIndex(0)
+									if (poolItemsRef.current !== null)
+										poolItemsRef.current.scrollTop = 0
 								}}
 								onKeyDown={(event) => {
 									if (event.key === "Escape") {
@@ -1203,11 +1226,16 @@ export function TilingWorkspace<Kind extends string, Context>({
 										event.preventDefault()
 										if (filteredTileDefinitions.length === 0) return
 										const direction = event.key === "ArrowDown" ? 1 : -1
-										setPoolIndex(
-											(index) =>
-												(index + direction + filteredTileDefinitions.length) %
-												filteredTileDefinitions.length,
-										)
+										const nextIndex =
+											(poolIndex + direction + filteredTileDefinitions.length) %
+											filteredTileDefinitions.length
+										setPoolIndex(nextIndex)
+										const nextKind = filteredTileDefinitions[nextIndex]?.kind
+										if (nextKind !== undefined)
+											setPoolScrollRequest((request) => ({
+												kind: nextKind,
+												sequence: (request?.sequence ?? 0) + 1,
+											}))
 										return
 									}
 									if (event.key === "Enter") {
@@ -1233,7 +1261,11 @@ export function TilingWorkspace<Kind extends string, Context>({
 							/>
 							<kbd>N</kbd>
 						</pool-search>
-						<pool-items id="tile-pool-results" role="listbox">
+						<pool-items
+							ref={poolItemsRef}
+							id="tile-pool-results"
+							role="listbox"
+						>
 							{filteredTileDefinitions.map((definition, index) => (
 								<button
 									key={definition.kind}

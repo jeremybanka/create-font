@@ -5,7 +5,12 @@ import { type TimelineMeta, useO, useTL } from "atom.io/react"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { DEFAULT_HOTBAR_SLOTS, HOTBAR_STORAGE_KEY } from "./action-hotbar.ts"
+import {
+	ALTERNATE_HOTBAR_STORAGE_KEY,
+	DEFAULT_ALTERNATE_HOTBAR_SLOTS,
+	DEFAULT_HOTBAR_SLOTS,
+	HOTBAR_STORAGE_KEY,
+} from "./action-hotbar.ts"
 import {
 	ActionHotbar,
 	assignPaletteCommandToHotbar,
@@ -134,6 +139,18 @@ function readInitialHotbarSlots(): HotbarSlots {
 	}
 }
 
+function readInitialAlternateHotbarSlots(): HotbarSlots {
+	if (typeof window === "undefined") return DEFAULT_ALTERNATE_HOTBAR_SLOTS
+	try {
+		return (
+			parseHotbarSlots(localStorage.getItem(ALTERNATE_HOTBAR_STORAGE_KEY)) ??
+			DEFAULT_ALTERNATE_HOTBAR_SLOTS
+		)
+	} catch {
+		return DEFAULT_ALTERNATE_HOTBAR_SLOTS
+	}
+}
+
 export function AppShell({
 	workspace,
 	versionControl,
@@ -142,6 +159,9 @@ export function AppShell({
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
+	const [alternateHotbarSlots, setAlternateHotbarSlots] = useState(
+		readInitialAlternateHotbarSlots,
+	)
 	const [diffView, setDiffView] = useState(false)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
@@ -218,6 +238,17 @@ export function AppShell({
 			// Hotbar persistence is best-effort in restricted browsing contexts.
 		}
 	}, [hotbarSlots])
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(
+				ALTERNATE_HOTBAR_STORAGE_KEY,
+				JSON.stringify(alternateHotbarSlots),
+			)
+		} catch {
+			// Hotbar persistence is best-effort in restricted browsing contexts.
+		}
+	}, [alternateHotbarSlots])
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
@@ -442,6 +473,7 @@ export function AppShell({
 							workspace={workspace}
 							render={(history) => (
 								<HistoryActionHotbar
+									alternateSlots={alternateHotbarSlots}
 									commands={commandsForHistory(history)}
 									enabled={!tilingStatus.management && !commandPaletteOpen}
 									hotkeysEnabled={
@@ -461,6 +493,18 @@ export function AppShell({
 												).slots,
 										)
 									}}
+									onAlternateAssignCommand={(commandId, slotIndex) => {
+										setAlternateHotbarSlots(
+											(current) =>
+												assignPaletteCommandToHotbar(
+													current,
+													slotIndex,
+													commandId,
+													"drag",
+												).slots,
+										)
+									}}
+									onAlternateSlotsChange={setAlternateHotbarSlots}
 									onOpenCommands={openCommandPalette}
 									onSlotsChange={setHotbarSlots}
 								/>

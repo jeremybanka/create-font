@@ -43,6 +43,15 @@ describe("command assignment", () => {
 		expect(
 			hotbarSlotIndexForKeyboardEvent(keyEvent("Digit1", { shiftKey: true })),
 		).toBeNull()
+		expect(
+			hotbarSlotIndexForKeyboardEvent(
+				keyEvent("Digit1", { altKey: true }),
+				"alternate",
+			),
+		).toBe(0)
+		expect(
+			hotbarSlotIndexForKeyboardEvent(keyEvent("Digit1"), "alternate"),
+		).toBeNull()
 	})
 
 	it("assigns, clears, and swaps slots without changing their count", () => {

@@ -1305,7 +1305,9 @@ describe("create-design shared vector scene", () => {
 		).toBe("design-selection-status")
 		expect(document.querySelectorAll('footer [role="status"]')).toHaveLength(1)
 		expect(
-			document.querySelectorAll("action-hotbar > hotbar-slot"),
+			document.querySelectorAll(
+				'action-hotbar[data-hotbar-kind="primary"] > hotbar-slot',
+			),
 		).toHaveLength(12)
 		const firstLayer = document.querySelector<HTMLButtonElement>(
 			'design-layers-tile [data-layer-kind="object"]',
