@@ -1,18 +1,21 @@
 {
-	"name": "@create-font/font-service",
-	"version": "0.0.1",
-	"description": "Runtime-portable deterministic OpenType shaping, metrics, and outline service",
+	"name": "@create-design/ai",
+	"version": "0.0.0",
+	"description": "Adobe Illustrator interchange for create-design documents",
 	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
-		"directory": "packages/create-font/font-service"
+		"directory": "packages/create-design/ai"
 	},
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"LICENSE"
+	],
 	"type": "module",
 	"sideEffects": false,
-	"publishConfig": {
-		"access": "public"
-	},
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -21,24 +24,19 @@
 		},
 		"./package.json": "./package.json"
 	},
-	"files": [
-		"dist/*.d.mts",
-		"dist/*.d.mts.map",
-		"dist/*.mjs",
-		"dist/*.mjs.map",
-		"README.md",
-		"src"
-	],
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test"
 	},
 	"dependencies": {
-		"harfbuzzjs": "1.6.0"
+		"@create-design/source": "workspace:*"
 	},
 	"devDependencies": {
-		"@create-font/target": "workspace:*",
-		"vitest": "catalog:"
+		"@types/node": "25.9.5",
+		"vitest": "4.1.10"
 	},
 	"engines": {
 		"node": ">=22.0.0"

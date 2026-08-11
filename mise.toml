@@ -2,5 +2,5 @@
 "cargo:wasm-bindgen-cli" = "0.2.126"
 ni = "30.5.0"
 node = "26.7.0"
-pnpm = "11.20.0"
+pnpm = "11.21.0"
 rust = { version = "1.97.1", components = ["clippy", "rustfmt"], targets = ["wasm32-unknown-unknown"] }

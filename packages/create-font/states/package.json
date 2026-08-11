@@ -43,9 +43,9 @@
 	"devDependencies": {
 		"@typescript-eslint/parser": "8.66.0",
 		"@typescript-eslint/utils": "8.66.0",
-		"eslint": "10.8.0",
+		"eslint": "10.8.1",
 		"jiti": "2.7.0",
-		"vitest": "4.1.10"
+		"vitest": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"

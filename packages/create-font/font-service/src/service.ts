@@ -449,14 +449,13 @@ export function createFontService(): FontService {
 		const extents = varied.font.hExtents()
 		const axes = Object.entries(parsed.value.face.getAxisInfos())
 			.sort(([left], [right]) => left.localeCompare(right))
-			.map(
-				([tag, axis]): FontAxis =>
-					Object.freeze({
-						tag,
-						min: axis.min,
-						default: axis.default,
-						max: axis.max,
-					}),
+			.map(([tag, axis]): FontAxis =>
+				Object.freeze({
+					tag,
+					min: axis.min,
+					default: axis.default,
+					max: axis.max,
+				}),
 			)
 		const value = Object.freeze({
 			unitsPerEm: parsed.value.face.upem,

@@ -27,3 +27,13 @@ peerDependencyRules:
     typescript: ^5.0.0 || ^6.0.0 || ^7.0.0
     vite: "*"
     vitest: "*"
+
+catalog:
+  "@vitest/coverage-v8": 4.1.10
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.8
+  vite-plus: 0.2.8
+  vitest: 4.1.10
+
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"

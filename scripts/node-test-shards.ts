@@ -46,7 +46,10 @@ const shards = {
 		},
 	],
 	"design-application": [
-		{ kind: `package-tests`, packages: [`create-design`] },
+		{
+			kind: `package-tests`,
+			packages: [`@create-design/ai`, `create-design`],
+		},
 	],
 	"feature-syntax-core": [
 		{
