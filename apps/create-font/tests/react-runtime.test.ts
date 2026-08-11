@@ -35,5 +35,7 @@ describe(`Browser artifact boundary`, () => {
 		expect(sourceMap).not.toContain(`/preact/`)
 		expect(javascript).toContain(`mountEditor`)
 		expect(styles).toContain(`editor-application-root`)
+		expect(styles).toContain(`action-hotbar`)
+		expect(styles).toContain(`tiling-workspace`)
 	})
 })

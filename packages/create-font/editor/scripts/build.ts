@@ -15,7 +15,7 @@ await build({
 		emptyOutDir: true,
 		lib: {
 			cssFileName: `editor`,
-			entry: resolve(packageRoot, `src/browser.ts`),
+			entry: resolve(packageRoot, `src/browser-build.ts`),
 			fileName: `editor`,
 			formats: [`es`],
 		},
