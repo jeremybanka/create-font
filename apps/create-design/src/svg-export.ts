@@ -18,12 +18,18 @@ import {
 	type SvgPreflightResult,
 } from "@create-design/svg"
 import {
+	resolveDesignArtboardLinks,
+	type DesignArtboardLinkDiagnostic,
+} from "@create-design/model"
+import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
+	type DesignImageResource,
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
 import { createDesignSourceService } from "./source-service.ts"
+import { loadDesignLinkedArtboardResources } from "./linked-artboard-export.ts"
 
 export interface DesignSvgExportOptions {
 	readonly artboardIds?: readonly string[]
@@ -139,6 +145,35 @@ async function writeSvgAtomically(
 	}
 }
 
+function withSvgLinkDiagnostics(
+	preflight: SvgPreflightResult,
+	diagnostics: readonly DesignArtboardLinkDiagnostic[],
+): SvgPreflightResult {
+	const cycles: readonly SvgDiagnostic[] = diagnostics.flatMap((diagnostic) =>
+		diagnostic.code !== "artboard-link.cycle"
+			? []
+			: [
+					Object.freeze({
+						code: "svg.artboard-link.cycle",
+						entityId: diagnostic.objectId,
+						message: diagnostic.message,
+						severity: "error" as const,
+						stage: "preflight" as const,
+					}),
+				],
+	)
+	if (cycles.length === 0) return preflight
+	return Object.freeze({
+		...preflight,
+		decision: "blocked",
+		diagnostics: Object.freeze([...preflight.diagnostics, ...cycles]),
+		summary: Object.freeze({
+			...preflight.summary,
+			errors: preflight.summary.errors + cycles.length,
+		}),
+	})
+}
+
 export async function exportDesignSvg(
 	options: DesignSvgExportOptions,
 ): Promise<DesignSvgExportResult> {
@@ -163,7 +198,7 @@ export async function exportDesignSvg(
 		({ path }) => path === "assets/index.json",
 	)
 	const assetIndex = assetIndexFileSchema.safeParse(assetIndexUnit?.value)
-	const imageResources = new Map(
+	const imageResources = new Map<string, DesignImageResource>(
 		assetIndex.success
 			? await Promise.all(
 					assetIndex.data.entries
@@ -190,20 +225,25 @@ export async function exportDesignSvg(
 				)
 			: [],
 	)
+	const links = resolveDesignArtboardLinks(
+		assembled.value,
+		await loadDesignLinkedArtboardResources(canonicalRoot),
+	)
+	for (const resource of links.imageResources)
+		imageResources.set(resource.id, resource)
 	const artboardId =
 		options.artboardIds?.[0] ?? assembled.value.artboards[0]?.id
 	if (artboardId === undefined)
 		throw new Error("SVG export requires one artboard.")
 	const target = { artboardId }
 	const projectionOptions = { imageResources }
-	const preflight = preflightSvgExport(
-		assembled.value,
-		target,
-		projectionOptions,
+	const preflight = withSvgLinkDiagnostics(
+		preflightSvgExport(links.document, target, projectionOptions),
+		links.diagnostics,
 	)
 	if (!svgPreflightAllowsOutput(preflight))
 		throw new DesignSvgPreflightError(preflight)
-	const bytes = exportSvg(assembled.value, target, projectionOptions)
+	const bytes = exportSvg(links.document, target, projectionOptions)
 	await writeSvgAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		artboardId,

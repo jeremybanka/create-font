@@ -42,6 +42,7 @@
 		"@create-art/source-rpc": "workspace:*",
 		"@create-design/ai": "workspace:*",
 		"@create-design/editor": "workspace:*",
+		"@create-design/model": "workspace:*",
 		"@create-design/pdf": "workspace:*",
 		"@create-design/png": "workspace:*",
 		"@create-design/svg": "workspace:*",

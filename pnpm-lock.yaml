@@ -101,6 +101,9 @@ importers:
       '@create-design/editor':
         specifier: workspace:*
         version: link:../../packages/create-design/editor
+      '@create-design/model':
+        specifier: workspace:*
+        version: link:../../packages/create-design/model
       '@create-design/pdf':
         specifier: workspace:*
         version: link:../../packages/create-design/pdf

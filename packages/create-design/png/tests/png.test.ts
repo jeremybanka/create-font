@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { createHash } from "node:crypto"
-import { createInitialDocument } from "@create-design/source"
-import { resolvedRgb } from "@create-design/model"
+import {
+	createInitialDocument,
+	DEFAULT_DESIGN_STROKE_STYLE,
+} from "@create-design/source"
+import { resolveDesignArtboardLinks, resolvedRgb } from "@create-design/model"
 
 import {
 	encodeRgbaPng,
@@ -59,6 +62,87 @@ async function decode(
 }
 
 describe("deterministic PNG output", () => {
+	it("matches direct artboard backgrounds, paint order, clipping, and hidden-link output", async () => {
+		const initial = createInitialDocument()
+		const artboard = {
+			...initial.artboards[0]!,
+			x: 10,
+			y: 20,
+			width: 2,
+			height: 1,
+			backgroundColor: "#123456",
+		}
+		const foreground = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 11,
+				y: 20,
+				width: 2,
+				height: 1,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const source = {
+			...initial,
+			artboards: [artboard],
+			objects: [foreground],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "object" as const, id: foreground.id }],
+				},
+			],
+		}
+		const target = createInitialDocument()
+		const targetArtboard = {
+			...target.artboards[0]!,
+			width: 2,
+			height: 1,
+		}
+		const link = {
+			...target.objects[0]!,
+			id: "object:background-link",
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			geometry: {
+				kind: "artboard-link" as const,
+				projectId: "source-design",
+				artboardId: artboard.id,
+				width: artboard.width,
+				height: artboard.height,
+			},
+		}
+		const targetWith = (hidden: boolean) => ({
+			...target,
+			artboards: [targetArtboard],
+			objects: [{ ...link, hidden }],
+			layers: [
+				{
+					...target.layers[0]!,
+					children: [{ kind: "object" as const, id: link.id }],
+				},
+			],
+		})
+		const resources = [
+			{ projectId: "source-design", revision: "r1", document: source },
+		]
+		const request = { scope: { kind: "all" as const }, samples: 1 as const }
+		const direct = await exportPng(source, request)
+		const linked = await exportPng(
+			resolveDesignArtboardLinks(targetWith(false), resources).document,
+			request,
+		)
+		expect(linked.artifacts[0]!.bytes).toEqual(direct.artifacts[0]!.bytes)
+
+		const hidden = await exportPng(
+			resolveDesignArtboardLinks(targetWith(true), resources).document,
+			request,
+		)
+		expect((await decode(hidden.artifacts[0]!.bytes)).rgba).toEqual(
+			new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0]),
+		)
+	})
+
 	it("uses authored artboard color by default and permits an explicit override", async () => {
 		const initial = createInitialDocument()
 		const document = {
@@ -172,6 +256,119 @@ describe("deterministic PNG output", () => {
 			Math.round(expected.b),
 			255,
 		])
+	})
+
+	it("clips group contents to their clipping paths", async () => {
+		const initial = createInitialDocument()
+		const rectangle = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 0,
+				y: 0,
+				width: 2,
+				height: 1,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const clip = {
+			...rectangle,
+			id: "object:clip",
+			geometry: { ...rectangle.geometry, width: 1 },
+		}
+		const content = { ...rectangle, id: "object:content" }
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 2, height: 1 }],
+			objects: [clip, content],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:clipped" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:clipped",
+					name: "Clipped",
+					clippingPathId: clip.id,
+					children: [
+						{ kind: "object" as const, id: clip.id },
+						{ kind: "object" as const, id: content.id },
+					],
+				},
+			],
+		}
+		const exported = await exportPng(document, {
+			scope: { kind: "all" },
+			samples: 1,
+		})
+		const image = await decode(exported.artifacts[0]!.bytes)
+
+		expect([image.width, image.height]).toEqual([2, 1])
+		expect([...image.rgba.subarray(0, 4)]).toEqual([218, 94, 67, 255])
+		expect([...image.rgba.subarray(4, 8)]).toEqual([0, 0, 0, 0])
+	})
+
+	it("uses unfilled stroke-only clipping geometry without painting the mask", async () => {
+		const initial = createInitialDocument()
+		const rectangle = {
+			...initial.objects[0]!,
+			geometry: {
+				kind: "rectangle" as const,
+				x: 0,
+				y: 0,
+				width: 2,
+				height: 1,
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+		}
+		const clip = {
+			...rectangle,
+			id: "object:unfilled-clip",
+			geometry: { ...rectangle.geometry, width: 1 },
+			appearance: {
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 0.25,
+				},
+			},
+		}
+		const content = {
+			...rectangle,
+			id: "object:clipped-content",
+			appearance: { fill: { swatchId: "swatch:cyan" } },
+		}
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 2, height: 1 }],
+			objects: [clip, content],
+			layers: [
+				{
+					...initial.layers[0]!,
+					children: [{ kind: "group" as const, id: "group:unfilled-mask" }],
+				},
+			],
+			groups: [
+				{
+					id: "group:unfilled-mask",
+					name: "Unfilled mask",
+					clippingPathId: clip.id,
+					children: [
+						{ kind: "object" as const, id: clip.id },
+						{ kind: "object" as const, id: content.id },
+					],
+				},
+			],
+		}
+		const image = await exportPng(document, {
+			scope: { kind: "all" },
+			samples: 1,
+		})
+		const rgba = (await decode(image.artifacts[0]!.bytes)).rgba
+		expect([...rgba.slice(0, 4)]).not.toEqual([0, 0, 0, 0])
+		expect([...rgba.slice(4)]).toEqual([0, 0, 0, 0])
 	})
 
 	it("encodes canonical metadata-free RGBA bytes", async () => {

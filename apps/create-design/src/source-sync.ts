@@ -504,17 +504,18 @@ export async function loadDesignLinkedArtboards(
 		workspace.projects
 			.filter(({ id }) => id !== activeProjectId)
 			.map(async ({ id }) => {
-				const snapshot = await createSourceRpcClient(
-					projectOrigin(id),
-				).readSnapshot()
+				const client = createSourceRpcClient(projectOrigin(id))
+				const snapshot = await client.readSnapshot()
 				const state = sourceSyncStateFromSnapshot(snapshot)
-				const update = assemble(state)
+				const update = await hydrateDesignSourceUpdate(client, state)
 				if (!update.ok)
 					throw new Error(`Linked design ${id} contains invalid source.`)
 				return {
 					projectId: id,
 					revision: update.revision,
 					document: update.document,
+					...(update.images === undefined ? {} : { images: update.images }),
+					fonts: update.fonts,
 				}
 			}),
 	)

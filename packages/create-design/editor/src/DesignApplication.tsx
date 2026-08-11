@@ -1119,6 +1119,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [linkedArtboards, setLinkedArtboards] = useState<
 		readonly DesignLinkedArtboardResource[]
 	>(() => sourceSession?.linkedArtboards ?? [])
+	const linkedArtboardRevisionKey = linkedArtboards
+		.map(({ projectId, revision }) => `${projectId}:${revision}`)
+		.join("\0")
 	const linkResources = useMemo(
 		() => [
 			...linkedArtboards,
@@ -1134,6 +1137,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		],
 		[
 			document,
+			linkedArtboardRevisionKey,
 			linkedArtboards,
 			persistence.durableRevision,
 			sourceSession?.projectId,
@@ -1141,10 +1145,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const linkedResolution = useMemo(
 		() => resolveDesignArtboardLinks(document, linkResources),
-		[document, linkResources],
+		[document, linkedArtboardRevisionKey, linkResources],
 	)
 	const exportableDocument = linkedResolution.document
-	const canvasImages = useDesignCanvasImages(document, imageResources)
+	const runtimeImageResources = useMemo(
+		() => [...imageResources, ...linkedResolution.imageResources],
+		[imageResources, linkedResolution.imageResources],
+	)
+	const canvasImages = useDesignCanvasImages(
+		exportableDocument,
+		runtimeImageResources,
+	)
 	const [selectedBlendId, setSelectedBlendId] = useState<string | null>(null)
 	const [editingTextId, setEditingTextId] = useState<string | null>(null)
 	const [textSelectionRange, setTextSelectionRange] = useState<Readonly<{
@@ -1312,6 +1323,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [textFontResources, setTextFontResources] = useState<
 		readonly DesignSourceFontResource[]
 	>(initialTextFontResources)
+	const runtimeTextFontResources = useMemo(
+		() => [...textFontResources, ...linkedResolution.fontResources],
+		[linkedResolution.fontResources, textFontResources],
+	)
 	const [availableTextFonts, setAvailableTextFonts] = useState<
 		readonly DesignFontReference[]
 	>(browserFontLoadingSupported ? [] : initialTextFonts)
@@ -1432,20 +1447,38 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		registerHeadlessTextFontResources(resources ?? [])
 	}, [props.sourceSession?.fonts, registerHeadlessTextFontResources])
 	useEffect(() => {
+		const registered = linkedResolution.fontResources.flatMap((resource) =>
+			textService
+				.registerFont(resource.reference, resource.bytes)
+				.some(({ severity }) => severity === "error")
+				? []
+				: [resource.reference.id],
+		)
+		setTextFontRevision((revision) => revision + 1)
+		return () => {
+			for (const fontId of registered) textService.unregisterFont(fontId)
+		}
+	}, [linkedResolution.fontResources, textService])
+	useEffect(() => {
 		if (!browserFontLoadingSupported) return
 		const generation = browserTextFontGenerationRef.current + 1
 		browserTextFontGenerationRef.current = generation
+		const authoredFontIds = new Set(
+			textFontResources.map(({ reference }) => reference.id),
+		)
 		const resourceKeys = new Map(
-			textFontResources.map(({ reference }) => [
+			runtimeTextFontResources.map(({ reference }) => [
 				reference.id,
 				String(reference.revision ?? "unversioned"),
 			]),
 		)
 		const alreadyReady = uniqueTextFonts(
-			textFontResources.flatMap(({ reference }) => {
+			runtimeTextFontResources.flatMap(({ reference }) => {
 				const browserFont = browserTextFontsRef.current.get(reference.id)
 				return browserFont?.revision === resourceKeys.get(reference.id)
-					? [reference]
+					? authoredFontIds.has(reference.id)
+						? [reference]
+						: []
 					: []
 			}),
 		)
@@ -1457,7 +1490,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 		void (async () => {
 			const readyResources = await Promise.all(
-				textFontResources.map(async (resource) => {
+				runtimeTextFontResources.map(async (resource) => {
 					const current = browserTextFontsRef.current.get(resource.reference.id)
 					if (
 						current?.revision ===
@@ -1501,7 +1534,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			for (const fontId of [...browserTextFontsRef.current.keys()])
 				if (!resourceKeys.has(fontId)) unregisterBrowserTextFont(fontId)
 			const references = uniqueTextFonts(
-				activated.map(({ resource }) => resource.reference),
+				activated.flatMap(({ resource }) =>
+					authoredFontIds.has(resource.reference.id)
+						? [resource.reference]
+						: [],
+				),
 			)
 			setAvailableTextFonts(references)
 			setActiveTextFontId((current) =>
@@ -1516,6 +1553,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		activateBrowserTextFont,
 		browserFontLoadingSupported,
 		loadBrowserTextFont,
+		runtimeTextFontResources,
 		textFontResources,
 		unregisterBrowserTextFont,
 	])
@@ -1535,19 +1573,19 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			createPdfDownloadManager(undefined, {
 				textService,
 				imageResources: new Map(
-					imageResources.map((resource) => [resource.id, resource]),
+					runtimeImageResources.map((resource) => [resource.id, resource]),
 				),
 			}),
-		[imageResources, textService],
+		[runtimeImageResources, textService],
 	)
 	const svgDownloadManager = useMemo(
 		() =>
 			createSvgDownloadManager(undefined, {
 				imageResources: new Map(
-					imageResources.map((resource) => [resource.id, resource]),
+					runtimeImageResources.map((resource) => [resource.id, resource]),
 				),
 			}),
-		[imageResources],
+		[runtimeImageResources],
 	)
 	const pngDownloadManager = useMemo(() => createPngDownloadManager(), [])
 	const pathfinderClient = useMemo(
@@ -4397,6 +4435,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		blendDiagnosticMessages: blendDiagnostics,
 		distributeSelection,
 		document,
+		exportDocumentSnapshot: exportableDocument,
 		expandSelection,
 		expansionDisabledReason: expansionEligibility.eligible
 			? null
@@ -7380,13 +7419,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
-	const resolvedCanvasDocument = resolveDesignArtboardLinks(
+	const resolvedCanvasResolution = resolveDesignArtboardLinks(
 		{
 			...canvasDocument,
 			objects: canvasAuthoredObjects,
 		},
 		linkResources,
-	).document
+	)
+	const resolvedCanvasDocument = resolvedCanvasResolution.document
 	const canvasOutputProjection = projectDesignOutput(resolvedCanvasDocument)
 	const displayedObjects = canvasOutputProjection.objects
 	const derivedBlendByObjectId = new Map(
@@ -7831,16 +7871,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											))}
 									{displayedObjects.map((object) => {
 										const derived = !authoredCanvasObjectIds.has(object.id)
-										const objectLayerUiColor = layerUiColorForObject(object.id)
 										const outputEntry = canvasOutputProjection.byObjectId.get(
 											object.id,
 										)
+										const linkedObjectId =
+											resolvedCanvasResolution.linkObjectIdByProjectedId.get(
+												object.id,
+											)
+										const interactionObject =
+											canvasAuthoredObjects.find(
+												({ id }) => id === linkedObjectId,
+											) ?? object
+										const linked = linkedObjectId !== undefined
+										const outputLayerIndex =
+											outputEntry === undefined
+												? -1
+												: resolvedCanvasDocument.layers.findIndex(
+														({ id }) => id === outputEntry.layer.id,
+													)
+										const objectLayerUiColor = designLayerUiColorCss(
+											outputEntry?.layer.uiColor,
+											outputLayerIndex,
+										)
 										const masks = (outputEntry?.maskGroupIds ?? []).flatMap(
 											(groupId) => {
-												const clippingPathId = canvasDocument.groups.find(
-													(group) => group.id === groupId,
-												)?.clippingPathId
-												const mask = canvasAuthoredObjects.find(
+												const clippingPathId =
+													resolvedCanvasDocument.groups.find(
+														(group) => group.id === groupId,
+													)?.clippingPathId
+												const mask = resolvedCanvasDocument.objects.find(
 													(candidate) => candidate.id === clippingPathId,
 												)
 												return mask === undefined ? [] : [mask]
@@ -7876,7 +7935,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															stroke="#c62828"
 															dash={[8 / worldScale, 6 / worldScale]}
 															onPointerDown={(event) =>
-																startObjectGesture(event, object)
+																startObjectGesture(event, interactionObject)
 															}
 														/>
 													) : (
@@ -7886,7 +7945,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															width={object.geometry.intrinsicWidth}
 															height={object.geometry.intrinsicHeight}
 															onPointerDown={(event) =>
-																startObjectGesture(event, object)
+																startObjectGesture(event, interactionObject)
 															}
 														/>
 													)}
@@ -7948,15 +8007,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															height={canonicalLayout.bounds.height}
 															fill="rgba(0, 0, 0, 0)"
 															onPointerDown={(event) =>
-																startObjectGesture(event, object)
+																startObjectGesture(event, interactionObject)
 															}
 															onDblClick={(
 																event: KonvaEventObject<
 																	MouseEvent | TouchEvent
 																>,
-															) => enterObjectGroup(event, object)}
+															) => enterObjectGroup(event, interactionObject)}
 															onDblTap={(event) =>
-																enterObjectGroup(event, object)
+																enterObjectGroup(event, interactionObject)
 															}
 														/>
 													)}
@@ -7967,7 +8026,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															width={geometry.frame.width}
 															height={geometry.frame.height}
 															stroke={
-																selection.includes(object.id)
+																selection.includes(interactionObject.id)
 																	? objectLayerUiColor
 																	: "#999"
 															}
@@ -8015,39 +8074,41 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																			geometry.frame.verticalAlignment,
 																	})}
 															onPointerDown={(event) =>
-																startObjectGesture(event, object)
+																startObjectGesture(event, interactionObject)
 															}
 															onDblClick={(
 																event: KonvaEventObject<
 																	MouseEvent | TouchEvent
 																>,
-															) => enterObjectGroup(event, object)}
+															) => enterObjectGroup(event, interactionObject)}
 															onDblTap={(event) =>
-																enterObjectGroup(event, object)
+																enterObjectGroup(event, interactionObject)
 															}
 														/>
 													) : (
 														<VectorContourPath
 															name={`design-object ${object.id}`}
 															object={projectDesignVectorRenderObject(
-																canvasDocument,
+																resolvedCanvasDocument,
 																canonicalObject,
 															)}
 															{...(fill === undefined
 																? {}
 																: { fill: textColor })}
 															fillEnabled={fill !== undefined}
-															selected={selection.includes(object.id)}
+															selected={selection.includes(
+																interactionObject.id,
+															)}
 															selectionStroke={objectLayerUiColor}
 															selectionStrokeWidth={1 / worldScale}
 															onPointerDown={(event) =>
-																startObjectGesture(event, object)
+																startObjectGesture(event, interactionObject)
 															}
 															onDoubleClick={(
 																event: KonvaEventObject<
 																	MouseEvent | TouchEvent
 																>,
-															) => enterObjectGroup(event, object)}
+															) => enterObjectGroup(event, interactionObject)}
 														/>
 													)}
 													{!estimate.overset ||
@@ -8083,7 +8144,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 														key={object.id}
 														name={`design-object ${object.id}`}
 														object={projectDesignVectorRenderObject(
-															canvasDocument,
+															resolvedCanvasDocument,
 															object,
 														)}
 														{...(fill === undefined
@@ -8105,25 +8166,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																})}
 														fillRule={designObjectFillRule(object)}
 														selected={
-															derived
-																? selectedBlendId === derivedBlendId
-																: selectedGroup === null &&
-																	selection.includes(object.id)
+															linked
+																? selection.includes(interactionObject.id)
+																: derived
+																	? selectedBlendId === derivedBlendId
+																	: selectedGroup === null &&
+																		selection.includes(object.id)
 														}
 														selectionStroke={objectLayerUiColor}
 														selectionStrokeWidth={1 / worldScale}
 														listening={
 															!object.locked &&
-															(!derived || derivedBlendId !== undefined)
+															(!derived ||
+																linked ||
+																derivedBlendId !== undefined)
 														}
 														onPointerDown={(event) =>
 															derivedBlendId === undefined
-																? startObjectGesture(event, object)
+																? startObjectGesture(event, interactionObject)
 																: selectBlendFromCanvas(event, derivedBlendId)
 														}
 														onDoubleClick={(
 															event: KonvaEventObject<MouseEvent | TouchEvent>,
-														) => enterObjectGroup(event, object)}
+														) => enterObjectGroup(event, interactionObject)}
 														onPointerEnter={(event) => {
 															if (
 																object.locked ||

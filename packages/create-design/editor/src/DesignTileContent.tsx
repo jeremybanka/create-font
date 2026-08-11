@@ -1355,6 +1355,7 @@ function DesignExportTile({
 }: {
 	readonly context: DesignTileContext
 }) {
+	const exportDocument = context.exportDocumentSnapshot ?? context.document
 	const [format, setFormat] = useState<"pdf" | "svg" | "png">("pdf")
 	const [previewEnabled, setPreviewEnabled] = useState(false)
 	const [svgPreviewEnabled, setSvgPreviewEnabled] = useState(false)
@@ -1374,21 +1375,15 @@ function DesignExportTile({
 	const [includeBleed, setIncludeBleed] = useState(false)
 	const [checkOutsideArtwork, setCheckOutsideArtwork] = useState(false)
 	const selectedIds = useMemo(() => {
-		const valid = context.document.artboards
+		const valid = exportDocument.artboards
 			.filter(({ id }) => selectedArtboardIds.includes(id))
 			.map(({ id }) => id)
 		return valid.length === 0 ? [context.activeArtboard.id] : valid
-	}, [
-		context.activeArtboard.id,
-		context.document.artboards,
-		selectedArtboardIds,
-	])
-	const startId = context.document.artboards.some(
-		({ id }) => id === rangeStartId,
-	)
+	}, [context.activeArtboard.id, exportDocument.artboards, selectedArtboardIds])
+	const startId = exportDocument.artboards.some(({ id }) => id === rangeStartId)
 		? rangeStartId
 		: context.activeArtboard.id
-	const endId = context.document.artboards.some(({ id }) => id === rangeEndId)
+	const endId = exportDocument.artboards.some(({ id }) => id === rangeEndId)
 		? rangeEndId
 		: context.activeArtboard.id
 	const target = useMemo<PdfExportRequest>(() => {
@@ -1413,7 +1408,7 @@ function DesignExportTile({
 		selectedIds,
 		startId,
 	])
-	const pageCount = resolvePdfArtboards(context.document, target).length
+	const pageCount = resolvePdfArtboards(exportDocument, target).length
 	const preflightPreferences = useMemo<ExportPreflightPreferences>(
 		() => ({
 			enabledLints: checkOutsideArtwork ? [ARTWORK_OUTSIDE_ARTBOARDS_LINT] : [],
@@ -1423,13 +1418,13 @@ function DesignExportTile({
 	const preflight = useMemo(
 		() =>
 			preflightPdfExport(
-				context.document,
+				exportDocument,
 				target,
 				preflightPreferences,
 				context.textService,
 			),
 		[
-			context.document,
+			exportDocument,
 			context.textFontRevision,
 			context.textService,
 			preflightPreferences,
@@ -1442,13 +1437,13 @@ function DesignExportTile({
 			Readonly<{ label: string; diagnostics: ExportDiagnostic[] }>
 		>()
 		groups.set("document", { label: "Document", diagnostics: [] })
-		for (const artboard of context.document.artboards)
+		for (const artboard of exportDocument.artboards)
 			groups.set(artboard.id, {
 				label: artboard.name,
 				diagnostics: [],
 			})
 		for (const diagnostic of preflight.diagnostics) {
-			const artboard = context.document.artboards.find(
+			const artboard = exportDocument.artboards.find(
 				({ id }) => id === diagnostic.artboardId,
 			)
 			const key = artboard?.id ?? "document"
@@ -1462,7 +1457,7 @@ function DesignExportTile({
 		return [...groups.entries()].filter(
 			([, { diagnostics }]) => diagnostics.length > 0,
 		)
-	}, [context.document.artboards, preflight.diagnostics])
+	}, [exportDocument.artboards, preflight.diagnostics])
 	const followDiagnostic = (diagnostic: ExportDiagnostic): void => {
 		const action = diagnostic.action
 		if (action?.kind === "select-entity" && action.entityKind === "object") {
@@ -1484,8 +1479,8 @@ function DesignExportTile({
 		[context.activeArtboard.id],
 	)
 	const svgPreflight = useMemo(
-		() => preflightSvgExport(context.document, svgTarget),
-		[context.document, svgTarget],
+		() => preflightSvgExport(exportDocument, svgTarget),
+		[exportDocument, svgTarget],
 	)
 	const pngRequest = useMemo<PngExportRequest>(
 		() => ({
@@ -1508,8 +1503,8 @@ function DesignExportTile({
 		[pngBackground, pngScale, target.scope],
 	)
 	const pngPreflight = useMemo(
-		() => preflightPngExport(context.document, pngRequest),
-		[context.document, pngRequest],
+		() => preflightPngExport(exportDocument, pngRequest),
+		[exportDocument, pngRequest],
 	)
 	return (
 		<design-export-tile>
@@ -1564,7 +1559,7 @@ function DesignExportTile({
 					{scope !== "selected" ? null : (
 						<fieldset data-export-selection>
 							<legend>Selected artboards</legend>
-							{context.document.artboards.map((artboard) => (
+							{exportDocument.artboards.map((artboard) => (
 								<label key={artboard.id}>
 									<input
 										type="checkbox"
@@ -1592,7 +1587,7 @@ function DesignExportTile({
 										setRangeStartId(event.currentTarget.value)
 									}
 								>
-									{context.document.artboards.map((artboard) => (
+									{exportDocument.artboards.map((artboard) => (
 										<option key={artboard.id} value={artboard.id}>
 											{artboard.name}
 										</option>
@@ -1605,7 +1600,7 @@ function DesignExportTile({
 									value={endId}
 									onChange={(event) => setRangeEndId(event.currentTarget.value)}
 								>
-									{context.document.artboards.map((artboard) => (
+									{exportDocument.artboards.map((artboard) => (
 										<option key={artboard.id} value={artboard.id}>
 											{artboard.name}
 										</option>
@@ -1670,7 +1665,7 @@ function DesignExportTile({
 														Select object
 													</TileButton>
 												) : diagnostic.action?.kind === "activate-artboard" &&
-												  context.document.artboards.some(
+												  exportDocument.artboards.some(
 														({ id }) => id === diagnostic.artboardId,
 												  ) ? (
 													<TileButton
@@ -1709,7 +1704,7 @@ function DesignExportTile({
 					</label>
 					{previewEnabled ? (
 						<PdfPreview
-							document={context.document}
+							document={exportDocument}
 							target={target}
 							preflightPreferences={preflightPreferences}
 							{...(context.textService === undefined
@@ -1782,7 +1777,7 @@ function DesignExportTile({
 						<span>Live SVG proof</span>
 					</label>
 					{svgPreviewEnabled ? (
-						<SvgPreview document={context.document} target={svgTarget} />
+						<SvgPreview document={exportDocument} target={svgTarget} />
 					) : null}
 				</export-format-panel>
 			)}
@@ -1853,7 +1848,7 @@ function DesignExportTile({
 						<span>Live PNG proof (opt in)</span>
 					</label>
 					{pngPreviewEnabled ? (
-						<PngPreview document={context.document} request={pngRequest} />
+						<PngPreview document={exportDocument} request={pngRequest} />
 					) : null}
 				</export-format-panel>
 			)}

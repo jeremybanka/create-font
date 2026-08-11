@@ -87,6 +87,16 @@ export function preflightSvgExport(
 		)
 	}
 	for (const { layer, object } of output.entries) {
+		if (object.geometry.kind === "artboard-link")
+			diagnostics.push(
+				diagnostic(
+					"svg.artboard-link.unresolved",
+					`${object.name} references ${object.geometry.projectId}/${object.geometry.artboardId}, which is unavailable. Restore the workspace design before export.`,
+					"error",
+					object.id,
+					layer,
+				),
+			)
 		if (object.geometry.kind === "text")
 			diagnostics.push(
 				diagnostic(

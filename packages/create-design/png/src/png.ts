@@ -247,7 +247,6 @@ export async function exportPng(
 	if (preflight.decision === "blocked")
 		throw new Error("PNG export was blocked by preflight errors.")
 	const backend = options.backend ?? referencePngRasterBackend
-	const projected = projectedPngDocument(document).document
 	const scale = request.scale ?? 1
 	const backgroundFor = (artboard: DesignArtboard): PngBackground =>
 		request.background ??
@@ -261,7 +260,7 @@ export async function exportPng(
 		const bytes = await backend.rasterize(
 			{ artboard, background: backgroundFor(artboard), ...dimensions, samples },
 			{
-				document: projected,
+				document,
 				signal: options.signal,
 				yieldControl: options.yieldControl ?? defaultYield,
 			},

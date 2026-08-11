@@ -1,5 +1,6 @@
 import type {
 	DesignDocument,
+	DesignFontResource,
 	DesignFontReference,
 	DesignImageResource,
 	DesignLinkedArtboardResource,
@@ -15,10 +16,7 @@ export type DesignSourceStatus =
 	| "recovering"
 	| "conflict"
 
-export type DesignSourceFontResource = Readonly<{
-	reference: DesignFontReference
-	bytes: Uint8Array
-}>
+export type DesignSourceFontResource = DesignFontResource
 
 export type DesignExternalSourceUpdate =
 	| Readonly<{

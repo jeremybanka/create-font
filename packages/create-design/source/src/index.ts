@@ -127,6 +127,7 @@ export type {
 	DesignDocument,
 	DesignFill,
 	DesignFillRule,
+	DesignFontResource,
 	DesignGeometry,
 	DesignFontReference,
 	DesignGuide,

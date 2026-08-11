@@ -86,6 +86,7 @@ export interface ExportPreflightPreferences {
 }
 
 const VECTOR_CAPABILITIES = Object.freeze({
+	"artboard-link": "workspace.artboard-link",
 	ellipse: "vector.ellipse",
 	image: "image.placement",
 	openPathFill: "vector.open-path-fill",
@@ -160,7 +161,9 @@ function unsupportedObjectDiagnostics(
 	const geometryDiagnostic = capabilityDiagnostic(
 		geometryCapability,
 		object.geometry.kind,
-		`${object.name} uses ${object.geometry.kind} geometry that ${target.toUpperCase()} cannot export.`,
+		object.geometry.kind === "artboard-link"
+			? `${object.name} references ${object.geometry.projectId}/${object.geometry.artboardId}, which is unavailable. Restore the workspace design before export.`
+			: `${object.name} uses ${object.geometry.kind} geometry that ${target.toUpperCase()} cannot export.`,
 		`${object.name} uses ${object.geometry.kind} geometry that ${target.toUpperCase()} approximates.`,
 	)
 	if (geometryDiagnostic !== null) diagnostics.push(geometryDiagnostic)

@@ -20,6 +20,10 @@ import {
 	type PdfExportRequest,
 } from "@create-design/pdf"
 import {
+	resolveDesignArtboardLinks,
+	type DesignArtboardLinkDiagnostic,
+} from "@create-design/model"
+import {
 	assembleDesignDocument,
 	assetIndexFileSchema,
 	fontIndexFileSchema,
@@ -33,6 +37,7 @@ import {
 } from "@create-design/text"
 
 import { createDesignSourceService } from "./source-service.ts"
+import { loadDesignLinkedArtboardResources } from "./linked-artboard-export.ts"
 
 export interface DesignPdfExportOptions {
 	readonly artboardIds?: readonly string[]
@@ -163,6 +168,38 @@ function pdfRequest(options: DesignPdfExportOptions): PdfExportRequest {
 	}
 }
 
+function withPdfLinkDiagnostics(
+	preflight: ExportPreflightResult,
+	diagnostics: readonly DesignArtboardLinkDiagnostic[],
+): ExportPreflightResult {
+	const cycles: readonly ExportDiagnostic[] = diagnostics.flatMap(
+		(diagnostic) =>
+			diagnostic.code !== "artboard-link.cycle"
+				? []
+				: [
+						Object.freeze({
+							capability: "workspace.artboard-link",
+							code: "pdf.artboard-link.cycle",
+							entityId: diagnostic.objectId,
+							entityKind: "object",
+							message: diagnostic.message,
+							severity: "error" as const,
+							target: "pdf",
+						}),
+					],
+	)
+	if (cycles.length === 0) return preflight
+	return Object.freeze({
+		...preflight,
+		decision: "blocked",
+		diagnostics: Object.freeze([...preflight.diagnostics, ...cycles]),
+		summary: Object.freeze({
+			...preflight.summary,
+			errors: preflight.summary.errors + cycles.length,
+		}),
+	})
+}
+
 async function loadDesignDocument(root: string): Promise<{
 	document: DesignDocument
 	imageResources: ReadonlyMap<string, DesignImageResource>
@@ -248,21 +285,41 @@ export async function exportDesignPdf(
 	assertOutputOutsideRoot(root, output)
 	const canonicalRoot = await realpath(root)
 	assertOutputOutsideRoot(canonicalRoot, await canonicalFuturePath(output))
-	const { document, imageResources, revision, textService } =
-		await loadDesignDocument(canonicalRoot)
-	const request = pdfRequest(options)
-	const preflight = preflightPdfExport(
+	const {
 		document,
-		request,
-		{
-			enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
-		},
+		imageResources: localImages,
+		revision,
 		textService,
-		imageResources,
+	} = await loadDesignDocument(canonicalRoot)
+	const links = resolveDesignArtboardLinks(
+		document,
+		await loadDesignLinkedArtboardResources(canonicalRoot),
+	)
+	const imageResources = new Map([
+		...localImages,
+		...links.imageResources.map((resource) => [resource.id, resource] as const),
+	])
+	for (const resource of links.fontResources)
+		textService.registerFont(resource.reference, resource.bytes)
+	const request = pdfRequest(options)
+	const preflight = withPdfLinkDiagnostics(
+		preflightPdfExport(
+			links.document,
+			request,
+			{
+				enabledLints: [ARTWORK_OUTSIDE_ARTBOARDS_LINT],
+			},
+			textService,
+			imageResources,
+		),
+		links.diagnostics,
 	)
 	if (!exportPreflightAllowsOutput(preflight))
 		throw new DesignPdfPreflightError(preflight)
-	const bytes = exportPdf(document, request, { imageResources, textService })
+	const bytes = exportPdf(links.document, request, {
+		imageResources,
+		textService,
+	})
 	await writePdfAtomically(output, bytes, options.force === true)
 	return Object.freeze({
 		byteLength: bytes.byteLength,
