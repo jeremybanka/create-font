@@ -76,3 +76,10 @@ Current native-source results are:
 
 Committed synthetic fixtures cover the same private-container, shared-canvas,
 paint, hierarchy, compound, clip, lexer, and direct-source paths.
+
+## Trademark
+
+This is an independent interoperability package and is not affiliated with,
+endorsed by, or sponsored by Adobe. Adobe and Adobe Illustrator are either
+registered trademarks or trademarks of Adobe in the United States and/or other
+countries.
