@@ -6,7 +6,7 @@ import { superviseDevProcesses } from "../../../scripts/dev-processes.ts"
 
 const packageRoot = resolve(import.meta.dirname, `..`)
 const workspaceRoot = resolve(packageRoot, `../..`)
-const sourceRoot = resolve(workspaceRoot, `designs/workbench-poster`)
+const sourceRoot = workspaceRoot
 const frontendPort = resolveDevPort({
 	argv: process.argv.slice(2),
 	defaultPort: DEFAULT_DEV_PORT + 2,

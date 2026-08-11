@@ -1,0 +1,18 @@
+{
+	"format": "create-design.palette",
+	"swatches": [
+		{
+			"alternate": { "c": 74, "k": 68, "m": 64, "space": "cmyk", "y": 52 },
+			"id": "swatch:ink",
+			"name": "Create Design ink",
+			"source": { "b": 32, "g": 24, "r": 20, "space": "rgb" }
+		},
+		{
+			"alternate": { "c": 0, "k": 0, "m": 84, "space": "cmyk", "y": 91 },
+			"id": "swatch:coral",
+			"name": "Create Design coral",
+			"source": { "b": 35, "g": 61, "r": 239, "space": "rgb" }
+		}
+	],
+	"version": 1
+}

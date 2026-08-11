@@ -1,0 +1,25 @@
+{
+	"appearance": {
+		"stroke": {
+			"cap": "round",
+			"dashArray": [],
+			"dashOffset": 0,
+			"join": "round",
+			"miterLimit": 4,
+			"swatchId": "swatch:coral",
+			"width": 12
+		}
+	},
+	"format": "create-design.object",
+	"geometry": {
+		"centerX": 88,
+		"centerY": 40,
+		"kind": "ellipse",
+		"radiusX": 26,
+		"radiusY": 26
+	},
+	"id": "object:shape-orbit",
+	"name": "Shape orbit",
+	"transform": { "a": 1, "b": 0, "c": 0, "d": 1, "e": 0, "f": 0 },
+	"version": 1
+}

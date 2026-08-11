@@ -535,7 +535,11 @@ function unionBounds(left: Bounds | null, right: Bounds | null): Bounds | null {
 }
 
 export function visibleObjectBounds(object: DesignObject): Bounds | null {
-	if (object.geometry.kind === "image") return objectBounds(object)
+	if (
+		object.geometry.kind === "image" ||
+		object.geometry.kind === "artboard-link"
+	)
+		return objectBounds(object)
 	let bounds =
 		object.appearance.fill === undefined ? null : objectBounds(object)
 	const stroke = object.appearance.stroke

@@ -1,0 +1,18 @@
+{
+	"entries": [
+		{
+			"id": "object:anchor-node",
+			"path": "scene/objects/logo/anchor-node.json"
+		},
+		{
+			"id": "object:artboard-frame",
+			"path": "scene/objects/logo/artboard-frame.json"
+		},
+		{
+			"id": "object:shape-orbit",
+			"path": "scene/objects/logo/shape-orbit.json"
+		}
+	],
+	"format": "create-design.object-index",
+	"version": 1
+}

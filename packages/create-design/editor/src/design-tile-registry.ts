@@ -39,6 +39,7 @@ import type {
 	DesignDocument,
 	DesignFontReference,
 	DesignLayerUiColor,
+	DesignLinkedArtboardResource,
 	DesignObject,
 	DesignStroke,
 	DesignSwatch,
@@ -129,6 +130,11 @@ export interface DesignTileContext {
 	readonly blendDiagnosticMessages: readonly string[]
 	readonly directSelectionSummary: string
 	readonly document: DesignDocument
+	readonly linkedArtboardResources?: readonly DesignLinkedArtboardResource[]
+	readonly placeLinkedArtboard?: (
+		resource: DesignLinkedArtboardResource,
+		artboard: DesignArtboard,
+	) => void
 	/** Runtime projection used only for export preflight and previews. */
 	readonly exportDocumentSnapshot?: DesignDocument
 	readonly activeLayerId: string

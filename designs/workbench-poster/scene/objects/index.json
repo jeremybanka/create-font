@@ -21,6 +21,10 @@
 			"path": "scene/objects/composition/coral-sun.json"
 		},
 		{
+			"id": "object:create-design-logo",
+			"path": "scene/objects/brand/create-design-logo.json"
+		},
+		{
 			"id": "object:ink-diagonal",
 			"path": "scene/objects/composition/ink-diagonal.json"
 		},

@@ -1,6 +1,7 @@
 import type {
 	DesignDocument,
 	DesignFontResource,
+	DesignGeometry,
 	DesignGroup,
 	DesignImageResource,
 	DesignLinkedArtboardResource,
@@ -48,7 +49,7 @@ type ExpandedDocument = Readonly<{
 }>
 
 function intersects(
-	bounds: ReturnType<typeof objectBounds>,
+	bounds: ReturnType<typeof visibleObjectBounds>,
 	artboard: DesignDocument["artboards"][number],
 ): boolean {
 	return (
@@ -72,6 +73,111 @@ function composeTransform(
 		e: parent.a * child.e + parent.c * child.f + parent.e,
 		f: parent.b * child.e + parent.d * child.f + parent.f,
 	}
+}
+
+/**
+ * Bakes a scalar into local geometry so length-valued paint can carry the same
+ * scale while the projected object's affine transform is divided by it.
+ */
+function scaleGeometry(
+	geometry: DesignGeometry,
+	scale: number,
+): DesignGeometry {
+	if (geometry.kind === "path")
+		return {
+			...geometry,
+			contours: geometry.contours.map((contour) => ({
+				...contour,
+				points: contour.points.map((point) => ({
+					...point,
+					x: point.x * scale,
+					y: point.y * scale,
+					...(point.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: point.incoming.x * scale,
+									y: point.incoming.y * scale,
+								},
+							}),
+					...(point.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: point.outgoing.x * scale,
+									y: point.outgoing.y * scale,
+								},
+							}),
+					...(point.corner === undefined
+						? {}
+						: {
+								corner: {
+									...point.corner,
+									amount: point.corner.amount * scale,
+								},
+							}),
+				})),
+			})),
+		}
+	if (geometry.kind === "text")
+		return {
+			...geometry,
+			x: geometry.x * scale,
+			y: geometry.y * scale,
+			typography: {
+				...geometry.typography,
+				size: geometry.typography.size * scale,
+				leading: geometry.typography.leading * scale,
+			},
+			...(geometry.frame === undefined
+				? {}
+				: {
+						frame: {
+							...geometry.frame,
+							width: geometry.frame.width * scale,
+							height: geometry.frame.height * scale,
+							inset: {
+								top: geometry.frame.inset.top * scale,
+								right: geometry.frame.inset.right * scale,
+								bottom: geometry.frame.inset.bottom * scale,
+								left: geometry.frame.inset.left * scale,
+							},
+						},
+					}),
+		}
+	if (geometry.kind === "image")
+		return {
+			...geometry,
+			intrinsicWidth: geometry.intrinsicWidth * scale,
+			intrinsicHeight: geometry.intrinsicHeight * scale,
+		}
+	if (geometry.kind === "artboard-link")
+		return {
+			...geometry,
+			width: geometry.width * scale,
+			height: geometry.height * scale,
+		}
+	if (geometry.kind === "rectangle")
+		return {
+			...geometry,
+			x: geometry.x * scale,
+			y: geometry.y * scale,
+			width: geometry.width * scale,
+			height: geometry.height * scale,
+		}
+	return {
+		...geometry,
+		centerX: geometry.centerX * scale,
+		centerY: geometry.centerY * scale,
+		radiusX: geometry.radiusX * scale,
+		radiusY: geometry.radiusY * scale,
+	}
+}
+
+function transformEffectScale(transform: DesignTransform): number {
+	return Math.sqrt(
+		Math.abs(transform.a * transform.d - transform.b * transform.c),
+	)
 }
 
 function namespace(scope: string, id: string): string {
@@ -116,8 +222,9 @@ export function resolveDesignArtboardLinks(
 		let images = [...baseImages]
 		let fonts = [...baseFonts]
 		for (const link of input.objects) {
-			if (link.geometry.kind !== "artboard-link") continue
-			const key = `${link.geometry.projectId}/${link.geometry.artboardId}`
+			const linkGeometry = link.geometry
+			if (linkGeometry.kind !== "artboard-link") continue
+			const key = `${linkGeometry.projectId}/${linkGeometry.artboardId}`
 			if (stack.includes(key)) {
 				diagnostics.push({
 					code: "artboard-link.cycle",
@@ -126,22 +233,22 @@ export function resolveDesignArtboardLinks(
 				})
 				continue
 			}
-			const resource = byProject.get(link.geometry.projectId)
+			const resource = byProject.get(linkGeometry.projectId)
 			if (resource === undefined) {
 				diagnostics.push({
 					code: "artboard-link.missing-project",
-					message: `Linked design ${link.geometry.projectId} is unavailable.`,
+					message: `Linked design ${linkGeometry.projectId} is unavailable.`,
 					objectId: link.id,
 				})
 				continue
 			}
 			const artboard = resource.document.artboards.find(
-				({ id }) => id === link.geometry.artboardId,
+				({ id }) => id === linkGeometry.artboardId,
 			)
 			if (artboard === undefined) {
 				diagnostics.push({
 					code: "artboard-link.missing-artboard",
-					message: `Linked artboard ${link.geometry.artboardId} no longer exists in ${link.geometry.projectId}.`,
+					message: `Linked artboard ${linkGeometry.artboardId} no longer exists in ${linkGeometry.projectId}.`,
 					objectId: link.id,
 				})
 				continue
@@ -181,6 +288,7 @@ export function resolveDesignArtboardLinks(
 				e: -artboard.x,
 				f: -artboard.y,
 			})
+			const effectScale = transformEffectScale(link.transform)
 			const linkState = {
 				...(link.hidden === true ? { hidden: true } : {}),
 				...(link.locked === true ? { locked: true } : {}),
@@ -225,11 +333,26 @@ export function resolveDesignArtboardLinks(
 							reference: { ...font.reference, id: fontId },
 						})
 				}
+				const composedTransform = composeTransform(placement, object.transform)
+				const stroke = object.appearance.stroke
+				const normalizeScaledEffects =
+					stroke !== undefined && effectScale > Number.EPSILON
 				const projected: DesignObject = {
 					...object,
 					id,
-					geometry,
-					transform: composeTransform(placement, object.transform),
+					geometry: normalizeScaledEffects
+						? scaleGeometry(geometry, effectScale)
+						: geometry,
+					transform: normalizeScaledEffects
+						? {
+								a: composedTransform.a / effectScale,
+								b: composedTransform.b / effectScale,
+								c: composedTransform.c / effectScale,
+								d: composedTransform.d / effectScale,
+								e: composedTransform.e,
+								f: composedTransform.f,
+							}
+						: composedTransform,
 					appearance: {
 						...(object.appearance.fill === undefined
 							? {}
@@ -240,14 +363,19 @@ export function resolveDesignArtboardLinks(
 											namespace(scope, object.appearance.fill.swatchId),
 									},
 								}),
-						...(object.appearance.stroke === undefined
+						...(stroke === undefined
 							? {}
 							: {
 									stroke: {
-										...object.appearance.stroke,
+										...stroke,
 										swatchId:
-											swatchIds.get(object.appearance.stroke.swatchId) ??
-											namespace(scope, object.appearance.stroke.swatchId),
+											swatchIds.get(stroke.swatchId) ??
+											namespace(scope, stroke.swatchId),
+										width: stroke.width * effectScale,
+										dashArray: stroke.dashArray.map(
+											(value) => value * effectScale,
+										),
+										dashOffset: stroke.dashOffset * effectScale,
 									},
 								}),
 					},

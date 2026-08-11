@@ -40,6 +40,28 @@ const path = (
 })
 
 describe("painted design geometry", () => {
+	it("uses the transformed artboard rectangle for an unpainted live link", () => {
+		const link: DesignObject = {
+			id: "object:link",
+			name: "Linked mark",
+			geometry: {
+				kind: "artboard-link",
+				projectId: "brand",
+				artboardId: "artboard:mark",
+				width: 80,
+				height: 40,
+			},
+			transform: { a: 2, b: 0, c: 0, d: 2, e: 30, f: 50 },
+			appearance: {},
+		}
+		expect(visibleObjectBounds(link)).toEqual({
+			minX: 30,
+			minY: 50,
+			maxX: 190,
+			maxY: 130,
+		})
+	})
+
 	it("treats an open subpath as implicitly closed for fill paint", () => {
 		const triangle = path([
 			{ x: 0, y: 0 },

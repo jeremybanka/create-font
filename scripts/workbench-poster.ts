@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 
 import {
+	decodeDesignDocument,
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
@@ -260,9 +261,81 @@ const objectPaths: Readonly<Record<string, string>> = {
 	"object:letter-o": "scene/objects/lettering/o.json",
 	"object:letter-r": "scene/objects/lettering/r.json",
 	"object:letter-m": "scene/objects/lettering/m.json",
+	"object:create-design-logo": "scene/objects/brand/create-design-logo.json",
 }
 
-const split = splitDesignDocument(document, {
+const decoded = decodeDesignDocument(document)
+if (!decoded.ok) {
+	throw new Error(decoded.errors.map(({ message }) => message).join("\n"))
+}
+const logoLink: DesignObject = {
+	id: "object:create-design-logo",
+	name: "create-design logo",
+	geometry: {
+		kind: "artboard-link",
+		projectId: "create-design-logo",
+		artboardId: "artboard:logo",
+		width: 128,
+		height: 128,
+	},
+	transform: { a: 0.5, b: 0, c: 0, d: 0.5, e: 208, f: 60 },
+	appearance: {},
+}
+const linkedDocument: DesignDocument = {
+	...decoded.value,
+	objects: [
+		...decoded.value.objects.slice(0, 10),
+		logoLink,
+		...decoded.value.objects.slice(10),
+	],
+	layers: [
+		{
+			id: "layer:background",
+			name: "Background",
+			children: [{ kind: "object", id: "object:background-paper" }],
+			uiColor: "red",
+		},
+		{
+			id: "layer:composition",
+			name: "Composition",
+			children: [
+				"object:cobalt-column",
+				"object:coral-sun",
+				"object:yellow-beam",
+				"object:ink-diagonal",
+				"object:paper-counter",
+				"object:aqua-counter",
+				"object:ink-pivot",
+				"object:coral-block",
+				"object:sun-dot",
+			].map((id) => ({ kind: "object" as const, id })),
+			uiColor: "blue",
+		},
+		{
+			id: "layer:brand",
+			name: "Brand mark",
+			children: [{ kind: "object", id: logoLink.id }],
+			uiColor: "purple",
+		},
+		{
+			id: "layer:lettering",
+			name: "Lettering",
+			children: [
+				"object:letter-f",
+				"object:letter-o",
+				"object:letter-r",
+				"object:letter-m",
+			].map((id) => ({ kind: "object" as const, id })),
+			uiColor: "yellow",
+		},
+	],
+}
+
+const split = splitDesignDocument(linkedDocument, {
+	layerPath: ({ id }) =>
+		id === "layer:brand"
+			? "scene/layers/brand.json"
+			: `scene/layers/${id.slice("layer:".length)}.json`,
 	objectPath: ({ id }) => objectPaths[id] ?? `scene/objects/${id}.json`,
 })
 if (!split.ok) {

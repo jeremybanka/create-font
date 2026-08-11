@@ -47,6 +47,20 @@ const artboard = (
 	...bounds,
 })
 
+const linkedArtboard = (x: number, y: number): DesignObject => ({
+	id: "object:link",
+	name: "Linked artboard",
+	geometry: {
+		kind: "artboard-link",
+		projectId: "brand",
+		artboardId: "artboard:mark",
+		width: 80,
+		height: 40,
+	},
+	transform: { a: 1, b: 0, c: 0, d: 1, e: x, f: y },
+	appearance: {},
+})
+
 const strokedPath = (stroke: Partial<DesignStroke> = {}): DesignObject => ({
 	id: "stroke",
 	name: "Stroke",
@@ -503,6 +517,27 @@ describe("design canvas adapter", () => {
 		expect(result.x).toBe(63)
 		expect(result.objects[0]?.transform.e).toBe(3)
 		expect(result.objects[1]?.transform.e).toBe(3)
+	})
+
+	it("snaps an unpainted live link from its atomic artboard bounds", () => {
+		const moving = linkedArtboard(103, 70)
+		const scene = {
+			artboards: [] as const,
+			objects: [moving],
+			guides: [
+				{ id: "guide:left", axis: "x" as const, value: 100 },
+				{ id: "guide:bottom", axis: "y" as const, value: 113 },
+			],
+		}
+		const result = snapDesignObject(moving, scene, 1)
+
+		expect(result.x).toBe(100)
+		expect(result.y).toBe(113)
+		expect(result.object.transform).toMatchObject({ e: 100, f: 73 })
+		expect(result.matches?.map(({ category }) => category)).toEqual([
+			"guides",
+			"guides",
+		])
 	})
 
 	it("snaps a clipping-mask group from its clipping contour bounds", () => {

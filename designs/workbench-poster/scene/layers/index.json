@@ -2,6 +2,7 @@
 	"entries": [
 		{ "id": "layer:background", "path": "scene/layers/background.json" },
 		{ "id": "layer:composition", "path": "scene/layers/composition.json" },
+		{ "id": "layer:brand", "path": "scene/layers/brand.json" },
 		{ "id": "layer:lettering", "path": "scene/layers/lettering.json" }
 	],
 	"format": "create-design.layer-index",

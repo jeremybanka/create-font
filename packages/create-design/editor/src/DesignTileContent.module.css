@@ -89,6 +89,7 @@ design-tile-content.class {
 
 	> design-pages-tile button,
 	> design-layers-tile > layer-toolbar > button,
+	> design-layers-tile > linked-artboard-placement > button,
 	> design-layers-tile > layer-breadcrumb > button,
 	> design-layers-tile > layer-tree > layer-tree-row > button,
 	> design-layers-tile > layer-tree > layer-tree-row > layer-row-controls > button,
@@ -252,6 +253,73 @@ design-tile-content.class {
 			}
 		}
 
+		> linked-artboard-placement {
+			display: grid;
+			gap: 6px;
+			padding: 7px;
+			border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+			border-radius: 6px;
+			background: color-mix(in srgb, var(--accent) 7%, var(--paper));
+
+			> linked-artboard-heading {
+				display: grid;
+				gap: 2px;
+
+				> span {
+					display: flex;
+					align-items: center;
+					gap: 5px;
+					color: var(--ink);
+
+					> svg {
+						width: 11px;
+						height: 11px;
+						color: var(--accent);
+					}
+				}
+
+				> small {
+					color: var(--ink-faint);
+					font-size: 7px;
+					line-height: 1.35;
+				}
+			}
+
+			> label {
+				display: grid;
+				gap: 3px;
+				color: var(--ink-muted);
+
+				> span {
+					font-size: 7px;
+				}
+
+				> select {
+					min-width: 0;
+					width: 100%;
+					padding: 5px;
+					border: 1px solid var(--line);
+					border-radius: 4px;
+					background: var(--paper);
+					color: var(--ink);
+					font-size: 8px;
+				}
+			}
+
+			> button {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 5px;
+				padding: 6px;
+
+				> svg {
+					width: 11px;
+					height: 11px;
+				}
+			}
+		}
+
 		> layer-breadcrumb {
 			display: flex;
 			align-items: center;
@@ -378,7 +446,11 @@ design-tile-content.class {
 					font-size: 7px;
 				}
 
-				> small[data-clipping-path-badge] {
+				> small[data-clipping-path-badge],
+				> small[data-live-link-badge] {
+					display: flex;
+					align-items: center;
+					gap: 3px;
 					padding: 2px 5px;
 					border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
 					border-radius: 999px;
@@ -388,6 +460,11 @@ design-tile-content.class {
 					font-weight: 700;
 					line-height: 1;
 					text-transform: uppercase;
+
+					> svg {
+						width: 8px;
+						height: 8px;
+					}
 				}
 
 				> layer-row-controls {
@@ -1045,6 +1122,81 @@ design-tile-content.class {
 			overflow: hidden;
 			line-height: 1.5;
 			color: var(--ink-faint);
+		}
+
+		> object-live-link {
+			display: grid;
+			gap: 6px;
+			padding: 7px;
+			border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+			border-radius: 6px;
+			background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+
+			&[data-source-available="false"] {
+				border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+				background: color-mix(in srgb, var(--danger) 6%, var(--paper));
+			}
+
+			> object-live-link-heading {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 6px;
+
+				> span {
+					display: flex;
+					align-items: center;
+					gap: 5px;
+
+					> svg {
+						width: 11px;
+						height: 11px;
+						color: var(--accent);
+					}
+				}
+
+				> small {
+					padding: 2px 5px;
+					border-radius: 999px;
+					background: color-mix(in srgb, var(--accent) 14%, transparent);
+					color: var(--accent);
+					font-size: 7px;
+					font-weight: 700;
+					text-transform: uppercase;
+				}
+			}
+
+			> dl {
+				display: grid;
+				gap: 3px;
+				margin: 0;
+
+				> object-live-link-source {
+					display: grid;
+					grid-template-columns: 42px minmax(0, 1fr);
+					gap: 5px;
+
+					> dt {
+						color: var(--ink-faint);
+					}
+
+					> dd {
+						min-width: 0;
+						margin: 0;
+						overflow: hidden;
+						color: var(--ink);
+						text-overflow: ellipsis;
+						white-space: nowrap;
+					}
+				}
+			}
+
+			> p {
+				margin: 0;
+				color: var(--ink-faint);
+				font-size: 7px;
+				line-height: 1.35;
+			}
 		}
 
 		> object-geometry-editor {

@@ -1,0 +1,8 @@
+{
+	"children": [{ "id": "object:create-design-logo", "kind": "object" }],
+	"format": "create-design.layer",
+	"id": "layer:brand",
+	"name": "Brand mark",
+	"uiColor": "purple",
+	"version": 2
+}

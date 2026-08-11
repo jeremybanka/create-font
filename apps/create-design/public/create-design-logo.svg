@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>create-design logo</title>
+  <defs><clipPath id="create-design-artboard-clip"><rect x="0" y="0" width="128" height="128"/></clipPath></defs>
+  <g clip-path="url(#create-design-artboard-clip)">
+    <rect id="object:artboard-frame" fill="none" stroke="#141820" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="4" x="22" y="28" width="72" height="76">
+      <title>Artboard frame</title>
+    </rect>
+    <ellipse id="object:shape-orbit" fill="none" stroke="#ef3d23" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="4" cx="88" cy="40" rx="26" ry="26">
+      <title>Shape orbit</title>
+    </ellipse>
+    <ellipse id="object:anchor-node" fill="#141820" cx="88" cy="40" rx="6" ry="6">
+      <title>Anchor node</title>
+    </ellipse>
+  </g>
+</svg>
