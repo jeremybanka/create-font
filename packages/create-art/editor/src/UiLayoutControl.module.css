@@ -6,6 +6,19 @@ ui-layout-control.class {
 	min-width: 0;
 	max-width: 100%;
 
+	> [data-screen-reader] {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	> select,
 	> input,
 	> button {
