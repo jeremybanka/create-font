@@ -144,7 +144,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 		mainLoadsEditorArtifact: main.includes("/editor/editor.js"),
 		mountType: typeof editorModule.mountEditor,
 		stylesContentType: editorStylesResponse.headers.get("content-type"),
+		stylesHaveActionHotbar: editorStyles.includes("action-hotbar"),
 		stylesHaveEditorRoot: editorStyles.includes("editor-application-root"),
+		stylesHaveTilingWorkspace: editorStyles.includes("tiling-workspace"),
 	}))
 	await app.stop()
 	process.exit(0)
@@ -166,7 +168,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 			rootHasApplication?: boolean
 			rootStatus?: number
 			stylesContentType?: string
+			stylesHaveActionHotbar?: boolean
 			stylesHaveEditorRoot?: boolean
+			stylesHaveTilingWorkspace?: boolean
 		}
 		const editorPackage = JSON.parse(
 			await readFile(
@@ -184,7 +188,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 		expect(result.editorHasImplementation).toBe(true)
 		expect(result.editorSize).toBeGreaterThan(100_000)
 		expect(result.stylesContentType).toMatch(/^text\/css/u)
+		expect(result.stylesHaveActionHotbar).toBe(true)
 		expect(result.stylesHaveEditorRoot).toBe(true)
+		expect(result.stylesHaveTilingWorkspace).toBe(true)
 		expect(result.mountType).toBe(`function`)
 	}, 60_000)
 })
