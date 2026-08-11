@@ -55,6 +55,11 @@ design build
 design dev
 ```
 
+`design dev` and its `design serve` alias bind to
+`http://127.0.0.1:16386/` by default, keeping create-design distinct from
+create-font and unrelated local applications. Pass `--port` to override the
+default. One Ctrl-C gracefully closes the workspace server.
+
 When a workspace contains multiple projects, pass the design name, for example
 `design build second-poster`. `design build` writes the default PDF artifact to
 `artifacts/<design>/<design>.pdf`; `design export` retains explicit PDF, SVG,

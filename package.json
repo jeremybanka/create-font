@@ -25,7 +25,7 @@
 		"lint": "vp lint",
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
-		"test": "node --test ./scripts/dev-ports.test.ts && mise exec -- cargo test --workspace && pnpm -r test",
+		"test": "node --test ./scripts/dev-ports.test.ts ./scripts/dev-processes.test.ts ./scripts/server-shutdown.test.ts && mise exec -- cargo test --workspace && pnpm -r test",
 		"version-packages": "changeset version && dprint fmt --config .changeset/dprint-manifests.json --config-discovery=false"
 	},
 	"devDependencies": {

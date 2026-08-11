@@ -95,6 +95,14 @@ describe("design CLI", () => {
 		expect(result.stdout()).toContain("export")
 	})
 
+	test("documents the distinctive development server port", async () => {
+		const result = await run(["dev", "--help"])
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stdout()).toContain("Defaults to 16386")
+		expect(result.stdout()).toContain("--port=16386")
+	})
+
 	test("checks and builds a named design from a workspace", async () => {
 		const workspaceRoot = await temporaryRoot()
 		const designRoot = join(workspaceRoot, "designs", "poster")
