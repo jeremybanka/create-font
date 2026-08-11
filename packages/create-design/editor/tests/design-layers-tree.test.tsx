@@ -78,8 +78,10 @@ function context(
 		reorderLayer: vi.fn(),
 		moveHierarchyNode: vi.fn(),
 		setLayerLocked: vi.fn(),
+		toggleOtherLayerLocks: vi.fn(),
 		setLayerUiColor: vi.fn(),
 		setLayerVisibility: vi.fn(),
+		toggleOtherLayerVisibility: vi.fn(),
 		selectLayer: vi.fn(),
 		selectHierarchyGroup: vi.fn(),
 		selectHierarchyObject: vi.fn(),
@@ -295,6 +297,26 @@ describe("Design Layers tree", () => {
 				?.click(),
 		)
 		expect(value.setLayerLocked).toHaveBeenCalledWith("layer:back", true)
+		const hiddenLock = host.querySelector<HTMLButtonElement>(
+			'button[aria-label="Lock Back"]',
+		)
+		expect(hiddenLock?.querySelector("svg")).toBeNull()
+		act(() => {
+			host
+				.querySelector<HTMLButtonElement>('button[aria-label="Hide Front"]')
+				?.dispatchEvent(
+					new MouseEvent("click", { bubbles: true, altKey: true }),
+				)
+		})
+		expect(value.toggleOtherLayerVisibility).toHaveBeenCalledWith("layer:front")
+		expect(value.setLayerVisibility).toHaveBeenCalledTimes(1)
+		act(() => {
+			hiddenLock?.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, altKey: true }),
+			)
+		})
+		expect(value.toggleOtherLayerLocks).toHaveBeenCalledWith("layer:back")
+		expect(value.setLayerLocked).toHaveBeenCalledTimes(1)
 		const color = host.querySelector<HTMLSelectElement>(
 			'select[aria-label="UI color for Back"]',
 		)

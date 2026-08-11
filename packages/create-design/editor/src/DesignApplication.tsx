@@ -140,7 +140,9 @@ import {
 import {
 	addDesignGuide,
 	deleteDesignGuide,
+	DESIGN_GUIDES_VISIBLE_STORAGE_KEY,
 	designRulerTicks,
+	setDesignGuidesLocked,
 	updateDesignGuide,
 } from "./design-guides.ts"
 import {
@@ -190,6 +192,7 @@ import {
 	setDesignLayerLocked,
 	setDesignLayerUiColor,
 	setDesignLayerVisibility,
+	toggleOtherDesignLayers,
 } from "./design-layer-operations.ts"
 import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
 import { placeDesignImage } from "./placed-images.ts"
@@ -207,6 +210,7 @@ import {
 	reconcileDesignKeyObject,
 	shouldPromoteDesignKeyObject,
 	toggleDirectSelection,
+	toggleDirectObjectSelection,
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
 } from "./design-selection.ts"
@@ -699,6 +703,16 @@ function browserLocalStorage(namespace?: string): Storage | null {
 
 const DESIGN_MOVE_ARTWORK_WITH_ARTBOARD_KEY =
 	"create-design:move-artwork-with-artboard:v1"
+function initialDesignGuidesVisible(): boolean {
+	try {
+		return (
+			browserLocalStorage()?.getItem(DESIGN_GUIDES_VISIBLE_STORAGE_KEY) !==
+			"false"
+		)
+	} catch {
+		return true
+	}
+}
 
 function initialMoveArtworkWithArtboard(): boolean {
 	try {
@@ -1287,10 +1301,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		DEFAULT_DESIGN_SNAP_SETTINGS,
 	)
 	const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null)
+	const [guidesVisible, setGuidesVisible] = useState(initialDesignGuidesVisible)
 	const [guidePreview, setGuidePreview] = useState<Readonly<{
 		id: string
 		value: number
 	}> | null>(null)
+	useEffect(() => {
+		try {
+			browserLocalStorage()?.setItem(
+				DESIGN_GUIDES_VISIBLE_STORAGE_KEY,
+				String(guidesVisible),
+			)
+		} catch {
+			// Guide visibility persistence is best-effort in restricted contexts.
+		}
+	}, [guidesVisible])
 	const artboardWrapRef = useRef<HTMLElement>(null)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const helpButtonRef = useRef<HTMLButtonElement>(null)
@@ -1670,6 +1695,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const effectivePolicyDocument = useMemo<DesignDocument>(
 		() => ({
 			...document,
+			guides: guidesVisible ? document.guides : [],
 			objects: effectiveHierarchy.entries.map((entry) =>
 				entry.visible && entry.locked === Boolean(entry.object.locked)
 					? entry.object
@@ -1680,7 +1706,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						},
 			),
 		}),
-		[document, effectiveHierarchy],
+		[document, effectiveHierarchy, guidesVisible],
 	)
 	const effectiveEditableObjectIds = useMemo(
 		() =>
@@ -4324,6 +4350,38 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			setStatus(`${layer.name} ${locked ? "locked" : "unlocked"}.`)
 		},
+		toggleOtherLayerLocks: (layerId) => {
+			const target = document.layers.find(({ id }) => id === layerId)
+			if (target === undefined) return
+			const next = toggleOtherDesignLayers(document, layerId, "locked")
+			if (next === document) {
+				setStatus(`No other layers to change beside ${target.name}.`)
+				return
+			}
+			const newlyLocked = new Set(
+				next.layers.flatMap((layer) =>
+					layer.id !== layerId && layer.locked ? [layer.id] : [],
+				),
+			)
+			commit(next)
+			setSelection((current) =>
+				current.filter(
+					(id) => !newlyLocked.has(designLayerIdForObject(document, id) ?? ""),
+				),
+			)
+			setDirectSelection((current) =>
+				current.filter(
+					(target) =>
+						!newlyLocked.has(
+							designLayerIdForObject(document, target.objectId) ?? "",
+						),
+				),
+			)
+			if (newlyLocked.has(activeLayerId)) setGroupScope([])
+			setStatus(
+				`Lock state inverted for ${document.layers.length - 1} other layer${document.layers.length === 2 ? "" : "s"}.`,
+			)
+		},
 		setLayerUiColor: (layerId, uiColor) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
 			if (layer === undefined || layer.uiColor === uiColor) return
@@ -4349,6 +4407,38 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				if (layerId === activeLayerId) setGroupScope([])
 			}
 			setStatus(`${layer.name} ${visible ? "shown" : "hidden"}.`)
+		},
+		toggleOtherLayerVisibility: (layerId) => {
+			const target = document.layers.find(({ id }) => id === layerId)
+			if (target === undefined) return
+			const next = toggleOtherDesignLayers(document, layerId, "visible")
+			if (next === document) {
+				setStatus(`No other layers to change beside ${target.name}.`)
+				return
+			}
+			const newlyHidden = new Set(
+				next.layers.flatMap((layer) =>
+					layer.id !== layerId && layer.hidden ? [layer.id] : [],
+				),
+			)
+			commit(next)
+			setSelection((current) =>
+				current.filter(
+					(id) => !newlyHidden.has(designLayerIdForObject(document, id) ?? ""),
+				),
+			)
+			setDirectSelection((current) =>
+				current.filter(
+					(target) =>
+						!newlyHidden.has(
+							designLayerIdForObject(document, target.objectId) ?? "",
+						),
+				),
+			)
+			if (newlyHidden.has(activeLayerId)) setGroupScope([])
+			setStatus(
+				`Visibility inverted for ${document.layers.length - 1} other layer${document.layers.length === 2 ? "" : "s"}.`,
+			)
 		},
 		selectLayer: (layerId) => {
 			const layer = document.layers.find(({ id }) => id === layerId)
@@ -4608,6 +4698,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedSwatch,
 		selectedSwatchId,
 		selectedGuideId,
+		guidesVisible,
 		snapSettings,
 		setSnapCategory: (category, enabled) =>
 			setSnapSettings((current) => ({
@@ -4622,8 +4713,39 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectGuide: setSelectedGuideId,
 		toggleGuideLock: (id) => {
 			const guide = document.guides.find((candidate) => candidate.id === id)
-			if (guide !== undefined)
+			if (guide !== undefined) {
 				commit(updateDesignGuide(document, id, { locked: !guide.locked }))
+				setStatus(guide.locked ? "Guide unlocked." : "Guide locked.")
+			}
+		},
+		setAllGuidesLocked: (locked) => {
+			const next = setDesignGuidesLocked(document, locked)
+			if (next === document) {
+				setStatus(
+					document.guides.length === 0
+						? "Create a guide before changing guide locks."
+						: `All guides are already ${locked ? "locked" : "unlocked"}.`,
+				)
+				return
+			}
+			cancelCanvasGesture()
+			commit(next)
+			setStatus(
+				`${document.guides.length} guide${document.guides.length === 1 ? "" : "s"} ${locked ? "locked" : "unlocked"}.`,
+			)
+		},
+		setGuidesVisible: (visible) => {
+			if (document.guides.length === 0) {
+				setStatus("Create a guide before changing guide visibility.")
+				return
+			}
+			if (guidesVisible === visible) return
+			cancelCanvasGesture()
+			setGuidesVisible(visible)
+			if (!visible) setSelectedGuideId(null)
+			setStatus(
+				`${document.guides.length} guide${document.guides.length === 1 ? "" : "s"} ${visible ? "shown" : "hidden"}.`,
+			)
 		},
 		deleteGuide: (id) => {
 			const next = deleteDesignGuide(document, id)
@@ -6461,6 +6583,31 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
+	const selectObjectNodesFromFill = (
+		event: KonvaEventObject<PointerEvent>,
+		object: DesignObject,
+	): void => {
+		if (tool !== "direct" || object.geometry.kind !== "path") return
+		const effective = effectiveHierarchy.byObjectId.get(object.id)
+		if (effective === undefined || !effective.visible || effective.locked)
+			return
+		event.cancelBubble = true
+		const contours = projectDesignVectorObject(document, object).contours
+		const next = toggleDirectObjectSelection(
+			directSelection,
+			object.id,
+			contours.map(({ id }) => id),
+			gestureModifiers(event.evt).additive,
+		)
+		setDirectSelection(next)
+		setSelection([...new Set(next.map((target) => target.objectId))])
+		setSelectedBlendId(null)
+		setStatus(
+			next.some((target) => target.objectId === object.id)
+				? `All nodes in ${object.name} selected.`
+				: `${object.name} removed from direct selection.`,
+		)
+	}
 	const startCornerGesture = (
 		event: KonvaEventObject<PointerEvent>,
 		objectId: string,
@@ -8020,6 +8167,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
 										const strokeStyle = object.appearance.stroke
+										const directFillSelectable =
+											tool === "direct" &&
+											!derived &&
+											object.geometry.kind === "path" &&
+											interactionObject.geometry.kind === "path" &&
+											object.appearance.fill !== undefined &&
+											fill !== undefined
 										if (object.geometry.kind === "image") {
 											if (object.hidden) return null
 											const image = canvasImages.get(object.geometry.source.id)
@@ -8244,94 +8398,117 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													strokeStyle.width === 0))
 											? null
 											: masked(
-													<VectorContourPath
-														key={object.id}
-														name={`design-object ${object.id}`}
-														object={projectDesignVectorRenderObject(
-															resolvedCanvasDocument,
-															object,
-														)}
-														{...(fill === undefined
-															? {}
-															: { fill: swatchCss(fill) })}
-														fillEnabled={fill !== undefined}
-														{...(stroke === undefined ||
-														strokeStyle === undefined ||
-														strokeStyle.width === 0
-															? {}
-															: {
-																	stroke: swatchCss(stroke),
-																	strokeWidth: strokeStyle.width,
-																	lineCap: strokeStyle.cap,
-																	lineJoin: strokeStyle.join,
-																	miterLimit: strokeStyle.miterLimit,
-																	dash: [...strokeStyle.dashArray],
-																	dashOffset: strokeStyle.dashOffset,
-																})}
-														fillRule={designObjectFillRule(object)}
-														selected={
-															linked
-																? selection.includes(interactionObject.id)
-																: derived
-																	? selectedBlendId === derivedBlendId
-																	: selectedGroup === null &&
-																		selection.includes(object.id)
-														}
-														selectionStroke={objectLayerUiColor}
-														selectionStrokeWidth={selectionStrokeWidthForObject(
-															interactionObject.id,
-														)}
-														listening={
-															!object.locked &&
-															(!derived ||
-																linked ||
-																derivedBlendId !== undefined)
-														}
-														onPointerDown={(event) =>
-															derivedBlendId === undefined
-																? startObjectGesture(event, interactionObject)
-																: selectBlendFromCanvas(event, derivedBlendId)
-														}
-														onDoubleClick={(
-															event: KonvaEventObject<MouseEvent | TouchEvent>,
-														) => enterObjectGroup(event, interactionObject)}
-														onPointerEnter={(event) => {
-															if (
-																object.locked ||
-																(tool !== "select" &&
-																	tool !== "direct" &&
-																	tool !== "transform")
-															)
-																return
-															const container = event.target
-																.getStage()
-																?.container()
-															if (container !== undefined)
-																container.style.cursor = canvasToolCursor(
-																	tool === "direct" ? "select" : tool,
-																	{
-																		overObject: true,
-																	},
+													<>
+														<VectorContourPath
+															key={object.id}
+															name={`design-object ${object.id}`}
+															object={projectDesignVectorRenderObject(
+																resolvedCanvasDocument,
+																object,
+															)}
+															{...(fill === undefined
+																? {}
+																: { fill: swatchCss(fill) })}
+															fillEnabled={fill !== undefined}
+															{...(stroke === undefined ||
+															strokeStyle === undefined ||
+															strokeStyle.width === 0
+																? {}
+																: {
+																		stroke: swatchCss(stroke),
+																		strokeWidth: strokeStyle.width,
+																		lineCap: strokeStyle.cap,
+																		lineJoin: strokeStyle.join,
+																		miterLimit: strokeStyle.miterLimit,
+																		dash: [...strokeStyle.dashArray],
+																		dashOffset: strokeStyle.dashOffset,
+																	})}
+															fillRule={designObjectFillRule(object)}
+															selected={
+																linked
+																	? selection.includes(interactionObject.id)
+																	: derived
+																		? selectedBlendId === derivedBlendId
+																		: selectedGroup === null &&
+																			selection.includes(object.id)
+															}
+															selectionStroke={objectLayerUiColor}
+															selectionStrokeWidth={selectionStrokeWidthForObject(
+																interactionObject.id,
+															)}
+															listening={
+																!object.locked &&
+																!directFillSelectable &&
+																(!derived ||
+																	linked ||
+																	derivedBlendId !== undefined)
+															}
+															onPointerDown={(event) =>
+																derivedBlendId === undefined
+																	? startObjectGesture(event, interactionObject)
+																	: selectBlendFromCanvas(event, derivedBlendId)
+															}
+															onDoubleClick={(
+																event: KonvaEventObject<
+																	MouseEvent | TouchEvent
+																>,
+															) => enterObjectGroup(event, interactionObject)}
+															onPointerEnter={(event) => {
+																if (
+																	object.locked ||
+																	(tool !== "select" &&
+																		tool !== "direct" &&
+																		tool !== "transform")
 																)
-														}}
-														onPointerLeave={(event) => {
-															const container = event.target
-																.getStage()
-																?.container()
-															if (container !== undefined)
-																container.style.cursor = canvasToolCursor(
-																	tool === "direct"
-																		? "select"
-																		: tool === "artboard"
-																			? "rect"
-																			: tool === "text"
-																				? "select"
-																				: tool === "area-text"
-																					? "rect"
-																					: tool,
-																)
-														}}
-													/>,
+																	return
+																const container = event.target
+																	.getStage()
+																	?.container()
+																if (container !== undefined)
+																	container.style.cursor = canvasToolCursor(
+																		tool === "direct" ? "select" : tool,
+																		{
+																			overObject: true,
+																		},
+																	)
+															}}
+															onPointerLeave={(event) => {
+																const container = event.target
+																	.getStage()
+																	?.container()
+																if (container !== undefined)
+																	container.style.cursor = canvasToolCursor(
+																		tool === "direct"
+																			? "select"
+																			: tool === "artboard"
+																				? "rect"
+																				: tool === "text"
+																					? "select"
+																					: tool === "area-text"
+																						? "rect"
+																						: tool,
+																	)
+															}}
+														/>
+														{!directFillSelectable ? null : (
+															<VectorContourPath
+																name={`design-direct-fill ${object.id}`}
+																object={projectDesignVectorRenderObject(
+																	resolvedCanvasDocument,
+																	object,
+																)}
+																fill="rgba(0, 0, 0, 0)"
+																fillEnabled
+																fillRule={designObjectFillRule(object)}
+																onPointerDown={(event) =>
+																	selectObjectNodesFromFill(
+																		event,
+																		interactionObject,
+																	)
+																}
+															/>
+														)}
+													</>,
 												)
 									})}
 									{canvasAuthoredObjects.flatMap((object) => {
@@ -8376,7 +8553,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											/>,
 										]
 									})}
-									{document.guides.map((guide) => {
+									{(guidesVisible ? document.guides : []).map((guide) => {
 										const value =
 											guidePreview !== null && guidePreview.id === guide.id
 												? guidePreview.value

@@ -99,6 +99,33 @@ export function toggleDirectSelection(
 		: [...selection, target]
 }
 
+/** Select or remove every authored contour in an object as one additive unit. */
+export function toggleDirectObjectSelection(
+	selection: readonly DesignDirectSelectionTarget[],
+	objectId: string,
+	contourIds: readonly string[],
+	additive: boolean,
+): readonly DesignDirectSelectionTarget[] {
+	const contours = contourIds.map((contourId) => ({
+		kind: "contour" as const,
+		objectId,
+		contourId,
+	}))
+	if (!additive) return contours
+	const selectedContourIds = new Set(
+		selection.flatMap((target) =>
+			target.objectId === objectId && target.kind === "contour"
+				? [target.contourId]
+				: [],
+		),
+	)
+	const complete = contourIds.every((id) => selectedContourIds.has(id))
+	const otherObjects = selection.filter(
+		(target) => target.objectId !== objectId,
+	)
+	return complete ? otherObjects : [...otherObjects, ...contours]
+}
+
 export function toggleObjectSelection(
 	selection: readonly string[],
 	objectId: string,

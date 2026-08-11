@@ -13,6 +13,7 @@ import {
 	shouldPromoteDesignKeyObject,
 	selectionBounds,
 	toggleDirectSelection,
+	toggleDirectObjectSelection,
 	toggleObjectSelection,
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
@@ -85,6 +86,29 @@ describe("design selection", () => {
 		expect(toggleObjectSelection(["a"], "b", false)).toEqual(["b"])
 		expect(toggleObjectSelection(["a"], "b", true)).toEqual(["a", "b"])
 		expect(toggleObjectSelection(["a", "b"], "a", true)).toEqual(["b"])
+	})
+
+	it("selects every object contour as one additive direct-selection unit", () => {
+		const first = toggleDirectObjectSelection(
+			[],
+			"object:first",
+			["a", "b"],
+			false,
+		)
+		expect(first).toEqual([
+			{ kind: "contour", objectId: "object:first", contourId: "a" },
+			{ kind: "contour", objectId: "object:first", contourId: "b" },
+		])
+		const second = toggleDirectObjectSelection(
+			first,
+			"object:second",
+			["c"],
+			true,
+		)
+		expect(second).toHaveLength(3)
+		expect(
+			toggleDirectObjectSelection(second, "object:first", ["a", "b"], true),
+		).toEqual([{ kind: "contour", objectId: "object:second", contourId: "c" }])
 	})
 
 	it("promotes and reconciles an explicit key object", () => {

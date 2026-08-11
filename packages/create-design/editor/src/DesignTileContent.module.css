@@ -644,6 +644,34 @@ design-tile-content.class {
 				}
 			}
 		}
+
+		> guide-global-controls {
+			display: grid;
+			grid-template-columns: 28px 28px;
+			gap: 3px;
+
+			> button {
+				display: grid;
+				width: 28px;
+				height: 28px;
+				place-items: center;
+				padding: 5px;
+				border: 1px solid var(--line);
+				background: var(--paper);
+				color: var(--ink);
+				cursor: pointer;
+
+				&[aria-pressed="true"],
+				&[aria-pressed="mixed"] {
+					background: var(--selected);
+				}
+
+				> svg {
+					width: 11px;
+					height: 11px;
+				}
+			}
+		}
 	}
 
 	> design-export-tile {

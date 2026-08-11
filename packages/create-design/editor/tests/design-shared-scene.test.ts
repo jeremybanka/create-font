@@ -15,6 +15,7 @@ import { DESIGN_CANVAS_DIMMER_STORAGE_KEY } from "../src/canvas-dimmer.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { DESIGN_TOOLS } from "../src/design-tools.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
+import { DESIGN_GUIDES_VISIBLE_STORAGE_KEY } from "../src/design-guides.ts"
 import {
 	groupDesignSelection,
 	makeDesignClippingMask,
@@ -7503,5 +7504,238 @@ describe("create-design shared vector scene", () => {
 		if (saved === null) throw new Error("Design document was not persisted.")
 		parsed = JSON.parse(saved)
 		expect(parsed.objects).toHaveLength(3)
+	})
+
+	it("selects every contour from a painted fill and adds another object as one unit", async () => {
+		const initial = createInitialDocument()
+		let identity = 0
+		const firstPath = expandDesignShape(
+			initial.objects[0]!,
+			() => `fill:first:${identity++}`,
+		)
+		const secondPath = expandDesignShape(
+			initial.objects[1]!,
+			() => `fill:second:${identity++}`,
+		)
+		if (
+			firstPath.geometry.kind !== "path" ||
+			secondPath.geometry.kind !== "path"
+		)
+			throw new Error("Expected path fixtures.")
+		const firstContour = firstPath.geometry.contours[0]!
+		const compound: DesignObject = {
+			...firstPath,
+			geometry: {
+				...firstPath.geometry,
+				contours: [
+					firstContour,
+					{
+						...firstContour,
+						id: `${firstContour.id}:second`,
+						points: firstContour.points.map((point) => ({
+							...point,
+							id: `${point.id}:second`,
+							x: point.x + 20,
+							y: point.y + 20,
+						})),
+					},
+				],
+			},
+		}
+		const source: DesignDocument = {
+			...initial,
+			objects: [compound, secondPath],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [compound, secondPath].map((object) => ({
+					kind: "object" as const,
+					id: object.id,
+				})),
+			})),
+		}
+		const stage = mountDesign({ initialDocument: source })
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (direct === null) throw new Error("Direct Selection was not found.")
+		act(() => direct.click())
+		const fills = stage.find(".design-direct-fill")
+		expect(fills).toHaveLength(2)
+		const press = (
+			target: { fire: (type: string, event: unknown, bubble: boolean) => void },
+			ctrlKey = false,
+		): void => {
+			target.fire(
+				"pointerdown",
+				{
+					evt: new PointerEvent("pointerdown", {
+						bubbles: true,
+						button: 0,
+						buttons: 1,
+						ctrlKey,
+						pointerId: ctrlKey ? 302 : 301,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+		}
+		await act(async () => {
+			press(
+				fills.find((fill: { name: () => string }) =>
+					fill.name().includes(compound.id),
+				)!,
+			)
+			await Promise.resolve()
+		})
+		expect(document.querySelector("design-object-tile")?.textContent).toContain(
+			"Direct selection: 2 contours",
+		)
+		expect(stage.find(".vector-node")).toHaveLength(
+			firstContour.points.length * 2,
+		)
+		await act(async () => {
+			press(
+				fills.find((fill: { name: () => string }) =>
+					fill.name().includes(secondPath.id),
+				)!,
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(document.querySelector("design-object-tile")?.textContent).toContain(
+			"Direct selection: 3 contours",
+		)
+	})
+
+	it("hides guides as a persisted view preference and bulk-locks atomically", async () => {
+		const initial = createInitialDocument()
+		const source: DesignDocument = {
+			...initial,
+			guides: [
+				{ id: "guide:x", axis: "x", value: 100, locked: true },
+				{ id: "guide:y", axis: "y", value: 120 },
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: source }, storage)
+		const lockAll = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Lock all guides"]',
+		)
+		const hideAll = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Hide all guides"]',
+		)
+		if (lockAll === null || hideAll === null)
+			throw new Error("Global guide controls were not found.")
+		expect(lockAll.getAttribute("aria-pressed")).toBe("mixed")
+		expect(stage.find(".design-guide")).toHaveLength(2)
+		await act(async () => {
+			lockAll.click()
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.guides.every((guide) => guide.locked)).toBe(true)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.guides.map(({ locked }) => Boolean(locked))).toEqual([
+			true,
+			false,
+		])
+		await act(async () => {
+			hideAll.click()
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-guide")).toHaveLength(0)
+		expect(storage.get(DESIGN_GUIDES_VISIBLE_STORAGE_KEY)).toBe("false")
+		expect(
+			(JSON.parse(storage.get(DESIGN_STORAGE_KEY) ?? "{}") as DesignDocument)
+				.guides,
+		).toEqual(source.guides)
+	})
+
+	it("Alt-click inverts every other layer in one undo step", async () => {
+		const initial = createInitialDocument()
+		const source: DesignDocument = {
+			...initial,
+			layers: [
+				{
+					id: "layer:target",
+					name: "Target",
+					children: [{ kind: "object", id: initial.objects[0]!.id }],
+				},
+				{
+					id: "layer:hidden",
+					name: "Hidden",
+					hidden: true,
+					children: [{ kind: "object", id: initial.objects[1]!.id }],
+				},
+				{
+					id: "layer:locked",
+					name: "Locked",
+					locked: true,
+					children: [],
+				},
+			],
+		}
+		const storage = new Map<string, string>()
+		mountDesign({ initialDocument: source }, storage)
+		const visibility = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Hide Target"]',
+		)
+		if (visibility === null) throw new Error("Target visibility was not found.")
+		await act(async () => {
+			visibility.dispatchEvent(
+				new MouseEvent("click", { altKey: true, bubbles: true }),
+			)
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.layers.map(({ hidden }) => Boolean(hidden))).toEqual([
+			false,
+			false,
+			true,
+		])
+		expect(
+			document.querySelector("[data-footer-status]")?.textContent,
+		).toContain("Visibility inverted for 2 other layers")
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved).toEqual(source)
+		const lock = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Lock Target"]',
+		)
+		if (lock === null) throw new Error("Target lock was not found.")
+		await act(async () => {
+			lock.dispatchEvent(
+				new MouseEvent("click", { altKey: true, bubbles: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.layers.map(({ locked }) => Boolean(locked))).toEqual([
+			false,
+			true,
+			false,
+		])
 	})
 })

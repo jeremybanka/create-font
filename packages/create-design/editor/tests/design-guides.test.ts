@@ -5,6 +5,7 @@ import {
 	deleteDesignGuide,
 	designRulerTicks,
 	guideScreenPosition,
+	setDesignGuidesLocked,
 	updateDesignGuide,
 } from "../src/design-guides.ts"
 import { createInitialDocument } from "../src/document.ts"
@@ -40,5 +41,23 @@ describe("design rulers and guides", () => {
 		expect(deleteDesignGuide(locked, guide.id)).toBe(locked)
 		const unlocked = updateDesignGuide(locked, guide.id, { locked: false })
 		expect(deleteDesignGuide(unlocked, guide.id).guides).toHaveLength(0)
+	})
+
+	it("locks and unlocks every guide with canonical no-op behavior", () => {
+		const source = {
+			...createInitialDocument(),
+			guides: [
+				{ id: "guide:x", axis: "x" as const, value: 10, locked: true },
+				{ id: "guide:y", axis: "y" as const, value: 20 },
+			],
+		}
+		const locked = setDesignGuidesLocked(source, true)
+		expect(locked.guides.every((guide) => guide.locked)).toBe(true)
+		expect(setDesignGuidesLocked(locked, true)).toBe(locked)
+		const unlocked = setDesignGuidesLocked(locked, false)
+		expect(unlocked.guides).toEqual([
+			{ id: "guide:x", axis: "x", value: 10 },
+			{ id: "guide:y", axis: "y", value: 20 },
+		])
 	})
 })

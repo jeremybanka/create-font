@@ -166,11 +166,13 @@ export interface DesignTileContext {
 		index: number,
 	) => void
 	readonly setLayerLocked: (layerId: string, locked: boolean) => void
+	readonly toggleOtherLayerLocks: (layerId: string) => void
 	readonly setLayerUiColor: (
 		layerId: string,
 		uiColor: DesignLayerUiColor,
 	) => void
 	readonly setLayerVisibility: (layerId: string, visible: boolean) => void
+	readonly toggleOtherLayerVisibility: (layerId: string) => void
 	readonly selectLayer: (layerId: string) => void
 	readonly selectHierarchyGroup: (
 		groupId: string,
@@ -231,6 +233,7 @@ export interface DesignTileContext {
 	readonly selectedSwatch: DesignSwatch | undefined
 	readonly selectedSwatchId: string
 	readonly selectedGuideId: string | null
+	readonly guidesVisible: boolean
 	readonly snapSettings: DesignSnapSettings
 	readonly setSnapCategory: (
 		category: DesignSnapCategory,
@@ -239,6 +242,8 @@ export interface DesignTileContext {
 	readonly setSnapThreshold: (pixels: number) => void
 	readonly selectGuide: (id: string | null) => void
 	readonly toggleGuideLock: (id: string) => void
+	readonly setAllGuidesLocked: (locked: boolean) => void
+	readonly setGuidesVisible: (visible: boolean) => void
 	readonly deleteGuide: (id: string) => void
 	readonly setObjectProperty: (
 		object: DesignObject,
