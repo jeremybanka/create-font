@@ -80,6 +80,7 @@ for (const path of await applicationFilePaths(applicationAssets)) {
 }
 
 export type CreateFontWorkspaceMount = Readonly<{
+	available?: () => boolean
 	id: string
 	name: string
 	path: string
@@ -135,15 +136,34 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 	const activeProjectId = options.activeProjectId ?? projects[0]?.id
 	if (projects.length > 0 && !projects.some(({ id }) => id === activeProjectId))
 		throw new Error(`The active font is not available in this workspace.`)
-	const workspace =
-		activeProjectId === undefined
+	const workspaceId = `workspace:${createHash(`sha256`).update(workspaceRoot).digest(`hex`)}`
+	const mountIsAvailable = (project: CreateFontWorkspaceMount): boolean => {
+		try {
+			return project.available?.() ?? true
+		} catch {
+			return false
+		}
+	}
+	const workspace = () => {
+		const availableProjects = projects.filter(mountIsAvailable)
+		const availableActiveProjectId = availableProjects.some(
+			({ id }) => id === activeProjectId,
+		)
+			? activeProjectId
+			: availableProjects[0]?.id
+		return availableActiveProjectId === undefined
 			? undefined
 			: {
-					id: `workspace:${createHash(`sha256`).update(workspaceRoot).digest(`hex`)}`,
+					id: workspaceId,
 					name: basename(workspaceRoot),
-					activeProjectId,
-					projects: projects.map(({ id, name, path }) => ({ id, name, path })),
+					activeProjectId: availableActiveProjectId,
+					projects: availableProjects.map(({ id, name, path }) => ({
+						id,
+						name,
+						path,
+					})),
 				}
+	}
 	const app = new Elysia({ adapter, name: `create-font-server` })
 		.use(
 			createFontRpc({
@@ -153,7 +173,7 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 				...(projects.length === 0 && options.source !== undefined
 					? { source: options.source }
 					: {}),
-				...(workspace === undefined ? {} : { workspace }),
+				...(activeProjectId === undefined ? {} : { workspace }),
 			}),
 		)
 		.get(
@@ -179,14 +199,22 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 		.use(editorApplication)
 	for (const project of projects) {
 		app.group(`/projects/${encodeURIComponent(project.id)}`, (group) =>
-			group.use(
-				createFontRpc({
-					adapter,
-					name: `create-font-rpc:project:${project.id}`,
-					root: project.root,
-					source: project.source,
-				}),
-			),
+			group
+				.onBeforeHandle(() =>
+					mountIsAvailable(project)
+						? undefined
+						: new Response(`Font project is no longer available.`, {
+								status: 404,
+							}),
+				)
+				.use(
+					createFontRpc({
+						adapter,
+						name: `create-font-rpc:project:${project.id}`,
+						root: project.root,
+						source: project.source,
+					}),
+				),
 		)
 	}
 	return app

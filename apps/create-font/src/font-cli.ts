@@ -19,7 +19,11 @@ import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
 import { startCreateFontServer } from "./server.ts"
 import { createFileSystemSourceService } from "./source-service.ts"
 import { isMainModule } from "./runtime.ts"
-import { discoverFontProjects, selectFontProject } from "./workspace.ts"
+import {
+	discoverFontProjects,
+	isFontProjectAvailable,
+	selectFontProject,
+} from "./workspace.ts"
 import { buildFeaVsix, installFeaVsix } from "./vsix.ts"
 
 const helpSchema = { help: z.boolean().optional() }
@@ -227,6 +231,7 @@ export async function runFontCli(
 				discovered.map(async (candidate) => {
 					try {
 						return {
+							available: () => isFontProjectAvailable(candidate.root),
 							id: candidate.name,
 							name: candidate.name,
 							path: candidate.path,

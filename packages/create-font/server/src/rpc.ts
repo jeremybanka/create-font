@@ -29,7 +29,9 @@ export type CreateFontRpcOptions = Readonly<{
 	name?: string
 	root?: string
 	source?: CreateFontSourceService
-	workspace?: FontWorkspaceInventory
+	workspace?:
+		| FontWorkspaceInventory
+		| (() => FontWorkspaceInventory | undefined)
 }>
 
 export type FontWorkspaceInventory = Readonly<{
@@ -94,7 +96,13 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 			ok: true as const,
 			rpcVersion: CREATE_FONT_RPC_VERSION,
 		}))
-		.get(`/workspace`, () => ({ root, ...options.workspace }))
+		.get(`/workspace`, () => {
+			const workspace =
+				typeof options.workspace === `function`
+					? options.workspace()
+					: options.workspace
+			return { root, ...workspace }
+		})
 		.post(`/build`, options.build)
 		.use(
 			createSourceVersionControlRpc({

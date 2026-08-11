@@ -45,6 +45,7 @@ describe(`create-font RPC`, () => {
 	it(`serves a deterministic workspace inventory and isolated font routes`, async () => {
 		const alpha = source(`alpha-revision`)
 		const beta = source(`beta-revision`)
+		let betaAvailable = true
 		const app = createFontServerApp({
 			activeProjectId: `beta`,
 			projects: [
@@ -56,6 +57,7 @@ describe(`create-font RPC`, () => {
 					source: alpha,
 				},
 				{
+					available: () => betaAvailable,
 					id: `beta`,
 					name: `Beta`,
 					path: `fonts/beta`,
@@ -95,6 +97,23 @@ describe(`create-font RPC`, () => {
 				)
 				.then((response) => response.json()),
 		).resolves.toEqual({ revision: `beta-revision`, units: [] })
+
+		betaAvailable = false
+		await expect(
+			app
+				.handle(new Request(`http://localhost/api/workspace`))
+				.then((response) => response.json()),
+		).resolves.toEqual(
+			expect.objectContaining({
+				activeProjectId: `alpha`,
+				projects: [{ id: `alpha`, name: `Alpha`, path: `fonts/alpha` }],
+			}),
+		)
+		await expect(
+			app.handle(
+				new Request(`http://localhost/projects/beta/api/source/snapshot`),
+			),
+		).resolves.toMatchObject({ status: 404 })
 		for (const path of [
 			`/projects/missing/api/source/snapshot`,
 			`/projects/%2E%2E/api/source/snapshot`,

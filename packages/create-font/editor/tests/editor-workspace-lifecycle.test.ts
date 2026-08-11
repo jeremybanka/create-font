@@ -46,4 +46,25 @@ describe("editor workspace lifecycle", () => {
 		expect(documentRemove).toHaveBeenCalledWith("click", firstClickListener)
 		workspace.dispose()
 	})
+
+	it("preserves URL-backed workspace context across editor navigation", () => {
+		history.replaceState(null, ``, `/?font=beta`)
+		const workspace = createEditorWorkspace()
+		workspace.startBrowserNavigation()
+		const anchor = document.createElement(`a`)
+		anchor.href = `/info`
+		document.body.append(anchor)
+
+		anchor.click()
+		expect(window.location.pathname).toBe(`/info`)
+		expect(window.location.search).toBe(`?font=beta`)
+
+		workspace.actions.navigate(`/glyphs`)
+		expect(window.location.pathname).toBe(`/glyphs`)
+		expect(window.location.search).toBe(`?font=beta`)
+
+		workspace.dispose()
+		anchor.remove()
+		history.replaceState(null, ``, `/`)
+	})
 })

@@ -16,7 +16,9 @@ export type CreateFontRpcOptions = Readonly<{
 	name?: string
 	root?: string
 	source?: CreateFontSourceService
-	workspace?: FontWorkspaceInventory
+	workspace?:
+		| FontWorkspaceInventory
+		| (() => FontWorkspaceInventory | undefined)
 }>
 
 export function createFontRpc(options: CreateFontRpcOptions = {}) {

@@ -428,6 +428,7 @@ async function commitSourceUnits(
 		message: request.message,
 		paths: request.paths as [string, ...string[]],
 	})
+	if (sourceEventsDisposed) return
 	if (response.error !== null || response.data === null) {
 		throw new Error(
 			responseErrorMessage(
@@ -524,6 +525,7 @@ async function showSource(
 }
 
 async function showSourceState(state: SourceSyncState): Promise<void> {
+	if (sourceEventsDisposed) return
 	const assembled = assembleSourceSyncState(state)
 	const recovery = recoveryDraftLoaded ? undefined : readRecoveryDraft()
 	recoveryDraftLoaded = true
@@ -537,6 +539,7 @@ async function showSourceState(state: SourceSyncState): Promise<void> {
 		processing.writes,
 		processing.validation,
 	])
+	if (sourceEventsDisposed) return
 	await showSource(rendered, validation, {
 		entries: assembled.featureEntries,
 		sources: assembled.featureSources,
@@ -545,6 +548,7 @@ async function showSourceState(state: SourceSyncState): Promise<void> {
 
 const refreshController = createSourceSnapshotRefreshController({
 	async applySnapshot(snapshot, initialLoad) {
+		if (sourceEventsDisposed) return
 		sourceState = sourceSyncStateFromSnapshot(snapshot)
 		startupTimeline.mark(`source-message-received`)
 		await showSourceState(sourceState)
@@ -575,6 +579,7 @@ async function refreshSource(renderSnapshot: boolean): Promise<void> {
 }
 
 function markSourceDirty(source: EditorFontSource): void {
+	if (sourceEventsDisposed) return
 	dirtySequence += 1
 	sourceDirty = true
 	writeRecoveryDraft(source)
@@ -618,6 +623,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 				(error: unknown) => ({ error, ok: false as const }),
 			)
 			const writes = await processing.writes
+			if (sourceEventsDisposed) return
 			if (writes.length !== 0) {
 				const operationId = crypto.randomUUID()
 				const result = writeResultFromResponse(
@@ -629,6 +635,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 						],
 					}),
 				)
+				if (sourceEventsDisposed) return
 				if (
 					sourceState !== null &&
 					sourceState.revision === result.previousRevision
@@ -650,6 +657,7 @@ function saveSource(source: EditorFontSource): Promise<void> {
 				}
 			}
 			const validationResult = await validationPromise
+			if (sourceEventsDisposed) return
 			if (!validationResult.ok) throw validationResult.error
 			currentValidation = validationResult.validation
 			if (dirtySequence !== saveSequence) return
@@ -687,7 +695,9 @@ function saveSource(source: EditorFontSource): Promise<void> {
 }
 
 async function drainSourceEvents(): Promise<void> {
+	if (sourceEventsDisposed) return
 	await feaParserReady
+	if (sourceEventsDisposed) return
 	if (sourceDirty || sourceState === null || bufferedSourceEvents.length === 0)
 		return
 	let changed = false
@@ -717,6 +727,7 @@ async function drainSourceEvents(): Promise<void> {
 }
 
 function enqueueSourceEvent(event: SourceChangedEvent): void {
+	if (sourceEventsDisposed) return
 	bufferedSourceEvents.push(event)
 	queueSourceEventDrain()
 }
@@ -725,6 +736,7 @@ function queueSourceEventDrain(): void {
 	sourceEventQueue = sourceEventQueue
 		.then(drainSourceEvents)
 		.catch((error: unknown) => {
+			if (sourceEventsDisposed) return
 			console.error(`Unable to apply a source update.`, error)
 			if (!renderedSource) {
 				showBootstrapError(
@@ -742,6 +754,7 @@ function connectSourceEvents(): void {
 	activeSourceEvents = events as { close?: () => void }
 	events.subscribe((event) => enqueueSourceEvent(event.data))
 	events.on(`open`, () => {
+		if (sourceEventsDisposed) return
 		sourceEventReconnectDelay = 250
 		if (sourceEventsHaveConnected && !sourceDirty) {
 			sourceEventQueue = sourceEventQueue
@@ -805,7 +818,8 @@ window.addEventListener(`beforeunload`, (event) => {
 	event.returnValue = ``
 })
 
-window.addEventListener(`pagehide`, () => {
+window.addEventListener(`pagehide`, (event) => {
+	if (event.persisted) return
 	sourceEventsDisposed = true
 	if (sourceEventReconnectTimer !== undefined)
 		clearTimeout(sourceEventReconnectTimer)
