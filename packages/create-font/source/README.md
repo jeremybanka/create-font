@@ -13,6 +13,12 @@ references, relative incoming/outgoing handles, soft/hard node modes, and
 each contour's explicit `closed` state, plus editor-only note and color fields,
 all cross the boundary in the same form emitted by the state graph.
 
+## External source importers
+
+The native directory and document codecs stay format-focused. Glyphs.app text
+parsing, its source AST, and explicit lowering into this format live in
+[`@create-font/glyphs`](../glyphs/README.md).
+
 ## Project source directory
 
 The directory is deliberately shaped around the state graph's useful remote

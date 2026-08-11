@@ -10,7 +10,7 @@ import { runtimeElysiaAdapter } from "../src/elysia-adapter.ts"
 import { isMainModule } from "../src/runtime.ts"
 import { startCreateFontServer } from "../src/server.ts"
 
-async function availablePort(): Promise<number> {
+export async function availablePort(): Promise<number> {
 	const server = createServer()
 	await new Promise<void>((resolve, reject) => {
 		server.once(`error`, reject)
@@ -102,6 +102,12 @@ export async function verifyRuntimeServer(
 	const sockets = new Set<WebSocket>()
 	try {
 		assert.equal(server.url.href, `http://127.0.0.1:${port}/`)
+
+		const application = await fetch(server.url)
+		assert.equal(application.status, 200)
+		assert.match(application.headers.get(`content-type`) ?? ``, /text\/html/u)
+		assert.match(await application.text(), /create-font-root/u)
+		progress(`served browser application`)
 
 		const health = await fetch(new URL(`/api/health`, server.url))
 		assert.equal(health.status, 200)

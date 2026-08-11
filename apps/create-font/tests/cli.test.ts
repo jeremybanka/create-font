@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	readdir,
+	rm,
+	writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -8,6 +15,7 @@ import { createFontWorkspace } from "../src/create.ts"
 import { runFontCli } from "../src/font-cli.ts"
 import { createFileSystemSourceService } from "../src/source-service.ts"
 import { discoverFontProjects } from "../src/workspace.ts"
+import { assembleEditorFontSource } from "@create-font/source"
 
 function captureIo() {
 	const stderr: string[] = []
@@ -75,7 +83,91 @@ describe(`create-font CLI`, () => {
 		const projects = await discoverFontProjects(result.workspaceRoot)
 		expect(projects.map((project) => project.name)).toEqual([`my-font`])
 		const source = await createFileSystemSourceService(result.fontRoot)
-		expect((await source.readManifest()).units.length).toBe(11)
+		expect((await source.readManifest()).units.length).toBe(12)
+		expect(
+			JSON.parse(
+				await readFile(join(result.fontRoot, `features/index.json`), `utf8`),
+			),
+		).toEqual([])
+	})
+
+	it(`imports a Glyphs source into an atomically created native project`, async () => {
+		const cwd = await temporaryRoot()
+		await writeFile(
+			join(cwd, `imported-font.glyphs`),
+			`{
+			familyName = Imported;
+			fontMaster = ({ ascender = 800; capHeight = 700; descender = -200; id = regular; xHeight = 500; });
+			glyphs = (
+			{ glyphname = .notdef; layers = ({ layerId = regular; width = 500; }); },
+			{ glyphname = A; layers = ({ layerId = regular; paths = ({ closed = 1; nodes = ("0 0 LINE", "50 100 LINE", "100 0 LINE"); }); width = 120; }); unicode = 0041; }
+			);
+			features = ({ code = "sub A by .notdef;"; name = salt; });
+			unitsPerEm = 1000;
+			}`,
+		)
+		const captured = captureIo()
+		const exitCode = await runCreateFontCli(
+			[`node`, `create-font`, `--from`, `imported-font.glyphs`, `--no-install`],
+			captured.io,
+			cwd,
+		)
+
+		expect(exitCode).toBe(0)
+		expect(captured.stderr).toEqual([])
+		const projects = await discoverFontProjects(join(cwd, `imported-font`))
+		expect(projects).toHaveLength(1)
+		const service = await createFileSystemSourceService(projects[0]?.root ?? ``)
+		const files = Object.fromEntries(
+			await Promise.all(
+				(await service.readManifest()).units.map(
+					async ({ path }: { path: string }) => [
+						path,
+						(await service.readUnit(path)).value,
+					],
+				),
+			),
+		)
+		const assembled = assembleEditorFontSource(files)
+		expect(assembled.ok).toBe(true)
+		if (assembled.ok) {
+			expect(assembled.value.names.family).toBe(`Imported`)
+			const glyph = assembled.value.glyphs.find((item) => item.name === `A`)
+			expect(glyph?.layers[0]?.contours[0]?.points).toHaveLength(3)
+			expect(assembled.value.cmap).toEqual([
+				{ codePoint: 0x41, glyphId: `glyph:A` },
+			])
+		}
+		expect(
+			JSON.parse(
+				await readFile(
+					join(projects[0]?.root ?? ``, `features/index.json`),
+					`utf8`,
+				),
+			),
+		).toEqual([{ path: `features/glyphs-import.fea` }])
+		expect(
+			await readFile(
+				join(projects[0]?.root ?? ``, `features/glyphs-import.fea`),
+				`utf8`,
+			),
+		).toContain(`feature salt {`)
+	})
+
+	it(`reports Glyphs syntax locations without creating a partial workspace`, async () => {
+		const cwd = await temporaryRoot()
+		await writeFile(join(cwd, `broken.glyphs`), `{ familyName = Broken }`)
+		const captured = captureIo()
+		const exitCode = await runCreateFontCli(
+			[`node`, `create-font`, `--from`, `broken.glyphs`, `--no-install`],
+			captured.io,
+			cwd,
+		)
+
+		expect(exitCode).toBe(1)
+		expect(captured.stderr.join(``)).toContain(`broken.glyphs:1:`)
+		expect(captured.stderr.join(``)).toContain(`glyphs.parse`)
+		expect(await readdir(cwd)).toEqual([`broken.glyphs`])
 	})
 
 	it(`adds another font without replacing the workspace`, async () => {

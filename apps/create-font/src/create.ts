@@ -1,10 +1,22 @@
-import { readFile, readdir, stat, writeFile, mkdir } from "node:fs/promises"
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	readdir,
+	rename,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 
+import { formatSourceFea } from "@create-art/source-format"
+import type { ImportedGlyphsSource } from "@create-font/glyphs"
 import {
 	CREATE_FONT_SOURCE_FORMAT,
 	CREATE_FONT_SOURCE_VERSION,
 	formatSourceUnit,
+	splitEditorFontSource,
 	sourceUnitKindForPath,
 	type FontSourceDirectoryFiles,
 } from "@create-font/source"
@@ -30,6 +42,8 @@ export type CreateFontWorkspaceOptions = Readonly<{
 	name?: string
 	packageManager?: PackageManager
 	runtime?: RuntimeAdapter
+	/** Validated import payload used instead of the empty starter font. */
+	imported?: ImportedGlyphsSource
 }>
 
 export type CreatedFontWorkspace = Readonly<{
@@ -156,6 +170,7 @@ function initialFontFiles(name: string): FontSourceDirectoryFiles {
 		"instances/index.json": [],
 		"glyphs/index.json": [],
 		"cmap/index.json": [],
+		"features/index.json": [],
 	}
 }
 
@@ -190,25 +205,65 @@ async function createWorkspaceFiles(root: string, name: string): Promise<void> {
 	})
 }
 
-async function createFontFiles(root: string, name: string): Promise<void> {
-	await mkdir(root, { recursive: false })
-	for (const [path, value] of Object.entries(initialFontFiles(name))) {
-		const destination = join(root, path)
-		const kind = sourceUnitKindForPath(path)
-		if (kind === null) throw new Error(`Unknown font source path ${path}.`)
-		const formatted = formatSourceUnit(kind, value, path)
-		if (!formatted.ok) {
-			throw new Error(
-				formatted.errors
-					.map(
-						(error) =>
-							`${error.unitPath ?? path}${error.path}: ${error.message}`,
-					)
-					.join(`\n`),
+async function createFontFiles(
+	root: string,
+	name: string,
+	imported?: ImportedGlyphsSource,
+): Promise<void> {
+	const parent = dirname(root)
+	const temporaryRoot = await mkdtemp(join(parent, `.${name}-import-`))
+	try {
+		const files: Record<string, unknown> =
+			imported === undefined
+				? initialFontFiles(name)
+				: (() => {
+						const result = splitEditorFontSource(imported.source)
+						if (!result.ok)
+							throw new Error(
+								result.errors
+									.map(
+										(error) =>
+											`${error.unitPath ?? "source"}${error.path}: ${error.message}`,
+									)
+									.join("\n"),
+							)
+						return { ...result.value }
+					})()
+		if (imported !== undefined)
+			files["features/index.json"] =
+				imported.featureSource === undefined
+					? []
+					: [{ path: "features/glyphs-import.fea" }]
+		for (const [path, value] of Object.entries(files)) {
+			const destination = join(temporaryRoot, path)
+			const kind = sourceUnitKindForPath(path)
+			if (kind === null) throw new Error(`Unknown font source path ${path}.`)
+			const formatted = formatSourceUnit(kind, value, path)
+			if (!formatted.ok) {
+				throw new Error(
+					formatted.errors
+						.map(
+							(error) =>
+								`${error.unitPath ?? path}${error.path}: ${error.message}`,
+						)
+						.join(`\n`),
+				)
+			}
+			await mkdir(dirname(destination), { recursive: true })
+			await writeFile(destination, formatted.value, { flag: "wx" })
+		}
+		if (imported?.featureSource !== undefined) {
+			await mkdir(join(temporaryRoot, "features"), { recursive: true })
+			await writeFile(
+				join(temporaryRoot, "features", "glyphs-import.fea"),
+				formatSourceFea(imported.featureSource, "features/glyphs-import.fea"),
+				{ flag: "wx" },
 			)
 		}
-		await mkdir(dirname(destination), { recursive: true })
-		await writeFile(destination, formatted.value, { flag: "wx" })
+		await rename(temporaryRoot, root)
+	} catch (error) {
+		await rm(temporaryRoot, { force: true, recursive: true })
+		throw error
 	}
 }
 
@@ -246,9 +301,10 @@ export async function createFontWorkspace(
 			: basename(workspaceRoot),
 	)
 	const workspaceCreated = !workspaceExists
+	let targetType: Awaited<ReturnType<typeof pathType>> = null
 
 	if (workspaceCreated) {
-		const targetType = await pathType(workspaceRoot)
+		targetType = await pathType(workspaceRoot)
 		if (targetType === "file") {
 			throw new Error(`${workspaceRoot} already exists and is not a directory.`)
 		}
@@ -258,15 +314,34 @@ export async function createFontWorkspace(
 		) {
 			throw new Error(`${workspaceRoot} already exists and is not empty.`)
 		}
-		await createWorkspaceFiles(workspaceRoot, fontName)
 	}
 
 	const fontRoot = join(workspaceRoot, "fonts", fontName)
 	if ((await pathType(fontRoot)) !== null) {
 		throw new Error(`Font project ${JSON.stringify(fontName)} already exists.`)
 	}
-	await mkdir(join(workspaceRoot, "fonts"), { recursive: true })
-	await createFontFiles(fontRoot, fontName)
+	if (workspaceCreated && targetType === null) {
+		const temporaryWorkspaceRoot = await mkdtemp(
+			join(dirname(workspaceRoot), `.${basename(workspaceRoot)}-create-`),
+		)
+		try {
+			await createWorkspaceFiles(temporaryWorkspaceRoot, fontName)
+			await mkdir(join(temporaryWorkspaceRoot, "fonts"), { recursive: true })
+			await createFontFiles(
+				join(temporaryWorkspaceRoot, "fonts", fontName),
+				fontName,
+				options.imported,
+			)
+			await rename(temporaryWorkspaceRoot, workspaceRoot)
+		} catch (error) {
+			await rm(temporaryWorkspaceRoot, { force: true, recursive: true })
+			throw error
+		}
+	} else {
+		if (workspaceCreated) await createWorkspaceFiles(workspaceRoot, fontName)
+		await mkdir(join(workspaceRoot, "fonts"), { recursive: true })
+		await createFontFiles(fontRoot, fontName, options.imported)
+	}
 
 	const install = options.install ?? workspaceCreated
 	if (install) {

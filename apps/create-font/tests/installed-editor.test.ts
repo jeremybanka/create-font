@@ -115,9 +115,10 @@ const editorPackagePath = fileURLToPath(import.meta.resolve("@create-font/editor
 const createFontPackage = JSON.parse(await readFile(createFontPackagePath, "utf8"))
 const editorArtifactPath = resolve(dirname(editorPackagePath), "dist/browser/editor.js")
 const editorModule = await import(pathToFileURL(editorArtifactPath).href)
-const app = createFontServerApp()
+const app = createFontServerApp().compile()
 const request = (path: string) => app.handle(new Request(new URL(path, "http://installed.test")))
-	const html = await (await request("/")) .text()
+	const rootResponse = await request("/")
+	const html = await rootResponse.text()
 	const scriptSource = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
 	if (scriptSource === undefined) throw new Error("The installed app has no browser script.")
 	const publicRoot = resolve(dirname(createFontPackagePath), "dist/public")
@@ -133,6 +134,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 	const editorStyles = await editorStylesResponse.text()
 	await writeFile("result.json", JSON.stringify({
 		dependency: createFontPackage.dependencies["@create-font/editor"],
+		rootContentType: rootResponse.headers.get("content-type"),
+		rootHasApplication: html.includes("create-font-root"),
+		rootStatus: rootResponse.status,
 		editorContentType: editorJavaScriptResponse.headers.get("content-type"),
 		editorHasImplementation: editorJavaScript.includes("editor-application-root"),
 		editorSize: editorJavaScript.length,
@@ -158,6 +162,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 			mainHasEditorImplementation?: boolean
 			mainLoadsEditorArtifact?: boolean
 			mountType?: string
+			rootContentType?: string
+			rootHasApplication?: boolean
+			rootStatus?: number
 			stylesContentType?: string
 			stylesHaveEditorRoot?: boolean
 		}
@@ -168,6 +175,9 @@ const request = (path: string) => app.handle(new Request(new URL(path, "http://i
 			),
 		) as { version: string }
 		expect(result.dependency).toBe(editorPackage.version)
+		expect(result.rootStatus).toBe(200)
+		expect(result.rootContentType).toMatch(/^text\/html/u)
+		expect(result.rootHasApplication).toBe(true)
 		expect(result.mainHasEditorImplementation).toBe(false)
 		expect(result.mainLoadsEditorArtifact).toBe(true)
 		expect(result.editorContentType).toMatch(/^text\/javascript/u)
