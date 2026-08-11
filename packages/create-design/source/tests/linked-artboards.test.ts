@@ -4,7 +4,7 @@ import { createInitialDocument } from "../src/initial-document.ts"
 import { validateDesignDocument } from "../src/document.ts"
 import {
 	CREATE_DESIGN_SOURCE_VERSION,
-	PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
+	VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION,
 	assembleDesignDocument,
 	defaultObjectUnitPath,
 	designSourcePaths,
@@ -41,7 +41,7 @@ describe("linked artboard source", () => {
 		if (!split.ok) throw new Error("Expected linked source to split.")
 		expect(split.value[designSourcePaths.project]).toMatchObject({
 			sourceVersion: CREATE_DESIGN_SOURCE_VERSION,
-			documentVersion: 7,
+			documentVersion: 8,
 		})
 		expect(
 			split.value[defaultObjectUnitPath(linked.objects[0]!.id)],
@@ -50,7 +50,7 @@ describe("linked artboard source", () => {
 			...split.value,
 			[designSourcePaths.project]: {
 				...(split.value[designSourcePaths.project] as Record<string, unknown>),
-				sourceVersion: PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
+				sourceVersion: VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION,
 			},
 		}
 		expect(assembleDesignDocument(previousSource)).toMatchObject({

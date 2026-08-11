@@ -17,10 +17,13 @@ import {
 	designBlendSchema,
 	finiteNumberSchema,
 	guideSchema,
+	legacyGuideSchema,
+	migrateLegacyGuide,
 	linkedArtboardGeometrySchema,
 	positiveNumberSchema,
 	LEGACY_DESIGN_DOCUMENT_VERSION,
 	PREVIOUS_DESIGN_DOCUMENT_VERSION,
+	VERSION_SIX_DESIGN_DOCUMENT_VERSION,
 	VERSION_FIVE_DESIGN_DOCUMENT_VERSION,
 	VERSION_FOUR_DESIGN_DOCUMENT_VERSION,
 	VERSION_THREE_DESIGN_DOCUMENT_VERSION,
@@ -53,8 +56,9 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_SOURCE_FORMAT = "create-design.source" as const
-export const CREATE_DESIGN_SOURCE_VERSION = 5 as const
-export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 4 as const
+export const CREATE_DESIGN_SOURCE_VERSION = 6 as const
+export const PREVIOUS_CREATE_DESIGN_SOURCE_VERSION = 5 as const
+export const VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION = 4 as const
 export const VERSION_THREE_CREATE_DESIGN_SOURCE_VERSION = 3 as const
 export const VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION = 2 as const
 export const LEGACY_CREATE_DESIGN_SOURCE_VERSION = 1 as const
@@ -74,6 +78,7 @@ export const projectFileSchema = z
 			z.literal(LEGACY_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(VERSION_THREE_CREATE_DESIGN_SOURCE_VERSION),
+			z.literal(VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(PREVIOUS_CREATE_DESIGN_SOURCE_VERSION),
 			z.literal(CREATE_DESIGN_SOURCE_VERSION),
 		]),
@@ -84,20 +89,37 @@ export const projectFileSchema = z
 			z.literal(VERSION_FOUR_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_THREE_DESIGN_DOCUMENT_VERSION),
 			z.literal(VERSION_FIVE_DESIGN_DOCUMENT_VERSION),
+			z.literal(VERSION_SIX_DESIGN_DOCUMENT_VERSION),
 			z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
 			z.literal(CREATE_DESIGN_DOCUMENT_VERSION),
 		]),
 	})
 	.strict()
-export const documentFileSchema = z
+export const legacyDocumentFileSchema = z
 	.object({
 		format: z.literal("create-design.metadata"),
 		version: z.literal(1),
 		title: z.string(),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 		blends: z.array(designBlendSchema).optional(),
 	})
 	.strict()
+export const documentFileSchema = z.union([
+	z
+		.object({
+			format: z.literal("create-design.metadata"),
+			version: z.literal(2),
+			title: z.string(),
+			guides: z.array(guideSchema),
+			blends: z.array(designBlendSchema).optional(),
+		})
+		.strict(),
+	legacyDocumentFileSchema.transform((file) => ({
+		...file,
+		version: 2 as const,
+		guides: file.guides.map(migrateLegacyGuide),
+	})),
+])
 export const paletteFileSchema = z
 	.object({
 		format: z.literal("create-design.palette"),
@@ -888,7 +910,7 @@ export function splitDesignDocument(
 		} satisfies ProjectFile,
 		[designSourcePaths.document]: {
 			format: "create-design.metadata",
-			version: 1,
+			version: 2,
 			title: validated.value.title,
 			guides: validated.value.guides.map((guide) => ({ ...guide })),
 			...(validated.value.blends === undefined
@@ -1146,7 +1168,7 @@ export function assembleDesignDocument(
 		)
 	if (
 		project !== null &&
-		project.sourceVersion < PREVIOUS_CREATE_DESIGN_SOURCE_VERSION &&
+		project.sourceVersion < VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION &&
 		layerIndex !== null &&
 		(layerIndex.entries.length !== 1 ||
 			layerIndex.entries[0]?.id !== DEFAULT_LAYER_ID)
@@ -1155,7 +1177,7 @@ export function assembleDesignDocument(
 			diagnostic(
 				"directory.unsupported",
 				"$.entries",
-				`Source versions before ${PREVIOUS_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
+				`Source versions before ${VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
 				designSourcePaths.layerIndex,
 			),
 		)
@@ -1231,7 +1253,7 @@ export function assembleDesignDocument(
 		if (
 			file.geometry.kind === "artboard-link" &&
 			project !== null &&
-			project.sourceVersion < CREATE_DESIGN_SOURCE_VERSION
+			project.sourceVersion < PREVIOUS_CREATE_DESIGN_SOURCE_VERSION
 		)
 			errors.push(
 				diagnostic(

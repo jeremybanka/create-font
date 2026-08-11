@@ -34,7 +34,7 @@ const fixture = (): DesignDocument => {
 	const end = endpoint("object:end", 30)
 	return {
 		format: "create-design.document",
-		version: 7,
+		version: 8,
 		title: "PDF blend",
 		artboards: [
 			{ id: "artboard:one", name: "One", x: 0, y: 0, width: 100, height: 100 },

@@ -283,6 +283,26 @@ const canonicalV1Fixture = () => ({
 })
 
 describe("complete design document codec", () => {
+	const migratedGuides = (
+		guides: readonly Readonly<{
+			id: string
+			axis: "x" | "y"
+			value: number
+			locked?: boolean
+		}>[],
+	) =>
+		guides.map((guide) => ({
+			id: guide.id,
+			a:
+				guide.axis === "x"
+					? { x: guide.value, y: 0 }
+					: { x: 0, y: guide.value },
+			b:
+				guide.axis === "x"
+					? { x: guide.value, y: 1 }
+					: { x: 1, y: guide.value },
+			...(guide.locked === undefined ? {} : { locked: guide.locked }),
+		}))
 	it("round-trips optional live-corner metadata without a source-version bump", () => {
 		const decoded = decodeDesignDocument(canonicalV1Fixture())
 		if (!decoded.ok) throw new Error("Expected the fixture to migrate.")
@@ -444,7 +464,7 @@ describe("complete design document codec", () => {
 					},
 				],
 				groups: [],
-				guides: legacy.guides,
+				guides: migratedGuides(legacy.guides),
 			},
 		})
 	})
@@ -455,6 +475,7 @@ describe("complete design document codec", () => {
 		const { layers: _layers, groups: _groups, ...common } = current.value
 		const previous = {
 			...common,
+			guides: canonicalV1Fixture().guides,
 			version: 5 as const,
 			scene: [{ kind: "group" as const, id: "group:root" }],
 			groups: [
@@ -526,6 +547,43 @@ describe("complete design document codec", () => {
 		).toMatchObject({ ok: false })
 	})
 
+	it("migrates v7 axis guides and rejects coincident v8 guide points", () => {
+		const current = createInitialDocument()
+		const previous = {
+			...current,
+			version: 7 as const,
+			guides: [
+				{ id: "guide:vertical", axis: "x" as const, value: 42, locked: true },
+			],
+		}
+		expect(decodeDesignDocument(previous)).toMatchObject({
+			ok: true,
+			value: {
+				version: CREATE_DESIGN_DOCUMENT_VERSION,
+				guides: [
+					{
+						id: "guide:vertical",
+						a: { x: 42, y: 0 },
+						b: { x: 42, y: 1 },
+						locked: true,
+					},
+				],
+			},
+		})
+		expect(
+			validateDesignDocument({
+				...current,
+				guides: [
+					{
+						id: "guide:invalid",
+						a: { x: 10, y: 10 },
+						b: { x: 10, y: 10 },
+					},
+				],
+			}),
+		).toMatchObject({ ok: false })
+	})
+
 	it("preserves canonical v1 IDs, ordering, colors, geometry, appearance, transforms, flags, guides, and page properties", () => {
 		const canonical = canonicalV1Fixture()
 		expect(decodeDesignDocument(canonical)).toEqual({
@@ -570,7 +628,7 @@ describe("complete design document codec", () => {
 					},
 				],
 				groups: [],
-				guides: canonical.guides,
+				guides: migratedGuides(canonical.guides),
 			},
 		})
 	})
@@ -678,7 +736,7 @@ describe("complete design document codec", () => {
 							}),
 				},
 			})),
-			guides: current.value.guides,
+			guides: canonicalV1Fixture().guides,
 		}
 		const decoded = decodeDesignDocument(versionThree)
 		if (!decoded.ok) throw new Error("Expected the v3 fixture to migrate.")
