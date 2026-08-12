@@ -19,7 +19,7 @@ app-shell.class {
 		border-bottom: 1px solid var(--line-strong);
 		background: var(--surface-header);
 		box-shadow: 0 1px 3px var(--shadow-subtle);
-		z-index: 2;
+		z-index: 18;
 
 		> brand-lockup {
 			display: flex;

@@ -1,6 +1,6 @@
 /* eslint-disable lasertag/render-tag-with-own-name -- Headless atom.io history boundaries intentionally return caller-owned controls without DOM wrappers. */
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
-import type { GlyphId } from "@create-font/states"
+import type { GlyphId, MasterId } from "@create-font/states"
 import { type TimelineMeta, useO, useTL } from "atom.io/react"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -65,6 +65,8 @@ import type {
 	EditorWorkspaceProject,
 } from "./browser-api.ts"
 import { CollaborationPanel } from "./CollaborationPanel.tsx"
+import { CollaborationUiPresence } from "./CollaborationUiPresence.tsx"
+import { useEditorCollaborationPresence } from "./use-editor-collaboration-presence.ts"
 
 const svg = {
 	MagnifyingGlass: MagnifyingGlassIcon,
@@ -189,6 +191,9 @@ export function AppShell({
 		readInitialAlternateHotbarSlots,
 	)
 	const [diffView, setDiffView] = useState(false)
+	const [followingDeviceId, setFollowingDeviceId] = useState<string | null>(
+		null,
+	)
 	const [tilingLayout, setTilingLayout] = useState(readInitialTilingLayout)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
@@ -197,6 +202,7 @@ export function AppShell({
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<FontTileKind> | null>(null)
 	const uiLayoutControlRef = useRef<UiLayoutControlHandle>(null)
+	const followedTargetRef = useRef<string | null>(null)
 	const tileCommandSequence = useRef(0)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -212,6 +218,13 @@ export function AppShell({
 	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
+	const { editorWorkspaceRef, publishPresence: publishEditorPresence } =
+		useEditorCollaborationPresence({
+			activeMasterId,
+			collaboration,
+			layout: tilingLayout,
+			routeName,
+		})
 	const uiLayout = {
 		version: 1,
 		id: "local",
@@ -281,7 +294,6 @@ export function AppShell({
 		setCommandPaletteOpen(false)
 		requestAnimationFrame(() => commandCenterRef.current?.focus())
 	}
-
 	useEffect(() => {
 		setCollaborationSession(collaboration?.session())
 		if (collaboration === undefined) return
@@ -291,6 +303,65 @@ export function AppShell({
 	useEffect(() => {
 		if (readOnly) setAddingGlyphs(false)
 	}, [readOnly])
+
+	useEffect(() => {
+		followedTargetRef.current = null
+	}, [followingDeviceId])
+
+	useEffect(() => {
+		if (followingDeviceId === null || collaborationSession === undefined) return
+		const participant = collaborationSession.participants.find(
+			(item) => item.identity.deviceId === followingDeviceId,
+		)
+		if (participant === undefined || !participant.connected) {
+			setFollowingDeviceId(null)
+			return
+		}
+		const presence = collaborationSession.presence.find(
+			(item) => item.deviceId === followingDeviceId,
+		)
+		if (presence === undefined) return
+		const surface = presence.context.surface
+		const glyphId = presence.context.glyph
+		const masterId = presence.context.master
+		const target = `${surface ?? `canvas`}:${glyphId ?? ``}:${masterId ?? ``}`
+		if (followedTargetRef.current === target) return
+		followedTargetRef.current = target
+		if (surface === `glyphs`) {
+			if (routeName !== `glyphs`) workspace.actions.navigate(`/glyphs`)
+			return
+		}
+		if (surface === `info`) {
+			if (routeName !== `info`) workspace.actions.navigate(`/info`)
+			return
+		}
+		if (masterId !== null && masterId !== undefined) {
+			const candidate = masterId as MasterId
+			if (masterIds.some((id) => id === candidate))
+				workspace.actions.selectMaster(candidate)
+		}
+		if (glyphId !== null && glyphId !== undefined) {
+			const candidate = glyphId as GlyphId
+			const candidateExists = workspace.font.read
+				.editorSource()
+				?.glyphs.some((glyph) => glyph.id === candidate)
+			if (
+				candidateExists === true &&
+				(routeName !== `canvas` || activeGlyphId !== candidate)
+			) {
+				workspace.actions.reviewGlyph(candidate)
+			}
+		} else if (routeName !== `canvas`) {
+			workspace.actions.navigate(`/`)
+		}
+	}, [
+		activeGlyphId,
+		collaborationSession,
+		followingDeviceId,
+		masterIds,
+		routeName,
+		workspace,
+	])
 
 	useEffect(() => {
 		try {
@@ -313,6 +384,11 @@ export function AppShell({
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
+			if (event.key === `Escape` && followingDeviceId !== null) {
+				event.preventDefault()
+				setFollowingDeviceId(null)
+				return
+			}
 			if (tilingStatus.management) return
 			if (isCurvatureShortcut(event, IS_MAC_LIKE)) {
 				event.preventDefault()
@@ -326,7 +402,7 @@ export function AppShell({
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [tilingStatus.management, workspace])
+	}, [followingDeviceId, tilingStatus.management, workspace])
 
 	const commandsForHistory = (
 		history: TimelineMeta | null,
@@ -495,7 +571,15 @@ export function AppShell({
 				</command-center>
 				<header-actions>
 					{collaboration === undefined ? null : (
-						<CollaborationPanel collaboration={collaboration} />
+						<CollaborationPanel
+							collaboration={collaboration}
+							followingDeviceId={followingDeviceId}
+							onFollow={(deviceId) =>
+								setFollowingDeviceId((current) =>
+									current === deviceId ? null : deviceId,
+								)
+							}
+						/>
 					)}
 					<document-status
 						role="status"
@@ -537,13 +621,13 @@ export function AppShell({
 					</viewer-notice>
 				) : null}
 				{routeName === "canvas" ? (
-					<editor-workspace>
+					<editor-workspace ref={editorWorkspaceRef}>
 						<GlyphCanvas
 							{...(collaboration === undefined
 								? {}
 								: {
-										collaboration,
 										collaborationSession,
+										publishPresence: publishEditorPresence,
 									})}
 							workspace={workspace}
 							disabled={tilingStatus.management || readOnly}
@@ -666,6 +750,9 @@ export function AppShell({
 					create-font editor v{workspace.document.editorVersion}
 				</format-label>
 			</footer>
+			{collaborationSession === undefined ? null : (
+				<CollaborationUiPresence session={collaborationSession} />
+			)}
 			{commandPaletteOpen ? (
 				<EditorHistoryBoundary
 					activeGlyphId={activeGlyphId}

@@ -87,6 +87,24 @@ export interface CollaborationPresence {
 		maxX: number
 		maxY: number
 	}> | null
+	/**
+	 * Normalized viewport geometry for application UI that floats above the
+	 * document canvas. A cursor is relative to the column it is currently over,
+	 * so receivers can keep it attached across different viewport sizes.
+	 */
+	readonly ui?: Readonly<{
+		readonly columns: readonly Readonly<{
+			minX: number
+			minY: number
+			maxX: number
+			maxY: number
+		}>[]
+		readonly cursor: Readonly<{
+			column: number
+			x: number
+			y: number
+		}> | null
+	}> | null
 }
 
 export interface CollaborationClientEvents<Source, Command> {

@@ -235,6 +235,7 @@ import { normalizedPresenceSelectionBox } from "./collaboration-presence.ts"
 export interface GlyphCanvasProps {
 	readonly collaboration?: EditorCollaboration
 	readonly collaborationSession?: EditorCollaborationSession
+	readonly publishPresence?: EditorCollaboration["publishPresence"]
 	readonly workspace: EditorWorkspace
 	readonly disabled?: boolean
 	readonly diffView?: boolean
@@ -431,6 +432,7 @@ const TRANSFORM_ROTATION_SNAP_DEGREES = 15
 export function GlyphCanvas({
 	collaboration,
 	collaborationSession,
+	publishPresence,
 	workspace,
 	disabled = false,
 	diffView = false,
@@ -1120,7 +1122,7 @@ export function GlyphCanvas({
 			y: event.evt.offsetY,
 		}
 	presencePublisherRef.current = () => {
-		collaboration?.publishPresence({
+		;(publishPresence ?? collaboration?.publishPresence)?.({
 			context: {
 				glyph: activeGlyphId,
 				master: activeMasterId,
@@ -1134,7 +1136,11 @@ export function GlyphCanvas({
 		})
 	}
 	const schedulePresence = (): void => {
-		if (collaboration === undefined || presenceFrameRef.current !== null) return
+		if (
+			(publishPresence === undefined && collaboration === undefined) ||
+			presenceFrameRef.current !== null
+		)
+			return
 		presenceFrameRef.current = requestAnimationFrame(() => {
 			presenceFrameRef.current = null
 			presencePublisherRef.current()
@@ -1154,6 +1160,7 @@ export function GlyphCanvas({
 		activeTool,
 		collaboration,
 		editingTextIndex,
+		publishPresence,
 		selection,
 		selectionBox,
 	])
@@ -1163,7 +1170,7 @@ export function GlyphCanvas({
 				cancelAnimationFrame(presenceFrameRef.current)
 				presenceFrameRef.current = null
 			}
-			collaboration?.publishPresence({
+			;(publishPresence ?? collaboration?.publishPresence)?.({
 				context: {
 					glyph: null,
 					master: activeMasterId,
@@ -1176,7 +1183,7 @@ export function GlyphCanvas({
 				selectionBox: null,
 			})
 		}
-	}, [collaboration])
+	}, [collaboration, publishPresence])
 	const sharedModifiers = (
 		event: Pick<MouseEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
 	): VectorGestureModifiers => ({

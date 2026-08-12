@@ -99,11 +99,19 @@ describe(`authoritative realtime actions`, () => {
 			gesture: `pen`,
 			selection: [`node:1`],
 			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
+			ui: {
+				columns: [{ minX: 0.02, minY: 0.1, maxX: 0.25, maxY: 0.9 }],
+				cursor: { column: 0, x: 0.4, y: 0.6 },
+			},
 		})
 		expect(await presence).toMatchObject({
 			context: { document: `primary` },
 			deviceId: `editor-a`,
 			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
+			ui: {
+				columns: [{ minX: 0.02, minY: 0.1, maxX: 0.25, maxY: 0.9 }],
+				cursor: { column: 0, x: 0.4, y: 0.6 },
+			},
 		})
 
 		const confirmed = new Promise<ConfirmedAction<Command>>((resolve) => {

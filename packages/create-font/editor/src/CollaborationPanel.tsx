@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { type CSSProperties, useEffect, useState } from "react"
 
 import type {
 	EditorCollaboration,
@@ -31,41 +31,79 @@ function timeLabel(value: number | null, connected: boolean): string {
 
 export function CollaborationPanel({
 	collaboration,
+	followingDeviceId,
+	onFollow,
 }: {
 	readonly collaboration: EditorCollaboration
+	readonly followingDeviceId: string | null
+	readonly onFollow: (deviceId: string) => void
 }) {
 	const session = useCollaborationSession(collaboration)
 	const connected = session.participants.filter(
 		(participant) => participant.connected,
+	)
+	const followedParticipant = session.participants.find(
+		(participant) => participant.identity.deviceId === followingDeviceId,
 	)
 
 	return (
 		<collaboration-panel className={css.class}>
 			<details>
 				<summary
-					aria-label={`${connected.length} connected participant${connected.length === 1 ? `` : `s`}; your role is ${session.role}`}
+					aria-label={`${connected.length} connected participant${connected.length === 1 ? `` : `s`}; your role is ${session.role}${followedParticipant === undefined ? `` : `; following ${followedParticipant.identity.name}`}`}
 				>
-					<participant-avatars aria-hidden="true">
+					<participant-avatars>
 						{connected.slice(0, 4).map((participant) => {
+							const deviceId = participant.identity.deviceId
 							const presence = session.presence.find(
-								(item) => item.deviceId === participant.identity.deviceId,
+								(item) => item.deviceId === deviceId,
 							)
-							return (
+							const avatar = participantInitials(participant.identity.name)
+							const title = `${participant.identity.name}${presence?.context.glyph === undefined || presence.context.glyph === null ? `` : ` · ${presence.context.glyph}`}`
+							return deviceId === session.deviceId ? (
 								<i
-									key={participant.identity.deviceId}
+									key={deviceId}
 									style={{
-										background: participantColor(participant.identity.deviceId),
+										background: participantColor(deviceId),
 									}}
-									title={`${participant.identity.name}${presence?.context.glyph === undefined || presence.context.glyph === null ? `` : ` · ${presence.context.glyph}`}`}
+									title={`${title} · You`}
 								>
-									{participantInitials(participant.identity.name)}
+									{avatar}
 								</i>
+							) : (
+								<button
+									key={deviceId}
+									type="button"
+									aria-label={
+										followingDeviceId === deviceId
+											? `Stop following ${participant.identity.name}`
+											: `Follow ${participant.identity.name}`
+									}
+									aria-pressed={followingDeviceId === deviceId}
+									data-following={followingDeviceId === deviceId}
+									style={
+										{
+											"--participant-color": participantColor(deviceId),
+											background: participantColor(deviceId),
+										} as CSSProperties
+									}
+									title={`${followingDeviceId === deviceId ? `Stop following` : `Follow`} ${title}`}
+									onClick={(event) => {
+										event.preventDefault()
+										event.stopPropagation()
+										onFollow(deviceId)
+									}}
+								>
+									{avatar}
+								</button>
 							)
 						})}
 						{connected.length <= 4 ? null : <b>+{connected.length - 4}</b>}
 					</participant-avatars>
 					<span>
-						{connected.length} · {session.role}
+						{followedParticipant === undefined
+							? `${connected.length} · ${session.role}`
+							: `Following ${followedParticipant.identity.name} · Esc to stop`}
 					</span>
 				</summary>
 				<collaboration-popover aria-label="Collaboration participants">
@@ -122,16 +160,32 @@ export function CollaborationPanel({
 										)
 									})()}
 								</span>
-								{session.role === `owner` && participant.role !== `owner` ? (
-									<button
-										type="button"
-										onClick={() =>
-											void collaboration.revoke(participant.identity.deviceId)
-										}
-									>
-										Revoke
-									</button>
-								) : null}
+								<participant-actions>
+									{participant.connected &&
+									participant.identity.deviceId !== session.deviceId ? (
+										<button
+											type="button"
+											aria-pressed={
+												followingDeviceId === participant.identity.deviceId
+											}
+											onClick={() => onFollow(participant.identity.deviceId)}
+										>
+											{followingDeviceId === participant.identity.deviceId
+												? `Stop following`
+												: `Follow`}
+										</button>
+									) : null}
+									{session.role === `owner` && participant.role !== `owner` ? (
+										<button
+											type="button"
+											onClick={() =>
+												void collaboration.revoke(participant.identity.deviceId)
+											}
+										>
+											Revoke
+										</button>
+									) : null}
+								</participant-actions>
 							</li>
 						))}
 					</ul>

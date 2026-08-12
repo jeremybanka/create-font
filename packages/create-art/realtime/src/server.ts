@@ -117,6 +117,12 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 				const cursor = presence.cursor
 				const context = presence.context
 				const selectionBox = presence.selectionBox
+				const ui = presence.ui
+				const normalizedNumber = (value: unknown): value is number =>
+					typeof value === `number` &&
+					Number.isFinite(value) &&
+					value >= 0 &&
+					value <= 1
 				return (
 					typeof presence.deviceId === `string` &&
 					presence.deviceId.length <= 128 &&
@@ -149,6 +155,28 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 							Number.isFinite(selectionBox.maxY) &&
 							selectionBox.minX <= selectionBox.maxX &&
 							selectionBox.minY <= selectionBox.maxY)) &&
+					(ui === undefined ||
+						ui === null ||
+						(isRecord(ui) &&
+							Array.isArray(ui.columns) &&
+							ui.columns.length <= 8 &&
+							ui.columns.every(
+								(column) =>
+									isRecord(column) &&
+									normalizedNumber(column.minX) &&
+									normalizedNumber(column.minY) &&
+									normalizedNumber(column.maxX) &&
+									normalizedNumber(column.maxY) &&
+									column.minX <= column.maxX &&
+									column.minY <= column.maxY,
+							) &&
+							(ui.cursor === null ||
+								(isRecord(ui.cursor) &&
+									Number.isSafeInteger(ui.cursor.column) &&
+									ui.cursor.column >= 0 &&
+									ui.cursor.column < ui.columns.length &&
+									normalizedNumber(ui.cursor.x) &&
+									normalizedNumber(ui.cursor.y))))) &&
 					Array.isArray(presence.selection) &&
 					presence.selection.length <= 10_000 &&
 					presence.selection.every((item) => typeof item === `string`)
