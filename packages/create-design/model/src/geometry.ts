@@ -341,6 +341,40 @@ export function projectDesignObjectCornerResolutions(
 	)
 }
 
+/**
+ * Derives the closed region used by fill-only geometry consumers.
+ *
+ * SVG and PDF fill open subpaths by joining their endpoint anchors with a
+ * straight segment while leaving the same subpath open for stroke painting.
+ * Removing only the two dangling endpoint controls gives headless geometry
+ * consumers that same contract without mutating authored topology.
+ */
+export function closeDesignContourForFill(
+	contour: DesignContour,
+): DesignContour {
+	if (contour.closed) return contour
+	const lastIndex = contour.points.length - 1
+	return {
+		...contour,
+		closed: true,
+		points: contour.points.map((point, index) => {
+			const { incoming, outgoing, ...source } = point
+			return {
+				...source,
+				...(index === 0 || incoming === undefined ? {} : { incoming }),
+				...(index === lastIndex || outgoing === undefined ? {} : { outgoing }),
+			}
+		}),
+	}
+}
+
+/** Projects document-space contours with open subpaths derived as fill regions. */
+export function projectDesignObjectFillContours(
+	object: Pick<DesignObject, "id" | "geometry" | "transform">,
+): readonly DesignContour[] {
+	return projectDesignObjectContours(object).map(closeDesignContourForFill)
+}
+
 const pathNumber = (value: number): string =>
 	Number(value.toFixed(3)).toString()
 

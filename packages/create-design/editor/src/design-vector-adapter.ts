@@ -295,6 +295,77 @@ function replaceAt(
 	}
 }
 
+function remainingDesignPointRuns(
+	points: DesignContour["points"],
+	deleted: ReadonlySet<string>,
+	closed: boolean,
+): readonly (readonly DesignContour["points"][number][])[] {
+	const hasNextSegment = (index: number): boolean => {
+		const nextIndex = index + 1
+		if (!closed && nextIndex === points.length) return false
+		const start = points[index]
+		const end = points[nextIndex % points.length]
+		return (
+			start !== undefined &&
+			end !== undefined &&
+			!deleted.has(start.id) &&
+			!deleted.has(end.id)
+		)
+	}
+	const starts = points.flatMap((point, index) => {
+		if (deleted.has(point.id)) return []
+		if (!closed && index === 0) return [index]
+		const previousIndex = (index + points.length - 1) % points.length
+		return hasNextSegment(previousIndex) ? [] : [index]
+	})
+	if (starts.length === 0) {
+		const remaining = points.filter((point) => !deleted.has(point.id))
+		return remaining.length > 0 ? [remaining] : []
+	}
+	const runs: DesignContour["points"][number][][] = []
+	for (const start of starts) {
+		const run: DesignContour["points"][number][] = []
+		let index = start
+		while (true) {
+			const point = points[index]
+			if (point === undefined || deleted.has(point.id)) break
+			run.push(point)
+			if (!hasNextSegment(index)) break
+			index = (index + 1) % points.length
+			if (index === start) break
+		}
+		if (run.length > 0) runs.push(run)
+	}
+	return runs
+}
+
+function clearDanglingDesignHandles(
+	points: readonly DesignContour["points"][number][],
+): readonly DesignContour["points"][number][] {
+	const lastIndex = points.length - 1
+	return points.map((point, index) => {
+		const { incoming, outgoing, ...source } = point
+		return {
+			...source,
+			...(index === 0 || incoming === undefined ? {} : { incoming }),
+			...(index === lastIndex || outgoing === undefined ? {} : { outgoing }),
+		}
+	})
+}
+
+function splitDesignContourId(
+	contourId: string,
+	firstPointId: string,
+	occupied: Set<string>,
+): string {
+	const base = `${contourId}:split:${firstPointId}`
+	let candidate = base
+	let suffix = 2
+	while (occupied.has(candidate)) candidate = `${base}:${suffix++}`
+	occupied.add(candidate)
+	return candidate
+}
+
 export function createDesignVectorAdapter(
 	scope: DesignHierarchyScope,
 ): VectorDocumentAdapter<DesignDocument, DesignVectorSelection> {
@@ -501,25 +572,141 @@ export function createDesignVectorAdapter(
 				}
 			}
 			if (intent.kind === "delete") {
-				const ids = new Set(intent.objectIds)
-				const unknown = [...ids].find(
+				const controls = intent.controls ?? []
+				const ids = new Set([
+					...intent.objectIds,
+					...controls.flatMap((target) =>
+						target.kind === "object" ? [target.objectId] : [],
+					),
+				])
+				const editedIds = new Set([
+					...ids,
+					...controls.map((target) => target.objectId),
+				])
+				const unknown = [...editedIds].find(
 					(id) => !document.objects.some((object) => object.id === id),
 				)
 				if (unknown !== undefined)
 					return reject(`Unknown design object ${unknown}.`)
 				const locked = document.objects.find(
-					(object) => ids.has(object.id) && object.locked,
+					(object) => editedIds.has(object.id) && object.locked,
 				)
 				if (locked !== undefined)
 					return reject(`Object ${locked.id} is locked.`)
+				for (const control of controls) {
+					if (control.kind === "object") continue
+					const object = document.objects.find(
+						(candidate) => candidate.id === control.objectId,
+					)
+					if (object?.geometry.kind !== "path")
+						return reject(
+							`Object ${control.objectId} has no editable path controls.`,
+						)
+					const contour = object.geometry.contours.find(
+						(candidate) => candidate.id === control.contourId,
+					)
+					if (
+						contour === undefined ||
+						!contour.points.some((point) => point.id === control.pointId)
+					)
+						return reject(`Unknown design point ${control.pointId}.`)
+				}
+				const removedIds = new Set(ids)
+				const objects = document.objects.flatMap((object) => {
+					if (removedIds.has(object.id)) return []
+					const objectControls = controls.flatMap((target) =>
+						target.kind !== "object" && target.objectId === object.id
+							? [target]
+							: [],
+					)
+					if (objectControls.length === 0 || object.geometry.kind !== "path")
+						return [object]
+					const deletedPoints = new Set(
+						objectControls.flatMap((target) =>
+							target.kind === "node" ? [target.pointId] : [],
+						),
+					)
+					const deletedHandles = new Set(
+						objectControls.flatMap((target) =>
+							target.kind === "handle"
+								? [`${target.pointId}:${target.handle}`]
+								: [],
+						),
+					)
+					const occupiedContourIds = new Set(
+						object.geometry.contours.map(({ id }) => id),
+					)
+					const contours = object.geometry.contours.flatMap((contour) => {
+						const touched = objectControls.some(
+							(target) => target.contourId === contour.id,
+						)
+						if (!touched) return [contour]
+						const points = contour.points.map((point) => {
+							const removeIncoming = deletedHandles.has(`${point.id}:incoming`)
+							const removeOutgoing = deletedHandles.has(`${point.id}:outgoing`)
+							if (!removeIncoming && !removeOutgoing) return point
+							const { incoming, outgoing, ...source } = point
+							return {
+								...source,
+								...(removeIncoming || incoming === undefined
+									? {}
+									: { incoming }),
+								...(removeOutgoing || outgoing === undefined
+									? {}
+									: { outgoing }),
+							}
+						})
+						const contourDeleted = new Set(
+							points.flatMap((point) =>
+								deletedPoints.has(point.id) ? [point.id] : [],
+							),
+						)
+						if (contourDeleted.size === 0) return [{ ...contour, points }]
+						const breakPaths = intent.deletePolicy === "break-paths"
+						const remainingRuns = breakPaths
+							? remainingDesignPointRuns(points, contourDeleted, contour.closed)
+							: [points.filter((point) => !contourDeleted.has(point.id))]
+						return remainingRuns.flatMap((run, runIndex) => {
+							if (run.length === 0) return []
+							const closed = !breakPaths && contour.closed && run.length >= 3
+							const firstPoint = run[0]
+							if (firstPoint === undefined) return []
+							return [
+								{
+									...contour,
+									id:
+										runIndex === 0
+											? contour.id
+											: splitDesignContourId(
+													contour.id,
+													firstPoint.id,
+													occupiedContourIds,
+												),
+									closed,
+									points: closed ? run : clearDanglingDesignHandles(run),
+								},
+							]
+						})
+					})
+					if (contours.length === 0) {
+						removedIds.add(object.id)
+						return []
+					}
+					return [
+						{
+							...object,
+							geometry: { ...object.geometry, contours },
+						},
+					]
+				})
 				const next = {
 					...document,
-					objects: document.objects.filter((object) => !ids.has(object.id)),
+					objects,
 				}
 				return {
 					ok: true,
-					document: removeDesignHierarchyObjects(next, ids),
-					selection: selection.filter((objectId) => !ids.has(objectId)),
+					document: removeDesignHierarchyObjects(next, removedIds),
+					selection: selection.filter((objectId) => !removedIds.has(objectId)),
 				}
 			}
 			if (intent.kind === "reorder") {

@@ -931,7 +931,7 @@ describe("create-design path commands", () => {
 			path("stroke-only", [rectangle("stroke-box", 0, 0, 10, 10)], {
 				appearance: {},
 			}),
-			path("open", [line("open-line", 0, 10)]),
+			path("short-open", [line("short-open-line", 0, 10)]),
 		]
 		for (const invalid of cases) {
 			const source = documentWith(valid, invalid)
@@ -942,6 +942,51 @@ describe("create-design path commands", () => {
 			expect(eligibility.eligible).toBe(false)
 			expect(source.objects).toEqual([valid, invalid])
 		}
+	})
+
+	it("treats open filled contours as straight-closed Pathfinder regions without mutating source", () => {
+		const open = contour("open-fill", [
+			{
+				id: "open-fill:0",
+				x: 0,
+				y: 0,
+				incoming: { x: -100, y: -100 },
+			},
+			{ id: "open-fill:1", x: 10, y: 0 },
+			{
+				id: "open-fill:2",
+				x: 10,
+				y: 10,
+				outgoing: { x: 100, y: 100 },
+			},
+		])
+		const openObject = path("open-object", [open])
+		const inset = path("inset", [rectangle("inset-box", 6, 1, 8, 3)])
+		const source = documentWith(openObject, inset)
+		expect(
+			designPathCommandEligibility(
+				"pathfinder-unite",
+				context(source, [openObject.id, inset.id]),
+			),
+		).toEqual({ eligible: true })
+		let sequence = 0
+		const result = applyDesignPathCommand(
+			"pathfinder-unite",
+			context(source, [openObject.id, inset.id]),
+			{ nextId: () => `open-fill:${sequence++}` },
+		)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		expect(objectBounds(result.document.objects[0]!)).toEqual({
+			minX: 0,
+			minY: 0,
+			maxX: 10,
+			maxY: 10,
+		})
+		expect(source.objects[0]).toBe(openObject)
+		expect(open.closed).toBe(false)
+		expect(open.points[0]?.incoming).toEqual({ x: -100, y: -100 })
+		expect(open.points.at(-1)?.outgoing).toEqual({ x: 100, y: 100 })
 	})
 
 	it("unites transformed, overlapping, and disjoint fills under the topmost appearance", () => {

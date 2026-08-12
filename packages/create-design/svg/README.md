@@ -26,3 +26,8 @@ flatten in canonical order because this interchange does not encode the
 create-design layer model; nested groups remain ordinary SVG groups. Hidden
 layers emit no elements, locked layers remain visually unchanged, live blends
 lower to ordinary paths, and diagnostics retain containing-layer identity.
+
+Open path data is serialized without `Z`. SVG therefore applies its standard
+implicit straight closure to fill paint and clipping while the same element's
+stroke retains open endpoints, caps, and dash phase. Importing that output
+preserves `closed: false`; export never rewrites the authored contour.

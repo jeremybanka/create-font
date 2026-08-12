@@ -4,7 +4,7 @@ import {
 	flattenDesignContour,
 	objectStrokeDistance,
 	projectDesignOutput,
-	projectDesignObjectContours,
+	projectDesignObjectFillContours,
 	resolvedRgb,
 	visibleObjectBounds,
 } from "@create-design/model"
@@ -93,7 +93,7 @@ export const referencePngRasterBackend: PngRasterBackend = {
 		const projection = orderedObjects(context.document)
 		const objects = projection.objects.map(({ masks, object }) => ({
 			bounds: visibleObjectBounds(object),
-			contours: projectDesignObjectContours(object).map((contour) =>
+			contours: projectDesignObjectFillContours(object).map((contour) =>
 				flattenDesignContour(contour),
 			),
 			fillRule: designObjectFillRule(object),

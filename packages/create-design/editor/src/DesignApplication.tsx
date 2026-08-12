@@ -13,7 +13,6 @@ import {
 	reduceVectorGesture,
 	reduceCanvasWheel,
 	screenToDocument,
-	shouldCloseVectorPen,
 	VectorControlHandles,
 	VectorCornerHandle,
 	VectorContourPath,
@@ -206,12 +205,20 @@ import {
 	setDesignLayerVisibility,
 	toggleOtherDesignLayers,
 } from "./design-layer-operations.ts"
-import { createDesignPenObject, type DesignPenPoint } from "./design-pen.ts"
+import {
+	createDesignPenObject,
+	DESIGN_PEN_DRAG_THRESHOLD_PIXELS,
+	DESIGN_VECTOR_GESTURE_POLICY,
+	type DesignPenPoint,
+	resolveDesignPenProspectiveSegment,
+	type DesignPenProspectiveSegment,
+} from "./design-pen.ts"
 import { placeDesignImage } from "./placed-images.ts"
 import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
 	directSelectionKey,
+	directSelectionVectorControls,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
 	isDirectSelectionNodeSelected,
@@ -770,7 +777,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "guide")
 		return "Click point A, then point B · Shift constrains to 15° increments · Escape cancels"
 	if (tool === "pen")
-		return "Click for corners · Drag for curves · Click start to close · Enter finishes open · Escape cancels"
+		return "Click for corners · Drag for curves · Click start to close · Enter or Escape finishes open"
 	if (tool === "rect" || tool === "ellipse")
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
@@ -1360,6 +1367,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
+	const [penProspectiveSegment, setPenProspectiveSegment] =
+		useState<DesignPenProspectiveSegment | null>(null)
 	const [canvasViewport, setCanvasViewport] = useState({
 		width: 0,
 		height: 0,
@@ -2213,10 +2222,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			// The preference remains effective for this session when storage is blocked.
 		}
 	}, [])
-	const gesturePolicy = useMemo(
-		() => ({ yAxis: "down" as const, rotationSnapDegrees: 15 }),
-		[],
-	)
+	const gesturePolicy = DESIGN_VECTOR_GESTURE_POLICY
 
 	const commit = useCallback(
 		(next: DesignDocument): void => {
@@ -2661,6 +2667,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gestureRef.current = null
 		previewObjectsRef.current = []
 		penPointsRef.current = []
+		setPenProspectiveSegment(null)
 		setPreviewObjects([])
 		setGesturePreview(null)
 		setPenPoints([])
@@ -2673,6 +2680,53 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setGuidePlot(null)
 		setTransformCursor(null)
 	}, [gesturePolicy])
+	const finishPen = useCallback(
+		(closed = false): DesignObject | null => {
+			if (activeLayerUnavailableReason !== null) {
+				cancelCanvasGesture()
+				setStatus(activeLayerUnavailableReason)
+				return null
+			}
+			const points = penPointsRef.current
+			const object = createDesignPenObject({
+				id: `object:${nextId()}`,
+				name: `Pen path ${document.objects.length + 1}`,
+				appearance: authoredAppearance,
+				points,
+				closed,
+			})
+			if (object === null) {
+				cancelCanvasGesture()
+				return null
+			}
+			commit(
+				appendDesignHierarchyObjects(
+					{ ...document, objects: [...document.objects, object] },
+					[object.id],
+					activeHierarchyScope,
+				),
+			)
+			setSelection([object.id])
+			penPointsRef.current = []
+			setPenProspectiveSegment(null)
+			setPenPoints([])
+			setGesturePreview(null)
+			gestureRef.current = null
+			setStatus(
+				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
+			)
+			return object
+		},
+		[
+			activeHierarchyScope,
+			activeLayerUnavailableReason,
+			cancelCanvasGesture,
+			commit,
+			authoredAppearance,
+			document,
+			nextId,
+		],
+	)
 	useEffect(() => {
 		const activeScopeUnavailable =
 			(activeLayer.hidden || activeLayer.locked) &&
@@ -2752,13 +2806,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setStatus(textToolsDisabledReason)
 				return
 			}
-			cancelCanvasGesture()
+			const finishedPen =
+				tool === "pen" && nextTool !== "pen" && penPointsRef.current.length >= 2
+					? finishPen(false)
+					: null
+			if (finishedPen === null) cancelCanvasGesture()
 			if (editingTextId !== null) {
 				setEditingTextId(null)
 				setTextSelectionRange(null)
 			}
 			if (nextTool !== "direct") setDirectSelection([])
-			if (nextTool === "select" || nextTool === "transform")
+			if (
+				finishedPen === null &&
+				(nextTool === "select" || nextTool === "transform")
+			)
 				setSelection((current) =>
 					normalizeDesignSelection(
 						document,
@@ -2768,7 +2829,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					),
 				)
 			setTool(nextTool)
-			setStatus(`${DESIGN_TOOLS[nextTool].label} tool`)
+			setStatus(
+				finishedPen === null
+					? `${DESIGN_TOOLS[nextTool].label} tool`
+					: `Created open ${finishedPen.name.toLowerCase()}; ${DESIGN_TOOLS[nextTool].label} tool.`,
+			)
 		},
 		[
 			cancelCanvasGesture,
@@ -2776,7 +2841,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			document,
 			editingTextId,
 			effectiveEditableObjectIds,
+			finishPen,
 			textToolsDisabledReason,
+			tool,
 		],
 	)
 	useEffect(() => {
@@ -2832,6 +2899,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setStatus("Deleted live blend; endpoint objects were retained.")
 			return
 		}
+		if (tool === "direct" && directSelection.length > 0) {
+			const controls = directSelectionVectorControls(document, directSelection)
+			if (
+				controls.length > 0 &&
+				commitVectorIntent({
+					kind: "delete",
+					objectIds: [],
+					controls,
+					deletePolicy: "break-paths",
+				})
+			) {
+				setDirectSelection([])
+				setStatus(
+					`Deleted ${controls.length} selected path control${controls.length === 1 ? "" : "s"}.`,
+				)
+			}
+			return
+		}
 		if (selection.length === 0) return
 		if (selectedUnavailableEntry !== undefined) {
 			setStatus(
@@ -2852,10 +2937,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}, [
 		commit,
 		commitVectorIntent,
+		directSelection,
 		document,
 		selectedBlend,
 		selectedUnavailableEntry,
 		selection,
+		tool,
 	])
 
 	const duplicateSelection = useCallback((): void => {
@@ -3788,52 +3875,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedBlendId,
 		selection,
 	])
-
-	const finishPen = useCallback(
-		(closed = false): void => {
-			if (activeLayerUnavailableReason !== null) {
-				cancelCanvasGesture()
-				setStatus(activeLayerUnavailableReason)
-				return
-			}
-			const points = penPointsRef.current
-			const object = createDesignPenObject({
-				id: `object:${nextId()}`,
-				name: `Pen path ${document.objects.length + 1}`,
-				appearance: authoredAppearance,
-				points,
-				closed,
-			})
-			if (object === null) {
-				cancelCanvasGesture()
-				return
-			}
-			commit(
-				appendDesignHierarchyObjects(
-					{ ...document, objects: [...document.objects, object] },
-					[object.id],
-					activeHierarchyScope,
-				),
-			)
-			setSelection([object.id])
-			penPointsRef.current = []
-			setPenPoints([])
-			setGesturePreview(null)
-			gestureRef.current = null
-			setStatus(
-				`Created ${closed ? "closed" : "open"} ${object.name.toLowerCase()}.`,
-			)
-		},
-		[
-			activeHierarchyScope,
-			activeLayerUnavailableReason,
-			cancelCanvasGesture,
-			commit,
-			authoredAppearance,
-			document,
-			nextId,
-		],
-	)
 
 	const exportDocument = useCallback(
 		(
@@ -5964,6 +6005,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			if (event.key === "Escape") {
+				if (tool === "pen" && penPointsRef.current.length >= 2) {
+					event.preventDefault()
+					finishPen()
+					return
+				}
 				const canceledGesture =
 					gestureRef.current !== null || guidePlotRef.current !== null
 				cancelCanvasGesture()
@@ -6895,8 +6941,29 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
+	const finishOpenPenOnDoubleClick = (
+		event: KonvaEventObject<MouseEvent | TouchEvent>,
+	): void => {
+		if (tool !== "pen" || penPointsRef.current.length < 2) return
+		event.cancelBubble = true
+		const points = penPointsRef.current
+		const previous = points.at(-2)
+		const last = points.at(-1)
+		if (
+			previous === undefined ||
+			last === undefined ||
+			Math.hypot(last.x - previous.x, last.y - previous.y) * worldScale >
+				DESIGN_PEN_DRAG_THRESHOLD_PIXELS
+		)
+			return
+		const deduplicated = points.slice(0, -1)
+		penPointsRef.current = deduplicated
+		setPenPoints(deduplicated)
+		finishPen(false)
+	}
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
+		setPenProspectiveSegment(null)
 		if (event.evt.button === 1) {
 			const pointer = event.target.getStage()?.getPointerPosition()
 			if (pointer === null || pointer === undefined) return
@@ -7023,17 +7090,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (tool === "pen") {
-			if (shouldCloseVectorPen(penPointsRef.current, point, worldScale)) {
+			const snap = resolveCreationPoint(point)
+			const prospective = resolveDesignPenProspectiveSegment(
+				penPointsRef.current,
+				snap.point,
+				worldScale,
+			)
+			if (prospective.closesDraft) {
 				finishPen(true)
 				return
 			}
-			beginVectorGesture(
-				event,
-				{ tool: "pen" },
-				undefined,
-				undefined,
-				resolveCreationPoint(point),
-			)
+			beginVectorGesture(event, { tool: "pen" }, undefined, undefined, snap)
 			return
 		}
 		if (tool === "direct") {
@@ -7144,10 +7211,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				!creationTool ||
 				(tool !== "artboard" && activeLayerUnavailableReason)
 			) {
+				setPenProspectiveSegment(null)
 				clearCreationSnapHint()
 				return
 			}
-			showCreationSnapHint(resolveCreationPoint(pagePoint(event)))
+			const snap = resolveCreationPoint(pagePoint(event))
+			showCreationSnapHint(snap)
+			setPenProspectiveSegment(
+				tool === "pen" && penPointsRef.current.length > 0
+					? resolveDesignPenProspectiveSegment(
+							penPointsRef.current,
+							snap.point,
+							worldScale,
+						)
+					: null,
+			)
 			return
 		}
 		if (gesture.kind === "pan") {
@@ -7494,6 +7572,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				},
 			]
 			penPointsRef.current = points
+			setPenProspectiveSegment(null)
 			setPenPoints(points)
 			return
 		}
@@ -7718,6 +7797,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setTransformCursor(null)
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
 				penPointsRef.current = []
+				setPenProspectiveSegment(null)
 				setPenPoints([])
 			}
 		},
@@ -7733,6 +7813,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		cancelPointer(event.evt.pointerId, event.evt.currentTarget)
 	}
 	const pointerLeave = (): void => {
+		setPenProspectiveSegment(null)
 		clearCreationSnapHint(gestureRef.current === null)
 	}
 	useEffect(() => {
@@ -7750,14 +7831,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	useEffect(() => {
 		const element = artboardWrapRef.current
 		if (element === null) return
-		const listener = (event: PointerEvent): void => {
+		const cancelListener = (event: PointerEvent): void => {
 			cancelPointer(event.pointerId, event.currentTarget)
 		}
-		element.addEventListener("pointercancel", listener, { capture: true })
-		element.addEventListener("lostpointercapture", listener, { capture: true })
+		const lostCaptureListener = (event: PointerEvent): void => {
+			const gesture = gestureRef.current
+			if (
+				event.buttons === 0 &&
+				gesture?.kind === "vector" &&
+				gesture.state.tool === "pen" &&
+				gesture.state.pointerId === event.pointerId
+			) {
+				// Some browsers retire capture before their native pointer-up reaches
+				// Konva on a same-frame Pen drag. Capture loss still carries the
+				// authoritative release coordinates, so finish synchronously before a
+				// cancellation path can clear the already-authored draft points.
+				finishPointerRef.current(event, event.currentTarget)
+				return
+			}
+			cancelListener(event)
+		}
+		element.addEventListener("pointercancel", cancelListener, { capture: true })
+		element.addEventListener("lostpointercapture", lostCaptureListener, {
+			capture: true,
+		})
 		return () => {
-			element.removeEventListener("pointercancel", listener, { capture: true })
-			element.removeEventListener("lostpointercapture", listener, {
+			element.removeEventListener("pointercancel", cancelListener, {
+				capture: true,
+			})
+			element.removeEventListener("lostpointercapture", lostCaptureListener, {
 				capture: true,
 			})
 		}
@@ -7851,6 +7953,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			swatch.id ===
 			(authoredAppearance.fill?.swatchId ??
 				authoredAppearance.stroke?.swatchId),
+	)
+	const penPreviewFill = document.swatches.find(
+		(swatch) => swatch.id === authoredAppearance.fill?.swatchId,
+	)
+	const penPreviewStroke = document.swatches.find(
+		(swatch) => swatch.id === authoredAppearance.stroke?.swatchId,
+	)
+	const penPreviewLayerColor = designLayerUiColorCss(
+		activeLayer.uiColor,
+		activeLayerIndex,
 	)
 	const selectionBounds =
 		tool !== "select" && tool !== "transform"
@@ -8180,6 +8292,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							onPointerLeave={pointerLeave}
 							onPointerCancel={pointerCancel}
 							onLostPointerCapture={pointerCancel}
+							onDblClick={finishOpenPenOnDoubleClick}
+							onDblTap={finishOpenPenOnDoubleClick}
 							onWheel={(event: KonvaEventObject<WheelEvent>) => {
 								event.evt.preventDefault()
 								const pointer =
@@ -8957,7 +9071,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											preview={gesturePreview}
 											preceding={penPoints}
 											inverseScale={1 / worldScale}
-											color={canvasTheme.selection}
+											color={penPreviewLayerColor}
+											{...(penPreviewFill === undefined
+												? {}
+												: {
+														fill: swatchCss(penPreviewFill),
+														fillEnabled: true,
+													})}
+											{...(penPreviewStroke === undefined ||
+											authoredAppearance.stroke === undefined
+												? {}
+												: {
+														stroke: swatchCss(penPreviewStroke),
+														strokeWidth: authoredAppearance.stroke.width,
+														lineCap: authoredAppearance.stroke.cap,
+														lineJoin: authoredAppearance.stroke.join,
+														miterLimit: authoredAppearance.stroke.miterLimit,
+														dash: [...authoredAppearance.stroke.dashArray],
+														dashOffset: authoredAppearance.stroke.dashOffset,
+													})}
+											selectionStroke={penPreviewLayerColor}
+											selectionStrokeWidth={1 / worldScale}
+											handleFill={canvasTheme.handleFill}
 										/>
 									) : penPoints.length === 0 ? null : (
 										<VectorPenPreview
@@ -8982,7 +9117,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											}}
 											preceding={penPoints.slice(0, -1)}
 											inverseScale={1 / worldScale}
-											color={canvasTheme.selection}
+											color={penPreviewLayerColor}
+											{...(penPreviewFill === undefined
+												? {}
+												: {
+														fill: swatchCss(penPreviewFill),
+														fillEnabled: true,
+													})}
+											{...(penPreviewStroke === undefined ||
+											authoredAppearance.stroke === undefined
+												? {}
+												: {
+														stroke: swatchCss(penPreviewStroke),
+														strokeWidth: authoredAppearance.stroke.width,
+														lineCap: authoredAppearance.stroke.cap,
+														lineJoin: authoredAppearance.stroke.join,
+														miterLimit: authoredAppearance.stroke.miterLimit,
+														dash: [...authoredAppearance.stroke.dashArray],
+														dashOffset: authoredAppearance.stroke.dashOffset,
+													})}
+											selectionStroke={penPreviewLayerColor}
+											selectionStrokeWidth={1 / worldScale}
+											{...(penProspectiveSegment === null
+												? {}
+												: {
+														hangingPoint: penProspectiveSegment.point,
+														hangingConnected: penProspectiveSegment.closesDraft,
+													})}
+											handleFill={canvasTheme.handleFill}
 										/>
 									)}
 									<VectorSnapGuides

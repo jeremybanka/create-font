@@ -169,6 +169,13 @@ Authored path contours and points always carry stable `id` fields after
 assembly. Expansion and paste assign fresh identities so selection and later
 path edits never depend on array indexes.
 
+Path contours also retain their explicit `closed` state. `closed: false` is
+canonical, lossless source rather than an incomplete document: directory and
+complete-document codecs preserve the open endpoints and their dangling
+controls exactly. Painting/lowering policy is intentionally downstream—fills
+derive the conventional straight endpoint closure, while strokes, direct
+editing, and explicit Close Path commands continue to use authored topology.
+
 Live blend records persist a stable blend ID, two ordinary object IDs, the
 number of intermediate steps, and explicit contour/point correspondence. They
 never persist derived intermediate objects. Missing endpoints and stale

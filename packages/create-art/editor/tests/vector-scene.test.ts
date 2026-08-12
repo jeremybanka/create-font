@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { vectorContourPath } from "../src/vector-scene.ts"
+import { vectorContourPath, vectorPenSegmentPath } from "../src/vector-scene.ts"
 import { vectorCornerHandlePosition } from "../src/VectorScene.tsx"
 import type { VectorContour } from "../src/vector-editing.ts"
 
@@ -22,6 +22,38 @@ const square = (profile?: "circular" | "squircle"): VectorContour => ({
 })
 
 describe("shared vector scene paths", () => {
+	it.each([
+		{
+			label: "straight",
+			from: { x: 10, y: 20 },
+			to: { x: 80, y: 90 },
+			expected: "M 10 20 L 80 90",
+		},
+		{
+			label: "source handle only",
+			from: { x: 10, y: 20, outgoing: { x: 15, y: -5 } },
+			to: { x: 80, y: 90 },
+			expected: "M 10 20 C 25 15 80 90 80 90",
+		},
+		{
+			label: "target handle only",
+			from: { x: 10, y: 20 },
+			to: { x: 80, y: 90, incoming: { x: -12, y: 7 } },
+			expected: "M 10 20 C 10 20 68 97 80 90",
+		},
+		{
+			label: "both endpoint handles",
+			from: { x: 10, y: 20, outgoing: { x: 15, y: -5 } },
+			to: { x: 80, y: 90, incoming: { x: -12, y: 7 } },
+			expected: "M 10 20 C 25 15 68 97 80 90",
+		},
+	] as const)(
+		"renders a $label prospective segment",
+		({ from, to, expected }) => {
+			expect(vectorPenSegmentPath(from, to)).toBe(expected)
+		},
+	)
+
 	it("renders circular and squircle metadata as lowered canvas geometry", () => {
 		const sharp = vectorContourPath(square())
 		const circular = vectorContourPath(square("circular"))

@@ -8,6 +8,7 @@ import {
 import {
 	designObjectFillRule,
 	objectBounds,
+	projectDesignObjectFillContours,
 	projectDesignObjectContours,
 	type Bounds,
 } from "./geometry.ts"
@@ -428,7 +429,7 @@ export function objectGeometryContainsPoint(
 export function createDesignObjectGeometryHitTest(
 	object: DesignObject,
 ): Readonly<{ containsPoint(point: Point): boolean }> {
-	const contours = projectDesignObjectContours(object)
+	const contours = projectDesignObjectFillContours(object)
 		.filter(({ points }) => points.length >= 3)
 		.map((contour) => flattenDesignContour(contour))
 	const fillRule = designObjectFillRule(object)

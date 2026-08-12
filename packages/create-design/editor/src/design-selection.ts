@@ -2,6 +2,7 @@ import type {
 	CanvasPoint,
 	VectorHandleKind,
 	VectorNode,
+	VectorSelectionTarget,
 } from "@create-art/editor"
 
 import { projectDesignVectorObject } from "./design-vector-adapter.ts"
@@ -187,6 +188,52 @@ export function isDirectSelectionNodeSelected(
 	)
 }
 
+export function directSelectionVectorControls(
+	document: DesignDocument,
+	selection: readonly DesignDirectSelectionTarget[],
+): readonly VectorSelectionTarget[] {
+	const controls: VectorSelectionTarget[] = []
+	const keys = new Set<string>()
+	const add = (target: VectorSelectionTarget): void => {
+		const key =
+			target.kind === "object"
+				? `object:${target.objectId}`
+				: target.kind === "node"
+					? `node:${target.objectId}:${target.contourId}:${target.pointId}`
+					: `handle:${target.objectId}:${target.contourId}:${target.pointId}:${target.handle}`
+		if (keys.has(key)) return
+		keys.add(key)
+		controls.push(target)
+	}
+	for (const target of selection) {
+		if (target.kind === "node" || target.kind === "handle") {
+			add(target)
+			continue
+		}
+		const object = document.objects.find(({ id }) => id === target.objectId)
+		if (object?.geometry.kind !== "path") continue
+		const contour = object.geometry.contours.find(
+			({ id }) => id === target.contourId,
+		)
+		if (contour === undefined) continue
+		const points =
+			target.kind === "contour"
+				? contour.points
+				: [
+						contour.points[target.segmentIndex],
+						contour.points[(target.segmentIndex + 1) % contour.points.length],
+					].filter((point) => point !== undefined)
+		for (const point of points)
+			add({
+				kind: "node",
+				objectId: target.objectId,
+				contourId: target.contourId,
+				pointId: point.id,
+			})
+	}
+	return controls
+}
+
 export function selectableObjectIds(
 	objects: readonly DesignObject[],
 ): readonly string[] {
@@ -341,6 +388,7 @@ export function nearestDirectSelectionTarget(
 		| Readonly<{
 				target: DesignDirectSelectionTarget
 				distance: number
+				distanceBand: number
 				priority: number
 				stack: number
 		  }>
@@ -352,15 +400,17 @@ export function nearestDirectSelectionTarget(
 		stack: number,
 	): void => {
 		if (distance > maximum) return
+		const distanceBand = Math.floor((distance * worldScale) / 2)
 		if (
 			best === undefined ||
-			distance < best.distance ||
-			(distance === best.distance && priority < best.priority) ||
+			distanceBand < best.distanceBand ||
+			(distanceBand === best.distanceBand && priority < best.priority) ||
 			(priority === best.priority &&
-				distance === best.distance &&
-				stack > best.stack)
+				distanceBand === best.distanceBand &&
+				(distance < best.distance ||
+					(distance === best.distance && stack > best.stack)))
 		)
-			best = { target, distance, priority, stack }
+			best = { target, distance, distanceBand, priority, stack }
 	}
 	for (const [stack, object] of objects.entries()) {
 		if (object.hidden || object.locked || object.geometry.kind !== "path")

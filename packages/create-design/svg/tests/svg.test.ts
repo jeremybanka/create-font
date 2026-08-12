@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { createInitialDocument } from "@create-design/source"
+import {
+	createInitialDocument,
+	DEFAULT_DESIGN_STROKE_STYLE,
+} from "@create-design/source"
 import { createDesignBlend } from "@create-design/model"
 import {
 	createSvgProjectionGraph,
@@ -12,6 +15,73 @@ import {
 import { parseSvgFixture } from "./svg-parser-fixture.ts"
 
 describe("SVG export", () => {
+	it("preserves an open fill-and-stroke path across SVG export and import", () => {
+		const initial = createInitialDocument()
+		const open = {
+			...initial.objects[0]!,
+			id: "object:open-path",
+			name: "Open path",
+			geometry: {
+				kind: "path" as const,
+				contours: [
+					{
+						id: "contour:open-path",
+						closed: false,
+						points: [
+							{ id: "point:open-path:0", x: 0, y: 0 },
+							{ id: "point:open-path:1", x: 4, y: 0 },
+							{ id: "point:open-path:2", x: 4, y: 4 },
+						],
+					},
+				],
+			},
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			appearance: {
+				fill: { swatchId: "swatch:coral" },
+				stroke: {
+					...DEFAULT_DESIGN_STROKE_STYLE,
+					swatchId: "swatch:ink",
+					width: 0.5,
+					cap: "round" as const,
+				},
+			},
+		}
+		const document = {
+			...initial,
+			artboards: [{ ...initial.artboards[0]!, width: 4, height: 4 }],
+			objects: [open],
+			layers: initial.layers.map((layer) => ({
+				...layer,
+				children: [{ kind: "object" as const, id: open.id }],
+			})),
+		}
+		const svg = new TextDecoder().decode(exportSvg(document))
+		const element = svg
+			.split("\n")
+			.find((line) => line.includes(`id="${open.id}"`))
+		expect(element).toContain('d="M 0 0 L 4 0 L 4 4"')
+		expect(element).toContain('stroke-linecap="round"')
+		expect(element).not.toContain(" Z")
+		expect(open.geometry.contours[0]?.closed).toBe(false)
+
+		let sequence = 0
+		const imported = importSvg(
+			svg,
+			{
+				...initial,
+				objects: [],
+				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+			},
+			{ nextId: () => `open-roundtrip:${sequence++}` },
+		)
+		expect(imported.ok).toBe(true)
+		expect(imported.document.objects).toHaveLength(1)
+		expect(imported.document.objects[0]?.geometry).toMatchObject({
+			kind: "path",
+			contours: [{ closed: false }],
+		})
+	})
+
 	it("blocks unresolved portable artboard references instead of exporting a fallback rectangle", () => {
 		const initial = createInitialDocument()
 		const link = {

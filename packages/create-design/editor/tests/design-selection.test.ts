@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	directSelectionKey,
+	directSelectionVectorControls,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
 	isDirectSelectionNodeSelected,
@@ -180,6 +181,14 @@ describe("design selection", () => {
 			nearestDirectSelectionTarget(
 				document,
 				document.objects,
+				{ x: 10.2, y: 10 },
+				1,
+			)?.kind,
+		).toBe("node")
+		expect(
+			nearestDirectSelectionTarget(
+				document,
+				document.objects,
 				{ x: 20, y: 10 },
 				1,
 			)?.kind,
@@ -268,6 +277,39 @@ describe("design selection", () => {
 				3,
 			),
 		).toBe(true)
+	})
+
+	it("expands contour and segment selections into unique vector node controls", () => {
+		const object = path()
+		const document = documentWith(object)
+		expect(
+			directSelectionVectorControls(document, [
+				{
+					kind: "contour",
+					objectId: object.id,
+					contourId: "contour:path",
+				},
+				{
+					kind: "segment",
+					objectId: object.id,
+					contourId: "contour:path",
+					segmentIndex: 0,
+				},
+			]),
+		).toEqual([
+			{
+				kind: "node",
+				objectId: object.id,
+				contourId: "contour:path",
+				pointId: "point:a",
+			},
+			{
+				kind: "node",
+				objectId: object.id,
+				contourId: "contour:path",
+				pointId: "point:b",
+			},
+		])
 	})
 
 	it("excludes direct targets inherited from hidden or locked layers", () => {

@@ -1,10 +1,19 @@
-import { reduceVectorGesture, shouldCloseVectorPen } from "@create-art/editor"
+import {
+	reduceVectorGesture,
+	resolveVectorPenAnchor,
+	shouldCloseVectorPen,
+	type VectorGesturePolicy,
+} from "@create-art/editor"
 
 import type { DesignAppearance, DesignObject, DesignPoint } from "./types.ts"
 import { IDENTITY_DESIGN_TRANSFORM } from "@create-design/model"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
 export const DESIGN_PEN_CLOSE_RADIUS_PIXELS = 10
+export const DESIGN_VECTOR_GESTURE_POLICY = Object.freeze({
+	yAxis: "down" as const,
+	rotationSnapDegrees: 15,
+}) satisfies VectorGesturePolicy
 
 export type DesignPenPoint = Omit<DesignPoint, "id"> & {
 	readonly id?: string
@@ -13,6 +22,31 @@ export type DesignPenPoint = Omit<DesignPoint, "id"> & {
 export interface DesignPenGesture {
 	readonly anchor: DesignPenPoint
 	readonly downScreen: DesignPenPoint
+}
+
+export type DesignPenProspectiveSegment = Readonly<{
+	readonly point: DesignPenPoint
+	readonly closesDraft: boolean
+}>
+
+/**
+ * Resolves the idle Pen rubber band from the same snapped point used on click.
+ * A closing segment terminates at the authored first node because no new node is
+ * committed, and therefore inherits that node's incoming handle.
+ */
+export function resolveDesignPenProspectiveSegment(
+	points: readonly DesignPenPoint[],
+	snappedPoint: DesignPenPoint,
+	worldScale: number,
+): DesignPenProspectiveSegment {
+	const point = resolveVectorPenAnchor(
+		snappedPoint,
+		DESIGN_VECTOR_GESTURE_POLICY,
+	)
+	const first = points[0]
+	if (first !== undefined && shouldCloseDesignPen(points, point, worldScale))
+		return { point: first, closesDraft: true }
+	return { point, closesDraft: false }
 }
 
 /** Compatibility wrapper over the shared Pen gesture reducer. */

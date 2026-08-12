@@ -21,6 +21,7 @@ import {
 import {
 	designObjectFillRule,
 	IDENTITY_DESIGN_TRANSFORM,
+	projectDesignObjectFillContours,
 	projectDesignObjectContours,
 } from "@create-design/model"
 import { replaceDesignHierarchySelection } from "./design-hierarchy.ts"
@@ -217,12 +218,12 @@ function pathfinderEligibility(
 		const contours = projectDesignObjectContours(object)
 		return (
 			contours.length === 0 ||
-			contours.some((contour) => !contour.closed || contour.points.length < 3)
+			contours.some((contour) => contour.points.length < 3)
 		)
 	})
 	if (invalid !== undefined)
 		return reject(
-			`${invalid.name} needs non-empty closed geometry for Pathfinder.`,
+			`${invalid.name} needs non-empty geometry with at least three points per contour for Pathfinder.`,
 		)
 	return { eligible: true }
 }
@@ -1280,8 +1281,8 @@ function applyPathfinder(
 	try {
 		const regions = entries.map((object) =>
 			resolveFilledContours(
-				projectDesignObjectContours(object).map((contour) => ({
-					closed: true,
+				projectDesignObjectFillContours(object).map((contour) => ({
+					closed: contour.closed,
 					points: flattenDesignContour(contour, inputFlatness),
 				})),
 				{
@@ -1396,8 +1397,8 @@ function pathfinderRegions(
 }>[])[] {
 	return entries.map(({ object }) =>
 		resolveFilledContours(
-			projectDesignObjectContours(object).map((contour) => ({
-				closed: true,
+			projectDesignObjectFillContours(object).map((contour) => ({
+				closed: contour.closed,
 				points: flattenDesignContour(contour, inputFlatness),
 			})),
 			{
