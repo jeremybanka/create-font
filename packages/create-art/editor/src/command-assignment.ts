@@ -17,6 +17,7 @@ export type HotbarKey = (typeof HOTBAR_KEYS)[number]
 export type HotbarSlot = string | null
 export type HotbarSlots = readonly HotbarSlot[]
 export type HotbarAssignmentMethod = "drag" | "keyboard"
+export type HotbarKind = "primary" | "alternate"
 
 export interface HotbarAssignmentResult {
 	readonly slots: HotbarSlots
@@ -50,14 +51,22 @@ interface HotbarKeyboardEvent {
 
 export function hotbarSlotIndexForKeyboardEvent(
 	event: HotbarKeyboardEvent,
+	kind: HotbarKind = "primary",
 ): number | null {
-	if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+	if (
+		event.metaKey ||
+		event.ctrlKey ||
+		event.shiftKey ||
+		(kind === "primary" ? event.altKey : !event.altKey)
+	)
 		return null
 	const index = HOTBAR_CODES.indexOf(
 		event.code as (typeof HOTBAR_CODES)[number],
 	)
 	return index < 0 ? null : index
 }
+
+export const EMPTY_HOTBAR_SLOTS: HotbarSlots = HOTBAR_KEYS.map(() => null)
 
 export function normalizeHotbarSlots(value: unknown): HotbarSlots | null {
 	if (!Array.isArray(value) || value.length !== HOTBAR_KEYS.length) return null

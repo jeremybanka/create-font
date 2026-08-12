@@ -1,4 +1,5 @@
 export { CommandPalette } from "./CommandPalette.tsx"
+export { scrollActiveDescendantIntoView } from "./active-descendant-scroll.ts"
 export { ActionHotbar, type ActionHotbarProps } from "./ActionHotbar.tsx"
 export {
 	TooltipButton,
@@ -38,6 +39,7 @@ export {
 	assignHotbarSlot,
 	assignPaletteCommandToHotbar,
 	HOTBAR_COMMAND_MIME,
+	EMPTY_HOTBAR_SLOTS,
 	HOTBAR_KEYS,
 	hotbarSlotIndexForKeyboardEvent,
 	normalizeHotbarSlots,
@@ -46,6 +48,7 @@ export {
 	type HotbarAssignmentMethod,
 	type HotbarAssignmentResult,
 	type HotbarKey,
+	type HotbarKind,
 	type HotbarSlot,
 	type HotbarSlots,
 } from "./command-assignment.ts"

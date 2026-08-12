@@ -1,8 +1,19 @@
-action-hotbar.class {
+action-hotbar-group.class {
 	--hotbar-slot-size: min(36px, calc((100vw - 64px) / 12));
 	position: absolute;
 	bottom: 12px;
 	left: 50%;
+	display: grid;
+	gap: 6px;
+	transform: translateX(-50%);
+	z-index: var(--action-hotbar-z-index, 3);
+
+	&[data-palette-open="true"] {
+		z-index: var(--action-hotbar-palette-z-index, 41);
+	}
+}
+
+action-hotbar.class {
 	display: grid;
 	grid-template-columns: repeat(12, var(--hotbar-slot-size));
 	gap: 3px;
@@ -11,11 +22,24 @@ action-hotbar.class {
 	border-radius: 10px;
 	background: color-mix(in srgb, var(--panel) 94%, transparent);
 	backdrop-filter: blur(12px);
-	transform: translateX(-50%);
-	z-index: var(--action-hotbar-z-index, 3);
 
-	&[data-palette-open="true"] {
-		z-index: var(--action-hotbar-palette-z-index, 41);
+	&[data-hotbar-kind="alternate"] {
+		opacity: 0;
+		visibility: hidden;
+		pointer-events: none;
+		transform: translateY(6px);
+		transition:
+			opacity 100ms ease,
+			transform 100ms ease,
+			visibility 0s linear 100ms;
+
+		&[data-visible="true"] {
+			opacity: 1;
+			visibility: visible;
+			pointer-events: auto;
+			transform: translateY(0);
+			transition-delay: 0s;
+		}
 	}
 
 	> hotbar-slot {

@@ -11,3 +11,4 @@ export function isMacLike(navigatorValue: NavigatorWithUserAgentData): boolean {
 export const IS_MAC_LIKE =
 	typeof navigator === "undefined" ? false : isMacLike(navigator)
 export const MOD_KEY_LABEL = IS_MAC_LIKE ? "⌘" : "ctrl"
+export const ALT_KEY_LABEL = IS_MAC_LIKE ? "⌥" : "Alt"
