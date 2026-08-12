@@ -65,7 +65,12 @@ import {
 	useRef,
 	useState,
 } from "react"
-import type { CSSProperties, ReactNode, ComponentProps } from "react"
+import type {
+	CSSProperties,
+	ReactNode,
+	ComponentProps,
+	KeyboardEvent as ReactKeyboardEvent,
+} from "react"
 import { StoreProvider, useO, useTL } from "atom.io/react"
 
 import {
@@ -368,6 +373,15 @@ import {
 	updateDesignText,
 	updateDesignTextTypography,
 } from "./design-text.ts"
+import {
+	bakePerspectiveObjects,
+	perspectiveHandlePoint,
+	perspectiveQuadFromBounds,
+	perspectiveTransformEligibility,
+	resolvePerspectiveQuad,
+	type PerspectiveHandle,
+	type PerspectiveQuad,
+} from "./perspective-transform.ts"
 
 const svg = {
 	Cross2Icon,
@@ -432,6 +446,17 @@ type CanvasGesture =
 			readonly kind: "transform"
 			readonly originals: readonly DesignObject[]
 			readonly state: VectorGestureState
+	  }
+	| {
+			readonly kind: "perspective"
+			readonly pointerId: number
+			readonly originals: readonly DesignObject[]
+			readonly bounds: Bounds
+			readonly handle: PerspectiveHandle
+			readonly start: CanvasPoint
+			readonly rawCurrent: CanvasPoint
+			readonly current: CanvasPoint
+			readonly modifiers: Readonly<{ shiftKey: boolean; altKey: boolean }>
 	  }
 	| {
 			readonly kind: "direct"
@@ -810,6 +835,8 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
 		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
+	if (tool === "perspective")
+		return "Drag corner controls for perspective · Drag edge controls to skew · Shift constrains corners or snaps skew to 15° · Alt/Option mirrors around the cage center · Escape cancels"
 	if (tool === "text")
 		return "Click to insert point text · Type in the native editor · Escape exits text editing"
 	if (tool === "area-text")
@@ -834,6 +861,85 @@ const DESIGN_TRANSFORM_HANDLES = [
 	VectorTransformHandle,
 	"move" | "rotation"
 >[]
+
+const DESIGN_PERSPECTIVE_HANDLES = [
+	"nw",
+	"n",
+	"ne",
+	"e",
+	"se",
+	"s",
+	"sw",
+	"w",
+] as const satisfies readonly PerspectiveHandle[]
+
+const PERSPECTIVE_HANDLE_LABELS: Readonly<Record<PerspectiveHandle, string>> = {
+	nw: "top-left perspective corner",
+	n: "top skew edge",
+	ne: "top-right perspective corner",
+	e: "right skew edge",
+	se: "bottom-right perspective corner",
+	s: "bottom skew edge",
+	sw: "bottom-left perspective corner",
+	w: "left skew edge",
+}
+
+/* eslint-disable lasertag/render-tag-with-own-name -- This component returns a Konva Group, not a DOM custom element. */
+function PerspectiveSelectionCage({
+	quad,
+	inverseScale,
+	color,
+	onHandlePointerDown,
+	onHandlePointerEnter,
+	onHandlePointerLeave,
+}: {
+	readonly quad: PerspectiveQuad
+	readonly inverseScale: number
+	readonly color: string
+	readonly onHandlePointerDown: (
+		handle: PerspectiveHandle,
+		event: KonvaEventObject<PointerEvent>,
+	) => void
+	readonly onHandlePointerEnter: (handle: PerspectiveHandle) => void
+	readonly onHandlePointerLeave: () => void
+}) {
+	return (
+		<Group name="perspective-transform-cage">
+			<Line
+				name="perspective-cage-outline"
+				points={quad.flatMap(({ x, y }) => [x, y])}
+				closed
+				fill={color}
+				opacity={0.06}
+				stroke={color}
+				strokeWidth={1.5 * inverseScale}
+				listening={false}
+			/>
+			{DESIGN_PERSPECTIVE_HANDLES.map((handle) => {
+				const point = perspectiveHandlePoint(quad, handle)
+				return (
+					<Rect
+						key={handle}
+						name={`perspective-handle perspective-handle-${handle}`}
+						x={point.x}
+						y={point.y}
+						width={(handle.length === 1 ? 12 : 10) * inverseScale}
+						height={(handle.length === 1 ? 7 : 10) * inverseScale}
+						offsetX={(handle.length === 1 ? 6 : 5) * inverseScale}
+						offsetY={(handle.length === 1 ? 3.5 : 5) * inverseScale}
+						fill="#fff"
+						stroke={color}
+						strokeWidth={1.5 * inverseScale}
+						onPointerDown={(event) => onHandlePointerDown(handle, event)}
+						onMouseEnter={() => onHandlePointerEnter(handle)}
+						onMouseLeave={onHandlePointerLeave}
+					/>
+				)
+			})}
+		</Group>
+	)
+}
+/* eslint-enable lasertag/render-tag-with-own-name */
 
 function designTransformHandleCursor(
 	handle: VectorTransformHandle,
@@ -1399,6 +1505,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
+	const [perspectiveCage, setPerspectiveCage] =
+		useState<PerspectiveQuad | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
 	const [penProspectiveSegment, setPenProspectiveSegment] =
 		useState<DesignPenProspectiveSegment | null>(null)
@@ -2041,6 +2149,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						selectedUnavailableEntry,
 						"transforming the selection",
 					)
+	const perspectiveEligibility =
+		selectionTransformDisabledReason === null
+			? perspectiveTransformEligibility(document, selectedObjects)
+			: { eligible: false as const, reason: selectionTransformDisabledReason }
 	const selectionDescription =
 		selectedBlend !== null
 			? `${selectedBlend.name}, live blend with ${selectedBlend.steps} specified step${selectedBlend.steps === 1 ? "" : "s"}, selected.`
@@ -2707,7 +2819,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture.kind !== "segment-action" &&
 			gesture.kind !== "corner" &&
 			gesture.kind !== "artboard" &&
-			gesture.kind !== "guide"
+			gesture.kind !== "guide" &&
+			gesture.kind !== "perspective"
 		)
 			reduceVectorGesture(
 				gesture.state,
@@ -2723,6 +2836,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setPenProspectiveSegment(null)
 		setPreviewObjects([])
 		setGesturePreview(null)
+		setPerspectiveCage(null)
 		setPenPoints([])
 		setActiveSnapGuides([])
 		creationSnapStatusRef.current = false
@@ -2852,6 +2966,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
+			if (nextTool === "perspective" && !perspectiveEligibility.eligible) {
+				setStatus(perspectiveEligibility.reason)
+				return
+			}
 			if (
 				(nextTool === "text" || nextTool === "area-text") &&
 				textToolsDisabledReason !== null
@@ -2871,7 +2989,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (nextTool !== "direct") setDirectSelection([])
 			if (
 				finishedPen === null &&
-				(nextTool === "select" || nextTool === "transform")
+				(nextTool === "select" ||
+					nextTool === "transform" ||
+					nextTool === "perspective")
 			)
 				setSelection((current) =>
 					normalizeDesignSelection(
@@ -2895,6 +3015,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			editingTextId,
 			effectiveEditableObjectIds,
 			finishPen,
+			perspectiveEligibility,
 			textToolsDisabledReason,
 			tool,
 		],
@@ -4971,7 +5092,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				][]
 			).map(([id, definition]) => {
 				const disabledReason =
-					id === "text" || id === "area-text" ? textToolsDisabledReason : null
+					id === "text" || id === "area-text"
+						? textToolsDisabledReason
+						: id === "perspective" && !perspectiveEligibility.eligible
+							? perspectiveEligibility.reason
+							: null
 				return {
 					id: `tool-${id}`,
 					displayName: definition.label,
@@ -5989,6 +6114,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture.kind === "guide"
 			)
 				return
+			if (gesture.kind === "perspective") {
+				const resolved = resolvePerspectiveGesture(
+					gesture,
+					gesture.rawCurrent,
+					{ shiftKey: event.shiftKey, altKey: event.altKey },
+				)
+				gestureRef.current = resolved.gesture
+				setPerspectiveCage(resolved.quad)
+				const baked = bakePerspectiveObjects(
+					gesture.originals,
+					gesture.bounds,
+					resolved.quad,
+				)
+				if (baked.ok) {
+					previewObjectsRef.current = baked.objects
+					setPreviewObjects(baked.objects)
+					setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
+				}
+				return
+			}
 			const transition = reduceVectorGesture(
 				gesture.state,
 				{
@@ -6024,6 +6169,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		const keydown = (event: KeyboardEvent): void => {
 			updateGestureModifiers(event)
+			if (event.defaultPrevented) return
 			if (
 				isCommandPaletteKeyboardEvent(
 					event,
@@ -6596,6 +6742,47 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}
 	const resolveCreationPoint = (point: CanvasPoint): DesignPointSnapResult =>
 		snapDesignPoint(point, effectivePolicyDocument, worldScale, snapSettings)
+	const resolvePerspectiveGesture = (
+		gesture: Extract<CanvasGesture, { readonly kind: "perspective" }>,
+		rawCurrent: CanvasPoint,
+		modifiers = gesture.modifiers,
+	) => {
+		const rawQuad = resolvePerspectiveQuad(
+			gesture.bounds,
+			gesture.handle,
+			gesture.start,
+			rawCurrent,
+			modifiers,
+		)
+		const rawHandle = perspectiveHandlePoint(rawQuad, gesture.handle)
+		const snap = snapDesignPoint(
+			rawHandle,
+			{
+				...effectivePolicyDocument,
+				objects: effectivePolicyDocument.objects.filter(
+					({ id }) => !gesture.originals.some((object) => object.id === id),
+				),
+			},
+			worldScale,
+			snapSettings,
+		)
+		const current = {
+			x: rawCurrent.x + snap.point.x - rawHandle.x,
+			y: rawCurrent.y + snap.point.y - rawHandle.y,
+		}
+		const quad = resolvePerspectiveQuad(
+			gesture.bounds,
+			gesture.handle,
+			gesture.start,
+			current,
+			modifiers,
+		)
+		return {
+			gesture: { ...gesture, rawCurrent, current, modifiers },
+			quad,
+			snap,
+		}
+	}
 	const clearCreationSnapHint = (restoreToolStatus = true): void => {
 		setActiveSnapGuides([])
 		if (restoreToolStatus && creationSnapStatusRef.current)
@@ -7101,7 +7288,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			tool === "rect" ||
 			tool === "ellipse" ||
 			tool === "artboard" ||
-			tool === "guide"
+			tool === "guide" ||
+			tool === "perspective"
 		)
 			return
 		event.cancelBubble = true
@@ -7343,6 +7531,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			} else startDirectGesture(event, target)
 			return
 		}
+		if (tool === "perspective") {
+			setStatus(
+				"Drag a Perspective Transform cage control; use Tab for keyboard controls.",
+			)
+			return
+		}
 		const hit = nearestDesignObject(
 			displayedObjects,
 			point,
@@ -7505,6 +7699,37 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 			gestureRef.current = { ...gesture, start: current, guide: moved }
 			setGuidePreview(moved)
+			return
+		}
+		if (gesture.kind === "perspective") {
+			if (gesture.pointerId !== event.evt.pointerId) return
+			const resolved = resolvePerspectiveGesture(
+				gesture,
+				pagePoint(event),
+				gestureModifiers(event.evt),
+			)
+			gestureRef.current = resolved.gesture
+			setPerspectiveCage(resolved.quad)
+			setActiveSnapGuides(designSnapGuides(resolved.snap, activeArtboard))
+			const baked = bakePerspectiveObjects(
+				gesture.originals,
+				gesture.bounds,
+				resolved.quad,
+			)
+			if (!baked.ok) {
+				setStatus(baked.error)
+				return
+			}
+			previewObjectsRef.current = baked.objects
+			setPreviewObjects(baked.objects)
+			const labels = [
+				...new Set(resolved.snap.matches.map(({ label }) => label)),
+			]
+			setStatus(
+				labels.length === 0
+					? "Perspective Transform preview."
+					: `Snap: ${labels.join(" · ")}.`,
+			)
 			return
 		}
 		const groupPress = groupPointerPressRef.current
@@ -7763,6 +7988,51 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			setStatus(
 				`Moved ${Number(designGuideAngle(moved).toFixed(1))}° guide through ${Number(moved.a.x.toFixed(2))}, ${Number(moved.a.y.toFixed(2))} pt.`,
+			)
+			return
+		}
+		if (gesture.kind === "perspective") {
+			if (gesture.pointerId !== event.pointerId) return
+			const resolved = resolvePerspectiveGesture(gesture, releasePoint, {
+				shiftKey: event.shiftKey,
+				altKey: event.altKey,
+			})
+			gestureRef.current = null
+			previewObjectsRef.current = []
+			releaseDesignPointer(captureTarget, event.pointerId)
+			setPreviewObjects([])
+			setPerspectiveCage(null)
+			setActiveSnapGuides([])
+			setTransformCursor(null)
+			if (
+				Math.hypot(
+					releasePoint.x - gesture.start.x,
+					releasePoint.y - gesture.start.y,
+				) *
+					worldScale <
+				4
+			) {
+				setStatus("Perspective Transform canceled: no change.")
+				return
+			}
+			const baked = bakePerspectiveObjects(
+				gesture.originals,
+				gesture.bounds,
+				resolved.quad,
+			)
+			if (!baked.ok) {
+				setStatus(baked.error)
+				return
+			}
+			const byId = new Map(baked.objects.map((object) => [object.id, object]))
+			commit({
+				...document,
+				objects: document.objects.map(
+					(object) => byId.get(object.id) ?? object,
+				),
+			})
+			setStatus(
+				`Applied Perspective Transform to ${baked.objects.length} object${baked.objects.length === 1 ? "" : "s"}.`,
 			)
 			return
 		}
@@ -8039,7 +8309,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture.kind === "segment-action" ||
 				gesture.kind === "corner" ||
 				gesture.kind === "artboard" ||
-				gesture.kind === "guide"
+				gesture.kind === "guide" ||
+				gesture.kind === "perspective"
 					? gesture.pointerId
 					: gesture.state.pointerId
 			if (activePointerId !== pointerId) return
@@ -8052,7 +8323,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture.kind !== "segment-action" &&
 				gesture.kind !== "corner" &&
 				gesture.kind !== "artboard" &&
-				gesture.kind !== "guide"
+				gesture.kind !== "guide" &&
+				gesture.kind !== "perspective"
 			)
 				reduceVectorGesture(
 					gesture.state,
@@ -8063,6 +8335,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			previewObjectsRef.current = []
 			setPreviewObjects([])
 			setGesturePreview(null)
+			setPerspectiveCage(null)
 			setActiveSnapGuides([])
 			creationSnapStatusRef.current = false
 			setPreviewArtboardDocument(null)
@@ -8170,6 +8443,115 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 	}
 
+	const startPerspective = (
+		handle: PerspectiveHandle,
+		event: KonvaEventObject<PointerEvent>,
+	): void => {
+		if (!perspectiveEligibility.eligible) {
+			setStatus(perspectiveEligibility.reason)
+			return
+		}
+		const bounds = designHierarchySelectionBounds(
+			document,
+			selectedObjects,
+			interactionBoundsForObject,
+		)
+		if (bounds === null) {
+			setStatus(
+				"Perspective Transform needs a non-degenerate vector selection.",
+			)
+			return
+		}
+		const width = bounds.maxX - bounds.minX
+		const height = bounds.maxY - bounds.minY
+		if (!(width > 1e-6) || !(height > 1e-6)) {
+			setStatus(
+				"Perspective Transform needs a selection with width and height.",
+			)
+			return
+		}
+		event.cancelBubble = true
+		const start = perspectiveHandlePoint(
+			perspectiveQuadFromBounds(bounds),
+			handle,
+		)
+		const gesture: Extract<CanvasGesture, { readonly kind: "perspective" }> = {
+			kind: "perspective",
+			pointerId: event.evt.pointerId,
+			originals: selectedObjects,
+			bounds,
+			handle,
+			start,
+			rawCurrent: start,
+			current: start,
+			modifiers: gestureModifiers(event.evt),
+		}
+		gestureRef.current = gesture
+		setPerspectiveCage(perspectiveQuadFromBounds(bounds))
+		setTransformCursor(designTransformHandleCursor(handle))
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+	}
+
+	const keyboardPerspective = (
+		handle: PerspectiveHandle,
+		event: ReactKeyboardEvent<HTMLButtonElement>,
+	): void => {
+		if (!perspectiveEligibility.eligible || selectionBounds === null) return
+		const arrowDelta =
+			event.key === "ArrowLeft"
+				? { x: -1 / worldScale, y: 0 }
+				: event.key === "ArrowRight"
+					? { x: 1 / worldScale, y: 0 }
+					: event.key === "ArrowUp"
+						? { x: 0, y: -1 / worldScale }
+						: event.key === "ArrowDown"
+							? { x: 0, y: 1 / worldScale }
+							: null
+		if (arrowDelta === null) return
+		if (
+			((handle === "n" || handle === "s") && arrowDelta.x === 0) ||
+			((handle === "e" || handle === "w") && arrowDelta.y === 0)
+		)
+			return
+		event.preventDefault()
+		const start = perspectiveHandlePoint(
+			perspectiveQuadFromBounds(selectionBounds),
+			handle,
+		)
+		const gesture: Extract<CanvasGesture, { readonly kind: "perspective" }> = {
+			kind: "perspective",
+			pointerId: -1,
+			originals: selectedObjects,
+			bounds: selectionBounds,
+			handle,
+			start,
+			rawCurrent: start,
+			current: start,
+			modifiers: { shiftKey: event.shiftKey, altKey: event.altKey },
+		}
+		const resolved = resolvePerspectiveGesture(gesture, {
+			x: start.x + arrowDelta.x,
+			y: start.y + arrowDelta.y,
+		})
+		const baked = bakePerspectiveObjects(
+			selectedObjects,
+			selectionBounds,
+			resolved.quad,
+		)
+		if (!baked.ok) {
+			setStatus(baked.error)
+			return
+		}
+		const byId = new Map(baked.objects.map((object) => [object.id, object]))
+		commit({
+			...document,
+			objects: document.objects.map((object) => byId.get(object.id) ?? object),
+		})
+		setStatus(
+			`Adjusted ${PERSPECTIVE_HANDLE_LABELS[handle]} with the keyboard.`,
+		)
+	}
+
 	const copyingGesture =
 		gestureRef.current?.kind === "move" &&
 		gestureRef.current.state.modifiers.altKey &&
@@ -8260,7 +8642,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		activeLayerIndex,
 	)
 	const selectionBounds =
-		tool !== "select" && tool !== "transform"
+		tool !== "select" && tool !== "transform" && tool !== "perspective"
 			? null
 			: selectedBlend !== null
 				? designBlendBounds(canvasDocument, selectedBlend)
@@ -8574,9 +8956,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													? "select"
 													: tool === "area-text"
 														? "rect"
-														: tool === "guide"
-															? "pen"
-															: tool,
+														: tool === "perspective"
+															? "transform"
+															: tool === "guide"
+																? "pen"
+																: tool,
 										{
 											dragging: gestureRef.current?.kind === "pan",
 										},
@@ -9062,7 +9446,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																						? "rect"
 																						: tool === "guide"
 																							? "pen"
-																							: tool,
+																							: tool === "perspective"
+																								? "transform"
+																								: tool,
 																	)
 															}}
 														/>
@@ -9516,32 +9902,53 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											})()}
 									{selectionBounds === null ? null : (
 										<>
-											<VectorSelectionBounds
-												bounds={selectionBounds}
-												inverseScale={1 / worldScale}
-												color={aggregateSelectionColor}
-												strokeWidth={1 / worldScale}
-												fillOpacity={
-													selectionVisualObjects.length > 1 ? 0 : 0.06
-												}
-												rotation={tool === "transform"}
-												{...(tool === "transform"
-													? {
-															handles: DESIGN_TRANSFORM_HANDLES,
-															onHandlePointerDown: startScale,
-															onHandlePointerEnter: (
-																handle: VectorTransformHandle,
-															) =>
-																setTransformCursor(
-																	designTransformHandleCursor(handle),
-																),
-															onHandlePointerLeave: () => {
-																if (gestureRef.current?.kind !== "transform")
-																	setTransformCursor(null)
-															},
-														}
-													: { handles: [], listening: false })}
-											/>
+											{tool === "perspective" ? (
+												<PerspectiveSelectionCage
+													quad={
+														perspectiveCage ??
+														perspectiveQuadFromBounds(selectionBounds)
+													}
+													inverseScale={1 / worldScale}
+													color={aggregateSelectionColor}
+													onHandlePointerDown={startPerspective}
+													onHandlePointerEnter={(handle) =>
+														setTransformCursor(
+															designTransformHandleCursor(handle),
+														)
+													}
+													onHandlePointerLeave={() => {
+														if (gestureRef.current?.kind !== "perspective")
+															setTransformCursor(null)
+													}}
+												/>
+											) : (
+												<VectorSelectionBounds
+													bounds={selectionBounds}
+													inverseScale={1 / worldScale}
+													color={aggregateSelectionColor}
+													strokeWidth={1 / worldScale}
+													fillOpacity={
+														selectionVisualObjects.length > 1 ? 0 : 0.06
+													}
+													rotation={tool === "transform"}
+													{...(tool === "transform"
+														? {
+																handles: DESIGN_TRANSFORM_HANDLES,
+																onHandlePointerDown: startScale,
+																onHandlePointerEnter: (
+																	handle: VectorTransformHandle,
+																) =>
+																	setTransformCursor(
+																		designTransformHandleCursor(handle),
+																	),
+																onHandlePointerLeave: () => {
+																	if (gestureRef.current?.kind !== "transform")
+																		setTransformCursor(null)
+																},
+															}
+														: { handles: [], listening: false })}
+												/>
+											)}
 											{selectedGroup === null ? null : (
 												<Text
 													name="design-group-selection-label"
@@ -9577,6 +9984,30 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							/>
 						)}
 					</artboard-wrap>
+					{tool !== "perspective" || selectionBounds === null ? null : (
+						<perspective-keyboard-controls
+							data-screen-reader
+							role="group"
+							aria-label="Perspective Transform cage controls"
+						>
+							<p>
+								Use arrow keys on a corner to distort it, or horizontal/vertical
+								arrows on the corresponding edge to skew. Shift constrains and
+								Alt or Option mirrors around the center.
+							</p>
+							{DESIGN_PERSPECTIVE_HANDLES.map((handle) => (
+								<button
+									key={handle}
+									type="button"
+									aria-label={`Adjust ${PERSPECTIVE_HANDLE_LABELS[handle]}`}
+									disabled={!perspectiveEligibility.eligible}
+									onKeyDown={(event) => keyboardPerspective(handle, event)}
+								>
+									{PERSPECTIVE_HANDLE_LABELS[handle]}
+								</button>
+							))}
+						</perspective-keyboard-controls>
+					)}
 					<canvas-help-controls>
 						<button
 							ref={helpButtonRef}

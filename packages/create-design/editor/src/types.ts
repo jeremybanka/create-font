@@ -37,6 +37,7 @@ export type DesignTool =
 	| "select"
 	| "direct"
 	| "transform"
+	| "perspective"
 	| "artboard"
 	| "pen"
 	| "knife"

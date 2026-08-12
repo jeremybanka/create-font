@@ -8,6 +8,7 @@ describe("create-design tool registration", () => {
 			"select",
 			"direct",
 			"transform",
+			"perspective",
 			"artboard",
 			"pen",
 			"knife",
@@ -25,6 +26,10 @@ describe("create-design tool registration", () => {
 			label: "Knife",
 			key: "K",
 			paletteIcon: "HobbyKnifeIcon",
+		})
+		expect(DESIGN_TOOLS.perspective).toMatchObject({
+			label: "Perspective Transform",
+			key: "P",
 		})
 		expect("rule" in DESIGN_TOOLS).toBe(false)
 		expect(DESIGN_TOOLS.guide).toMatchObject({ label: "Guide", key: "G" })
