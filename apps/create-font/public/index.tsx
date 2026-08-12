@@ -15,9 +15,7 @@ import {
 	assembleEditorFontSource,
 	initializeFeaParser,
 } from "@create-font/source/browser"
-import { createRoot, type Root } from "react-dom/client"
 
-import { BootstrapScreen } from "./BootstrapScreen.tsx"
 import {
 	bootstrapDocumentTitle,
 	INITIAL_BOOTSTRAP_STATE,
@@ -191,8 +189,6 @@ if (
 	url.searchParams.set(`font`, activeProjectId)
 	window.history.replaceState({ font: activeProjectId }, ``, url)
 }
-
-let bootstrapRoot: Root | null = createRoot(applicationMount)
 const sourceSyncWorker = createSourceSyncWorkerClient()
 let sourceState: SourceSyncState | null = null
 let saveQueue = Promise.resolve()
@@ -288,14 +284,39 @@ function retrySource(): void {
 		})
 }
 
+async function renderEditor(options: EditorBrowserOptions): Promise<void> {
+	const editorModule = await editorModulePromise
+	if (mountedEditor === null) {
+		mountedEditor = editorModule.mountEditor(applicationMount, options)
+	} else {
+		mountedEditor.update(options)
+	}
+}
+
 function renderBootstrap(): void {
 	const finish = startupTimeline.startPhase(`bootstrap-render`)
 	document.title = bootstrapDocumentTitle(bootstrapState)
-	bootstrapRoot?.render(
-		<BootstrapScreen state={bootstrapState} onAction={retrySource} />,
-	)
-	finish()
-	startupTimeline.mark(`bootstrap-rendered`)
+	const startup: EditorBrowserOptions =
+		bootstrapState.type === `loading`
+			? { startup: { type: `loading` } }
+			: {
+					startup: {
+						type: `error`,
+						message: bootstrapState.message,
+						onRetry: retrySource,
+					},
+				}
+	void renderEditor(startup)
+		.then(() => {
+			finish()
+			startupTimeline.mark(`bootstrap-rendered`)
+		})
+		.catch((error: unknown) => {
+			finish()
+			console.error(`Unable to render the create-font editor shell.`, error)
+			applicationMount.textContent =
+				error instanceof Error ? error.message : `The editor did not load.`
+		})
 }
 
 function showBootstrapError(message: string): void {
@@ -454,7 +475,7 @@ async function showSource(
 	}>,
 ): Promise<void> {
 	if (sourceEventsDisposed) return
-	const editorModule = await editorModulePromise
+	await editorModulePromise
 	if (sourceEventsDisposed) return
 	const initialRender = !renderedSource
 	renderedSource = true
@@ -503,15 +524,7 @@ async function showSource(
 					},
 				}),
 	}
-	if (mountedEditor === null) {
-		// The bootstrap and editor artifacts intentionally own separate React
-		// renderers. Fully unmount bootstrap before handing the host over.
-		bootstrapRoot?.unmount()
-		bootstrapRoot = null
-		mountedEditor = editorModule.mountEditor(applicationMount, options)
-	} else {
-		mountedEditor.update(options)
-	}
+	await renderEditor(options)
 	finish?.()
 	if (initialRender) {
 		startupTimeline.mark(`editor-rendered`)

@@ -170,10 +170,11 @@ transaction journal stay in the server process.
 
 `@create-font/editor` publishes its own browser-ready `editor.js` and
 `editor.css`. The Elysia server resolves those files from the installed
-production dependency and serves them under `/editor/`. Once a source is ready,
-the bootstrap dynamically imports the editor and calls its `mountEditor`
-boundary. The editor artifact owns its Preact renderer and hooks; it never
-shares component state with the bootstrap bundle.
+production dependency and serves them under `/editor/`. The bootstrap
+dynamically imports the editor and immediately mounts its inert opening shell.
+Once a source is ready, the same `mountEditor` boundary replaces that shell with
+one hydrated editor workspace. Startup failures remain visible and retryable
+without maintaining a second application renderer.
 
 The repository's `pnpm dev` command splits the development serving path at a
 deliberate boundary. Node runs the Elysia HTTP and WebSocket API in watch mode

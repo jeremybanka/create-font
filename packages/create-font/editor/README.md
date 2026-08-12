@@ -86,7 +86,10 @@ The editor is not a self-starting application. Its package build publishes
 `dist/browser/editor.js` and `editor.css`. The `@create-font/editor/browser`
 entry exposes `mountEditor`, `update`, and `unmount` through an imperative
 boundary so this artifact owns its React root. `create-font` serves and
-dynamically imports these files from its installed production dependency.
+dynamically imports these files from its installed production dependency. The
+boundary accepts either a real font source or an inert startup state. Startup
+renders the familiar editor frame without constructing a disposable font
+workspace; updating it with a source performs the one real hydration.
 
 The initial slice intentionally has no inert save or export affordances. The UI
 currently loads its self-contained `EditorFontSource` fixture and edits that

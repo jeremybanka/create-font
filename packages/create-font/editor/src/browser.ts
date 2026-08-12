@@ -32,6 +32,7 @@ export function mountEditor(
 export type {
 	EditorBrowserOptions,
 	EditorFontSource,
+	EditorStartupState,
 	MountedEditor,
 } from "./browser-api.ts"
 export type {

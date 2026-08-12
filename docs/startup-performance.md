@@ -19,6 +19,9 @@ includes:
 The `session` field is `direct-server`. Historical captures may contain the
 retired SharedWorker phases and `cold-worker` / `warm-worker` classifications.
 The instrumentation is observational and does not add retries or caching.
+`bootstrap-rendered` marks the inert editor shell in current captures. Captures
+before the shell-based bootstrap change used that milestone for the retired
+standalone loading screen.
 
 ## Reproducible capture protocol
 
