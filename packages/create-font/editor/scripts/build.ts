@@ -21,6 +21,7 @@ await build({
 		},
 		minify: true,
 		outDir: outdir,
+		reportCompressedSize: false,
 		sourcemap: true,
 	},
 })

@@ -24,7 +24,6 @@
 		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "node ../../scripts/build-dprint-plugin-fea.ts",
 		"test": "vp test"
 	},
 	"devDependencies": {

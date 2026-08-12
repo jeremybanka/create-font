@@ -26,8 +26,4 @@ runs:
     - name: Build generated test runtime
       if: steps.runtime-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: >-
-        pnpm
-        --filter dprint-plugin-fea
-        --filter @create-font/fea-rs-wasm
-        build
+      run: pnpm exec vp run dprint-plugin-fea#build

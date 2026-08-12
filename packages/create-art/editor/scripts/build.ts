@@ -19,7 +19,8 @@ await build({
 		},
 		minify: true,
 		outDir: outdir,
-		rollupOptions: {
+		reportCompressedSize: false,
+		rolldownOptions: {
 			external:
 				/^(?:@radix-ui\/react-icons|konva|react|react-dom|react-konva)(?:\/|$)/,
 		},

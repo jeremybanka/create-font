@@ -32,7 +32,7 @@
 	},
 	"scripts": {
 		"benchmark:runtime": "node --expose-gc ./scripts/benchmark-runtime.ts",
-		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
+		"build": "node ./scripts/build.ts",
 		"test": "vp test"
 	},
 	"dependencies": {

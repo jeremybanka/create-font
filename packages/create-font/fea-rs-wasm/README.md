@@ -81,7 +81,7 @@ Install the versions pinned by the repository and build:
 
 ```sh
 mise install
-pnpm --filter @create-font/fea-rs-wasm build
+pnpm exec vp run @create-font/fea-rs-wasm#build
 ```
 
 The build uses mise-managed Cargo, Rust, the `wasm32-unknown-unknown` target,
@@ -91,7 +91,7 @@ and `wasm-bindgen-cli`. Generated bindings and Wasm stay under the ignored
 Run the package checks with:
 
 ```sh
-pnpm --filter @create-font/fea-rs-wasm build
+pnpm exec vp run @create-font/fea-rs-wasm#build
 pnpm --filter @create-font/fea-rs-wasm test
 pnpm --filter @create-font/fea-rs-wasm pack --dry-run
 ```

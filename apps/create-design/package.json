@@ -33,7 +33,7 @@
 		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "tsc --project tsconfig.json --noEmit && node ./scripts/build.ts",
+		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"dev": "node ./scripts/dev.ts",
 		"test": "vp test --config=./vitest.config.ts"
