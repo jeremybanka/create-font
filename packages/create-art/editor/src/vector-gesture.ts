@@ -245,6 +245,9 @@ const roundPoint = (
 	return { x: canonicalZero(round(point.x)), y: canonicalZero(round(point.y)) }
 }
 
+/** Resolves the authored anchor precision used by Pen previews and commits. */
+export const resolveVectorPenAnchor = roundPoint
+
 const constrainedRay = (vector: VectorPoint): VectorPoint => {
 	const length = Math.hypot(vector.x, vector.y)
 	if (length === 0) return { x: 0, y: 0 }

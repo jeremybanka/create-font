@@ -117,6 +117,7 @@ export {
 } from "./vector-editing.ts"
 export {
 	reduceVectorGesture,
+	resolveVectorPenAnchor,
 	shouldCloseVectorPen,
 	VECTOR_PEN_CLOSE_RADIUS_PIXELS,
 	type VectorGestureCommitIntent,
@@ -136,6 +137,7 @@ export {
 	rotateVectorObject,
 	scaleVectorObject,
 	translateVectorObject,
+	vectorPenSegmentPath,
 	vectorObjectPath,
 	vectorShapeNodes,
 	type VectorBounds,

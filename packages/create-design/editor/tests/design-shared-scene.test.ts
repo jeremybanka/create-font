@@ -7917,12 +7917,137 @@ describe("create-design shared vector scene", () => {
 		expect(editingPath.data()).toBe(authoredPath.data())
 		expect(editingPath.stroke()).toBe(layerColor)
 		expect(hanging.stroke()).toBe(layerColor)
-		expect(hanging.points()).toHaveLength(4)
-		expect(hanging.points().slice(0, 2)).not.toEqual(hanging.points().slice(2))
+		expect(hanging.data()).toMatch(/^M [-\d.]+ [-\d.]+ L [-\d.]+ [-\d.]+$/)
 		expect(terminalNode.stroke()).toBe(layerColor)
 		expect(terminalNode.fill()).toBe(
 			readDesignCanvasTheme(document.querySelector("design-application"))
 				.handleFill,
+		)
+	})
+
+	it("previews the exact curved segment and snapped close that the Pen will commit", async () => {
+		const initial = createInitialDocument()
+		const initialDocument: DesignDocument = {
+			...initial,
+			objects: [],
+			layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
+			guides: [
+				{ id: "guide:start-x", a: { x: 330, y: 0 }, b: { x: 330, y: 1 } },
+				{ id: "guide:start-y", a: { x: 0, y: 280 }, b: { x: 1, y: 280 } },
+			],
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		const paper = stage.findOne(".design-paper")
+		if (pen === null || canvas === null || paper === undefined)
+			throw new Error("Pen preview controls were not found.")
+		act(() => pen.click())
+		const world = paper.getParent().getAbsoluteTransform()
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			point: Readonly<{ x: number; y: number }>,
+			pointerId: number,
+		): void => {
+			const screen = world.point(point)
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: screen.x,
+					clientY: screen.y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const click = (
+			point: Readonly<{ x: number; y: number }>,
+			pointerId: number,
+		): void => {
+			fire("pointerdown", point, pointerId)
+			fire("pointerup", point, pointerId)
+		}
+
+		await act(async () => {
+			fire("pointerdown", { x: 330, y: 280 }, 401)
+			fire("pointermove", { x: 360, y: 280 }, 401)
+			fire("pointerup", { x: 360, y: 280 }, 401)
+			fire("pointermove", { x: 440.314, y: 350.686 }, 402)
+			await Promise.resolve()
+		})
+		const fractionalPreview = stage.findOne(".pen-preview-hanging").data()
+		expect(fractionalPreview).toContain(" C ")
+
+		await act(async () => {
+			click({ x: 440.314, y: 350.686 }, 402)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".pen-preview-path").data()).toBe(fractionalPreview)
+
+		await act(async () => {
+			click({ x: 380, y: 430 }, 403)
+			fire("pointermove", { x: 520, y: 360 }, 404)
+			await Promise.resolve()
+		})
+		const openPreview = stage.findOne(".pen-preview-hanging")
+		expect(openPreview.data()).toMatch(/^M [-\d.]+ [-\d.]+ L [-\d.]+ [-\d.]+$/)
+		expect(stage.findOne(".pen-preview-connection")).toBeUndefined()
+
+		await act(async () => {
+			fire("pointermove", { x: 333, y: 283 }, 405)
+			await Promise.resolve()
+		})
+		const closePreview = stage.findOne(".pen-preview-hanging")
+		expect(closePreview.data()).toContain(" C ")
+		expect(stage.findOne(".pen-preview-connection")).toBeDefined()
+
+		await act(async () => {
+			click({ x: 333, y: 283 }, 406)
+			await Promise.resolve()
+		})
+		const saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		const contour =
+			saved.objects[0]?.geometry.kind === "path"
+				? saved.objects[0].geometry.contours[0]
+				: undefined
+		expect(contour?.closed).toBe(true)
+		expect(contour?.points[0]).toMatchObject({ x: 330, y: 280 })
+		expect(contour?.points[0]?.incoming).toBeDefined()
+
+		await act(async () => {
+			click({ x: 600, y: 300 }, 407)
+			fire("pointermove", { x: 684.686, y: 412.314 }, 408)
+			await Promise.resolve()
+		})
+		const straightFractionalPreview = stage
+			.findOne(".pen-preview-hanging")
+			.data()
+		expect(straightFractionalPreview).toContain(" L ")
+		await act(async () => {
+			click({ x: 684.686, y: 412.314 }, 408)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".pen-preview-path").data()).toBe(
+			straightFractionalPreview,
 		)
 	})
 

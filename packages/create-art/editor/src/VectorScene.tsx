@@ -14,6 +14,7 @@ import type {
 	VectorTransformHandle,
 } from "./vector-gesture.ts"
 import {
+	vectorPenSegmentPath,
 	vectorObjectPath,
 	vectorShapeNodes,
 	type VectorBounds,
@@ -405,6 +406,7 @@ export function VectorPenPreview({
 	selectionStroke,
 	selectionStrokeWidth = inverseScale,
 	hangingPoint,
+	hangingConnected = false,
 	handleFill = "#fff",
 }: {
 	readonly preview: Extract<VectorGesturePreview, { readonly kind: "pen" }>
@@ -424,8 +426,10 @@ export function VectorPenPreview({
 	/** When present, paints the complete draft's editing indication separately. */
 	readonly selectionStroke?: string
 	readonly selectionStrokeWidth?: number
-	/** Current unattached pointer position for the terminal rubber-band segment. */
-	readonly hangingPoint?: VectorPoint
+	/** Prospective endpoint, including the incoming handle used if committed. */
+	readonly hangingPoint?: VectorPoint & Partial<Pick<VectorNode, "incoming">>
+	/** Indicates that clicking the prospective endpoint will connect the draft. */
+	readonly hangingConnected?: boolean
 	readonly handleFill?: string
 }) {
 	const node: VectorNode = {
@@ -490,11 +494,23 @@ export function VectorPenPreview({
 				/>
 			)}
 			{hangingPoint === undefined ? null : (
-				<Line
+				<Path
 					name="pen-preview-hanging"
-					points={[node.x, node.y, hangingPoint.x, hangingPoint.y]}
+					data={vectorPenSegmentPath(node, hangingPoint)}
 					stroke={selectionStroke ?? color}
 					strokeWidth={selectionStrokeWidth}
+					listening={false}
+				/>
+			)}
+			{hangingPoint === undefined || !hangingConnected ? null : (
+				<Circle
+					name="pen-preview-connection"
+					x={hangingPoint.x}
+					y={hangingPoint.y}
+					radius={5 * inverseScale}
+					fill={handleFill}
+					stroke={selectionStroke ?? color}
+					strokeWidth={2 * inverseScale}
 					listening={false}
 				/>
 			)}

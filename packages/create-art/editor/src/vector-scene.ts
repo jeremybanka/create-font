@@ -17,6 +17,26 @@ export const VECTOR_ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
 const number = (value: number): string => Number(value.toFixed(3)).toString()
 
+function vectorSegmentCommand(
+	from: VectorPoint & Partial<Pick<VectorNode, "outgoing">>,
+	to: VectorPoint & Partial<Pick<VectorNode, "incoming">>,
+): string {
+	if (from.outgoing === undefined && to.incoming === undefined)
+		return `L ${number(to.x)} ${number(to.y)}`
+	const outgoing = from.outgoing ?? { x: 0, y: 0 }
+	const incoming = to.incoming ?? { x: 0, y: 0 }
+	return `C ${number(from.x + outgoing.x)} ${number(from.y + outgoing.y)} ${number(to.x + incoming.x)} ${number(to.y + incoming.y)} ${number(to.x)} ${number(to.y)}`
+}
+
+/** Paints one prospective Pen segment exactly as it would be committed. */
+export function vectorPenSegmentPath(
+	from: VectorPoint & Partial<Pick<VectorNode, "outgoing">>,
+	to: VectorPoint & Partial<Pick<VectorNode, "incoming">>,
+): string {
+	const start = `M ${number(from.x)} ${number(from.y)}`
+	return `${start} ${vectorSegmentCommand(from, to)}`
+}
+
 export function vectorContourPath(contour: VectorContour): string {
 	const nodes = contour.nodes.some(({ corner }) => corner !== undefined)
 		? lowerCornerProfiles({
@@ -68,22 +88,15 @@ export function vectorContourPath(contour: VectorContour): string {
 	const first = nodes[0]
 	if (first === undefined) return ""
 	const commands = [`M ${number(first.x)} ${number(first.y)}`]
-	const segment = (from: VectorNode, to: VectorNode): string => {
-		if (from.outgoing === undefined && to.incoming === undefined)
-			return `L ${number(to.x)} ${number(to.y)}`
-		const outgoing = from.outgoing ?? { x: 0, y: 0 }
-		const incoming = to.incoming ?? { x: 0, y: 0 }
-		return `C ${number(from.x + outgoing.x)} ${number(from.y + outgoing.y)} ${number(to.x + incoming.x)} ${number(to.y + incoming.y)} ${number(to.x)} ${number(to.y)}`
-	}
 	for (let index = 1; index < nodes.length; index += 1) {
 		const previous = nodes[index - 1]
 		const point = nodes[index]
 		if (previous !== undefined && point !== undefined)
-			commands.push(segment(previous, point))
+			commands.push(vectorSegmentCommand(previous, point))
 	}
 	if (contour.closed && nodes.length > 1) {
 		const last = nodes.at(-1)
-		if (last !== undefined) commands.push(segment(last, first))
+		if (last !== undefined) commands.push(vectorSegmentCommand(last, first))
 		commands.push("Z")
 	}
 	return commands.join(" ")
