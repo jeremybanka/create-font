@@ -27,6 +27,7 @@ import {
 } from "../src/design-text.ts"
 import {
 	objectBounds,
+	swatchCss,
 	translateObject,
 	visibleObjectBounds,
 } from "@create-design/model"
@@ -7742,6 +7743,187 @@ describe("create-design shared vector scene", () => {
 			true,
 			false,
 		])
+	})
+
+	it("finishes an active Pen draft on Escape and detaches subsequent Pen input", async () => {
+		const storage = new Map<string, string>()
+		const stage = mountDesign({}, storage)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (pen === null || canvas === null)
+			throw new Error("Pen Escape controls were not found.")
+		act(() => pen.click())
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			x: number,
+			y: number,
+			pointerId: number,
+		): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons: type === "pointerup" ? 0 : 1,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const click = (x: number, y: number, pointerId: number): void => {
+			fire("pointerdown", x, y, pointerId)
+			fire("pointerup", x, y, pointerId)
+		}
+
+		await act(async () => {
+			click(330, 280, 201)
+			click(430, 330, 202)
+			fire("pointerdown", 520, 260, 203)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			fire("pointerup", 520, 260, 203)
+			await Promise.resolve()
+		})
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects).toHaveLength(3)
+		const first = saved.objects.at(-1)
+		expect(first?.geometry.kind).toBe("path")
+		if (first?.geometry.kind !== "path") return
+		expect(first.geometry.contours[0]).toMatchObject({ closed: false })
+		expect(first.geometry.contours[0]?.points).toHaveLength(2)
+		expect(stage.findOne(".vector-pen-preview")).toBeUndefined()
+
+		await act(async () => {
+			fire("pointermove", 570, 360, 204)
+			click(570, 360, 204)
+			click(650, 410, 205)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects).toHaveLength(4)
+		const second = saved.objects.at(-1)
+		expect(second?.geometry.kind).toBe("path")
+		if (second?.geometry.kind !== "path") return
+		expect(second.geometry.contours[0]).toMatchObject({ closed: false })
+		expect(second.geometry.contours[0]?.points).toHaveLength(2)
+		expect(second.id).not.toBe(first.id)
+		expect(second.geometry.contours[0]?.points[0]?.id).not.toBe(
+			first.geometry.contours[0]?.points.at(-1)?.id,
+		)
+	})
+
+	it("paints Pen drafts with authored appearance and a complete layer-color editing outline", async () => {
+		const initial = createInitialDocument()
+		const documentWithTealLayer: DesignDocument = {
+			...initial,
+			layers: initial.layers.map((layer) => ({ ...layer, uiColor: "teal" })),
+		}
+		const stage = mountDesign({ initialDocument: documentWithTealLayer })
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const strokeTarget = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Stroke paint: None"]',
+		)
+		if (strokeTarget === null) throw new Error("Stroke target was not found.")
+		await act(async () => {
+			strokeTarget.click()
+			await Promise.resolve()
+		})
+		const ink = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Use Rich black as stroke paint"]',
+		)
+		const pen = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Pen"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (ink === null || pen === null || canvas === null)
+			throw new Error("Pen appearance controls were not found.")
+		await act(async () => {
+			ink.click()
+			pen.click()
+			await Promise.resolve()
+		})
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			x: number,
+			y: number,
+			pointerId: number,
+			buttons = type === "pointerup" ? 0 : 1,
+		): void => {
+			canvas.dispatchEvent(
+				new PointerEvent(type, {
+					bubbles: true,
+					button: 0,
+					buttons,
+					clientX: x,
+					clientY: y,
+					isPrimary: true,
+					pointerId,
+					pointerType: "mouse",
+				}),
+			)
+		}
+		const click = (x: number, y: number, pointerId: number): void => {
+			fire("pointerdown", x, y, pointerId)
+			fire("pointerup", x, y, pointerId)
+		}
+		await act(async () => {
+			click(330, 280, 301)
+			click(440, 280, 302)
+			click(410, 380, 303)
+			fire("pointermove", 530, 350, 304, 0)
+			await Promise.resolve()
+		})
+
+		const authoredPath = stage.findOne(".pen-preview-path")
+		const editingPath = stage.findOne(".vector-contour-selection")
+		const hanging = stage.findOne(".pen-preview-hanging")
+		const terminalNode = stage.findOne("#pen-preview")
+		const coral = initial.swatches.find(({ id }) => id === "swatch:coral")!
+		const richBlack = initial.swatches.find(({ id }) => id === "swatch:ink")!
+		const layerColor = designLayerUiColorCss("teal")
+		expect(authoredPath.fillEnabled()).toBe(true)
+		expect(authoredPath.fill()).toBe(swatchCss(coral))
+		expect(authoredPath.stroke()).toBe(swatchCss(richBlack))
+		expect(authoredPath.strokeWidth()).toBe(1)
+		expect(editingPath.data()).toBe(authoredPath.data())
+		expect(editingPath.stroke()).toBe(layerColor)
+		expect(hanging.stroke()).toBe(layerColor)
+		expect(hanging.points()).toHaveLength(4)
+		expect(hanging.points().slice(0, 2)).not.toEqual(hanging.points().slice(2))
+		expect(terminalNode.stroke()).toBe(layerColor)
+		expect(terminalNode.fill()).toBe(
+			readDesignCanvasTheme(document.querySelector("design-application"))
+				.handleFill,
+		)
 	})
 
 	it("commits a same-frame Pen handle drag when capture loss precedes pointer-up", async () => {

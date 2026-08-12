@@ -16,12 +16,13 @@ document contract lives in [`@create-design/source`](../source/README.md).
 
 ## Pen and path editing
 
-The Pen tool finishes an open draft with **Enter**, a double-click at the last
-point, or a switch to another enabled tool. Clicking the first point after at
-least three authored points closes the contour instead. Direct Selection can
-delete individual nodes or non-adjacent node sets: surviving connected runs
-remain in the same object as open contours, with unused endpoint handles
-removed. Deleting every node removes the empty object from its hierarchy.
+The Pen tool finishes an open draft with **Enter**, **Escape**, a double-click
+at the last point, or a switch to another enabled tool. Clicking the first
+point after at least three authored points closes the contour instead. Direct
+Selection can delete individual nodes or non-adjacent node sets: surviving
+connected runs remain in the same object as open contours, with unused endpoint
+handles removed. Deleting every node removes the empty object from its
+hierarchy.
 
 ## Layers and hierarchy
 

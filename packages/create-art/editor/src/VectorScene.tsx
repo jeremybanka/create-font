@@ -393,12 +393,40 @@ export function VectorPenPreview({
 	preceding = [],
 	inverseScale,
 	color,
+	fill,
+	fillEnabled = false,
+	stroke,
+	strokeWidth,
+	lineCap,
+	lineJoin,
+	miterLimit,
+	dash,
+	dashOffset,
+	selectionStroke,
+	selectionStrokeWidth = inverseScale,
+	hangingPoint,
+	handleFill = "#fff",
 }: {
 	readonly preview: Extract<VectorGesturePreview, { readonly kind: "pen" }>
 	readonly preceding?: readonly (VectorPoint &
 		Partial<Pick<VectorNode, "incoming" | "outgoing" | "mode">>)[]
 	readonly inverseScale: number
 	readonly color: string
+	readonly fill?: string
+	readonly fillEnabled?: boolean
+	readonly stroke?: string
+	readonly strokeWidth?: number
+	readonly lineCap?: "butt" | "round" | "square"
+	readonly lineJoin?: "miter" | "round" | "bevel"
+	readonly miterLimit?: number
+	readonly dash?: number[]
+	readonly dashOffset?: number
+	/** When present, paints the complete draft's editing indication separately. */
+	readonly selectionStroke?: string
+	readonly selectionStrokeWidth?: number
+	/** Current unattached pointer position for the terminal rubber-band segment. */
+	readonly hangingPoint?: VectorPoint
+	readonly handleFill?: string
 }) {
 	const node: VectorNode = {
 		id: "pen-preview",
@@ -427,6 +455,8 @@ export function VectorPenPreview({
 		})),
 		node,
 	]
+	const renderedStroke =
+		stroke ?? (selectionStroke === undefined ? color : undefined)
 	return (
 		<Group name="vector-pen-preview" listening={false}>
 			{preceding.length === 0 ? null : (
@@ -444,9 +474,27 @@ export function VectorPenPreview({
 							},
 						],
 					}}
-					fillEnabled={false}
-					stroke={color}
-					strokeWidth={1.5 * inverseScale}
+					{...(fill === undefined ? {} : { fill })}
+					fillEnabled={fillEnabled}
+					{...(renderedStroke === undefined ? {} : { stroke: renderedStroke })}
+					strokeWidth={strokeWidth ?? 1.5 * inverseScale}
+					{...(lineCap === undefined ? {} : { lineCap })}
+					{...(lineJoin === undefined ? {} : { lineJoin })}
+					{...(miterLimit === undefined ? {} : { miterLimit })}
+					{...(dash === undefined ? {} : { dash })}
+					{...(dashOffset === undefined ? {} : { dashOffset })}
+					selected={selectionStroke !== undefined}
+					{...(selectionStroke === undefined ? {} : { selectionStroke })}
+					selectionStrokeWidth={selectionStrokeWidth}
+					listening={false}
+				/>
+			)}
+			{hangingPoint === undefined ? null : (
+				<Line
+					name="pen-preview-hanging"
+					points={[node.x, node.y, hangingPoint.x, hangingPoint.y]}
+					stroke={selectionStroke ?? color}
+					strokeWidth={selectionStrokeWidth}
 					listening={false}
 				/>
 			)}
@@ -454,6 +502,7 @@ export function VectorPenPreview({
 				node={node}
 				inverseScale={inverseScale}
 				color={color}
+				fill={handleFill}
 			/>
 		</Group>
 	)

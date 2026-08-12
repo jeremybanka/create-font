@@ -768,7 +768,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "guide")
 		return "Click point A, then point B · Shift constrains to 15° increments · Escape cancels"
 	if (tool === "pen")
-		return "Click for corners · Drag for curves · Click start to close · Enter finishes open · Escape cancels"
+		return "Click for corners · Drag for curves · Click start to close · Enter or Escape finishes open"
 	if (tool === "rect" || tool === "ellipse")
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
@@ -1300,6 +1300,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const [gesturePreview, setGesturePreview] =
 		useState<VectorGesturePreview | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
+	const [penHoverPoint, setPenHoverPoint] = useState<DesignPenPoint | null>(
+		null,
+	)
 	const [canvasViewport, setCanvasViewport] = useState({
 		width: 0,
 		height: 0,
@@ -2601,6 +2604,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		gestureRef.current = null
 		previewObjectsRef.current = []
 		penPointsRef.current = []
+		setPenHoverPoint(null)
 		setPreviewObjects([])
 		setGesturePreview(null)
 		setPenPoints([])
@@ -2641,6 +2645,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			)
 			setSelection([object.id])
 			penPointsRef.current = []
+			setPenHoverPoint(null)
 			setPenPoints([])
 			setGesturePreview(null)
 			gestureRef.current = null
@@ -5937,6 +5942,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			if (event.key === "Escape") {
+				if (tool === "pen" && penPointsRef.current.length >= 2) {
+					event.preventDefault()
+					finishPen()
+					return
+				}
 				const canceledGesture =
 					gestureRef.current !== null || guidePlotRef.current !== null
 				cancelCanvasGesture()
@@ -7016,6 +7026,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		if (tool === "pen") {
+			setPenHoverPoint(null)
 			if (shouldCloseVectorPen(penPointsRef.current, point, worldScale)) {
 				finishPen(true)
 				return
@@ -7140,7 +7151,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				clearCreationSnapHint()
 				return
 			}
-			showCreationSnapHint(resolveCreationPoint(pagePoint(event)))
+			const snap = resolveCreationPoint(pagePoint(event))
+			showCreationSnapHint(snap)
+			setPenHoverPoint(
+				tool === "pen" && penPointsRef.current.length > 0 ? snap.point : null,
+			)
 			return
 		}
 		if (gesture.kind === "pan") {
@@ -7487,6 +7502,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				},
 			]
 			penPointsRef.current = points
+			setPenHoverPoint(null)
 			setPenPoints(points)
 			return
 		}
@@ -7711,6 +7727,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			setTransformCursor(null)
 			if (gesture.kind === "vector" && gesture.state.tool === "pen") {
 				penPointsRef.current = []
+				setPenHoverPoint(null)
 				setPenPoints([])
 			}
 		},
@@ -7726,6 +7743,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		cancelPointer(event.evt.pointerId, event.evt.currentTarget)
 	}
 	const pointerLeave = (): void => {
+		setPenHoverPoint(null)
 		clearCreationSnapHint(gestureRef.current === null)
 	}
 	useEffect(() => {
@@ -7865,6 +7883,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			swatch.id ===
 			(authoredAppearance.fill?.swatchId ??
 				authoredAppearance.stroke?.swatchId),
+	)
+	const penPreviewFill = document.swatches.find(
+		(swatch) => swatch.id === authoredAppearance.fill?.swatchId,
+	)
+	const penPreviewStroke = document.swatches.find(
+		(swatch) => swatch.id === authoredAppearance.stroke?.swatchId,
+	)
+	const penPreviewLayerColor = designLayerUiColorCss(
+		activeLayer.uiColor,
+		activeLayerIndex,
 	)
 	const selectionBounds =
 		tool !== "select" && tool !== "transform"
@@ -8973,7 +9001,28 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											preview={gesturePreview}
 											preceding={penPoints}
 											inverseScale={1 / worldScale}
-											color={canvasTheme.selection}
+											color={penPreviewLayerColor}
+											{...(penPreviewFill === undefined
+												? {}
+												: {
+														fill: swatchCss(penPreviewFill),
+														fillEnabled: true,
+													})}
+											{...(penPreviewStroke === undefined ||
+											authoredAppearance.stroke === undefined
+												? {}
+												: {
+														stroke: swatchCss(penPreviewStroke),
+														strokeWidth: authoredAppearance.stroke.width,
+														lineCap: authoredAppearance.stroke.cap,
+														lineJoin: authoredAppearance.stroke.join,
+														miterLimit: authoredAppearance.stroke.miterLimit,
+														dash: [...authoredAppearance.stroke.dashArray],
+														dashOffset: authoredAppearance.stroke.dashOffset,
+													})}
+											selectionStroke={penPreviewLayerColor}
+											selectionStrokeWidth={1 / worldScale}
+											handleFill={canvasTheme.handleFill}
 										/>
 									) : penPoints.length === 0 ? null : (
 										<VectorPenPreview
@@ -8998,7 +9047,31 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											}}
 											preceding={penPoints.slice(0, -1)}
 											inverseScale={1 / worldScale}
-											color={canvasTheme.selection}
+											color={penPreviewLayerColor}
+											{...(penPreviewFill === undefined
+												? {}
+												: {
+														fill: swatchCss(penPreviewFill),
+														fillEnabled: true,
+													})}
+											{...(penPreviewStroke === undefined ||
+											authoredAppearance.stroke === undefined
+												? {}
+												: {
+														stroke: swatchCss(penPreviewStroke),
+														strokeWidth: authoredAppearance.stroke.width,
+														lineCap: authoredAppearance.stroke.cap,
+														lineJoin: authoredAppearance.stroke.join,
+														miterLimit: authoredAppearance.stroke.miterLimit,
+														dash: [...authoredAppearance.stroke.dashArray],
+														dashOffset: authoredAppearance.stroke.dashOffset,
+													})}
+											selectionStroke={penPreviewLayerColor}
+											selectionStrokeWidth={1 / worldScale}
+											{...(penHoverPoint === null
+												? {}
+												: { hangingPoint: penHoverPoint })}
+											handleFill={canvasTheme.handleFill}
 										/>
 									)}
 									<VectorSnapGuides
