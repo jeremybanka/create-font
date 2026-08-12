@@ -2,6 +2,9 @@ import type { CanvasView } from "@create-art/editor"
 
 import type { DesignDocument, DesignGuide } from "./types.ts"
 
+export const DESIGN_GUIDES_VISIBLE_STORAGE_KEY =
+	"create-design:guides-visible:v1"
+
 export interface DesignRulerTick {
 	readonly value: number
 	readonly major: boolean
@@ -76,6 +79,26 @@ export function updateDesignGuide(
 		guides: document.guides.map((guide) =>
 			guide.id === id ? { ...guide, ...change } : guide,
 		),
+	}
+}
+
+/** Set every guide lock in one immutable document operation. */
+export function setDesignGuidesLocked(
+	document: DesignDocument,
+	locked: boolean,
+): DesignDocument {
+	if (
+		document.guides.length === 0 ||
+		document.guides.every((guide) => Boolean(guide.locked) === locked)
+	)
+		return document
+	return {
+		...document,
+		guides: document.guides.map((guide) => {
+			const { locked: ignored, ...rest } = guide
+			void ignored
+			return locked ? { ...rest, locked: true } : rest
+		}),
 	}
 }
 

@@ -10,6 +10,7 @@ import {
 	setDesignLayerLocked,
 	setDesignLayerUiColor,
 	setDesignLayerVisibility,
+	toggleOtherDesignLayers,
 } from "../src/design-layer-operations.ts"
 import type { DesignDocument } from "../src/types.ts"
 
@@ -89,6 +90,36 @@ describe("design layer operations", () => {
 			name: "New layer",
 		})
 		expect(created.layers.at(-1)?.uiColor).toBe("red")
+	})
+
+	it("inverts visibility and locks on every layer except the target", () => {
+		const source = layeredFixture()
+		const mixed: DesignDocument = {
+			...source,
+			layers: [
+				{ ...source.layers[0]!, hidden: true },
+				{ ...source.layers[1]!, locked: true },
+				{
+					id: "layer:third",
+					name: "Third",
+					children: [],
+				},
+			],
+		}
+		const visibility = toggleOtherDesignLayers(mixed, "layer:front", "visible")
+		expect(visibility.layers.map(({ hidden }) => Boolean(hidden))).toEqual([
+			false,
+			false,
+			true,
+		])
+		const locks = toggleOtherDesignLayers(mixed, "layer:front", "locked")
+		expect(locks.layers.map(({ locked }) => Boolean(locked))).toEqual([
+			true,
+			true,
+			true,
+		])
+		const single = { ...mixed, layers: [mixed.layers[0]!] }
+		expect(toggleOtherDesignLayers(single, "layer:back", "locked")).toBe(single)
 	})
 
 	it("duplicates a complete layer tree with fresh identities and no cross-layer blend", () => {

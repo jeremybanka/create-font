@@ -139,6 +139,25 @@ export function setDesignLayerLocked(
 	}
 }
 
+/** Invert one layer property for every top-level layer except the target. */
+export function toggleOtherDesignLayers(
+	document: DesignDocument,
+	targetLayerId: string,
+	property: "locked" | "visible",
+): DesignDocument {
+	requireLayer(document, targetLayerId)
+	if (document.layers.length <= 1) return document
+	return {
+		...document,
+		layers: document.layers.map((layer) => {
+			if (layer.id === targetLayerId) return layer
+			return property === "locked"
+				? booleanProperty(layer, "locked", !layer.locked)
+				: booleanProperty(layer, "hidden", !layer.hidden)
+		}),
+	}
+}
+
 /** Moves a layer one visual row toward the top or bottom of the Layers tile. */
 export function reorderDesignLayer(
 	document: DesignDocument,

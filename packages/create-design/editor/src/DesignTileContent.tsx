@@ -13,7 +13,6 @@ import {
 	Link1Icon,
 	LinkBreak1Icon,
 	LockClosedIcon,
-	LockOpen1Icon,
 	SpaceBetweenHorizontallyIcon,
 	SpaceBetweenVerticallyIcon,
 	TrashIcon,
@@ -112,7 +111,6 @@ const svg = {
 	Link: Link1Icon,
 	LinkBreak: LinkBreak1Icon,
 	LockClosed: LockClosedIcon,
-	LockOpen: LockOpen1Icon,
 	SpaceBetweenHorizontally: SpaceBetweenHorizontallyIcon,
 	SpaceBetweenVertically: SpaceBetweenVerticallyIcon,
 	Trash: TrashIcon,
@@ -1002,10 +1000,13 @@ function DesignLayersTile({
 										title={`${rowLayer.hidden ? "Show" : "Hide"} ${rowLayer.name}`}
 										onClick={(event) => {
 											event.stopPropagation()
-											context.setLayerVisibility(
-												rowLayer.id,
-												Boolean(rowLayer.hidden),
-											)
+											if (event.altKey)
+												context.toggleOtherLayerVisibility(rowLayer.id)
+											else
+												context.setLayerVisibility(
+													rowLayer.id,
+													Boolean(rowLayer.hidden),
+												)
 										}}
 										onKeyDown={(event) => event.stopPropagation()}
 									>
@@ -1019,11 +1020,13 @@ function DesignLayersTile({
 										title={`${rowLayer.locked ? "Unlock" : "Lock"} ${rowLayer.name}`}
 										onClick={(event) => {
 											event.stopPropagation()
-											context.setLayerLocked(rowLayer.id, !rowLayer.locked)
+											if (event.altKey)
+												context.toggleOtherLayerLocks(rowLayer.id)
+											else context.setLayerLocked(rowLayer.id, !rowLayer.locked)
 										}}
 										onKeyDown={(event) => event.stopPropagation()}
 									>
-										{rowLayer.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+										{rowLayer.locked ? <svg.LockClosed /> : null}
 									</button>
 								</layer-row-controls>
 							) : row.object?.geometry.kind === "artboard-link" ? (
@@ -1278,6 +1281,52 @@ function DesignCanvasTile({
 				</label>
 			</snap-options>
 			<strong>Guides</strong>
+			<guide-global-controls role="group" aria-label="All guides">
+				<button
+					type="button"
+					disabled={context.document.guides.length === 0}
+					aria-label={
+						context.guidesVisible ? "Hide all guides" : "Show all guides"
+					}
+					aria-pressed={!context.guidesVisible}
+					title={
+						context.document.guides.length === 0
+							? "Create a guide before changing guide visibility."
+							: context.guidesVisible
+								? "Hide all guides"
+								: "Show all guides"
+					}
+					onClick={() => context.setGuidesVisible(!context.guidesVisible)}
+				>
+					{context.guidesVisible ? <svg.EyeOpen /> : <svg.EyeClosed />}
+				</button>
+				{(() => {
+					const allLocked =
+						context.document.guides.length > 0 &&
+						context.document.guides.every((guide) => guide.locked)
+					const someLocked = context.document.guides.some(
+						(guide) => guide.locked,
+					)
+					const pressed = allLocked ? true : someLocked ? "mixed" : false
+					const label = allLocked ? "Unlock all guides" : "Lock all guides"
+					return (
+						<button
+							type="button"
+							disabled={context.document.guides.length === 0}
+							aria-label={label}
+							aria-pressed={pressed}
+							title={
+								context.document.guides.length === 0
+									? "Create a guide before changing guide locks."
+									: label
+							}
+							onClick={() => context.setAllGuidesLocked(!allLocked)}
+						>
+							{allLocked ? <svg.LockClosed /> : null}
+						</button>
+					)
+				})()}
+			</guide-global-controls>
 			{context.document.guides.length === 0 ? (
 				<span>Click a ruler to create a guide.</span>
 			) : (
@@ -1296,9 +1345,11 @@ function DesignCanvasTile({
 							<button
 								type="button"
 								aria-label={guide.locked ? "Unlock guide" : "Lock guide"}
+								aria-pressed={Boolean(guide.locked)}
+								title={guide.locked ? "Unlock guide" : "Lock guide"}
 								onClick={() => context.toggleGuideLock(guide.id)}
 							>
-								{guide.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+								{guide.locked ? <svg.LockClosed /> : null}
 							</button>
 							<button
 								type="button"
@@ -2718,7 +2769,7 @@ function DesignObjectTile({
 								})
 					}
 				>
-					{object?.locked ? <svg.LockClosed /> : <svg.LockOpen />}
+					{object?.locked ? <svg.LockClosed /> : null}
 					{object?.locked ? "Locked" : "Unlocked"}
 				</TileButton>
 			</design-object-actions>
