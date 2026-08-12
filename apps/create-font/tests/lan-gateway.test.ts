@@ -314,11 +314,17 @@ describe(`pinned LAN and loopback gateways`, () => {
 			})
 			try {
 				expect(
+					(await fetch(new URL(`/api/ui-layouts`, ownerGateway.url))).status,
+				).toBe(200)
+				expect(
 					(
 						await fetch(new URL(`/api/health`, guestGateway.url), {
 							method: `POST`,
 						})
 					).status,
+				).toBe(403)
+				expect(
+					(await fetch(new URL(`/api/ui-layouts`, guestGateway.url))).status,
 				).toBe(403)
 				expect(
 					(

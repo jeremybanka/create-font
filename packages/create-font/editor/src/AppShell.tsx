@@ -237,6 +237,8 @@ export function AppShell({
 	const showCurvature = useO(workspace.ui.showCurvature)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
 	const readOnly = collaborationSession?.role === `viewer`
+	const canPersistUiLayouts =
+		collaborationSession === undefined || collaborationSession.role === `owner`
 	const toolContextForHistory = (
 		history: TimelineMeta | null,
 	): ToolContext => ({
@@ -601,15 +603,19 @@ export function AppShell({
 							onStatusChange={updateTilingStatus}
 							layout={tilingLayout}
 							onLayoutChange={setTilingLayout}
-							layoutManagement={
-								<UiLayoutControl
-									ref={uiLayoutControlRef}
-									product="create-font"
-									current={uiLayout}
-									onApply={applyUiLayout}
-								/>
-							}
-							onSaveLayout={() => void uiLayoutControlRef.current?.save()}
+							{...(canPersistUiLayouts
+								? {
+										layoutManagement: (
+											<UiLayoutControl
+												ref={uiLayoutControlRef}
+												product="create-font"
+												current={uiLayout}
+												onApply={applyUiLayout}
+											/>
+										),
+										onSaveLayout: () => void uiLayoutControlRef.current?.save(),
+									}
+								: {})}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (

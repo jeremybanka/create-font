@@ -623,6 +623,7 @@ export async function startLanHost(options: {
 					return
 				}
 				const ownerOnly =
+					url.pathname.startsWith(`/api/ui-layouts`) ||
 					request.method !== `GET` ||
 					url.pathname.startsWith(`/api/build`) ||
 					url.pathname.includes(`/commit`) ||
