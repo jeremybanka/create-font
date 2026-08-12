@@ -10,6 +10,7 @@ import {
 	UiLayoutControl,
 	isCurvatureShortcut,
 	isCommandPaletteKeyboardEvent,
+	keyboardStepMultiplier,
 	parseHotbarSlots,
 	readVectorClipboard,
 	reduceVectorGesture,
@@ -221,6 +222,7 @@ import { placeDesignImage } from "./placed-images.ts"
 import { placeDesignLinkedArtboard } from "./linked-artboards.ts"
 import {
 	directSelectionDescription,
+	directSelectionForTranslation,
 	directSelectionKey,
 	directSelectionVectorControls,
 	designCornerAmountFromInwardDrag,
@@ -435,8 +437,15 @@ type CanvasGesture =
 			readonly kind: "direct"
 			readonly pointerId: number
 			readonly start: CanvasPoint
+			readonly current: CanvasPoint
 			readonly original: DesignDocument
 			readonly selection: readonly DesignDirectSelectionTarget[]
+			readonly captureTarget: unknown
+			readonly controller: Readonly<{
+				objectId: string
+				pointId: string
+			}> | null
+			readonly altKey: boolean
 	  }
 	| {
 			readonly kind: "segment-action"
@@ -2687,6 +2696,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const cancelCanvasGesture = useCallback((): void => {
 		const gesture = gestureRef.current
+		if (gesture?.kind === "direct") {
+			gestureRef.current = null
+			releaseDesignPointer(gesture.captureTarget, gesture.pointerId)
+		}
 		if (
 			gesture !== null &&
 			gesture.kind !== "pan" &&
@@ -5942,10 +5955,34 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				setGuidePlot(next)
 			}
 			const gesture = gestureRef.current
+			if (gesture?.kind === "direct") {
+				if (event.key !== "Alt" || gesture.controller === null) return
+				const nextGesture = { ...gesture, altKey: event.altKey }
+				gestureRef.current = nextGesture
+				const preview = translateDirectSelection(
+					nextGesture.original,
+					nextGesture.selection,
+					{
+						x: nextGesture.current.x - nextGesture.start.x,
+						y: nextGesture.current.y - nextGesture.start.y,
+					},
+					{
+						fixedHandles: nextGesture.altKey,
+						...(nextGesture.controller === null
+							? {}
+							: { controller: nextGesture.controller }),
+					},
+				)
+				const changed = preview.objects.filter(
+					(object, index) => object !== nextGesture.original.objects[index],
+				)
+				previewObjectsRef.current = changed
+				setPreviewObjects(changed)
+				return
+			}
 			if (
 				gesture === null ||
 				gesture.kind === "pan" ||
-				gesture.kind === "direct" ||
 				gesture.kind === "segment-action" ||
 				gesture.kind === "corner" ||
 				gesture.kind === "artboard" ||
@@ -6123,7 +6160,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (
 				["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
 			) {
-				const amount = event.shiftKey ? 10 : 1
+				const amount = keyboardStepMultiplier(event, MAC_LIKE)
 				const delta = {
 					x:
 						event.key === "ArrowLeft"
@@ -6138,9 +6175,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								? amount
 								: 0,
 				}
+				const effectiveDirectSelection =
+					tool === "direct"
+						? directSelectionForTranslation(document, directSelection)
+						: directSelection
+				if (
+					tool === "direct" &&
+					!sameDirectSelection(effectiveDirectSelection, directSelection)
+				)
+					setDirectSelection(effectiveDirectSelection)
 				const next =
 					tool === "direct"
-						? translateDirectSelection(document, directSelection, delta)
+						? translateDirectSelection(
+								document,
+								effectiveDirectSelection,
+								delta,
+							)
 						: selectedLockedObject !== undefined
 							? document
 							: {
@@ -6160,7 +6210,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				}
 				if (
 					next !== document &&
-					(selection.length > 0 || directSelection.length > 0)
+					(selection.length > 0 || effectiveDirectSelection.length > 0)
 				) {
 					event.preventDefault()
 					commit(next)
@@ -6790,15 +6840,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			!additive && alreadySelected
 				? directSelection
 				: toggleDirectSelection(directSelection, target, additive)
-		setDirectSelection(next)
-		setSelection([...new Set(next.map((candidate) => candidate.objectId))])
-		if (additive || next.length === 0) return
+		const effective = directSelectionForTranslation(document, next)
+		setDirectSelection(effective)
+		setSelection([...new Set(effective.map((candidate) => candidate.objectId))])
+		if (additive || effective.length === 0) return
+		const start = pagePoint(event)
 		gestureRef.current = {
 			kind: "direct",
 			pointerId: event.evt.pointerId,
-			start: pagePoint(event),
+			start,
+			current: start,
 			original: document,
-			selection: next,
+			selection: effective,
+			captureTarget: event.evt.currentTarget,
+			controller:
+				target.kind === "node"
+					? { objectId: target.objectId, pointId: target.pointId }
+					: null,
+			altKey: event.evt.altKey,
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
@@ -7390,12 +7449,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (gesture.kind === "direct") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			const current = pagePoint(event)
+			const nextGesture = { ...gesture, current, altKey: event.evt.altKey }
+			gestureRef.current = nextGesture
 			const preview = translateDirectSelection(
-				gesture.original,
-				gesture.selection,
+				nextGesture.original,
+				nextGesture.selection,
 				{
-					x: current.x - gesture.start.x,
-					y: current.y - gesture.start.y,
+					x: current.x - nextGesture.start.x,
+					y: current.y - nextGesture.start.y,
+				},
+				{
+					fixedHandles: nextGesture.altKey && nextGesture.controller !== null,
+					...(nextGesture.controller === null
+						? {}
+						: { controller: nextGesture.controller }),
 				},
 			)
 			const changed = preview.objects.filter(
@@ -7599,12 +7666,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					x: releasePoint.x - gesture.start.x,
 					y: releasePoint.y - gesture.start.y,
 				},
+				{
+					fixedHandles: event.altKey && gesture.controller !== null,
+					...(gesture.controller === null
+						? {}
+						: { controller: gesture.controller }),
+				},
 			).objects.filter(
 				(object, index) => object !== gesture.original.objects[index],
 			)
 			gestureRef.current = null
 			previewObjectsRef.current = []
-			releaseDesignPointer(captureTarget, event.pointerId)
+			releaseDesignPointer(gesture.captureTarget, event.pointerId)
 			setPreviewObjects([])
 			if (changed.length > 0) {
 				const byId = new Map(changed.map((object) => [object.id, object]))
@@ -9219,7 +9292,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																		color={layerUiColorForObject(object.id)}
 																		fill={canvasTheme.handleFill}
 																		listening
-																		nodeShape="square"
+																		nodeShape={
+																			node.mode === "soft" ? "circle" : "square"
+																		}
 																		nodeSize={5}
 																		nodeStrokeWidth={1}
 																		selectedFill={layerUiColorForObject(

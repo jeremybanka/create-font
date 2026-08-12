@@ -208,6 +208,7 @@ export function VectorControlHandles({
 								y={endpoint.y}
 								radius={handleHitRadius[handle]}
 								fill="rgb(0 0 0 / 0.001)"
+								onPointerDown={(event) => onHandlePointerDown?.(handle, event)}
 							/>
 						)}
 						<Circle
@@ -259,6 +260,7 @@ export function VectorControlHandles({
 					y={node.y}
 					radius={nodeHitRadius}
 					fill="rgb(0 0 0 / 0.001)"
+					onPointerDown={(event) => onNodePointerDown?.(event)}
 				/>
 			)}
 			{nodeShape === "endpoint" && endpointNormal !== undefined ? (

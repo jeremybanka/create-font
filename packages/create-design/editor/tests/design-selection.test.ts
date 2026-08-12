@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	directSelectionKey,
+	directSelectionForTranslation,
 	directSelectionVectorControls,
 	designCornerAmountFromInwardDrag,
 	designInwardDistances,
@@ -369,7 +370,187 @@ describe("design selection", () => {
 			id: "point:a",
 			x: 10,
 			y: 10,
-			outgoing: { x: 12, y: 5 },
+			outgoing: { x: 13, y: 0 },
+		})
+	})
+
+	it("moves hard handles independently and preserves soft handle invariants", () => {
+		const object = path({
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:path",
+						closed: false,
+						points: [
+							{
+								id: "hard",
+								mode: "hard",
+								x: 0,
+								y: 0,
+								outgoing: { x: 10, y: 0 },
+							},
+							{
+								id: "soft",
+								mode: "soft",
+								x: 40,
+								y: 0,
+								incoming: { x: -10, y: 0 },
+								outgoing: { x: 20, y: 0 },
+							},
+						],
+					},
+				],
+			},
+		})
+		const moved = translateDirectSelection(
+			documentWith(object),
+			[
+				{
+					kind: "handle",
+					objectId: object.id,
+					contourId: "contour:path",
+					pointId: "hard",
+					handle: "outgoing",
+				},
+				{
+					kind: "handle",
+					objectId: object.id,
+					contourId: "contour:path",
+					pointId: "soft",
+					handle: "outgoing",
+				},
+			],
+			{ x: 0, y: 10 },
+		)
+		if (moved.objects[0]?.geometry.kind !== "path")
+			throw new Error("Expected a path.")
+		const [hard, soft] = moved.objects[0].geometry.contours[0]!.points
+		expect(hard).toMatchObject({
+			x: 0,
+			y: 0,
+			outgoing: { x: 10, y: 10 },
+		})
+		expect(soft?.outgoing).toEqual({ x: 20, y: 10 })
+		expect(
+			Math.hypot(soft?.incoming?.x ?? 0, soft?.incoming?.y ?? 0),
+		).toBeCloseTo(10)
+		expect(
+			(soft?.incoming?.x ?? 0) * (soft?.outgoing?.y ?? 0) -
+				(soft?.incoming?.y ?? 0) * (soft?.outgoing?.x ?? 0),
+		).toBeCloseTo(0)
+	})
+
+	it("adds a soft owner when both of its handles are independently selected", () => {
+		const document = documentWith(path())
+		const selection = directSelectionForTranslation(document, [
+			{
+				kind: "handle",
+				objectId: "object:path",
+				contourId: "contour:path",
+				pointId: "point:a",
+				handle: "outgoing",
+			},
+			{
+				kind: "handle",
+				objectId: "object:path",
+				contourId: "contour:path",
+				pointId: "point:a",
+				handle: "incoming",
+			},
+		])
+		// The fixture has only one authored handle, so no implicit owner is added.
+		expect(selection).toHaveLength(2)
+		const paired = path({
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:path",
+						closed: false,
+						points: [
+							{
+								id: "point:a",
+								mode: "soft",
+								x: 10,
+								y: 10,
+								incoming: { x: -5, y: 0 },
+								outgoing: { x: 10, y: 0 },
+							},
+							{ id: "point:b", x: 40, y: 10 },
+						],
+					},
+				],
+			},
+		})
+		const expanded = directSelectionForTranslation(
+			documentWith(paired),
+			selection,
+		)
+		expect(expanded.map(({ kind }) => kind)).toEqual([
+			"handle",
+			"handle",
+			"node",
+		])
+	})
+
+	it("Alt-drags a transformed hard node with fixed document-space handles", () => {
+		const object = path({
+			transform: { a: 2, b: 0.5, c: 0.25, d: 1.5, e: 7, f: -4 },
+			geometry: {
+				kind: "path",
+				contours: [
+					{
+						id: "contour:path",
+						closed: false,
+						points: [
+							{
+								id: "point:a",
+								mode: "hard",
+								x: 10,
+								y: 20,
+								incoming: { x: -5, y: 2 },
+								outgoing: { x: 8, y: -3 },
+							},
+							{ id: "point:b", x: 50, y: 20 },
+						],
+					},
+				],
+			},
+		})
+		const before = projectDesignObjectContours(object)[0]!.points[0]!
+		const moved = translateDirectSelection(
+			documentWith(object),
+			[
+				{
+					kind: "node",
+					objectId: object.id,
+					contourId: "contour:path",
+					pointId: "point:a",
+				},
+			],
+			{ x: 13, y: -9 },
+			{
+				fixedHandles: true,
+				controller: { objectId: object.id, pointId: "point:a" },
+			},
+		).objects[0]!
+		const after = projectDesignObjectContours(moved)[0]!.points[0]!
+		expect(after.x).toBeCloseTo(before.x + 13)
+		expect(after.y).toBeCloseTo(before.y - 9)
+		expect({
+			x: after.x + (after.incoming?.x ?? 0),
+			y: after.y + (after.incoming?.y ?? 0),
+		}).toEqual({
+			x: before.x + (before.incoming?.x ?? 0),
+			y: before.y + (before.incoming?.y ?? 0),
+		})
+		expect({
+			x: after.x + (after.outgoing?.x ?? 0),
+			y: after.y + (after.outgoing?.y ?? 0),
+		}).toEqual({
+			x: before.x + (before.outgoing?.x ?? 0),
+			y: before.y + (before.outgoing?.y ?? 0),
 		})
 	})
 

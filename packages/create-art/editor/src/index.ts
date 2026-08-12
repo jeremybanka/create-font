@@ -188,6 +188,14 @@ export {
 	type CurvatureSide,
 	type CurvatureShortcutEvent,
 } from "./curvature-comb.ts"
+export {
+	dragVectorControlsWithFixedHandles,
+	editVectorHandle,
+	translateVectorControls,
+	vectorHandleSelectionKey,
+	type VectorControlEditPlan,
+	type VectorControlSelection,
+} from "./vector-control-editing.ts"
 export { IS_MAC_LIKE, MOD_KEY_LABEL, isMacLike } from "./platform.ts"
 export {
 	selectedSourceReviewPaths,

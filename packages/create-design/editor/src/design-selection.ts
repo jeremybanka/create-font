@@ -1,13 +1,21 @@
 import type {
 	CanvasPoint,
+	VectorContour,
 	VectorHandleKind,
 	VectorNode,
 	VectorSelectionTarget,
+} from "@create-art/editor"
+import {
+	dragVectorControlsWithFixedHandles,
+	translateVectorControls,
+	vectorHandleSelectionKey,
+	type VectorControlSelection,
 } from "@create-art/editor"
 
 import { projectDesignVectorObject } from "./design-vector-adapter.ts"
 import type { Bounds } from "@create-design/model"
 import {
+	inverseTransformDesignPoint,
 	projectDesignEffectiveHierarchy,
 	visibleObjectBounds,
 } from "@create-design/model"
@@ -568,74 +576,190 @@ function selectedControls(
 	return { points, handles }
 }
 
-/** Updates selected controls in local space while preserving the object transform. */
+/** Adds the implicit owner required to rigidly translate both soft handles. */
+export function directSelectionForTranslation(
+	document: DesignDocument,
+	selection: readonly DesignDirectSelectionTarget[],
+): readonly DesignDirectSelectionTarget[] {
+	const next = [...selection]
+	const keys = new Set(selection.map(directSelectionKey))
+	for (const object of document.objects) {
+		if (object.geometry.kind !== "path") continue
+		const projected = projectDesignVectorObject(document, object)
+		const controls = selectedControls(object.id, projected.contours, selection)
+		for (const contour of projected.contours) {
+			for (const node of contour.nodes) {
+				if (
+					node.mode !== "soft" ||
+					node.incoming === undefined ||
+					node.outgoing === undefined ||
+					controls.points.has(node.id) ||
+					!controls.handles.has(`${node.id}:incoming`) ||
+					!controls.handles.has(`${node.id}:outgoing`)
+				)
+					continue
+				const target = {
+					kind: "node" as const,
+					objectId: object.id,
+					contourId: contour.id,
+					pointId: node.id,
+				}
+				const key = directSelectionKey(target)
+				if (keys.has(key)) continue
+				keys.add(key)
+				next.push(target)
+			}
+		}
+	}
+	return next
+}
+
+const DIRECT_EDIT_SEPARATOR = "\0"
+
+const namespacedId = (objectId: string, id: string): string =>
+	`${objectId}${DIRECT_EDIT_SEPARATOR}${id}`
+
+type DirectEditSceneEntry = Readonly<{
+	object: DesignObject
+	contours: readonly VectorContour[]
+}>
+
+function directEditScene(
+	document: DesignDocument,
+	selection: readonly DesignDirectSelectionTarget[],
+): Readonly<{
+	entries: readonly DirectEditSceneEntry[]
+	contours: readonly VectorContour[]
+	selection: VectorControlSelection
+}> {
+	const nodes = new Set<string>()
+	const handles = new Set<string>()
+	const entries = document.objects.flatMap((object) => {
+		if (object.hidden || object.locked || object.geometry.kind !== "path")
+			return []
+		const projected = projectDesignVectorObject(document, object)
+		const controls = selectedControls(object.id, projected.contours, selection)
+		if (controls.points.size === 0 && controls.handles.size === 0) return []
+		for (const pointId of controls.points)
+			nodes.add(namespacedId(object.id, pointId))
+		for (const contour of projected.contours)
+			for (const node of contour.nodes)
+				for (const handle of ["incoming", "outgoing"] as const)
+					if (controls.handles.has(`${node.id}:${handle}`))
+						handles.add(
+							vectorHandleSelectionKey(
+								namespacedId(object.id, node.id),
+								handle,
+							),
+						)
+		return [{ object, contours: projected.contours }]
+	})
+	return {
+		entries,
+		contours: entries.flatMap(({ object, contours }) =>
+			contours.map((contour) => ({
+				...contour,
+				id: namespacedId(object.id, contour.id),
+				nodes: contour.nodes.map((node) => ({
+					...node,
+					id: namespacedId(object.id, node.id),
+				})),
+			})),
+		),
+		selection: { nodes, handles },
+	}
+}
+
+function applyDirectEditPlan(
+	document: DesignDocument,
+	entries: readonly DirectEditSceneEntry[],
+	contours: readonly VectorContour[],
+): DesignDocument {
+	const planned = new Map(
+		contours.flatMap((contour) => contour.nodes.map((node) => [node.id, node])),
+	)
+	const editable = new Map(entries.map((entry) => [entry.object.id, entry]))
+	let changed = false
+	const objects = document.objects.map((object) => {
+		const entry = editable.get(object.id)
+		if (entry === undefined || object.geometry.kind !== "path") return object
+		let objectChanged = false
+		const nextContours = object.geometry.contours.map((contour) => ({
+			...contour,
+			points: contour.points.map((point) => {
+				const next = planned.get(namespacedId(object.id, point.id))
+				if (next === undefined) return point
+				const local = inverseTransformDesignPoint(object.transform, {
+					id: point.id,
+					...(point.mode === undefined ? {} : { mode: point.mode }),
+					x: next.x,
+					y: next.y,
+					...(next.incoming === undefined ? {} : { incoming: next.incoming }),
+					...(next.outgoing === undefined ? {} : { outgoing: next.outgoing }),
+					...(point.corner === undefined ? {} : { corner: point.corner }),
+				})
+				if (local === null) return point
+				const geometryChanged =
+					local.x !== point.x ||
+					local.y !== point.y ||
+					local.incoming?.x !== point.incoming?.x ||
+					local.incoming?.y !== point.incoming?.y ||
+					local.outgoing?.x !== point.outgoing?.x ||
+					local.outgoing?.y !== point.outgoing?.y
+				if (!geometryChanged) return point
+				objectChanged = true
+				return {
+					...point,
+					x: local.x,
+					y: local.y,
+					...(point.incoming === undefined
+						? {}
+						: { incoming: local.incoming ?? point.incoming }),
+					...(point.outgoing === undefined
+						? {}
+						: { outgoing: local.outgoing ?? point.outgoing }),
+				}
+			}),
+		}))
+		if (!objectChanged) return object
+		changed = true
+		return {
+			...object,
+			geometry: { ...object.geometry, contours: nextContours },
+		}
+	})
+	return changed ? { ...document, objects } : document
+}
+
+export interface DirectSelectionTranslationOptions {
+	readonly fixedHandles?: boolean
+	readonly controller?: Readonly<{ objectId: string; pointId: string }>
+}
+
+/** Updates selected controls in document space while preserving object transforms. */
 export function translateDirectSelection(
 	document: DesignDocument,
 	selection: readonly DesignDirectSelectionTarget[],
 	delta: CanvasPoint,
+	options: DirectSelectionTranslationOptions = {},
 ): DesignDocument {
 	if (selection.length === 0 || (delta.x === 0 && delta.y === 0))
 		return document
-	let changed = false
-	const objects = document.objects.map((object) => {
-		if (object.hidden || object.locked || object.geometry.kind !== "path")
-			return object
-		const projected = projectDesignVectorObject(document, object)
-		const controls = selectedControls(object.id, projected.contours, selection)
-		if (controls.points.size === 0 && controls.handles.size === 0) return object
-		const determinant =
-			object.transform.a * object.transform.d -
-			object.transform.b * object.transform.c
-		if (Math.abs(determinant) <= Number.EPSILON) return object
-		const localDelta = {
-			x:
-				(object.transform.d * delta.x - object.transform.c * delta.y) /
-				determinant,
-			y:
-				(-object.transform.b * delta.x + object.transform.a * delta.y) /
-				determinant,
-		}
-		changed = true
-		return {
-			...object,
-			geometry: {
-				...object.geometry,
-				contours: object.geometry.contours.map((contour) => ({
-					...contour,
-					points: contour.points.map((point) => ({
-						...point,
-						...(controls.points.has(point.id)
-							? {
-									x: point.x + localDelta.x,
-									y: point.y + localDelta.y,
-								}
-							: {}),
-						...(point.incoming === undefined ||
-						controls.points.has(point.id) ||
-						!controls.handles.has(`${point.id}:incoming`)
-							? {}
-							: {
-									incoming: {
-										x: point.incoming.x + localDelta.x,
-										y: point.incoming.y + localDelta.y,
-									},
-								}),
-						...(point.outgoing === undefined ||
-						controls.points.has(point.id) ||
-						!controls.handles.has(`${point.id}:outgoing`)
-							? {}
-							: {
-									outgoing: {
-										x: point.outgoing.x + localDelta.x,
-										y: point.outgoing.y + localDelta.y,
-									},
-								}),
-					})),
-				})),
-			},
-		}
-	})
-	return changed ? { ...document, objects } : document
+	const scene = directEditScene(document, selection)
+	if (scene.contours.length === 0) return document
+	const controller = options.controller
+	const plan =
+		options.fixedHandles === true && controller !== undefined
+			? dragVectorControlsWithFixedHandles(
+					scene.contours,
+					scene.selection,
+					namespacedId(controller.objectId, controller.pointId),
+					delta,
+				)
+			: translateVectorControls(scene.contours, scene.selection, delta)
+	return plan === null
+		? document
+		: applyDirectEditPlan(document, scene.entries, plan.contours)
 }
 
 export function directSelectionDescription(

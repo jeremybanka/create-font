@@ -27,6 +27,7 @@ import {
 } from "../src/design-text.ts"
 import {
 	objectBounds,
+	projectDesignObjectContours,
 	swatchCss,
 	translateObject,
 	visibleObjectBounds,
@@ -238,6 +239,58 @@ function clipboardEvent(
 	}) as ClipboardEvent
 	Object.defineProperty(event, "clipboardData", { value: clipboard })
 	return event
+}
+
+function directControlFixture(): Readonly<{
+	document: DesignDocument
+	object: DesignObject
+	hardPointId: string
+	softPointId: string
+}> {
+	const initial = createInitialDocument()
+	let identity = 0
+	const expanded = expandDesignShape(initial.objects[0]!, () =>
+		(identity += 1).toString(),
+	)
+	if (expanded.geometry.kind !== "path") throw new Error("Expected a path.")
+	const firstContour = expanded.geometry.contours[0]
+	const hardPointId = firstContour?.points[0]?.id
+	const softPointId = firstContour?.points[1]?.id
+	if (hardPointId === undefined || softPointId === undefined)
+		throw new Error("Expected two path points.")
+	const object: DesignObject = {
+		...expanded,
+		geometry: {
+			...expanded.geometry,
+			contours: expanded.geometry.contours.map((contour, contourIndex) => ({
+				...contour,
+				points: contour.points.map((point, pointIndex) => {
+					if (contourIndex !== 0) return point
+					if (pointIndex === 0)
+						return {
+							...point,
+							mode: "hard" as const,
+							incoming: { x: -18, y: 4 },
+							outgoing: { x: 22, y: -6 },
+						}
+					if (pointIndex === 1)
+						return {
+							...point,
+							mode: "soft" as const,
+							incoming: { x: -16, y: 0 },
+							outgoing: { x: 24, y: 0 },
+						}
+					return { ...point, mode: "hard" as const }
+				}),
+			})),
+		},
+	}
+	return {
+		document: { ...initial, objects: [object] },
+		object,
+		hardPointId,
+		softPointId,
+	}
 }
 
 describe("create-design shared vector scene", () => {
@@ -5969,8 +6022,28 @@ describe("create-design shared vector scene", () => {
 		const expanded = expandDesignShape(initial.objects[0]!, () =>
 			(identity += 1).toString(),
 		)
+		if (expanded.geometry.kind !== "path") throw new Error("Expected a path.")
+		const shaped: DesignObject = {
+			...expanded,
+			geometry: {
+				...expanded.geometry,
+				contours: expanded.geometry.contours.map((contour, contourIndex) => ({
+					...contour,
+					points: contour.points.map((point, pointIndex) =>
+						contourIndex === 0 && pointIndex === 0
+							? {
+									...point,
+									mode: "soft" as const,
+									incoming: { x: -12, y: 0 },
+									outgoing: { x: 12, y: 0 },
+								}
+							: { ...point, mode: "hard" as const },
+					),
+				})),
+			},
+		}
 		const stage = mountDesign({
-			initialDocument: { ...initial, objects: [expanded] },
+			initialDocument: { ...initial, objects: [shaped] },
 		})
 		const layer = document.querySelector<HTMLButtonElement>(
 			'design-layers-tile [data-layer-kind="object"]',
@@ -5993,6 +6066,12 @@ describe("create-design shared vector scene", () => {
 		act(() => direct.click())
 		const directNodes = stage.find(".vector-node")
 		expect(directNodes.length).toBeGreaterThan(0)
+		expect(
+			directNodes.filter((node) => node.getClassName() === "Circle"),
+		).toHaveLength(1)
+		expect(
+			directNodes.filter((node) => node.getClassName() === "Rect"),
+		).toHaveLength(directNodes.length - 1)
 		const theme = readDesignCanvasTheme(
 			document.querySelector("design-application"),
 		)
@@ -6506,6 +6585,274 @@ describe("create-design shared vector scene", () => {
 		expect(saved.objects[0].geometry.contours[0]?.points).toEqual(
 			originalPoints,
 		)
+	})
+
+	it("selects and nudges handles independently with modifiers and mixed controls", async () => {
+		const fixture = directControlFixture()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: fixture.document }, storage)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		if (layer === null || direct === null)
+			throw new Error("Direct Selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(`#${fixture.hardPointId}`)
+		const handle = node
+			?.getParent()
+			?.find(".bezier-handle")
+			.find((candidate) => candidate.hasName("vector-handle-outgoing"))
+		const handleTarget = handle?.getParent()?.findOne(".outline-control-helper")
+		if (
+			node === undefined ||
+			handle === undefined ||
+			handleTarget === undefined
+		)
+			throw new Error("Hard node handles were not rendered.")
+		const select = new PointerEvent("pointerdown", {
+			bubbles: true,
+			button: 0,
+			buttons: 1,
+			pointerId: 431,
+			pointerType: "mouse",
+		})
+		await act(async () => {
+			handleTarget.fire("pointerdown", { evt: select }, true)
+			stage.fire(
+				"pointerup",
+				{
+					evt: new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						pointerId: 431,
+						pointerType: "mouse",
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toBe("1 handle")
+		const original =
+			fixture.object.geometry.kind === "path"
+				? fixture.object.geometry.contours[0]!.points[0]!
+				: undefined
+		if (original === undefined) throw new Error("Expected path geometry.")
+		const savedPoint = (): DesignObject["geometry"] extends never
+			? never
+			: typeof original => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const object = saved.objects[0]
+			if (object?.geometry.kind !== "path")
+				throw new Error("Expected saved path geometry.")
+			return object.geometry.contours[0]!.points[0]!
+		}
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }))
+			await Promise.resolve()
+		})
+		expect(savedPoint()).toMatchObject({
+			x: original.x,
+			y: original.y,
+			incoming: original.incoming,
+			outgoing: {
+				x: (original.outgoing?.x ?? 0) + 1,
+				y: original.outgoing?.y,
+			},
+		})
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "ArrowRight", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedPoint().outgoing?.x).toBe((original.outgoing?.x ?? 0) + 101)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedPoint()).toEqual(original)
+		await act(async () => {
+			stage.findOne(`#${fixture.hardPointId}`).fire(
+				"pointerdown",
+				{
+					evt: new PointerEvent("pointerdown", {
+						bubbles: true,
+						button: 0,
+						buttons: 1,
+						pointerId: 432,
+						pointerType: "mouse",
+						shiftKey: true,
+					}),
+				},
+				true,
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toBe("1 handle, 1 node")
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }))
+			await Promise.resolve()
+		})
+		expect(savedPoint()).toMatchObject({
+			x: original.x,
+			y: original.y + 1,
+			incoming: original.incoming,
+			outgoing: original.outgoing,
+		})
+		expect(
+			document.getElementById("design-selection-status")?.textContent,
+		).toBe("1 handle, 1 node")
+	})
+
+	it("Alt-drags a hard node with fixed endpoints and supports history and cancel", async () => {
+		const fixture = directControlFixture()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument: fixture.document }, storage)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === null || direct === null || canvas === null)
+			throw new Error("Direct Selection controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const node = stage.findOne(`#${fixture.hardPointId}`)
+		if (node === undefined) throw new Error("Hard node was not rendered.")
+		const originalProjected = projectDesignObjectContours(fixture.object)[0]!
+			.points[0]!
+		const originalIncoming = {
+			x: originalProjected.x + (originalProjected.incoming?.x ?? 0),
+			y: originalProjected.y + (originalProjected.incoming?.y ?? 0),
+		}
+		const originalOutgoing = {
+			x: originalProjected.x + (originalProjected.outgoing?.x ?? 0),
+			y: originalProjected.y + (originalProjected.outgoing?.y ?? 0),
+		}
+		let pointer = node.getAbsolutePosition()
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const captured = new Set<number>()
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation((pointerId) => captured.add(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"hasPointerCapture",
+		).mockImplementation((pointerId) => captured.has(pointerId))
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation((pointerId) => {
+			captured.delete(pointerId)
+		})
+		const fire = (
+			type: "pointerdown" | "pointermove" | "pointerup",
+			at: Readonly<{ x: number; y: number }>,
+			pointerId: number,
+		): void => {
+			pointer = at
+			const event = new PointerEvent(type, {
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: at.x,
+				clientY: at.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				altKey: true,
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			node.fire(type, { evt: event }, true)
+		}
+		const start = { ...pointer }
+		const end = { x: start.x + 34, y: start.y + 21 }
+		await act(async () => {
+			fire("pointerdown", start, 433)
+			fire("pointermove", end, 433)
+			fire("pointerup", end, 433)
+			await Promise.resolve()
+		})
+		const savedObject = (): DesignObject => {
+			const saved = JSON.parse(
+				storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+			) as DesignDocument
+			const object = saved.objects[0]
+			if (object === undefined) throw new Error("Expected a saved object.")
+			return object
+		}
+		let projected = projectDesignObjectContours(savedObject())[0]!.points[0]!
+		expect({
+			x: projected.x + (projected.incoming?.x ?? 0),
+			y: projected.y + (projected.incoming?.y ?? 0),
+		}).toEqual(originalIncoming)
+		expect({
+			x: projected.x + (projected.outgoing?.x ?? 0),
+			y: projected.y + (projected.outgoing?.y ?? 0),
+		}).toEqual(originalOutgoing)
+		expect(projected.x).not.toBe(originalProjected.x)
+		expect(captured.size).toBe(0)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		expect(savedObject()).toEqual(fixture.object)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "z",
+					ctrlKey: true,
+					shiftKey: true,
+				}),
+			)
+			await Promise.resolve()
+		})
+		projected = projectDesignObjectContours(savedObject())[0]!.points[0]!
+		expect(projected.x).not.toBe(originalProjected.x)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+			pointer = node.getAbsolutePosition()
+			const cancelEnd = { x: pointer.x + 18, y: pointer.y - 12 }
+			fire("pointerdown", pointer, 434)
+			fire("pointermove", cancelEnd, 434)
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+			await Promise.resolve()
+		})
+		expect(savedObject()).toEqual(fixture.object)
+		expect(captured.size).toBe(0)
 	})
 
 	it("commits Direct Selection from the raw release before capture loss", async () => {
