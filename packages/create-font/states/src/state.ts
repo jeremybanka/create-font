@@ -2,6 +2,7 @@ import {
 	cornerProfileEligibility,
 	DEFAULT_GEOMETRY_TOLERANCES,
 	lowerCornerProfiles,
+	lowerInferredCorners,
 	type CornerContourPoint,
 } from "@create-art/vector-geometry"
 import {
@@ -2730,6 +2731,78 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					const contours: PointSource[][] = []
 					const flattenedPoints: PointSource[] = []
 					const seenPointIds = new Set<PointId>()
+					const inferredCornerPoints = new Map<string, Vector2>()
+					const inferredConsumedPoints = new Set<string>()
+					{
+						const inferableContours = (contourIds ?? []).flatMap(
+							(contourId) => {
+								const pointIds = get(contourPointIdsAtoms, [
+									masterId,
+									glyphId,
+									contourId,
+								])
+								const closed = get(contourClosedAtoms, [
+									masterId,
+									glyphId,
+									contourId,
+								])
+								if (pointIds === null || closed !== true) return []
+								const points = pointIds.flatMap((pointId) => {
+									const result = get(layerNodeSelectors, [
+										masterId,
+										glyphId,
+										pointId,
+									])
+									if (!result.ok) return []
+									return [
+										{
+											id: pointId,
+											point: { x: result.value.x, y: result.value.y },
+											...(result.value.incoming === undefined
+												? {}
+												: {
+														incoming: {
+															x: result.value.x + result.value.incoming.x,
+															y: result.value.y + result.value.incoming.y,
+														},
+													}),
+											...(result.value.outgoing === undefined
+												? {}
+												: {
+														outgoing: {
+															x: result.value.x + result.value.outgoing.x,
+															y: result.value.y + result.value.outgoing.y,
+														},
+													}),
+											...(result.value.corner === undefined
+												? {}
+												: { corner: result.value.corner }),
+										},
+									]
+								})
+								return points.length === pointIds.length
+									? [{ id: contourId, closed: true, points }]
+									: []
+							},
+						)
+						for (const contour of lowerInferredCorners(inferableContours)
+							.contours) {
+							const loweredIds = new Set(
+								contour.points.map((point) => point.id),
+							)
+							const authoredContour = inferableContours.find(
+								(candidate) => candidate.id === contour.id,
+							)
+							for (const point of authoredContour?.points ?? [])
+								if (!loweredIds.has(point.id))
+									inferredConsumedPoints.add(`${contour.id}\u0000${point.id}`)
+							for (const point of contour.points)
+								inferredCornerPoints.set(
+									`${contour.id}\u0000${point.id}`,
+									point.point,
+								)
+						}
+					}
 					for (const contourId of contourIds ?? []) {
 						const pointIds = get(contourPointIdsAtoms, [
 							masterId,
@@ -2818,7 +2891,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 								? ([
 										{
 											id: pointId,
-											point: { x: result.value.x, y: result.value.y },
+											point: inferredCornerPoints.get(
+												`${contourId}\u0000${pointId}`,
+											) ?? { x: result.value.x, y: result.value.y },
 											...(result.value.incoming === undefined
 												? {}
 												: {
@@ -3005,6 +3080,8 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						) {
 							const pointId = pointIds[segmentIndex]
 							if (pointId === undefined) continue
+							if (inferredConsumedPoints.has(`${contourId}\u0000${pointId}`))
+								continue
 							const endPointId = pointIds[(segmentIndex + 1) % pointIds.length]
 							if (endPointId === undefined) continue
 							const start = get(layerNodeSelectors, [
@@ -3027,9 +3104,15 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							if (!end.ok) errors.push(...end.errors)
 							if (!plan.ok) errors.push(...plan.errors)
 							if (!start.ok || !end.ok || !plan.ok) continue
+							const startPosition =
+								inferredCornerPoints.get(`${contourId}\u0000${pointId}`) ??
+								start.value
+							const endPosition =
+								inferredCornerPoints.get(`${contourId}\u0000${endPointId}`) ??
+								end.value
 
 							const startPoint = projectPoint(
-								start.value,
+								startPosition,
 								true,
 								`${path}.points[${pointId}]`,
 								pointId,
@@ -3043,16 +3126,16 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 							const outgoing = start.value.outgoing
 							const incoming = end.value.incoming
 							const cubic: CubicBezier = {
-								p0: { x: start.value.x, y: start.value.y },
+								p0: { x: startPosition.x, y: startPosition.y },
 								c1: {
-									x: start.value.x + (outgoing?.x ?? 0),
-									y: start.value.y + (outgoing?.y ?? 0),
+									x: startPosition.x + (outgoing?.x ?? 0),
+									y: startPosition.y + (outgoing?.y ?? 0),
 								},
 								c2: {
-									x: end.value.x + (incoming?.x ?? 0),
-									y: end.value.y + (incoming?.y ?? 0),
+									x: endPosition.x + (incoming?.x ?? 0),
+									y: endPosition.y + (incoming?.y ?? 0),
 								},
-								p3: { x: end.value.x, y: end.value.y },
+								p3: { x: endPosition.x, y: endPosition.y },
 							}
 							const quadratics =
 								outgoing === undefined && incoming === undefined

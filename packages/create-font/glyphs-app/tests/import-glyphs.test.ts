@@ -165,6 +165,23 @@ glyphs = (
 unitsPerEm = 1000;
 }`
 
+const overflowCornerFixture = `{
+familyName = "Open Corner Import";
+fontMaster = ({ ascender = 800; descender = -200; id = regular; });
+glyphs = (
+{
+glyphname = overflowCorner;
+layers = ({
+layerId = regular;
+paths = ({ closed = 1; nodes = ("0 0 LINE", "120 0 LINE", "100 -20 LINE", "100 100 LINE", "0 100 LINE"); });
+width = 200;
+});
+unicode = 004F;
+}
+);
+unitsPerEm = 1000;
+}`
+
 function componentExpansionFixture(depth: number, references: number): string {
 	const glyphs = Array.from({ length: depth + 1 }, (_, index) => {
 		const shapes =
@@ -182,6 +199,29 @@ function componentExpansionFixture(depth: number, references: number): string {
 }
 
 describe("Glyphs.app import", () => {
+	it("preserves Glyphs overflow nodes in source and infers their corner at export", () => {
+		const result = importGlyphsSource(overflowCornerFixture)
+		expect(result.ok).toBe(true)
+		if (!result.ok) return
+		const importedGlyph = result.value.source.glyphs.find(
+			(glyph) => glyph.name === "overflowCorner",
+		)!
+		expect(importedGlyph.layers[0]?.contours[0]?.points).toHaveLength(5)
+
+		const editor = createFontEditorState({ key: "glyphs/open-corner-import" })
+		editor.actions.load(result.value.source)
+		const compilation = editor.read.compilation()
+		const exported = compilation.source.glyphs.find(
+			(glyph) => glyph.name === "overflowCorner",
+		)!
+		expect(exported.contours[0]).toEqual([
+			{ x: 0, y: 0, onCurve: true },
+			{ x: 100, y: 0, onCurve: true },
+			{ x: 100, y: 100, onCurve: true },
+			{ x: 0, y: 100, onCurve: true },
+		])
+	})
+
 	it("lowers masters, cubic paths, components, cmap, kerning, and features", () => {
 		const result = importGlyphsSource(glyphsFixture)
 

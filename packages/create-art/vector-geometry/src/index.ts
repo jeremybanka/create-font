@@ -53,6 +53,13 @@ export {
 	type PolylineIntersection,
 	type SegmentIntersection,
 } from "./intersections.ts"
+export {
+	lowerInferredCorners,
+	type LoweredInferredCorners,
+	type InferredCorner,
+	type InferredCornerContour,
+	type InferredCornerPoint,
+} from "./open-corners.ts"
 export { fitCubicContour, type CubicFitOptions } from "./fit.ts"
 export { offsetContour, type OffsetContourOptions } from "./offset.ts"
 export {

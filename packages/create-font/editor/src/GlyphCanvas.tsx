@@ -5335,7 +5335,8 @@ export function GlyphCanvas({
 										opacity={0.1}
 										listening={false}
 									/>
-									{closedFontVectorObject === null ? null : (
+									{closedFontVectorObject ===
+									null ? null : contourPaintPaths.overflowPath === "" ? (
 										<VectorContourPath
 											name="closed-contour-outline"
 											object={closedFontVectorObject}
@@ -5344,6 +5345,25 @@ export function GlyphCanvas({
 											strokeWidth={1.25 * inverseScale}
 											listening={false}
 										/>
+									) : (
+										<>
+											<Path
+												name="closed-contour-outline"
+												data={contourPaintPaths.closedPath}
+												fillEnabled={false}
+												stroke={palette.outline}
+												strokeWidth={1.25 * inverseScale}
+												listening={false}
+											/>
+											<Path
+												name="open-corner-overflow-guide"
+												data={contourPaintPaths.overflowPath}
+												fillEnabled={false}
+												stroke={palette.guideMid}
+												strokeWidth={1.25 * inverseScale}
+												listening={false}
+											/>
+										</>
 									)}
 									{openFontVectorObject === null ? null : (
 										<VectorContourPath
