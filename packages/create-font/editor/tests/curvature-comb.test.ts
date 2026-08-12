@@ -73,7 +73,7 @@ describe("curvature comb", () => {
 					],
 				},
 			],
-			{ gain: 1, side: "outside", unitsPerEm: 1_000 },
+			{ gain: 1, side: "outside", referenceUnits: 1_000 },
 		)
 		expect(cells).toHaveLength(400)
 		expect(new Set(cells.map((cell) => cell.color)).size).toBeGreaterThan(1)
@@ -91,12 +91,12 @@ describe("curvature comb", () => {
 		const outside = createCurvatureComb([contour], {
 			gain: 1,
 			side: "outside",
-			unitsPerEm: 1_000,
+			referenceUnits: 1_000,
 		})[0]
 		const signed = createCurvatureComb([contour], {
 			gain: 1,
 			side: "signed",
-			unitsPerEm: 1_000,
+			referenceUnits: 1_000,
 		})[0]
 		expect(outside?.path).toMatch(/L6[67]\./)
 		expect(signed?.path).toContain("L-66.")
@@ -116,14 +116,14 @@ describe("curvature comb", () => {
 			createCurvatureComb(straight, {
 				gain: 1,
 				side: "outside",
-				unitsPerEm: 1_000,
+				referenceUnits: 1_000,
 			}),
 		).toEqual([])
 		expect(
 			createCurvatureComb(straight, {
 				gain: Number.NaN,
 				side: "outside",
-				unitsPerEm: 1_000,
+				referenceUnits: 1_000,
 			}),
 		).toEqual([])
 	})

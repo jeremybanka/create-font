@@ -20,6 +20,7 @@ import {
 import {
 	TileButton,
 	TileButtonGroup,
+	CurvatureCombControls,
 	TileNumericField,
 	TileSelect,
 	TileTextField,
@@ -2949,6 +2950,28 @@ function DesignBlendTile({ context }: { readonly context: DesignTileContext }) {
 	)
 }
 
+function DesignCurvatureCombTile({
+	context,
+}: {
+	readonly context: DesignTileContext
+}) {
+	return (
+		<design-curvature-comb-tile>
+			<CurvatureCombControls
+				enabled={context.curvatureCombEnabled}
+				disabledReason={context.curvatureCombDisabledReason}
+				size={context.curvatureCombSize}
+				intensity={context.curvatureCombIntensity}
+				side={context.curvatureCombSide}
+				onEnabledChange={context.setCurvatureCombEnabled}
+				onSizeChange={context.setCurvatureCombSize}
+				onIntensityChange={context.setCurvatureCombIntensity}
+				onSideChange={context.setCurvatureCombSide}
+			/>
+		</design-curvature-comb-tile>
+	)
+}
+
 function ShapeNumberInput({
 	disabled = false,
 	label,
@@ -3726,6 +3749,8 @@ export function DesignTileContent({
 				<DesignCanvasTile context={context} />
 			) : kind === "tools" ? (
 				<DesignToolsTile context={context} />
+			) : kind === "curvature-comb" ? (
+				<DesignCurvatureCombTile context={context} />
 			) : kind === "export" ? (
 				<DesignExportTile context={context} />
 			) : kind === "object" ? (

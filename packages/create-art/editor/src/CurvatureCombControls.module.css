@@ -1,0 +1,15 @@
+curvature-comb-controls.class {
+	display: grid;
+	align-content: start;
+	gap: 7px;
+	min-width: 0;
+	padding: 9px;
+	font-size: 9px;
+
+	> curvature-comb-fields {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 6px;
+		min-width: 0;
+	}
+}

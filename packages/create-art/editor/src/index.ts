@@ -1,5 +1,9 @@
 export { CommandPalette } from "./CommandPalette.tsx"
 export { scrollActiveDescendantIntoView } from "./active-descendant-scroll.ts"
+export {
+	CurvatureCombControls,
+	type CurvatureCombControlsProps,
+} from "./CurvatureCombControls.tsx"
 export { ActionHotbar, type ActionHotbarProps } from "./ActionHotbar.tsx"
 export {
 	TooltipButton,
@@ -179,6 +183,10 @@ export {
 export type { UiLayoutRecordV1 } from "@create-art/ui-layout"
 export { SourceReviewSurface } from "./SourceReviewSurface.tsx"
 export { keyboardStepMultiplier, stepBoundedNumber } from "./keyboard-step.ts"
+export {
+	isCurvatureShortcut,
+	type CurvatureShortcutEvent,
+} from "./curvature-comb.ts"
 export { IS_MAC_LIKE, MOD_KEY_LABEL, isMacLike } from "./platform.ts"
 export {
 	selectedSourceReviewPaths,

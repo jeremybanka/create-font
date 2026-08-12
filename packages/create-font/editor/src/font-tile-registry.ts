@@ -2,6 +2,7 @@ import { createElement } from "react"
 
 import { CanvasToolbar } from "./CanvasToolbar.tsx"
 import { CompatibilityTile } from "./CompatibilityTile.tsx"
+import { CurvatureCombTile } from "./CurvatureCombTile.tsx"
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import { FontNavigator } from "./FontNavigator.tsx"
 import { GlyphInspector } from "./GlyphInspector.tsx"
@@ -20,6 +21,7 @@ import { VersionControlTile } from "./VersionControlTile.tsx"
 export type FontTileKind =
 	| "font-navigation"
 	| "canvas-toolbar"
+	| "curvature-comb"
 	| "kerning"
 	| "preview"
 	| "compatibility"
@@ -69,6 +71,15 @@ const registrations = [
 		defaultPlacement: { column: 3 },
 		render: ({ context }) =>
 			createElement(CanvasToolbar, { workspace: context.workspace }),
+	},
+	{
+		kind: "curvature-comb",
+		name: "Curvature Comb",
+		description: "Toggle and tune the selected outline curvature diagnostic.",
+		defaultPlacement: { column: 3 },
+		command: { category: "View", icon: "Half2Icon" },
+		render: ({ context }) =>
+			createElement(CurvatureCombTile, { workspace: context.workspace }),
 	},
 	{
 		kind: "kerning",

@@ -3708,8 +3708,79 @@ describe("create-design shared vector scene", () => {
 		expect(document.querySelector("design-pages-tile")).not.toBeNull()
 		expect(document.querySelector("design-layers-tile")).not.toBeNull()
 		expect(document.querySelector("design-tools-tile")).not.toBeNull()
+		expect(document.querySelector("curvature-comb-controls")).not.toBeNull()
 		expect(document.querySelector("design-object-tile")).not.toBeNull()
 		expect(document.querySelector("design-appearance-tile")).not.toBeNull()
+	})
+
+	it("scopes the curvature comb to selected projected vectors and updates its compact controls", async () => {
+		const stage = mountDesign()
+		const layerRows = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		]
+		const ellipse = layerRows.find((button) =>
+			button.textContent?.includes("Cyan ellipse"),
+		)
+		const rectangle = layerRows.find((button) =>
+			button.textContent?.includes("Coral rectangle"),
+		)
+		const toggle = document.querySelector<HTMLInputElement>(
+			'curvature-comb-controls input[type="checkbox"]',
+		)
+		if (ellipse === undefined || rectangle === undefined || toggle === null)
+			throw new Error("Curvature comb controls were not found.")
+		expect(toggle.disabled).toBe(true)
+		act(() => ellipse.click())
+		expect(toggle.disabled).toBe(false)
+		act(() => toggle.click())
+		expect(stage.find(".design-curvature-comb-cell")).toHaveLength(400)
+		const group = stage.findOne(".design-curvature-comb")
+		expect(group.listening()).toBe(false)
+		const original = stage.findOne(".design-curvature-comb-cell").data()
+
+		const size = document.querySelector<HTMLInputElement>(
+			'curvature-comb-controls input[aria-label="Size"]',
+		)!
+		act(() => {
+			size.focus()
+			size.value = "2"
+			size.dispatchEvent(new InputEvent("input", { bubbles: true }))
+		})
+		await act(async () => {
+			size.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					cancelable: true,
+					key: "Enter",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.findOne(".design-curvature-comb-cell").data()).not.toBe(
+			original,
+		)
+
+		act(() => {
+			rectangle.dispatchEvent(
+				new MouseEvent("click", { bubbles: true, shiftKey: true }),
+			)
+		})
+		expect(stage.find(".design-curvature-comb-cell")).toHaveLength(400)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					cancelable: true,
+					ctrlKey: true,
+					shiftKey: true,
+					key: "x",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(stage.find(".design-curvature-comb-cell")).toHaveLength(0)
 	})
 
 	it("presents an accessible icon-only Tools palette with distinct A and B shortcuts", async () => {

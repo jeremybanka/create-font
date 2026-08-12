@@ -29,6 +29,15 @@ describe("PDF preview tile", () => {
 		const exportDocument = vi.fn()
 		const selectObject = vi.fn()
 		const context: DesignTileContext = {
+			curvatureCombEnabled: false,
+			curvatureCombDisabledReason: "Select a vector object.",
+			curvatureCombSize: 1,
+			curvatureCombIntensity: 0.7,
+			curvatureCombSide: "outside",
+			setCurvatureCombEnabled: vi.fn(),
+			setCurvatureCombSize: vi.fn(),
+			setCurvatureCombIntensity: vi.fn(),
+			setCurvatureCombSide: vi.fn(),
 			activeLayerId: document.layers[0]!.id,
 			activeGroupScope: [],
 			selectedGroupId: null,
