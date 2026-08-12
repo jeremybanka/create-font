@@ -169,6 +169,12 @@ export {
 	type TilingWorkspaceProps,
 	type TilingWorkspaceStatus,
 } from "./TilingWorkspace.tsx"
+export {
+	UiLayoutControl,
+	type UiLayoutControlHandle,
+	type UiLayoutControlProps,
+} from "./UiLayoutControl.tsx"
+export type { UiLayoutRecordV1 } from "@create-art/ui-layout"
 export { SourceReviewSurface } from "./SourceReviewSurface.tsx"
 export { keyboardStepMultiplier, stepBoundedNumber } from "./keyboard-step.ts"
 export { IS_MAC_LIKE, MOD_KEY_LABEL, isMacLike } from "./platform.ts"

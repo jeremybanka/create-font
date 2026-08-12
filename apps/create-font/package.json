@@ -54,6 +54,7 @@
 		"test:node-server": "node ./scripts/build-development.ts && node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {
+		"@create-art/ui-layout": "workspace:*",
 		"@create-art/source-format": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
 		"@create-font/editor": "workspace:*",

@@ -1,0 +1,55 @@
+{
+	"name": "@create-art/ui-layout",
+	"version": "0.1.0",
+	"description": "Versioned create-art UI layout schema, browser client, and secure filesystem persistence",
+	"license": "MPL-2.0",
+	"files": [
+		"dist",
+		"src",
+		"ui-layout.schema.json"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./client": {
+			"development": "./src/client.ts",
+			"types": "./dist/client.d.mts",
+			"browser": "./dist/client.mjs",
+			"import": "./dist/client.mjs"
+		},
+		"./node": {
+			"development": "./src/node.ts",
+			"types": "./dist/node.d.mts",
+			"import": "./dist/node.mjs"
+		},
+		"./server": {
+			"development": "./src/server.ts",
+			"types": "./dist/server.d.mts",
+			"import": "./dist/server.mjs"
+		},
+		"./schema.json": "./ui-layout.schema.json",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"schema": "node ./scripts/generate-schema.ts",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"elysia": "1.4.29",
+		"zod": "4.4.3"
+	},
+	"devDependencies": {
+		"@types/node": "25.9.5",
+		"vite-plus": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}

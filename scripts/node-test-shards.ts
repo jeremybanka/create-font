@@ -83,6 +83,7 @@ const shards = {
 			packages: [
 				`@create-art/editor`,
 				`@create-art/source-rpc`,
+				`@create-art/ui-layout`,
 				`@create-art/vector-geometry`,
 				`@create-design/model`,
 				`@create-design/pdf`,

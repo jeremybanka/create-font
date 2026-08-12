@@ -39,6 +39,7 @@
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {
+		"@create-art/ui-layout": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
 		"@create-design/ai": "workspace:*",
 		"@create-design/editor": "workspace:*",

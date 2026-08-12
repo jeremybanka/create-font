@@ -19,6 +19,10 @@ import {
 	type ActionHotbarProps,
 	type HotbarSlots,
 	type PaletteCommand,
+	UiLayoutControl,
+	type TilingLayout,
+	type UiLayoutControlHandle,
+	type UiLayoutRecordV1,
 } from "@create-art/editor"
 import { AppAnchor } from "./AppAnchor.tsx"
 import { CommandPalette } from "@create-art/editor"
@@ -151,6 +155,19 @@ function readInitialAlternateHotbarSlots(): HotbarSlots {
 	}
 }
 
+function readInitialTilingLayout(): TilingLayout<FontTileKind> {
+	if (typeof window === "undefined") return DEFAULT_FONT_TILING_LAYOUT
+	try {
+		return (
+			(parseFontTilingLayout(
+				localStorage.getItem(`${FONT_TILING_STORAGE_KEY}:draft:v1`),
+			) as TilingLayout<FontTileKind> | null) ?? DEFAULT_FONT_TILING_LAYOUT
+		)
+	} catch {
+		return DEFAULT_FONT_TILING_LAYOUT
+	}
+}
+
 export function AppShell({
 	workspace,
 	versionControl,
@@ -163,12 +180,14 @@ export function AppShell({
 		readInitialAlternateHotbarSlots,
 	)
 	const [diffView, setDiffView] = useState(false)
+	const [tilingLayout, setTilingLayout] = useState(readInitialTilingLayout)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
 		management: false,
 	})
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<FontTileKind> | null>(null)
+	const uiLayoutControlRef = useRef<UiLayoutControlHandle>(null)
 	const tileCommandSequence = useRef(0)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -184,6 +203,24 @@ export function AppShell({
 	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
+	const uiLayout = {
+		version: 1,
+		id: "local",
+		name: "My layout",
+		product: "create-font",
+		state: {
+			tiling: tilingLayout,
+			hotbars: { primary: hotbarSlots, alternate: alternateHotbarSlots },
+			preferences: { diffView },
+		},
+	} satisfies UiLayoutRecordV1
+	const applyUiLayout = useCallback((record: UiLayoutRecordV1) => {
+		if (record.product !== "create-font") return
+		setTilingLayout(record.state.tiling as TilingLayout<FontTileKind>)
+		setHotbarSlots(record.state.hotbars.primary as HotbarSlots)
+		setAlternateHotbarSlots(record.state.hotbars.alternate as HotbarSlots)
+		setDiffView(record.state.preferences.diffView)
+	}, [])
 	const faviconPreview = useO(workspace.ui.faviconPreview)
 	const visualDebug = useO(workspace.ui.visualDebug)
 	const constrainProportions = useO(workspace.ui.constrainProportions)
@@ -519,6 +556,17 @@ export function AppShell({
 							commandRequest={tileCommandRequest}
 							enabled={!commandPaletteOpen}
 							onStatusChange={updateTilingStatus}
+							layout={tilingLayout}
+							onLayoutChange={setTilingLayout}
+							layoutManagement={
+								<UiLayoutControl
+									ref={uiLayoutControlRef}
+									product="create-font"
+									current={uiLayout}
+									onApply={applyUiLayout}
+								/>
+							}
+							onSaveLayout={() => void uiLayoutControlRef.current?.save()}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (

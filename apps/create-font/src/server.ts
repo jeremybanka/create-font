@@ -5,6 +5,7 @@ import { basename, dirname, extname, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { Elysia } from "elysia"
+import { createUiLayoutRpc } from "@create-art/ui-layout/server"
 
 import { runtimeElysiaAdapter } from "./elysia-adapter.ts"
 import { resolveApplicationAssets } from "./application-assets.ts"
@@ -92,6 +93,7 @@ export type CreateFontServerOptions = CreateFontRpcOptions &
 	Readonly<{
 		activeProjectId?: string
 		projects?: readonly CreateFontWorkspaceMount[]
+		/** Workspace root containing fonts/, distinct from the selected font root. */
 		workspaceRoot?: string
 	}>
 
@@ -175,6 +177,14 @@ export function createFontServerApp(options: CreateFontServerOptions = {}) {
 					: {}),
 				...(activeProjectId === undefined ? {} : { workspace }),
 			}),
+		)
+		.group(`/api`, (api) =>
+			api.use(
+				createUiLayoutRpc({
+					adapter,
+					root: options.workspaceRoot ?? options.root ?? process.cwd(),
+				}),
+			),
 		)
 		.get(
 			`/editor/editor.js`,
