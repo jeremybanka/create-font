@@ -74,46 +74,6 @@ export function EditorApplicationRoot({
 	}, [collaboration, workspace])
 
 	useEffect(() => {
-		if (collaboration === undefined) return
-		let cursor: Readonly<{ x: number; y: number }> | null = null
-		let frame: number | null = null
-		const publish = (): void => {
-			frame = null
-			collaboration.publishPresence({
-				context: {
-					glyph: workspace.font.silo.getState(workspace.ui.activeGlyphId),
-					master: workspace.font.silo.getState(workspace.ui.activeMasterId),
-				},
-				cursor,
-				gesture: workspace.font.silo.getState(workspace.ui.activeTool),
-				selection: workspace.font.silo
-					.getState(workspace.ui.selection)
-					.map((target) => JSON.stringify(target)),
-			})
-		}
-		const schedule = (): void => {
-			if (frame === null) frame = requestAnimationFrame(publish)
-		}
-		const onPointerMove = (event: PointerEvent): void => {
-			cursor = { x: event.clientX, y: event.clientY }
-			schedule()
-		}
-		window.addEventListener(`pointermove`, onPointerMove, { passive: true })
-		const unsubscribers = [
-			workspace.font.silo.subscribe(workspace.ui.activeGlyphId, schedule),
-			workspace.font.silo.subscribe(workspace.ui.activeMasterId, schedule),
-			workspace.font.silo.subscribe(workspace.ui.activeTool, schedule),
-			workspace.font.silo.subscribe(workspace.ui.selection, schedule),
-		]
-		publish()
-		return () => {
-			if (frame !== null) cancelAnimationFrame(frame)
-			window.removeEventListener(`pointermove`, onPointerMove)
-			for (const unsubscribe of unsubscribers) unsubscribe()
-		}
-	}, [collaboration, workspace])
-
-	useEffect(() => {
 		return workspace.startBrowserNavigation()
 	}, [workspace])
 

@@ -22,3 +22,8 @@ Entry points:
 The transport is built on `atom.io/realtime`. Integration tests use
 `atom.io/realtime-testing` to run multiple isolated editor clients against one
 authoritative host.
+
+Presence coordinates belong to the product-defined document space, never to a
+browser window. Products identify that space through `context`, project the
+cursor and optional live `selectionBox` through each viewer's own viewport,
+and use the opaque `selection` identities to render product-native highlights.

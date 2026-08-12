@@ -65,7 +65,6 @@ import type {
 	EditorWorkspaceProject,
 } from "./browser-api.ts"
 import { CollaborationPanel } from "./CollaborationPanel.tsx"
-import { CollaborationPresenceLayer } from "./CollaborationPresenceLayer.tsx"
 
 const svg = {
 	MagnifyingGlass: MagnifyingGlassIcon,
@@ -540,6 +539,12 @@ export function AppShell({
 				{routeName === "canvas" ? (
 					<editor-workspace>
 						<GlyphCanvas
+							{...(collaboration === undefined
+								? {}
+								: {
+										collaboration,
+										collaborationSession,
+									})}
 							workspace={workspace}
 							disabled={tilingStatus.management || readOnly}
 							diffView={diffView}
@@ -635,9 +640,6 @@ export function AppShell({
 					</not-found-view>
 				)}
 			</main>
-			{collaboration === undefined ? null : (
-				<CollaborationPresenceLayer collaboration={collaboration} />
-			)}
 			<footer>
 				<active-context>
 					<strong>

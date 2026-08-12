@@ -98,10 +98,12 @@ describe(`authoritative realtime actions`, () => {
 			deviceId: `editor-a`,
 			gesture: `pen`,
 			selection: [`node:1`],
+			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
 		})
 		expect(await presence).toMatchObject({
 			context: { document: `primary` },
 			deviceId: `editor-a`,
+			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
 		})
 
 		const confirmed = new Promise<ConfirmedAction<Command>>((resolve) => {

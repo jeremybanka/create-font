@@ -80,6 +80,13 @@ export interface CollaborationPresence {
 	readonly deviceId: string
 	readonly gesture: string | null
 	readonly selection: readonly string[]
+	/** Live document-space marquee bounds, projected by each receiving client. */
+	readonly selectionBox?: Readonly<{
+		minX: number
+		minY: number
+		maxX: number
+		maxY: number
+	}> | null
 }
 
 export interface CollaborationClientEvents<Source, Command> {

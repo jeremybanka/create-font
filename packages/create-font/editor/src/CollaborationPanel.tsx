@@ -4,6 +4,10 @@ import type {
 	EditorCollaboration,
 	EditorCollaborationSession,
 } from "./browser-api.ts"
+import {
+	participantColor,
+	participantInitials,
+} from "./collaboration-presence.ts"
 import css from "./CollaborationPanel.module.css"
 
 function useCollaborationSession(
@@ -14,14 +18,6 @@ function useCollaborationSession(
 	)
 	useEffect(() => collaboration.subscribeSession(setSession), [collaboration])
 	return session
-}
-
-function participantColor(deviceId: string): string {
-	let hash = 0
-	for (const character of deviceId) {
-		hash = (hash * 31 + character.codePointAt(0)!) >>> 0
-	}
-	return `hsl(${hash % 360} 58% 46%)`
 }
 
 function timeLabel(value: number | null, connected: boolean): string {
@@ -41,22 +37,42 @@ export function CollaborationPanel({
 	const session = useCollaborationSession(collaboration)
 	const connected = session.participants.filter(
 		(participant) => participant.connected,
-	).length
+	)
 
 	return (
 		<collaboration-panel className={css.class}>
 			<details>
 				<summary
-					aria-label={`${connected} connected participant${connected === 1 ? `` : `s`}; your role is ${session.role}`}
+					aria-label={`${connected.length} connected participant${connected.length === 1 ? `` : `s`}; your role is ${session.role}`}
 				>
-					<span aria-hidden="true">●</span>
-					{connected} · {session.role}
+					<participant-avatars aria-hidden="true">
+						{connected.slice(0, 4).map((participant) => {
+							const presence = session.presence.find(
+								(item) => item.deviceId === participant.identity.deviceId,
+							)
+							return (
+								<i
+									key={participant.identity.deviceId}
+									style={{
+										background: participantColor(participant.identity.deviceId),
+									}}
+									title={`${participant.identity.name}${presence?.context.glyph === undefined || presence.context.glyph === null ? `` : ` · ${presence.context.glyph}`}`}
+								>
+									{participantInitials(participant.identity.name)}
+								</i>
+							)
+						})}
+						{connected.length <= 4 ? null : <b>+{connected.length - 4}</b>}
+					</participant-avatars>
+					<span>
+						{connected.length} · {session.role}
+					</span>
 				</summary>
 				<collaboration-popover aria-label="Collaboration participants">
 					<collaboration-header>
 						<strong>On this font</strong>
 						<span role="status" aria-live="polite">
-							{connected} connected
+							{connected.length} connected
 						</span>
 					</collaboration-header>
 					<p role="status" aria-live="polite" data-status={session.status}>

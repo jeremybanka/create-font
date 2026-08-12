@@ -116,6 +116,7 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 				const presence = parameters[0]
 				const cursor = presence.cursor
 				const context = presence.context
+				const selectionBox = presence.selectionBox
 				return (
 					typeof presence.deviceId === `string` &&
 					presence.deviceId.length <= 128 &&
@@ -135,6 +136,19 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 							Number.isFinite(cursor.x) &&
 							typeof cursor.y === `number` &&
 							Number.isFinite(cursor.y))) &&
+					(selectionBox === undefined ||
+						selectionBox === null ||
+						(isRecord(selectionBox) &&
+							typeof selectionBox.minX === `number` &&
+							Number.isFinite(selectionBox.minX) &&
+							typeof selectionBox.minY === `number` &&
+							Number.isFinite(selectionBox.minY) &&
+							typeof selectionBox.maxX === `number` &&
+							Number.isFinite(selectionBox.maxX) &&
+							typeof selectionBox.maxY === `number` &&
+							Number.isFinite(selectionBox.maxY) &&
+							selectionBox.minX <= selectionBox.maxX &&
+							selectionBox.minY <= selectionBox.maxY)) &&
 					Array.isArray(presence.selection) &&
 					presence.selection.length <= 10_000 &&
 					presence.selection.every((item) => typeof item === `string`)
