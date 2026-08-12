@@ -323,6 +323,16 @@ describe("create-design shared vector scene", () => {
 			throw new Error("Dimmer control was not found.")
 		expect(document.querySelector("[data-export]")).toBeNull()
 		expect(document.querySelector("design-export-tile")).not.toBeNull()
+		expect(
+			document.querySelector("header > header-actions ui-layout-control"),
+		).toBeNull()
+		const hudControl = document.querySelector(
+			"management-hud > hud-actions > ui-layout-control",
+		)
+		expect(hudControl).not.toBeNull()
+		expect(
+			hudControl?.closest("management-hud")?.getAttribute("aria-hidden"),
+		).toBe("true")
 		expect(slider.type).toBe("range")
 		expect(slider.min).toBe("0")
 		expect(slider.max).toBe("255")

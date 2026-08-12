@@ -21,6 +21,7 @@ import {
 	type PaletteCommand,
 	UiLayoutControl,
 	type TilingLayout,
+	type UiLayoutControlHandle,
 	type UiLayoutRecordV1,
 } from "@create-art/editor"
 import { AppAnchor } from "./AppAnchor.tsx"
@@ -186,6 +187,7 @@ export function AppShell({
 	})
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<FontTileKind> | null>(null)
+	const uiLayoutControlRef = useRef<UiLayoutControlHandle>(null)
 	const tileCommandSequence = useRef(0)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -461,11 +463,6 @@ export function AppShell({
 					</button>
 				</command-center>
 				<header-actions>
-					<UiLayoutControl
-						product="create-font"
-						current={uiLayout}
-						onApply={applyUiLayout}
-					/>
 					<document-status
 						role="status"
 						aria-live="polite"
@@ -561,6 +558,15 @@ export function AppShell({
 							onStatusChange={updateTilingStatus}
 							layout={tilingLayout}
 							onLayoutChange={setTilingLayout}
+							layoutManagement={
+								<UiLayoutControl
+									ref={uiLayoutControlRef}
+									product="create-font"
+									current={uiLayout}
+									onApply={applyUiLayout}
+								/>
+							}
+							onSaveLayout={() => void uiLayoutControlRef.current?.save()}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (

@@ -64,6 +64,80 @@ function host(): HTMLElement {
 }
 
 describe("TilingWorkspace registry integration", () => {
+	it("mounts product layout actions in the HUD and routes S to filesystem save", () => {
+		const element = host()
+		const filesystemSave = vi.fn()
+		act(() => {
+			render(
+				h(TilingWorkspace<"alpha" | "beta", Context>, {
+					context: { betaAvailable: true },
+					registry,
+					defaultLayout,
+					storageKey: `${storageKey}:layout-actions`,
+					layoutManagement: h(
+						"ui-layout-control",
+						null,
+						h("input", { "aria-label": "Layout name" }),
+						h(
+							"button",
+							{ "data-layout-save": true, onClick: filesystemSave },
+							"Save layout",
+						),
+					),
+					onSaveLayout: filesystemSave,
+				}),
+				element,
+			)
+		})
+		const hud = element.querySelector("management-hud")
+		expect(hud?.getAttribute("aria-hidden")).toBe("true")
+		expect(hud?.querySelector("hud-actions > ui-layout-control")).not.toBeNull()
+		expect(hud?.querySelector("button[data-save]")).toBeNull()
+
+		act(() =>
+			element
+				.querySelector<HTMLButtonElement>('button[aria-label="Manage tiles"]')!
+				.click(),
+		)
+		expect(hud?.hasAttribute("aria-hidden")).toBe(false)
+		act(() =>
+			hud
+				?.querySelector<HTMLButtonElement>(
+					'button[aria-label="Keyboard commands"]',
+				)
+				?.click(),
+		)
+		expect(element.querySelector("tile-help")?.textContent).toContain(
+			"Save UI layout",
+		)
+		expect(element.querySelector("tile-help")?.textContent).not.toContain(
+			"Revert to saved workspace",
+		)
+		act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "s" })))
+		expect(filesystemSave).toHaveBeenCalledTimes(1)
+		const selectedColumn = hud?.querySelector(
+			'column-targets button[aria-pressed="true"]',
+		)?.textContent
+
+		const input = hud?.querySelector<HTMLInputElement>(
+			'input[aria-label="Layout name"]',
+		)
+		act(() =>
+			input?.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					bubbles: true,
+					code: "Digit2",
+					key: "2",
+				}),
+			),
+		)
+		expect(
+			hud?.querySelector('column-targets button[aria-pressed="true"]')
+				?.textContent,
+		).toBe(selectedColumn)
+		expect(filesystemSave).toHaveBeenCalledTimes(1)
+	})
+
 	it("replaces the live workspace from an external durable layout", () => {
 		const element = host()
 		const onLayoutChange = vi.fn()

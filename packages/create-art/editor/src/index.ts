@@ -171,6 +171,7 @@ export {
 } from "./TilingWorkspace.tsx"
 export {
 	UiLayoutControl,
+	type UiLayoutControlHandle,
 	type UiLayoutControlProps,
 } from "./UiLayoutControl.tsx"
 export type { UiLayoutRecordV1 } from "@create-art/ui-layout"

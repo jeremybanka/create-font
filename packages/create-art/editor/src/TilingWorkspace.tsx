@@ -94,6 +94,10 @@ export interface TilingWorkspaceProps<Kind extends string, Context> {
 	/** Durable layout replacement supplied by the containing UI-layout manager. */
 	readonly layout?: TilingLayout<Kind>
 	readonly onLayoutChange?: (layout: TilingLayout<Kind>) => void
+	/** Product-level layout persistence controls shown in the management HUD. */
+	readonly layoutManagement?: React.ReactNode
+	/** Persists the whole product UI layout when management's S command is used. */
+	readonly onSaveLayout?: () => void
 }
 
 interface TileShortcut {
@@ -129,7 +133,7 @@ const TILE_SHORTCUTS: readonly TileShortcut[] = [
 	{ keys: "X · Del · ⌫", action: "Remove selected tile" },
 	{ keys: "⌘/Ctrl Z", action: "Undo layout edit" },
 	{ keys: "⌘/Ctrl ⇧ Z", action: "Redo layout edit" },
-	{ keys: "S", action: "Save workspace" },
+	{ keys: "S", action: "Save UI layout" },
 	{ keys: "R", action: "Revert to saved workspace" },
 	{ keys: "?", action: "Toggle keyboard help" },
 	{ keys: "Esc", action: "Cancel pending command" },
@@ -224,6 +228,8 @@ export function TilingWorkspace<Kind extends string, Context>({
 	onStatusChange,
 	layout: suppliedLayout,
 	onLayoutChange,
+	layoutManagement,
+	onSaveLayout,
 	parseLayout = parseTilingLayout,
 }: TilingWorkspaceProps<Kind, Context>) {
 	const [initial] = useState(() =>
@@ -661,6 +667,11 @@ export function TilingWorkspace<Kind extends string, Context>({
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
+			const editableTarget =
+				event.target instanceof HTMLInputElement ||
+				event.target instanceof HTMLTextAreaElement ||
+				event.target instanceof HTMLSelectElement ||
+				(event.target instanceof HTMLElement && event.target.isContentEditable)
 			const digit = event.code.startsWith("Digit")
 				? Number(event.code.slice("Digit".length))
 				: Number.NaN
@@ -670,17 +681,12 @@ export function TilingWorkspace<Kind extends string, Context>({
 				!event.altKey &&
 				!event.ctrlKey &&
 				!event.metaKey
-			if (isModeToggle) {
+			if (isModeToggle && !editableTarget) {
 				event.preventDefault()
 				event.stopImmediatePropagation()
 				toggleManagement()
 				return
 			}
-			const editableTarget =
-				event.target instanceof HTMLInputElement ||
-				event.target instanceof HTMLTextAreaElement ||
-				event.target instanceof HTMLSelectElement ||
-				(event.target instanceof HTMLElement && event.target.isContentEditable)
 			if (
 				enabled &&
 				!management &&
@@ -698,7 +704,7 @@ export function TilingWorkspace<Kind extends string, Context>({
 				return
 			}
 			if (!management) return
-			if (event.target === poolInputRef.current) return
+			if (editableTarget) return
 			event.stopImmediatePropagation()
 
 			if (
@@ -849,10 +855,11 @@ export function TilingWorkspace<Kind extends string, Context>({
 			}
 			if (key === "s") {
 				event.preventDefault()
-				save()
+				if (onSaveLayout === undefined) save()
+				else onSaveLayout()
 				return
 			}
-			if (key === "r") {
+			if (key === "r" && layoutManagement === undefined) {
 				event.preventDefault()
 				revert()
 			}
@@ -871,6 +878,8 @@ export function TilingWorkspace<Kind extends string, Context>({
 		saved,
 		selectedColumn,
 		selectedTileId,
+		layoutManagement,
+		onSaveLayout,
 	])
 
 	const dropPayload = (columnId: TileColumnId, beforeTileId?: string): void => {
@@ -1353,7 +1362,10 @@ export function TilingWorkspace<Kind extends string, Context>({
 								</button>
 							</help-heading>
 							<dl>
-								{TILE_SHORTCUTS.map((shortcut) => (
+								{TILE_SHORTCUTS.filter(
+									(shortcut) =>
+										layoutManagement === undefined || shortcut.keys !== "R",
+								).map((shortcut) => (
 									<shortcut-command key={shortcut.keys}>
 										<dt>
 											<kbd>{shortcut.keys}</kbd>
@@ -1364,55 +1376,61 @@ export function TilingWorkspace<Kind extends string, Context>({
 							</dl>
 						</tile-help>
 					) : null}
-					<management-hud>
-						<column-targets aria-label="Column targets">
-							{ALL_COLUMNS.map((columnId) => (
-								<button
-									key={columnId}
-									type="button"
-									aria-pressed={selectedColumn === columnId}
-									data-drop-active={dragging ? "true" : "false"}
-									onClick={() => selectColumn(columnId)}
-									onDragOver={(event) => event.preventDefault()}
-									onDrop={(event) => {
-										event.preventDefault()
-										dropPayload(columnId)
-									}}
-								>
-									{columnId}
-								</button>
-							))}
-						</column-targets>
-						<command-status role="status" aria-live="polite">
-							<strong>
-								{pending === "move"
-									? "Move to column…"
-									: pending === "align"
-										? "Align T · B"
-										: poolFocused
-											? "Choose a tile, then 1–4"
-											: `Column ${selectedColumn}`}
-							</strong>
-							<span>X remove · N new · S save · ? help</span>
-						</command-status>
-						<hud-actions>
-							<button
-								type="button"
-								data-help
-								aria-label="Keyboard commands"
-								aria-pressed={helpOpen}
-								onClick={() => setHelpOpen((open) => !open)}
-							>
-								<svg.QuestionMarkCircled aria-hidden="true" />
-							</button>
-							<button type="button" data-save onClick={save} disabled={!dirty}>
-								<svg.BookmarkFilled aria-hidden="true" />
-								{dirty ? "Save" : "Saved"}
-							</button>
-						</hud-actions>
-					</management-hud>
 				</>
 			) : null}
+			<management-hud
+				aria-hidden={management ? undefined : "true"}
+				inert={!management}
+			>
+				<column-targets aria-label="Column targets">
+					{ALL_COLUMNS.map((columnId) => (
+						<button
+							key={columnId}
+							type="button"
+							aria-pressed={selectedColumn === columnId}
+							data-drop-active={dragging ? "true" : "false"}
+							onClick={() => selectColumn(columnId)}
+							onDragOver={(event) => event.preventDefault()}
+							onDrop={(event) => {
+								event.preventDefault()
+								dropPayload(columnId)
+							}}
+						>
+							{columnId}
+						</button>
+					))}
+				</column-targets>
+				<command-status role="status" aria-live="polite">
+					<strong>
+						{pending === "move"
+							? "Move to column…"
+							: pending === "align"
+								? "Align T · B"
+								: poolFocused
+									? "Choose a tile, then 1–4"
+									: `Column ${selectedColumn}`}
+					</strong>
+					<span>X remove · N new · S save layout · ? help</span>
+				</command-status>
+				<hud-actions>
+					{layoutManagement}
+					<button
+						type="button"
+						data-help
+						aria-label="Keyboard commands"
+						aria-pressed={helpOpen}
+						onClick={() => setHelpOpen((open) => !open)}
+					>
+						<svg.QuestionMarkCircled aria-hidden="true" />
+					</button>
+					{layoutManagement === undefined ? (
+						<button type="button" data-save onClick={save} disabled={!dirty}>
+							<svg.BookmarkFilled aria-hidden="true" />
+							{dirty ? "Save" : "Saved"}
+						</button>
+					) : null}
+				</hud-actions>
+			</management-hud>
 			<mode-entry>
 				<button
 					type="button"

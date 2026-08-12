@@ -1,3 +1,4 @@
+import { BookmarkFilledIcon } from "@radix-ui/react-icons"
 import { createUiLayoutClient } from "@create-art/ui-layout/client"
 import {
 	canonicalUiLayout,
@@ -7,7 +8,15 @@ import {
 	type UiLayoutSource,
 	uiLayoutRecordV1Schema,
 } from "@create-art/ui-layout"
-import { useEffect, useMemo, useState } from "react"
+import {
+	forwardRef,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react"
 import css from "./UiLayoutControl.module.css"
 
 export type UiLayoutOption = Readonly<{
@@ -15,11 +24,14 @@ export type UiLayoutOption = Readonly<{
 	record: UiLayoutRecordV1
 	revision: string | null
 }>
-export type UiLayoutControlProps<Record extends UiLayoutRecordV1> = Readonly<{
+export type UiLayoutControlProps = Readonly<{
 	product: UiLayoutProduct
-	current: Record
-	onApply: (record: Record) => void
+	current: UiLayoutRecordV1
+	onApply: (record: UiLayoutRecordV1) => void
 }>
+export interface UiLayoutControlHandle {
+	save: () => Promise<void>
+}
 
 const client = createUiLayoutClient()
 const workingKey = (product: UiLayoutProduct) =>
@@ -28,12 +40,12 @@ const selectionKey = (product: UiLayoutProduct) =>
 	`${product}:ui-layout:selection:v1`
 const optionKey = ({ origin, record }: UiLayoutOption) =>
 	`${origin}:${record.id}`
+const ORIGINS = ["project", "home"] as const satisfies readonly UiLayoutOrigin[]
 
-export function UiLayoutControl<Record extends UiLayoutRecordV1>({
-	product,
-	current,
-	onApply,
-}: UiLayoutControlProps<Record>) {
+export const UiLayoutControl = forwardRef<
+	UiLayoutControlHandle,
+	UiLayoutControlProps
+>(function UiLayoutControl({ product, current, onApply }, ref) {
 	const [sources, setSources] = useState<readonly UiLayoutSource[]>([])
 	const [selected, setSelected] = useState(() => {
 		try {
@@ -47,17 +59,23 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 	const [error, setError] = useState("")
 	const [saving, setSaving] = useState(false)
 	const [workingReady, setWorkingReady] = useState(false)
+	const restoredWorking = useRef(false)
 	const options = useMemo<readonly UiLayoutOption[]>(
 		() =>
-			sources.flatMap((source) =>
-				source.layouts
-					.filter((record) => record.product === product)
-					.map((record) => ({
-						origin: source.origin,
-						revision: source.revision,
-						record,
-					})),
-			),
+			ORIGINS.flatMap((groupOrigin) => {
+				const source = sources.find(
+					({ origin: candidate }) => candidate === groupOrigin,
+				)
+				return (
+					source?.layouts
+						.filter((record) => record.product === product)
+						.map((record) => ({
+							origin: groupOrigin,
+							revision: source.revision,
+							record,
+						})) ?? []
+				)
+			}),
 		[product, sources],
 	)
 	const selectedOption = options.find(
@@ -66,15 +84,27 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 	const baseline = selectedOption?.record
 	const dirty =
 		baseline === undefined ||
+		name.trim() !== baseline.name ||
 		JSON.stringify(current.state) !== JSON.stringify(baseline.state)
+	const layoutState =
+		baseline === undefined ? "local" : dirty ? "modified" : "saved"
+	const layoutStatus =
+		layoutState === "local"
+			? "Local only"
+			: layoutState === "modified"
+				? "Modified"
+				: "Saved"
 
 	useEffect(() => {
 		try {
 			const raw = localStorage.getItem(workingKey(product))
 			if (raw !== null) {
 				const parsed = uiLayoutRecordV1Schema.safeParse(JSON.parse(raw))
-				if (parsed.success && parsed.data.product === product)
-					onApply(parsed.data as Record)
+				if (parsed.success && parsed.data.product === product) {
+					restoredWorking.current = true
+					setName(parsed.data.name)
+					onApply(parsed.data)
+				}
 			}
 		} catch {
 			/* Existing split browser state remains the migration source. */
@@ -103,11 +133,11 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 						: "Could not load UI layouts.",
 				),
 			)
-	}, [onApply, product])
+	}, [product])
 
 	useEffect(() => {
 		if (selectedOption === undefined) return
-		setName(selectedOption.record.name)
+		if (!restoredWorking.current) setName(selectedOption.record.name)
 		setOrigin(selectedOption.origin)
 	}, [selectedOption])
 
@@ -135,18 +165,22 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 			/* best effort */
 		}
 		const option = options.find((candidate) => optionKey(candidate) === value)
-		if (option === undefined) return
+		if (option === undefined) {
+			setName(current.name)
+			return
+		}
 		setOrigin(option.origin)
 		setName(option.record.name)
-		onApply(option.record as Record)
+		onApply(option.record)
 		setError("")
 	}
-	const save = async (): Promise<void> => {
+	const save = useCallback(async (): Promise<void> => {
 		const trimmed = name.trim()
 		if (!trimmed) {
 			setError("Name this layout before saving.")
 			return
 		}
+		if (saving) return
 		setSaving(true)
 		setError("")
 		const matching =
@@ -155,7 +189,7 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 			...current,
 			id: matching?.record.id ?? current.id,
 			name: trimmed,
-		} as Record
+		}
 		try {
 			const destination = sources.find((source) => source.origin === origin)
 			const response = await client.save({
@@ -181,50 +215,82 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 		} finally {
 			setSaving(false)
 		}
-	}
+	}, [current, name, onApply, origin, product, saving, selectedOption, sources])
+
+	useImperativeHandle(ref, () => ({ save }), [save])
 
 	return (
 		<ui-layout-control className={css.class} aria-label="UI layout">
-			<label data-screen-reader htmlFor={`${product}-ui-layout`}>
-				Saved UI layout
-			</label>
-			<select
-				id={`${product}-ui-layout`}
-				aria-label="Saved UI layout"
-				value={selected}
-				onChange={(event) => choose(event.currentTarget.value)}
-			>
-				<option value="">Current local layout</option>
-				{options.map((option) => (
-					<option key={optionKey(option)} value={optionKey(option)}>
-						{option.record.name} —{" "}
-						{option.origin === "home" ? "Home" : "Project"}
-					</option>
-				))}
-			</select>
-			<input
-				aria-label="Layout name"
-				value={name}
-				onChange={(event) => setName(event.currentTarget.value)}
-			/>
-			<select
-				aria-label="Save layout to"
-				value={origin}
-				onChange={(event) =>
-					setOrigin(event.currentTarget.value as UiLayoutOrigin)
-				}
-			>
-				<option value="home">Home</option>
-				<option value="project">Project</option>
-			</select>
-			<button type="button" disabled={saving} onClick={() => void save()}>
-				{saving ? "Saving…" : "Save"}
-			</button>
-			{dirty ? (
-				<status-dot role="status" aria-label="UI layout has unsaved changes">
-					Unsaved
+			<layout-picker>
+				<label data-screen-reader htmlFor={`${product}-ui-layout`}>
+					Saved UI layout
+				</label>
+				<select
+					id={`${product}-ui-layout`}
+					aria-label="Saved UI layout"
+					value={selected}
+					onChange={(event) => choose(event.currentTarget.value)}
+				>
+					<option value="">Current local layout</option>
+					{ORIGINS.map((groupOrigin) => (
+						<optgroup
+							key={groupOrigin}
+							label={groupOrigin === "project" ? "Project" : "Home"}
+						>
+							{options
+								.filter(({ origin: candidate }) => candidate === groupOrigin)
+								.map((option) => (
+									<option key={optionKey(option)} value={optionKey(option)}>
+										{option.record.name}
+									</option>
+								))}
+						</optgroup>
+					))}
+				</select>
+				<status-dot
+					role="status"
+					aria-live="polite"
+					data-state={layoutState}
+					aria-label={`UI layout: ${layoutStatus}`}
+				>
+					{layoutStatus}
 				</status-dot>
-			) : null}
+			</layout-picker>
+			<layout-save>
+				<label data-screen-reader htmlFor={`${product}-ui-layout-name`}>
+					Layout name
+				</label>
+				<input
+					id={`${product}-ui-layout-name`}
+					aria-label="Layout name"
+					value={name}
+					onChange={(event) => setName(event.currentTarget.value)}
+				/>
+				<save-destination role="group" aria-label="Save layout to">
+					{ORIGINS.map((destination) => (
+						<button
+							key={destination}
+							type="button"
+							data-short-label={destination === "project" ? "P" : "H"}
+							aria-pressed={origin === destination}
+							onClick={() => setOrigin(destination)}
+						>
+							{destination === "project" ? "Project" : "Home"}
+						</button>
+					))}
+				</save-destination>
+				<button
+					type="button"
+					data-layout-save
+					disabled={saving}
+					aria-keyshortcuts="S"
+					aria-label={`Save layout to ${origin === "project" ? "Project" : "Home"}`}
+					onClick={() => void save()}
+				>
+					<BookmarkFilledIcon aria-hidden="true" />
+					<span>{saving ? "Saving…" : "Save"}</span>
+				</button>
+			</layout-save>
 			{error ? (
 				<output role="alert" title={error}>
 					{error}
@@ -232,4 +298,4 @@ export function UiLayoutControl<Record extends UiLayoutRecordV1>({
 			) : null}
 		</ui-layout-control>
 	)
-}
+})

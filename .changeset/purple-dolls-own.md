@@ -7,4 +7,4 @@
 "create-design": patch
 ---
 
-Persist versioned named UI layouts from home and project ui.json files in create-font and create-design.
+Persist versioned named UI layouts from grouped home and project ui.json sources through the tile-management HUD in create-font and create-design.

@@ -4,7 +4,7 @@ import type { GlyphId } from "@create-font/states"
 import { Silo } from "atom.io"
 import { StoreProvider, useO, useTL } from "atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { AppShell } from "../src/AppShell.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
@@ -18,9 +18,68 @@ afterEach(() => {
 		host.remove()
 	}
 	hosts.length = 0
+	vi.unstubAllGlobals()
 })
 
 describe("atom.io React integration", () => {
+	it("places UI layout management in the tile HUD instead of the header", async () => {
+		vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+			function (this: HTMLCanvasElement) {
+				const context = {
+					canvas: this,
+					createImageData: (width: number, height: number) => ({
+						data: new Uint8ClampedArray(width * height * 4),
+						height,
+						width,
+					}),
+					getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+					measureText: () => ({ width: 0 }),
+				}
+				return new Proxy(context, {
+					get: (target, key) =>
+						key in target
+							? target[key as keyof typeof target]
+							: () => undefined,
+				}) as unknown as CanvasRenderingContext2D
+			},
+		)
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				Response.json({
+					sources: [
+						{ origin: "project", revision: null, layouts: [], issues: [] },
+						{ origin: "home", revision: null, layouts: [], issues: [] },
+					],
+				}),
+			),
+		)
+		const workspace = createEditorWorkspace()
+		const host = document.createElement("div")
+		document.body.append(host)
+		hosts.push(host)
+		act(() =>
+			render(
+				h(StoreProvider, {
+					store: workspace.font.silo.store,
+					children: h(AppShell, { workspace }),
+				}),
+				host,
+			),
+		)
+		await act(async () => Promise.resolve())
+		expect(
+			host.querySelector("header > header-actions ui-layout-control"),
+		).toBeNull()
+		const hudControl = host.querySelector(
+			"management-hud > hud-actions > ui-layout-control",
+		)
+		expect(hudControl).not.toBeNull()
+		expect(
+			hudControl?.closest("management-hud")?.getAttribute("aria-hidden"),
+		).toBe("true")
+	})
+
 	it("exposes a keyboard-native workspace font selector", () => {
 		const workspace = createEditorWorkspace()
 		workspace.actions.navigate("/glyphs")

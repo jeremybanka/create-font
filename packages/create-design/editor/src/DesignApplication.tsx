@@ -36,6 +36,7 @@ import {
 	type HotbarSlots,
 	type TilingWorkspaceStatus,
 	type TilingLayout,
+	type UiLayoutControlHandle,
 	type UiLayoutRecordV1,
 } from "@create-art/editor"
 import {
@@ -1312,6 +1313,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		dirty: false,
 		management: false,
 	})
+	const uiLayoutControlRef = useRef<UiLayoutControlHandle>(null)
 	const [status, setStatus] = useState(
 		`Ready — draw a shape or press ${MOD_KEY_LABEL}+Shift+P for commands.`,
 	)
@@ -7942,11 +7944,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					</button>
 				</command-center>
 				<header-actions>
-					<UiLayoutControl
-						product="create-design"
-						current={uiLayout}
-						onApply={applyUiLayout}
-					/>
 					<dimmer-control>
 						<label htmlFor="design-canvas-dimmer">Dimmer</label>
 						<span aria-hidden="true">Dark</span>
@@ -9065,6 +9062,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					onStatusChange={updateTilingStatus}
 					layout={tilingLayout}
 					onLayoutChange={setTilingLayout}
+					layoutManagement={
+						<UiLayoutControl
+							ref={uiLayoutControlRef}
+							product="create-design"
+							current={uiLayout}
+							onApply={applyUiLayout}
+						/>
+					}
+					onSaveLayout={() => void uiLayoutControlRef.current?.save()}
 				/>
 				<ActionHotbar
 					alternateSlots={alternateHotbarSlots}

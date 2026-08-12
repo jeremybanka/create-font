@@ -54,7 +54,7 @@ async function settle(): Promise<void> {
 	})
 }
 
-describe("UI layout header control", () => {
+describe("UI layout management control", () => {
 	it("disambiguates origins, restores a layout, persists edits, and saves", async () => {
 		const sources = [
 			{ origin: "home", revision: "home-1", layouts: [layout], issues: [] },
@@ -105,9 +105,23 @@ describe("UI layout header control", () => {
 		)
 		expect([...select!.options].map(({ text }) => text)).toEqual([
 			"Current local layout",
-			"Shared — Home",
-			"Shared — Project",
+			"Shared",
+			"Shared",
 		])
+		expect(
+			[...select!.querySelectorAll("optgroup")].map((group) => ({
+				label: group.label,
+				values: [...group.querySelectorAll("option")].map(
+					(option) => option.value,
+				),
+			})),
+		).toEqual([
+			{ label: "Project", values: ["project:layout-b"] },
+			{ label: "Home", values: ["home:layout-a"] },
+		])
+		expect(
+			document.querySelector('[role="status"]')?.getAttribute("data-state"),
+		).toBe("local")
 		act(() => {
 			select!.value = "project:layout-b"
 			select!.dispatchEvent(new Event("change", { bubbles: true }))
@@ -118,7 +132,9 @@ describe("UI layout header control", () => {
 		expect(localStorage.getItem("create-font:ui-layout:selection:v1")).toBe(
 			"project:layout-b",
 		)
-		expect(document.querySelector('[role="status"]')).toBeNull()
+		expect(
+			document.querySelector('[role="status"]')?.getAttribute("data-state"),
+		).toBe("saved")
 
 		const name = document.querySelector<HTMLInputElement>(
 			'input[aria-label="Layout name"]',
@@ -130,9 +146,12 @@ describe("UI layout header control", () => {
 			)?.set?.call(name, "Renamed")
 			name.dispatchEvent(new InputEvent("input", { bubbles: true }))
 		})
+		expect(
+			document.querySelector('[role="status"]')?.getAttribute("data-state"),
+		).toBe("modified")
 		act(() =>
 			document
-				.querySelector<HTMLButtonElement>("ui-layout-control button")!
+				.querySelector<HTMLButtonElement>("button[data-layout-save]")!
 				.click(),
 		)
 		await settle()
@@ -146,6 +165,11 @@ describe("UI layout header control", () => {
 		expect(localStorage.getItem("create-font:ui-layout:working:v1")).toContain(
 			'"name":"Renamed"',
 		)
+		expect(
+			document
+				.querySelector("button[data-layout-save]")
+				?.getAttribute("aria-label"),
+		).toBe("Save layout to Project")
 	})
 
 	it("keeps malformed filesystem data visible without replacing local state", async () => {
@@ -192,10 +216,12 @@ describe("UI layout header control", () => {
 	})
 
 	it("restores a browser working copy and keeps split-state migration durable offline", async () => {
+		localStorage.setItem("create-font:ui-layout:selection:v1", "home:layout-a")
 		localStorage.setItem(
 			"create-font:ui-layout:working:v1",
 			JSON.stringify({
 				...layout,
+				name: "Unsaved working name",
 				state: {
 					...layout.state,
 					preferences: { diffView: true },
@@ -204,7 +230,24 @@ describe("UI layout header control", () => {
 		)
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () => Promise.reject(new Error("offline"))),
+			vi.fn(async () =>
+				Response.json({
+					sources: [
+						{
+							origin: "home",
+							revision: "home-1",
+							layouts: [layout],
+							issues: [],
+						},
+						{
+							origin: "project",
+							revision: null,
+							layouts: [],
+							issues: [],
+						},
+					],
+				}),
+			),
 		)
 		const applied = vi.fn()
 		act(() =>
@@ -226,8 +269,14 @@ describe("UI layout header control", () => {
 		expect(
 			localStorage.getItem("create-font:ui-layout:working:v1"),
 		).not.toBeNull()
-		expect(document.querySelector('[role="alert"]')?.textContent).toBe(
-			"offline",
-		)
+		expect(
+			document.querySelector<HTMLInputElement>(
+				'input[aria-label="Layout name"]',
+			)?.value,
+		).toBe("Unsaved working name")
+		expect(
+			document.querySelector('[role="status"]')?.getAttribute("data-state"),
+		).toBe("modified")
+		expect(document.querySelector('[role="alert"]')).toBeNull()
 	})
 })
