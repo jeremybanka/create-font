@@ -10,7 +10,7 @@ import {
 	rm,
 } from "node:fs/promises"
 import { homedir } from "node:os"
-import { dirname, join, resolve, sep } from "node:path"
+import { basename, dirname, join, parse, resolve, sep } from "node:path"
 
 import type {
 	SaveUiLayoutInput,
@@ -47,17 +47,44 @@ function revision(text: string): string {
 function issuePath(path: readonly PropertyKey[]): string {
 	return path.length === 0 ? "$" : `$.${path.map(String).join(".")}`
 }
-async function rejectSymlinks(
+function pathResolutionError(
 	path: string,
-	allowedRoot: string,
-): Promise<void> {
-	const relative = path.slice(allowedRoot.length).split(sep).filter(Boolean)
-	let current = allowedRoot
-	for (const part of relative) {
+	error: NodeJS.ErrnoException,
+): Error {
+	if (error.code === "ELOOP")
+		return new Error(`UI layout path has a cyclic symbolic link: ${path}`)
+	if (error.code === "ENOENT")
+		return new Error(`UI layout path contains a broken symbolic link: ${path}`)
+	if (error.code === "EACCES" || error.code === "EPERM")
+		return new Error(`UI layout path is unreadable: ${path}`)
+	return new Error(`Could not resolve UI layout path ${path}: ${error.message}`)
+}
+
+/**
+ * Walk the logical path without rejecting links. A missing ordinary component is
+ * a valid not-yet-created layout location; a link must always resolve cleanly.
+ */
+async function assertResolvableSymlinks(path: string): Promise<void> {
+	const absolute = resolve(path)
+	const root = parse(absolute).root
+	const parts = absolute.slice(root.length).split(sep).filter(Boolean)
+	let current = root
+	for (const part of parts) {
 		current = join(current, part)
-		const info = await lstat(current).catch(() => undefined)
-		if (info?.isSymbolicLink())
-			throw new Error(`UI layout path contains a symbolic link: ${current}`)
+		let info
+		try {
+			info = await lstat(current)
+		} catch (error) {
+			const io = error as NodeJS.ErrnoException
+			if (io.code === "ENOENT") return
+			throw pathResolutionError(current, io)
+		}
+		if (!info.isSymbolicLink()) continue
+		try {
+			await realpath(current)
+		} catch (error) {
+			throw pathResolutionError(current, error as NodeJS.ErrnoException)
+		}
 	}
 }
 
@@ -79,35 +106,35 @@ export function createUiLayoutFileService(options: UiLayoutFileServiceOptions) {
 			"ui.json",
 		)
 	}
-	const assertPath = async (
+	const assertPath = (
 		path: string,
+		product: UiLayoutProduct,
 		origin: UiLayoutOrigin,
-	): Promise<void> => {
-		const allowed = origin === "home" ? homeRoot : workspaceRoot
-		if (path !== allowed && !path.startsWith(`${allowed}${sep}`))
-			throw new Error("UI layout path escaped its allowlisted root.")
-		await rejectSymlinks(path, allowed)
-		const realAllowed = await realpath(allowed).catch(() => allowed)
-		const existingParent = await realpath(dirname(path)).catch(() =>
-			dirname(path),
-		)
-		if (
-			existingParent !== realAllowed &&
-			!existingParent.startsWith(`${realAllowed}${sep}`)
-		)
-			throw new Error(
-				"UI layout path escaped its allowlisted root through a symbolic link.",
-			)
+	): void => {
+		if (path !== pathFor(product, origin))
+			throw new Error("UI layout path is not an exact supported location.")
 	}
 	const readSource = async (
 		product: UiLayoutProduct,
 		origin: UiLayoutOrigin,
 	): Promise<UiLayoutSource> => {
 		const path = pathFor(product, origin)
-		await assertPath(path, origin)
+		assertPath(path, product, origin)
+		await assertResolvableSymlinks(path)
 		const text = await readFile(path, "utf8").catch(
-			(error: NodeJS.ErrnoException) => {
-				if (error.code === "ENOENT") return null
+			async (error: NodeJS.ErrnoException) => {
+				if (error.code === "ENOENT") {
+					// Distinguish a normal absent layout from a link that broke after
+					// the first check.
+					await assertResolvableSymlinks(path)
+					return null
+				}
+				if (
+					error.code === "ELOOP" ||
+					error.code === "EACCES" ||
+					error.code === "EPERM"
+				)
+					throw pathResolutionError(path, error)
 				throw error
 			},
 		)
@@ -205,10 +232,43 @@ export function createUiLayoutFileService(options: UiLayoutFileServiceOptions) {
 		records.sort((a, b) => a.id.localeCompare(b.id))
 		const text = prettyUiLayoutFile(uiLayoutFileV1Schema.parse(records))
 		const path = pathFor(input.product, input.origin)
-		await assertPath(path, input.origin)
-		await mkdir(dirname(path), { recursive: true })
-		await assertPath(path, input.origin)
-		const temporary = join(dirname(path), `.ui.json.${randomUUID()}.tmp`)
+		assertPath(path, input.product, input.origin)
+		await assertResolvableSymlinks(path)
+		try {
+			await mkdir(dirname(path), { recursive: true })
+		} catch (error) {
+			throw pathResolutionError(dirname(path), error as NodeJS.ErrnoException)
+		}
+		// Resolve again immediately before writing. Directory links are followed
+		// into their canonical directory. A final ui.json link is deliberately
+		// preserved by replacing its canonical target rather than the link itself.
+		await assertResolvableSymlinks(path)
+		let canonicalParent: string
+		try {
+			canonicalParent = await realpath(dirname(path))
+		} catch (error) {
+			throw pathResolutionError(dirname(path), error as NodeJS.ErrnoException)
+		}
+		let target = join(canonicalParent, basename(path))
+		const info = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+			if (error.code === "ENOENT") return null
+			throw pathResolutionError(path, error)
+		})
+		if (info?.isSymbolicLink()) {
+			try {
+				target = await realpath(path)
+			} catch (error) {
+				throw pathResolutionError(path, error as NodeJS.ErrnoException)
+			}
+		}
+		let targetParent: string
+		try {
+			targetParent = await realpath(dirname(target))
+		} catch (error) {
+			throw pathResolutionError(dirname(target), error as NodeJS.ErrnoException)
+		}
+		target = join(targetParent, basename(target))
+		const temporary = join(targetParent, `.ui.json.${randomUUID()}.tmp`)
 		const handle = await open(
 			temporary,
 			constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
@@ -218,7 +278,7 @@ export function createUiLayoutFileService(options: UiLayoutFileServiceOptions) {
 			await handle.writeFile(text, "utf8")
 			await handle.sync()
 			await handle.close()
-			await rename(temporary, path)
+			await rename(temporary, target)
 		} catch (error) {
 			await handle.close().catch(() => undefined)
 			await rm(temporary, { force: true }).catch(() => undefined)
