@@ -1,4 +1,7 @@
-import { lowerCornerProfiles } from "@create-art/vector-geometry"
+import {
+	lowerCornerProfiles,
+	lowerInferredCorners,
+} from "@create-art/vector-geometry"
 import {
 	evaluateCubicCurve,
 	normalizeEditorLocation,
@@ -38,6 +41,8 @@ export interface EditorContourPaintPaths {
 	readonly closedPath: string
 	/** Open contours, suitable for stroke-only painting. */
 	readonly openPath: string
+	/** Inferred authored overextensions for an editor-only guide. */
+	readonly overflowPath: string
 }
 
 export interface ContourStartDirection {
@@ -410,15 +415,79 @@ export function editorContourPaintPaths(
 		| { readonly closed: boolean; readonly nodes: readonly EditorOutlineNode[] }
 	)[],
 ): EditorContourPaintPaths {
+	const inferableContours = contours.flatMap((contour, contourIndex) => {
+		if (!("nodes" in contour) || !contour.closed) return []
+		return [
+			{
+				id: `contour:${contourIndex}`,
+				closed: true,
+				points: contour.nodes.map((node, pointIndex) => ({
+					id:
+						node.pointId ?? (`point:${contourIndex}:${pointIndex}` as PointId),
+					point: { x: node.x, y: node.y },
+					...(node.incoming === undefined
+						? {}
+						: {
+								incoming: {
+									x: node.x + node.incoming.x,
+									y: node.y + node.incoming.y,
+								},
+							}),
+					...(node.outgoing === undefined
+						? {}
+						: {
+								outgoing: {
+									x: node.x + node.outgoing.x,
+									y: node.y + node.outgoing.y,
+								},
+							}),
+					...(node.corner === undefined ? {} : { corner: node.corner }),
+				})),
+			},
+		]
+	})
+	const inferred = lowerInferredCorners(inferableContours)
+	const inferredByContourIndex = new Map(
+		inferred.contours.map((contour) => [
+			Number(contour.id.slice("contour:".length)),
+			contour,
+		]),
+	)
 	const closedContours = []
 	const openContours = []
-	for (const contour of contours) {
-		if (!("nodes" in contour) || contour.closed) closedContours.push(contour)
-		else openContours.push(contour)
+	const overflowCommands: string[] = []
+	for (const [contourIndex, contour] of contours.entries()) {
+		const inferredContour = inferredByContourIndex.get(contourIndex)
+		const renderContour =
+			!("nodes" in contour) || inferredContour === undefined
+				? contour
+				: {
+						...contour,
+						nodes: inferredContour.points.flatMap((point) => {
+							const authoredIndex = contour.nodes.findIndex(
+								(node, pointIndex) =>
+									(node.pointId ??
+										(`point:${contourIndex}:${pointIndex}` as PointId)) ===
+									point.id,
+							)
+							const node = contour.nodes[authoredIndex]
+							return node === undefined
+								? []
+								: [{ ...node, x: point.point.x, y: point.point.y }]
+						}),
+					}
+		if (!("nodes" in renderContour) || renderContour.closed)
+			closedContours.push(renderContour)
+		else openContours.push(renderContour)
 	}
+	for (const segment of inferred.overflowSegments)
+		overflowCommands.push(
+			`M ${format(segment.start.x)} ${format(segment.start.y)} L ${format(segment.end.x)} ${format(segment.end.y)}`,
+		)
 	return {
 		closedPath: editorContoursToPath(closedContours),
 		openPath: editorContoursToPath(openContours),
+		overflowPath: overflowCommands.join(" "),
 	}
 }
 

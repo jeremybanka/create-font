@@ -1202,6 +1202,7 @@ describe("editor workspace", () => {
 		expect(editorContourPaintPaths([closed, open])).toEqual({
 			closedPath: "M 0 0 L 100 0 L 100 100 L 0 0 Z",
 			openPath: "M 200 0 C 220 0 240 20 240 40",
+			overflowPath: "",
 		})
 		expect(combinedEditorPathPreview([closed, open]).path).toBe(
 			"M 0 0 L 100 0 L 100 100 L 0 0 Z",
@@ -1224,9 +1225,60 @@ describe("editor workspace", () => {
 		expect(editorContourPaintPaths(openContours)).toEqual({
 			closedPath: "",
 			openPath: "M 0 0 L 80 20 M 100 100",
+			overflowPath: "",
 		})
 	})
 
+	it("infers same-contour overflow nodes for paint without source metadata", () => {
+		const contours = [
+			{
+				closed: true,
+				nodes: [
+					{ pointId: "point:a" as const, x: 0, y: 0 },
+					{ pointId: "point:overflow-in" as const, x: 120, y: 0 },
+					{ pointId: "point:overflow-out" as const, x: 100, y: -20 },
+					{ pointId: "point:d" as const, x: 100, y: 100 },
+					{ pointId: "point:e" as const, x: 0, y: 100 },
+				],
+			},
+		]
+		const before = structuredClone(contours)
+
+		expect(editorContourPaintPaths(contours)).toEqual({
+			closedPath: "M 0 0 L 100 0 L 100 100 L 0 100 L 0 0 Z",
+			openPath: "",
+			overflowPath: "M 100 0 L 120 0 M 120 0 L 100 -20 M 100 -20 L 100 0",
+		})
+		expect(contours).toEqual(before)
+	})
+
+	it("paints separate overlaps without inferring overflow guides", () => {
+		const contours = [
+			{
+				closed: true,
+				nodes: [
+					{ x: 0, y: 40 },
+					{ x: 100, y: 40 },
+					{ x: 100, y: 60 },
+					{ x: 0, y: 60 },
+				],
+			},
+			{
+				closed: true,
+				nodes: [
+					{ x: 40, y: 0 },
+					{ x: 60, y: 0 },
+					{ x: 60, y: 100 },
+					{ x: 40, y: 100 },
+				],
+			},
+		]
+		const forward = editorContourPaintPaths(contours)
+		expect(forward.openPath).toBe("")
+		expect(forward.overflowPath).toBe("")
+		expect(forward.closedPath.match(/M /gu)).toHaveLength(2)
+		expect(forward.closedPath.match(/ L /gu)).toHaveLength(8)
+	})
 	it("derives endpoint markers from the normal to an open path's tangent", () => {
 		const contour = [
 			{ x: 0, y: 0, outgoing: { x: 20, y: 0 } },
