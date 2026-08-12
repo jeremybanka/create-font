@@ -7608,13 +7608,18 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
-	it("hides guides as a persisted view preference and bulk-locks atomically", async () => {
+	it("hides axis and arbitrary guides as a persisted view preference and bulk-locks atomically", async () => {
 		const initial = createInitialDocument()
 		const source: DesignDocument = {
 			...initial,
 			guides: [
-				{ id: "guide:x", axis: "x", value: 100, locked: true },
-				{ id: "guide:y", axis: "y", value: 120 },
+				{
+					id: "guide:x",
+					a: { x: 100, y: 0 },
+					b: { x: 100, y: 1 },
+					locked: true,
+				},
+				{ id: "guide:diagonal", a: { x: 0, y: 120 }, b: { x: 1, y: 121 } },
 			],
 		}
 		const storage = new Map<string, string>()

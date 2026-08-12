@@ -145,7 +145,6 @@ import {
 	deleteDesignGuide,
 	DESIGN_GUIDES_VISIBLE_STORAGE_KEY,
 	designGuideAngle,
-	designGuideAxis,
 	designRulerTicks,
 	setDesignGuidesLocked,
 	translateDesignGuide,
