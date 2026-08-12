@@ -74,6 +74,13 @@ export const DESIGN_TOOLS = {
 		icon: TextIcon,
 		paletteIcon: "SquareIcon",
 	},
+	guide: {
+		label: "Guide",
+		description: "Plot an infinite snapping guide through two points.",
+		key: "G",
+		icon: Pencil1Icon,
+		paletteIcon: "Pencil1Icon",
+	},
 } as const satisfies Record<
 	DesignTool,
 	{

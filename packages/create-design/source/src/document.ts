@@ -16,8 +16,9 @@ import type {
 } from "./types.ts"
 
 export const CREATE_DESIGN_DOCUMENT_FORMAT = "create-design.document" as const
-export const CREATE_DESIGN_DOCUMENT_VERSION = 7 as const
-export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 6 as const
+export const CREATE_DESIGN_DOCUMENT_VERSION = 8 as const
+export const PREVIOUS_DESIGN_DOCUMENT_VERSION = 7 as const
+export const VERSION_SIX_DESIGN_DOCUMENT_VERSION = 6 as const
 export const VERSION_FIVE_DESIGN_DOCUMENT_VERSION = 5 as const
 export const VERSION_FOUR_DESIGN_DOCUMENT_VERSION = 4 as const
 export const VERSION_THREE_DESIGN_DOCUMENT_VERSION = 3 as const
@@ -387,7 +388,7 @@ const versionOneDesignObjectSchema = z.unknown().transform((value, context) => {
 	for (const issue of parsed.error.issues) context.addIssue(issue)
 	return z.NEVER
 })
-export const guideSchema = z
+export const legacyGuideSchema = z
 	.object({
 		id: guideIdSchema,
 		axis: z.enum(["x", "y"]),
@@ -395,6 +396,29 @@ export const guideSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
+export const guideSchema = z
+	.object({
+		id: guideIdSchema,
+		a: vectorSchema,
+		b: vectorSchema,
+		locked: z.boolean().optional(),
+	})
+	.strict()
+	.refine(
+		({ a, b }) => a.x !== b.x || a.y !== b.y,
+		"Guide points must be distinct.",
+	)
+
+export function migrateLegacyGuide(
+	guide: z.infer<typeof legacyGuideSchema>,
+): z.infer<typeof guideSchema> {
+	return {
+		id: guide.id,
+		a: guide.axis === "x" ? { x: guide.value, y: 0 } : { x: 0, y: guide.value },
+		b: guide.axis === "x" ? { x: guide.value, y: 1 } : { x: 1, y: guide.value },
+		...(guide.locked === undefined ? {} : { locked: guide.locked }),
+	}
+}
 
 export const sceneChildSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("object"), id: designObjectIdSchema }).strict(),
@@ -483,13 +507,19 @@ export const versionFiveDesignDocumentSchema = z
 		blends: z.array(designBlendSchema).optional(),
 		scene: z.array(sceneChildSchema).optional(),
 		groups: z.array(groupSchema).optional(),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 	})
 	.strict()
 
 export const versionSixDesignDocumentSchema = designDocumentSchema.extend({
-	version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+	version: z.literal(VERSION_SIX_DESIGN_DOCUMENT_VERSION),
 	objects: z.array(versionSixDesignObjectSchema),
+	guides: z.array(legacyGuideSchema),
+})
+
+export const versionSevenDesignDocumentSchema = designDocumentSchema.extend({
+	version: z.literal(PREVIOUS_DESIGN_DOCUMENT_VERSION),
+	guides: z.array(legacyGuideSchema),
 })
 
 export const versionTwoDesignDocumentSchema = z
@@ -500,7 +530,7 @@ export const versionTwoDesignDocumentSchema = z
 		page: previousPageSchema,
 		swatches: z.array(swatchSchema),
 		objects: z.array(versionTwoDesignObjectSchema),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 	})
 	.strict()
 
@@ -512,7 +542,7 @@ export const legacyDesignDocumentSchema = z
 		page: previousPageSchema,
 		swatches: z.array(swatchSchema),
 		objects: z.array(versionOneDesignObjectSchema),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 	})
 	.strict()
 
@@ -524,7 +554,7 @@ export const versionThreeDesignDocumentSchema = z
 		page: pageSchema,
 		swatches: z.array(swatchSchema),
 		objects: z.array(previousDesignObjectSchema),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 	})
 	.strict()
 
@@ -536,7 +566,7 @@ export const versionFourDesignDocumentSchema = z
 		page: pageSchema,
 		swatches: z.array(swatchSchema),
 		objects: z.array(versionFourDesignObjectSchema),
-		guides: z.array(guideSchema),
+		guides: z.array(legacyGuideSchema),
 	})
 	.strict()
 
@@ -1000,7 +1030,7 @@ function migrateCompleteDocument(
 			| z.infer<typeof versionTwoDesignObjectSchema>
 			| ReturnType<typeof migrateObjectV1>
 		)[]
-		readonly guides: readonly unknown[]
+		readonly guides: readonly z.infer<typeof legacyGuideSchema>[]
 	}>,
 ): DesignSourceResult<DesignDocument> {
 	return validateDesignDocument({
@@ -1016,7 +1046,7 @@ function migrateCompleteDocument(
 			),
 		],
 		groups: [],
-		guides: document.guides,
+		guides: document.guides.map(migrateLegacyGuide),
 	})
 }
 
@@ -1077,7 +1107,7 @@ export function migrateDesignDocumentV3(
 			),
 		],
 		groups: [],
-		guides: parsed.data.guides,
+		guides: parsed.data.guides.map(migrateLegacyGuide),
 	})
 }
 
@@ -1099,7 +1129,7 @@ export function migrateDesignDocumentV4(
 			),
 		],
 		groups: [],
-		guides: parsed.data.guides,
+		guides: parsed.data.guides.map(migrateLegacyGuide),
 	})
 }
 
@@ -1126,7 +1156,7 @@ export function migrateDesignDocumentV5(
 			),
 		],
 		groups: parsed.data.groups ?? [],
-		guides: parsed.data.guides,
+		guides: parsed.data.guides.map(migrateLegacyGuide),
 	})
 }
 
@@ -1138,6 +1168,19 @@ export function migrateDesignDocumentV6(
 	return validateDesignDocument({
 		...parsed.data,
 		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		guides: parsed.data.guides.map(migrateLegacyGuide),
+	})
+}
+
+export function migrateDesignDocumentV7(
+	value: unknown,
+): DesignSourceResult<DesignDocument> {
+	const parsed = versionSevenDesignDocumentSchema.safeParse(value)
+	if (!parsed.success) return failure(documentSchemaDiagnostics(parsed.error))
+	return validateDesignDocument({
+		...parsed.data,
+		version: CREATE_DESIGN_DOCUMENT_VERSION,
+		guides: parsed.data.guides.map(migrateLegacyGuide),
 	})
 }
 
@@ -1192,8 +1235,10 @@ export function decodeDesignDocument(
 			return migrateDesignDocumentV3(value)
 		case VERSION_FIVE_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV5(value)
-		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+		case VERSION_SIX_DESIGN_DOCUMENT_VERSION:
 			return migrateDesignDocumentV6(value)
+		case PREVIOUS_DESIGN_DOCUMENT_VERSION:
+			return migrateDesignDocumentV7(value)
 		case CREATE_DESIGN_DOCUMENT_VERSION:
 			return validateDesignDocument(value)
 		default:

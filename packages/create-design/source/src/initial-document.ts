@@ -12,7 +12,7 @@ export const IDENTITY_DESIGN_TRANSFORM: DesignTransform = Object.freeze({
 export function createInitialDocument(): DesignDocument {
 	return {
 		format: "create-design.document",
-		version: 7,
+		version: 8,
 		title: "Untitled design",
 		artboards: [
 			{

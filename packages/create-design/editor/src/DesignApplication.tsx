@@ -139,10 +139,15 @@ import {
 } from "./design-canvas.ts"
 import {
 	addDesignGuide,
+	axisDesignGuide,
+	clipDesignGuideToBounds,
+	constrainGuidePointToAngle,
 	deleteDesignGuide,
 	DESIGN_GUIDES_VISIBLE_STORAGE_KEY,
+	designGuideAngle,
 	designRulerTicks,
 	setDesignGuidesLocked,
+	translateDesignGuide,
 	updateDesignGuide,
 } from "./design-guides.ts"
 import {
@@ -428,10 +433,9 @@ type CanvasGesture =
 			readonly kind: "guide"
 			readonly pointerId: number
 			readonly id: string
-			readonly axis: "x" | "y"
 			readonly original: DesignDocument
 			readonly start: CanvasPoint
-			readonly value: number
+			readonly guide: DesignGuide
 	  }
 
 type DesignObjectGesture = Extract<
@@ -756,6 +760,8 @@ function persistenceLabel(state: DesignPersistenceState): string {
 }
 
 function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
+	if (tool === "guide")
+		return "Click point A, then point B · Shift constrains to 15° increments · Escape cancels"
 	if (tool === "pen")
 		return "Click for corners · Drag for curves · Click start to close · Enter finishes open · Escape cancels"
 	if (tool === "rect" || tool === "ellipse")
@@ -1302,10 +1308,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	)
 	const [selectedGuideId, setSelectedGuideId] = useState<string | null>(null)
 	const [guidesVisible, setGuidesVisible] = useState(initialDesignGuidesVisible)
-	const [guidePreview, setGuidePreview] = useState<Readonly<{
-		id: string
-		value: number
+	const [guidePreview, setGuidePreview] = useState<DesignGuide | null>(null)
+	const [guidePlot, setGuidePlot] = useState<Readonly<{
+		a: CanvasPoint
+		b: CanvasPoint
+		rawB: CanvasPoint
+		constrained: boolean
 	}> | null>(null)
+	const guidePlotRef = useRef<typeof guidePlot>(null)
 	useEffect(() => {
 		try {
 			browserLocalStorage()?.setItem(
@@ -2515,15 +2525,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			event: Readonly<{ clientX: number; clientY: number }>,
 		): void => {
 			const point = documentPointFromClient(event)
-			const guide: DesignGuide = {
-				id: `guide:${nextId()}`,
+			const guide = axisDesignGuide(
+				`guide:${nextId()}`,
 				axis,
-				value: axis === "x" ? point.x : point.y,
-			}
+				axis === "x" ? point.x : point.y,
+			)
 			commit(addDesignGuide(document, guide))
 			setSelectedGuideId(guide.id)
 			setStatus(
-				`Created ${axis === "x" ? "vertical" : "horizontal"} guide at ${Number(guide.value.toFixed(2))} pt.`,
+				`Created ${axis === "x" ? "vertical" : "horizontal"} guide at ${Number((axis === "x" ? guide.a.x : guide.a.y).toFixed(2))} pt.`,
 			)
 		},
 		[commit, document, documentPointFromClient, nextId],
@@ -2594,6 +2604,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setPreviewArtboardDocument(null)
 		previewArtboardDocumentRef.current = null
 		setGuidePreview(null)
+		guidePlotRef.current = null
+		setGuidePlot(null)
 		setTransformCursor(null)
 	}, [gesturePolicy])
 	useEffect(() => {
@@ -5744,6 +5756,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	useEffect(() => {
 		const updateGestureModifiers = (event: KeyboardEvent): void => {
 			if (event.key !== "Shift" && event.key !== "Alt") return
+			const plotted = guidePlotRef.current
+			if (event.key === "Shift" && plotted !== null) {
+				const next = {
+					...plotted,
+					b: event.shiftKey
+						? constrainGuidePointToAngle(plotted.a, plotted.rawB)
+						: plotted.rawB,
+					constrained: event.shiftKey,
+				}
+				guidePlotRef.current = next
+				setGuidePlot(next)
+			}
 			const gesture = gestureRef.current
 			if (
 				gesture === null ||
@@ -5875,7 +5899,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				return
 			}
 			if (event.key === "Escape") {
-				const canceledGesture = gestureRef.current !== null
+				const canceledGesture =
+					gestureRef.current !== null || guidePlotRef.current !== null
 				cancelCanvasGesture()
 				if (canceledGesture) {
 					event.preventDefault()
@@ -6785,7 +6810,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			tool === "pen" ||
 			tool === "rect" ||
 			tool === "ellipse" ||
-			tool === "artboard"
+			tool === "artboard" ||
+			tool === "guide"
 		)
 			return
 		event.cancelBubble = true
@@ -6798,10 +6824,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			kind: "guide",
 			pointerId: event.evt.pointerId,
 			id: guide.id,
-			axis: guide.axis,
 			original: document,
 			start: pagePoint(event),
-			value: guide.value,
+			guide,
 		}
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
@@ -6820,6 +6845,51 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		const point = pagePoint(event)
+		if (tool === "guide") {
+			const snap = resolveCreationPoint(point)
+			const pending = guidePlotRef.current
+			if (pending === null) {
+				const next = {
+					a: snap.point,
+					b: snap.point,
+					rawB: snap.point,
+					constrained: false,
+				}
+				guidePlotRef.current = next
+				setGuidePlot(next)
+				showCreationSnapHint(snap)
+				setStatus(
+					`Guide point A at ${Number(snap.point.x.toFixed(2))}, ${Number(snap.point.y.toFixed(2))} pt. Click point B; hold Shift for 15° angles.`,
+				)
+				return
+			}
+			// Endpoint snapping is resolved first. Shift then constrains that
+			// candidate, making the 15° direction authoritative.
+			const b = event.evt.shiftKey
+				? constrainGuidePointToAngle(pending.a, snap.point)
+				: snap.point
+			if (Math.hypot(b.x - pending.a.x, b.y - pending.a.y) <= 1e-7) {
+				guidePlotRef.current = null
+				setGuidePlot(null)
+				clearCreationSnapHint(false)
+				setStatus("Guide canceled: point B must be distinct from point A.")
+				return
+			}
+			const guide: DesignGuide = {
+				id: `guide:${nextId()}`,
+				a: pending.a,
+				b,
+			}
+			commit(addDesignGuide(document, guide))
+			setSelectedGuideId(guide.id)
+			guidePlotRef.current = null
+			setGuidePlot(null)
+			clearCreationSnapHint(false)
+			setStatus(
+				`Created guide from ${Number(guide.a.x.toFixed(2))}, ${Number(guide.a.y.toFixed(2))} to ${Number(guide.b.x.toFixed(2))}, ${Number(guide.b.y.toFixed(2))} pt at ${Number(designGuideAngle(guide).toFixed(1))}°${event.evt.shiftKey ? " (constrained)" : ""}.`,
+			)
+			return
+		}
 		if (tool === "artboard") {
 			beginArtboardGesture(event, point)
 			return
@@ -6978,11 +7048,33 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const pointerMove = (event: KonvaEventObject<PointerEvent>): void => {
 		const gesture = gestureRef.current
 		if (gesture === null) {
+			const pendingGuide = guidePlotRef.current
+			if (tool === "guide" && pendingGuide !== null) {
+				const snap = resolveCreationPoint(pagePoint(event))
+				const b = event.evt.shiftKey
+					? constrainGuidePointToAngle(pendingGuide.a, snap.point)
+					: snap.point
+				const next = {
+					a: pendingGuide.a,
+					b,
+					rawB: snap.point,
+					constrained: event.evt.shiftKey,
+				}
+				guidePlotRef.current = next
+				setGuidePlot(next)
+				if (event.evt.shiftKey) clearCreationSnapHint(false)
+				else showCreationSnapHint(snap)
+				setStatus(
+					`Guide point B at ${Number(b.x.toFixed(2))}, ${Number(b.y.toFixed(2))} pt${event.evt.shiftKey ? ` · constrained ${Number(designGuideAngle(next).toFixed(1))}°` : snap.line === undefined ? "" : ` · snap: ${snap.line.label}`}.`,
+				)
+				return
+			}
 			const creationTool =
 				tool === "pen" ||
 				tool === "rect" ||
 				tool === "ellipse" ||
-				tool === "artboard"
+				tool === "artboard" ||
+				tool === "guide"
 			if (
 				!creationTool ||
 				(tool !== "artboard" && activeLayerUnavailableReason)
@@ -7049,13 +7141,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		if (gesture.kind === "guide") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			const current = pagePoint(event)
-			const value =
-				gesture.value +
-				(gesture.axis === "x"
-					? current.x - gesture.start.x
-					: current.y - gesture.start.y)
-			gestureRef.current = { ...gesture, start: current, value }
-			setGuidePreview({ id: gesture.id, value })
+			const moved = translateDesignGuide(gesture.guide, {
+				x: current.x - gesture.start.x,
+				y: current.y - gesture.start.y,
+			})
+			gestureRef.current = { ...gesture, start: current, guide: moved }
+			setGuidePreview(moved)
 			return
 		}
 		const groupPress = groupPointerPressRef.current
@@ -7242,21 +7333,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		if (gesture.kind === "guide") {
 			if (gesture.pointerId !== event.pointerId) return
-			const value =
-				gesture.value +
-				(gesture.axis === "x"
-					? releasePoint.x - gesture.start.x
-					: releasePoint.y - gesture.start.y)
+			const moved = translateDesignGuide(gesture.guide, {
+				x: releasePoint.x - gesture.start.x,
+				y: releasePoint.y - gesture.start.y,
+			})
 			gestureRef.current = null
 			releaseDesignPointer(captureTarget, event.pointerId)
 			setGuidePreview(null)
 			commit(
 				updateDesignGuide(gesture.original, gesture.id, {
-					value,
+					a: moved.a,
+					b: moved.b,
 				}),
 			)
 			setStatus(
-				`Moved ${gesture.axis === "x" ? "vertical" : "horizontal"} guide to ${Number(value.toFixed(2))} pt.`,
+				`Moved ${Number(designGuideAngle(moved).toFixed(1))}° guide through ${Number(moved.a.x.toFixed(2))}, ${Number(moved.a.y.toFixed(2))} pt.`,
 			)
 			return
 		}
@@ -7568,6 +7659,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[gesturePolicy],
 	)
 	const pointerCancel = (event: KonvaEventObject<PointerEvent>): void => {
+		if (guidePlotRef.current !== null) {
+			guidePlotRef.current = null
+			setGuidePlot(null)
+			clearCreationSnapHint(false)
+			setStatus("Guide creation canceled.")
+		}
 		cancelPointer(event.evt.pointerId, event.evt.currentTarget)
 	}
 	const pointerLeave = (): void => {
@@ -8004,7 +8101,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													? "select"
 													: tool === "area-text"
 														? "rect"
-														: tool,
+														: tool === "guide"
+															? "pen"
+															: tool,
 										{
 											dragging: gestureRef.current?.kind === "pan",
 										},
@@ -8486,7 +8585,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																					? "select"
 																					: tool === "area-text"
 																						? "rect"
-																						: tool,
+																						: tool === "guide"
+																							? "pen"
+																							: tool,
 																	)
 															}}
 														/>
@@ -8553,57 +8654,71 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											/>,
 										]
 									})}
-									{(guidesVisible ? document.guides : []).map((guide) => {
-										const value =
-											guidePreview !== null && guidePreview.id === guide.id
-												? guidePreview.value
-												: guide.value
-										return (
-											<Line
-												key={guide.id}
-												name={`design-guide ${guide.id}`}
-												points={
-													guide.axis === "x"
-														? [
-																value,
-																visibleDocumentBounds.minY,
-																value,
-																visibleDocumentBounds.maxY,
-															]
-														: [
-																visibleDocumentBounds.minX,
-																value,
-																visibleDocumentBounds.maxX,
-																value,
-															]
-												}
-												stroke={
-													selectedGuideId === guide.id
-														? canvasTheme.selection
-														: canvasTheme.guide
-												}
-												strokeWidth={1 / worldScale}
-												{...(guide.locked
-													? { dash: [4 / worldScale, 3 / worldScale] }
-													: {})}
-												hitStrokeWidth={12 / worldScale}
-												onPointerDown={(event) =>
-													startGuideGesture(event, guide)
-												}
-												onDblClick={(event) => {
-													event.cancelBubble = true
-													commit(
-														updateDesignGuide(document, guide.id, {
-															locked: !guide.locked,
-														}),
-													)
-													setStatus(
-														guide.locked ? "Guide unlocked." : "Guide locked.",
-													)
-												}}
-											/>
+									{(guidesVisible ? document.guides : []).flatMap((guide) => {
+										const displayed =
+											guidePreview?.id === guide.id ? guidePreview : guide
+										const points = clipDesignGuideToBounds(
+											displayed,
+											visibleDocumentBounds,
 										)
+										return points === null
+											? []
+											: [
+													<Line
+														key={guide.id}
+														name={`design-guide ${guide.id}`}
+														points={[...points]}
+														stroke={
+															selectedGuideId === guide.id
+																? canvasTheme.selection
+																: canvasTheme.guide
+														}
+														strokeWidth={1 / worldScale}
+														{...(guide.locked
+															? { dash: [4 / worldScale, 3 / worldScale] }
+															: {})}
+														hitStrokeWidth={12 / worldScale}
+														onPointerDown={(event) =>
+															startGuideGesture(event, guide)
+														}
+														onDblClick={(event) => {
+															event.cancelBubble = true
+															commit(
+																updateDesignGuide(document, guide.id, {
+																	locked: !guide.locked,
+																}),
+															)
+															setStatus(
+																guide.locked
+																	? "Guide unlocked."
+																	: "Guide locked.",
+															)
+														}}
+													/>,
+												]
 									})}
+									{guidePlot === null ||
+									Math.hypot(
+										guidePlot.b.x - guidePlot.a.x,
+										guidePlot.b.y - guidePlot.a.y,
+									) <= 1e-7
+										? null
+										: (() => {
+												const points = clipDesignGuideToBounds(
+													guidePlot,
+													visibleDocumentBounds,
+												)
+												return points === null ? null : (
+													<Line
+														name="design-guide-preview"
+														points={[...points]}
+														stroke={canvasTheme.selection}
+														strokeWidth={1 / worldScale}
+														dash={[6 / worldScale, 4 / worldScale]}
+														listening={false}
+													/>
+												)
+											})()}
 									{tool !== "select" && tool !== "transform"
 										? null
 										: selectedObjects.flatMap((selected) => {

@@ -1340,7 +1340,15 @@ function DesignCanvasTile({
 								type="button"
 								onClick={() => context.selectGuide(guide.id)}
 							>
-								{guide.axis.toUpperCase()} {Number(guide.value.toFixed(2))} pt
+								{Number(
+									((Math.atan2(guide.b.y - guide.a.y, guide.b.x - guide.a.x) *
+										180) /
+										Math.PI +
+										180) %
+										180,
+								).toFixed(1)}
+								° through {Number(guide.a.x.toFixed(2))},{" "}
+								{Number(guide.a.y.toFixed(2))} pt
 							</button>
 							<button
 								type="button"

@@ -333,7 +333,12 @@ describe("design canvas adapter", () => {
 				},
 			],
 			guides: [
-				{ id: "guide:locked", axis: "x" as const, value: 32, locked: true },
+				{
+					id: "guide:locked",
+					a: { x: 32, y: 0 },
+					b: { x: 32, y: 1 },
+					locked: true,
+				},
 			],
 		}
 		const targets = designSnapTargets(
@@ -407,7 +412,7 @@ describe("design canvas adapter", () => {
 					children: [{ kind: "object" as const, id: moving.id }],
 				},
 			],
-			guides: [{ id: "guide:near", axis: "x" as const, value: 112 }],
+			guides: [{ id: "guide:near", a: { x: 112, y: 0 }, b: { x: 112, y: 1 } }],
 		}
 		const enabled = snapDesignObject(moving, document, 1)
 		expect(enabled.x).toBe(112)
@@ -422,7 +427,7 @@ describe("design canvas adapter", () => {
 			},
 		})
 		expect(disabled.object).toEqual(moving)
-		expect(document.guides[0]?.value).toBe(112)
+		expect(document.guides[0]?.a.x).toBe(112)
 	})
 
 	it("ranks equal-distance candidates deterministically by priority then identity", () => {
@@ -431,8 +436,8 @@ describe("design canvas adapter", () => {
 			artboards: [] as const,
 			objects: [moving],
 			guides: [
-				{ id: "guide:z", axis: "x" as const, value: 98 },
-				{ id: "guide:a", axis: "x" as const, value: 112 },
+				{ id: "guide:z", a: { x: 98, y: 0 }, b: { x: 98, y: 1 } },
+				{ id: "guide:a", a: { x: 112, y: 0 }, b: { x: 112, y: 1 } },
 			],
 		}
 		const outcomes = Array.from(
@@ -453,7 +458,7 @@ describe("design canvas adapter", () => {
 		const scene = {
 			artboards: [] as const,
 			objects: [moving],
-			guides: [{ id: "guide:five", axis: "x" as const, value: 115 }],
+			guides: [{ id: "guide:five", a: { x: 115, y: 0 }, b: { x: 115, y: 1 } }],
 		}
 		expect(snapDesignObject(moving, scene, 1).x).toBe(115)
 		expect(snapDesignObject(moving, scene, 2).x).toBeNull()
@@ -465,9 +470,9 @@ describe("design canvas adapter", () => {
 			artboards: [] as const,
 			objects: [anchor],
 			guides: [
-				{ id: "guide:z", axis: "x" as const, value: 102 },
-				{ id: "guide:a", axis: "y" as const, value: 102 },
-				{ id: "guide:z", axis: "y" as const, value: 98 },
+				{ id: "guide:z", a: { x: 102, y: 0 }, b: { x: 102, y: 1 } },
+				{ id: "guide:a", a: { x: 0, y: 102 }, b: { x: 1, y: 102 } },
+				{ id: "guide:z", a: { x: 0, y: 98 }, b: { x: 1, y: 98 } },
 			],
 		}
 		const snapped = snapDesignPoint({ x: 100, y: 100 }, scene, 1)
@@ -480,6 +485,42 @@ describe("design canvas adapter", () => {
 			x: 100,
 			y: 100,
 		})
+	})
+
+	it("projects creation points perpendicularly onto arbitrary guides", () => {
+		const guide = {
+			id: "guide:diagonal",
+			a: { x: 0, y: 0 },
+			b: { x: 100, y: 100 },
+		}
+		const snapped = snapDesignPoint(
+			{ x: 52, y: 48 },
+			{ artboards: [], objects: [], guides: [guide] },
+			1,
+		)
+		expect(snapped.point).toEqual({ x: 50, y: 50 })
+		expect(snapped.line?.guide).toBe(guide)
+	})
+
+	it("moves object anchors perpendicularly onto arbitrary guides", () => {
+		const moving = rectangle("moving", 10, 0, 20, 5)
+		const snapped = snapDesignObject(
+			moving,
+			{
+				artboards: [],
+				objects: [moving],
+				guides: [
+					{
+						id: "guide:diagonal",
+						a: { x: 0, y: 0 },
+						b: { x: 100, y: 100 },
+					},
+				],
+			},
+			1,
+		)
+		expect(snapped.object.transform.e).toBeCloseTo(-2.5)
+		expect(snapped.object.transform.f).toBeCloseTo(2.5)
 	})
 
 	it("honors creation-point categories and hidden or locked references", () => {
@@ -511,7 +552,7 @@ describe("design canvas adapter", () => {
 		const scene = {
 			artboards: [] as const,
 			objects: [first, second],
-			guides: [{ id: "guide:right", axis: "x" as const, value: 63 }],
+			guides: [{ id: "guide:right", a: { x: 63, y: 0 }, b: { x: 63, y: 1 } }],
 		}
 		const result = snapDesignObjects([first, second], scene, 1)
 		expect(result.x).toBe(63)
@@ -525,8 +566,8 @@ describe("design canvas adapter", () => {
 			artboards: [] as const,
 			objects: [moving],
 			guides: [
-				{ id: "guide:left", axis: "x" as const, value: 100 },
-				{ id: "guide:bottom", axis: "y" as const, value: 113 },
+				{ id: "guide:left", a: { x: 100, y: 0 }, b: { x: 100, y: 1 } },
+				{ id: "guide:bottom", a: { x: 0, y: 113 }, b: { x: 1, y: 113 } },
 			],
 		}
 		const result = snapDesignObject(moving, scene, 1)
@@ -564,7 +605,7 @@ describe("design canvas adapter", () => {
 					clippingPathId: clip.id,
 				},
 			],
-			guides: [{ id: "guide:right", axis: "x" as const, value: 63 }],
+			guides: [{ id: "guide:right", a: { x: 63, y: 0 }, b: { x: 63, y: 1 } }],
 		}
 		const result = snapDesignObjects(
 			masked.objects,

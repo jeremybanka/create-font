@@ -275,8 +275,9 @@ export interface DesignLayer {
 
 export interface DesignGuide {
 	readonly id: string
-	readonly axis: "x" | "y"
-	readonly value: number
+	/** Two distinct document-space points defining an infinite line. */
+	readonly a: Readonly<{ readonly x: number; readonly y: number }>
+	readonly b: Readonly<{ readonly x: number; readonly y: number }>
 	/** Locked guides remain visible snap targets but cannot be moved or deleted. */
 	readonly locked?: boolean
 }
@@ -311,7 +312,7 @@ export interface DesignArtboard {
 
 export interface DesignDocument {
 	readonly format: "create-design.document"
-	readonly version: 7
+	readonly version: 8
 	readonly title: string
 	/** Ordered export rectangles, independent from the global scene hierarchy. */
 	readonly artboards: readonly DesignArtboard[]

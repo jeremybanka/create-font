@@ -79,7 +79,7 @@ const documentWith = (
 	const blend = createDesignBlend("blend:test", "Test blend", start, end, 2)
 	return {
 		format: "create-design.document",
-		version: 7,
+		version: 8,
 		title: "Blend",
 		artboards: [
 			{ id: "artboard:one", name: "One", x: 0, y: 0, width: 200, height: 200 },

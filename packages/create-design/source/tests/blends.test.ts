@@ -10,7 +10,7 @@ import {
 
 const document: DesignDocument = {
 	format: "create-design.document",
-	version: 7,
+	version: 8,
 	title: "Persisted blend",
 	artboards: [
 		{ id: "artboard:one", name: "One", x: 0, y: 0, width: 100, height: 100 },

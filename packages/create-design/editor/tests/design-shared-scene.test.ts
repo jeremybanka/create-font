@@ -4328,10 +4328,10 @@ describe("create-design shared vector scene", () => {
 				objects: [],
 				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
 				guides: [
-					{ id: "guide:left", axis: "x", value: 120 },
-					{ id: "guide:top", axis: "y", value: 160 },
-					{ id: "guide:right", axis: "x", value: 300 },
-					{ id: "guide:bottom", axis: "y", value: 320 },
+					{ id: "guide:left", a: { x: 120, y: 0 }, b: { x: 120, y: 1 } },
+					{ id: "guide:top", a: { x: 0, y: 160 }, b: { x: 1, y: 160 } },
+					{ id: "guide:right", a: { x: 300, y: 0 }, b: { x: 300, y: 1 } },
+					{ id: "guide:bottom", a: { x: 0, y: 320 }, b: { x: 1, y: 320 } },
 				],
 			}
 			const storage = new Map<string, string>()
@@ -4415,14 +4415,14 @@ describe("create-design shared vector scene", () => {
 			objects: [],
 			layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
 			guides: [
-				{ id: "guide:pen-x1", axis: "x", value: 120 },
-				{ id: "guide:pen-y1", axis: "y", value: 160 },
-				{ id: "guide:pen-x2", axis: "x", value: 300 },
-				{ id: "guide:pen-y2", axis: "y", value: 320 },
-				{ id: "guide:board-x1", axis: "x", value: 700 },
-				{ id: "guide:board-y1", axis: "y", value: 100 },
-				{ id: "guide:board-x2", axis: "x", value: 850 },
-				{ id: "guide:board-y2", axis: "y", value: 250 },
+				{ id: "guide:pen-x1", a: { x: 120, y: 0 }, b: { x: 120, y: 1 } },
+				{ id: "guide:pen-y1", a: { x: 0, y: 160 }, b: { x: 1, y: 160 } },
+				{ id: "guide:pen-x2", a: { x: 300, y: 0 }, b: { x: 300, y: 1 } },
+				{ id: "guide:pen-y2", a: { x: 0, y: 320 }, b: { x: 1, y: 320 } },
+				{ id: "guide:board-x1", a: { x: 700, y: 0 }, b: { x: 700, y: 1 } },
+				{ id: "guide:board-y1", a: { x: 0, y: 100 }, b: { x: 1, y: 100 } },
+				{ id: "guide:board-x2", a: { x: 850, y: 0 }, b: { x: 850, y: 1 } },
+				{ id: "guide:board-y2", a: { x: 0, y: 250 }, b: { x: 1, y: 250 } },
 			],
 		}
 		const storage = new Map<string, string>()
@@ -4523,9 +4523,9 @@ describe("create-design shared vector scene", () => {
 				objects: [],
 				layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
 				guides: [
-					{ id: "guide:start-x", axis: "x", value: 120 },
-					{ id: "guide:start-y", axis: "y", value: 160 },
-					{ id: "guide:end-x", axis: "x", value: 300 },
+					{ id: "guide:start-x", a: { x: 120, y: 0 }, b: { x: 120, y: 1 } },
+					{ id: "guide:start-y", a: { x: 0, y: 160 }, b: { x: 1, y: 160 } },
+					{ id: "guide:end-x", a: { x: 300, y: 0 }, b: { x: 300, y: 1 } },
 				],
 			}
 			const storage = new Map<string, string>()
@@ -4599,10 +4599,10 @@ describe("create-design shared vector scene", () => {
 			objects: [],
 			layers: initial.layers.map((layer) => ({ ...layer, children: [] })),
 			guides: [
-				{ id: "guide:left", axis: "x", value: 120 },
-				{ id: "guide:top", axis: "y", value: 160 },
-				{ id: "guide:right", axis: "x", value: 300 },
-				{ id: "guide:bottom", axis: "y", value: 320 },
+				{ id: "guide:left", a: { x: 120, y: 0 }, b: { x: 120, y: 1 } },
+				{ id: "guide:top", a: { x: 0, y: 160 }, b: { x: 1, y: 160 } },
+				{ id: "guide:right", a: { x: 300, y: 0 }, b: { x: 300, y: 1 } },
+				{ id: "guide:bottom", a: { x: 0, y: 320 }, b: { x: 1, y: 320 } },
 			],
 		}
 		const storage = new Map<string, string>()
@@ -7608,13 +7608,18 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
-	it("hides guides as a persisted view preference and bulk-locks atomically", async () => {
+	it("hides axis and arbitrary guides as a persisted view preference and bulk-locks atomically", async () => {
 		const initial = createInitialDocument()
 		const source: DesignDocument = {
 			...initial,
 			guides: [
-				{ id: "guide:x", axis: "x", value: 100, locked: true },
-				{ id: "guide:y", axis: "y", value: 120 },
+				{
+					id: "guide:x",
+					a: { x: 100, y: 0 },
+					b: { x: 100, y: 1 },
+					locked: true,
+				},
+				{ id: "guide:diagonal", a: { x: 0, y: 120 }, b: { x: 1, y: 121 } },
 			],
 		}
 		const storage = new Map<string, string>()

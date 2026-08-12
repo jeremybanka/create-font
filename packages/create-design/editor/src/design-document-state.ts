@@ -494,7 +494,7 @@ export function createDesignDocumentState(
 			const groupIds = get(groupIdsAtom)
 			return {
 				format: "create-design.document",
-				version: 7,
+				version: 8,
 				title: get(titleAtom),
 				artboards: get(artboardIdsAtom).map((id) =>
 					required(get(artboardSelectors, id), "artboard", id),

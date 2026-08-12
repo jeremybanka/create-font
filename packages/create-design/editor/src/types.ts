@@ -43,3 +43,4 @@ export type DesignTool =
 	| "ellipse"
 	| "text"
 	| "area-text"
+	| "guide"

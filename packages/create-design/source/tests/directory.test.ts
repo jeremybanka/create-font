@@ -5,6 +5,7 @@ import {
 	DEFAULT_LAYER_ID,
 	CREATE_DESIGN_SOURCE_VERSION,
 	PREVIOUS_CREATE_DESIGN_SOURCE_VERSION,
+	VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION,
 	VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION,
 	assembleDesignDocument,
 	decodeDesignDocument,
@@ -27,7 +28,7 @@ import {
 
 const fixture = (): DesignDocument => ({
 	format: "create-design.document",
-	version: 7,
+	version: 8,
 	title: "Directory proof",
 	artboards: [
 		{
@@ -110,7 +111,14 @@ const fixture = (): DesignDocument => ({
 		},
 	],
 	groups: [],
-	guides: [{ id: "guide:center", axis: "x", value: 306, locked: true }],
+	guides: [
+		{
+			id: "guide:center",
+			a: { x: 306, y: 0 },
+			b: { x: 306, y: 1 },
+			locked: true,
+		},
+	],
 })
 
 function split(
@@ -505,7 +513,12 @@ describe("create-design directory source", () => {
 					fillId: "swatch:coral",
 				},
 			],
-			guides: document.guides,
+			guides: document.guides.map((guide) => ({
+				id: guide.id,
+				axis: guide.a.x === guide.b.x ? ("x" as const) : ("y" as const),
+				value: guide.a.x === guide.b.x ? guide.a.x : guide.a.y,
+				...(guide.locked === undefined ? {} : { locked: guide.locked }),
+			})),
 		})
 		expect(result).toMatchObject({
 			ok: true,
@@ -541,7 +554,7 @@ describe("create-design directory source", () => {
 			stroke: { swatchId: "swatch:ink", width: 3 },
 		}
 		const assembled = assemble(files as DesignSourceDirectoryFiles)
-		expect(assembled.version).toBe(7)
+		expect(assembled.version).toBe(8)
 		expect(assembled.objects[0]?.appearance.stroke).toEqual({
 			...DEFAULT_DESIGN_STROKE_STYLE,
 			swatchId: "swatch:ink",
@@ -785,7 +798,7 @@ describe("create-design directory source", () => {
 		expect(result).toEqual({
 			ok: true,
 			value:
-				'{\n\t"format": "create-design.metadata",\n\t"guides": [{ "axis": "x", "id": "guide:zero", "value": -0 }],\n\t"title": "Canonical",\n\t"version": 1\n}\n',
+				'{\n\t"format": "create-design.metadata",\n\t"guides": [\n\t\t{ "a": { "x": -0, "y": 0 }, "b": { "x": -0, "y": 1 }, "id": "guide:zero" }\n\t],\n\t"title": "Canonical",\n\t"version": 2\n}\n',
 		})
 		const parsed = parseSourceUnitText(
 			"document",
@@ -795,7 +808,7 @@ describe("create-design directory source", () => {
 		expect(parsed.ok).toBe(true)
 		if (parsed.ok) {
 			const document = parsed.value as DocumentFile
-			expect(Object.is(document.guides[0]?.value, -0)).toBe(true)
+			expect(Object.is(document.guides[0]?.a.x, -0)).toBe(true)
 		}
 	})
 
@@ -804,12 +817,18 @@ describe("create-design directory source", () => {
 			{ length: 25 },
 			(_, guideCount): DocumentFile => ({
 				format: "create-design.metadata",
-				version: 1,
+				version: 2,
 				title: `Width boundary ${guideCount}`,
 				guides: Array.from({ length: guideCount }, (_, index) => ({
-					axis: index % 2 === 0 ? "y" : "x",
 					id: `guide:${index}_${"x".repeat(10 + (index % 9))}`,
-					value: index * 11.339506169749999,
+					a:
+						index % 2 === 0
+							? { x: 0, y: index * 11.339506169749999 }
+							: { x: index * 11.339506169749999, y: 0 },
+					b:
+						index % 2 === 0
+							? { x: 1, y: index * 11.339506169749999 }
+							: { x: index * 11.339506169749999, y: 1 },
 				})),
 			}),
 		)
@@ -832,9 +851,9 @@ describe("create-design directory source", () => {
 			guides: elevenGuides.guides.map((guide, index) =>
 				index === 4
 					? {
-							axis: "y",
 							id: "guide:4_xxxxxxxxxxxxxx",
-							value: 45.358024678999996,
+							a: { x: 0, y: 45.358024678999996 },
+							b: { x: 1, y: 45.358024678999996 },
 						}
 					: guide,
 			),
@@ -842,7 +861,7 @@ describe("create-design directory source", () => {
 		expect(regression.ok).toBe(true)
 		if (regression.ok) {
 			expect(regression.value).toContain(
-				'\t\t{\n\t\t\t"axis": "y",\n\t\t\t"id": "guide:4_xxxxxxxxxxxxxx",\n\t\t\t"value": 45.358024678999996\n\t\t},',
+				'"a": { "x": 0, "y": 45.358024678999996 }',
 			)
 		}
 	})
@@ -1187,7 +1206,7 @@ describe("create-design directory source", () => {
 			errors: expect.arrayContaining([
 				expect.objectContaining({
 					code: "directory.unsupported",
-					message: `Source versions before ${PREVIOUS_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
+					message: `Source versions before ${VERSION_FOUR_CREATE_DESIGN_SOURCE_VERSION} require the singleton ${DEFAULT_LAYER_ID} layer.`,
 				}),
 			]),
 		})

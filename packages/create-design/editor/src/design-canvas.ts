@@ -23,6 +23,11 @@ import type {
 	DesignGuide,
 	DesignObject,
 } from "./types.ts"
+import {
+	designGuideAxis,
+	distanceToDesignGuide,
+	projectPointToGuide,
+} from "./design-guides.ts"
 
 export const DESIGN_MIN_ZOOM = 0.01
 export const DESIGN_MAX_ZOOM = 8
@@ -205,6 +210,10 @@ export interface DesignPointSnapResult {
 	readonly x: number | null
 	readonly y: number | null
 	readonly matches: readonly DesignSnapMatch[]
+	readonly line?: Readonly<{
+		readonly guide: DesignGuide
+		readonly label: string
+	}>
 }
 
 export type DesignSnapCategory =
@@ -357,8 +366,8 @@ export function designSnapTargets(
 		}
 	if (settings.enabled.guides)
 		for (const guide of scene.guides)
-			if (guide.axis === axis)
-				targets.push(target("guides", guide.id, "Guide", guide.value))
+			if (designGuideAxis(guide) === axis)
+				targets.push(target("guides", guide.id, "Guide", guide.a[axis]))
 
 	for (const object of scene.objects) {
 		if (object.hidden || excludedObjectIds.has(object.id)) continue
@@ -442,6 +451,32 @@ export function snapDesignPoint(
 	if (!(worldScale > 0)) return { point, x: null, y: null, matches: [] }
 	const threshold = designSnapThreshold(settings.thresholdPixels, worldScale)
 	const scene = snapScene(sceneInput)
+	const lineSnap = settings.enabled.guides
+		? scene.guides
+				.map((guide, index) => ({
+					guide,
+					index,
+					distance: distanceToDesignGuide(point, guide),
+				}))
+				.filter(({ guide }) => designGuideAxis(guide) === null)
+				.filter(({ distance }) => distance <= threshold)
+				.toSorted(
+					(left, right) =>
+						left.distance - right.distance ||
+						left.guide.id.localeCompare(right.guide.id) ||
+						left.index - right.index,
+				)[0]
+		: undefined
+	if (lineSnap !== undefined) {
+		const projected = projectPointToGuide(point, lineSnap.guide)
+		return {
+			point: projected,
+			x: projected.x,
+			y: projected.y,
+			matches: [],
+			line: { guide: lineSnap.guide, label: "Guide" },
+		}
+	}
 	const xSnap = rankAxisCandidate(
 		point.x,
 		designSnapTargets(scene, "x", settings, excludedObjectIds),
@@ -570,6 +605,55 @@ function snapBoundsTranslation(
 		),
 		threshold,
 	)
+	const lineSnap = settings.enabled.guides
+		? [
+				{ x: bounds.minX, y: bounds.minY },
+				{ x: bounds.maxX, y: bounds.minY },
+				{
+					x: (bounds.minX + bounds.maxX) / 2,
+					y: (bounds.minY + bounds.maxY) / 2,
+				},
+				{ x: bounds.minX, y: bounds.maxY },
+				{ x: bounds.maxX, y: bounds.maxY },
+			]
+				.flatMap((anchor, anchorIndex) =>
+					scene.guides.flatMap((guide) => {
+						if (designGuideAxis(guide) !== null) return []
+						const projected = projectPointToGuide(anchor, guide)
+						const deltaX = projected.x - anchor.x
+						const deltaY = projected.y - anchor.y
+						return [
+							{
+								guide,
+								anchorIndex,
+								deltaX,
+								deltaY,
+								distance: Math.hypot(deltaX, deltaY),
+								projected,
+							},
+						]
+					}),
+				)
+				.filter(({ distance }) => distance <= threshold)
+				.toSorted(
+					(left, right) =>
+						left.distance - right.distance ||
+						left.guide.id.localeCompare(right.guide.id) ||
+						left.anchorIndex - right.anchorIndex,
+				)[0]
+		: undefined
+	const axisDistance = Math.hypot(xSnap?.value ?? 0, ySnap?.value ?? 0)
+	if (
+		lineSnap !== undefined &&
+		(xSnap === null && ySnap === null ? true : lineSnap.distance < axisDistance)
+	)
+		return {
+			deltaX: lineSnap.deltaX,
+			deltaY: lineSnap.deltaY,
+			x: lineSnap.projected.x,
+			y: lineSnap.projected.y,
+			matches: [],
+		}
 	return {
 		deltaX: xSnap?.value ?? 0,
 		deltaY: ySnap?.value ?? 0,

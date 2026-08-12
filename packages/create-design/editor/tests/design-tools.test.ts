@@ -14,12 +14,14 @@ describe("create-design tool registration", () => {
 			"ellipse",
 			"text",
 			"area-text",
+			"guide",
 		])
 		expect(DESIGN_TOOLS.artboard).toMatchObject({
 			label: "Artboard",
 			key: "B",
 		})
 		expect("rule" in DESIGN_TOOLS).toBe(false)
+		expect(DESIGN_TOOLS.guide).toMatchObject({ label: "Guide", key: "G" })
 		expect(
 			Object.values(DESIGN_TOOLS).some((tool) => String(tool.key) === "L"),
 		).toBe(false)
