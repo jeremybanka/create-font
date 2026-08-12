@@ -26,11 +26,11 @@
 		"release": "pnpm build && changeset publish",
 		"staged": "vp staged",
 		"test": "node --test ./scripts/dev-ports.test.ts ./scripts/dev-processes.test.ts ./scripts/server-shutdown.test.ts && mise exec -- cargo test --workspace && pnpm -r test",
-		"version-packages": "changeset version && dprint fmt --config .changeset/dprint-manifests.json --config-discovery=false"
+		"version-packages": "vp run --ignore-depends-on dprint-plugin-fea#build && changeset version"
 	},
 	"devDependencies": {
-		"@changesets/cli": "2.31.1",
-		"@changesets/config": "3.1.4",
+		"@changesets/cli": "3.0.0",
+		"@changesets/config": "4.0.0",
 		"@dprint/json": "0.23.0",
 		"@dprint/markdown": "0.22.1",
 		"@dprint/oxc": "0.34.0",
