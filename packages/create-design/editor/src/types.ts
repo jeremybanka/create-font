@@ -39,6 +39,7 @@ export type DesignTool =
 	| "transform"
 	| "artboard"
 	| "pen"
+	| "knife"
 	| "rect"
 	| "ellipse"
 	| "text"

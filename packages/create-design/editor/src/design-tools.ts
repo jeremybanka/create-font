@@ -2,6 +2,7 @@ import {
 	BorderAllIcon,
 	CircleIcon,
 	CursorArrowIcon,
+	HobbyKnifeIcon,
 	Pencil1Icon,
 	SquareIcon,
 	TextIcon,
@@ -45,6 +46,13 @@ export const DESIGN_TOOLS = {
 		key: "Q",
 		icon: Pencil1Icon,
 		paletteIcon: "Pencil1Icon",
+	},
+	knife: {
+		label: "Knife",
+		description: "Break an authored path at the clicked point.",
+		key: "K",
+		icon: HobbyKnifeIcon,
+		paletteIcon: "HobbyKnifeIcon",
 	},
 	rect: {
 		label: "Rectangle",
@@ -91,6 +99,7 @@ export const DESIGN_TOOLS = {
 		readonly paletteIcon:
 			| "CircleIcon"
 			| "CursorArrowIcon"
+			| "HobbyKnifeIcon"
 			| "Pencil1Icon"
 			| "SquareIcon"
 			| "TransformIcon"
