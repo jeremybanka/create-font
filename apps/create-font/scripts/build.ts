@@ -30,7 +30,8 @@ await Promise.all([
 				formats: [`es`],
 			},
 			outDir: outdir,
-			rollupOptions: {
+			reportCompressedSize: false,
+			rolldownOptions: {
 				external: externalPackage,
 			},
 			sourcemap: true,
@@ -50,7 +51,8 @@ await Promise.all([
 				formats: [`es`],
 			},
 			outDir: outdir,
-			rollupOptions: {
+			reportCompressedSize: false,
+			rolldownOptions: {
 				external: externalPackage,
 			},
 			sourcemap: true,

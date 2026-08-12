@@ -24,7 +24,8 @@ await Promise.all([
 				formats: [`es`],
 			},
 			outDir: outdir,
-			rollupOptions: { external: externalPackage },
+			reportCompressedSize: false,
+			rolldownOptions: { external: externalPackage },
 			sourcemap: true,
 			target: `node22`,
 		},
@@ -38,6 +39,7 @@ await Promise.all([
 			emptyOutDir: false,
 			minify: true,
 			outDir: outdir,
+			reportCompressedSize: false,
 			// HarfBuzz's universal wrapper dynamically imports this only in Node.
 			// Keep it external in this browser-only build so Vite does not shim it.
 			rolldownOptions: { external: ["module"] },

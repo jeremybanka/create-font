@@ -36,7 +36,8 @@ export async function buildBrowserApplication(
 			assetsDir: ``,
 			emptyOutDir: true,
 			outDir: outdir,
-			rollupOptions: {
+			reportCompressedSize: false,
+			rolldownOptions: {
 				input: {
 					glyphs: resolve(publicRoot, `glyphs/index.html`),
 					index: resolve(publicRoot, `index.html`),

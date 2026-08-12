@@ -44,7 +44,7 @@ mise-managed Rust toolchain:
 
 ```sh
 mise install
-pnpm --filter dprint-plugin-fea build
+pnpm exec vp run dprint-plugin-fea#build
 pnpm --filter dprint-plugin-fea test
 pnpm --filter dprint-plugin-fea pack --dry-run
 ```
