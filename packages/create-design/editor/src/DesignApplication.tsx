@@ -4,9 +4,11 @@ import {
 	canvasScale,
 	canvasToolCursor,
 	CommandPalette,
+	type CurvatureSide,
 	parseTilingLayout,
 	TilingWorkspace,
 	UiLayoutControl,
+	isCurvatureShortcut,
 	isCommandPaletteKeyboardEvent,
 	parseHotbarSlots,
 	readVectorClipboard,
@@ -44,6 +46,7 @@ import {
 	type KonvaEventObject,
 	Layer,
 	Line,
+	Path,
 	Rect,
 	Stage,
 	Text,
@@ -73,6 +76,7 @@ import {
 	validDesignAppearance,
 	type AppearancePaintTarget,
 } from "./appearance.ts"
+import { createDesignCurvatureComb } from "./design-curvature-comb.ts"
 import {
 	activeDesignArtboard,
 	copyDesignBlendSelection,
@@ -1317,6 +1321,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 	}, [])
 	const [helpOpen, setHelpOpen] = useState(false)
+	const [curvatureCombEnabled, setCurvatureCombEnabled] = useState(false)
+	const [curvatureCombSize, setCurvatureCombSize] = useState(1)
+	const [curvatureCombIntensity, setCurvatureCombIntensity] = useState(0.7)
+	const [curvatureCombSide, setCurvatureCombSide] =
+		useState<CurvatureSide>("outside")
 	const [transformCursor, setTransformCursor] = useState<CanvasCursor | null>(
 		null,
 	)
@@ -1842,6 +1851,21 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
+	const curvatureCombObjects = selectedObjects.filter((object) => {
+		const entry = effectiveHierarchy.byObjectId.get(object.id)
+		return (
+			entry?.visible === true &&
+			!entry.locked &&
+			object.geometry.kind !== "image" &&
+			object.geometry.kind !== "text"
+		)
+	})
+	const curvatureCombDisabledReason =
+		curvatureCombObjects.length > 0
+			? null
+			: selectedObjects.length === 0
+				? "Select one or more visible vector objects."
+				: "The selection has no visible, editable vector objects."
 	const cornerControlsForObject = (object: DesignObject) =>
 		object.geometry.kind !== "path" ||
 		object.hidden ||
@@ -4332,6 +4356,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	}
 
 	const designTileContext: DesignTileContext = {
+		curvatureCombEnabled,
+		curvatureCombDisabledReason,
+		curvatureCombSize,
+		curvatureCombIntensity,
+		curvatureCombSide,
+		setCurvatureCombEnabled,
+		setCurvatureCombSize,
+		setCurvatureCombIntensity,
+		setCurvatureCombSide,
 		activeLayerId,
 		activeGroupScope: groupScope,
 		selectedGroupId: selectedGroup?.id ?? null,
@@ -4924,6 +4957,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					do: () => selectTool(id),
 				}
 			}),
+			{
+				id: "toggle-curvature-comb",
+				displayName: "Toggle Curvature Comb",
+				category: "View",
+				description:
+					"Show a perpendicular, color-mapped diagnostic for selected cubic contours.",
+				icon: "Half2Icon",
+				keywords: ["speed punk", "bezier", "continuity", "comb"],
+				shortcut: `${MOD_KEY_LABEL}+Shift+X`,
+				checked: curvatureCombEnabled,
+				disabled: curvatureCombDisabledReason !== null,
+				...(curvatureCombDisabledReason === null
+					? {}
+					: { disabledReason: curvatureCombDisabledReason }),
+				do: () => setCurvatureCombEnabled((enabled) => !enabled),
+			},
 			{
 				id: "artboard-create",
 				displayName: "Create Artboard",
@@ -5612,6 +5661,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			appearanceDisabledReason,
 			appearanceTarget,
 			cancelPartitionPathfinder,
+			curvatureCombDisabledReason,
+			curvatureCombEnabled,
 			createArtboard,
 			deleteArtboard,
 			deleteSelection,
@@ -5929,7 +5980,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				openCommandPalette()
 				return
 			}
-			if (paletteOpen || editableTarget(event.target)) return
+			if (
+				paletteOpen ||
+				tilingStatus.management ||
+				editableTarget(event.target)
+			)
+				return
 			if (helpOpen && event.key === "Escape") {
 				event.preventDefault()
 				closeHelp()
@@ -5937,6 +5993,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			}
 			const mod = event.metaKey || event.ctrlKey
 			const key = event.key.toLowerCase()
+			if (isCurvatureShortcut(event, MAC_LIKE)) {
+				event.preventDefault()
+				if (curvatureCombDisabledReason === null || curvatureCombEnabled)
+					setCurvatureCombEnabled((enabled) => !enabled)
+				else setStatus(curvatureCombDisabledReason)
+				return
+			}
 			const stackCommand = designStackShortcutCommand(event, MAC_LIKE)
 			if (stackCommand !== null) {
 				event.preventDefault()
@@ -6137,6 +6200,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		deleteArtboard,
 		cancelCanvasGesture,
 		closeHelp,
+		curvatureCombDisabledReason,
+		curvatureCombEnabled,
 		directSelection,
 		document,
 		exportDocument,
@@ -6154,6 +6219,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		stackSelection,
 		swapSingleObjectAppearance,
 		tool,
+		tilingStatus.management,
 		ungroupSelection,
 		worldScale,
 	])
@@ -7928,6 +7994,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const canvasAuthoredObjects = canvasDocument.objects.map(
 		(object) => previewById.get(object.id) ?? object,
 	)
+	const canvasCurvatureComb = curvatureCombEnabled
+		? createDesignCurvatureComb(
+				canvasAuthoredObjects.flatMap((object) => {
+					const entry = effectiveHierarchy.byObjectId.get(object.id)
+					if (
+						!selection.includes(object.id) ||
+						entry?.visible !== true ||
+						entry.locked ||
+						object.geometry.kind === "image" ||
+						object.geometry.kind === "text"
+					)
+						return []
+					return [object]
+				}),
+				{
+					gain: curvatureCombSize,
+					side: curvatureCombSide,
+					referenceUnits: Math.max(activeArtboard.width, activeArtboard.height),
+				},
+			)
+		: []
 	const resolvedCanvasResolution = resolveDesignArtboardLinks(
 		{
 			...canvasDocument,
@@ -8791,6 +8878,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													</>,
 												)
 									})}
+									{canvasCurvatureComb.length === 0 ? null : (
+										<Group
+											name="design-curvature-comb"
+											opacity={curvatureCombIntensity}
+											listening={false}
+										>
+											{canvasCurvatureComb.map((cell, index) => (
+												<Path
+													key={`design-curvature-comb:${index}`}
+													name="design-curvature-comb-cell"
+													data={cell.path}
+													fill={cell.color}
+													strokeEnabled={false}
+													listening={false}
+												/>
+											))}
+										</Group>
+									)}
 									{canvasAuthoredObjects.flatMap((object) => {
 										const entry = effectiveHierarchy.byObjectId.get(object.id)
 										const selected = selection.includes(object.id)

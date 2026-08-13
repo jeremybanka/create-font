@@ -24,6 +24,7 @@ import type { ExportPreflightPreferences } from "@create-design/pdf"
 import type { PngExportRequest } from "@create-design/png"
 import type { SvgExportTarget, SvgImportResult } from "@create-design/svg"
 import type { DesignTextService } from "@create-design/text"
+import type { CurvatureSide } from "@create-art/editor"
 import type {
 	DesignAlignment,
 	DesignAlignmentTarget,
@@ -53,6 +54,7 @@ export type DesignTileKind =
 	| "pages"
 	| "layers"
 	| "canvas"
+	| "curvature-comb"
 	| "tools"
 	| "export"
 	| "object"
@@ -261,6 +263,15 @@ export interface DesignTileContext {
 	readonly updateSwatch: (swatch: DesignSwatch) => void
 	readonly versionControl?: DesignSourceReviewController
 	readonly zoom: number
+	readonly curvatureCombEnabled: boolean
+	readonly curvatureCombDisabledReason: string | null
+	readonly curvatureCombSize: number
+	readonly curvatureCombIntensity: number
+	readonly curvatureCombSide: CurvatureSide
+	readonly setCurvatureCombEnabled: (enabled: boolean) => void
+	readonly setCurvatureCombSize: (size: number) => void
+	readonly setCurvatureCombIntensity: (intensity: number) => void
+	readonly setCurvatureCombSide: (side: CurvatureSide) => void
 }
 
 const registrations = [
@@ -314,6 +325,18 @@ const registrations = [
 		defaultPlacement: { column: 3 },
 		render: ({ context }) =>
 			createElement(DesignTileContent, { context, kind: "tools" }),
+	},
+	{
+		kind: "curvature-comb",
+		name: "Curvature Comb",
+		description: "Toggle and tune the selected-object curvature diagnostic.",
+		defaultPlacement: { column: 3 },
+		command: { category: "View", icon: "Half2Icon" },
+		render: ({ context }) =>
+			createElement(DesignTileContent, {
+				context,
+				kind: "curvature-comb",
+			}),
 	},
 	{
 		kind: "object",
@@ -384,7 +407,9 @@ export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v4"
 export const RECENT_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v5"
-export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v6"
+export const PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY =
+	"create-design:tiling-workspace:v6"
+export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v7"
 
 function splitObjectInspectorTiles(layout: TilingLayout): TilingLayout {
 	const kinds = new Set(
@@ -442,6 +467,7 @@ export function migrateDesignTilingStorage(
 		const destination = `${DESIGN_TILING_STORAGE_KEY}:${suffix}`
 		if (storage.getItem(destination) !== null) continue
 		const legacy =
+			storage.getItem(`${PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${RECENT_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${PREVIOUS_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??
 			storage.getItem(`${LEGACY_DESIGN_TILING_STORAGE_KEY}:${suffix}`) ??

@@ -91,6 +91,7 @@ describe("tile registry", () => {
 			"version-control",
 			"font-navigation",
 			"canvas-toolbar",
+			"curvature-comb",
 			"kerning",
 			"preview",
 			"compatibility",
@@ -105,6 +106,7 @@ describe("tile registry", () => {
 			"font-navigation",
 			"version-control",
 			"canvas-toolbar",
+			"curvature-comb",
 			"glyph-attributes",
 		])
 	})

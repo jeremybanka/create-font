@@ -43,6 +43,18 @@ export {
 	type CubicSplit,
 } from "./cubic.ts"
 export {
+	createCurvatureComb,
+	sampleCubicCurvature,
+	type CurvatureCombCell,
+	type CurvatureCombOptions,
+	type CurvatureContour,
+	type CurvatureNode,
+	type CurvatureNormalDirection,
+	type CurvatureNormalResolver,
+	type CurvatureSample,
+	type CurvatureSampleLocation,
+} from "./curvature-comb.ts"
+export {
 	intersectCubicCurves,
 	intersectPolylines,
 	intersectSegments,

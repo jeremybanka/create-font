@@ -163,6 +163,7 @@ describe("tiling workspace", () => {
 		])
 		expect(layout.columns[2]?.tiles.map((tile) => tile.kind)).toEqual([
 			"canvas-toolbar",
+			"curvature-comb",
 		])
 		expect(layout.columns[3]?.tiles.map((tile) => tile.kind)).toEqual([
 			"glyph-attributes",
@@ -184,7 +185,7 @@ describe("tiling workspace", () => {
 		expect(atTop.columns[3]?.tiles[0]?.id).toBe(added.tileId)
 		expect(findTile(moved, added.tileId)).toMatchObject({
 			columnId: 3,
-			index: 1,
+			index: 2,
 		})
 		expect(findTile(moved, added.tileId)?.tile.kind).toBe("glyph-attributes")
 	})
@@ -249,7 +250,11 @@ describe("tiling workspace", () => {
 			withoutNavigation,
 			"canvas-toolbar:default",
 		)
-		const empty = removeTile(withoutToolbar, "glyph-attributes:default")
+		const withoutCurvature = removeTile(
+			withoutToolbar,
+			"curvature-comb:default",
+		)
+		const empty = removeTile(withoutCurvature, "glyph-attributes:default")
 		const completelyEmpty = removeTile(empty, "version-control:default")
 
 		expect(
@@ -319,7 +324,10 @@ describe("tiling workspace", () => {
 		const column = legacy.columns.find((item) => item.id === 3)
 		if (column === undefined) throw new Error("Column 3 is missing.")
 		column.collapsed = true
-		column.tiles = column.tiles.filter((tile) => tile.kind !== "canvas-toolbar")
+		column.tiles = column.tiles.filter(
+			(tile) =>
+				tile.kind !== "canvas-toolbar" && tile.kind !== "curvature-comb",
+		)
 		const versionControlColumn = legacy.columns.find((item) => item.id === 2)
 		if (versionControlColumn === undefined)
 			throw new Error("Column 2 is missing.")

@@ -6,6 +6,7 @@ import {
 	DESIGN_TILE_REGISTRY,
 	LEGACY_DESIGN_TILING_STORAGE_KEY,
 	migrateDesignTilingStorage,
+	PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY,
 	PREVIOUS_DESIGN_TILING_STORAGE_KEY,
 	RECENT_DESIGN_TILING_STORAGE_KEY,
 } from "../src/design-tile-registry.ts"
@@ -19,6 +20,7 @@ describe("create-design tile registry", () => {
 			"canvas",
 			"export",
 			"tools",
+			"curvature-comb",
 			"object",
 			"blend",
 			"transform",
@@ -33,7 +35,7 @@ describe("create-design tile registry", () => {
 		).toEqual([
 			["pages", "layers"],
 			["version-control", "canvas", "export"],
-			["tools"],
+			["tools", "curvature-comb"],
 			["object", "blend", "transform", "arrange", "typography", "appearance"],
 		])
 		const tools = DEFAULT_DESIGN_TILING_LAYOUT.columns
@@ -70,6 +72,34 @@ describe("create-design tile registry", () => {
 		).toBe(false)
 	})
 
+	it("preserves customized v6 layouts without inserting the new tile", () => {
+		const previous = JSON.stringify({
+			...DEFAULT_DESIGN_TILING_LAYOUT,
+			columns: DEFAULT_DESIGN_TILING_LAYOUT.columns.map((column) => ({
+				...column,
+				tiles: column.tiles.filter((tile) => tile.kind !== "curvature-comb"),
+			})),
+		})
+		const values = new Map<string, string>([
+			[`${PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY}:saved:v1`, previous],
+			[`${PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY}:draft:v1`, previous],
+		])
+		migrateDesignTilingStorage({
+			getItem: (key) => values.get(key) ?? null,
+			setItem: (key, value) => values.set(key, value),
+		})
+		for (const suffix of ["saved:v1", "draft:v1"]) {
+			const migrated = JSON.parse(
+				values.get(`${DESIGN_TILING_STORAGE_KEY}:${suffix}`) ?? "null",
+			) as typeof DEFAULT_DESIGN_TILING_LAYOUT
+			expect(
+				migrated.columns.flatMap((column) =>
+					column.tiles.map((tile) => tile.kind),
+				),
+			).not.toContain("curvature-comb")
+		}
+	})
+
 	it("adds Blend, Transform, and Arrange beside customized v4 Object tiles", () => {
 		const previousLayout = {
 			...DEFAULT_DESIGN_TILING_LAYOUT,
@@ -78,6 +108,7 @@ describe("create-design tile registry", () => {
 				tiles: column.tiles.filter(
 					(tile) =>
 						tile.kind !== "version-control" &&
+						tile.kind !== "curvature-comb" &&
 						tile.kind !== "blend" &&
 						tile.kind !== "transform" &&
 						tile.kind !== "arrange",

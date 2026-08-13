@@ -4,6 +4,10 @@ design-tile-content.class {
 	min-height: 0;
 	height: 100%;
 
+	> design-curvature-comb-tile {
+		display: contents;
+	}
+
 	> design-pages-tile,
 	> design-layers-tile,
 	> design-canvas-tile,
