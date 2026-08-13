@@ -4,6 +4,7 @@ import {
 	canvasScale,
 	canvasToolCursor,
 	CommandPalette,
+	type CurvatureSide,
 	parseTilingLayout,
 	TilingWorkspace,
 	UiLayoutControl,
@@ -51,10 +52,6 @@ import {
 	Text,
 } from "@create-art/editor"
 import {
-	createCurvatureComb,
-	type CurvatureSide,
-} from "@create-art/vector-geometry"
-import {
 	Cross2Icon,
 	MagnifyingGlassIcon,
 	QuestionMarkCircledIcon,
@@ -79,6 +76,7 @@ import {
 	validDesignAppearance,
 	type AppearancePaintTarget,
 } from "./appearance.ts"
+import { createDesignCurvatureComb } from "./design-curvature-comb.ts"
 import {
 	activeDesignArtboard,
 	copyDesignBlendSelection,
@@ -7997,7 +7995,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		(object) => previewById.get(object.id) ?? object,
 	)
 	const canvasCurvatureComb = curvatureCombEnabled
-		? createCurvatureComb(
+		? createDesignCurvatureComb(
 				canvasAuthoredObjects.flatMap((object) => {
 					const entry = effectiveHierarchy.byObjectId.get(object.id)
 					if (
@@ -8008,8 +8006,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						object.geometry.kind === "text"
 					)
 						return []
-					return projectDesignVectorRenderObject(canvasDocument, object)
-						.contours
+					return [object]
 				}),
 				{
 					gain: curvatureCombSize,

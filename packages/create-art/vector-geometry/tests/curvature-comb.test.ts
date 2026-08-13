@@ -48,12 +48,12 @@ describe("curvature comb", () => {
 		}
 		const outside = createCurvatureComb([contour], {
 			gain: 1,
-			side: "outside",
+			normalDirection: "right",
 			referenceUnits: 1_000,
 		})
 		const signed = createCurvatureComb([contour], {
 			gain: 1,
-			side: "signed",
+			normalDirection: "curvature",
 			referenceUnits: 1_000,
 		})
 		expect(outside).toHaveLength(400)
@@ -61,6 +61,33 @@ describe("curvature comb", () => {
 		expect(outside[0]?.path).not.toBe(signed[0]?.path)
 		expect(outside.every(({ curvature }) => Number.isFinite(curvature))).toBe(
 			true,
+		)
+	})
+
+	it("delegates normal selection with exact contour and segment context", () => {
+		const contour = {
+			closed: false,
+			nodes: [
+				{ x: 0, y: 0, outgoing: { x: 0, y: 100 } },
+				{ x: 100, y: 0, incoming: { x: 0, y: 100 } },
+			],
+		}
+		const locations: { contourIndex: number; segmentIndex: number }[] = []
+		const cells = createCurvatureComb([contour], {
+			gain: 1,
+			normalDirection: (_sample, location) => {
+				locations.push(location)
+				return location.t < 0.5 ? "left" : "right"
+			},
+			referenceUnits: 1_000,
+		})
+		expect(cells).toHaveLength(400)
+		expect(locations).toHaveLength(401)
+		expect(new Set(locations.map(({ contourIndex }) => contourIndex))).toEqual(
+			new Set([0]),
+		)
+		expect(new Set(locations.map(({ segmentIndex }) => segmentIndex))).toEqual(
+			new Set([0]),
 		)
 	})
 
@@ -77,7 +104,7 @@ describe("curvature comb", () => {
 		expect(
 			createCurvatureComb(straight, {
 				gain: 1,
-				side: "outside",
+				normalDirection: "right",
 				referenceUnits: 1_000,
 			}),
 		).toEqual([])
@@ -94,7 +121,7 @@ describe("curvature comb", () => {
 				],
 				{
 					gain: Number.NaN,
-					side: "outside",
+					normalDirection: "right",
 					referenceUnits: 0,
 				},
 			),

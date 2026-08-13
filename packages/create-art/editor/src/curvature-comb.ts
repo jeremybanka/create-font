@@ -7,6 +7,9 @@ export type CurvatureShortcutEvent = Readonly<{
 	shiftKey: boolean
 }>
 
+/** Product-facing display modes; each product resolves "outside" itself. */
+export type CurvatureSide = "outside" | "signed"
+
 /** Matches Speed Punk's original platform-Mod+Shift+X shortcut. */
 export function isCurvatureShortcut(
 	event: CurvatureShortcutEvent,

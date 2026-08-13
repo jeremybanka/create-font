@@ -24,7 +24,7 @@ import type { ExportPreflightPreferences } from "@create-design/pdf"
 import type { PngExportRequest } from "@create-design/png"
 import type { SvgExportTarget, SvgImportResult } from "@create-design/svg"
 import type { DesignTextService } from "@create-design/text"
-import type { CurvatureSide } from "@create-art/vector-geometry"
+import type { CurvatureSide } from "@create-art/editor"
 import type {
 	DesignAlignment,
 	DesignAlignmentTarget,

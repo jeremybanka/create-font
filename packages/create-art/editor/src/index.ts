@@ -185,6 +185,7 @@ export { SourceReviewSurface } from "./SourceReviewSurface.tsx"
 export { keyboardStepMultiplier, stepBoundedNumber } from "./keyboard-step.ts"
 export {
 	isCurvatureShortcut,
+	type CurvatureSide,
 	type CurvatureShortcutEvent,
 } from "./curvature-comb.ts"
 export { IS_MAC_LIKE, MOD_KEY_LABEL, isMacLike } from "./platform.ts"

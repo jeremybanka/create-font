@@ -1,9 +1,8 @@
-import type { CurvatureSide } from "@create-art/vector-geometry"
-
 import { TileCheckbox } from "./TileCheckbox.tsx"
 import { TileNumericField } from "./TileNumericField.tsx"
 import { TileSelect } from "./TileSelect.tsx"
 import css from "./CurvatureCombControls.module.css"
+import type { CurvatureSide } from "./curvature-comb.ts"
 
 export interface CurvatureCombControlsProps {
 	readonly enabled: boolean
@@ -73,7 +72,7 @@ export function CurvatureCombControls({
 				label="Direction"
 				value={side}
 				disabled={settingsDisabled}
-				description="Outer keeps every tooth outside; Signed reveals curvature direction."
+				description="Outer follows the product's exterior convention; open paths use Signed curvature."
 				onChange={(event) =>
 					onSideChange(event.currentTarget.value as CurvatureSide)
 				}

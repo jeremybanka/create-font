@@ -858,7 +858,8 @@ export function GlyphCanvas({
 			showCurvature
 				? createCurvatureComb(visibleContours, {
 						gain: curvatureGain,
-						side: curvatureSide,
+						normalDirection:
+							curvatureSide === "outside" ? "right" : "curvature",
 						referenceUnits: metadata.unitsPerEm,
 					})
 				: [],

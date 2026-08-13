@@ -5,7 +5,6 @@ export {
 	type CurvatureCombOptions,
 	type CurvatureContour,
 	type CurvatureSample,
-	type CurvatureSide,
 } from "@create-art/vector-geometry"
 
-export { isCurvatureShortcut } from "@create-art/editor"
+export { isCurvatureShortcut, type CurvatureSide } from "@create-art/editor"

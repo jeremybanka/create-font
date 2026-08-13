@@ -8,7 +8,7 @@
 
 import type { Cubic, Point } from "./types.ts"
 
-export type CurvatureSide = "outside" | "signed"
+export type CurvatureNormalDirection = "left" | "right" | "curvature"
 
 export interface CurvatureNode extends Point {
 	readonly incoming?: Point
@@ -34,10 +34,26 @@ export interface CurvatureCombCell {
 
 export interface CurvatureCombOptions {
 	readonly gain: number
-	readonly side: CurvatureSide
+	/**
+	 * Chooses the normal independently from any product winding convention.
+	 * A resolver may return null when a sampled segment has no meaningful side.
+	 */
+	readonly normalDirection: CurvatureNormalDirection | CurvatureNormalResolver
 	/** Product-space reference length, such as font UPM or artboard extent. */
 	readonly referenceUnits: number
 }
+
+export interface CurvatureSampleLocation {
+	readonly contour: CurvatureContour
+	readonly contourIndex: number
+	readonly segmentIndex: number
+	readonly t: number
+}
+
+export type CurvatureNormalResolver = (
+	sample: CurvatureSample,
+	location: CurvatureSampleLocation,
+) => CurvatureNormalDirection | null
 
 const TOTAL_SUBDIVISIONS = 400
 const MIN_SUBDIVISIONS = 4
@@ -116,11 +132,13 @@ function interpolateColor(amount: number): string {
 function tip(
 	sample: CurvatureSample,
 	scale: number,
-	side: CurvatureSide,
+	direction: CurvatureNormalDirection,
 ): Point {
 	const speed = Math.hypot(sample.tangent.x, sample.tangent.y)
 	const signedCurvature =
-		side === "outside" ? Math.abs(sample.curvature) : sample.curvature
+		direction === "curvature"
+			? sample.curvature
+			: Math.abs(sample.curvature) * (direction === "right" ? 1 : -1)
 	const length = signedCurvature * scale
 	return {
 		x: sample.point.x + (sample.tangent.y / speed) * length,
@@ -128,7 +146,17 @@ function tip(
 	}
 }
 
-function contourCubics(contour: CurvatureContour): readonly Cubic[] {
+interface LocatedCubic {
+	readonly contour: CurvatureContour
+	readonly contourIndex: number
+	readonly cubic: Cubic
+	readonly segmentIndex: number
+}
+
+function contourCubics(
+	contour: CurvatureContour,
+	contourIndex: number,
+): readonly LocatedCubic[] {
 	const segmentCount = Math.max(
 		0,
 		contour.nodes.length - (contour.closed ? 0 : 1),
@@ -143,18 +171,23 @@ function contourCubics(contour: CurvatureContour): readonly Cubic[] {
 		)
 			return null
 		return {
-			p0: { x: from.x, y: from.y },
-			c1: {
-				x: from.x + (from.outgoing?.x ?? 0),
-				y: from.y + (from.outgoing?.y ?? 0),
+			contour,
+			contourIndex,
+			segmentIndex,
+			cubic: {
+				p0: { x: from.x, y: from.y },
+				c1: {
+					x: from.x + (from.outgoing?.x ?? 0),
+					y: from.y + (from.outgoing?.y ?? 0),
+				},
+				c2: {
+					x: to.x + (to.incoming?.x ?? 0),
+					y: to.y + (to.incoming?.y ?? 0),
+				},
+				p3: { x: to.x, y: to.y },
 			},
-			c2: {
-				x: to.x + (to.incoming?.x ?? 0),
-				y: to.y + (to.incoming?.y ?? 0),
-			},
-			p3: { x: to.x, y: to.y },
 		}
-	}).filter((cubic): cubic is Cubic => cubic !== null)
+	}).filter((entry): entry is LocatedCubic => entry !== null)
 }
 
 /** Builds colored perpendicular cells for every usable cubic segment. */
@@ -170,20 +203,37 @@ export function createCurvatureComb(
 	)
 		return []
 
-	const cubics = contours.flatMap(contourCubics)
+	const cubics = contours.flatMap((contour, contourIndex) =>
+		contourCubics(contour, contourIndex),
+	)
 	if (cubics.length === 0) return []
 	const subdivisions = Math.max(
 		MIN_SUBDIVISIONS,
 		Math.floor(TOTAL_SUBDIVISIONS / cubics.length),
 	)
-	const sampled = cubics.map((cubic) =>
-		Array.from({ length: subdivisions + 1 }, (_, index) =>
-			sampleCubicCurvature(cubic, index / subdivisions),
-		),
+	const sampled = cubics.map((entry) =>
+		Array.from({ length: subdivisions + 1 }, (_, index) => {
+			const t = index / subdivisions
+			const sample = sampleCubicCurvature(entry.cubic, t)
+			if (sample === null) return null
+			const location = {
+				contour: entry.contour,
+				contourIndex: entry.contourIndex,
+				segmentIndex: entry.segmentIndex,
+				t,
+			}
+			const direction =
+				typeof options.normalDirection === "function"
+					? options.normalDirection(sample, location)
+					: options.normalDirection
+			return direction === null ? null : { direction, sample }
+		}),
 	)
 	const magnitudes = sampled.flatMap((samples) =>
-		samples.flatMap((sample) =>
-			sample === null ? [] : [Math.abs(sample.curvature) * DRAW_FACTOR],
+		samples.flatMap((resolved) =>
+			resolved === null
+				? []
+				: [Math.abs(resolved.sample.curvature) * DRAW_FACTOR],
 		),
 	)
 	if (magnitudes.length === 0) return []
@@ -198,10 +248,12 @@ export function createCurvatureComb(
 			const previous = samples[index]
 			if (previous === undefined || previous === null || current === null)
 				return []
-			const previousTip = tip(previous, scale, options.side)
-			const currentTip = tip(current, scale, options.side)
+			const previousTip = tip(previous.sample, scale, previous.direction)
+			const currentTip = tip(current.sample, scale, current.direction)
 			const magnitude =
-				((Math.abs(previous.curvature) + Math.abs(current.curvature)) / 2) *
+				((Math.abs(previous.sample.curvature) +
+					Math.abs(current.sample.curvature)) /
+					2) *
 				DRAW_FACTOR
 			const colorPosition =
 				range <= SPEED_EPSILON ? 0.5 : (magnitude - min) / range
@@ -209,7 +261,7 @@ export function createCurvatureComb(
 				{
 					color: interpolateColor(colorPosition),
 					curvature: magnitude,
-					path: `M${format(previous.point.x)} ${format(previous.point.y)}L${format(current.point.x)} ${format(current.point.y)}L${format(currentTip.x)} ${format(currentTip.y)}L${format(previousTip.x)} ${format(previousTip.y)}Z`,
+					path: `M${format(previous.sample.point.x)} ${format(previous.sample.point.y)}L${format(current.sample.point.x)} ${format(current.sample.point.y)}L${format(currentTip.x)} ${format(currentTip.y)}L${format(previousTip.x)} ${format(previousTip.y)}Z`,
 				},
 			]
 		}),

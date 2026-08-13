@@ -49,8 +49,10 @@ export {
 	type CurvatureCombOptions,
 	type CurvatureContour,
 	type CurvatureNode,
+	type CurvatureNormalDirection,
+	type CurvatureNormalResolver,
 	type CurvatureSample,
-	type CurvatureSide,
+	type CurvatureSampleLocation,
 } from "./curvature-comb.ts"
 export {
 	intersectCubicCurves,
