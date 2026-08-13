@@ -39,8 +39,9 @@ const pathObject = (
 })
 
 const tips = (path: string): readonly { x: number; y: number }[] => {
-	const values = [...path.matchAll(/[ML](-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g)]
-		.map((match) => ({ x: Number(match[1]), y: Number(match[2]) }))
+	const values = [
+		...path.matchAll(/[ML](-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g),
+	].map((match) => ({ x: Number(match[1]), y: Number(match[2]) }))
 	return values.slice(2)
 }
 
@@ -67,9 +68,9 @@ describe("create-design curvature-comb topology", () => {
 			const cells = outerCells([object])
 			expect(cells).toHaveLength(400)
 			expect(
-				cells.flatMap(({ path }) => tips(path)).every((tip) =>
-					!hitTest.containsPoint(tip),
-				),
+				cells
+					.flatMap(({ path }) => tips(path))
+					.every((tip) => !hitTest.containsPoint(tip)),
 			).toBe(true)
 		}
 	})
@@ -92,32 +93,30 @@ describe("create-design curvature-comb topology", () => {
 			const cells = outerCells([object])
 			expect(cells).toHaveLength(400)
 			expect(
-				cells.flatMap(({ path }) => tips(path)).every((tip) =>
-					!hitTest.containsPoint(tip),
-				),
+				cells
+					.flatMap(({ path }) => tips(path))
+					.every((tip) => !hitTest.containsPoint(tip)),
 			).toBe(true)
 		}
 
-		const filledNested = pathObject("filled-nested", [outer, counter], "nonzero")
+		const filledNested = pathObject(
+			"filled-nested",
+			[outer, counter],
+			"nonzero",
+		)
 		// The same-winding nested contour is not a boundary under nonzero fill.
 		expect(outerCells([filledNested])).toHaveLength(200)
 	})
 
 	it("budgets cells across multiple objects while resolving each topology", () => {
 		const first = pathObject("first", [
-			ellipseContour(
-				{ minX: 0, minY: 0, maxX: 100, maxY: 100 },
-				"first",
-			),
+			ellipseContour({ minX: 0, minY: 0, maxX: 100, maxY: 100 }, "first"),
 		])
 		const second = pathObject(
 			"second",
 			[
 				reverseContour(
-					ellipseContour(
-						{ minX: 0, minY: 0, maxX: 100, maxY: 100 },
-						"second",
-					),
+					ellipseContour({ minX: 0, minY: 0, maxX: 100, maxY: 100 }, "second"),
 				),
 			],
 			"evenodd",

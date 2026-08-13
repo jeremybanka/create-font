@@ -78,12 +78,8 @@ export function createDesignCurvatureComb(
 				nodes: contour.points.map((point) => ({
 					x: point.x,
 					y: point.y,
-					...(point.incoming === undefined
-						? {}
-						: { incoming: point.incoming }),
-					...(point.outgoing === undefined
-						? {}
-						: { outgoing: point.outgoing }),
+					...(point.incoming === undefined ? {} : { incoming: point.incoming }),
+					...(point.outgoing === undefined ? {} : { outgoing: point.outgoing }),
 				})),
 			}
 			resolverByContour.set(projected, resolver)
