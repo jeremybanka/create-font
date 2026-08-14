@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/pdf",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Headless PDF projection, preflight, and serialization for create-design documents",
 	"license": "MPL-2.0",
 	"repository": {

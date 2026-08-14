@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/text",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"description": "Runtime-portable canonical text layout and outline projection for create-design",
 	"license": "MPL-2.0",
 	"repository": {

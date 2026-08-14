@@ -1,5 +1,39 @@
 # create-font
 
+## 0.3.18
+
+### Patch Changes
+
+- cd55b47: Include the shared editor component styles in the create-font CLI browser stylesheet.
+- 350ae8c: Give the Create Art CLI servers distinctive default ports and shut down CLI and repository development process trees cleanly on Ctrl-C.
+- cdd7a49: Add `@create-font/glyphs-app` with a bounded Glyphs.app 2/3 source parser, preserved source AST, explicit create-font lowering, and a parser-only runtime entry. Import the resulting master-local cubic outlines, recursively expanded components, axes, instances, cmap, default-master kerning, and diagnostics through atomic project creation. Keep `font dev` alive and reliably serve the browser application from source-linked and installed packages.
+- eed238c: Add an accessible workspace font selector with isolated project RPC routes,
+  reloadable project URLs, guarded saving, and project-scoped recovery drafts.
+- 653eb46: Persist versioned named UI layouts from grouped home and project ui.json sources through the tile-management HUD in create-font and create-design, including supported locations reached through filesystem symlinks.
+- f99d64d: Infer conservative same-contour overlap-built corners from geometry and show authored overflow spans as subdued editor guides without changing ordinary overlapping contours.
+- Updated dependencies [3275452]
+- Updated dependencies [cd55b47]
+- Updated dependencies [e56860f]
+- Updated dependencies [7c9c382]
+- Updated dependencies [0c0fca5]
+- Updated dependencies [cdd7a49]
+- Updated dependencies [207c441]
+- Updated dependencies [bbf22f4]
+- Updated dependencies [eed238c]
+- Updated dependencies [8818c4f]
+- Updated dependencies [87ccb07]
+- Updated dependencies [ee1891e]
+- Updated dependencies [653eb46]
+- Updated dependencies [7c9c382]
+- Updated dependencies [f99d64d]
+  - @create-art/source-rpc@0.1.3
+  - @create-font/editor@0.9.2
+  - @create-font/states@0.7.1
+  - @create-font/source@0.2.10
+  - @create-font/glyphs-app@0.0.1
+  - @create-font/server@0.2.4
+  - @create-art/ui-layout@0.1.1
+
 ## 0.3.17
 
 ### Patch Changes

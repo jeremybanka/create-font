@@ -1,5 +1,20 @@
 # @create-font/states
 
+## 0.7.1
+
+### Patch Changes
+
+- e56860f: Add durable circular and squircle corner profiles with shared inset controls,
+  deterministic lowering, safe adjacent-corner clamping, accessible numeric
+  editing, undoable multi-master font edits, and output/compiler parity.
+- f99d64d: Infer conservative same-contour overlap-built corners from geometry and show authored overflow spans as subdued editor guides without changing ordinary overlapping contours.
+- Updated dependencies [e56860f]
+- Updated dependencies [eed238c]
+- Updated dependencies [8818c4f]
+- Updated dependencies [f99d64d]
+  - @create-art/vector-geometry@0.0.3
+  - @create-font/server@0.2.4
+
 ## 0.7.0
 
 ### Minor Changes

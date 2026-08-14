@@ -1,5 +1,16 @@
 # @create-font/source
 
+## 0.2.10
+
+### Patch Changes
+
+- e56860f: Add durable circular and squircle corner profiles with shared inset controls,
+  deterministic lowering, safe adjacent-corner clamping, accessible numeric
+  editing, undoable multi-master font edits, and output/compiler parity.
+- Updated dependencies [e56860f]
+- Updated dependencies [f99d64d]
+  - @create-font/states@0.7.1
+
 ## 0.2.9
 
 ### Patch Changes

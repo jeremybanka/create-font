@@ -1,5 +1,103 @@
 # create-design
 
+## 0.3.0
+
+### Minor Changes
+
+- dc18f81: Use `create-design` to scaffold workspaces and add projects, and move existing-project operations to the new `design` CLI with `build`, `check`, `dev`, `serve`, and `export` commands.
+
+### Patch Changes
+
+- 3275452: Add editable point and area text, canonical font shaping and outline projection,
+  persistent source fonts, PDF text lowering, overset diagnostics, and undoable
+  text expansion. Use ready browser faces in the native editing overlay and exact
+  layout/ink bounds for text selection, transforms, whitespace hit testing, and
+  dragging. Rehydrate installed font bytes before reload preflight, reject stale
+  browser font loads, and let whitespace double-clicks enter text editing.
+  Keep canonical glyph outlines visually authoritative while the accessible native
+  surface owns caret, selection, composition, and input. Store authored text in
+  stable adjacent raw UTF-8 `.txt` units with lossless inline-source migration and
+  coherent source/version-control transactions.
+  Absorb proportional Point and Area Text resizing into canonical typography and
+  frame metrics, including mixed selections and repeated transforms, while
+  preserving anchored world geometry. Keep the native editor's content width
+  independent of its border and prevent Point Text from soft-wrapping so caret and
+  selection insertion boundaries remain aligned with shaped glyph advances.
+
+  Keep installed font inventories and binary files coherent across comparison and
+  selective version-control commits.
+- 1a9b87b: Add authored layer UI colors, layer-colored selection outlines and fills, and a neutral layer-agnostic selection marquee.
+- 350ae8c: Give the Create Art CLI servers distinctive default ports and shut down CLI and repository development process trees cleanly on Ctrl-C.
+- 6421beb: Add placed raster images and editable clipping masks across source projects, canvas rendering, and PDF/SVG export.
+- 48db2a7: Add a canonical create-design logo and demonstrate portable live artboard links by placing it in the Workbench Poster sample. Make live links discoverable in the Layers and Object tiles, treat their artboard bounds as a single snapping object, and carry placement scale into stroke widths and dash metrics.
+- 8a6aee9: Add deterministic PNG export, browser worker downloads and live preview, and CLI batch parity.
+- 2bc8b32: Import Adobe Illustrator's native revisable source into a shared canvas
+  hierarchy with original artboards, layers, vector paint, clipping, compound
+  paths, and live text instead of treating embedded PDF preview pages as artwork.
+- 6376ef1: Finish first-class layers with hierarchy reparenting, stable source synchronization, semantic review, and a representative multi-layer fixture.
+- 5c9197e: Preserve linked artboard paints, artboard backgrounds, live text and image resources, clipping, visibility and locking, and atomic selection across canvas and headless PDF, SVG, and PNG exports, with explicit diagnostics for unresolved and cyclic references.
+- bbf22f4: Add workspace design switching and versioned portable live linked-artboard objects, including browser canvas/export projection and isolated recovery state.
+- 653eb46: Persist versioned named UI layouts from grouped home and project ui.json sources through the tile-management HUD in create-font and create-design, including supported locations reached through filesystem symlinks.
+- 17f9651: Add deterministic SVG import, artboard export, browser download and live preview, and CLI parity with structured unsupported-content diagnostics.
+- Updated dependencies [3fb4abf]
+- Updated dependencies [2309f2e]
+- Updated dependencies [3275452]
+- Updated dependencies [bbf22f4]
+- Updated dependencies [1a9b87b]
+- Updated dependencies [de6ecbb]
+- Updated dependencies [cbbd99d]
+- Updated dependencies [6421beb]
+- Updated dependencies [48db2a7]
+- Updated dependencies [e56860f]
+- Updated dependencies [27a2793]
+- Updated dependencies [3fb4abf]
+- Updated dependencies [8a6aee9]
+- Updated dependencies [c80b294]
+- Updated dependencies [7c9c382]
+- Updated dependencies [1b2118e]
+- Updated dependencies [14b1e64]
+- Updated dependencies [b477f39]
+- Updated dependencies [2bc8b32]
+- Updated dependencies [207c441]
+- Updated dependencies [6376ef1]
+- Updated dependencies [bbf22f4]
+- Updated dependencies [00c892a]
+- Updated dependencies [5c9197e]
+- Updated dependencies [e2a54d3]
+- Updated dependencies [8818c4f]
+- Updated dependencies [fa8a287]
+- Updated dependencies [b09bcd4]
+- Updated dependencies [85e4b7a]
+- Updated dependencies [3d7e4d5]
+- Updated dependencies [664804c]
+- Updated dependencies [bd38221]
+- Updated dependencies [bbf22f4]
+- Updated dependencies [653eb46]
+- Updated dependencies [62c9d01]
+- Updated dependencies [3fb4abf]
+- Updated dependencies [7c9c382]
+- Updated dependencies [46d635f]
+- Updated dependencies [4da41fb]
+- Updated dependencies [be88c18]
+- Updated dependencies [6a40a28]
+- Updated dependencies [864121c]
+- Updated dependencies [db30f7b]
+- Updated dependencies [e166e2c]
+- Updated dependencies [17f9651]
+- Updated dependencies [f0710f5]
+- Updated dependencies [85b9bb9]
+- Updated dependencies [884a88e]
+  - @create-design/editor@0.3.0
+  - @create-art/source-rpc@0.1.3
+  - @create-design/model@0.2.0
+  - @create-design/pdf@0.1.2
+  - @create-design/source@0.4.0
+  - @create-design/svg@0.1.0
+  - @create-design/text@0.0.1
+  - @create-design/ai@0.0.1
+  - @create-design/png@0.1.0
+  - @create-art/ui-layout@0.1.1
+
 ## 0.2.2
 
 ### Patch Changes
