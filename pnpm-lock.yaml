@@ -354,8 +354,8 @@ importers:
   packages/create-art/realtime:
     dependencies:
       atom.io:
-        specifier: 0.51.1
-        version: 0.51.1(@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@typescript-eslint/parser@8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.2)(socket.io-client@4.8.3(supports-color@7.2.0))(socket.io@4.8.3(supports-color@7.2.0))
+        specifier: 0.51.3
+        version: 0.51.3(@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@typescript-eslint/parser@8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.2)(socket.io-client@4.8.3(supports-color@7.2.0))(socket.io@4.8.3(supports-color@7.2.0))
     devDependencies:
       '@testing-library/react':
         specifier: 16.3.2
@@ -2536,41 +2536,6 @@ packages:
 
   atom.io@0.50.1:
     resolution: {integrity: sha512-yEYoDsTRpk/+SNOlWJgrNf5onPxGoYKFseVIrcEaWJ6JSLOV7h20y24ccNbc4uR10tqKxzo7BCPRlFNZDzHPwA==}
-    peerDependencies:
-      '@floating-ui/react': '>=0.25.0'
-      '@floating-ui/react-dom': '>=2.0.0'
-      '@testing-library/react': '>=14.0.0'
-      '@typescript-eslint/parser': '>=8.0.0'
-      eslint: '>=9.0.0'
-      happy-dom: '>=17.4.4'
-      motion: '>=11.0.0'
-      socket.io: '>=4.0.0'
-      socket.io-client: '>=4.0.0'
-      solid-js: ^1.9.0
-    peerDependenciesMeta:
-      '@floating-ui/react':
-        optional: true
-      '@floating-ui/react-dom':
-        optional: true
-      '@testing-library/react':
-        optional: true
-      '@typescript-eslint/parser':
-        optional: true
-      eslint:
-        optional: true
-      happy-dom:
-        optional: true
-      motion:
-        optional: true
-      socket.io:
-        optional: true
-      socket.io-client:
-        optional: true
-      solid-js:
-        optional: true
-
-  atom.io@0.51.1:
-    resolution: {integrity: sha512-tbVMqIox2dAPmz0WAsSQMh1hihIqKut+u4iD2ZfyUjPagKpuKPT6KKrSvdWDJzcWShxqoPW7IT+HLoR/vq8H3Q==}
     peerDependencies:
       '@floating-ui/react': '>=0.25.0'
       '@floating-ui/react-dom': '>=2.0.0'
@@ -5819,15 +5784,6 @@ snapshots:
   asynckit@0.4.0: {}
 
   atom.io@0.50.1(@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@typescript-eslint/parser@8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.2)(socket.io-client@4.8.3(supports-color@7.2.0))(socket.io@4.8.3(supports-color@7.2.0)):
-    optionalDependencies:
-      '@testing-library/react': 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@typescript-eslint/parser': 8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
-      eslint: 10.8.1(jiti@2.7.0)(supports-color@7.2.0)
-      happy-dom: 20.11.2
-      socket.io: 4.8.3(supports-color@7.2.0)
-      socket.io-client: 4.8.3(supports-color@7.2.0)
-
-  atom.io@0.51.1(@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@typescript-eslint/parser@8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.2)(socket.io-client@4.8.3(supports-color@7.2.0))(socket.io@4.8.3(supports-color@7.2.0)):
     optionalDependencies:
       '@testing-library/react': 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@typescript-eslint/parser': 8.67.0(eslint@10.8.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
