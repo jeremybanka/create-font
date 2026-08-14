@@ -1641,6 +1641,547 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
+	it("activates Perspective without a selection and reuses click-toggle selection before showing its cage", async () => {
+		const stage = mountDesign()
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (perspective === null || canvas === null)
+			throw new Error("Perspective selection controls were not found.")
+		expect(perspective.disabled).toBe(false)
+		act(() => perspective.click())
+		expect(perspective.getAttribute("aria-pressed")).toBe("true")
+		expect(stage.find(".perspective-handle")).toHaveLength(0)
+
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const object = (id: string) => {
+			const node = stage
+				.find(".design-object")
+				.find((candidate: { name(): string }) => candidate.name().includes(id))
+			if (node === undefined) throw new Error(`${id} was not rendered.`)
+			return node
+		}
+		const clickObject = async (
+			id: string,
+			pointerId: number,
+			shiftKey = false,
+		): Promise<void> => {
+			const node = object(id)
+			const rect = node.getClientRect()
+			const point = {
+				x: rect.x + rect.width / 2,
+				y: rect.y + rect.height / 2,
+			}
+			const down = new PointerEvent("pointerdown", {
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: point.x,
+				clientY: point.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				shiftKey,
+			})
+			Object.defineProperty(down, "currentTarget", { value: canvas })
+			await act(async () => {
+				stage.setPointersPositions(down)
+				node.fire("pointerdown", { evt: down }, true)
+				stage.fire(
+					"pointerup",
+					{
+						evt: new PointerEvent("pointerup", {
+							bubbles: true,
+							button: 0,
+							clientX: point.x,
+							clientY: point.y,
+							pointerId,
+							pointerType: "mouse",
+							shiftKey,
+						}),
+					},
+					true,
+				)
+				await Promise.resolve()
+			})
+		}
+		const selectedNames = () =>
+			[
+				...document.querySelectorAll<HTMLButtonElement>(
+					'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+				),
+			].map((button) => button.textContent)
+
+		await clickObject("object:coral", 301)
+		expect(selectedNames()).toHaveLength(1)
+		expect(selectedNames()[0]).toContain("Coral rectangle")
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		await clickObject("object:cyan", 302, true)
+		expect(selectedNames()).toHaveLength(2)
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		await clickObject("object:coral", 303, true)
+		expect(selectedNames()).toHaveLength(1)
+		expect(selectedNames()[0]).toContain("Cyan ellipse")
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		const cursorByHandle = {
+			nw: "nwse-resize",
+			n: "ew-resize",
+			ne: "nesw-resize",
+			e: "ns-resize",
+			se: "nwse-resize",
+			s: "ew-resize",
+			sw: "nesw-resize",
+			w: "ns-resize",
+		} as const
+		for (const [name, cursor] of Object.entries(cursorByHandle)) {
+			act(() => stage.findOne(`.perspective-handle-${name}`).fire("mouseenter"))
+			expect(stage.container().style.cursor).toBe(cursor)
+			act(() => stage.findOne(`.perspective-handle-${name}`).fire("mouseleave"))
+		}
+	})
+
+	it("marquee-selects artwork with Perspective and reveals the eligible cage", async () => {
+		const stage = mountDesign()
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		const objects = stage.find(".design-object")
+		if (perspective === null || canvas === null || objects.length < 2)
+			throw new Error("Perspective marquee controls were not found.")
+		act(() => perspective.click())
+		const rects = objects.map((object: { getClientRect(): DOMRect }) =>
+			object.getClientRect(),
+		)
+		const start = {
+			x: Math.min(...rects.map(({ x }) => x)) - 20,
+			y: Math.min(...rects.map(({ y }) => y)) - 20,
+		}
+		const end = {
+			x: Math.max(...rects.map(({ x, width }) => x + width)) + 20,
+			y: Math.max(...rects.map(({ y, height }) => y + height)) + 20,
+		}
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: start.x,
+					clientY: start.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: end.x,
+					clientY: end.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					clientX: end.x,
+					clientY: end.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelectorAll(
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+			),
+		).toHaveLength(2)
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+	})
+
+	it("latches live Perspective whole-side sizing across Shift boundary crossings", async () => {
+		const stage = mountDesign()
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || perspective === null || canvas === null)
+			throw new Error("Perspective corner controls were not found.")
+		act(() => {
+			layer.click()
+			perspective.click()
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		let pointer = { x: 0, y: 0 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const corners = ["nw", "ne", "se", "sw"] as const
+		const horizontalNeighbor = { nw: "ne", ne: "nw", se: "sw", sw: "se" }
+		const verticalNeighbor = { nw: "sw", ne: "se", se: "ne", sw: "nw" }
+		const cornerPosition = (name: (typeof corners)[number]) =>
+			stage.findOne(`.perspective-handle-${name}`).position()
+		const startGesture = (
+			handleName: (typeof corners)[number],
+			pointerId: number,
+			shiftKey: boolean,
+		) => {
+			const handle = stage.findOne(`.perspective-handle-${handleName}`)
+			pointer = handle.getAbsolutePosition()
+			const down = new PointerEvent("pointerdown", {
+				altKey: true,
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				shiftKey,
+			})
+			Object.defineProperty(down, "currentTarget", { value: canvas })
+			handle.fire("pointerdown", { evt: down }, true)
+			return { ...pointer }
+		}
+		const moveGesture = (
+			origin: { x: number; y: number },
+			delta: { x: number; y: number },
+			pointerId: number,
+			shiftKey: boolean,
+		) => {
+			pointer = { x: origin.x + delta.x, y: origin.y + delta.y }
+			stage.fire(
+				"pointermove",
+				{
+					evt: new PointerEvent("pointermove", {
+						altKey: true,
+						bubbles: true,
+						button: 0,
+						buttons: 1,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						isPrimary: true,
+						pointerId,
+						pointerType: "mouse",
+						shiftKey,
+					}),
+				},
+				true,
+			)
+		}
+		const pressShift = (shiftKey: boolean) =>
+			window.dispatchEvent(
+				new KeyboardEvent(shiftKey ? "keydown" : "keyup", {
+					altKey: true,
+					bubbles: true,
+					key: "Shift",
+					shiftKey,
+				}),
+			)
+		const cancelGesture = () =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+
+		let pointerId = 400
+		for (const handleName of corners) {
+			for (const initialChoice of ["horizontal", "vertical"] as const) {
+				const source = Object.fromEntries(
+					corners.map((name) => [name, { ...cornerPosition(name) }]),
+				) as Record<(typeof corners)[number], { x: number; y: number }>
+				const chosen = (
+					initialChoice === "horizontal" ? horizontalNeighbor : verticalNeighbor
+				)[handleName]
+				const reacquired = (
+					initialChoice === "horizontal" ? verticalNeighbor : horizontalNeighbor
+				)[handleName]
+				const initial =
+					initialChoice === "horizontal" ? { x: 80, y: 10 } : { x: 10, y: 80 }
+				const crossed =
+					initialChoice === "horizontal" ? { x: 30, y: 100 } : { x: 100, y: 30 }
+				let origin = { x: 0, y: 0 }
+				await act(async () => {
+					origin = startGesture(handleName, pointerId, false)
+					moveGesture(origin, initial, pointerId, false)
+					pressShift(true)
+					moveGesture(origin, crossed, pointerId, true)
+					await Promise.resolve()
+				})
+				const dragged = cornerPosition(handleName)
+				const latched = cornerPosition(chosen)
+				const untouched = cornerPosition(reacquired)
+				expect(latched.x - source[chosen].x).toBeCloseTo(
+					-(dragged.x - source[handleName].x),
+				)
+				expect(latched.y - source[chosen].y).toBeCloseTo(
+					-(dragged.y - source[handleName].y),
+				)
+				if (initialChoice === "horizontal") {
+					expect(latched.x).not.toBeCloseTo(source[chosen].x)
+					expect(latched.y).toBeCloseTo(source[chosen].y)
+				} else {
+					expect(latched.x).toBeCloseTo(source[chosen].x)
+					expect(latched.y).not.toBeCloseTo(source[chosen].y)
+				}
+				expect(untouched).toEqual(source[reacquired])
+
+				await act(async () => {
+					pressShift(false)
+					await Promise.resolve()
+				})
+				expect(cornerPosition(chosen)).toEqual(source[chosen])
+				const resumedDragged = cornerPosition(handleName)
+				const resumed = cornerPosition(reacquired)
+				expect(resumed).not.toEqual(source[reacquired])
+				expect(resumed.x - source[reacquired].x).toBeCloseTo(
+					-(resumedDragged.x - source[handleName].x),
+				)
+				expect(resumed.y - source[reacquired].y).toBeCloseTo(
+					-(resumedDragged.y - source[handleName].y),
+				)
+				await act(async () => {
+					cancelGesture()
+					await Promise.resolve()
+				})
+				pointerId += 1
+			}
+		}
+
+		const source = Object.fromEntries(
+			corners.map((name) => [name, { ...cornerPosition(name) }]),
+		) as Record<(typeof corners)[number], { x: number; y: number }>
+		let origin = { x: 0, y: 0 }
+		await act(async () => {
+			origin = startGesture("nw", pointerId, true)
+			moveGesture(origin, { x: 10, y: 80 }, pointerId, true)
+			moveGesture(origin, { x: 100, y: 30 }, pointerId, true)
+			await Promise.resolve()
+		})
+		const dragged = cornerPosition("nw")
+		expect(cornerPosition("sw").x).toBeCloseTo(source.sw.x)
+		expect(cornerPosition("sw").y).not.toBeCloseTo(source.sw.y)
+		expect(cornerPosition("sw").y - source.sw.y).toBeCloseTo(
+			-(dragged.y - source.nw.y),
+		)
+		expect(cornerPosition("ne")).toEqual(source.ne)
+		await act(async () => {
+			pressShift(false)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("sw")).toEqual(source.sw)
+		expect(cornerPosition("ne")).not.toEqual(source.ne)
+		act(() => {
+			cancelGesture()
+		})
+	})
+
+	it("previews, composes, commits, cancels, and undoes Perspective whole-side sizing", async () => {
+		const initialDocument = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || perspective === null || canvas === null)
+			throw new Error("Perspective whole-side controls were not found.")
+		act(() => {
+			layer.click()
+			perspective.click()
+		})
+		const persistedInitial = storage.get(DESIGN_STORAGE_KEY)
+		if (persistedInitial === undefined)
+			throw new Error("The initial Perspective document was not persisted.")
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		let pointer = { x: 0, y: 0 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const corners = ["nw", "ne", "se", "sw"] as const
+		const cornerPosition = (name: (typeof corners)[number]) =>
+			stage.findOne(`.perspective-handle-${name}`).position()
+		const positions = () =>
+			Object.fromEntries(
+				corners.map((name) => [name, { ...cornerPosition(name) }]),
+			) as Record<(typeof corners)[number], { x: number; y: number }>
+		const begin = (pointerId: number, altKey = true) => {
+			const handle = stage.findOne(".perspective-handle-nw")
+			pointer = handle.getAbsolutePosition()
+			const event = new PointerEvent("pointerdown", {
+				altKey,
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			handle.fire("pointerdown", { evt: event }, true)
+			return { ...pointer }
+		}
+		const fireStage = (
+			type: "pointermove" | "pointerup",
+			origin: { x: number; y: number },
+			delta: { x: number; y: number },
+			pointerId: number,
+			altKey = true,
+		) => {
+			pointer = { x: origin.x + delta.x, y: origin.y + delta.y }
+			const event = new PointerEvent(type, {
+				altKey,
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			stage.fire(type, { evt: event }, true)
+		}
+		const cancel = () =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+
+		const base = positions()
+		let origin = { x: 0, y: 0 }
+		await act(async () => {
+			origin = begin(449, false)
+			fireStage("pointermove", origin, { x: -30, y: 6 }, 449, false)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).toEqual(base.ne)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { altKey: true, key: "Alt" }),
+			)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).not.toEqual(base.ne)
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }))
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).toEqual(base.ne)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+
+		await act(async () => {
+			origin = begin(450)
+			fireStage("pointermove", origin, { x: -30, y: 6 }, 450)
+			await Promise.resolve()
+		})
+		const freePreview = positions()
+		expect(freePreview.nw.x).toBeLessThan(base.nw.x)
+		expect(freePreview.ne.x).toBeGreaterThan(base.ne.x)
+		expect(freePreview.nw.x - base.nw.x).toBeCloseTo(
+			-(freePreview.ne.x - base.ne.x),
+		)
+		expect(freePreview.nw.y - base.nw.y).toBeCloseTo(
+			-(freePreview.ne.y - base.ne.y),
+		)
+		expect(freePreview.se).toEqual(base.se)
+		expect(freePreview.sw).toEqual(base.sw)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+		expect(positions()).toEqual(base)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedInitial)
+
+		await act(async () => {
+			origin = begin(451)
+			fireStage("pointermove", origin, { x: -30, y: 0 }, 451)
+			await Promise.resolve()
+		})
+		const commitPreview = positions()
+		await act(async () => {
+			fireStage("pointerup", origin, { x: -30, y: 0 }, 451)
+			await Promise.resolve()
+		})
+		const grown = positions()
+		expect(grown).toEqual(commitPreview)
+		expect(grown.nw.x).toBeLessThan(base.nw.x)
+		expect(grown.ne.x).toBeGreaterThan(base.ne.x)
+		expect(storage.get(DESIGN_STORAGE_KEY)).not.toBe(persistedInitial)
+
+		await act(async () => {
+			origin = begin(452)
+			fireStage("pointermove", origin, { x: 15, y: 0 }, 452)
+			await Promise.resolve()
+		})
+		const shrunk = positions()
+		expect(shrunk.ne.x - shrunk.nw.x).toBeLessThan(grown.ne.x - grown.nw.x)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+		expect(positions()).toEqual(grown)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedInitial)
+		expect(positions()).toEqual(base)
+	})
+
 	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {
 		const base = createInitialDocument()
 		const template = base.objects[0]!

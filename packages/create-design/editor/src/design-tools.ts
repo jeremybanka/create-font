@@ -33,6 +33,14 @@ export const DESIGN_TOOLS = {
 		icon: TransformIcon,
 		paletteIcon: "TransformIcon",
 	},
+	perspective: {
+		label: "Perspective Transform",
+		description:
+			"Skew edges and apply four-corner perspective to vector artwork.",
+		key: "P",
+		icon: TransformIcon,
+		paletteIcon: "TransformIcon",
+	},
 	artboard: {
 		label: "Artboard",
 		description: "Draw and edit artboards on the canvas.",
