@@ -53,6 +53,11 @@ export interface PerspectiveCornerAcquisitionState {
 	readonly shiftKey: boolean
 }
 
+type PerspectiveCornerHandle = Extract<
+	PerspectiveHandle,
+	"nw" | "ne" | "se" | "sw"
+>
+
 export const PERSPECTIVE_BAKE_MAX_ERROR = 0.25
 const PERSPECTIVE_SAMPLE_ERROR = 0.05
 const PERSPECTIVE_REFIT_ERROR =
@@ -94,17 +99,20 @@ const midpoint = (
 
 function constrainedDelta(
 	bounds: Bounds,
+	source: PerspectiveQuad,
 	handle: PerspectiveHandle,
 	delta: DesignPointLike,
 	modifiers: PerspectiveModifiers,
 ): DesignPointLike {
 	if (!modifiers.shiftKey) return delta
 	if (handle.length === 2) {
-		return (modifiers.cornerAcquisition ??
-			(Math.abs(delta.x) >= Math.abs(delta.y) ? "horizontal" : "vertical")) ===
+		const acquisition =
+			modifiers.cornerAcquisition ??
+			dominantCornerAcquisition(source, handle, delta) ??
 			"horizontal"
-			? { x: delta.x, y: 0 }
-			: { x: 0, y: delta.y }
+		const direction = cornerSideDirection(source, handle, acquisition)
+		const amount = delta.x * direction.x + delta.y * direction.y
+		return { x: direction.x * amount, y: direction.y * amount }
 	}
 	const perpendicularSize =
 		handle === "n" || handle === "s"
@@ -120,7 +128,39 @@ function constrainedDelta(
 		: { x: 0, y: constrained }
 }
 
+const CORNER_INDEX = { nw: 0, ne: 1, se: 2, sw: 3 } as const
+const HORIZONTAL_CORNER_MATE = { nw: 1, ne: 0, se: 3, sw: 2 } as const
+const VERTICAL_CORNER_MATE = { nw: 3, ne: 2, se: 1, sw: 0 } as const
+
+function cornerSideMate(
+	handle: PerspectiveCornerHandle,
+	acquisition: PerspectiveCornerAcquisition,
+): number {
+	return acquisition === "horizontal"
+		? HORIZONTAL_CORNER_MATE[handle]
+		: VERTICAL_CORNER_MATE[handle]
+}
+
+function cornerSideDirection(
+	source: PerspectiveQuad,
+	handle: PerspectiveCornerHandle,
+	acquisition: PerspectiveCornerAcquisition,
+): DesignPointLike {
+	const corner = source[CORNER_INDEX[handle]]
+	const mate = source[cornerSideMate(handle, acquisition)]
+	const dx = corner.x - mate.x
+	const dy = corner.y - mate.y
+	const length = Math.hypot(dx, dy)
+	return length <= MINIMUM_CAGE_SIZE
+		? acquisition === "horizontal"
+			? { x: 1, y: 0 }
+			: { x: 0, y: 1 }
+		: { x: dx / length, y: dy / length }
+}
+
 function dominantCornerAcquisition(
+	source: PerspectiveQuad,
+	handle: PerspectiveCornerHandle,
 	delta: DesignPointLike,
 ): PerspectiveCornerAcquisition | null {
 	if (
@@ -128,7 +168,13 @@ function dominantCornerAcquisition(
 		Math.abs(delta.y) <= Number.EPSILON
 	)
 		return null
-	return Math.abs(delta.x) >= Math.abs(delta.y) ? "horizontal" : "vertical"
+	const horizontal = cornerSideDirection(source, handle, "horizontal")
+	const vertical = cornerSideDirection(source, handle, "vertical")
+	const horizontalAmount = Math.abs(
+		delta.x * horizontal.x + delta.y * horizontal.y,
+	)
+	const verticalAmount = Math.abs(delta.x * vertical.x + delta.y * vertical.y)
+	return horizontalAmount >= verticalAmount ? "horizontal" : "vertical"
 }
 
 /**
@@ -139,10 +185,12 @@ function dominantCornerAcquisition(
  */
 export function resolvePerspectiveCornerAcquisition(
 	previous: PerspectiveCornerAcquisitionState | null,
+	source: PerspectiveQuad,
+	handle: PerspectiveCornerHandle,
 	delta: DesignPointLike,
 	shiftKey: boolean,
 ): PerspectiveCornerAcquisitionState {
-	const dynamic = dominantCornerAcquisition(delta)
+	const dynamic = dominantCornerAcquisition(source, handle, delta)
 	if (!shiftKey)
 		return {
 			choice: dynamic ?? previous?.choice ?? null,
@@ -161,10 +209,11 @@ export function resolvePerspectiveCornerAcquisition(
 
 /**
  * Resolves a cage gesture. Side handles shear parallel to their edge. Corner
- * handles move one projective control; Shift keeps its acquired axis. With Alt,
- * a horizontal acquisition couples the horizontal neighbor and a vertical
- * acquisition couples the vertical neighbor. Exact ties count as horizontal.
- * Alt on an edge continues to mirror its skew across the cage center.
+ * handles move one projective control. With Alt, the incident side selected by
+ * the gesture resizes about its midpoint: the dragged endpoint follows the
+ * gesture while its side-mate moves by the opposite delta. Shift projects the
+ * delta onto the latched side as well as keeping that side acquired. Alt on an
+ * edge continues to mirror its skew across the cage center.
  */
 export function resolvePerspectiveQuad(
 	bounds: Bounds,
@@ -172,10 +221,10 @@ export function resolvePerspectiveQuad(
 	start: DesignPointLike,
 	current: DesignPointLike,
 	modifiers: PerspectiveModifiers,
+	source: PerspectiveQuad = perspectiveQuadFromBounds(bounds),
 ): PerspectiveQuad {
-	const source = perspectiveQuadFromBounds(bounds)
 	const rawDelta = { x: current.x - start.x, y: current.y - start.y }
-	const delta = constrainedDelta(bounds, handle, rawDelta, modifiers)
+	const delta = constrainedDelta(bounds, source, handle, rawDelta, modifiers)
 	const quad = source.map((point) => ({ ...point })) as [
 		DesignPointLike,
 		DesignPointLike,
@@ -191,19 +240,15 @@ export function resolvePerspectiveQuad(
 		handle === "se" ||
 		handle === "sw"
 	) {
-		const index = { nw: 0, ne: 1, se: 2, sw: 3 }[handle]
+		const index = CORNER_INDEX[handle]
 		move(index, delta.x, delta.y)
 		if (modifiers.altKey) {
 			const acquisition =
 				modifiers.cornerAcquisition ??
-				(Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)
-					? "horizontal"
-					: "vertical")
-			const neighbor =
-				acquisition === "horizontal"
-					? ({ nw: 1, ne: 0, se: 3, sw: 2 } as const)[handle]
-					: ({ nw: 3, ne: 2, se: 1, sw: 0 } as const)[handle]
-			move(neighbor, delta.x, delta.y)
+				dominantCornerAcquisition(source, handle, rawDelta) ??
+				"horizontal"
+			const mate = cornerSideMate(handle, acquisition)
+			move(mate, -delta.x, -delta.y)
 		}
 	} else if (handle === "n" || handle === "s") {
 		const indices = handle === "n" ? ([0, 1] as const) : ([3, 2] as const)
@@ -322,14 +367,8 @@ export function validPerspectiveQuad(quad: PerspectiveQuad): boolean {
 	)
 }
 
-function homographyFor(
-	bounds: Bounds,
-	quad: PerspectiveQuad,
-): Homography | null {
+function unitSquareHomographyFor(quad: PerspectiveQuad): Homography | null {
 	if (!validPerspectiveQuad(quad)) return null
-	const width = bounds.maxX - bounds.minX
-	const height = bounds.maxY - bounds.minY
-	if (width <= MINIMUM_CAGE_SIZE || height <= MINIMUM_CAGE_SIZE) return null
 	const [p0, p1, p2, p3] = quad
 	const dx1 = p1.x - p2.x
 	const dx2 = p3.x - p2.x
@@ -355,18 +394,115 @@ function homographyFor(
 	return { a, b, c: p0.x, d, e, f: p0.y, g, h }
 }
 
+type Matrix3 = readonly [
+	number,
+	number,
+	number,
+	number,
+	number,
+	number,
+	number,
+	number,
+	number,
+]
+
+const homographyMatrix = (homography: Homography): Matrix3 => [
+	homography.a,
+	homography.b,
+	homography.c,
+	homography.d,
+	homography.e,
+	homography.f,
+	homography.g,
+	homography.h,
+	1,
+]
+
+function inverseMatrix(matrix: Matrix3): Matrix3 | null {
+	const [a, b, c, d, e, f, g, h, i] = matrix
+	const inverse: Matrix3 = [
+		e * i - f * h,
+		c * h - b * i,
+		b * f - c * e,
+		f * g - d * i,
+		a * i - c * g,
+		c * d - a * f,
+		d * h - e * g,
+		b * g - a * h,
+		a * e - b * d,
+	]
+	const determinant = a * inverse[0] + b * inverse[3] + c * inverse[6]
+	if (!Number.isFinite(determinant) || Math.abs(determinant) <= Number.EPSILON)
+		return null
+	return [
+		inverse[0] / determinant,
+		inverse[1] / determinant,
+		inverse[2] / determinant,
+		inverse[3] / determinant,
+		inverse[4] / determinant,
+		inverse[5] / determinant,
+		inverse[6] / determinant,
+		inverse[7] / determinant,
+		inverse[8] / determinant,
+	]
+}
+
+function multiplyMatrices(outer: Matrix3, inner: Matrix3): Matrix3 {
+	return [
+		outer[0] * inner[0] + outer[1] * inner[3] + outer[2] * inner[6],
+		outer[0] * inner[1] + outer[1] * inner[4] + outer[2] * inner[7],
+		outer[0] * inner[2] + outer[1] * inner[5] + outer[2] * inner[8],
+		outer[3] * inner[0] + outer[4] * inner[3] + outer[5] * inner[6],
+		outer[3] * inner[1] + outer[4] * inner[4] + outer[5] * inner[7],
+		outer[3] * inner[2] + outer[4] * inner[5] + outer[5] * inner[8],
+		outer[6] * inner[0] + outer[7] * inner[3] + outer[8] * inner[6],
+		outer[6] * inner[1] + outer[7] * inner[4] + outer[8] * inner[7],
+		outer[6] * inner[2] + outer[7] * inner[5] + outer[8] * inner[8],
+	]
+}
+
+function homographyBetween(
+	source: PerspectiveQuad,
+	target: PerspectiveQuad,
+): Homography | null {
+	const sourceHomography = unitSquareHomographyFor(source)
+	const targetHomography = unitSquareHomographyFor(target)
+	if (sourceHomography === null || targetHomography === null) return null
+	const inverseSource = inverseMatrix(homographyMatrix(sourceHomography))
+	if (inverseSource === null) return null
+	const matrix = multiplyMatrices(
+		homographyMatrix(targetHomography),
+		inverseSource,
+	)
+	const scale = matrix[8]
+	if (!Number.isFinite(scale) || Math.abs(scale) <= Number.EPSILON) return null
+	const normalized = matrix.map((value) => value / scale)
+	if (normalized.some((value) => !Number.isFinite(value))) return null
+	return {
+		a: normalized[0]!,
+		b: normalized[1]!,
+		c: normalized[2]!,
+		d: normalized[3]!,
+		e: normalized[4]!,
+		f: normalized[5]!,
+		g: normalized[6]!,
+		h: normalized[7]!,
+	}
+}
+
 function mapPoint(
 	homography: Homography,
-	bounds: Bounds,
 	point: DesignPointLike,
 ): DesignPointLike | null {
-	const u = (point.x - bounds.minX) / (bounds.maxX - bounds.minX)
-	const v = (point.y - bounds.minY) / (bounds.maxY - bounds.minY)
-	const denominator = homography.g * u + homography.h * v + 1
-	if (denominator <= MINIMUM_CAGE_SIZE) return null
+	const denominator = homography.g * point.x + homography.h * point.y + 1
+	if (Math.abs(denominator) <= MINIMUM_CAGE_SIZE) return null
 	const mapped = {
-		x: (homography.a * u + homography.b * v + homography.c) / denominator,
-		y: (homography.d * u + homography.e * v + homography.f) / denominator,
+		x:
+			(homography.a * point.x + homography.b * point.y + homography.c) /
+			denominator,
+		y:
+			(homography.d * point.x + homography.e * point.y + homography.f) /
+			denominator,
 	}
 	return Number.isFinite(mapped.x) && Number.isFinite(mapped.y) ? mapped : null
 }
@@ -394,11 +530,10 @@ const pointLineDistance = (
 function flattenMappedCubic(
 	cubic: Cubic,
 	homography: Homography,
-	bounds: Bounds,
 	depth = 0,
 ): readonly DesignPointLike[] | null {
 	const samples = [0, 0.25, 0.5, 0.75, 1].map((t) =>
-		mapPoint(homography, bounds, evaluateCubic(cubic, t)),
+		mapPoint(homography, evaluateCubic(cubic, t)),
 	)
 	if (samples.some((point) => point === null)) return null
 	const [start, quarter, middle, threeQuarter, end] =
@@ -411,8 +546,8 @@ function flattenMappedCubic(
 	if (error <= PERSPECTIVE_SAMPLE_ERROR || depth >= MAX_SUBDIVISION_DEPTH)
 		return [start!, end!]
 	const split = splitCubic(cubic, 0.5)
-	const left = flattenMappedCubic(split.left, homography, bounds, depth + 1)
-	const right = flattenMappedCubic(split.right, homography, bounds, depth + 1)
+	const left = flattenMappedCubic(split.left, homography, depth + 1)
+	const right = flattenMappedCubic(split.right, homography, depth + 1)
 	return left === null || right === null ? null : [...left, ...right.slice(1)]
 }
 
@@ -473,7 +608,6 @@ function fittedPoints(
 function bakeContour(
 	contour: DesignContour,
 	homography: Homography,
-	bounds: Bounds,
 ): DesignContour | null {
 	const first = contour.points[0]
 	if (first === undefined) return { ...contour, points: [] }
@@ -485,7 +619,7 @@ function bakeContour(
 		const from = contour.points[index]
 		const to = contour.points[(index + 1) % contour.points.length]
 		if (from === undefined || to === undefined) continue
-		const segment = flattenMappedCubic(cubicFor(from, to), homography, bounds)
+		const segment = flattenMappedCubic(cubicFor(from, to), homography)
 		if (segment === null) return null
 		samples = samples.length === 0 ? segment : [...samples, ...segment.slice(1)]
 	}
@@ -525,8 +659,9 @@ export function bakePerspectiveObjects(
 	objects: readonly DesignObject[],
 	bounds: Bounds,
 	quad: PerspectiveQuad,
+	sourceQuad: PerspectiveQuad = perspectiveQuadFromBounds(bounds),
 ): PerspectiveBakeResult {
-	const homography = homographyFor(bounds, quad)
+	const homography = homographyBetween(sourceQuad, quad)
 	if (homography === null)
 		return {
 			ok: false,
@@ -536,9 +671,7 @@ export function bakePerspectiveObjects(
 	const baked: DesignObject[] = []
 	for (const object of objects) {
 		const source = projectDesignObjectContours(object)
-		const contours = source.map((contour) =>
-			bakeContour(contour, homography, bounds),
-		)
+		const contours = source.map((contour) => bakeContour(contour, homography))
 		if (contours.some((contour) => contour === null))
 			return {
 				ok: false,

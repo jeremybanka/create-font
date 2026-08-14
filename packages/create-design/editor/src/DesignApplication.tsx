@@ -454,6 +454,7 @@ type CanvasGesture =
 			readonly pointerId: number
 			readonly originals: readonly DesignObject[]
 			readonly bounds: Bounds
+			readonly sourceQuad: PerspectiveQuad
 			readonly handle: PerspectiveHandle
 			readonly start: CanvasPoint
 			readonly rawCurrent: CanvasPoint
@@ -839,7 +840,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "transform")
 		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
 	if (tool === "perspective")
-		return "Click or marquee to select · Shift/Command/Ctrl-click toggles selection · Drag corners for perspective · Shift constrains and latches the acquired side until release · Alt/Option couples the horizontal neighbor for horizontal-dominant corner drags, or the vertical neighbor for vertical-dominant drags · Edge controls skew; Alt/Option mirrors edge skew · Escape cancels"
+		return "Click or marquee to select · Shift/Command/Ctrl-click toggles selection · Drag corners for perspective · Alt/Option resizes the acquired whole side about its midpoint: horizontal motion chooses the top/bottom side, vertical motion chooses the left/right side · Shift constrains and latches that side until release · Edge controls skew; Alt/Option mirrors edge skew · Escape cancels"
 	if (tool === "text")
 		return "Click to insert point text · Type in the native editor · Escape exits text editing"
 	if (tool === "area-text")
@@ -1516,6 +1517,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		useState<VectorGesturePreview | null>(null)
 	const [perspectiveCage, setPerspectiveCage] =
 		useState<PerspectiveQuad | null>(null)
+	const [committedPerspectiveCage, setCommittedPerspectiveCage] =
+		useState<Readonly<{
+			quad: PerspectiveQuad
+			objectSignature: string
+		}> | null>(null)
 	const [penPoints, setPenPoints] = useState<readonly DesignPenPoint[]>([])
 	const [penProspectiveSegment, setPenProspectiveSegment] =
 		useState<DesignPenProspectiveSegment | null>(null)
@@ -1992,6 +1998,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const selectedObjects = document.objects.filter((object) =>
 		selection.includes(object.id),
 	)
+	const retainedPerspectiveCage =
+		committedPerspectiveCage !== null &&
+		tool === "perspective" &&
+		committedPerspectiveCage.objectSignature === JSON.stringify(selectedObjects)
+			? committedPerspectiveCage.quad
+			: null
 	const curvatureCombObjects = selectedObjects.filter((object) => {
 		const entry = effectiveHierarchy.byObjectId.get(object.id)
 		return (
@@ -6126,6 +6138,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					gesture.originals,
 					gesture.bounds,
 					resolved.quad,
+					gesture.sourceQuad,
 				)
 				if (baked.ok) {
 					previewObjectsRef.current = baked.objects
@@ -6751,6 +6764,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture.handle.length === 2
 				? resolvePerspectiveCornerAcquisition(
 						gesture.cornerAcquisition,
+						gesture.sourceQuad,
+						gesture.handle,
 						{
 							x: rawCurrent.x - gesture.start.x,
 							y: rawCurrent.y - gesture.start.y,
@@ -6768,6 +6783,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture.start,
 			rawCurrent,
 			resolvedModifiers,
+			gesture.sourceQuad,
 		)
 		const rawHandle = perspectiveHandlePoint(rawQuad, gesture.handle)
 		const snap = snapDesignPoint(
@@ -6791,6 +6807,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture.start,
 			current,
 			resolvedModifiers,
+			gesture.sourceQuad,
 		)
 		return {
 			gesture: {
@@ -7735,6 +7752,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture.originals,
 				gesture.bounds,
 				resolved.quad,
+				gesture.sourceQuad,
 			)
 			if (!baked.ok) {
 				setStatus(baked.error)
@@ -8039,12 +8057,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture.originals,
 				gesture.bounds,
 				resolved.quad,
+				gesture.sourceQuad,
 			)
 			if (!baked.ok) {
 				setStatus(baked.error)
 				return
 			}
 			const byId = new Map(baked.objects.map((object) => [object.id, object]))
+			setCommittedPerspectiveCage({
+				quad: resolved.quad,
+				objectSignature: JSON.stringify(baked.objects),
+			})
 			commit({
 				...document,
 				objects: document.objects.map(
@@ -8491,15 +8514,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			return
 		}
 		event.cancelBubble = true
-		const start = perspectiveHandlePoint(
-			perspectiveQuadFromBounds(bounds),
-			handle,
-		)
+		const sourceQuad =
+			retainedPerspectiveCage ?? perspectiveQuadFromBounds(bounds)
+		const start = perspectiveHandlePoint(sourceQuad, handle)
 		const gesture: Extract<CanvasGesture, { readonly kind: "perspective" }> = {
 			kind: "perspective",
 			pointerId: event.evt.pointerId,
 			originals: selectedObjects,
 			bounds,
+			sourceQuad,
 			handle,
 			start,
 			rawCurrent: start,
@@ -8508,7 +8531,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			cornerAcquisition: null,
 		}
 		gestureRef.current = gesture
-		setPerspectiveCage(perspectiveQuadFromBounds(bounds))
+		setPerspectiveCage(sourceQuad)
 		setTransformCursor(perspectiveHandleCursor(handle))
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
@@ -8535,15 +8558,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		)
 			return
 		event.preventDefault()
-		const start = perspectiveHandlePoint(
-			perspectiveQuadFromBounds(selectionBounds),
-			handle,
-		)
+		const sourceQuad =
+			retainedPerspectiveCage ?? perspectiveQuadFromBounds(selectionBounds)
+		const start = perspectiveHandlePoint(sourceQuad, handle)
 		const gesture: Extract<CanvasGesture, { readonly kind: "perspective" }> = {
 			kind: "perspective",
 			pointerId: -1,
 			originals: selectedObjects,
 			bounds: selectionBounds,
+			sourceQuad,
 			handle,
 			start,
 			rawCurrent: start,
@@ -8559,12 +8582,17 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			selectedObjects,
 			selectionBounds,
 			resolved.quad,
+			sourceQuad,
 		)
 		if (!baked.ok) {
 			setStatus(baked.error)
 			return
 		}
 		const byId = new Map(baked.objects.map((object) => [object.id, object]))
+		setCommittedPerspectiveCage({
+			quad: resolved.quad,
+			objectSignature: JSON.stringify(baked.objects),
+		})
 		commit({
 			...document,
 			objects: document.objects.map((object) => byId.get(object.id) ?? object),
@@ -9934,6 +9962,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												<PerspectiveSelectionCage
 													quad={
 														perspectiveCage ??
+														retainedPerspectiveCage ??
 														perspectiveQuadFromBounds(selectionBounds)
 													}
 													inverseScale={1 / worldScale}
@@ -10021,10 +10050,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							<p>
 								Use arrow keys on a corner to distort it, or horizontal/vertical
 								arrows on the corresponding edge to skew. Shift constrains. On a
-								corner, Alt or Option couples the horizontal neighbor for a
-								horizontal-dominant move and the vertical neighbor for a
-								vertical-dominant move. Shift latches that choice until
-								released; on an edge Alt or Option mirrors the skew.
+								corner, Alt or Option resizes the acquired whole side about its
+								midpoint: horizontal motion chooses the top or bottom side, and
+								vertical motion chooses the left or right side. Shift constrains
+								and latches that side until released; on an edge Alt or Option
+								mirrors the skew.
 							</p>
 							{DESIGN_PERSPECTIVE_HANDLES.map((handle) => (
 								<button

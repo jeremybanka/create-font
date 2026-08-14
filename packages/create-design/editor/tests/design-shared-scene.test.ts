@@ -1818,7 +1818,7 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".perspective-handle")).toHaveLength(8)
 	})
 
-	it("latches live Perspective corner acquisition across Shift boundary crossings", async () => {
+	it("latches live Perspective whole-side sizing across Shift boundary crossings", async () => {
 		const stage = mountDesign()
 		const layer = [
 			...document.querySelectorAll<HTMLButtonElement>(
@@ -1940,8 +1940,15 @@ describe("create-design shared vector scene", () => {
 					moveGesture(origin, crossed, pointerId, true)
 					await Promise.resolve()
 				})
+				const dragged = cornerPosition(handleName)
 				const latched = cornerPosition(chosen)
 				const untouched = cornerPosition(reacquired)
+				expect(latched.x - source[chosen].x).toBeCloseTo(
+					-(dragged.x - source[handleName].x),
+				)
+				expect(latched.y - source[chosen].y).toBeCloseTo(
+					-(dragged.y - source[handleName].y),
+				)
 				if (initialChoice === "horizontal") {
 					expect(latched.x).not.toBeCloseTo(source[chosen].x)
 					expect(latched.y).toBeCloseTo(source[chosen].y)
@@ -1956,8 +1963,15 @@ describe("create-design shared vector scene", () => {
 					await Promise.resolve()
 				})
 				expect(cornerPosition(chosen)).toEqual(source[chosen])
+				const resumedDragged = cornerPosition(handleName)
 				const resumed = cornerPosition(reacquired)
 				expect(resumed).not.toEqual(source[reacquired])
+				expect(resumed.x - source[reacquired].x).toBeCloseTo(
+					-(resumedDragged.x - source[handleName].x),
+				)
+				expect(resumed.y - source[reacquired].y).toBeCloseTo(
+					-(resumedDragged.y - source[handleName].y),
+				)
 				await act(async () => {
 					cancelGesture()
 					await Promise.resolve()
@@ -1976,8 +1990,12 @@ describe("create-design shared vector scene", () => {
 			moveGesture(origin, { x: 100, y: 30 }, pointerId, true)
 			await Promise.resolve()
 		})
+		const dragged = cornerPosition("nw")
 		expect(cornerPosition("sw").x).toBeCloseTo(source.sw.x)
 		expect(cornerPosition("sw").y).not.toBeCloseTo(source.sw.y)
+		expect(cornerPosition("sw").y - source.sw.y).toBeCloseTo(
+			-(dragged.y - source.nw.y),
+		)
 		expect(cornerPosition("ne")).toEqual(source.ne)
 		await act(async () => {
 			pressShift(false)
@@ -1988,6 +2006,180 @@ describe("create-design shared vector scene", () => {
 		act(() => {
 			cancelGesture()
 		})
+	})
+
+	it("previews, composes, commits, cancels, and undoes Perspective whole-side sizing", async () => {
+		const initialDocument = createInitialDocument()
+		const storage = new Map<string, string>()
+		const stage = mountDesign({ initialDocument }, storage)
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || perspective === null || canvas === null)
+			throw new Error("Perspective whole-side controls were not found.")
+		act(() => {
+			layer.click()
+			perspective.click()
+		})
+		const persistedInitial = storage.get(DESIGN_STORAGE_KEY)
+		if (persistedInitial === undefined)
+			throw new Error("The initial Perspective document was not persisted.")
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		let pointer = { x: 0, y: 0 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const corners = ["nw", "ne", "se", "sw"] as const
+		const cornerPosition = (name: (typeof corners)[number]) =>
+			stage.findOne(`.perspective-handle-${name}`).position()
+		const positions = () =>
+			Object.fromEntries(
+				corners.map((name) => [name, { ...cornerPosition(name) }]),
+			) as Record<(typeof corners)[number], { x: number; y: number }>
+		const begin = (pointerId: number, altKey = true) => {
+			const handle = stage.findOne(".perspective-handle-nw")
+			pointer = handle.getAbsolutePosition()
+			const event = new PointerEvent("pointerdown", {
+				altKey,
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			handle.fire("pointerdown", { evt: event }, true)
+			return { ...pointer }
+		}
+		const fireStage = (
+			type: "pointermove" | "pointerup",
+			origin: { x: number; y: number },
+			delta: { x: number; y: number },
+			pointerId: number,
+			altKey = true,
+		) => {
+			pointer = { x: origin.x + delta.x, y: origin.y + delta.y }
+			const event = new PointerEvent(type, {
+				altKey,
+				bubbles: true,
+				button: 0,
+				buttons: type === "pointerup" ? 0 : 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+			})
+			Object.defineProperty(event, "currentTarget", { value: canvas })
+			stage.fire(type, { evt: event }, true)
+		}
+		const cancel = () =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+
+		const base = positions()
+		let origin = { x: 0, y: 0 }
+		await act(async () => {
+			origin = begin(449, false)
+			fireStage("pointermove", origin, { x: -30, y: 6 }, 449, false)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).toEqual(base.ne)
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { altKey: true, key: "Alt" }),
+			)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).not.toEqual(base.ne)
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }))
+			await Promise.resolve()
+		})
+		expect(cornerPosition("ne")).toEqual(base.ne)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+
+		await act(async () => {
+			origin = begin(450)
+			fireStage("pointermove", origin, { x: -30, y: 6 }, 450)
+			await Promise.resolve()
+		})
+		const freePreview = positions()
+		expect(freePreview.nw.x).toBeLessThan(base.nw.x)
+		expect(freePreview.ne.x).toBeGreaterThan(base.ne.x)
+		expect(freePreview.nw.x - base.nw.x).toBeCloseTo(
+			-(freePreview.ne.x - base.ne.x),
+		)
+		expect(freePreview.nw.y - base.nw.y).toBeCloseTo(
+			-(freePreview.ne.y - base.ne.y),
+		)
+		expect(freePreview.se).toEqual(base.se)
+		expect(freePreview.sw).toEqual(base.sw)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+		expect(positions()).toEqual(base)
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedInitial)
+
+		await act(async () => {
+			origin = begin(451)
+			fireStage("pointermove", origin, { x: -30, y: 0 }, 451)
+			await Promise.resolve()
+		})
+		const commitPreview = positions()
+		await act(async () => {
+			fireStage("pointerup", origin, { x: -30, y: 0 }, 451)
+			await Promise.resolve()
+		})
+		const grown = positions()
+		expect(grown).toEqual(commitPreview)
+		expect(grown.nw.x).toBeLessThan(base.nw.x)
+		expect(grown.ne.x).toBeGreaterThan(base.ne.x)
+		expect(storage.get(DESIGN_STORAGE_KEY)).not.toBe(persistedInitial)
+
+		await act(async () => {
+			origin = begin(452)
+			fireStage("pointermove", origin, { x: 15, y: 0 }, 452)
+			await Promise.resolve()
+		})
+		const shrunk = positions()
+		expect(shrunk.ne.x - shrunk.nw.x).toBeLessThan(grown.ne.x - grown.nw.x)
+		await act(async () => {
+			cancel()
+			await Promise.resolve()
+		})
+		expect(positions()).toEqual(grown)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { ctrlKey: true, key: "z" }),
+			)
+			await Promise.resolve()
+		})
+		expect(storage.get(DESIGN_STORAGE_KEY)).toBe(persistedInitial)
+		expect(positions()).toEqual(base)
 	})
 
 	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {

@@ -71,95 +71,172 @@ describe("perspective cage gestures", () => {
 		expect(validPerspectiveQuad(quad)).toBe(true)
 	})
 
-	it("updates Shift and Alt semantics from the same gesture origin", () => {
-		const shifted = resolvePerspectiveQuad(
-			bounds,
-			"nw",
-			{ x: 0, y: 0 },
-			{ x: 30, y: 8 },
-			{ shiftKey: true, altKey: false },
-		)
-		expect(shifted[0]).toEqual({ x: 30, y: 0 })
-		const centered = resolvePerspectiveQuad(
-			bounds,
-			"nw",
-			{ x: 0, y: 0 },
-			{ x: 30, y: 8 },
-			{ shiftKey: false, altKey: true },
-		)
-		expect(centered[0]).toEqual({ x: 30, y: 8 })
-		expect(centered[1]).toEqual({ x: 130, y: 8 })
-		expect(centered[3]).toEqual({ x: 0, y: 80 })
-		expect(centered[2]).toEqual({ x: 100, y: 80 })
-	})
-
 	it.each([
-		["nw", { x: 30, y: 8 }, 0, 1],
-		["nw", { x: 8, y: 30 }, 0, 3],
-		["ne", { x: 30, y: 8 }, 1, 0],
-		["ne", { x: 8, y: 30 }, 1, 2],
-		["se", { x: 30, y: 8 }, 2, 3],
-		["se", { x: 8, y: 30 }, 2, 1],
-		["sw", { x: 30, y: 8 }, 3, 2],
-		["sw", { x: 8, y: 30 }, 3, 0],
+		["nw", 0, "horizontal", 1, { x: -12, y: 0 }],
+		["nw", 0, "vertical", 3, { x: 0, y: -12 }],
+		["ne", 1, "horizontal", 0, { x: 12, y: 0 }],
+		["ne", 1, "vertical", 2, { x: 0, y: -12 }],
+		["se", 2, "horizontal", 3, { x: 12, y: 0 }],
+		["se", 2, "vertical", 1, { x: 0, y: 12 }],
+		["sw", 3, "horizontal", 2, { x: -12, y: 0 }],
+		["sw", 3, "vertical", 0, { x: 0, y: 12 }],
 	] as const)(
-		"couples the adjacent %s corner by dominant axis and recomputes live Alt transitions",
-		(handle, delta, movedIndex, coupledIndex) => {
+		"sizes both endpoints of the %s corner's %s side for grow and shrink",
+		(handle, movedIndex, acquisition, mateIndex, outward) => {
 			const source = perspectiveQuadFromBounds(bounds)
 			const start = source[movedIndex]
-			const current = { x: start.x + delta.x, y: start.y + delta.y }
-			const withoutAlt = resolvePerspectiveQuad(
-				bounds,
-				handle,
-				start,
-				current,
-				{
-					shiftKey: false,
-					altKey: false,
-				},
+			const originalLength = Math.hypot(
+				start.x - source[mateIndex].x,
+				start.y - source[mateIndex].y,
 			)
-			const withAlt = resolvePerspectiveQuad(bounds, handle, start, current, {
-				shiftKey: false,
-				altKey: true,
-			})
-			const releasedAlt = resolvePerspectiveQuad(
-				bounds,
-				handle,
-				start,
-				current,
-				{
-					shiftKey: false,
-					altKey: false,
-				},
-			)
-
-			expect(withoutAlt[movedIndex]).toEqual(current)
-			expect(withoutAlt[coupledIndex]).toEqual(source[coupledIndex])
-			expect(withAlt[movedIndex]).toEqual(current)
-			expect(withAlt[coupledIndex]).toEqual({
-				x: source[coupledIndex].x + delta.x,
-				y: source[coupledIndex].y + delta.y,
-			})
-			expect(releasedAlt).toEqual(withoutAlt)
+			for (const direction of [1, -1]) {
+				const delta = {
+					x: outward.x * direction,
+					y: outward.y * direction,
+				}
+				const quad = resolvePerspectiveQuad(
+					bounds,
+					handle,
+					start,
+					{ x: start.x + delta.x, y: start.y + delta.y },
+					{
+						shiftKey: false,
+						altKey: true,
+						cornerAcquisition: acquisition,
+					},
+				)
+				expect(quad[movedIndex]).toEqual({
+					x: start.x + delta.x,
+					y: start.y + delta.y,
+				})
+				expect(quad[mateIndex]).toEqual({
+					x: source[mateIndex].x - delta.x,
+					y: source[mateIndex].y - delta.y,
+				})
+				for (const index of [0, 1, 2, 3])
+					if (index !== movedIndex && index !== mateIndex)
+						expect(quad[index]).toEqual(source[index])
+				const length = Math.hypot(
+					quad[movedIndex].x - quad[mateIndex].x,
+					quad[movedIndex].y - quad[mateIndex].y,
+				)
+				expect(
+					direction === 1 ? length > originalLength : length < originalLength,
+				).toBe(true)
+			}
 		},
 	)
 
-	it("uses horizontal acquisition for an exact dominant-axis tie", () => {
+	it("keeps the selected side midpoint fixed and restores single-corner behavior when Alt is released", () => {
+		const source = perspectiveQuadFromBounds(bounds)
+		const start = source[0]
+		const current = { x: -20, y: 7 }
+		const sized = resolvePerspectiveQuad(bounds, "nw", start, current, {
+			shiftKey: false,
+			altKey: true,
+			cornerAcquisition: "horizontal",
+		})
+		expect(sized[0]).toEqual(current)
+		expect(sized[1]).toEqual({ x: 120, y: -7 })
+		expect({
+			x: (sized[0].x + sized[1].x) / 2,
+			y: (sized[0].y + sized[1].y) / 2,
+		}).toEqual({ x: 50, y: 0 })
+		const released = resolvePerspectiveQuad(bounds, "nw", start, current, {
+			shiftKey: false,
+			altKey: false,
+		})
+		expect(released).toEqual([current, source[1], source[2], source[3]])
+	})
+
+	it("uses horizontal side sizing for an exact acquisition tie", () => {
 		const quad = resolvePerspectiveQuad(
 			bounds,
 			"nw",
 			{ x: 0, y: 0 },
-			{ x: 12, y: 12 },
+			{ x: -12, y: -12 },
 			{ shiftKey: false, altKey: true },
 		)
 		expect(quad[1]).toEqual({ x: 112, y: 12 })
 		expect(quad[3]).toEqual({ x: 0, y: 80 })
 	})
 
+	it("applies free side sizing without Shift and constrains onto the latched side with Shift", () => {
+		const start = { x: 0, y: 0 }
+		const free = resolvePerspectiveQuad(
+			bounds,
+			"nw",
+			start,
+			{ x: -20, y: 9 },
+			{
+				shiftKey: false,
+				altKey: true,
+				cornerAcquisition: "horizontal",
+			},
+		)
+		expect(free[0]).toEqual({ x: -20, y: 9 })
+		expect(free[1]).toEqual({ x: 120, y: -9 })
+		const constrained = resolvePerspectiveQuad(
+			bounds,
+			"nw",
+			start,
+			{ x: -20, y: 9 },
+			{
+				shiftKey: true,
+				altKey: true,
+				cornerAcquisition: "horizontal",
+			},
+		)
+		expect(constrained[0]).toEqual({ x: -20, y: 0 })
+		expect(constrained[1]).toEqual({ x: 120, y: 0 })
+	})
+
+	it("acquires sides in the local frame of an already-perspectived cage", () => {
+		const source = [
+			{ x: 0, y: 10 },
+			{ x: 110, y: 0 },
+			{ x: 95, y: 100 },
+			{ x: -10, y: 80 },
+		] as const
+		const top = { x: -110, y: 10 }
+		const topLength = Math.hypot(top.x, top.y)
+		const acquired = resolvePerspectiveCornerAcquisition(
+			null,
+			source,
+			"nw",
+			{ x: (top.x / topLength) * 20, y: (top.y / topLength) * 20 },
+			false,
+		)
+		expect(acquired.choice).toBe("horizontal")
+		const rawDelta = { x: -18, y: 24 }
+		const unit = { x: top.x / topLength, y: top.y / topLength }
+		const amount = rawDelta.x * unit.x + rawDelta.y * unit.y
+		const constrained = { x: unit.x * amount, y: unit.y * amount }
+		const quad = resolvePerspectiveQuad(
+			bounds,
+			"nw",
+			source[0],
+			{ x: source[0].x + rawDelta.x, y: source[0].y + rawDelta.y },
+			{
+				shiftKey: true,
+				altKey: true,
+				cornerAcquisition: "horizontal",
+			},
+			source,
+		)
+		expect(quad[0].x).toBeCloseTo(source[0].x + constrained.x)
+		expect(quad[0].y).toBeCloseTo(source[0].y + constrained.y)
+		expect(quad[1].x).toBeCloseTo(source[1].x - constrained.x)
+		expect(quad[1].y).toBeCloseTo(source[1].y - constrained.y)
+	})
+
 	it("latches an acquired side while Shift is held and reacquires on release", () => {
+		const source = perspectiveQuadFromBounds(bounds)
 		const horizontal = resolvePerspectiveCornerAcquisition(
 			null,
-			{ x: 30, y: 8 },
+			source,
+			"nw",
+			{ x: -30, y: 8 },
 			false,
 		)
 		expect(horizontal).toEqual({
@@ -169,7 +246,9 @@ describe("perspective cage gestures", () => {
 		})
 		const latched = resolvePerspectiveCornerAcquisition(
 			horizontal,
-			{ x: 30, y: 8 },
+			source,
+			"nw",
+			{ x: -30, y: 8 },
 			true,
 		)
 		expect(latched).toEqual({
@@ -179,14 +258,18 @@ describe("perspective cage gestures", () => {
 		})
 		const drifted = resolvePerspectiveCornerAcquisition(
 			latched,
-			{ x: 8, y: 30 },
+			source,
+			"nw",
+			{ x: 8, y: -30 },
 			true,
 		)
 		expect(drifted.choice).toBe("horizontal")
 		expect(drifted.latched).toBe("horizontal")
 		const released = resolvePerspectiveCornerAcquisition(
 			drifted,
-			{ x: 8, y: 30 },
+			source,
+			"nw",
+			{ x: 8, y: -30 },
 			false,
 		)
 		expect(released).toEqual({
@@ -197,15 +280,20 @@ describe("perspective cage gestures", () => {
 	})
 
 	it("waits for meaningful movement before latching Shift", () => {
+		const source = perspectiveQuadFromBounds(bounds)
 		const pressed = resolvePerspectiveCornerAcquisition(
 			null,
+			source,
+			"nw",
 			{ x: 0, y: 0 },
 			true,
 		)
 		expect(pressed).toEqual({ choice: null, latched: null, shiftKey: true })
 		const acquired = resolvePerspectiveCornerAcquisition(
 			pressed,
-			{ x: 8, y: 30 },
+			source,
+			"nw",
+			{ x: 8, y: -30 },
 			true,
 		)
 		expect(acquired).toEqual({
@@ -215,51 +303,13 @@ describe("perspective cage gestures", () => {
 		})
 		const drifted = resolvePerspectiveCornerAcquisition(
 			acquired,
-			{ x: 30, y: 8 },
+			source,
+			"nw",
+			{ x: -30, y: 8 },
 			true,
 		)
 		expect(drifted.choice).toBe("vertical")
 	})
-
-	it.each([
-		["nw", 0, "horizontal", 1, { x: 8, y: 30 }],
-		["nw", 0, "vertical", 3, { x: 30, y: 8 }],
-		["ne", 1, "horizontal", 0, { x: 8, y: 30 }],
-		["ne", 1, "vertical", 2, { x: 30, y: 8 }],
-		["se", 2, "horizontal", 3, { x: 8, y: 30 }],
-		["se", 2, "vertical", 1, { x: 30, y: 8 }],
-		["sw", 3, "horizontal", 2, { x: 8, y: 30 }],
-		["sw", 3, "vertical", 0, { x: 30, y: 8 }],
-	] as const)(
-		"keeps the latched %s corner side after crossing its decision boundary",
-		(handle, movedIndex, acquisition, coupledIndex, drift) => {
-			const source = perspectiveQuadFromBounds(bounds)
-			const start = source[movedIndex]
-			const quad = resolvePerspectiveQuad(
-				bounds,
-				handle,
-				start,
-				{ x: start.x + drift.x, y: start.y + drift.y },
-				{
-					shiftKey: true,
-					altKey: true,
-					cornerAcquisition: acquisition,
-				},
-			)
-			const constrained =
-				acquisition === "horizontal"
-					? { x: drift.x, y: 0 }
-					: { x: 0, y: drift.y }
-			expect(quad[movedIndex]).toEqual({
-				x: start.x + constrained.x,
-				y: start.y + constrained.y,
-			})
-			expect(quad[coupledIndex]).toEqual({
-				x: source[coupledIndex].x + constrained.x,
-				y: source[coupledIndex].y + constrained.y,
-			})
-		},
-	)
 
 	it("shears edges and quantizes a Shift-held skew to 15 degrees", () => {
 		const free = resolvePerspectiveQuad(
@@ -304,6 +354,48 @@ describe("perspective cage gestures", () => {
 })
 
 describe("perspective destructive bake boundary", () => {
+	it("composes whole-side sizing through an already-perspectived source cage", () => {
+		const source = [
+			{ x: 5, y: 12 },
+			{ x: 112, y: 2 },
+			{ x: 96, y: 92 },
+			{ x: -8, y: 76 },
+		] as const
+		const first = bakePerspectiveObjects([rectangle()], bounds, source)
+		expect(first.ok).toBe(true)
+		if (!first.ok) return
+		const delta = { x: -14, y: 5 }
+		const target = resolvePerspectiveQuad(
+			bounds,
+			"nw",
+			source[0],
+			{ x: source[0].x + delta.x, y: source[0].y + delta.y },
+			{
+				shiftKey: false,
+				altKey: true,
+				cornerAcquisition: "horizontal",
+			},
+			source,
+		)
+		expect(target).toEqual([
+			{ x: source[0].x + delta.x, y: source[0].y + delta.y },
+			{ x: source[1].x - delta.x, y: source[1].y - delta.y },
+			source[2],
+			source[3],
+		])
+		const second = bakePerspectiveObjects(first.objects, bounds, target, source)
+		expect(second.ok).toBe(true)
+		if (!second.ok) return
+		const geometry = second.objects[0]!.geometry
+		expect(geometry.kind).toBe("path")
+		if (geometry.kind !== "path") return
+		const points = geometry.contours[0]!.points.slice(0, 4)
+		for (const [index, point] of points.entries()) {
+			expect(point?.x).toBeCloseTo(target[index]!.x, 6)
+			expect(point?.y).toBeCloseTo(target[index]!.y, 6)
+		}
+	})
+
 	it("expands a live shape to an ordinary identity-transform path", () => {
 		const object = rectangle({
 			transform: { a: 1, b: 0, c: 0.2, d: 1, e: 10, f: 20 },
