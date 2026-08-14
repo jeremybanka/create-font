@@ -111,8 +111,11 @@ function constrainedDelta(
 
 /**
  * Resolves a cage gesture. Side handles shear parallel to their edge. Corner
- * handles move one projective control; Shift keeps its dominant axis. Alt
- * mirrors the corresponding opposite edge/corner around the cage center.
+ * handles move one projective control; Shift keeps its dominant axis. With Alt,
+ * a horizontal-dominant corner drag couples the vertical neighbor and a
+ * vertical-dominant drag couples the horizontal neighbor. Exact ties count as
+ * horizontal, matching the Shift dominant-axis rule. Alt on an edge continues
+ * to mirror its skew across the cage center.
  */
 export function resolvePerspectiveQuad(
 	bounds: Bounds,
@@ -141,7 +144,13 @@ export function resolvePerspectiveQuad(
 	) {
 		const index = { nw: 0, ne: 1, se: 2, sw: 3 }[handle]
 		move(index, delta.x, delta.y)
-		if (modifiers.altKey) move((index + 2) % 4, -delta.x, -delta.y)
+		if (modifiers.altKey) {
+			const horizontalDominant = Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)
+			const neighbor = horizontalDominant
+				? ({ nw: 3, ne: 2, se: 1, sw: 0 } as const)[handle]
+				: ({ nw: 1, ne: 0, se: 3, sw: 2 } as const)[handle]
+			move(neighbor, delta.x, delta.y)
+		}
 	} else if (handle === "n" || handle === "s") {
 		const indices = handle === "n" ? ([0, 1] as const) : ([3, 2] as const)
 		for (const index of indices) move(index, delta.x, 0)

@@ -87,7 +87,71 @@ describe("perspective cage gestures", () => {
 			{ shiftKey: false, altKey: true },
 		)
 		expect(centered[0]).toEqual({ x: 30, y: 8 })
-		expect(centered[2]).toEqual({ x: 70, y: 72 })
+		expect(centered[3]).toEqual({ x: 30, y: 88 })
+		expect(centered[2]).toEqual({ x: 100, y: 80 })
+	})
+
+	it.each([
+		["nw", { x: 30, y: 8 }, 0, 3],
+		["nw", { x: 8, y: 30 }, 0, 1],
+		["ne", { x: 30, y: 8 }, 1, 2],
+		["ne", { x: 8, y: 30 }, 1, 0],
+		["se", { x: 30, y: 8 }, 2, 1],
+		["se", { x: 8, y: 30 }, 2, 3],
+		["sw", { x: 30, y: 8 }, 3, 0],
+		["sw", { x: 8, y: 30 }, 3, 2],
+	] as const)(
+		"couples the adjacent %s corner by dominant axis and recomputes live Alt transitions",
+		(handle, delta, movedIndex, coupledIndex) => {
+			const source = perspectiveQuadFromBounds(bounds)
+			const start = source[movedIndex]
+			const current = { x: start.x + delta.x, y: start.y + delta.y }
+			const withoutAlt = resolvePerspectiveQuad(
+				bounds,
+				handle,
+				start,
+				current,
+				{
+					shiftKey: false,
+					altKey: false,
+				},
+			)
+			const withAlt = resolvePerspectiveQuad(bounds, handle, start, current, {
+				shiftKey: false,
+				altKey: true,
+			})
+			const releasedAlt = resolvePerspectiveQuad(
+				bounds,
+				handle,
+				start,
+				current,
+				{
+					shiftKey: false,
+					altKey: false,
+				},
+			)
+
+			expect(withoutAlt[movedIndex]).toEqual(current)
+			expect(withoutAlt[coupledIndex]).toEqual(source[coupledIndex])
+			expect(withAlt[movedIndex]).toEqual(current)
+			expect(withAlt[coupledIndex]).toEqual({
+				x: source[coupledIndex].x + delta.x,
+				y: source[coupledIndex].y + delta.y,
+			})
+			expect(releasedAlt).toEqual(withoutAlt)
+		},
+	)
+
+	it("uses horizontal acquisition for an exact dominant-axis tie", () => {
+		const quad = resolvePerspectiveQuad(
+			bounds,
+			"nw",
+			{ x: 0, y: 0 },
+			{ x: 12, y: 12 },
+			{ shiftKey: false, altKey: true },
+		)
+		expect(quad[3]).toEqual({ x: 12, y: 92 })
+		expect(quad[1]).toEqual({ x: 100, y: 0 })
 	})
 
 	it("shears edges and quantizes a Shift-held skew to 15 degrees", () => {

@@ -836,7 +836,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "transform")
 		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
 	if (tool === "perspective")
-		return "Drag corner controls for perspective · Drag edge controls to skew · Shift constrains corners or snaps skew to 15° · Alt/Option mirrors around the cage center · Escape cancels"
+		return "Click or marquee to select · Shift/Command/Ctrl-click toggles selection · Drag corners for perspective · Shift constrains · Alt/Option couples the vertical neighbor for horizontal-dominant corner drags, or the horizontal neighbor for vertical-dominant drags · Edge controls skew; Alt/Option mirrors edge skew · Escape cancels"
 	if (tool === "text")
 		return "Click to insert point text · Type in the native editor · Escape exits text editing"
 	if (tool === "area-text")
@@ -962,6 +962,12 @@ function designTransformHandleCursor(
 		case "move":
 			return "move"
 	}
+}
+
+function perspectiveHandleCursor(handle: PerspectiveHandle): CanvasCursor {
+	if (handle === "n" || handle === "s") return "ew-resize"
+	if (handle === "e" || handle === "w") return "ns-resize"
+	return designTransformHandleCursor(handle)
 }
 
 function uniqueTextFonts(
@@ -2966,10 +2972,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 
 	const selectTool = useCallback(
 		(nextTool: DesignTool): void => {
-			if (nextTool === "perspective" && !perspectiveEligibility.eligible) {
-				setStatus(perspectiveEligibility.reason)
-				return
-			}
 			if (
 				(nextTool === "text" || nextTool === "area-text") &&
 				textToolsDisabledReason !== null
@@ -3015,7 +3017,6 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			editingTextId,
 			effectiveEditableObjectIds,
 			finishPen,
-			perspectiveEligibility,
 			textToolsDisabledReason,
 			tool,
 		],
@@ -5092,11 +5093,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				][]
 			).map(([id, definition]) => {
 				const disabledReason =
-					id === "text" || id === "area-text"
-						? textToolsDisabledReason
-						: id === "perspective" && !perspectiveEligibility.eligible
-							? perspectiveEligibility.reason
-							: null
+					id === "text" || id === "area-text" ? textToolsDisabledReason : null
 				return {
 					id: `tool-${id}`,
 					displayName: definition.label,
@@ -6868,7 +6865,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<PointerEvent>,
 		object: DesignObject,
 	): void => {
-		if (tool !== "select" && tool !== "transform") return
+		if (tool !== "select" && tool !== "transform" && tool !== "perspective")
+			return
 		const effective = effectiveHierarchy.byObjectId.get(object.id)
 		if (effective !== undefined && (!effective.visible || effective.locked)) {
 			event.cancelBubble = true
@@ -6961,7 +6959,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<PointerEvent>,
 		blendId: string,
 	): void => {
-		if (tool !== "select" && tool !== "transform") return
+		if (tool !== "select" && tool !== "transform" && tool !== "perspective")
+			return
 		const blend = document.blends?.find(({ id }) => id === blendId)
 		if (blend === undefined || blend.hidden || blend.locked) return
 		const unavailable = [blend.startObjectId, blend.endObjectId]
@@ -6988,7 +6987,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		event: KonvaEventObject<MouseEvent | TouchEvent>,
 		object: DesignObject,
 	): void => {
-		if (tool !== "select" && tool !== "transform") return
+		if (tool !== "select" && tool !== "transform" && tool !== "perspective")
+			return
 		const unit = designSelectionUnitAtObject(
 			document,
 			object.id,
@@ -7531,17 +7531,13 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			} else startDirectGesture(event, target)
 			return
 		}
-		if (tool === "perspective") {
-			setStatus(
-				"Drag a Perspective Transform cage control; use Tab for keyboard controls.",
-			)
-			return
-		}
 		const hit = nearestDesignObject(
 			displayedObjects,
 			point,
 			worldScale,
-			tool === "select" || tool === "transform" ? 12 : 0,
+			tool === "select" || tool === "transform" || tool === "perspective"
+				? 12
+				: 0,
 			interactionBoundsForObject,
 		)
 		if (hit === null)
@@ -8488,7 +8484,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		}
 		gestureRef.current = gesture
 		setPerspectiveCage(perspectiveQuadFromBounds(bounds))
-		setTransformCursor(designTransformHandleCursor(handle))
+		setTransformCursor(perspectiveHandleCursor(handle))
 		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
 	}
 
@@ -9416,7 +9412,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																	object.locked ||
 																	(tool !== "select" &&
 																		tool !== "direct" &&
-																		tool !== "transform")
+																		tool !== "transform" &&
+																		tool !== "perspective")
 																)
 																	return
 																const container = event.target
@@ -9424,7 +9421,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																	?.container()
 																if (container !== undefined)
 																	container.style.cursor = canvasToolCursor(
-																		tool === "direct" ? "select" : tool,
+																		tool === "direct"
+																			? "select"
+																			: tool === "perspective"
+																				? "transform"
+																				: tool,
 																		{
 																			overObject: true,
 																		},
@@ -9902,7 +9903,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											})()}
 									{selectionBounds === null ? null : (
 										<>
-											{tool === "perspective" ? (
+											{tool === "perspective" &&
+											perspectiveEligibility.eligible ? (
 												<PerspectiveSelectionCage
 													quad={
 														perspectiveCage ??
@@ -9912,9 +9914,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													color={aggregateSelectionColor}
 													onHandlePointerDown={startPerspective}
 													onHandlePointerEnter={(handle) =>
-														setTransformCursor(
-															designTransformHandleCursor(handle),
-														)
+														setTransformCursor(perspectiveHandleCursor(handle))
 													}
 													onHandlePointerLeave={() => {
 														if (gestureRef.current?.kind !== "perspective")
@@ -9984,7 +9984,9 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							/>
 						)}
 					</artboard-wrap>
-					{tool !== "perspective" || selectionBounds === null ? null : (
+					{tool !== "perspective" ||
+					selectionBounds === null ||
+					!perspectiveEligibility.eligible ? null : (
 						<perspective-keyboard-controls
 							data-screen-reader
 							role="group"
@@ -9992,8 +9994,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						>
 							<p>
 								Use arrow keys on a corner to distort it, or horizontal/vertical
-								arrows on the corresponding edge to skew. Shift constrains and
-								Alt or Option mirrors around the center.
+								arrows on the corresponding edge to skew. Shift constrains. On a
+								corner, Alt or Option couples the vertical neighbor for a
+								horizontal-dominant move and the horizontal neighbor for a
+								vertical-dominant move; on an edge it mirrors the skew.
 							</p>
 							{DESIGN_PERSPECTIVE_HANDLES.map((handle) => (
 								<button

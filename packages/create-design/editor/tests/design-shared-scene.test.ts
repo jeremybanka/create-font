@@ -1641,6 +1641,183 @@ describe("create-design shared vector scene", () => {
 		)
 	})
 
+	it("activates Perspective without a selection and reuses click-toggle selection before showing its cage", async () => {
+		const stage = mountDesign()
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (perspective === null || canvas === null)
+			throw new Error("Perspective selection controls were not found.")
+		expect(perspective.disabled).toBe(false)
+		act(() => perspective.click())
+		expect(perspective.getAttribute("aria-pressed")).toBe("true")
+		expect(stage.find(".perspective-handle")).toHaveLength(0)
+
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		const object = (id: string) => {
+			const node = stage
+				.find(".design-object")
+				.find((candidate: { name(): string }) => candidate.name().includes(id))
+			if (node === undefined) throw new Error(`${id} was not rendered.`)
+			return node
+		}
+		const clickObject = async (
+			id: string,
+			pointerId: number,
+			shiftKey = false,
+		): Promise<void> => {
+			const node = object(id)
+			const rect = node.getClientRect()
+			const point = {
+				x: rect.x + rect.width / 2,
+				y: rect.y + rect.height / 2,
+			}
+			const down = new PointerEvent("pointerdown", {
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: point.x,
+				clientY: point.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				shiftKey,
+			})
+			Object.defineProperty(down, "currentTarget", { value: canvas })
+			await act(async () => {
+				stage.setPointersPositions(down)
+				node.fire("pointerdown", { evt: down }, true)
+				stage.fire(
+					"pointerup",
+					{
+						evt: new PointerEvent("pointerup", {
+							bubbles: true,
+							button: 0,
+							clientX: point.x,
+							clientY: point.y,
+							pointerId,
+							pointerType: "mouse",
+							shiftKey,
+						}),
+					},
+					true,
+				)
+				await Promise.resolve()
+			})
+		}
+		const selectedNames = () =>
+			[
+				...document.querySelectorAll<HTMLButtonElement>(
+					'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+				),
+			].map((button) => button.textContent)
+
+		await clickObject("object:coral", 301)
+		expect(selectedNames()).toHaveLength(1)
+		expect(selectedNames()[0]).toContain("Coral rectangle")
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		await clickObject("object:cyan", 302, true)
+		expect(selectedNames()).toHaveLength(2)
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		await clickObject("object:coral", 303, true)
+		expect(selectedNames()).toHaveLength(1)
+		expect(selectedNames()[0]).toContain("Cyan ellipse")
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+
+		const cursorByHandle = {
+			nw: "nwse-resize",
+			n: "ew-resize",
+			ne: "nesw-resize",
+			e: "ns-resize",
+			se: "nwse-resize",
+			s: "ew-resize",
+			sw: "nesw-resize",
+			w: "ns-resize",
+		} as const
+		for (const [name, cursor] of Object.entries(cursorByHandle)) {
+			act(() => stage.findOne(`.perspective-handle-${name}`).fire("mouseenter"))
+			expect(stage.container().style.cursor).toBe(cursor)
+			act(() => stage.findOne(`.perspective-handle-${name}`).fire("mouseleave"))
+		}
+	})
+
+	it("marquee-selects artwork with Perspective and reveals the eligible cage", async () => {
+		const stage = mountDesign()
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		const objects = stage.find(".design-object")
+		if (perspective === null || canvas === null || objects.length < 2)
+			throw new Error("Perspective marquee controls were not found.")
+		act(() => perspective.click())
+		const rects = objects.map((object: { getClientRect(): DOMRect }) =>
+			object.getClientRect(),
+		)
+		const start = {
+			x: Math.min(...rects.map(({ x }) => x)) - 20,
+			y: Math.min(...rects.map(({ y }) => y)) - 20,
+		}
+		const end = {
+			x: Math.max(...rects.map(({ x, width }) => x + width)) + 20,
+			y: Math.max(...rects.map(({ y, height }) => y + height)) + 20,
+		}
+		await act(async () => {
+			canvas.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: start.x,
+					clientY: start.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointermove", {
+					bubbles: true,
+					button: 0,
+					buttons: 1,
+					clientX: end.x,
+					clientY: end.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			canvas.dispatchEvent(
+				new PointerEvent("pointerup", {
+					bubbles: true,
+					button: 0,
+					clientX: end.x,
+					clientY: end.y,
+					pointerId: 304,
+					pointerType: "mouse",
+				}),
+			)
+			await Promise.resolve()
+		})
+		expect(
+			document.querySelectorAll(
+				'design-layers-tile [data-layer-kind="object"][aria-selected="true"]',
+			),
+		).toHaveLength(2)
+		expect(stage.find(".perspective-handle")).toHaveLength(8)
+	})
+
 	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {
 		const base = createInitialDocument()
 		const template = base.objects[0]!
