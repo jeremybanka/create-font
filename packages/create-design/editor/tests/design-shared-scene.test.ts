@@ -1818,6 +1818,178 @@ describe("create-design shared vector scene", () => {
 		expect(stage.find(".perspective-handle")).toHaveLength(8)
 	})
 
+	it("latches live Perspective corner acquisition across Shift boundary crossings", async () => {
+		const stage = mountDesign()
+		const layer = [
+			...document.querySelectorAll<HTMLButtonElement>(
+				'design-layers-tile [data-layer-kind="object"]',
+			),
+		].find((button) => button.textContent?.includes("Coral rectangle"))
+		const perspective = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Perspective Transform"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === undefined || perspective === null || canvas === null)
+			throw new Error("Perspective corner controls were not found.")
+		act(() => {
+			layer.click()
+			perspective.click()
+		})
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"setPointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(
+			HTMLCanvasElement.prototype,
+			"releasePointerCapture",
+		).mockImplementation(() => undefined)
+		vi.spyOn(HTMLCanvasElement.prototype, "hasPointerCapture").mockReturnValue(
+			false,
+		)
+		let pointer = { x: 0, y: 0 }
+		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
+		const corners = ["nw", "ne", "se", "sw"] as const
+		const horizontalNeighbor = { nw: "ne", ne: "nw", se: "sw", sw: "se" }
+		const verticalNeighbor = { nw: "sw", ne: "se", se: "ne", sw: "nw" }
+		const cornerPosition = (name: (typeof corners)[number]) =>
+			stage.findOne(`.perspective-handle-${name}`).position()
+		const startGesture = (
+			handleName: (typeof corners)[number],
+			pointerId: number,
+			shiftKey: boolean,
+		) => {
+			const handle = stage.findOne(`.perspective-handle-${handleName}`)
+			pointer = handle.getAbsolutePosition()
+			const down = new PointerEvent("pointerdown", {
+				altKey: true,
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: pointer.x,
+				clientY: pointer.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				shiftKey,
+			})
+			Object.defineProperty(down, "currentTarget", { value: canvas })
+			handle.fire("pointerdown", { evt: down }, true)
+			return { ...pointer }
+		}
+		const moveGesture = (
+			origin: { x: number; y: number },
+			delta: { x: number; y: number },
+			pointerId: number,
+			shiftKey: boolean,
+		) => {
+			pointer = { x: origin.x + delta.x, y: origin.y + delta.y }
+			stage.fire(
+				"pointermove",
+				{
+					evt: new PointerEvent("pointermove", {
+						altKey: true,
+						bubbles: true,
+						button: 0,
+						buttons: 1,
+						clientX: pointer.x,
+						clientY: pointer.y,
+						isPrimary: true,
+						pointerId,
+						pointerType: "mouse",
+						shiftKey,
+					}),
+				},
+				true,
+			)
+		}
+		const pressShift = (shiftKey: boolean) =>
+			window.dispatchEvent(
+				new KeyboardEvent(shiftKey ? "keydown" : "keyup", {
+					altKey: true,
+					bubbles: true,
+					key: "Shift",
+					shiftKey,
+				}),
+			)
+		const cancelGesture = () =>
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+			)
+
+		let pointerId = 400
+		for (const handleName of corners) {
+			for (const initialChoice of ["horizontal", "vertical"] as const) {
+				const source = Object.fromEntries(
+					corners.map((name) => [name, { ...cornerPosition(name) }]),
+				) as Record<(typeof corners)[number], { x: number; y: number }>
+				const chosen = (
+					initialChoice === "horizontal" ? horizontalNeighbor : verticalNeighbor
+				)[handleName]
+				const reacquired = (
+					initialChoice === "horizontal" ? verticalNeighbor : horizontalNeighbor
+				)[handleName]
+				const initial =
+					initialChoice === "horizontal" ? { x: 80, y: 10 } : { x: 10, y: 80 }
+				const crossed =
+					initialChoice === "horizontal" ? { x: 30, y: 100 } : { x: 100, y: 30 }
+				let origin = { x: 0, y: 0 }
+				await act(async () => {
+					origin = startGesture(handleName, pointerId, false)
+					moveGesture(origin, initial, pointerId, false)
+					pressShift(true)
+					moveGesture(origin, crossed, pointerId, true)
+					await Promise.resolve()
+				})
+				const latched = cornerPosition(chosen)
+				const untouched = cornerPosition(reacquired)
+				if (initialChoice === "horizontal") {
+					expect(latched.x).not.toBeCloseTo(source[chosen].x)
+					expect(latched.y).toBeCloseTo(source[chosen].y)
+				} else {
+					expect(latched.x).toBeCloseTo(source[chosen].x)
+					expect(latched.y).not.toBeCloseTo(source[chosen].y)
+				}
+				expect(untouched).toEqual(source[reacquired])
+
+				await act(async () => {
+					pressShift(false)
+					await Promise.resolve()
+				})
+				expect(cornerPosition(chosen)).toEqual(source[chosen])
+				const resumed = cornerPosition(reacquired)
+				expect(resumed).not.toEqual(source[reacquired])
+				await act(async () => {
+					cancelGesture()
+					await Promise.resolve()
+				})
+				pointerId += 1
+			}
+		}
+
+		const source = Object.fromEntries(
+			corners.map((name) => [name, { ...cornerPosition(name) }]),
+		) as Record<(typeof corners)[number], { x: number; y: number }>
+		let origin = { x: 0, y: 0 }
+		await act(async () => {
+			origin = startGesture("nw", pointerId, true)
+			moveGesture(origin, { x: 10, y: 80 }, pointerId, true)
+			moveGesture(origin, { x: 100, y: 30 }, pointerId, true)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("sw").x).toBeCloseTo(source.sw.x)
+		expect(cornerPosition("sw").y).not.toBeCloseTo(source.sw.y)
+		expect(cornerPosition("ne")).toEqual(source.ne)
+		await act(async () => {
+			pressShift(false)
+			await Promise.resolve()
+		})
+		expect(cornerPosition("sw")).toEqual(source.sw)
+		expect(cornerPosition("ne")).not.toEqual(source.ne)
+		act(() => {
+			cancelGesture()
+		})
+	})
+
 	it("runs large partition Pathfinder commands off-thread with progress, cancellation, and stale-result protection", async () => {
 		const base = createInitialDocument()
 		const template = base.objects[0]!

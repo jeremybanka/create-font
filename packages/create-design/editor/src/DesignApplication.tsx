@@ -378,7 +378,9 @@ import {
 	perspectiveHandlePoint,
 	perspectiveQuadFromBounds,
 	perspectiveTransformEligibility,
+	resolvePerspectiveCornerAcquisition,
 	resolvePerspectiveQuad,
+	type PerspectiveCornerAcquisitionState,
 	type PerspectiveHandle,
 	type PerspectiveQuad,
 } from "./perspective-transform.ts"
@@ -457,6 +459,7 @@ type CanvasGesture =
 			readonly rawCurrent: CanvasPoint
 			readonly current: CanvasPoint
 			readonly modifiers: Readonly<{ shiftKey: boolean; altKey: boolean }>
+			readonly cornerAcquisition: PerspectiveCornerAcquisitionState | null
 	  }
 	| {
 			readonly kind: "direct"
@@ -836,7 +839,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "transform")
 		return "Drag corner handles to resize both axes · Drag side handles to resize one axis · Shift preserves proportions · Alt resizes from center · Use numeric Transform controls for keyboard access"
 	if (tool === "perspective")
-		return "Click or marquee to select · Shift/Command/Ctrl-click toggles selection · Drag corners for perspective · Shift constrains · Alt/Option couples the vertical neighbor for horizontal-dominant corner drags, or the horizontal neighbor for vertical-dominant drags · Edge controls skew; Alt/Option mirrors edge skew · Escape cancels"
+		return "Click or marquee to select · Shift/Command/Ctrl-click toggles selection · Drag corners for perspective · Shift constrains and latches the acquired side until release · Alt/Option couples the horizontal neighbor for horizontal-dominant corner drags, or the vertical neighbor for vertical-dominant drags · Edge controls skew; Alt/Option mirrors edge skew · Escape cancels"
 	if (tool === "text")
 		return "Click to insert point text · Type in the native editor · Escape exits text editing"
 	if (tool === "area-text")
@@ -6744,12 +6747,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		rawCurrent: CanvasPoint,
 		modifiers = gesture.modifiers,
 	) => {
+		const cornerAcquisition =
+			gesture.handle.length === 2
+				? resolvePerspectiveCornerAcquisition(
+						gesture.cornerAcquisition,
+						{
+							x: rawCurrent.x - gesture.start.x,
+							y: rawCurrent.y - gesture.start.y,
+						},
+						modifiers.shiftKey,
+					)
+				: null
+		const resolvedModifiers =
+			cornerAcquisition?.choice === null || cornerAcquisition === null
+				? modifiers
+				: { ...modifiers, cornerAcquisition: cornerAcquisition.choice }
 		const rawQuad = resolvePerspectiveQuad(
 			gesture.bounds,
 			gesture.handle,
 			gesture.start,
 			rawCurrent,
-			modifiers,
+			resolvedModifiers,
 		)
 		const rawHandle = perspectiveHandlePoint(rawQuad, gesture.handle)
 		const snap = snapDesignPoint(
@@ -6772,10 +6790,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture.handle,
 			gesture.start,
 			current,
-			modifiers,
+			resolvedModifiers,
 		)
 		return {
-			gesture: { ...gesture, rawCurrent, current, modifiers },
+			gesture: {
+				...gesture,
+				rawCurrent,
+				current,
+				modifiers,
+				cornerAcquisition,
+			},
 			quad,
 			snap,
 		}
@@ -8481,6 +8505,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			rawCurrent: start,
 			current: start,
 			modifiers: gestureModifiers(event.evt),
+			cornerAcquisition: null,
 		}
 		gestureRef.current = gesture
 		setPerspectiveCage(perspectiveQuadFromBounds(bounds))
@@ -8524,6 +8549,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			rawCurrent: start,
 			current: start,
 			modifiers: { shiftKey: event.shiftKey, altKey: event.altKey },
+			cornerAcquisition: null,
 		}
 		const resolved = resolvePerspectiveGesture(gesture, {
 			x: start.x + arrowDelta.x,
@@ -9995,9 +10021,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							<p>
 								Use arrow keys on a corner to distort it, or horizontal/vertical
 								arrows on the corresponding edge to skew. Shift constrains. On a
-								corner, Alt or Option couples the vertical neighbor for a
-								horizontal-dominant move and the horizontal neighbor for a
-								vertical-dominant move; on an edge it mirrors the skew.
+								corner, Alt or Option couples the horizontal neighbor for a
+								horizontal-dominant move and the vertical neighbor for a
+								vertical-dominant move. Shift latches that choice until
+								released; on an edge Alt or Option mirrors the skew.
 							</p>
 							{DESIGN_PERSPECTIVE_HANDLES.map((handle) => (
 								<button

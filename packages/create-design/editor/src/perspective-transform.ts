@@ -42,6 +42,15 @@ export interface DesignPointLike {
 export interface PerspectiveModifiers {
 	readonly shiftKey: boolean
 	readonly altKey: boolean
+	readonly cornerAcquisition?: PerspectiveCornerAcquisition
+}
+
+export type PerspectiveCornerAcquisition = "horizontal" | "vertical"
+
+export interface PerspectiveCornerAcquisitionState {
+	readonly choice: PerspectiveCornerAcquisition | null
+	readonly latched: PerspectiveCornerAcquisition | null
+	readonly shiftKey: boolean
 }
 
 export const PERSPECTIVE_BAKE_MAX_ERROR = 0.25
@@ -87,11 +96,13 @@ function constrainedDelta(
 	bounds: Bounds,
 	handle: PerspectiveHandle,
 	delta: DesignPointLike,
-	shiftKey: boolean,
+	modifiers: PerspectiveModifiers,
 ): DesignPointLike {
-	if (!shiftKey) return delta
+	if (!modifiers.shiftKey) return delta
 	if (handle.length === 2) {
-		return Math.abs(delta.x) >= Math.abs(delta.y)
+		return (modifiers.cornerAcquisition ??
+			(Math.abs(delta.x) >= Math.abs(delta.y) ? "horizontal" : "vertical")) ===
+			"horizontal"
 			? { x: delta.x, y: 0 }
 			: { x: 0, y: delta.y }
 	}
@@ -109,13 +120,51 @@ function constrainedDelta(
 		: { x: 0, y: constrained }
 }
 
+function dominantCornerAcquisition(
+	delta: DesignPointLike,
+): PerspectiveCornerAcquisition | null {
+	if (
+		Math.abs(delta.x) <= Number.EPSILON &&
+		Math.abs(delta.y) <= Number.EPSILON
+	)
+		return null
+	return Math.abs(delta.x) >= Math.abs(delta.y) ? "horizontal" : "vertical"
+}
+
+/**
+ * Tracks the adjacent side selected by a corner gesture. Acquisition follows
+ * the current dominant pointer axis until Shift is pressed. Shift freezes the
+ * current choice (or the first meaningful choice if held before movement), and
+ * releasing Shift resumes dynamic acquisition at the current pointer.
+ */
+export function resolvePerspectiveCornerAcquisition(
+	previous: PerspectiveCornerAcquisitionState | null,
+	delta: DesignPointLike,
+	shiftKey: boolean,
+): PerspectiveCornerAcquisitionState {
+	const dynamic = dominantCornerAcquisition(delta)
+	if (!shiftKey)
+		return {
+			choice: dynamic ?? previous?.choice ?? null,
+			latched: null,
+			shiftKey: false,
+		}
+	const latched = previous?.shiftKey
+		? (previous.latched ?? previous.choice ?? dynamic)
+		: (previous?.choice ?? dynamic)
+	return {
+		choice: latched,
+		latched,
+		shiftKey: true,
+	}
+}
+
 /**
  * Resolves a cage gesture. Side handles shear parallel to their edge. Corner
- * handles move one projective control; Shift keeps its dominant axis. With Alt,
- * a horizontal-dominant corner drag couples the vertical neighbor and a
- * vertical-dominant drag couples the horizontal neighbor. Exact ties count as
- * horizontal, matching the Shift dominant-axis rule. Alt on an edge continues
- * to mirror its skew across the cage center.
+ * handles move one projective control; Shift keeps its acquired axis. With Alt,
+ * a horizontal acquisition couples the horizontal neighbor and a vertical
+ * acquisition couples the vertical neighbor. Exact ties count as horizontal.
+ * Alt on an edge continues to mirror its skew across the cage center.
  */
 export function resolvePerspectiveQuad(
 	bounds: Bounds,
@@ -126,7 +175,7 @@ export function resolvePerspectiveQuad(
 ): PerspectiveQuad {
 	const source = perspectiveQuadFromBounds(bounds)
 	const rawDelta = { x: current.x - start.x, y: current.y - start.y }
-	const delta = constrainedDelta(bounds, handle, rawDelta, modifiers.shiftKey)
+	const delta = constrainedDelta(bounds, handle, rawDelta, modifiers)
 	const quad = source.map((point) => ({ ...point })) as [
 		DesignPointLike,
 		DesignPointLike,
@@ -145,10 +194,15 @@ export function resolvePerspectiveQuad(
 		const index = { nw: 0, ne: 1, se: 2, sw: 3 }[handle]
 		move(index, delta.x, delta.y)
 		if (modifiers.altKey) {
-			const horizontalDominant = Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)
-			const neighbor = horizontalDominant
-				? ({ nw: 3, ne: 2, se: 1, sw: 0 } as const)[handle]
-				: ({ nw: 1, ne: 0, se: 3, sw: 2 } as const)[handle]
+			const acquisition =
+				modifiers.cornerAcquisition ??
+				(Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)
+					? "horizontal"
+					: "vertical")
+			const neighbor =
+				acquisition === "horizontal"
+					? ({ nw: 1, ne: 0, se: 3, sw: 2 } as const)[handle]
+					: ({ nw: 3, ne: 2, se: 1, sw: 0 } as const)[handle]
 			move(neighbor, delta.x, delta.y)
 		}
 	} else if (handle === "n" || handle === "s") {

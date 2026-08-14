@@ -5,6 +5,7 @@ import {
 	bakePerspectiveObjects,
 	perspectiveQuadFromBounds,
 	perspectiveTransformEligibility,
+	resolvePerspectiveCornerAcquisition,
 	resolvePerspectiveQuad,
 	validPerspectiveQuad,
 } from "../src/perspective-transform.ts"
@@ -87,19 +88,20 @@ describe("perspective cage gestures", () => {
 			{ shiftKey: false, altKey: true },
 		)
 		expect(centered[0]).toEqual({ x: 30, y: 8 })
-		expect(centered[3]).toEqual({ x: 30, y: 88 })
+		expect(centered[1]).toEqual({ x: 130, y: 8 })
+		expect(centered[3]).toEqual({ x: 0, y: 80 })
 		expect(centered[2]).toEqual({ x: 100, y: 80 })
 	})
 
 	it.each([
-		["nw", { x: 30, y: 8 }, 0, 3],
-		["nw", { x: 8, y: 30 }, 0, 1],
-		["ne", { x: 30, y: 8 }, 1, 2],
-		["ne", { x: 8, y: 30 }, 1, 0],
-		["se", { x: 30, y: 8 }, 2, 1],
-		["se", { x: 8, y: 30 }, 2, 3],
-		["sw", { x: 30, y: 8 }, 3, 0],
-		["sw", { x: 8, y: 30 }, 3, 2],
+		["nw", { x: 30, y: 8 }, 0, 1],
+		["nw", { x: 8, y: 30 }, 0, 3],
+		["ne", { x: 30, y: 8 }, 1, 0],
+		["ne", { x: 8, y: 30 }, 1, 2],
+		["se", { x: 30, y: 8 }, 2, 3],
+		["se", { x: 8, y: 30 }, 2, 1],
+		["sw", { x: 30, y: 8 }, 3, 2],
+		["sw", { x: 8, y: 30 }, 3, 0],
 	] as const)(
 		"couples the adjacent %s corner by dominant axis and recomputes live Alt transitions",
 		(handle, delta, movedIndex, coupledIndex) => {
@@ -150,9 +152,114 @@ describe("perspective cage gestures", () => {
 			{ x: 12, y: 12 },
 			{ shiftKey: false, altKey: true },
 		)
-		expect(quad[3]).toEqual({ x: 12, y: 92 })
-		expect(quad[1]).toEqual({ x: 100, y: 0 })
+		expect(quad[1]).toEqual({ x: 112, y: 12 })
+		expect(quad[3]).toEqual({ x: 0, y: 80 })
 	})
+
+	it("latches an acquired side while Shift is held and reacquires on release", () => {
+		const horizontal = resolvePerspectiveCornerAcquisition(
+			null,
+			{ x: 30, y: 8 },
+			false,
+		)
+		expect(horizontal).toEqual({
+			choice: "horizontal",
+			latched: null,
+			shiftKey: false,
+		})
+		const latched = resolvePerspectiveCornerAcquisition(
+			horizontal,
+			{ x: 30, y: 8 },
+			true,
+		)
+		expect(latched).toEqual({
+			choice: "horizontal",
+			latched: "horizontal",
+			shiftKey: true,
+		})
+		const drifted = resolvePerspectiveCornerAcquisition(
+			latched,
+			{ x: 8, y: 30 },
+			true,
+		)
+		expect(drifted.choice).toBe("horizontal")
+		expect(drifted.latched).toBe("horizontal")
+		const released = resolvePerspectiveCornerAcquisition(
+			drifted,
+			{ x: 8, y: 30 },
+			false,
+		)
+		expect(released).toEqual({
+			choice: "vertical",
+			latched: null,
+			shiftKey: false,
+		})
+	})
+
+	it("waits for meaningful movement before latching Shift", () => {
+		const pressed = resolvePerspectiveCornerAcquisition(
+			null,
+			{ x: 0, y: 0 },
+			true,
+		)
+		expect(pressed).toEqual({ choice: null, latched: null, shiftKey: true })
+		const acquired = resolvePerspectiveCornerAcquisition(
+			pressed,
+			{ x: 8, y: 30 },
+			true,
+		)
+		expect(acquired).toEqual({
+			choice: "vertical",
+			latched: "vertical",
+			shiftKey: true,
+		})
+		const drifted = resolvePerspectiveCornerAcquisition(
+			acquired,
+			{ x: 30, y: 8 },
+			true,
+		)
+		expect(drifted.choice).toBe("vertical")
+	})
+
+	it.each([
+		["nw", 0, "horizontal", 1, { x: 8, y: 30 }],
+		["nw", 0, "vertical", 3, { x: 30, y: 8 }],
+		["ne", 1, "horizontal", 0, { x: 8, y: 30 }],
+		["ne", 1, "vertical", 2, { x: 30, y: 8 }],
+		["se", 2, "horizontal", 3, { x: 8, y: 30 }],
+		["se", 2, "vertical", 1, { x: 30, y: 8 }],
+		["sw", 3, "horizontal", 2, { x: 8, y: 30 }],
+		["sw", 3, "vertical", 0, { x: 30, y: 8 }],
+	] as const)(
+		"keeps the latched %s corner side after crossing its decision boundary",
+		(handle, movedIndex, acquisition, coupledIndex, drift) => {
+			const source = perspectiveQuadFromBounds(bounds)
+			const start = source[movedIndex]
+			const quad = resolvePerspectiveQuad(
+				bounds,
+				handle,
+				start,
+				{ x: start.x + drift.x, y: start.y + drift.y },
+				{
+					shiftKey: true,
+					altKey: true,
+					cornerAcquisition: acquisition,
+				},
+			)
+			const constrained =
+				acquisition === "horizontal"
+					? { x: drift.x, y: 0 }
+					: { x: 0, y: drift.y }
+			expect(quad[movedIndex]).toEqual({
+				x: start.x + constrained.x,
+				y: start.y + constrained.y,
+			})
+			expect(quad[coupledIndex]).toEqual({
+				x: source[coupledIndex].x + constrained.x,
+				y: source[coupledIndex].y + constrained.y,
+			})
+		},
+	)
 
 	it("shears edges and quantizes a Shift-held skew to 15 degrees", () => {
 		const free = resolvePerspectiveQuad(
