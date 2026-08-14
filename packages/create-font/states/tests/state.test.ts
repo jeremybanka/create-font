@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { createFontEditorState } from "../src/index.ts"
+import {
+	createFontEditorState,
+	type FontDocumentCommand,
+} from "../src/index.ts"
 import {
 	blackMasterId,
 	makeGeometricOEditorFont,
@@ -97,6 +100,36 @@ describe("font editor state", () => {
 			expect.objectContaining({ x: black.x + 19, y: black.y - 7 }),
 		)
 		expect(firstPoint(editor, razorMasterId)).toEqual(razor)
+	})
+
+	it("replays registered commands with one shared glyph timeline", () => {
+		const commands: FontDocumentCommand[] = []
+		const local = createFontEditorState({
+			key: "state/realtime-local",
+			onDocumentCommand: (command) => commands.push(command),
+		})
+		local.actions.load(makeGeometricOEditorFont())
+		const remote = loaded("state/realtime-remote")
+		const point = firstPoint(local, blackMasterId)
+		local.actions.movePoints({
+			masterId: blackMasterId,
+			glyphId: oGlyphId,
+			points: [{ pointId: point.id, x: point.x + 12, y: point.y }],
+		})
+		expect(commands).toHaveLength(1)
+		remote.applyDocumentCommand(commands[0]!)
+		expect(remote.read.editorSource()).toEqual(local.read.editorSource())
+		expect(
+			remote.silo.inspectTimeline(remote.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 1, length: 1 })
+
+		local.undo(oGlyphId)
+		expect(commands).toHaveLength(2)
+		remote.applyDocumentCommand(commands[1]!)
+		expect(remote.read.editorSource()).toEqual(local.read.editorSource())
+		expect(
+			remote.silo.inspectTimeline(remote.glyphHistoryTimelines, oGlyphId),
+		).toEqual({ at: 0, length: 1 })
 	})
 
 	it("keeps point and metric subscriptions isolated by coherent state boundary", () => {
@@ -694,6 +727,27 @@ describe("font editor state", () => {
 		})
 		editor.undo(oGlyphId)
 		expect(editor.read.editorGlyphSource(notdefGlyphId)).toBe(beforeNotdef)
+	})
+
+	it("blocks local viewer actions while accepting authoritative replay", () => {
+		const editor = createFontEditorState({
+			key: "state/viewer",
+			canEdit: () => false,
+		})
+		editor.actions.load(makeGeometricOEditorFont())
+		const point = firstPoint(editor, blackMasterId)
+		const command = {
+			type: "movePoints",
+			input: {
+				masterId: blackMasterId,
+				glyphId: oGlyphId,
+				points: [{ pointId: point.id, x: point.x + 12, y: point.y }],
+			},
+		} as const satisfies FontDocumentCommand
+		expect(() => editor.actions.movePoints(command.input)).toThrow(`view-only`)
+		expect(firstPoint(editor, blackMasterId).x).toBe(point.x)
+		editor.applyDocumentCommand(command)
+		expect(firstPoint(editor, blackMasterId).x).toBe(point.x + 12)
 	})
 
 	it("returns detached frozen snapshots", () => {

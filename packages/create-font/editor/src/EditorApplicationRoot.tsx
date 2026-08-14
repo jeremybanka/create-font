@@ -7,12 +7,16 @@ import { startBrowserLiveFont } from "./browser-font-face.ts"
 import css from "./EditorApplicationRoot.module.css"
 import { createEditorWorkspace } from "./editor-workspace.ts"
 import "./globals.css"
-import type { EditorVersionControl } from "./version-control.ts"
-import type { EditorFeatureSubstitution } from "./browser-api.ts"
-import type { EditorWorkspaceProject } from "./browser-api.ts"
+import type {
+	EditorCollaboration,
+	EditorFeatureSubstitution,
+	EditorWorkspaceProject,
+} from "./browser-api.ts"
 import { createSourcePersistenceScheduler } from "./source-persistence.ts"
+import type { EditorVersionControl } from "./version-control.ts"
 
 export type EditorApplicationRootProps = Readonly<{
+	collaboration?: EditorCollaboration
 	featureSubstitutions?: readonly EditorFeatureSubstitution[]
 	onSourceChange?: (source: EditorFontSource) => Promise<void> | void
 	onSourceDirty?: (source: EditorFontSource) => void
@@ -23,6 +27,7 @@ export type EditorApplicationRootProps = Readonly<{
 }>
 
 export function EditorApplicationRoot({
+	collaboration,
 	featureSubstitutions,
 	onSourceChange,
 	onSourceDirty,
@@ -32,7 +37,13 @@ export function EditorApplicationRoot({
 	workspaceProject,
 }: EditorApplicationRootProps) {
 	const [workspace] = useState(() =>
-		createEditorWorkspace(source, validation, featureSubstitutions),
+		createEditorWorkspace(
+			source,
+			validation,
+			featureSubstitutions,
+			collaboration?.publish,
+			() => collaboration?.session().role !== `viewer`,
+		),
 	)
 
 	useEffect(() => {
@@ -40,6 +51,27 @@ export function EditorApplicationRoot({
 	}, [featureSubstitutions, workspace])
 	const applyingSource = useRef(false)
 	const currentSource = useRef(source)
+
+	useEffect(() => {
+		if (collaboration === undefined) return
+		return collaboration.subscribe({
+			apply(command): void {
+				workspace.font.applyDocumentCommand(command)
+			},
+			load(base, actions): void {
+				applyingSource.current = true
+				try {
+					workspace.actions.replaceSource(base)
+					for (const command of actions) {
+						workspace.font.applyDocumentCommand(command)
+					}
+					currentSource.current = workspace.font.read.editorSource() ?? base
+				} finally {
+					applyingSource.current = false
+				}
+			},
+		})
+	}, [collaboration, workspace])
 
 	useEffect(() => {
 		return workspace.startBrowserNavigation()
@@ -117,6 +149,7 @@ export function EditorApplicationRoot({
 		<editor-application-root className={css.class}>
 			<StoreProvider store={workspace.font.silo.store}>
 				<AppShell
+					{...(collaboration === undefined ? {} : { collaboration })}
 					workspace={workspace}
 					{...(versionControl === undefined ? {} : { versionControl })}
 					{...(workspaceProject === undefined ? {} : { workspaceProject })}

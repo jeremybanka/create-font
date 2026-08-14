@@ -1,6 +1,6 @@
 /* eslint-disable lasertag/render-tag-with-own-name -- Headless atom.io history boundaries intentionally return caller-owned controls without DOM wrappers. */
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
-import type { GlyphId } from "@create-font/states"
+import type { GlyphId, MasterId } from "@create-font/states"
 import { type TimelineMeta, useO, useTL } from "atom.io/react"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -60,13 +60,20 @@ import {
 import { tileRegistryCommands } from "@create-art/editor"
 import { visualDebugPaletteCommands } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
-import type { EditorWorkspaceProject } from "./browser-api.ts"
+import type {
+	EditorCollaboration,
+	EditorWorkspaceProject,
+} from "./browser-api.ts"
+import { CollaborationPanel } from "./CollaborationPanel.tsx"
+import { CollaborationUiPresence } from "./CollaborationUiPresence.tsx"
+import { useEditorCollaborationPresence } from "./use-editor-collaboration-presence.ts"
 
 const svg = {
 	MagnifyingGlass: MagnifyingGlassIcon,
 }
 
 export interface AppShellProps {
+	readonly collaboration?: EditorCollaboration
 	readonly workspace: EditorWorkspace
 	readonly versionControl?: EditorVersionControl
 	readonly workspaceProject?: EditorWorkspaceProject
@@ -169,17 +176,24 @@ function readInitialTilingLayout(): TilingLayout<FontTileKind> {
 }
 
 export function AppShell({
+	collaboration,
 	workspace,
 	versionControl,
 	workspaceProject,
 }: AppShellProps) {
 	const [addingGlyphs, setAddingGlyphs] = useState(false)
+	const [collaborationSession, setCollaborationSession] = useState(() =>
+		collaboration?.session(),
+	)
 	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [hotbarSlots, setHotbarSlots] = useState(readInitialHotbarSlots)
 	const [alternateHotbarSlots, setAlternateHotbarSlots] = useState(
 		readInitialAlternateHotbarSlots,
 	)
 	const [diffView, setDiffView] = useState(false)
+	const [followingDeviceId, setFollowingDeviceId] = useState<string | null>(
+		null,
+	)
 	const [tilingLayout, setTilingLayout] = useState(readInitialTilingLayout)
 	const [tilingStatus, setTilingStatus] = useState<TilingWorkspaceStatus>({
 		dirty: false,
@@ -188,6 +202,7 @@ export function AppShell({
 	const [tileCommandRequest, setTileCommandRequest] =
 		useState<TileCommandRequest<FontTileKind> | null>(null)
 	const uiLayoutControlRef = useRef<UiLayoutControlHandle>(null)
+	const followedTargetRef = useRef<string | null>(null)
 	const tileCommandSequence = useRef(0)
 	const commandCenterRef = useRef<HTMLButtonElement>(null)
 	const activeGlyphId = useO(workspace.ui.activeGlyphId)
@@ -203,6 +218,13 @@ export function AppShell({
 	const selection = useO(workspace.ui.selection)
 	const routeName = useO(workspace.ui.routeName)
 	const previewText = useO(workspace.ui.previewText)
+	const { editorWorkspaceRef, publishPresence: publishEditorPresence } =
+		useEditorCollaborationPresence({
+			activeMasterId,
+			collaboration,
+			layout: tilingLayout,
+			routeName,
+		})
 	const uiLayout = {
 		version: 1,
 		id: "local",
@@ -226,6 +248,9 @@ export function AppShell({
 	const constrainProportions = useO(workspace.ui.constrainProportions)
 	const showCurvature = useO(workspace.ui.showCurvature)
 	const activeKerningPair = useO(workspace.ui.activeKerningPair)
+	const readOnly = collaborationSession?.role === `viewer`
+	const canPersistUiLayouts =
+		collaborationSession === undefined || collaborationSession.role === `owner`
 	const toolContextForHistory = (
 		history: TimelineMeta | null,
 	): ToolContext => ({
@@ -235,6 +260,8 @@ export function AppShell({
 		activeTool,
 		editingTextIndex,
 		history,
+		kerningActive: activeKerningPair !== null,
+		readOnly,
 		selection,
 		workspace,
 	})
@@ -267,6 +294,74 @@ export function AppShell({
 		setCommandPaletteOpen(false)
 		requestAnimationFrame(() => commandCenterRef.current?.focus())
 	}
+	useEffect(() => {
+		setCollaborationSession(collaboration?.session())
+		if (collaboration === undefined) return
+		return collaboration.subscribeSession(setCollaborationSession)
+	}, [collaboration])
+
+	useEffect(() => {
+		if (readOnly) setAddingGlyphs(false)
+	}, [readOnly])
+
+	useEffect(() => {
+		followedTargetRef.current = null
+	}, [followingDeviceId])
+
+	useEffect(() => {
+		if (followingDeviceId === null || collaborationSession === undefined) return
+		const participant = collaborationSession.participants.find(
+			(item) => item.identity.deviceId === followingDeviceId,
+		)
+		if (participant === undefined || !participant.connected) {
+			setFollowingDeviceId(null)
+			return
+		}
+		const presence = collaborationSession.presence.find(
+			(item) => item.deviceId === followingDeviceId,
+		)
+		if (presence === undefined) return
+		const surface = presence.context.surface
+		const glyphId = presence.context.glyph
+		const masterId = presence.context.master
+		const target = `${surface ?? `canvas`}:${glyphId ?? ``}:${masterId ?? ``}`
+		if (followedTargetRef.current === target) return
+		followedTargetRef.current = target
+		if (surface === `glyphs`) {
+			if (routeName !== `glyphs`) workspace.actions.navigate(`/glyphs`)
+			return
+		}
+		if (surface === `info`) {
+			if (routeName !== `info`) workspace.actions.navigate(`/info`)
+			return
+		}
+		if (masterId !== null && masterId !== undefined) {
+			const candidate = masterId as MasterId
+			if (masterIds.some((id) => id === candidate))
+				workspace.actions.selectMaster(candidate)
+		}
+		if (glyphId !== null && glyphId !== undefined) {
+			const candidate = glyphId as GlyphId
+			const candidateExists = workspace.font.read
+				.editorSource()
+				?.glyphs.some((glyph) => glyph.id === candidate)
+			if (
+				candidateExists === true &&
+				(routeName !== `canvas` || activeGlyphId !== candidate)
+			) {
+				workspace.actions.reviewGlyph(candidate)
+			}
+		} else if (routeName !== `canvas`) {
+			workspace.actions.navigate(`/`)
+		}
+	}, [
+		activeGlyphId,
+		collaborationSession,
+		followingDeviceId,
+		masterIds,
+		routeName,
+		workspace,
+	])
 
 	useEffect(() => {
 		try {
@@ -289,6 +384,11 @@ export function AppShell({
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent): void => {
+			if (event.key === `Escape` && followingDeviceId !== null) {
+				event.preventDefault()
+				setFollowingDeviceId(null)
+				return
+			}
 			if (tilingStatus.management) return
 			if (isCurvatureShortcut(event, IS_MAC_LIKE)) {
 				event.preventDefault()
@@ -302,7 +402,7 @@ export function AppShell({
 		}
 		window.addEventListener("keydown", handleKeyDown)
 		return () => window.removeEventListener("keydown", handleKeyDown)
-	}, [tilingStatus.management, workspace])
+	}, [followingDeviceId, tilingStatus.management, workspace])
 
 	const commandsForHistory = (
 		history: TimelineMeta | null,
@@ -345,6 +445,10 @@ export function AppShell({
 				description: "Add one or more glyphs to the font.",
 				icon: "PlusIcon",
 				keywords: ["new", "create", "character"],
+				disabled: readOnly,
+				disabledReason: readOnly
+					? "View-only guests cannot change the font."
+					: undefined,
 				do: () => {
 					workspace.actions.navigate("/glyphs")
 					setAddingGlyphs(true)
@@ -376,9 +480,12 @@ export function AppShell({
 					shortcut: formatHotkey(tool.hotkey).join("+"),
 					checked: tool.status(toolContext) === "active",
 					disabled:
-						routeName !== "canvas" || tool.status(toolContext) === "disabled",
-					disabledReason:
-						routeName !== "canvas"
+						readOnly ||
+						routeName !== "canvas" ||
+						tool.status(toolContext) === "disabled",
+					disabledReason: readOnly
+						? "View-only guests cannot change the font."
+						: routeName !== "canvas"
 							? "Open the canvas to use this editor command."
 							: toolDisabledReason(tool, toolContext),
 					do: () => tool.do(toolContext),
@@ -463,6 +570,17 @@ export function AppShell({
 					</button>
 				</command-center>
 				<header-actions>
+					{collaboration === undefined ? null : (
+						<CollaborationPanel
+							collaboration={collaboration}
+							followingDeviceId={followingDeviceId}
+							onFollow={(deviceId) =>
+								setFollowingDeviceId((current) =>
+									current === deviceId ? null : deviceId,
+								)
+							}
+						/>
+					)}
 					<document-status
 						role="status"
 						aria-live="polite"
@@ -495,12 +613,24 @@ export function AppShell({
 					</view-tabs>
 				</header-actions>
 			</header>
-			<main data-view={routeName}>
+			<main data-view={routeName} aria-readonly={readOnly || undefined}>
+				{readOnly ? (
+					<viewer-notice role="note">
+						View only · You can explore this font, but editing and history are
+						disabled.
+					</viewer-notice>
+				) : null}
 				{routeName === "canvas" ? (
-					<editor-workspace>
+					<editor-workspace ref={editorWorkspaceRef}>
 						<GlyphCanvas
+							{...(collaboration === undefined
+								? {}
+								: {
+										collaborationSession,
+										publishPresence: publishEditorPresence,
+									})}
 							workspace={workspace}
-							disabled={tilingStatus.management}
+							disabled={tilingStatus.management || readOnly}
 							diffView={diffView}
 							{...(versionControl === undefined ? {} : { versionControl })}
 						/>
@@ -512,9 +642,13 @@ export function AppShell({
 								<HistoryActionHotbar
 									alternateSlots={alternateHotbarSlots}
 									commands={commandsForHistory(history)}
-									enabled={!tilingStatus.management && !commandPaletteOpen}
+									enabled={
+										!readOnly && !tilingStatus.management && !commandPaletteOpen
+									}
 									hotkeysEnabled={
-										routeName === "canvas" && !tilingStatus.management
+										routeName === "canvas" &&
+										!readOnly &&
+										!tilingStatus.management
 									}
 									paletteOpen={commandPaletteOpen}
 									slots={hotbarSlots}
@@ -558,26 +692,31 @@ export function AppShell({
 							onStatusChange={updateTilingStatus}
 							layout={tilingLayout}
 							onLayoutChange={setTilingLayout}
-							layoutManagement={
-								<UiLayoutControl
-									ref={uiLayoutControlRef}
-									product="create-font"
-									current={uiLayout}
-									onApply={applyUiLayout}
-								/>
-							}
-							onSaveLayout={() => void uiLayoutControlRef.current?.save()}
+							{...(canPersistUiLayouts
+								? {
+										layoutManagement: (
+											<UiLayoutControl
+												ref={uiLayoutControlRef}
+												product="create-font"
+												current={uiLayout}
+												onApply={applyUiLayout}
+											/>
+										),
+										onSaveLayout: () => void uiLayoutControlRef.current?.save(),
+									}
+								: {})}
 						/>
 					</editor-workspace>
 				) : routeName === "glyphs" ? (
 					<GlyphLibrary
 						workspace={workspace}
+						readOnly={readOnly}
 						addingGlyphs={addingGlyphs}
 						onAddingGlyphsChange={setAddingGlyphs}
 						{...(versionControl === undefined ? {} : { versionControl })}
 					/>
 				) : routeName === "info" ? (
-					<FontInfo workspace={workspace} />
+					<FontInfo workspace={workspace} readOnly={readOnly} />
 				) : (
 					<not-found-view>
 						<strong>View not found</strong>
@@ -611,6 +750,9 @@ export function AppShell({
 					create-font editor v{workspace.document.editorVersion}
 				</format-label>
 			</footer>
+			{collaborationSession === undefined ? null : (
+				<CollaborationUiPresence session={collaborationSession} />
+			)}
 			{commandPaletteOpen ? (
 				<EditorHistoryBoundary
 					activeGlyphId={activeGlyphId}

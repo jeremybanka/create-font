@@ -19,7 +19,7 @@ app-shell.class {
 		border-bottom: 1px solid var(--line-strong);
 		background: var(--surface-header);
 		box-shadow: 0 1px 3px var(--shadow-subtle);
-		z-index: 2;
+		z-index: 18;
 
 		> brand-lockup {
 			display: flex;
@@ -196,9 +196,24 @@ app-shell.class {
 
 	> main {
 		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
+
+		> viewer-notice {
+			display: block;
+			padding: 7px 14px;
+			border-bottom: 1px solid var(--line-strong);
+			background: var(--selected);
+			color: var(--ink-muted);
+			font: 600 10px/1.3 var(--ui-font);
+			text-align: center;
+		}
+
+		&:not([aria-readonly="true"]) {
+			grid-template-rows: minmax(0, 1fr);
+		}
 
 		&[data-view="canvas"] {
 			grid-template-columns: minmax(0, 1fr);

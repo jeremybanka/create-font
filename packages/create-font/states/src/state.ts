@@ -754,10 +754,77 @@ export interface DeleteSelectionInput {
 }
 
 export interface CreateFontEditorStateOptions {
+	/** Allows a host application to make local document actions read-only. */
+	readonly canEdit?: () => boolean
 	/** Diagnostic name for this document's isolated Silo. */
 	readonly key: string
 	readonly isProduction?: boolean
+	/**
+	 * Receives successful, user-authored document commands. Replayed commands are
+	 * suppressed by `applyDocumentCommand`, so this is safe to forward to a
+	 * realtime authority without creating an echo loop.
+	 */
+	readonly onDocumentCommand?: (command: FontDocumentCommand) => void
 }
+
+export type FontDocumentCommand =
+	| Readonly<{ type: `setGlyphRules`; input: SetGlyphRulesInput }>
+	| Readonly<{
+			type: `setCoreSource`
+			input:
+				| Readonly<{ field: `metadata`; value: EditorFontSource[`metadata`] }>
+				| Readonly<{ field: `names`; value: EditorFontSource[`names`] }>
+				| Readonly<{ field: `metrics`; value: EditorFontSource[`metrics`] }>
+				| Readonly<{ field: `style`; value: EditorFontSource[`style`] }>
+	  }>
+	| Readonly<{ type: `addGlyphs`; input: readonly string[] }>
+	| Readonly<{ type: `movePoints`; input: MovePointsInput }>
+	| Readonly<{ type: `setCornerProfiles`; input: SetCornerProfilesInput }>
+	| Readonly<{
+			type: `setHorizontalMetrics`
+			input: SetHorizontalMetricsInput
+	  }>
+	| Readonly<{ type: `moveHandle`; input: MoveHandleInput }>
+	| Readonly<{ type: `transformControls`; input: TransformControlsInput }>
+	| Readonly<{ type: `slideSoftNode`; input: SlideSoftNodeInput }>
+	| Readonly<{ type: `setNodeMode`; input: SetNodeModeInput }>
+	| Readonly<{ type: `toggleNodeModes`; input: ToggleNodeModesInput }>
+	| Readonly<{ type: `authorPenEndpoint`; input: AuthorPenEndpointInput }>
+	| Readonly<{ type: `insertPoint`; input: InsertPointInput }>
+	| Readonly<{
+			type: `addSegmentHandles`
+			input: AddSegmentHandlesInput
+	  }>
+	| Readonly<{ type: `splitSegment`; input: SplitSegmentInput }>
+	| Readonly<{ type: `cutSegment`; input: CutSegmentInput }>
+	| Readonly<{ type: `joinOpenContours`; input: JoinOpenContoursInput }>
+	| Readonly<{ type: `reverseContour`; input: ReverseContourInput }>
+	| Readonly<{ type: `invertContour`; input: InvertContourInput }>
+	| Readonly<{ type: `makeNodeFirst`; input: MakeNodeFirstInput }>
+	| Readonly<{ type: `createContour`; input: CreateContourInput }>
+	| Readonly<{ type: `setContourClosed`; input: SetContourClosedInput }>
+	| Readonly<{ type: `reorderContour`; input: ReorderContourInput }>
+	| Readonly<{ type: `closeContour`; input: CloseContourInput }>
+	| Readonly<{
+			type: `createCompleteContour`
+			input: CreateCompleteContourInput
+	  }>
+	| Readonly<{ type: `pasteContours`; input: PasteContoursInput }>
+	| Readonly<{ type: `deleteSelection`; input: DeleteSelectionInput }>
+	| Readonly<{ type: `setKerningPair`; input: SetKerningPairInput }>
+	| Readonly<{ type: `undoGlyph`; glyphId: GlyphId }>
+	| Readonly<{ type: `redoGlyph`; glyphId: GlyphId }>
+	| Readonly<{ type: `undoKerning` }>
+	| Readonly<{ type: `redoKerning` }>
+	| Readonly<{
+			type: `reconcileExternalSource`
+			input: Readonly<{
+				allGlyphs: boolean
+				glyphIds: readonly GlyphId[]
+				kerning: boolean
+				source: EditorFontSource
+			}>
+	  }>
 
 /** A caller-owned plain atom/value pair committed with a whole-document load. */
 export interface FontLoadCoWrite<Value> {
@@ -4811,6 +4878,127 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		},
 	})
 
+	const reconcileExternalSourceTransaction = revisionedTransaction<
+		(
+			input: Extract<
+				FontDocumentCommand,
+				{ type: `reconcileExternalSource` }
+			>[`input`],
+		) => void
+	>({
+		key: `reconcileExternalSource`,
+		do: ({ get, set }, input) => {
+			validateEditorSourceStructure(input.source)
+			set(metadataAtom, deepFreeze({ ...input.source.metadata }))
+			set(namesAtom, deepFreeze({ ...input.source.names }))
+			set(metricsAtom, deepFreeze({ ...input.source.metrics }))
+			set(styleAtom, deepFreeze({ ...input.source.style }))
+			if (input.kerning) {
+				set(kerningAtom, deepFreeze([...(input.source.kerning ?? [])]))
+			}
+
+			for (const glyphId of input.glyphIds) {
+				const glyph = input.source.glyphs.find(
+					(candidate) => candidate.id === glyphId,
+				)
+				if (glyph === undefined) {
+					throw new TypeError(`Unknown external glyph ${glyphId}.`)
+				}
+				const oldLayerMasterIds = get(glyphLayerMasterIdsAtoms, glyphId) ?? []
+				for (const masterId of oldLayerMasterIds) {
+					const contourIds =
+						get(glyphContourIdsAtoms, [masterId, glyphId]) ?? []
+					for (const contourId of contourIds) {
+						const pointIds =
+							get(contourPointIdsAtoms, [masterId, glyphId, contourId]) ?? []
+						for (const pointId of pointIds) {
+							set(pointAtoms, [masterId, glyphId, pointId], null)
+							set(pointPositionValueAtoms, [masterId, glyphId, pointId], null)
+							set(incomingHandleXAtoms, [masterId, glyphId, pointId], null)
+							set(incomingHandleYAtoms, [masterId, glyphId, pointId], null)
+							set(outgoingHandleXAtoms, [masterId, glyphId, pointId], null)
+							set(outgoingHandleYAtoms, [masterId, glyphId, pointId], null)
+						}
+						set(contourPointIdsAtoms, [masterId, glyphId, contourId], null)
+						set(contourClosedAtoms, [masterId, glyphId, contourId], null)
+					}
+					set(advanceWidthValueAtoms, [masterId, glyphId], null)
+					set(glyphContourIdsAtoms, [masterId, glyphId], null)
+				}
+
+				set(
+					glyphAtoms,
+					glyphId,
+					deepFreeze({
+						name: glyph.name,
+						export: glyph.export,
+						overlap: glyph.overlap ?? false,
+					}),
+				)
+				set(
+					glyphEditorAtoms,
+					glyphId,
+					deepFreeze({
+						note: glyph.note ?? ``,
+						color: glyph.color ?? null,
+						rules: glyph.rules ?? [],
+					}),
+				)
+				set(
+					glyphLayerMasterIdsAtoms,
+					glyphId,
+					deepFreeze(glyph.layers.map((layer) => layer.masterId)),
+				)
+				for (const layer of glyph.layers) {
+					set(
+						glyphContourIdsAtoms,
+						[layer.masterId, glyphId],
+						deepFreeze(layer.contours.map((contour) => contour.id)),
+					)
+					set(
+						advanceWidthValueAtoms,
+						[layer.masterId, glyphId],
+						layer.advanceWidth,
+					)
+					for (const contour of layer.contours) {
+						set(
+							contourClosedAtoms,
+							[layer.masterId, glyphId, contour.id],
+							contour.closed,
+						)
+						set(
+							contourPointIdsAtoms,
+							[layer.masterId, glyphId, contour.id],
+							deepFreeze(contour.points.map((point) => point.id)),
+						)
+						for (const point of contour.points) {
+							const key: LayerPointKey = [layer.masterId, glyphId, point.id]
+							set(
+								pointPositionValueAtoms,
+								key,
+								deepFreeze({ x: point.x, y: point.y }),
+							)
+							set(
+								pointAtoms,
+								key,
+								deepFreeze({
+									mode: point.mode,
+									...(point.corner === undefined
+										? {}
+										: { corner: point.corner }),
+								}),
+							)
+							set(incomingHandleXAtoms, key, point.incoming?.x ?? null)
+							set(incomingHandleYAtoms, key, point.incoming?.y ?? null)
+							set(outgoingHandleXAtoms, key, point.outgoing?.x ?? null)
+							set(outgoingHandleYAtoms, key, point.outgoing?.y ?? null)
+						}
+					}
+				}
+			}
+		},
+	})
+
 	const movePointsTransaction = revisionedTransaction<
 		(input: MovePointsInput) => void
 	>({
@@ -8333,11 +8521,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.value > MAX_INT16)
 			)
 				throw new TypeError("Kerning values must be signed 16-bit integers.")
-			const pairs = [
-				...get(kerningAtom).filter(
-					(pair) => pair.left !== input.left || pair.right !== input.right,
-				),
-			]
+			const pairs = get(kerningAtom).filter(
+				(pair) => pair.left !== input.left || pair.right !== input.right,
+			)
 			if (input.value !== null && input.value !== 0)
 				pairs.push({ left: input.left, right: input.right, value: input.value })
 			set(kerningAtom, deepFreeze(pairs))
@@ -8345,6 +8531,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 	})
 
 	const runReplaceFont = silo.runTransaction(replaceFontTransaction)
+	const runReconcileExternalSource = silo.runTransaction(
+		reconcileExternalSourceTransaction,
+	)
 	const runMovePoints = silo.runTransaction(movePointsTransaction)
 	const runSetHorizontalMetrics = silo.runTransaction(
 		setHorizontalMetricsTransaction,
@@ -8380,9 +8569,222 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			throw new TypeError(`Unknown glyph history ${glyphId}.`)
 		}
 	}
+	const assertWritable = (): void => {
+		if (options.canEdit?.() === false)
+			throw new Error(`This collaboration session is view-only.`)
+	}
+	const emitDocumentCommand = (command: FontDocumentCommand): void => {
+		options.onDocumentCommand?.(deepFreeze(command))
+	}
+	const loadFontSource = <
+		const CoWrites extends readonly FontLoadCoWriteCandidate[],
+	>(
+		source: EditorFontSource,
+		coWrites?: CoWrites & FontLoadCoWrites<CoWrites>,
+	): void => {
+		const previousGlyphIds = silo.getState(glyphIdsAtom)
+		runReplaceFont(source, coWrites)
+		const nextGlyphIds = silo.getState(glyphIdsAtom)
+		const nextGlyphIdSet = new Set(nextGlyphIds)
+		for (const glyphId of previousGlyphIds) {
+			if (!nextGlyphIdSet.has(glyphId)) {
+				silo.disposeTimeline(glyphHistoryTimelines, glyphId)
+			}
+		}
+		for (const glyphId of nextGlyphIds) {
+			silo.clearTimeline(glyphHistoryTimelines, glyphId)
+		}
+		silo.clearTimeline(kerningTimeline)
+	}
+	const setGlyphRules = ({ glyphId, rules }: SetGlyphRulesInput): void => {
+		assertKnownGlyphHistory(glyphId)
+		const editor = silo.getState(glyphEditorAtoms, glyphId)
+		if (editor === null) throw new TypeError(`Unknown glyph ${glyphId}.`)
+		const seen = new Set<string>()
+		for (const rule of rules) {
+			if (seen.has(rule.id))
+				throw new TypeError(`Duplicate rule ID ${rule.id}.`)
+			seen.add(rule.id)
+			if (
+				![rule.a.x, rule.a.y, rule.b.x, rule.b.y].every(Number.isFinite) ||
+				Math.hypot(rule.b.x - rule.a.x, rule.b.y - rule.a.y) <= 1e-6
+			)
+				throw new TypeError(`Rule ${rule.id} is invalid.`)
+		}
+		silo.setState(
+			glyphEditorAtoms,
+			glyphId,
+			deepFreeze({ ...editor, rules: [...rules] }),
+		)
+		markDocumentChanged()
+	}
+	const setCoreSource = (
+		input: Extract<FontDocumentCommand, { type: `setCoreSource` }>[`input`],
+	): void => {
+		switch (input.field) {
+			case `metadata`:
+				silo.setState(metadataAtom, deepFreeze(input.value))
+				break
+			case `names`:
+				silo.setState(namesAtom, deepFreeze(input.value))
+				break
+			case `metrics`:
+				silo.setState(metricsAtom, deepFreeze(input.value))
+				break
+			case `style`:
+				silo.setState(styleAtom, deepFreeze(input.value))
+				break
+		}
+		markDocumentChanged()
+	}
+	const addGlyphs = (rawNames: readonly string[]): readonly GlyphId[] => {
+		const currentDocument = silo.getState(editorSourceSelector)
+		if (currentDocument === null) return Object.freeze([])
+		const existingNames = new Set(
+			currentDocument.glyphs.map((glyph) => glyph.name),
+		)
+		const existingIds = new Set(currentDocument.glyphs.map((glyph) => glyph.id))
+		const cmap = [...currentDocument.cmap]
+		const mappedCodePoints = new Set(cmap.map((entry) => entry.codePoint))
+		const glyphs = [...currentDocument.glyphs]
+		const addedIds: GlyphId[] = []
+		for (const rawName of rawNames) {
+			const name = rawName.trim()
+			const id = `glyph:${name}` as GlyphId
+			if (name.length === 0 || existingNames.has(name) || existingIds.has(id)) {
+				continue
+			}
+			existingNames.add(name)
+			existingIds.add(id)
+			glyphs.push({
+				id,
+				name,
+				export: true,
+				color: `#d5963f`,
+				layers: currentDocument.masters.map((master) => ({
+					masterId: master.id,
+					advanceWidth: currentDocument.metadata.unitsPerEm,
+					leftSideBearing: 80,
+					contours: [],
+				})),
+			})
+			const characters = Array.from(name)
+			const codePoint =
+				characters.length === 1 ? name.codePointAt(0) : undefined
+			if (codePoint !== undefined && !mappedCodePoints.has(codePoint)) {
+				cmap.push({ codePoint, glyphId: id })
+				mappedCodePoints.add(codePoint)
+			}
+			addedIds.push(id)
+		}
+		if (addedIds.length === 0) return Object.freeze([])
+		loadFontSource({ ...currentDocument, glyphs, cmap })
+		return Object.freeze(addedIds)
+	}
+	const reconcileExternalSource = (
+		input: Extract<
+			FontDocumentCommand,
+			{ type: `reconcileExternalSource` }
+		>[`input`],
+	): void => {
+		const previousGlyphIds = silo.getState(glyphIdsAtom)
+		if (input.allGlyphs) runReplaceFont(input.source)
+		else runReconcileExternalSource(input)
+		const nextGlyphIds = silo.getState(glyphIdsAtom)
+		const nextGlyphIdSet = new Set(nextGlyphIds)
+		for (const glyphId of previousGlyphIds) {
+			if (!nextGlyphIdSet.has(glyphId)) {
+				silo.disposeTimeline(glyphHistoryTimelines, glyphId)
+			}
+		}
+		const affectedGlyphIds = input.allGlyphs ? nextGlyphIds : input.glyphIds
+		for (const glyphId of affectedGlyphIds) {
+			if (nextGlyphIdSet.has(glyphId)) {
+				silo.clearTimeline(glyphHistoryTimelines, glyphId)
+			}
+		}
+		if (input.kerning) silo.clearTimeline(kerningTimeline)
+	}
+	const applyDocumentCommand = (command: FontDocumentCommand): unknown => {
+		switch (command.type) {
+			case `setGlyphRules`:
+				return setGlyphRules(command.input)
+			case `setCoreSource`:
+				return setCoreSource(command.input)
+			case `addGlyphs`:
+				return addGlyphs(command.input)
+			case `movePoints`:
+				return runMovePoints(command.input)
+			case `setCornerProfiles`:
+				return runSetCornerProfiles(command.input)
+			case `setHorizontalMetrics`:
+				return runSetHorizontalMetrics(command.input)
+			case `moveHandle`:
+				return runMoveHandle(command.input)
+			case `transformControls`:
+				return runTransformControls(command.input)
+			case `slideSoftNode`:
+				return runSlideSoftNode(command.input)
+			case `setNodeMode`:
+				return runSetNodeMode(command.input)
+			case `toggleNodeModes`:
+				return runToggleNodeModes(command.input)
+			case `authorPenEndpoint`:
+				return runAuthorPenEndpoint(command.input)
+			case `insertPoint`:
+				return runInsertPoint(command.input)
+			case `addSegmentHandles`:
+				return runAddSegmentHandles(command.input)
+			case `splitSegment`:
+				return runSplitSegment(command.input)
+			case `cutSegment`:
+				return runCutSegment(command.input)
+			case `joinOpenContours`:
+				return runJoinOpenContours(command.input)
+			case `reverseContour`:
+				return runReverseContour(command.input)
+			case `invertContour`:
+				return runInvertContour(command.input)
+			case `makeNodeFirst`:
+				return runMakeNodeFirst(command.input)
+			case `createContour`:
+				return runCreateContour(command.input)
+			case `setContourClosed`:
+				return runSetContourClosed(command.input)
+			case `reorderContour`:
+				return runReorderContour(command.input)
+			case `closeContour`:
+				return runCloseContour(command.input)
+			case `createCompleteContour`:
+				return runCreateCompleteContour(command.input)
+			case `pasteContours`:
+				return runPasteContours(command.input)
+			case `deleteSelection`:
+				return runDeleteSelection(command.input)
+			case `setKerningPair`:
+				return runSetKerningPair(command.input)
+			case `undoGlyph`:
+				assertKnownGlyphHistory(command.glyphId)
+				silo.undo(glyphHistoryTimelines, command.glyphId)
+				return markDocumentChanged()
+			case `redoGlyph`:
+				assertKnownGlyphHistory(command.glyphId)
+				silo.redo(glyphHistoryTimelines, command.glyphId)
+				return markDocumentChanged()
+			case `undoKerning`:
+				silo.undo(kerningTimeline)
+				return markDocumentChanged()
+			case `redoKerning`:
+				silo.redo(kerningTimeline)
+				return markDocumentChanged()
+			case `reconcileExternalSource`:
+				return reconcileExternalSource(command.input)
+		}
+	}
 
 	return {
 		silo,
+		applyDocumentCommand,
 		atoms: {
 			documentRevision: documentRevisionAtom,
 			metadata: metadataAtom,
@@ -8488,27 +8890,23 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 		glyphHistoryTimelines,
 		kerningTimeline,
 		actions: {
-			setGlyphRules({ glyphId, rules }: SetGlyphRulesInput): void {
-				assertKnownGlyphHistory(glyphId)
-				const editor = silo.getState(glyphEditorAtoms, glyphId)
-				if (editor === null) throw new TypeError(`Unknown glyph ${glyphId}.`)
-				const seen = new Set<string>()
-				for (const rule of rules) {
-					if (seen.has(rule.id))
-						throw new TypeError(`Duplicate rule ID ${rule.id}.`)
-					seen.add(rule.id)
-					if (
-						![rule.a.x, rule.a.y, rule.b.x, rule.b.y].every(Number.isFinite) ||
-						Math.hypot(rule.b.x - rule.a.x, rule.b.y - rule.a.y) <= 1e-6
-					)
-						throw new TypeError(`Rule ${rule.id} is invalid.`)
-				}
-				silo.setState(
-					glyphEditorAtoms,
-					glyphId,
-					deepFreeze({ ...editor, rules: [...rules] }),
-				)
-				markDocumentChanged()
+			setGlyphRules(input: SetGlyphRulesInput): void {
+				assertWritable()
+				setGlyphRules(input)
+				emitDocumentCommand({ type: `setGlyphRules`, input })
+			},
+			setCoreSource(
+				input: Extract<FontDocumentCommand, { type: `setCoreSource` }>[`input`],
+			): void {
+				assertWritable()
+				setCoreSource(input)
+				emitDocumentCommand({ type: `setCoreSource`, input })
+			},
+			addGlyphs(input: readonly string[]): readonly GlyphId[] {
+				assertWritable()
+				const added = addGlyphs(input)
+				if (added.length > 0) emitDocumentCommand({ type: `addGlyphs`, input })
+				return added
 			},
 			setFeatureSubstitutions(
 				substitutions: readonly {
@@ -8520,107 +8918,161 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 			): void {
 				silo.setState(featureSubstitutionsAtom, deepFreeze([...substitutions]))
 			},
-			markDocumentChanged,
+			markDocumentChanged(
+				historyCommand?: Extract<
+					FontDocumentCommand,
+					{ type: `redoGlyph` | `undoGlyph` }
+				>,
+			): void {
+				assertWritable()
+				markDocumentChanged()
+				if (historyCommand !== undefined) emitDocumentCommand(historyCommand)
+			},
 			load<const CoWrites extends readonly FontLoadCoWriteCandidate[]>(
 				source: EditorFontSource,
 				coWrites?: CoWrites & FontLoadCoWrites<CoWrites>,
 			): void {
-				const previousGlyphIds = silo.getState(glyphIdsAtom)
-				runReplaceFont(source, coWrites)
-				const nextGlyphIds = silo.getState(glyphIdsAtom)
-				const nextGlyphIdSet = new Set(nextGlyphIds)
-				for (const glyphId of previousGlyphIds) {
-					if (!nextGlyphIdSet.has(glyphId)) {
-						silo.disposeTimeline(glyphHistoryTimelines, glyphId)
-					}
-				}
-				for (const glyphId of nextGlyphIds) {
-					silo.clearTimeline(glyphHistoryTimelines, glyphId)
-				}
-				silo.clearTimeline(kerningTimeline)
+				loadFontSource(source, coWrites)
 			},
 			movePoints(input: MovePointsInput): void {
+				assertWritable()
 				runMovePoints(input)
+				emitDocumentCommand({ type: `movePoints`, input })
 			},
 			setCornerProfiles(input: SetCornerProfilesInput): void {
+				assertWritable()
 				runSetCornerProfiles(input)
+				emitDocumentCommand({ type: `setCornerProfiles`, input })
 			},
 			setHorizontalMetrics(input: SetHorizontalMetricsInput): void {
+				assertWritable()
 				runSetHorizontalMetrics(input)
+				emitDocumentCommand({ type: `setHorizontalMetrics`, input })
 			},
 			moveHandle(input: MoveHandleInput): void {
+				assertWritable()
 				runMoveHandle(input)
+				emitDocumentCommand({ type: `moveHandle`, input })
 			},
 			transformControls(input: TransformControlsInput): void {
+				assertWritable()
 				runTransformControls(input)
+				emitDocumentCommand({ type: `transformControls`, input })
 			},
 			slideSoftNode(input: SlideSoftNodeInput): void {
+				assertWritable()
 				runSlideSoftNode(input)
+				emitDocumentCommand({ type: `slideSoftNode`, input })
 			},
 			setNodeMode(input: SetNodeModeInput): void {
+				assertWritable()
 				runSetNodeMode(input)
+				emitDocumentCommand({ type: `setNodeMode`, input })
 			},
 			toggleNodeModes(input: ToggleNodeModesInput): ToggleNodeModesResult {
-				return runToggleNodeModes(input)
+				assertWritable()
+				const result = runToggleNodeModes(input)
+				if (result.toggled > 0)
+					emitDocumentCommand({ type: `toggleNodeModes`, input })
+				return result
 			},
 			authorPenEndpoint(input: AuthorPenEndpointInput): void {
+				assertWritable()
 				runAuthorPenEndpoint(input)
+				emitDocumentCommand({ type: `authorPenEndpoint`, input })
 			},
 			insertPoint(input: InsertPointInput): void {
+				assertWritable()
 				runInsertPoint(input)
+				emitDocumentCommand({ type: `insertPoint`, input })
 			},
 			addSegmentHandles(input: AddSegmentHandlesInput): boolean {
-				return runAddSegmentHandles(input)
+				assertWritable()
+				const changed = runAddSegmentHandles(input)
+				if (changed) emitDocumentCommand({ type: `addSegmentHandles`, input })
+				return changed
 			},
 			splitSegment(input: SplitSegmentInput): void {
+				assertWritable()
 				runSplitSegment(input)
+				emitDocumentCommand({ type: `splitSegment`, input })
 			},
 			cutSegment(input: CutSegmentInput): void {
+				assertWritable()
 				runCutSegment(input)
+				emitDocumentCommand({ type: `cutSegment`, input })
 			},
 			joinOpenContours(input: JoinOpenContoursInput): void {
+				assertWritable()
 				runJoinOpenContours(input)
+				emitDocumentCommand({ type: `joinOpenContours`, input })
 			},
 			reverseContour(input: ReverseContourInput): void {
+				assertWritable()
 				runReverseContour(input)
+				emitDocumentCommand({ type: `reverseContour`, input })
 			},
 			invertContour(input: InvertContourInput): void {
+				assertWritable()
 				runInvertContour(input)
+				emitDocumentCommand({ type: `invertContour`, input })
 			},
 			makeNodeFirst(input: MakeNodeFirstInput): void {
+				assertWritable()
 				runMakeNodeFirst(input)
+				emitDocumentCommand({ type: `makeNodeFirst`, input })
 			},
 			createContour(input: CreateContourInput): void {
+				assertWritable()
 				runCreateContour(input)
+				emitDocumentCommand({ type: `createContour`, input })
 			},
 			setContourClosed(input: SetContourClosedInput): void {
+				assertWritable()
 				runSetContourClosed(input)
+				emitDocumentCommand({ type: `setContourClosed`, input })
 			},
 			reorderContour(input: ReorderContourInput): void {
+				assertWritable()
 				runReorderContour(input)
+				emitDocumentCommand({ type: `reorderContour`, input })
 			},
 			closeContour(input: CloseContourInput): void {
+				assertWritable()
 				runCloseContour(input)
+				emitDocumentCommand({ type: `closeContour`, input })
 			},
 			createCompleteContour(input: CreateCompleteContourInput): void {
+				assertWritable()
 				runCreateCompleteContour(input)
+				emitDocumentCommand({ type: `createCompleteContour`, input })
 			},
 			pasteContours(input: PasteContoursInput): void {
+				assertWritable()
 				runPasteContours(input)
+				emitDocumentCommand({ type: `pasteContours`, input })
 			},
 			deleteSelection(input: DeleteSelectionInput): void {
+				assertWritable()
 				runDeleteSelection(input)
+				emitDocumentCommand({ type: `deleteSelection`, input })
 			},
 			setKerningPair(input: SetKerningPairInput): void {
+				assertWritable()
 				runSetKerningPair(input)
+				emitDocumentCommand({ type: `setKerningPair`, input })
 			},
 			undoKerning(): void {
+				assertWritable()
 				silo.undo(kerningTimeline)
 				markDocumentChanged()
+				emitDocumentCommand({ type: `undoKerning` })
 			},
 			redoKerning(): void {
+				assertWritable()
 				silo.redo(kerningTimeline)
 				markDocumentChanged()
+				emitDocumentCommand({ type: `redoKerning` })
 			},
 		},
 		read: {
@@ -8652,14 +9104,18 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 				silo.getState(livePreviewFontCompilationSelector),
 		},
 		undo: (glyphId: GlyphId): void => {
+			assertWritable()
 			assertKnownGlyphHistory(glyphId)
 			silo.undo(glyphHistoryTimelines, glyphId)
 			markDocumentChanged()
+			emitDocumentCommand({ type: `undoGlyph`, glyphId })
 		},
 		redo: (glyphId: GlyphId): void => {
+			assertWritable()
 			assertKnownGlyphHistory(glyphId)
 			silo.redo(glyphHistoryTimelines, glyphId)
 			markDocumentChanged()
+			emitDocumentCommand({ type: `redoGlyph`, glyphId })
 		},
 		clearHistory: (glyphId?: GlyphId): void => {
 			if (glyphId !== undefined) {

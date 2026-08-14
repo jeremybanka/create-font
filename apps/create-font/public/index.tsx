@@ -2,7 +2,16 @@ import type {
 	EditorBrowserOptions,
 	MountedEditor,
 } from "@create-font/editor/browser"
-import type { EditorFontSource } from "@create-font/states"
+import {
+	CREATE_ART_REALTIME_PATH,
+	type AdmissionRequest,
+	type CollaborationIdentity,
+	type CollaborationParticipant,
+	type CollaborationPresence,
+	type CollaborationRole,
+} from "@create-art/realtime"
+import { createCollaborationClient } from "@create-art/realtime/client"
+import type { EditorFontSource, FontDocumentCommand } from "@create-font/states"
 import { createFontRpcClient } from "@create-font/server/client"
 import type {
 	FontWorkspaceInventory,
@@ -16,6 +25,7 @@ import {
 	initializeFeaParser,
 } from "@create-font/source/browser"
 import { createRoot, type Root } from "react-dom/client"
+import { io } from "socket.io-client"
 
 import { BootstrapScreen } from "./BootstrapScreen.tsx"
 import {
@@ -170,27 +180,12 @@ async function readFontWorkspace(): Promise<BrowserFontWorkspace | undefined> {
 		: undefined
 }
 
-const fontWorkspace = await readFontWorkspace()
 const requestedProjectId = new URL(window.location.href).searchParams.get(
 	`font`,
 )
-const requestedProjectUnavailable =
-	fontWorkspace !== undefined &&
-	requestedProjectId !== null &&
-	!fontWorkspace.projects.some(({ id }) => id === requestedProjectId)
-const activeProjectId =
-	requestedProjectUnavailable || fontWorkspace === undefined
-		? undefined
-		: (requestedProjectId ?? fontWorkspace.activeProjectId)
-if (
-	fontWorkspace !== undefined &&
-	requestedProjectId === null &&
-	activeProjectId !== undefined
-) {
-	const url = new URL(window.location.href)
-	url.searchParams.set(`font`, activeProjectId)
-	window.history.replaceState({ font: activeProjectId }, ``, url)
-}
+let fontWorkspace: BrowserFontWorkspace | undefined
+let requestedProjectUnavailable = false
+let activeProjectId: string | undefined
 
 let bootstrapRoot: Root | null = createRoot(applicationMount)
 const sourceSyncWorker = createSourceSyncWorkerClient()
@@ -208,14 +203,7 @@ let versionControlState: Readonly<{
 	error?: string
 	loading: boolean
 }> = { loading: false }
-const rpcClient = createFontRpcClient(
-	activeProjectId === undefined
-		? window.location.origin
-		: new URL(
-				`/projects/${encodeURIComponent(activeProjectId)}`,
-				window.location.origin,
-			).href,
-)
+let rpcClient = createFontRpcClient(window.location.origin)
 let comparisonRequestSequence = 0
 let versionControlSelection: VersionControlSelection = { baseRef: `HEAD` }
 let bootstrapState: BootstrapState = INITIAL_BOOTSTRAP_STATE
@@ -230,6 +218,35 @@ let activeSourceEvents: { close?: () => void } | null = null
 let sourceEventReconnectTimer: ReturnType<typeof setTimeout> | undefined
 let recoveryDraftLoaded = false
 let projectSwitchPending = false
+
+async function initializeFontWorkspace(): Promise<void> {
+	fontWorkspace = await readFontWorkspace()
+	requestedProjectUnavailable =
+		fontWorkspace !== undefined &&
+		requestedProjectId !== null &&
+		!fontWorkspace.projects.some(({ id }) => id === requestedProjectId)
+	activeProjectId =
+		requestedProjectUnavailable || fontWorkspace === undefined
+			? undefined
+			: (requestedProjectId ?? fontWorkspace.activeProjectId)
+	if (
+		fontWorkspace !== undefined &&
+		requestedProjectId === null &&
+		activeProjectId !== undefined
+	) {
+		const url = new URL(window.location.href)
+		url.searchParams.set(`font`, activeProjectId)
+		window.history.replaceState({ font: activeProjectId }, ``, url)
+	}
+	rpcClient = createFontRpcClient(
+		activeProjectId === undefined
+			? window.location.origin
+			: new URL(
+					`/projects/${encodeURIComponent(activeProjectId)}`,
+					window.location.origin,
+				).href,
+	)
+}
 
 function recoveryStorageKey(): string | undefined {
 	return fontWorkspace === undefined || activeProjectId === undefined
@@ -266,6 +283,259 @@ function clearRecoveryDraft(): void {
 	} catch {
 		// Recovery is best-effort in restricted browsing contexts.
 	}
+}
+
+type BrowserCollaborationSession = Readonly<{
+	admission: `approved`
+	identity: CollaborationIdentity
+	participants: readonly CollaborationParticipant[]
+	pending?: readonly AdmissionRequest[]
+	role: CollaborationRole
+}>
+
+let collaborationBridge: EditorBrowserOptions[`collaboration`]
+let collaborationSession: BrowserCollaborationSession | null = null
+
+type CollaborationProbe =
+	| BrowserCollaborationSession
+	| Readonly<{ admission: `pending` | `rejected`; requestId?: string }>
+	| null
+
+function renderAdmissionWaiting(
+	state: `pending` | `rejected` | `revoked`,
+	requestId?: string,
+): void {
+	if (bootstrapRoot === null) {
+		mountedEditor?.unmount()
+		mountedEditor = null
+		bootstrapRoot = createRoot(applicationMount)
+	}
+	document.title =
+		state === `pending`
+			? `Waiting for host · create-font`
+			: state === `revoked`
+				? `Session ended · create-font`
+				: `Admission rejected · create-font`
+	bootstrapRoot?.render(
+		<main
+			aria-labelledby="collaboration-waiting-title"
+			style={{
+				display: `grid`,
+				gap: `12px`,
+				minHeight: `100dvh`,
+				placeContent: `center`,
+				textAlign: `center`,
+			}}
+		>
+			<h1 id="collaboration-waiting-title">
+				{state === `pending`
+					? `Waiting for the host`
+					: state === `revoked`
+						? `This collaboration session has ended`
+						: `The host declined this request`}
+			</h1>
+			<p role="status" aria-live="polite">
+				{state === `pending`
+					? `Keep this window open. The font will load as soon as you are admitted.`
+					: state === `revoked`
+						? `The host stopped or revoked this device. Ask the host before joining again.`
+						: `Ask the host for a new invitation before trying again.`}
+			</p>
+			{requestId === undefined ? null : (
+				<small>Request {requestId.slice(0, 8)}</small>
+			)}
+		</main>,
+	)
+}
+
+async function readCollaborationSession(): Promise<CollaborationProbe> {
+	const response = await fetch(`/api/collaboration/session`, {
+		headers: { accept: `application/json` },
+	})
+	if (response.status === 404) return null
+	if (!response.ok)
+		throw new Error(
+			`Collaboration session failed with HTTP ${response.status}.`,
+		)
+	return (await response.json()) as CollaborationProbe
+}
+
+async function initializeCollaboration(): Promise<boolean> {
+	let session = await readCollaborationSession()
+	if (session === null) return false
+	while (session.admission !== `approved`) {
+		renderAdmissionWaiting(session.admission, session.requestId)
+		if (session.admission === `rejected`) return true
+		await new Promise((resolve) => setTimeout(resolve, 500))
+		session = await readCollaborationSession()
+		if (session === null)
+			throw new Error(`The local collaboration gateway stopped.`)
+	}
+	collaborationSession = session
+	const socket = io(window.location.origin, {
+		auth: { connectionId: crypto.randomUUID() },
+		path: CREATE_ART_REALTIME_PATH,
+	})
+	let receiver:
+		| Parameters<
+				NonNullable<EditorBrowserOptions[`collaboration`]>[`subscribe`]
+		  >[0]
+		| null = null
+	const sessionListeners = new Set<
+		Parameters<
+			NonNullable<EditorBrowserOptions[`collaboration`]>[`subscribeSession`]
+		>[0]
+	>()
+	let presence: CollaborationPresence[] = []
+	let connectionStatus: `connected` | `error` | `reconnecting` | `saving` =
+		`connected`
+	let connectionError: string | undefined
+	const retainConnectedPresence = (
+		participants: readonly CollaborationParticipant[],
+	): void => {
+		presence = presence.filter((item) =>
+			participants.some(
+				(participant) =>
+					participant.connected &&
+					participant.identity.deviceId === item.deviceId,
+			),
+		)
+	}
+	const realtimeClient = createCollaborationClient<
+		EditorFontSource,
+		FontDocumentCommand
+	>({
+		apply: (command) => receiver?.apply(command),
+		deviceId: session.identity.deviceId,
+		load: (source) => receiver?.load(source, []),
+		socket: socket as never,
+	})
+	const editorSession = () => ({
+		deviceId: session.identity.deviceId,
+		...(connectionError === undefined ? {} : { error: connectionError }),
+		participants: collaborationSession?.participants ?? [],
+		pending: collaborationSession?.pending ?? [],
+		presence,
+		role: collaborationSession?.role ?? `viewer`,
+		status: connectionStatus,
+	})
+	const notifySession = (): void => {
+		for (const listener of sessionListeners) listener(editorSession())
+	}
+	const refreshSession = async (): Promise<void> => {
+		const next = await readCollaborationSession()
+		if (next?.admission !== `approved`) return
+		collaborationSession = next
+		retainConnectedPresence(next.participants)
+		notifySession()
+	}
+	const mutateSession = async (path: string, body: unknown): Promise<void> => {
+		const response = await fetch(path, {
+			body: JSON.stringify(body),
+			headers: { "content-type": `application/json` },
+			method: `POST`,
+		})
+		if (!response.ok)
+			throw new Error(
+				`Collaboration request failed with HTTP ${response.status}.`,
+			)
+		await refreshSession()
+	}
+	collaborationBridge = {
+		async decide(requestId, decision, role): Promise<void> {
+			await mutateSession(`/api/collaboration/admission/decision`, {
+				decision,
+				requestId,
+				...(role === undefined ? {} : { role }),
+			})
+		},
+		publish(command): void {
+			connectionStatus = `saving`
+			connectionError = undefined
+			notifySession()
+			realtimeClient.publish(command)
+		},
+		publishPresence(nextPresence): void {
+			const complete = { ...nextPresence, deviceId: session.identity.deviceId }
+			presence = [
+				...presence.filter((item) => item.deviceId !== complete.deviceId),
+				complete,
+			]
+			realtimeClient.publishPresence(complete)
+		},
+		async revoke(deviceId): Promise<void> {
+			await mutateSession(`/api/collaboration/revoke`, { deviceId })
+		},
+		session: editorSession,
+		subscribe(nextReceiver): () => void {
+			receiver = nextReceiver
+			socket.emit(`collaboration:snapshot`, realtimeClient.replay)
+			return () => {
+				if (receiver === nextReceiver) receiver = null
+			}
+		},
+		subscribeSession(listener): () => void {
+			sessionListeners.add(listener)
+			return () => sessionListeners.delete(listener)
+		},
+	}
+	socket.on(
+		`collaboration:participants`,
+		(participants: readonly CollaborationParticipant[]) => {
+			if (collaborationSession === null) return
+			collaborationSession = { ...collaborationSession, participants }
+			retainConnectedPresence(participants)
+			notifySession()
+		},
+	)
+	socket.on(`collaboration:presence`, (nextPresence: CollaborationPresence) => {
+		presence = [
+			...presence.filter((item) => item.deviceId !== nextPresence.deviceId),
+			nextPresence,
+		]
+		notifySession()
+	})
+	socket.on(`collaboration:confirmed`, () => {
+		connectionStatus = `connected`
+		connectionError = undefined
+		notifySession()
+	})
+	socket.on(
+		`collaboration:rejected`,
+		(rejection: Readonly<{ message: string }>) => {
+			connectionStatus = `error`
+			connectionError = rejection.message
+			notifySession()
+		},
+	)
+	socket.on(`connect`, () => {
+		connectionStatus = `connected`
+		connectionError = undefined
+		notifySession()
+	})
+	socket.on(`disconnect`, (reason) => {
+		if (reason === `io server disconnect`) {
+			renderAdmissionWaiting(`revoked`)
+			return
+		}
+		connectionStatus = `reconnecting`
+		connectionError = undefined
+		notifySession()
+	})
+	const refreshTimer =
+		session.role === `owner`
+			? setInterval(() => void refreshSession().catch(() => undefined), 1_000)
+			: undefined
+	window.addEventListener(
+		`pagehide`,
+		() => {
+			if (refreshTimer !== undefined) clearInterval(refreshTimer)
+			realtimeClient.dispose()
+			socket.disconnect()
+		},
+		{ once: true },
+	)
+	return false
 }
 
 function retrySource(): void {
@@ -487,12 +757,19 @@ async function showSource(
 		? startupTimeline.startPhase(`editor-hydration-render`)
 		: undefined
 	const options: EditorBrowserOptions = {
+		...(collaborationBridge === undefined
+			? {
+					onSourceChange: saveSource,
+					onSourceDirty: markSourceDirty,
+				}
+			: { collaboration: collaborationBridge }),
 		featureSubstitutions: currentFeatureSubstitutions,
-		onSourceChange: saveSource,
-		onSourceDirty: markSourceDirty,
 		source,
 		validation,
-		versionControl: versionControlOptions(),
+		...(collaborationSession?.role === `editor` ||
+		collaborationSession?.role === `viewer`
+			? {}
+			: { versionControl: versionControlOptions() }),
 		...(fontWorkspace === undefined || activeProjectId === undefined
 			? {}
 			: {
@@ -829,20 +1106,23 @@ window.addEventListener(`pagehide`, (event) => {
 })
 
 renderBootstrap()
-if (requestedProjectUnavailable) {
-	showBootstrapError(
-		`Font ${JSON.stringify(requestedProjectId)} is not available. Try again to open ${fontWorkspace?.activeProjectId ?? `the active font`}.`,
-	)
-} else {
-	connectSourceEvents()
-	void feaParserReady
-		.then(() => refreshSource(true))
-		.then(queueSourceEventDrain)
-		.catch((error: unknown) => {
+void initializeCollaboration()
+	.then(async (stopped) => {
+		if (stopped) return
+		await initializeFontWorkspace()
+		if (requestedProjectUnavailable) {
 			showBootstrapError(
-				error instanceof Error
-					? error.message
-					: `The font source did not load.`,
+				`Font ${JSON.stringify(requestedProjectId)} is not available. Try again to open ${fontWorkspace?.activeProjectId ?? `the active font`}.`,
 			)
-		})
-}
+			return
+		}
+		if (collaborationBridge === undefined) connectSourceEvents()
+		await feaParserReady
+		await refreshSource(true)
+		queueSourceEventDrain()
+	})
+	.catch((error: unknown) => {
+		showBootstrapError(
+			error instanceof Error ? error.message : `The font source did not load.`,
+		)
+	})

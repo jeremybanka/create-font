@@ -139,8 +139,16 @@ export function createEditorWorkspace(
 	source: EditorFontSource = makeDemoFont(),
 	initialValidation?: EditorValidationStatus,
 	initialFeatureSubstitutions: readonly EditorFeatureSubstitution[] = [],
+	onDocumentCommand?: Parameters<
+		typeof createFontEditorState
+	>[0][`onDocumentCommand`],
+	canEdit?: Parameters<typeof createFontEditorState>[0][`canEdit`],
 ) {
-	const font = createFontEditorState({ key: "create-font/editor/font" })
+	const font = createFontEditorState({
+		key: "create-font/editor/font",
+		...(canEdit === undefined ? {} : { canEdit }),
+		...(onDocumentCommand === undefined ? {} : { onDocumentCommand }),
+	})
 	font.actions.load(source)
 	const document = font.read.editorSource()
 	if (document === null)
@@ -1245,52 +1253,7 @@ export function createEditorWorkspace(
 				runEditorUiTransition({ kind: "select-tool", tool })
 			},
 			addGlyphs(names: readonly string[]): readonly GlyphId[] {
-				const currentDocument = font.read.editorSource()
-				if (currentDocument === null) return []
-				const existingNames = new Set(
-					currentDocument.glyphs.map((glyph) => glyph.name),
-				)
-				const existingIds = new Set(
-					currentDocument.glyphs.map((glyph) => glyph.id),
-				)
-				const cmap = [...currentDocument.cmap]
-				const mappedCodePoints = new Set(cmap.map((entry) => entry.codePoint))
-				const glyphs = [...currentDocument.glyphs]
-				const addedIds: GlyphId[] = []
-				for (const rawName of names) {
-					const name = rawName.trim()
-					const id = `glyph:${name}` as GlyphId
-					if (
-						name.length === 0 ||
-						existingNames.has(name) ||
-						existingIds.has(id)
-					)
-						continue
-					existingNames.add(name)
-					existingIds.add(id)
-					glyphs.push({
-						id,
-						name,
-						export: true,
-						color: "#d5963f",
-						layers: currentDocument.masters.map((master) => ({
-							masterId: master.id,
-							advanceWidth: currentDocument.metadata.unitsPerEm,
-							leftSideBearing: 80,
-							contours: [],
-						})),
-					})
-					const characters = Array.from(name)
-					const codePoint =
-						characters.length === 1 ? name.codePointAt(0) : undefined
-					if (codePoint !== undefined && !mappedCodePoints.has(codePoint)) {
-						cmap.push({ codePoint, glyphId: id })
-						mappedCodePoints.add(codePoint)
-					}
-					addedIds.push(id)
-				}
-				if (addedIds.length === 0) return Object.freeze([])
-				font.actions.load({ ...currentDocument, glyphs, cmap })
+				const addedIds = font.actions.addGlyphs(names)
 				const selectedId = addedIds.at(-1)
 				if (selectedId !== undefined) {
 					runEditorUiTransition({

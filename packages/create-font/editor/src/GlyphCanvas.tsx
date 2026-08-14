@@ -225,8 +225,17 @@ import {
 	visualDebugControlRegions,
 } from "./visual-debug.ts"
 import type { EditorVersionControl } from "./version-control.ts"
+import type {
+	EditorCollaboration,
+	EditorCollaborationSession,
+} from "./browser-api.ts"
+import { CollaborationCanvasPresence } from "./CollaborationCanvasPresence.tsx"
+import { normalizedPresenceSelectionBox } from "./collaboration-presence.ts"
 
 export interface GlyphCanvasProps {
+	readonly collaboration?: EditorCollaboration
+	readonly collaborationSession?: EditorCollaborationSession
+	readonly publishPresence?: EditorCollaboration["publishPresence"]
 	readonly workspace: EditorWorkspace
 	readonly disabled?: boolean
 	readonly diffView?: boolean
@@ -421,6 +430,9 @@ const ARROW_DELTAS: Readonly<Record<string, readonly [number, number]>> = {
 const TRANSFORM_ROTATION_SNAP_DEGREES = 15
 
 export function GlyphCanvas({
+	collaboration,
+	collaborationSession,
+	publishPresence,
 	workspace,
 	disabled = false,
 	diffView = false,
@@ -594,6 +606,11 @@ export function GlyphCanvas({
 	const setCanvasViewport = useI(workspace.ui.canvasViewport)
 	const rootRef = useRef<HTMLElement>(null)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const presenceCursorRef = useRef<Readonly<{ x: number; y: number }> | null>(
+		null,
+	)
+	const presenceFrameRef = useRef<number | null>(null)
+	const presencePublisherRef = useRef<() => void>(() => undefined)
 	const preferredCaretXRef = useRef<number | null>(null)
 	const {
 		ref,
@@ -1104,6 +1121,69 @@ export function GlyphCanvas({
 			x: event.evt.offsetX,
 			y: event.evt.offsetY,
 		}
+	presencePublisherRef.current = () => {
+		;(publishPresence ?? collaboration?.publishPresence)?.({
+			context: {
+				glyph: activeGlyphId,
+				master: activeMasterId,
+				surface: `canvas`,
+				textIndex: editingTextIndex === null ? null : String(editingTextIndex),
+			},
+			cursor: presenceCursorRef.current,
+			gesture: selectionBox === null ? activeTool : `select-marquee`,
+			selection: selection.map((target) => JSON.stringify(target)),
+			selectionBox: normalizedPresenceSelectionBox(selectionBox),
+		})
+	}
+	const schedulePresence = (): void => {
+		if (
+			(publishPresence === undefined && collaboration === undefined) ||
+			presenceFrameRef.current !== null
+		)
+			return
+		presenceFrameRef.current = requestAnimationFrame(() => {
+			presenceFrameRef.current = null
+			presencePublisherRef.current()
+		})
+	}
+	const updatePresencePointer = (
+		event: KonvaEventObject<MouseEvent | PointerEvent | DragEvent | TouchEvent>,
+	): void => {
+		presenceCursorRef.current = pointerInEditingGlyph(event)
+		schedulePresence()
+	}
+	useEffect(() => {
+		schedulePresence()
+	}, [
+		activeGlyphId,
+		activeMasterId,
+		activeTool,
+		collaboration,
+		editingTextIndex,
+		publishPresence,
+		selection,
+		selectionBox,
+	])
+	useEffect(() => {
+		return () => {
+			if (presenceFrameRef.current !== null) {
+				cancelAnimationFrame(presenceFrameRef.current)
+				presenceFrameRef.current = null
+			}
+			;(publishPresence ?? collaboration?.publishPresence)?.({
+				context: {
+					glyph: null,
+					master: activeMasterId,
+					surface: null,
+					textIndex: null,
+				},
+				cursor: null,
+				gesture: null,
+				selection: [],
+				selectionBox: null,
+			})
+		}
+	}, [collaboration, publishPresence])
 	const sharedModifiers = (
 		event: Pick<MouseEvent, "shiftKey" | "altKey" | "metaKey" | "ctrlKey">,
 	): VectorGestureModifiers => ({
@@ -4477,6 +4557,8 @@ export function GlyphCanvas({
 						)
 					}}
 					onMouseLeave={() => {
+						presenceCursorRef.current = null
+						schedulePresence()
 						if (activeTool === "pen" && penGestureRef.current === null)
 							clearPenHoverPreview()
 						if (activeShapeKind !== null && shapeGestureRef.current === null)
@@ -4495,6 +4577,7 @@ export function GlyphCanvas({
 						}
 					}}
 					onPointerMove={(event: KonvaEventObject<PointerEvent>) => {
+						updatePresencePointer(event)
 						if (momentaryPreview) return
 						if (editingTextIndex !== null && activeTool === "pen")
 							updatePenPointer(event)
@@ -6350,6 +6433,24 @@ export function GlyphCanvas({
 										/>
 									)}
 								</Group>
+							)}
+							{collaborationSession === undefined ? null : (
+								<CollaborationCanvasPresence
+									activeGlyphId={activeGlyphId}
+									activeMasterId={activeMasterId}
+									ascender={metrics.ascender}
+									descender={metrics.descender}
+									inverseScale={inverseScale}
+									nodes={allPoints}
+									positions={layout.glyphs.map((position) => ({
+										advance: position.advance,
+										baseline: position.baseline,
+										glyphId: position.item.glyphId,
+										textStart: position.item.textStart,
+										x: position.x,
+									}))}
+									session={collaborationSession}
+								/>
 							)}
 						</Group>
 					</Layer>

@@ -412,6 +412,27 @@ describe("editor tools and hotkeys", () => {
 		expect(markDocumentChanged).toHaveBeenCalledTimes(2)
 	})
 
+	it("delegates kerning history through the registered document actions", () => {
+		const undo = vi.fn()
+		const redo = vi.fn()
+		const undoKerning = vi.fn()
+		const redoKerning = vi.fn()
+		const context = {
+			activeGlyphId: "unused",
+			kerningActive: true,
+			workspace: { font: { actions: { redoKerning, undoKerning } } },
+			history: { at: 1, length: 2, undo, redo, clear: vi.fn() },
+		} as unknown as Parameters<(typeof TOOLS)["UNDO"]["do"]>[0]
+
+		TOOLS.UNDO.do(context)
+		TOOLS.REDO.do(context)
+
+		expect(undoKerning).toHaveBeenCalledOnce()
+		expect(redoKerning).toHaveBeenCalledOnce()
+		expect(undo).not.toHaveBeenCalled()
+		expect(redo).not.toHaveBeenCalled()
+	})
+
 	it("prefers user-agent client hints and falls back to navigator.platform", () => {
 		expect(
 			isMacLike({

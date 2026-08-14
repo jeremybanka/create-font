@@ -97,6 +97,71 @@ One Ctrl-C gracefully closes the workspace server.
 
 `font serve` remains an alias for `font dev`.
 
+## LAN multiplayer
+
+Add `--share` to host the selected font on the local network:
+
+```sh
+npm exec -- font dev workbench-sans --share
+```
+
+The command starts the ordinary workspace server on loopback, wraps it in a
+short-lived HTTPS LAN endpoint, prints an invitation and terminal QR code, and
+opens the host through a loopback gateway. HTTPS is zero-configuration: each
+host process creates an ephemeral certificate and its fingerprint is pinned in
+the signed invitation flow rather than delegated to the ambient network.
+
+A collaborator copies the printed command or scans/copies its token:
+
+```sh
+npm exec -- font join '<invitation>'
+```
+
+`font join` reads the effective Git `user.name` and `user.email`, signs that
+friendly identity with a persistent local device key, requests admission, and
+opens a loopback gateway. The host must approve the device as an editor or a
+viewer for every host process. The browser remains connected directly to the
+host machine through the local gateway; no relay, hosted account, or cloud
+source of truth is involved. The host can revoke a guest at any time, which
+invalidates the session and disconnects all of that device's open tabs.
+If the effective Git name or email is missing, an interactive terminal prompts
+for it before sending an admission request; a non-interactive join exits with
+an actionable error instead of inventing an identity.
+
+Invitations and admitted guest credentials expire after 12 hours at the
+latest, and stopping the host invalidates them immediately. Restarting
+`font dev --share` always creates a new certificate, invitation, admission
+queue, and shared in-memory history. Rejoining therefore requires the new
+invitation and a new host decision.
+
+Only the host can invoke raw workspace writes, builds, comparisons, commits,
+and other source APIs. Editors submit a closed set of validated font commands
+over the collaboration socket; viewers cannot mutate the document. The host
+persists each accepted command with source revision checks before broadcasting
+confirmation. External filesystem or Git changes advance the session epoch and
+cause connected clients to recover from an authoritative snapshot. A change
+isolated to one glyph clears only that glyph's shared history; kerning changes
+clear the kerning history; structural changes conservatively reset every
+affected timeline. Invalid external source remains diagnostic data and does not
+replace the last valid shared document.
+
+Glyph and kerning edits retain the editor's existing atom.io timeline families.
+All editors participate in that shared global history: undo and redo operate on
+the currently active glyph or kerning scope. History remains process-memory
+state and is intentionally not written into canonical font source.
+
+The invitation is a bearer capability for requesting admission, so share it
+only with intended LAN peers. Device name and email are visible to participants
+by default, matching Git's authorship convention. Browser-only direct guest
+connections, internet relays, resumable offline editing, durable history, and
+user-centric selective undo are outside this first multiplayer release.
+
+The collaboration transport is covered under both supported runtimes. Node
+uses Socket.IO's WebSocket transport; Bun uses Socket.IO's HTTP long-polling
+transport because its Node-compatible HTTPS upgrade socket cannot currently
+carry the gateway's raw upgraded byte stream. Both paths retain the same
+pinned-HTTPS, authorization, ordering, persistence, and presence contracts.
+
 ## Adobe feature tooling
 
 `font check [name]` validates every indexed `.fea` source and its transitive

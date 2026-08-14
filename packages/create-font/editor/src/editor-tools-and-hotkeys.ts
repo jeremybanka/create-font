@@ -65,6 +65,8 @@ export interface ToolContext {
 	readonly activeLayer: EditorCanvasLayer | null
 	readonly editingTextIndex: number | null
 	readonly history: TimelineMeta | null
+	readonly kerningActive?: boolean
+	readonly readOnly?: boolean
 	readonly selection: readonly EditorSelectionTarget[]
 }
 
@@ -83,6 +85,7 @@ export function toolDisabledReason(
 	context: ToolContext,
 ): string | undefined {
 	if (tool.status(context) !== "disabled") return undefined
+	if (context.readOnly) return "View-only guests cannot change the font."
 	if (
 		context.editingTextIndex === null &&
 		tool.id !== "undo" &&
@@ -398,7 +401,7 @@ export const TOOLS = {
 		},
 	},
 	UNDO: {
-		description: "Undo the latest edit to the active glyph.",
+		description: "Undo the latest edit in the active history scope.",
 		id: "undo",
 		displayName: "Undo",
 		hotkey: { key: "z", mod: true },
@@ -407,14 +410,22 @@ export const TOOLS = {
 			history === null || history.at === 0 ? "disabled" : "ready",
 		do: (context) => {
 			if (context.history === null) return
+			if (context.kerningActive) {
+				context.workspace.font.actions.undoKerning()
+				return
+			}
+			if (context.activeGlyphId === null) return
 			const remap = directionChangeAt(context, context.history.at)
 			context.history.undo()
-			context.workspace.font.actions.markDocumentChanged()
+			context.workspace.font.actions.markDocumentChanged({
+				type: `undoGlyph`,
+				glyphId: context.activeGlyphId,
+			})
 			if (remap) remapSelectionHandles(context)
 		},
 	},
 	REDO: {
-		description: "Restore the next edit to the active glyph.",
+		description: "Restore the next edit in the active history scope.",
 		id: "redo",
 		displayName: "Redo",
 		hotkey: { key: "z", mod: true, shift: true },
@@ -423,9 +434,17 @@ export const TOOLS = {
 			history === null || history.at === history.length ? "disabled" : "ready",
 		do: (context) => {
 			if (context.history === null) return
+			if (context.kerningActive) {
+				context.workspace.font.actions.redoKerning()
+				return
+			}
+			if (context.activeGlyphId === null) return
 			const remap = directionChangeAt(context, context.history.at + 1)
 			context.history.redo()
-			context.workspace.font.actions.markDocumentChanged()
+			context.workspace.font.actions.markDocumentChanged({
+				type: `redoGlyph`,
+				glyphId: context.activeGlyphId,
+			})
 			if (remap) remapSelectionHandles(context)
 		},
 	},

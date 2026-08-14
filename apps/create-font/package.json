@@ -45,18 +45,20 @@
 	"scripts": {
 		"build": "node ./scripts/build.ts",
 		"dev": "node ./scripts/dev.ts",
-		"test": "pnpm run test:unit && pnpm run test:e2e && pnpm run test:node-server",
-		"test:bun-server": "node ./scripts/build-development.ts && bun --conditions=development ./tests/runtime-server-smoke.ts",
+		"test": "pnpm run test:unit && pnpm run test:e2e && pnpm run test:node-server && pnpm run test:node-collaboration",
+		"test:bun-server": "node ./scripts/build-development.ts && bun --conditions=development ./tests/runtime-server-smoke.ts && bun --conditions=development ./tests/runtime-collaboration-smoke.ts",
 		"test:e2e": "vp test --config ./vitest.e2e.config.ts",
 		"test:unit": "pnpm run test:unit-interfaces && pnpm run test:unit-source-pipeline",
 		"test:unit-interfaces": "node ./scripts/build-development.ts && vp test --exclude ./tests/build.test.ts --exclude ./tests/source-service.test.ts",
 		"test:unit-source-pipeline": "vp test ./tests/build.test.ts ./tests/source-service.test.ts",
-		"test:node-server": "node ./scripts/build-development.ts && node --conditions=development --test ./tests/node-server.node.ts"
+		"test:node-server": "node ./scripts/build-development.ts && node --conditions=development --test ./tests/node-server.node.ts",
+		"test:node-collaboration": "node --conditions=development ./tests/runtime-collaboration-smoke.ts"
 	},
 	"dependencies": {
-		"@create-art/ui-layout": "workspace:*",
+		"@create-art/realtime": "workspace:*",
 		"@create-art/source-format": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
+		"@create-art/ui-layout": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/glyphs-app": "workspace:*",
@@ -71,6 +73,10 @@
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"rolldown": "1.2.4",
+		"qrcode": "1.5.4",
+		"selfsigned": "3.0.1",
+		"socket.io": "4.8.3",
+		"socket.io-client": "4.8.3",
 		"vscode-languageclient": "10.1.0",
 		"vscode-languageserver": "10.1.0",
 		"vscode-languageserver-textdocument": "1.0.12",
@@ -79,6 +85,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "25.9.5",
+		"@types/qrcode": "1.5.6",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.4",
 		"@vitejs/plugin-react": "6.0.5",

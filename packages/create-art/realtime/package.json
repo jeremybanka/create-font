@@ -1,0 +1,68 @@
+{
+	"name": "@create-art/realtime",
+	"version": "0.1.0",
+	"description": "LAN-first identity, admission, session, presence, and authoritative action contracts for create-* applications",
+	"license": "MPL-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jeremybanka/create-font",
+		"directory": "packages/create-art/realtime"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"development": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./client": {
+			"development": "./src/client.ts",
+			"types": "./dist/client.d.mts",
+			"browser": "./dist/client.mjs",
+			"import": "./dist/client.mjs"
+		},
+		"./node": {
+			"development": "./src/node.ts",
+			"types": "./dist/node.d.mts",
+			"import": "./dist/node.mjs"
+		},
+		"./server": {
+			"development": "./src/server.ts",
+			"types": "./dist/server.d.mts",
+			"import": "./dist/server.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "vp pack",
+		"dev": "vp pack --watch --no-clean",
+		"test": "vp test"
+	},
+	"dependencies": {
+		"atom.io": "0.51.3"
+	},
+	"devDependencies": {
+		"@testing-library/react": "16.3.2",
+		"@types/node": "25.9.5",
+		"happy-dom": "20.11.2",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
+		"socket.io": "4.8.3",
+		"socket.io-client": "4.8.3",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	}
+}
