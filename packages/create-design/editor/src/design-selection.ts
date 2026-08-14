@@ -76,6 +76,14 @@ export type DesignDirectSelectionTarget =
 			readonly segmentIndex: number
 	  }>
 
+export interface DesignDirectSelectionHit {
+	readonly target: DesignDirectSelectionTarget
+	/** Distance from the pointer in document units. */
+	readonly distance: number
+	/** Nearest authored parameter for segment and contour hits. */
+	readonly parameter?: number
+}
+
 export function directSelectionKey(
 	target: DesignDirectSelectionTarget,
 ): string {
@@ -315,7 +323,7 @@ export function marqueeDirectSelection(
 const squaredDistance = (first: CanvasPoint, second: CanvasPoint): number =>
 	(first.x - second.x) ** 2 + (first.y - second.y) ** 2
 
-function lineDistanceSquared(
+function nearestLineParameter(
 	point: CanvasPoint,
 	start: CanvasPoint,
 	end: CanvasPoint,
@@ -323,15 +331,11 @@ function lineDistanceSquared(
 	const x = end.x - start.x
 	const y = end.y - start.y
 	const length = x * x + y * y
-	if (length === 0) return squaredDistance(point, start)
-	const amount = Math.max(
+	if (length === 0) return 0
+	return Math.max(
 		0,
 		Math.min(1, ((point.x - start.x) * x + (point.y - start.y) * y) / length),
 	)
-	return squaredDistance(point, {
-		x: start.x + amount * x,
-		y: start.y + amount * y,
-	})
 }
 
 function cubicPoint(
@@ -358,30 +362,46 @@ function cubicPoint(
 	}
 }
 
-function segmentDistanceSquared(
+function nearestCubicParameter(
 	point: CanvasPoint,
 	from: VectorNode,
 	to: VectorNode,
 ): number {
-	if (from.outgoing === undefined && to.incoming === undefined)
-		return lineDistanceSquared(point, from, to)
-	let distance = Number.POSITIVE_INFINITY
-	let previous: CanvasPoint = from
-	for (let index = 1; index <= 16; index += 1) {
-		const current = cubicPoint(from, to, index / 16)
-		distance = Math.min(distance, lineDistanceSquared(point, previous, current))
-		previous = current
+	const samples = 64
+	let bestIndex = 0
+	let bestDistance = Number.POSITIVE_INFINITY
+	for (let index = 0; index <= samples; index += 1) {
+		const distance = squaredDistance(
+			point,
+			cubicPoint(from, to, index / samples),
+		)
+		if (distance < bestDistance) {
+			bestDistance = distance
+			bestIndex = index
+		}
 	}
-	return distance
+	let low = Math.max(0, (bestIndex - 1) / samples)
+	let high = Math.min(1, (bestIndex + 1) / samples)
+	for (let iteration = 0; iteration < 28; iteration += 1) {
+		const first = low + (high - low) / 3
+		const second = high - (high - low) / 3
+		if (
+			squaredDistance(point, cubicPoint(from, to, first)) <=
+			squaredDistance(point, cubicPoint(from, to, second))
+		)
+			high = second
+		else low = first
+	}
+	return (low + high) / 2
 }
 
-export function nearestDirectSelectionTarget(
+export function nearestDirectSelectionHit(
 	document: Pick<DesignDocument, "swatches">,
 	objects: readonly DesignObject[],
 	point: CanvasPoint,
 	worldScale: number,
 	options: Readonly<{ contour?: boolean; maxDistancePixels?: number }> = {},
-): DesignDirectSelectionTarget | null {
+): DesignDirectSelectionHit | null {
 	if (!(worldScale > 0)) return null
 	const maximum = (options.maxDistancePixels ?? 10) / worldScale
 	let best:
@@ -389,6 +409,7 @@ export function nearestDirectSelectionTarget(
 				target: DesignDirectSelectionTarget
 				distance: number
 				distanceBand: number
+				parameter?: number
 				priority: number
 				stack: number
 		  }>
@@ -398,19 +419,31 @@ export function nearestDirectSelectionTarget(
 		distance: number,
 		priority: number,
 		stack: number,
+		parameter?: number,
 	): void => {
 		if (distance > maximum) return
 		const distanceBand = Math.floor((distance * worldScale) / 2)
 		if (
 			best === undefined ||
-			distanceBand < best.distanceBand ||
-			(distanceBand === best.distanceBand && priority < best.priority) ||
+			(priority < 2 && best.priority === 2) ||
+			(priority < 2 && best.priority < 2 && distanceBand < best.distanceBand) ||
+			(priority < 2 &&
+				best.priority < 2 &&
+				distanceBand === best.distanceBand &&
+				priority < best.priority) ||
 			(priority === best.priority &&
 				distanceBand === best.distanceBand &&
 				(distance < best.distance ||
 					(distance === best.distance && stack > best.stack)))
 		)
-			best = { target, distance, distanceBand, priority, stack }
+			best = {
+				target,
+				distance,
+				distanceBand,
+				priority,
+				stack,
+				...(parameter === undefined ? {} : { parameter }),
+			}
 	}
 	for (const [stack, object] of objects.entries()) {
 		if (object.hidden || object.locked || object.geometry.kind !== "path")
@@ -458,6 +491,11 @@ export function nearestDirectSelectionTarget(
 				const from = contour.nodes[segmentIndex]
 				const to = contour.nodes[(segmentIndex + 1) % contour.nodes.length]
 				if (from === undefined || to === undefined) continue
+				const parameter =
+					from.outgoing === undefined && to.incoming === undefined
+						? nearestLineParameter(point, from, to)
+						: nearestCubicParameter(point, from, to)
+				const nearest = cubicPoint(from, to, parameter)
 				consider(
 					options.contour
 						? { kind: "contour", objectId: object.id, contourId: contour.id }
@@ -467,14 +505,34 @@ export function nearestDirectSelectionTarget(
 								contourId: contour.id,
 								segmentIndex,
 							},
-					Math.sqrt(segmentDistanceSquared(point, from, to)),
+					Math.sqrt(squaredDistance(point, nearest)),
 					2,
 					stack,
+					parameter,
 				)
 			}
 		}
 	}
-	return best?.target ?? null
+	return best === undefined
+		? null
+		: {
+				target: best.target,
+				distance: best.distance,
+				...(best.parameter === undefined ? {} : { parameter: best.parameter }),
+			}
+}
+
+export function nearestDirectSelectionTarget(
+	document: Pick<DesignDocument, "swatches">,
+	objects: readonly DesignObject[],
+	point: CanvasPoint,
+	worldScale: number,
+	options: Readonly<{ contour?: boolean; maxDistancePixels?: number }> = {},
+): DesignDirectSelectionTarget | null {
+	return (
+		nearestDirectSelectionHit(document, objects, point, worldScale, options)
+			?.target ?? null
+	)
 }
 
 function selectedControls(

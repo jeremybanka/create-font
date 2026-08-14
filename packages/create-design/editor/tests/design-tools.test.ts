@@ -10,6 +10,7 @@ describe("create-design tool registration", () => {
 			"transform",
 			"artboard",
 			"pen",
+			"knife",
 			"rect",
 			"ellipse",
 			"text",
@@ -19,6 +20,11 @@ describe("create-design tool registration", () => {
 		expect(DESIGN_TOOLS.artboard).toMatchObject({
 			label: "Artboard",
 			key: "B",
+		})
+		expect(DESIGN_TOOLS.knife).toMatchObject({
+			label: "Knife",
+			key: "K",
+			paletteIcon: "HobbyKnifeIcon",
 		})
 		expect("rule" in DESIGN_TOOLS).toBe(false)
 		expect(DESIGN_TOOLS.guide).toMatchObject({ label: "Guide", key: "G" })

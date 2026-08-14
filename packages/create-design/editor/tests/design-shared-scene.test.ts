@@ -8444,4 +8444,162 @@ describe("create-design shared vector scene", () => {
 			"Deleted 1 selected path control.",
 		)
 	})
+
+	it("commits Alt-edge handles and Knife cuts as undoable canvas gestures", async () => {
+		const initial = createInitialDocument()
+		const source = initial.objects[0]
+		if (source === undefined) throw new Error("Design fixture is missing.")
+		const authoredPath: DesignObject = {
+			...source,
+			id: "object:gesture-path",
+			name: "Gesture path",
+			transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+			geometry: {
+				kind: "path",
+				fillRule: "nonzero",
+				contours: [
+					{
+						id: "contour:gesture-path",
+						closed: true,
+						points: [
+							{ id: "point:a", x: 100, y: 100 },
+							{ id: "point:b", x: 300, y: 100 },
+							{ id: "point:c", x: 300, y: 300 },
+							{ id: "point:d", x: 100, y: 300 },
+						],
+					},
+				],
+			},
+		}
+		const storage = new Map<string, string>()
+		const stage = mountDesign(
+			{
+				initialDocument: {
+					...initial,
+					objects: [authoredPath],
+					layers: [
+						{
+							id: "layer:gesture-path",
+							name: "Gesture path",
+							children: [{ kind: "object", id: authoredPath.id }],
+						},
+					],
+				},
+			},
+			storage,
+		)
+		const layer = document.querySelector<HTMLButtonElement>(
+			'design-layers-tile [data-layer-kind="object"]',
+		)
+		const direct = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Direct Selection"]',
+		)
+		const knife = document.querySelector<HTMLButtonElement>(
+			'button[aria-label="Knife"]',
+		)
+		const canvas = stage.container().querySelector("canvas")
+		if (layer === null || direct === null || knife === null || canvas === null)
+			throw new Error("Segment gesture controls were not found.")
+		act(() => {
+			layer.click()
+			direct.click()
+		})
+		const [firstNode, secondNode] = stage.find(".vector-node")
+		if (firstNode === undefined || secondNode === undefined)
+			throw new Error("Direct path nodes were not rendered.")
+		const first = firstNode.getAbsolutePosition()
+		const second = secondNode.getAbsolutePosition()
+		const midpoint = {
+			x: (first.x + second.x) / 2,
+			y: (first.y + second.y) / 2,
+		}
+		let pointerId = 901
+		const gesture = async (altKey = false): Promise<void> => {
+			const down = new PointerEvent("pointerdown", {
+				bubbles: true,
+				button: 0,
+				buttons: 1,
+				clientX: midpoint.x,
+				clientY: midpoint.y,
+				isPrimary: true,
+				pointerId,
+				pointerType: "mouse",
+				altKey,
+			})
+			Object.defineProperty(down, "currentTarget", { value: canvas })
+			await act(async () => {
+				stage.setPointersPositions(down)
+				stage.fire("pointerdown", { evt: down }, true)
+				window.dispatchEvent(
+					new PointerEvent("pointerup", {
+						bubbles: true,
+						button: 0,
+						buttons: 0,
+						clientX: midpoint.x,
+						clientY: midpoint.y,
+						isPrimary: true,
+						pointerId,
+						pointerType: "mouse",
+						altKey,
+					}),
+				)
+				pointerId += 1
+				await Promise.resolve()
+			})
+		}
+
+		await gesture(true)
+		let saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		let geometry = saved.objects[0]?.geometry
+		if (geometry?.kind !== "path") throw new Error("Expected saved path.")
+		expect(geometry.contours[0]?.points[0]?.outgoing).toEqual({
+			x: 200 / 3,
+			y: 0,
+		})
+		expect(geometry.contours[0]?.points[1]?.incoming).toEqual({
+			x: -200 / 3,
+			y: 0,
+		})
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]?.geometry).toEqual(authoredPath.geometry)
+
+		act(() => knife.click())
+		await gesture()
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		geometry = saved.objects[0]?.geometry
+		if (geometry?.kind !== "path") throw new Error("Expected cut path.")
+		expect(geometry.contours).toHaveLength(1)
+		expect(geometry.contours[0]?.closed).toBe(false)
+		expect(geometry.contours[0]?.points).toHaveLength(6)
+		const cutPoints = geometry.contours[0]?.points ?? []
+		expect(cutPoints[0]).toMatchObject({
+			x: cutPoints.at(-1)?.x,
+			y: cutPoints.at(-1)?.y,
+		})
+		expect(cutPoints[0]?.id).not.toBe(cutPoints.at(-1)?.id)
+
+		await act(async () => {
+			window.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "z", ctrlKey: true }),
+			)
+			await Promise.resolve()
+		})
+		saved = JSON.parse(
+			storage.get(DESIGN_STORAGE_KEY) ?? "{}",
+		) as DesignDocument
+		expect(saved.objects[0]?.geometry).toEqual(authoredPath.geometry)
+	}, 15_000)
 })

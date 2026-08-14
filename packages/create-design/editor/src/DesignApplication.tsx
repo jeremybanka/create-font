@@ -228,7 +228,7 @@ import {
 	isDirectSelectionNodeSelected,
 	marqueeDirectSelection,
 	marqueeObjectIds,
-	nearestDirectSelectionTarget,
+	nearestDirectSelectionHit,
 	selectableObjectIds,
 	reconcileDesignKeyObject,
 	shouldPromoteDesignKeyObject,
@@ -237,6 +237,11 @@ import {
 	translateDirectSelection,
 	type DesignDirectSelectionTarget,
 } from "./design-selection.ts"
+import {
+	addDesignSegmentHandles,
+	cutDesignSegment,
+	type DesignSegmentReference,
+} from "./design-segment-operations.ts"
 import { DESIGN_TOOLS } from "./design-tools.ts"
 import {
 	type DesignSourceReviewChange,
@@ -432,6 +437,14 @@ type CanvasGesture =
 			readonly start: CanvasPoint
 			readonly original: DesignDocument
 			readonly selection: readonly DesignDirectSelectionTarget[]
+	  }
+	| {
+			readonly kind: "segment-action"
+			readonly action: "add-handles" | "cut"
+			readonly pointerId: number
+			readonly startScreen: CanvasPoint
+			readonly original: DesignDocument
+			readonly reference: DesignSegmentReference
 	  }
 	| {
 			readonly kind: "corner"
@@ -782,6 +795,8 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 		return "Click point A, then point B · Shift constrains to 15° increments · Escape cancels"
 	if (tool === "pen")
 		return "Click for corners · Drag for curves · Click start to close · Enter or Escape finishes open"
+	if (tool === "knife")
+		return "Click an authored path segment to cut it · Cuts preserve straight and cubic geometry · K activates Knife"
 	if (tool === "rect" || tool === "ellipse")
 		return "Drag to draw · Shift constrains · Alt draws from center"
 	if (tool === "transform")
@@ -791,7 +806,7 @@ function contextualHelp(tool: DesignTool, editingGroup: boolean): string {
 	if (tool === "area-text")
 		return "Drag to create a text frame · Type in the native editor · Escape exits text editing"
 	if (tool === "direct")
-		return "Click path nodes to edit them · Select a live rectangle to convert it explicitly before editing its corners · Drag inset corner handles to change the corner amount"
+		return "Click path nodes or handles to edit them · Alt/Option-click a straight edge to add Bézier handles · Double-click an edge to select its contour · Select a live rectangle to convert it explicitly before editing its corners"
 	if (editingGroup)
 		return "Editing group contents · Double-click nested groups · Escape exits group"
 	return `Drag objects to move · Alt/Option-drag to copy · ${MOD_KEY_LABEL}+D duplicates with offset · ${MOD_KEY_LABEL}+[ / ] changes stacking · ${ALT_KEY_LABEL}+${MOD_KEY_LABEL}+[ / ] sends to back/front · Double-click a group to edit contents · F shows transform handles · X targets fill or stroke · Shift-X swaps one object's paints · ${MOD_KEY_LABEL}+X cuts`
@@ -2026,7 +2041,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 					: `${selection.length} object${selection.length === 1 ? "" : "s"} selected.`
 				: `${selectedGroup.name}, group with ${selectedGroup.objectIds.length} object${selectedGroup.objectIds.length === 1 ? "" : "s"}, selected${selectedLockedObject === undefined ? "" : "; contains locked artwork"}.`
 	const selectionAnnouncement =
-		tool === "direct"
+		tool === "direct" || (tool === "knife" && directSelection.length > 0)
 			? directSelectionDescription(directSelection)
 			: selectionDescription
 	const announcedSelectionRef = useRef(selectionAnnouncement)
@@ -2676,6 +2691,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			gesture !== null &&
 			gesture.kind !== "pan" &&
 			gesture.kind !== "direct" &&
+			gesture.kind !== "segment-action" &&
 			gesture.kind !== "corner" &&
 			gesture.kind !== "artboard" &&
 			gesture.kind !== "guide"
@@ -5930,6 +5946,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				gesture === null ||
 				gesture.kind === "pan" ||
 				gesture.kind === "direct" ||
+				gesture.kind === "segment-action" ||
 				gesture.kind === "corner" ||
 				gesture.kind === "artboard" ||
 				gesture.kind === "guide"
@@ -6810,6 +6827,42 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				: `${object.name} removed from direct selection.`,
 		)
 	}
+	const startSegmentAction = (
+		event: KonvaEventObject<PointerEvent>,
+		action: "add-handles" | "cut",
+		reference: DesignSegmentReference,
+	): void => {
+		event.cancelBubble = true
+		gestureRef.current = {
+			kind: "segment-action",
+			action,
+			pointerId: event.evt.pointerId,
+			startScreen: gesturePointer(event).screen,
+			original: document,
+			reference,
+		}
+		captureDesignPointer(event.evt.currentTarget, event.evt.pointerId)
+	}
+	const selectDirectContour = (event: KonvaEventObject<MouseEvent>): void => {
+		if (tool !== "direct") return
+		const hit = nearestDirectSelectionHit(
+			effectivePolicyDocument,
+			effectivePolicyDocument.objects,
+			pagePoint(event),
+			worldScale,
+			{ contour: true },
+		)
+		if (hit?.target.kind !== "contour") return
+		event.cancelBubble = true
+		const next = toggleDirectSelection(
+			directSelection,
+			hit.target,
+			gestureModifiers(event.evt).additive,
+		)
+		setDirectSelection(next)
+		setSelection([...new Set(next.map(({ objectId }) => objectId))])
+		setStatus(`Selected contour ${hit.target.contourId}.`)
+	}
 	const startCornerGesture = (
 		event: KonvaEventObject<PointerEvent>,
 		objectId: string,
@@ -6985,6 +7038,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	): void => {
 		if (
 			tool === "pen" ||
+			tool === "knife" ||
 			tool === "rect" ||
 			tool === "ellipse" ||
 			tool === "artboard" ||
@@ -7027,6 +7081,14 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		setPenPoints(deduplicated)
 		finishPen(false)
 	}
+	const handleStageDoubleClick = (
+		event: KonvaEventObject<MouseEvent>,
+	): void => {
+		finishOpenPenOnDoubleClick(event)
+		selectDirectContour(event)
+	}
+	const handleStageDoubleTap = (event: KonvaEventObject<TouchEvent>): void =>
+		finishOpenPenOnDoubleClick(event)
 
 	const pointerDown = (event: KonvaEventObject<PointerEvent>): void => {
 		setPenProspectiveSegment(null)
@@ -7169,16 +7231,35 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			beginVectorGesture(event, { tool: "pen" }, undefined, undefined, snap)
 			return
 		}
-		if (tool === "direct") {
-			const target = nearestDirectSelectionTarget(
-				document,
-				displayedObjects,
+		if (tool === "knife" || tool === "direct") {
+			const hit = nearestDirectSelectionHit(
+				effectivePolicyDocument,
+				effectivePolicyDocument.objects,
 				point,
 				worldScale,
-				{
-					contour: event.evt.altKey,
-				},
 			)
+			if (
+				hit?.target.kind === "segment" &&
+				hit.parameter !== undefined &&
+				(tool === "knife" || event.evt.altKey)
+			) {
+				startSegmentAction(event, tool === "knife" ? "cut" : "add-handles", {
+					objectId: hit.target.objectId,
+					contourId: hit.target.contourId,
+					segmentIndex: hit.target.segmentIndex,
+					parameter: hit.parameter,
+				})
+				return
+			}
+			if (tool === "knife") {
+				setStatus(
+					hit === null
+						? "Knife did not find an editable path segment."
+						: "Knife cuts segment interiors; nodes and handles take precedence.",
+				)
+				return
+			}
+			const target = hit?.target ?? null
 			if (target === null) {
 				const liveShape = nearestDesignObject(
 					displayedObjects,
@@ -7305,6 +7386,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 			return
 		}
+		if (gesture.kind === "segment-action") return
 		if (gesture.kind === "direct") {
 			if (gesture.pointerId !== event.evt.pointerId) return
 			const current = pagePoint(event)
@@ -7455,6 +7537,57 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			})
 			gestureRef.current = null
 			releaseDesignPointer(captureTarget, event.pointerId)
+			return
+		}
+		if (gesture.kind === "segment-action") {
+			if (gesture.pointerId !== event.pointerId) return
+			gestureRef.current = null
+			releaseDesignPointer(captureTarget, event.pointerId)
+			if (
+				Math.hypot(
+					releaseScreen.x - gesture.startScreen.x,
+					releaseScreen.y - gesture.startScreen.y,
+				) > GROUP_DOUBLE_CLICK_SLOP_PIXELS
+			) {
+				setStatus(
+					gesture.action === "cut"
+						? "Knife cut cancelled because the pointer moved."
+						: "Bézier handle insertion cancelled because the pointer moved.",
+				)
+				return
+			}
+			if (documentRef.current !== gesture.original) {
+				setStatus("The path changed before the segment edit completed.")
+				return
+			}
+			const result =
+				gesture.action === "cut"
+					? cutDesignSegment(gesture.original, gesture.reference, nextId)
+					: addDesignSegmentHandles(gesture.original, gesture.reference)
+			if (!result.ok) {
+				setStatus(result.error)
+				return
+			}
+			const beforeSelection = {
+				objectSelection: selection,
+				directSelection,
+				layerId: activeLayerId,
+				groupScope,
+			}
+			const afterSelection = {
+				objectSelection: result.objectSelection,
+				directSelection: result.directSelection,
+				layerId: activeLayerId,
+				groupScope,
+			}
+			pathCommandSelectionsRef.current.set(gesture.original, beforeSelection)
+			pathCommandSelectionsRef.current.set(result.document, afterSelection)
+			historySelectionsRef.current.set(historyAt, beforeSelection)
+			historySelectionsRef.current.set(historyAt + 1, afterSelection)
+			commit(result.document)
+			setSelection(result.objectSelection)
+			setDirectSelection(result.directSelection)
+			setStatus(result.message)
 			return
 		}
 		if (gesture.kind === "direct") {
@@ -7830,6 +7963,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			const activePointerId =
 				gesture.kind === "pan" ||
 				gesture.kind === "direct" ||
+				gesture.kind === "segment-action" ||
 				gesture.kind === "corner" ||
 				gesture.kind === "artboard" ||
 				gesture.kind === "guide"
@@ -7842,6 +7976,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			if (
 				gesture.kind !== "pan" &&
 				gesture.kind !== "direct" &&
+				gesture.kind !== "segment-action" &&
 				gesture.kind !== "corner" &&
 				gesture.kind !== "artboard" &&
 				gesture.kind !== "guide"
@@ -8346,7 +8481,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 						tabIndex={-1}
 					>
 						<span id="design-selection-status" data-screen-reader>
-							{tool === "direct"
+							{tool === "direct" ||
+							(tool === "knife" && directSelection.length > 0)
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
 						</span>
@@ -8379,8 +8515,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							onPointerLeave={pointerLeave}
 							onPointerCancel={pointerCancel}
 							onLostPointerCapture={pointerCancel}
-							onDblClick={finishOpenPenOnDoubleClick}
-							onDblTap={finishOpenPenOnDoubleClick}
+							onDblClick={handleStageDoubleClick}
+							onDblTap={handleStageDoubleTap}
 							onWheel={(event: KonvaEventObject<WheelEvent>) => {
 								event.evt.preventDefault()
 								const pointer =
@@ -9003,7 +9139,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													/>
 												)
 											})()}
-									{tool !== "select" && tool !== "transform"
+									{tool !== "select" && tool !== "transform" && tool !== "knife"
 										? null
 										: selectedObjects.flatMap((selected) => {
 												const object = previewById.get(selected.id) ?? selected

@@ -11,10 +11,11 @@ import {
 describe("create-design action hotbar", () => {
 	it("provides a complete application-specific authoring layout", () => {
 		expect(DEFAULT_DESIGN_HOTBAR_SLOTS).toHaveLength(HOTBAR_KEYS.length)
-		expect(DEFAULT_DESIGN_HOTBAR_SLOTS.slice(0, 6)).toEqual([
+		expect(DEFAULT_DESIGN_HOTBAR_SLOTS.slice(0, 7)).toEqual([
 			"tool-select",
 			"tool-direct",
 			"tool-pen",
+			"tool-knife",
 			"tool-rect",
 			"tool-ellipse",
 			"tool-transform",

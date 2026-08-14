@@ -8,6 +8,7 @@ export const DEFAULT_DESIGN_HOTBAR_SLOTS: HotbarSlots = [
 	"tool-select",
 	"tool-direct",
 	"tool-pen",
+	"tool-knife",
 	"tool-rect",
 	"tool-ellipse",
 	"tool-transform",
@@ -15,7 +16,6 @@ export const DEFAULT_DESIGN_HOTBAR_SLOTS: HotbarSlots = [
 	"redo",
 	"duplicate-offset",
 	"group-selection",
-	"align-center",
 	"export-pdf",
 ]
 
