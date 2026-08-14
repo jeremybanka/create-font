@@ -1,6 +1,6 @@
-# @create-art/source-rpc
+# @create-design/text
 
-## 0.1.3
+## 0.0.1
 
 ### Patch Changes
 
@@ -22,18 +22,20 @@
 
   Keep installed font inventories and binary files coherent across comparison and
   selective version-control commits.
-- bbf22f4: Allow uniquely named source RPC mounts so multiple isolated project sessions can share one workspace server.
-
-## 0.1.2
-
-### Patch Changes
-
-- c852f02: Declare the repository's MPL library boundary and AGPL application boundary, with explicit permissions for generated assets.
-
-## 0.1.1
-
-### Patch Changes
-
-- 05f8226: Transfer byte-preserved design assets through bounded, atomic source RPC transactions.
-- 05f8226: Generalize bounded source comparison and selective Git commits with adapter-defined semantic change groups, and enable design-aware version control.
-- 76d6aa0: Add shared revisioned source RPC infrastructure and source-backed create-design workspaces with atomic persistence and reliable live editor synchronization, including active glyph restoration after external filesystem resets. Run both editors and their APIs from the root development command on a configurable four-port block, with the checked-in Workbench Poster as create-design's default development source.
+- Updated dependencies [3275452]
+- Updated dependencies [1a9b87b]
+- Updated dependencies [6421beb]
+- Updated dependencies [e56860f]
+- Updated dependencies [27a2793]
+- Updated dependencies [5c9197e]
+- Updated dependencies [8818c4f]
+- Updated dependencies [fa8a287]
+- Updated dependencies [3d7e4d5]
+- Updated dependencies [bbf22f4]
+- Updated dependencies [62c9d01]
+- Updated dependencies [3fb4abf]
+- Updated dependencies [f99d64d]
+- Updated dependencies [db30f7b]
+  - @create-design/source@0.4.0
+  - @create-font/font-service@0.0.2
+  - @create-art/vector-geometry@0.0.3

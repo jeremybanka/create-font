@@ -1,5 +1,15 @@
 # @create-font/server
 
+## 0.2.4
+
+### Patch Changes
+
+- eed238c: Add an accessible workspace font selector with isolated project RPC routes,
+  reloadable project URLs, guarded saving, and project-scoped recovery drafts.
+- Updated dependencies [3275452]
+- Updated dependencies [bbf22f4]
+  - @create-art/source-rpc@0.1.3
+
 ## 0.2.3
 
 ### Patch Changes

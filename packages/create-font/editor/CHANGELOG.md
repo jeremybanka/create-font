@@ -1,5 +1,48 @@
 # @create-font/editor
 
+## 0.9.2
+
+### Patch Changes
+
+- cd55b47: Include the shared editor component styles in the create-font CLI browser stylesheet.
+- e56860f: Add durable circular and squircle corner profiles with shared inset controls,
+  deterministic lowering, safe adjacent-corner clamping, accessible numeric
+  editing, undoable multi-master font edits, and output/compiler parity.
+- 7c9c382: Add an Alt/Option alternate hotbar and keep keyboard-selected command and tile options visible.
+- 0c0fca5: Crop the generated lowercase-a favicon to a centered square based on exact outline bounds, and visually unite overlapping positive contours without closing genuine counters.
+- 207c441: Share accessible rich tooltips and make the create-design Tools tile a compact icon palette with distinct Direct Selection and Artboard shortcuts.
+- eed238c: Add an accessible workspace font selector with isolated project RPC routes,
+  reloadable project URLs, guarded saving, and project-scoped recovery drafts.
+- 8818c4f: Share curvature-comb geometry and compact controls, then add selected-object comb diagnostics to create-design with object fill-topology-aware exterior normals.
+- 87ccb07: Add a Moby-Dick preview sample, keep canvas text softly wrapped to 65 columns,
+  and reduce the minimum canvas zoom from 25% to 5%.
+- ee1891e: Add a live curvature comb visualization with gain, opacity, and side controls.
+- 653eb46: Persist versioned named UI layouts from grouped home and project ui.json sources through the tile-management HUD in create-font and create-design, including supported locations reached through filesystem symlinks.
+- 7c9c382: Share the configurable action hotbar with Create Design while preserving Create Font behavior.
+- f99d64d: Infer conservative same-contour overlap-built corners from geometry and show authored overflow spans as subdued editor guides without changing ordinary overlapping contours.
+- Updated dependencies [3fb4abf]
+- Updated dependencies [cd55b47]
+- Updated dependencies [1a9b87b]
+- Updated dependencies [de6ecbb]
+- Updated dependencies [cbbd99d]
+- Updated dependencies [bd5d86f]
+- Updated dependencies [6421beb]
+- Updated dependencies [e56860f]
+- Updated dependencies [3fb4abf]
+- Updated dependencies [7c9c382]
+- Updated dependencies [207c441]
+- Updated dependencies [00c892a]
+- Updated dependencies [8818c4f]
+- Updated dependencies [bd38221]
+- Updated dependencies [653eb46]
+- Updated dependencies [7c9c382]
+- Updated dependencies [46d635f]
+- Updated dependencies [f99d64d]
+- Updated dependencies [85b9bb9]
+  - @create-art/editor@0.2.1
+  - @create-art/vector-geometry@0.0.3
+  - @create-font/states@0.7.1
+
 ## 0.9.1
 
 ### Patch Changes

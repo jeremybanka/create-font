@@ -1,5 +1,15 @@
 # @create-art/vector-geometry
 
+## 0.0.3
+
+### Patch Changes
+
+- e56860f: Add durable circular and squircle corner profiles with shared inset controls,
+  deterministic lowering, safe adjacent-corner clamping, accessible numeric
+  editing, undoable multi-master font edits, and output/compiler parity.
+- 8818c4f: Share curvature-comb geometry and compact controls, then add selected-object comb diagnostics to create-design with object fill-topology-aware exterior normals.
+- f99d64d: Infer conservative same-contour overlap-built corners from geometry and show authored overflow spans as subdued editor guides without changing ordinary overlapping contours.
+
 ## 0.0.2
 
 ### Patch Changes
