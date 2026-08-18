@@ -13,7 +13,7 @@ repository = "https://github.com/jeremybanka/create-font"
 rust-version = "1.97.1"
 
 [workspace.dependencies]
-dprint-core = { version = "0.68.2", default-features = false }
+dprint-core = { version = "0.69.0", default-features = false }
 fea-rs = "0.22.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
