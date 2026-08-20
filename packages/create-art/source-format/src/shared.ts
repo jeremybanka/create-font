@@ -1,4 +1,6 @@
-export const SOURCE_FORMAT_CONTRACT_VERSION = 2 as const
+export const SOURCE_FORMAT_CONTRACT_VERSION = 1 as const
+export const SOURCE_FORMAT_DPRINT_RANGE = ">=0.55.2 <0.57.0" as const
+/** @deprecated Use SOURCE_FORMAT_DPRINT_RANGE when checking compatibility. */
 export const SOURCE_FORMAT_DPRINT_VERSION = "0.56.0" as const
 export const SOURCE_FORMAT_JSON_PLUGIN_VERSION = "0.23.0" as const
 export const SOURCE_FORMAT_FEA_PLUGIN_VERSION = "0.1.1" as const

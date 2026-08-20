@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 import {
 	formatSourceFea,
 	formatSourceJson,
+	SOURCE_FORMAT_DPRINT_RANGE,
 	SOURCE_FORMAT_DPRINT_VERSION,
 	SOURCE_FORMAT_FEA_PLUGIN_VERSION,
 	SOURCE_FORMAT_JSON_PLUGIN_VERSION,
@@ -17,11 +18,23 @@ import {
 } from "../src/browser.ts"
 
 describe("create-art source formatting contract", () => {
-	it("pins and reports the complete trusted toolchain", async () => {
+	it("pins trusted formatters and reports compatible dprint CLIs", async () => {
 		const packageJson = JSON.parse(
 			await readFile(new URL("../package.json", import.meta.url), "utf8"),
-		) as { dependencies: Record<string, string> }
-		expect(packageJson.dependencies.dprint).toBe(SOURCE_FORMAT_DPRINT_VERSION)
+		) as {
+			dependencies: Record<string, string>
+			peerDependencies: Record<string, string>
+			peerDependenciesMeta: Record<string, { optional?: boolean }>
+		}
+		const workspacePackageJson = JSON.parse(
+			await readFile(new URL("../../../../package.json", import.meta.url), "utf8"),
+		) as { devDependencies: Record<string, string> }
+		expect(packageJson.dependencies.dprint).toBeUndefined()
+		expect(packageJson.peerDependencies.dprint).toBe(SOURCE_FORMAT_DPRINT_RANGE)
+		expect(packageJson.peerDependenciesMeta.dprint?.optional).toBe(true)
+		expect(workspacePackageJson.devDependencies.dprint).toBe(
+			SOURCE_FORMAT_DPRINT_VERSION,
+		)
 		expect(packageJson.dependencies["@dprint/json"]).toBe(
 			SOURCE_FORMAT_JSON_PLUGIN_VERSION,
 		)

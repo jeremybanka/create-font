@@ -4,9 +4,9 @@ The versioned formatting contract for application-owned create-font and
 create-design source. Application writes use bundled, trusted Wasm formatters;
 an opened project cannot replace their configuration or plugin code.
 
-Contract version 2 pins:
+Contract version 1 pins:
 
-- dprint `0.56.0`;
+- `@dprint/formatter` `0.5.1`;
 - `@dprint/json` `0.23.0`; and
 - `dprint-plugin-fea` `0.1.1`.
 
@@ -54,8 +54,9 @@ editor task can use:
 pnpm exec create-source-format fmt "${file}"
 ```
 
-Projects that also install `dprint@0.56.0` may extend the published lexical
-configuration without copying it:
+Projects that also install a dprint version in the optional peer range
+`>=0.55.2 <0.57.0` may extend the published lexical configuration without
+copying it:
 
 ```json
 {
@@ -70,9 +71,11 @@ cannot recursively sort object names, so bare `dprint fmt`, editor extensions
 that invoke only dprint, and `dprint lsp` are not canonical source workflows.
 They are safe as supplementary syntax formatters after the canonical command.
 Do not add another JSON or FEA plugin or override the published settings.
-`SOURCE_FORMAT_*_VERSION` exports let integrations assert the contract at
-runtime. A version mismatch should be corrected in the package manifest and
-lockfile instead of accepted as a formatting change.
+`SOURCE_FORMAT_*_VERSION` exports let integrations assert the pinned formatter
+contract, while `SOURCE_FORMAT_DPRINT_RANGE` reports compatible dprint CLIs.
+The exact `SOURCE_FORMAT_DPRINT_VERSION` remains available for compatibility
+and reports the workspace's reference CLI. A mismatch should be corrected in
+the package manifest and lockfile instead of accepted as a formatting change.
 
 Node adapters call `formatSourceJson()` and `formatSourceFea()` directly.
 Formatting is deliberately unsupported in browsers and workers: synchronous

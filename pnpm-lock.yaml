@@ -342,7 +342,7 @@ importers:
         specifier: 0.23.0
         version: 0.23.0
       dprint:
-        specifier: 0.56.0
+        specifier: '>=0.55.2 <0.57.0'
         version: 0.56.0
       dprint-plugin-fea:
         specifier: workspace:*
