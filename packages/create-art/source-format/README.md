@@ -4,9 +4,9 @@ The versioned formatting contract for application-owned create-font and
 create-design source. Application writes use bundled, trusted Wasm formatters;
 an opened project cannot replace their configuration or plugin code.
 
-Contract version 1 pins:
+Contract version 2 pins:
 
-- dprint `0.55.2`;
+- dprint `0.56.0`;
 - `@dprint/json` `0.23.0`; and
 - `dprint-plugin-fea` `0.1.1`.
 
@@ -54,7 +54,7 @@ editor task can use:
 pnpm exec create-source-format fmt "${file}"
 ```
 
-Projects that also install `dprint@0.55.2` may extend the published lexical
+Projects that also install `dprint@0.56.0` may extend the published lexical
 configuration without copying it:
 
 ```json
