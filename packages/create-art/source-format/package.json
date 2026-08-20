@@ -36,9 +36,10 @@
 	"dependencies": {
 		"@dprint/formatter": "0.5.1",
 		"@dprint/json": "0.23.0",
-		"dprint": "0.55.2",
 		"dprint-plugin-fea": "workspace:*"
 	},
 	"devDependencies": { "@types/node": "25.9.5", "vitest": "catalog:" },
+	"peerDependencies": { "dprint": ">=0.55.2 <0.57.0" },
+	"peerDependenciesMeta": { "dprint": { "optional": true } },
 	"engines": { "node": ">=22.0.0" }
 }

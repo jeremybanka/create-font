@@ -41,7 +41,7 @@
 		"agents.yaml": "0.2.2",
 		"create-design": "workspace:*",
 		"create-font": "workspace:*",
-		"dprint": "0.55.2",
+		"dprint": "0.56.0",
 		"dprint-plugin-fea": "workspace:*",
 		"dprint-plugin-malva": "0.16.0",
 		"dprint-plugin-markup": "0.27.3",
