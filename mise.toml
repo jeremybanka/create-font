@@ -3,6 +3,6 @@
 ni = "30.5.0"
 node = "26.7.0"
 pnpm = "11.22.0"
-rust = { version = "1.97.1", components = ["clippy", "rustfmt"], targets = [
+rust = { version = "1.98.0", components = ["clippy", "rustfmt"], targets = [
 	"wasm32-unknown-unknown",
 ] }
