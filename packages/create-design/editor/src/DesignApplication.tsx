@@ -120,6 +120,7 @@ import {
 	writeCanvasDimmerPreference,
 } from "./canvas-dimmer.ts"
 import {
+	designCanvasDisplayStrokeWidth,
 	readDesignCanvasRenderer,
 	type DesignCanvasRendererId,
 	writeDesignCanvasRenderer,
@@ -2389,6 +2390,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[baseScale],
 	)
 	const worldScale = canvasScale(canvasView, viewOptions)
+	const canvasDevicePixelRatio =
+		typeof globalThis.devicePixelRatio === "number"
+			? globalThis.devicePixelRatio
+			: 1
 	const focusActiveArtboard = useCallback((): void => {
 		artboardWrapRef.current?.focus()
 		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
@@ -9190,6 +9195,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
 										const strokeStyle = object.appearance.stroke
+										const displayStrokeWidth =
+											strokeStyle === undefined
+												? undefined
+												: designCanvasDisplayStrokeWidth({
+														authoredWidth: strokeStyle.width,
+														devicePixelRatio: canvasDevicePixelRatio,
+														renderer: canvasRenderer,
+														worldScale,
+													})
 										const directFillSelectable =
 											tool === "direct" &&
 											!derived &&
@@ -9439,7 +9453,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																? {}
 																: {
 																		stroke: swatchCss(stroke),
-																		strokeWidth: strokeStyle.width,
+																		strokeWidth: displayStrokeWidth,
+																		hitStrokeWidth: strokeStyle.width,
 																		lineCap: strokeStyle.cap,
 																		lineJoin: strokeStyle.join,
 																		miterLimit: strokeStyle.miterLimit,

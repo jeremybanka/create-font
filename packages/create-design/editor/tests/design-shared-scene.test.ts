@@ -295,7 +295,7 @@ function directControlFixture(): Readonly<{
 }
 
 describe("create-design shared vector scene", () => {
-	it("exposes the original renderer as a persisted Canvas setting", () => {
+	it("exposes both Konva modes as a persisted Canvas setting", () => {
 		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
 		mountDesign({}, storage)
 		const application =
@@ -309,7 +309,85 @@ describe("create-design shared vector scene", () => {
 		expect(renderer.value).toBe("konva")
 		expect(
 			[...renderer.options].map(({ text, value }) => ({ text, value })),
-		).toEqual([{ text: "Konva (original)", value: "konva" }])
+		).toEqual([
+			{ text: "Konva (original)", value: "konva" },
+			{ text: "Konva (preserved detail)", value: "konva-preserved" },
+		])
+
+		act(() => {
+			renderer.value = "konva-preserved"
+			renderer.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(application.dataset.canvasRenderer).toBe("konva-preserved")
+		expect(storage.get(DESIGN_CANVAS_RENDERER_STORAGE_KEY)).toBe(
+			"konva-preserved",
+		)
+	})
+
+	it("preserves a physical pixel of authored stroke at low zoom without widening its hit geometry", async () => {
+		vi.stubGlobal("devicePixelRatio", 2)
+		const initial = createInitialDocument()
+		const hairlineWidth = 0.25
+		const stroked = {
+			...initial,
+			objects: initial.objects.map((object, index) =>
+				index === 0
+					? {
+							...object,
+							appearance: {
+								...object.appearance,
+								stroke: {
+									...DEFAULT_DESIGN_STROKE_STYLE,
+									swatchId: "swatch:ink",
+									width: hairlineWidth,
+								},
+							},
+						}
+					: object,
+			),
+		} satisfies DesignDocument
+		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
+		const stage = mountDesign({ initialDocument: stroked }, storage)
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue({ x: 480, y: 360 })
+		await act(async () => {
+			stage.fire("wheel", {
+				evt: {
+					altKey: false,
+					ctrlKey: true,
+					deltaX: 0,
+					deltaY: 10_000,
+					metaKey: false,
+					preventDefault: vi.fn(),
+					shiftKey: false,
+				},
+			})
+			await Promise.resolve()
+		})
+
+		const originalPath = stage.findOne(".design-object")
+		const originalScale = originalPath.getAbsoluteScale().x
+		expect(originalPath.strokeWidth()).toBe(hairlineWidth)
+		expect(
+			originalPath.strokeWidth() * originalScale * devicePixelRatio,
+		).toBeLessThan(1)
+
+		const renderer = document.querySelector<HTMLSelectElement>(
+			'design-canvas-tile select[aria-label="Canvas renderer"]',
+		)
+		if (renderer === null)
+			throw new Error("Canvas renderer setting was not found.")
+		act(() => {
+			renderer.value = "konva-preserved"
+			renderer.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+
+		const preservedPath = stage.findOne(".design-object")
+		expect(
+			preservedPath.strokeWidth() *
+				preservedPath.getAbsoluteScale().x *
+				devicePixelRatio,
+		).toBeCloseTo(1)
+		expect(preservedPath.hitStrokeWidth()).toBe(hairlineWidth)
 	})
 
 	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
