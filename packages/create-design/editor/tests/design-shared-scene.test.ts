@@ -295,7 +295,7 @@ function directControlFixture(): Readonly<{
 }
 
 describe("create-design shared vector scene", () => {
-	it("exposes the Konva modes and Vello as a persisted Canvas setting", () => {
+	it("exposes all renderer modes as a persisted Canvas setting", () => {
 		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
 		mountDesign({}, storage)
 		const application =
@@ -313,6 +313,7 @@ describe("create-design shared vector scene", () => {
 			{ text: "Konva (original)", value: "konva" },
 			{ text: "Konva (preserved detail)", value: "konva-preserved" },
 			{ text: "Vello Hybrid (GPU)", value: "vello-hybrid" },
+			{ text: "CanvasKit / Skia (preview)", value: "canvaskit" },
 		])
 
 		act(() => {

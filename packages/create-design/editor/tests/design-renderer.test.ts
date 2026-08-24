@@ -17,6 +17,7 @@ describe("design canvas renderer preference", () => {
 			{ id: "konva", label: "Konva (original)" },
 			{ id: "konva-preserved", label: "Konva (preserved detail)" },
 			{ id: "vello-hybrid", label: "Vello Hybrid (GPU)" },
+			{ id: "canvaskit", label: "CanvasKit / Skia (preview)" },
 		])
 		expect(DEFAULT_DESIGN_CANVAS_RENDERER).toBe("konva")
 	})
@@ -27,7 +28,7 @@ describe("design canvas renderer preference", () => {
 			"konva-preserved",
 		)
 		expect(normalizeDesignCanvasRenderer("vello-hybrid")).toBe("vello-hybrid")
-		expect(normalizeDesignCanvasRenderer("canvaskit")).toBe("konva")
+		expect(normalizeDesignCanvasRenderer("canvaskit")).toBe("canvaskit")
 		expect(normalizeDesignCanvasRenderer(null)).toBe("konva")
 	})
 
@@ -98,6 +99,9 @@ describe("design canvas renderer preference", () => {
 		expect(readDesignCanvasRenderer({ getItem: () => "vello-hybrid" })).toBe(
 			"vello-hybrid",
 		)
+		expect(readDesignCanvasRenderer({ getItem: () => "canvaskit" })).toBe(
+			"canvaskit",
+		)
 		expect(readDesignCanvasRenderer({ getItem: () => "future-renderer" })).toBe(
 			"konva",
 		)
@@ -117,10 +121,10 @@ describe("design canvas renderer preference", () => {
 				{
 					setItem: (key, value) => values.set(key, value),
 				},
-				"konva",
+				"canvaskit",
 			),
 		).toBe(true)
-		expect(values.get(DESIGN_CANVAS_RENDERER_STORAGE_KEY)).toBe("konva")
+		expect(values.get(DESIGN_CANVAS_RENDERER_STORAGE_KEY)).toBe("canvaskit")
 		expect(
 			writeDesignCanvasRenderer(
 				{ setItem: (key, value) => values.set(key, value) },
