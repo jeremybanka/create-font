@@ -53,6 +53,10 @@ import {
 	type DesignArtboardPresetId,
 } from "./artboard-operations.ts"
 import type { DesignSnapCategory } from "./design-canvas.ts"
+import {
+	DESIGN_CANVAS_RENDERERS,
+	normalizeDesignCanvasRenderer,
+} from "./design-renderer.ts"
 import { exactObjectBounds } from "./shape-expansion.ts"
 import { visibleObjectBounds } from "@create-design/model"
 import type {
@@ -1245,6 +1249,25 @@ function DesignCanvasTile({
 						context.setDocumentTitle(event.currentTarget.value)
 					}
 				/>
+			</label>
+			<strong>Rendering</strong>
+			<label data-field>
+				<span>Canvas renderer</span>
+				<select
+					aria-label="Canvas renderer"
+					value={context.canvasRenderer}
+					onChange={(event) =>
+						context.setCanvasRenderer(
+							normalizeDesignCanvasRenderer(event.currentTarget.value),
+						)
+					}
+				>
+					{DESIGN_CANVAS_RENDERERS.map((renderer) => (
+						<option key={renderer.id} value={renderer.id}>
+							{renderer.label}
+						</option>
+					))}
+				</select>
 			</label>
 			<span>
 				{context.activeArtboard.width} × {context.activeArtboard.height} pt ·{" "}

@@ -119,6 +119,11 @@ import {
 	subscribeToPreferredColorScheme,
 	writeCanvasDimmerPreference,
 } from "./canvas-dimmer.ts"
+import {
+	readDesignCanvasRenderer,
+	type DesignCanvasRendererId,
+	writeDesignCanvasRenderer,
+} from "./design-renderer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
 	createInitialDocument,
@@ -1256,6 +1261,13 @@ type DesignApplicationContentProps = Omit<
 
 function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const { pathfinderWorkerClient, sourceSession } = props
+	const [canvasRenderer, setCanvasRenderer] = useState(() =>
+		readDesignCanvasRenderer(browserLocalStorage()),
+	)
+	const selectCanvasRenderer = (renderer: DesignCanvasRendererId): void => {
+		setCanvasRenderer(renderer)
+		writeDesignCanvasRenderer(browserLocalStorage(), renderer)
+	}
 	const [canvasDimmerPreference, setCanvasDimmerPreference] = useState(() =>
 		readCanvasDimmerPreference(browserLocalStorage()),
 	)
@@ -5016,6 +5028,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedSwatchId,
 		selectedGuideId,
 		guidesVisible,
+		canvasRenderer,
+		setCanvasRenderer: selectCanvasRenderer,
 		snapSettings,
 		setSnapCategory: (category, enabled) =>
 			setSnapSettings((current) => ({
@@ -8811,6 +8825,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			ref={setApplicationElement}
 			data-canvas-dimmer={canvasDimmer}
 			data-canvas-dimmer-source={canvasDimmerPreference.kind}
+			data-canvas-renderer={canvasRenderer}
 			style={
 				{
 					"--design-canvas-surface": dimmerTokens.surface,

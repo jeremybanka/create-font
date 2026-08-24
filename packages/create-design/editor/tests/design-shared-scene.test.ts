@@ -12,6 +12,7 @@ import {
 import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
 import { DESIGN_CANVAS_DIMMER_STORAGE_KEY } from "../src/canvas-dimmer.ts"
+import { DESIGN_CANVAS_RENDERER_STORAGE_KEY } from "../src/design-renderer.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { DESIGN_TOOLS } from "../src/design-tools.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
@@ -294,6 +295,23 @@ function directControlFixture(): Readonly<{
 }
 
 describe("create-design shared vector scene", () => {
+	it("exposes the original renderer as a persisted Canvas setting", () => {
+		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
+		mountDesign({}, storage)
+		const application =
+			document.querySelector<HTMLElement>("design-application")
+		const renderer = document.querySelector<HTMLSelectElement>(
+			'design-canvas-tile select[aria-label="Canvas renderer"]',
+		)
+		if (application === null || renderer === null)
+			throw new Error("Canvas renderer setting was not found.")
+		expect(application.dataset.canvasRenderer).toBe("konva")
+		expect(renderer.value).toBe("konva")
+		expect(
+			[...renderer.options].map(({ text, value }) => ({ text, value })),
+		).toEqual([{ text: "Konva (original)", value: "konva" }])
+	})
+
 	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
 		let prefersLight = true
 		const listeners = new Set<EventListenerOrEventListenerObject>()
