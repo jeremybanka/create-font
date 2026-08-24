@@ -58,7 +58,11 @@ function createVectorDocument(): DesignDocument {
 
 describe("design preview scene projection", () => {
 	it("does no CanvasKit projection work in any other renderer mode", () => {
-		for (const renderer of ["konva", "konva-preserved", "vello-hybrid"] as const) {
+		for (const renderer of [
+			"konva",
+			"konva-preserved",
+			"vello-hybrid",
+		] as const) {
 			let projections = 0
 			const scene = resolveCanvasKitPreviewScene(renderer, () => {
 				projections += 1
