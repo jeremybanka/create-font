@@ -1,5 +1,12 @@
 # @create-art/source-format
 
+## 0.2.0
+
+### Minor Changes
+
+- 1032c7c: Accept dprint 0.55.2 and 0.56.x as an optional peer for the published lexical
+  configuration while keeping canonical source formatting on contract version 1.
+
 ## 0.1.2
 
 ### Patch Changes
