@@ -127,7 +127,7 @@ import {
 } from "./design-renderer.ts"
 import {
 	projectDesignPreviewScene,
-	type DesignPreviewScene,
+	resolveCanvasKitPreviewScene,
 } from "./design-preview-scene.ts"
 import type { DesignPreviewRendererStatus } from "./design-preview-renderer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
@@ -8691,41 +8691,46 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const resolvedCanvasDocument = resolvedCanvasResolution.document
 	const canvasOutputProjection = projectDesignOutput(resolvedCanvasDocument)
 	const displayedObjects = canvasOutputProjection.objects
-	const canvasKitSceneObjects = displayedObjects.map((object): DesignObject => {
-		if (object.geometry.kind !== "text") return object
-		const canonicalLayout = textService.layout(object)
-		return canonicalLayout === null ||
-			canonicalLayout.diagnostics.some(
-				(diagnostic) => diagnostic.severity === "error",
+	const canvasKitPreviewScene = resolveCanvasKitPreviewScene(
+		canvasRenderer,
+		() => {
+			const sceneObjects = displayedObjects.map((object): DesignObject => {
+				if (object.geometry.kind !== "text") return object
+				const canonicalLayout = textService.layout(object)
+				return canonicalLayout === null ||
+					canonicalLayout.diagnostics.some(
+						(diagnostic) => diagnostic.severity === "error",
+					)
+					? object
+					: {
+							...object,
+							geometry: {
+								kind: "path",
+								fillRule: "nonzero",
+								contours: canonicalLayout.glyphs.flatMap(
+									({ contours }) => contours,
+								),
+							},
+						}
+			})
+			const maskedObjectIds = new Set(
+				canvasOutputProjection.entries.flatMap((entry) =>
+					entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
+				),
 			)
-			? object
-			: {
-					...object,
-					geometry: {
-						kind: "path",
-						fillRule: "nonzero",
-						contours: canonicalLayout.glyphs.flatMap(
-							({ contours }) => contours,
-						),
-					},
-				}
-	})
-	const canvasKitMaskedObjectIds = new Set(
-		canvasOutputProjection.entries.flatMap((entry) =>
-			entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
-		),
+			return projectDesignPreviewScene({
+				document: resolvedCanvasDocument,
+				artboards: canvasDocument.artboards.map((artboard) => ({
+					...artboard,
+					...(artboard.backgroundColor === undefined
+						? {}
+						: { background: artboard.backgroundColor }),
+				})),
+				objects: sceneObjects,
+				maskedObjectIds,
+			})
+		},
 	)
-	const canvasKitPreviewScene: DesignPreviewScene = projectDesignPreviewScene({
-		document: resolvedCanvasDocument,
-		artboards: canvasDocument.artboards.map((artboard) => ({
-			...artboard,
-			...(artboard.backgroundColor === undefined
-				? {}
-				: { background: artboard.backgroundColor }),
-		})),
-		objects: canvasKitSceneObjects,
-		maskedObjectIds: canvasKitMaskedObjectIds,
-	})
 	const canvasKitOwnsScene =
 		canvasRenderer === "canvaskit" &&
 		canvasKitPreviewScene.supported &&

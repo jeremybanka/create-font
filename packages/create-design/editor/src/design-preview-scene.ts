@@ -2,6 +2,7 @@ import { vectorObjectPath } from "@create-art/editor"
 import { designObjectFillRule, swatchCss } from "@create-design/model"
 
 import { projectDesignVectorRenderObject } from "./design-vector-adapter.ts"
+import type { DesignCanvasRendererId } from "./design-renderer.ts"
 import type { DesignArtboard, DesignDocument, DesignObject } from "./types.ts"
 
 export type DesignPreviewDiagnostic = Readonly<{
@@ -48,6 +49,22 @@ export type DesignPreviewScene = Readonly<{
 	diagnostics: readonly DesignPreviewDiagnostic[]
 	supported: boolean
 }>
+
+export const INACTIVE_DESIGN_PREVIEW_SCENE: DesignPreviewScene = Object.freeze({
+	revision: "inactive",
+	artboards: Object.freeze([]),
+	paths: Object.freeze([]),
+	diagnostics: Object.freeze([]),
+	supported: false,
+})
+
+/** Avoid even projecting a preview scene while another renderer is selected. */
+export function resolveCanvasKitPreviewScene(
+	renderer: DesignCanvasRendererId,
+	project: () => DesignPreviewScene,
+): DesignPreviewScene {
+	return renderer === "canvaskit" ? project() : INACTIVE_DESIGN_PREVIEW_SCENE
+}
 
 export type DesignPreviewSceneInput = Readonly<{
 	document: Pick<DesignDocument, "swatches">

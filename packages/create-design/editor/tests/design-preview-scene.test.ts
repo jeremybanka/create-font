@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { projectDesignPreviewScene } from "../src/design-preview-scene.ts"
+import {
+	INACTIVE_DESIGN_PREVIEW_SCENE,
+	projectDesignPreviewScene,
+	resolveCanvasKitPreviewScene,
+} from "../src/design-preview-scene.ts"
 import type { DesignDocument } from "../src/types.ts"
 
 function createVectorDocument(): DesignDocument {
@@ -53,16 +57,29 @@ function createVectorDocument(): DesignDocument {
 }
 
 describe("design preview scene projection", () => {
+	it("does no CanvasKit projection work in original Konva mode", () => {
+		let projections = 0
+		const scene = resolveCanvasKitPreviewScene("konva", () => {
+			projections += 1
+			throw new Error("Konva mode must not project a CanvasKit scene.")
+		})
+
+		expect(scene).toBe(INACTIVE_DESIGN_PREVIEW_SCENE)
+		expect(projections).toBe(0)
+	})
+
 	it("projects vector artwork into stable renderer-neutral path commands", () => {
 		const document = createVectorDocument()
-		const scene = projectDesignPreviewScene({
-			document,
-			artboards: document.artboards.map((artboard) => ({
-				...artboard,
-				background: "#fff",
-			})),
-			objects: document.objects,
-		})
+		const scene = resolveCanvasKitPreviewScene("canvaskit", () =>
+			projectDesignPreviewScene({
+				document,
+				artboards: document.artboards.map((artboard) => ({
+					...artboard,
+					background: "#fff",
+				})),
+				objects: document.objects,
+			}),
+		)
 
 		expect(scene.supported).toBe(true)
 		expect(scene.diagnostics).toEqual([])
