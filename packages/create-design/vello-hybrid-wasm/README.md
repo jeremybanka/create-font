@@ -12,3 +12,5 @@ The first editor integration renders solid vector fills and strokes only when
 the complete visible paint stack is supported. Text, images, linked artboards,
 masks, dashed strokes, and unsupported artboard colors trigger a whole-scene
 Konva fallback so DOM canvas stacking cannot silently change paint order.
+Authored strokes are widened only for preview rendering when needed to retain a
+strict minimum of one physical device pixel at distant zoom levels.

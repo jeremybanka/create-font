@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createInitialDocument } from "../src/document.ts"
 import {
 	projectVelloHybridScene,
+	VELLO_MINIMUM_DEVICE_STROKE_WIDTH,
 	velloPreservedStrokeWidth,
 } from "../src/vello-hybrid-scene.ts"
 
@@ -35,9 +36,18 @@ describe("Vello Hybrid scene projection", () => {
 		})
 	})
 
-	it("preserves authored strokes once they exceed the device-pixel floor", () => {
+	it("enforces a strict one-physical-pixel floor for authored strokes", () => {
+		expect(VELLO_MINIMUM_DEVICE_STROKE_WIDTH).toBe(1)
 		expect(velloPreservedStrokeWidth(2, 1, 2)).toBe(2)
-		expect(velloPreservedStrokeWidth(0.1, 0.25, 2)).toBe(1.5)
+		const worldScale = 0.25
+		const devicePixelRatio = 2
+		const projectedWidth = velloPreservedStrokeWidth(
+			0.1,
+			worldScale,
+			devicePixelRatio,
+		)
+		expect(projectedWidth).toBe(2)
+		expect(projectedWidth * worldScale * devicePixelRatio).toBe(1)
 	})
 
 	it("delegates unsupported primitives explicitly instead of dropping them", () => {

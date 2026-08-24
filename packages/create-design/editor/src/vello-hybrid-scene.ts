@@ -8,7 +8,7 @@ import type {
 } from "./types.ts"
 
 export const VELLO_HYBRID_SCENE_ABI_VERSION = 1
-export const VELLO_MINIMUM_DEVICE_STROKE_WIDTH = 0.75
+export const VELLO_MINIMUM_DEVICE_STROKE_WIDTH = 1
 
 export type VelloPathCommand =
 	| Readonly<{ verb: "move" | "line"; x: number; y: number }>
@@ -182,12 +182,14 @@ export function velloPreservedStrokeWidth(
 	authoredWidth: number,
 	worldScale: number,
 	devicePixelRatio: number,
-	minimumDeviceWidth = VELLO_MINIMUM_DEVICE_STROKE_WIDTH,
 ): number {
 	const deviceScale = worldScale * devicePixelRatio
 	if (!(authoredWidth > 0) || !(deviceScale > 0))
 		return Math.max(0, authoredWidth)
-	return Math.max(authoredWidth, minimumDeviceWidth / deviceScale)
+	return Math.max(
+		authoredWidth,
+		VELLO_MINIMUM_DEVICE_STROKE_WIDTH / deviceScale,
+	)
 }
 
 export function projectVelloHybridScene(
