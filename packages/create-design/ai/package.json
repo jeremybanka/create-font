@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/ai",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "Adobe Illustrator interchange for create-design documents",
 	"license": "MPL-2.0",
 	"repository": {

@@ -1,5 +1,13 @@
 # @create-design/pdf
 
+## 0.1.4
+
+### Patch Changes
+
+- @create-design/source@0.4.2
+  - @create-design/model@0.2.2
+  - @create-design/text@0.0.3
+
 ## 0.1.3
 
 ### Patch Changes
