@@ -109,6 +109,7 @@ import {
 import { swatchCss } from "@create-design/model"
 import { canvasToDocumentPoint } from "@create-design/model"
 import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
+import { CanvasKitPreviewSurface } from "./CanvasKitPreviewSurface.tsx"
 import {
 	canvasDimmerPercent,
 	canvasDimmerTokens,
@@ -124,6 +125,11 @@ import {
 	type DesignCanvasRendererId,
 	writeDesignCanvasRenderer,
 } from "./design-renderer.ts"
+import {
+	projectDesignPreviewScene,
+	type DesignPreviewScene,
+} from "./design-preview-scene.ts"
+import type { DesignPreviewRendererStatus } from "./design-preview-renderer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
 	createInitialDocument,
@@ -1263,6 +1269,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const { pathfinderWorkerClient, sourceSession } = props
 	const [canvasRenderer, setCanvasRenderer] = useState(() =>
 		readDesignCanvasRenderer(browserLocalStorage()),
+	)
+	const [canvasRendererStatus, setCanvasRendererStatus] =
+		useState<DesignPreviewRendererStatus>({ state: "inactive" })
+	const updateCanvasRendererStatus = useCallback(
+		(status: DesignPreviewRendererStatus) => setCanvasRendererStatus(status),
+		[],
 	)
 	const selectCanvasRenderer = (renderer: DesignCanvasRendererId): void => {
 		setCanvasRenderer(renderer)
@@ -8679,6 +8691,53 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const resolvedCanvasDocument = resolvedCanvasResolution.document
 	const canvasOutputProjection = projectDesignOutput(resolvedCanvasDocument)
 	const displayedObjects = canvasOutputProjection.objects
+	const canvasKitSceneObjects = displayedObjects.map((object): DesignObject => {
+		if (object.geometry.kind !== "text") return object
+		const canonicalLayout = textService.layout(object)
+		return canonicalLayout === null ||
+			canonicalLayout.diagnostics.some(
+				(diagnostic) => diagnostic.severity === "error",
+			)
+			? object
+			: {
+					...object,
+					geometry: {
+						kind: "path",
+						fillRule: "nonzero",
+						contours: canonicalLayout.glyphs.flatMap(
+							({ contours }) => contours,
+						),
+					},
+				}
+	})
+	const canvasKitMaskedObjectIds = new Set(
+		canvasOutputProjection.entries.flatMap((entry) =>
+			entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
+		),
+	)
+	const canvasKitPreviewScene: DesignPreviewScene = projectDesignPreviewScene({
+		document: resolvedCanvasDocument,
+		artboards: canvasDocument.artboards.map((artboard) => ({
+			...artboard,
+			...(artboard.backgroundColor === undefined
+				? {}
+				: { background: artboard.backgroundColor }),
+		})),
+		objects: canvasKitSceneObjects,
+		maskedObjectIds: canvasKitMaskedObjectIds,
+	})
+	const canvasKitOwnsScene =
+		canvasRenderer === "canvaskit" &&
+		canvasKitPreviewScene.supported &&
+		canvasRendererStatus.state === "ready"
+	const canvasRendererDiagnostic =
+		canvasRenderer !== "canvaskit" || canvasRendererStatus.state === "inactive"
+			? null
+			: canvasRendererStatus.state === "loading"
+				? "Loading CanvasKit / Skia…"
+				: canvasRendererStatus.state === "fallback"
+					? `CanvasKit fallback: ${canvasRendererStatus.reason}`
+					: "CanvasKit / Skia is rendering document content."
 	const derivedBlendByObjectId = new Map(
 		canvasOutputProjection.entries.flatMap((entry) =>
 			entry.source.kind === "blend"
@@ -8826,6 +8885,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			data-canvas-dimmer={canvasDimmer}
 			data-canvas-dimmer-source={canvasDimmerPreference.kind}
 			data-canvas-renderer={canvasRenderer}
+			data-canvas-effective-renderer={
+				canvasKitOwnsScene ? "canvaskit" : "konva"
+			}
+			data-canvas-renderer-status={canvasRendererStatus.state}
 			style={
 				{
 					"--design-canvas-surface": dimmerTokens.surface,
@@ -9006,6 +9069,26 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
 						</span>
+						<CanvasKitPreviewSurface
+							enabled={canvasRenderer === "canvaskit"}
+							scene={canvasKitPreviewScene}
+							width={canvasViewport.width}
+							height={canvasViewport.height}
+							view={{
+								x: canvasView.x,
+								y: canvasView.y,
+								scale: worldScale,
+							}}
+							onStatus={updateCanvasRendererStatus}
+						/>
+						{canvasRendererDiagnostic === null ? null : (
+							<renderer-status
+								role="status"
+								data-state={canvasRendererStatus.state}
+							>
+								{canvasRendererDiagnostic}
+							</renderer-status>
+						)}
 						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
@@ -9072,7 +9155,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													height={artboard.height}
 													{...(chrome.background === undefined
 														? {}
-														: { fill: chrome.background })}
+														: {
+																fill: canvasKitOwnsScene
+																	? "rgba(0, 0, 0, 0)"
+																	: chrome.background,
+															})}
 												/>
 												<Rect
 													{...chrome.border}
@@ -9373,7 +9460,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															)}
 															{...(fill === undefined
 																? {}
-																: { fill: textColor })}
+																: {
+																		fill: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: textColor,
+																	})}
 															fillEnabled={fill !== undefined}
 															selected={selection.includes(
 																interactionObject.id,
@@ -9431,14 +9522,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															)}
 															{...(fill === undefined
 																? {}
-																: { fill: swatchCss(fill) })}
+																: {
+																		fill: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: swatchCss(fill),
+																	})}
 															fillEnabled={fill !== undefined}
 															{...(stroke === undefined ||
 															strokeStyle === undefined ||
 															strokeStyle.width === 0
 																? {}
 																: {
-																		stroke: swatchCss(stroke),
+																		stroke: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: swatchCss(stroke),
 																		strokeWidth: strokeStyle.width,
 																		lineCap: strokeStyle.cap,
 																		lineJoin: strokeStyle.join,

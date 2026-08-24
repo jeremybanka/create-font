@@ -309,7 +309,10 @@ describe("create-design shared vector scene", () => {
 		expect(renderer.value).toBe("konva")
 		expect(
 			[...renderer.options].map(({ text, value }) => ({ text, value })),
-		).toEqual([{ text: "Konva (original)", value: "konva" }])
+		).toEqual([
+			{ text: "Konva (original)", value: "konva" },
+			{ text: "CanvasKit / Skia (preview)", value: "canvaskit" },
+		])
 	})
 
 	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {

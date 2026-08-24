@@ -3,6 +3,7 @@ export const DESIGN_CANVAS_RENDERER_STORAGE_KEY =
 
 export const DESIGN_CANVAS_RENDERERS = Object.freeze([
 	Object.freeze({ id: "konva", label: "Konva (original)" }),
+	Object.freeze({ id: "canvaskit", label: "CanvasKit / Skia (preview)" }),
 ] as const)
 
 export type DesignCanvasRendererId =
