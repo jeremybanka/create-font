@@ -439,6 +439,9 @@ importers:
       '@create-design/text':
         specifier: workspace:*
         version: link:../text
+      '@create-design/vello-hybrid-wasm':
+        specifier: workspace:*
+        version: link:../vello-hybrid-wasm
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(react@19.2.8)
@@ -587,6 +590,15 @@ importers:
       '@create-font/target':
         specifier: workspace:*
         version: link:../../create-font/target
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.11(vitest@4.1.11))(@voidzero-dev/vite-plus-core@0.2.9(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)
+
+  packages/create-design/vello-hybrid-wasm:
+    devDependencies:
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.9(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(@voidzero-dev/vite-plus-core@0.2.9(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.11(vitest@4.1.11))(@voidzero-dev/vite-plus-core@0.2.9(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)
