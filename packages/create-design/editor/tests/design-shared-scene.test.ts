@@ -295,7 +295,7 @@ function directControlFixture(): Readonly<{
 }
 
 describe("create-design shared vector scene", () => {
-	it("exposes the original renderer as a persisted Canvas setting", () => {
+	it("exposes the original and GPU renderers with Konva persisted", () => {
 		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
 		mountDesign({}, storage)
 		const application =
@@ -309,7 +309,10 @@ describe("create-design shared vector scene", () => {
 		expect(renderer.value).toBe("konva")
 		expect(
 			[...renderer.options].map(({ text, value }) => ({ text, value })),
-		).toEqual([{ text: "Konva (original)", value: "konva" }])
+		).toEqual([
+			{ text: "Konva (original)", value: "konva" },
+			{ text: "Vello Hybrid (GPU)", value: "vello-hybrid" },
+		])
 	})
 
 	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
