@@ -112,7 +112,7 @@ const shards = {
 	editor: [
 		{
 			kind: `package-tests`,
-			packages: [`@create-design/editor`],
+			packages: [`@create-design/editor`, `@create-design/vello-hybrid-wasm`],
 		},
 		{
 			kind: `package-script`,

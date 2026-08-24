@@ -57,15 +57,17 @@ function createVectorDocument(): DesignDocument {
 }
 
 describe("design preview scene projection", () => {
-	it("does no CanvasKit projection work in original Konva mode", () => {
-		let projections = 0
-		const scene = resolveCanvasKitPreviewScene("konva", () => {
-			projections += 1
-			throw new Error("Konva mode must not project a CanvasKit scene.")
-		})
+	it("does no CanvasKit projection work in any other renderer mode", () => {
+		for (const renderer of ["konva", "konva-preserved", "vello-hybrid"] as const) {
+			let projections = 0
+			const scene = resolveCanvasKitPreviewScene(renderer, () => {
+				projections += 1
+				throw new Error(`${renderer} must not project a CanvasKit scene.`)
+			})
 
-		expect(scene).toBe(INACTIVE_DESIGN_PREVIEW_SCENE)
-		expect(projections).toBe(0)
+			expect(scene).toBe(INACTIVE_DESIGN_PREVIEW_SCENE)
+			expect(projections).toBe(0)
+		}
 	})
 
 	it("projects vector artwork into stable renderer-neutral path commands", () => {

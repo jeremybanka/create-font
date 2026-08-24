@@ -312,6 +312,7 @@ describe("create-design shared vector scene", () => {
 		).toEqual([
 			{ text: "Konva (original)", value: "konva" },
 			{ text: "Konva (preserved detail)", value: "konva-preserved" },
+			{ text: "Vello Hybrid (GPU)", value: "vello-hybrid" },
 			{ text: "CanvasKit / Skia (preview)", value: "canvaskit" },
 		])
 

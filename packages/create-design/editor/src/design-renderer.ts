@@ -7,6 +7,7 @@ export const DESIGN_CANVAS_RENDERERS = Object.freeze([
 		id: "konva-preserved",
 		label: "Konva (preserved detail)",
 	}),
+	Object.freeze({ id: "vello-hybrid", label: "Vello Hybrid (GPU)" }),
 	Object.freeze({ id: "canvaskit", label: "CanvasKit / Skia (preview)" }),
 ] as const)
 

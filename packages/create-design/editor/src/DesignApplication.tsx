@@ -371,6 +371,14 @@ import type {
 } from "./types.ts"
 import { TextEditingSurface } from "./TextEditingSurface.tsx"
 import {
+	VelloHybridSurface,
+	type VelloHybridRuntimeStatus,
+} from "./VelloHybridSurface.tsx"
+import {
+	EMPTY_VELLO_HYBRID_SCENE_PROJECTION,
+	projectVelloHybridScene,
+} from "./vello-hybrid-scene.ts"
+import {
 	createDesignTextObject,
 	DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
 	DESIGN_TEXT_INITIAL_DRAFT,
@@ -1277,7 +1285,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		(status: DesignPreviewRendererStatus) => setCanvasRendererStatus(status),
 		[],
 	)
+	const [velloRuntimeStatus, setVelloRuntimeStatus] =
+		useState<VelloHybridRuntimeStatus>({ state: "idle" })
 	const selectCanvasRenderer = (renderer: DesignCanvasRendererId): void => {
+		setCanvasRendererStatus({ state: "inactive" })
+		setVelloRuntimeStatus({ state: "idle" })
 		setCanvasRenderer(renderer)
 		writeDesignCanvasRenderer(browserLocalStorage(), renderer)
 	}
@@ -8748,6 +8760,27 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 				: canvasRendererStatus.state === "fallback"
 					? `CanvasKit fallback: ${canvasRendererStatus.reason}`
 					: "CanvasKit / Skia is rendering document content."
+	const velloProjection =
+		canvasRenderer === "vello-hybrid"
+			? projectVelloHybridScene({
+					viewport: canvasViewport,
+					devicePixelRatio:
+						typeof window === "undefined" ? 1 : window.devicePixelRatio,
+					view: { x: canvasView.x, y: canvasView.y, scale: worldScale },
+					artboards: resolvedCanvasDocument.artboards,
+					objects: displayedObjects,
+					swatches: canvasOutputProjection.swatches,
+					maskedObjectIds: new Set(
+						canvasOutputProjection.entries.flatMap((entry) =>
+							entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
+						),
+					),
+				})
+			: EMPTY_VELLO_HYBRID_SCENE_PROJECTION
+	const velloActive =
+		canvasRenderer === "vello-hybrid" &&
+		velloRuntimeStatus.state === "ready" &&
+		velloProjection.packet !== null
 	const derivedBlendByObjectId = new Map(
 		canvasOutputProjection.entries.flatMap((entry) =>
 			entry.source.kind === "blend"
@@ -8896,9 +8929,16 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			data-canvas-dimmer-source={canvasDimmerPreference.kind}
 			data-canvas-renderer={canvasRenderer}
 			data-canvas-effective-renderer={
-				canvasKitOwnsScene ? "canvaskit" : "konva"
+				canvasKitOwnsScene
+					? "canvaskit"
+					: velloActive
+						? "vello-hybrid"
+						: "konva"
 			}
 			data-canvas-renderer-status={canvasRendererStatus.state}
+			data-canvas-renderer-state={
+				canvasRenderer === "vello-hybrid" ? velloRuntimeStatus.state : "ready"
+			}
 			style={
 				{
 					"--design-canvas-surface": dimmerTokens.surface,
@@ -9079,18 +9119,20 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
 						</span>
-						<CanvasKitPreviewSurface
-							enabled={canvasRenderer === "canvaskit"}
-							scene={canvasKitPreviewScene}
-							width={canvasViewport.width}
-							height={canvasViewport.height}
-							view={{
-								x: canvasView.x,
-								y: canvasView.y,
-								scale: worldScale,
-							}}
-							onStatus={updateCanvasRendererStatus}
-						/>
+						{canvasRenderer !== "canvaskit" ? null : (
+							<CanvasKitPreviewSurface
+								enabled
+								scene={canvasKitPreviewScene}
+								width={canvasViewport.width}
+								height={canvasViewport.height}
+								view={{
+									x: canvasView.x,
+									y: canvasView.y,
+									scale: worldScale,
+								}}
+								onStatus={updateCanvasRendererStatus}
+							/>
+						)}
 						{canvasRendererDiagnostic === null ? null : (
 							<renderer-status
 								role="status"
@@ -9098,6 +9140,24 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 							>
 								{canvasRendererDiagnostic}
 							</renderer-status>
+						)}
+						{canvasRenderer !== "vello-hybrid" ? null : (
+							<span data-screen-reader data-vello-hybrid-status>
+								{velloRuntimeStatus.state === "fallback"
+									? `Vello Hybrid unavailable: ${velloRuntimeStatus.reason} Konva is rendering the complete scene.`
+									: velloRuntimeStatus.state === "ready"
+										? `Vello Hybrid is rendering ${velloProjection.gpuObjectIds.size} vector objects. ${velloProjection.diagnostics.length} unsupported objects remain on Konva.`
+										: "Vello Hybrid is loading; Konva remains active."}
+							</span>
+						)}
+						{canvasRenderer !== "vello-hybrid" ? null : (
+							<VelloHybridSurface
+								width={velloProjection.packet?.width ?? 1}
+								height={velloProjection.packet?.height ?? 1}
+								packetJson={velloProjection.packetJson}
+								fallbackReason={velloProjection.diagnostics[0]?.message}
+								onStatusChange={setVelloRuntimeStatus}
+							/>
 						)}
 						<div.Stage
 							width={canvasViewport.width}
@@ -9169,6 +9229,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																fill: canvasKitOwnsScene
 																	? "rgba(0, 0, 0, 0)"
 																	: chrome.background,
+																fillEnabled: !velloActive,
 															})}
 												/>
 												<Rect
@@ -9303,6 +9364,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											interactionObject.geometry.kind === "path" &&
 											object.appearance.fill !== undefined &&
 											fill !== undefined
+										const gpuPainted =
+											velloActive && velloProjection.gpuObjectIds.has(object.id)
 										if (object.geometry.kind === "image") {
 											if (object.hidden) return null
 											const image = canvasImages.get(object.geometry.source.id)
@@ -9564,6 +9627,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																		dashOffset: strokeStyle.dashOffset,
 																	})}
 															fillRule={designObjectFillRule(object)}
+															opacity={gpuPainted ? 0.001 : 1}
 															selected={
 																linked
 																	? selection.includes(interactionObject.id)
