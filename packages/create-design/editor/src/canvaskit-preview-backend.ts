@@ -16,6 +16,47 @@ import type {
 	DesignPreviewScene,
 } from "./design-preview-scene.ts"
 
+export const CANVASKIT_MINIMUM_STROKE_DEVICE_PIXELS = 1
+
+/**
+ * Project an authored world-space stroke width to CanvasKit's retained picture.
+ * The adjustment is preview-only: document, export, and hit geometry continue to
+ * use the authored width from DesignPreviewScene.
+ */
+export function canvasKitPreviewStrokeWidth(
+	authoredWidth: number,
+	viewScale: number,
+	pixelRatio: number,
+): number {
+	const deviceScale = viewScale * pixelRatio
+	if (!(deviceScale > 0) || !Number.isFinite(deviceScale)) return authoredWidth
+	return Math.max(
+		authoredWidth,
+		CANVASKIT_MINIMUM_STROKE_DEVICE_PIXELS / deviceScale,
+	)
+}
+
+/**
+ * A picture only needs recompiling when scene content or an effective stroke
+ * width changes. View translation is deliberately excluded, as are zoom/DPR
+ * changes while every stroke remains above the coverage floor.
+ */
+export function canvasKitPictureRevision(frame: DesignPreviewFrame): string {
+	const adjustedStrokeWidths = frame.scene.paths.flatMap((path) => {
+		const stroke = path.stroke
+		if (stroke === undefined) return []
+		const width = canvasKitPreviewStrokeWidth(
+			stroke.width,
+			frame.view.scale,
+			frame.viewport.pixelRatio,
+		)
+		return width === stroke.width ? [] : [[path.id, width] as const]
+	})
+	return adjustedStrokeWidths.length === 0
+		? frame.scene.revision
+		: `${frame.scene.revision}\u0000stroke-floor:${JSON.stringify(adjustedStrokeWidths)}`
+}
+
 function configureFill(canvasKit: CanvasKit, color: string): Paint {
 	const paint = new canvasKit.Paint()
 	paint.setAntiAlias(true)
@@ -27,6 +68,8 @@ function configureFill(canvasKit: CanvasKit, color: string): Paint {
 function configureStroke(
 	canvasKit: CanvasKit,
 	path: DesignPreviewPath,
+	viewScale: number,
+	pixelRatio: number,
 ): Readonly<{ paint: Paint; disposeEffect: () => void }> | null {
 	const stroke = path.stroke
 	if (stroke === undefined) return null
@@ -34,7 +77,9 @@ function configureStroke(
 	paint.setAntiAlias(true)
 	paint.setStyle(canvasKit.PaintStyle.Stroke)
 	paint.setColor(canvasKit.parseColorString(stroke.color))
-	paint.setStrokeWidth(stroke.width)
+	paint.setStrokeWidth(
+		canvasKitPreviewStrokeWidth(stroke.width, viewScale, pixelRatio),
+	)
 	paint.setStrokeMiter(stroke.miterLimit)
 	paint.setStrokeCap(
 		stroke.cap === "round"
@@ -67,6 +112,8 @@ function drawPreviewPath(
 	canvasKit: CanvasKit,
 	canvas: Canvas,
 	command: DesignPreviewPath,
+	viewScale: number,
+	pixelRatio: number,
 ): void {
 	const path: Path | null = canvasKit.Path.MakeFromSVGString(command.pathData)
 	if (path === null)
@@ -85,7 +132,12 @@ function drawPreviewPath(
 				fill.delete()
 			}
 		}
-		const configuredStroke = configureStroke(canvasKit, command)
+		const configuredStroke = configureStroke(
+			canvasKit,
+			command,
+			viewScale,
+			pixelRatio,
+		)
 		if (configuredStroke !== null)
 			try {
 				canvas.drawPath(path, configuredStroke.paint)
@@ -100,8 +152,9 @@ function drawPreviewPath(
 
 function recordScene(
 	canvasKit: CanvasKit,
-	scene: DesignPreviewScene,
+	frame: DesignPreviewFrame,
 ): SkPicture {
+	const { scene } = frame
 	const recorder = new canvasKit.PictureRecorder()
 	try {
 		// The document plane is intentionally generous: artwork may live outside an
@@ -126,7 +179,14 @@ function recordScene(
 				paint.delete()
 			}
 		}
-		for (const path of scene.paths) drawPreviewPath(canvasKit, canvas, path)
+		for (const path of scene.paths)
+			drawPreviewPath(
+				canvasKit,
+				canvas,
+				path,
+				frame.view.scale,
+				frame.viewport.pixelRatio,
+			)
 		return recorder.finishRecordingAsPicture()
 	} finally {
 		recorder.delete()
@@ -181,11 +241,12 @@ export class CanvasKitPreviewBackend implements DesignPreviewRendererBackend {
 
 	render(frame: DesignPreviewFrame): void {
 		const surface = this.#ensureSurface(frame)
-		if (this.#pictureRevision !== frame.scene.revision) {
-			const nextPicture = recordScene(this.#canvasKit, frame.scene)
+		const pictureRevision = canvasKitPictureRevision(frame)
+		if (this.#pictureRevision !== pictureRevision) {
+			const nextPicture = recordScene(this.#canvasKit, frame)
 			this.#picture?.delete()
 			this.#picture = nextPicture
-			this.#pictureRevision = frame.scene.revision
+			this.#pictureRevision = pictureRevision
 		}
 		const picture = this.#picture
 		if (picture === null) return

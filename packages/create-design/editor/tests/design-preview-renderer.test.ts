@@ -66,4 +66,34 @@ describe("design preview renderer lifecycle", () => {
 		controller.update(frame)
 		expect(statuses).toHaveLength(2)
 	})
+
+	it("forwards pan, zoom, and device-pixel-ratio frames to the backend", async () => {
+		const rendered: DesignPreviewFrame[] = []
+		const controller = startDesignPreviewRenderer(
+			{} as HTMLCanvasElement,
+			async () => ({
+				mount: () => undefined,
+				render: (next) => rendered.push(next),
+				dispose: () => undefined,
+			}),
+			() => undefined,
+		)
+		controller.update(frame)
+		await Promise.resolve()
+		await Promise.resolve()
+		const panned: DesignPreviewFrame = {
+			...frame,
+			view: { ...frame.view, x: 200, y: -80 },
+		}
+		const zoomedAtHigherDpr: DesignPreviewFrame = {
+			...panned,
+			viewport: { ...frame.viewport, pixelRatio: 3 },
+			view: { ...panned.view, scale: 0.125 },
+		}
+		controller.update(panned)
+		controller.update(zoomedAtHigherDpr)
+
+		expect(rendered).toEqual([frame, panned, zoomedAtHigherDpr])
+		controller.dispose()
+	})
 })
