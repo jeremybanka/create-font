@@ -1,5 +1,11 @@
 # @create-art/source-format
 
+## 0.2.1
+
+### Patch Changes
+
+- 20375fa: Update the workspace's validated dprint reference to 0.56.1 without changing the compatible peer range or formatting contract.
+
 ## 0.2.0
 
 ### Minor Changes
