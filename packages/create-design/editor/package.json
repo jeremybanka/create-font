@@ -37,7 +37,6 @@
 		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
 		"test": "vp test"
@@ -49,11 +48,13 @@
 		"@create-design/model": "workspace:*",
 		"@create-design/pdf": "workspace:*",
 		"@create-design/png": "workspace:*",
-		"@create-design/svg": "workspace:*",
 		"@create-design/source": "workspace:*",
+		"@create-design/svg": "workspace:*",
 		"@create-design/text": "workspace:*",
+		"@create-design/vello-hybrid-wasm": "workspace:*",
 		"@radix-ui/react-icons": "^1.3.2",
 		"atom.io": "0.52.1",
+		"canvaskit-wasm": "0.41.1",
 		"react": "19.2.8",
 		"react-dom": "19.2.8"
 	},

@@ -8,17 +8,18 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
+          packages/create-design/vello-hybrid-wasm/dist
           packages/create-font/fea-rs-wasm/dist
           packages/dprint-plugin-fea/manifest.json
           packages/dprint-plugin-fea/plugin.wasm
-        key: node-test-runtime-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'packages/create-font/fea-rs-wasm/package.json', 'packages/dprint-plugin-fea/package.json', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
+        key: node-test-runtime-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'packages/create-design/vello-hybrid-wasm/package.json', 'packages/create-font/fea-rs-wasm/package.json', 'packages/dprint-plugin-fea/package.json', 'scripts/build-create-design-vello-wasm.ts', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
 
     - name: Restore Rust build cache
       if: steps.runtime-cache.outputs.cache-hit != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: target
-        key: node-build-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
+        key: node-build-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'mise.toml', 'crates/**', 'scripts/build-create-design-vello-wasm.ts', 'scripts/build-dprint-plugin-fea.ts', 'scripts/build-fea-rs-wasm.ts') }}
         restore-keys: |
           node-build-${{ runner.os }}-
           node-package-artifacts-${{ runner.os }}-
@@ -26,4 +27,4 @@ runs:
     - name: Build generated test runtime
       if: steps.runtime-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: pnpm exec vp run dprint-plugin-fea#build
+      run: pnpm exec vp run --filter dprint-plugin-fea --filter @create-design/vello-hybrid-wasm build

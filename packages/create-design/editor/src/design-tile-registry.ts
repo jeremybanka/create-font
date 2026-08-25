@@ -19,6 +19,7 @@ import type {
 	DesignSourceReviewController,
 } from "./design-version-control.ts"
 import type { DesignSnapCategory, DesignSnapSettings } from "./design-canvas.ts"
+import type { DesignCanvasRendererId } from "./design-renderer.ts"
 import type { PdfExportTarget } from "@create-design/pdf"
 import type { ExportPreflightPreferences } from "@create-design/pdf"
 import type { PngExportRequest } from "@create-design/png"
@@ -236,6 +237,8 @@ export interface DesignTileContext {
 	readonly selectedSwatchId: string
 	readonly selectedGuideId: string | null
 	readonly guidesVisible: boolean
+	readonly canvasRenderer: DesignCanvasRendererId
+	readonly setCanvasRenderer: (renderer: DesignCanvasRendererId) => void
 	readonly snapSettings: DesignSnapSettings
 	readonly setSnapCategory: (
 		category: DesignSnapCategory,

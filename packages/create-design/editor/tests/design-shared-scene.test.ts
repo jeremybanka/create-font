@@ -12,6 +12,7 @@ import {
 import { mountDesignEditor } from "../src/browser.ts"
 import { readDesignCanvasTheme } from "../src/design-canvas-theme.ts"
 import { DESIGN_CANVAS_DIMMER_STORAGE_KEY } from "../src/canvas-dimmer.ts"
+import { DESIGN_CANVAS_RENDERER_STORAGE_KEY } from "../src/design-renderer.ts"
 import { designLayerUiColorCss } from "../src/design-layer-ui-color.ts"
 import { DESIGN_TOOLS } from "../src/design-tools.ts"
 import { createInitialDocument, DESIGN_STORAGE_KEY } from "../src/document.ts"
@@ -294,6 +295,103 @@ function directControlFixture(): Readonly<{
 }
 
 describe("create-design shared vector scene", () => {
+	it("exposes all renderer modes as a persisted Canvas setting", () => {
+		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
+		mountDesign({}, storage)
+		const application =
+			document.querySelector<HTMLElement>("design-application")
+		const renderer = document.querySelector<HTMLSelectElement>(
+			'design-canvas-tile select[aria-label="Canvas renderer"]',
+		)
+		if (application === null || renderer === null)
+			throw new Error("Canvas renderer setting was not found.")
+		expect(application.dataset.canvasRenderer).toBe("konva")
+		expect(renderer.value).toBe("konva")
+		expect(
+			[...renderer.options].map(({ text, value }) => ({ text, value })),
+		).toEqual([
+			{ text: "Konva (original)", value: "konva" },
+			{ text: "Konva (preserved detail)", value: "konva-preserved" },
+			{ text: "Vello Hybrid (GPU)", value: "vello-hybrid" },
+			{ text: "CanvasKit / Skia (preview)", value: "canvaskit" },
+		])
+
+		act(() => {
+			renderer.value = "konva-preserved"
+			renderer.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+		expect(application.dataset.canvasRenderer).toBe("konva-preserved")
+		expect(storage.get(DESIGN_CANVAS_RENDERER_STORAGE_KEY)).toBe(
+			"konva-preserved",
+		)
+	})
+
+	it("preserves a physical pixel of authored stroke at low zoom without widening its hit geometry", async () => {
+		vi.stubGlobal("devicePixelRatio", 2)
+		const initial = createInitialDocument()
+		const hairlineWidth = 0.25
+		const stroked = {
+			...initial,
+			objects: initial.objects.map((object, index) =>
+				index === 0
+					? {
+							...object,
+							appearance: {
+								...object.appearance,
+								stroke: {
+									...DEFAULT_DESIGN_STROKE_STYLE,
+									swatchId: "swatch:ink",
+									width: hairlineWidth,
+								},
+							},
+						}
+					: object,
+			),
+		} satisfies DesignDocument
+		const storage = new Map([[DESIGN_CANVAS_RENDERER_STORAGE_KEY, "konva"]])
+		const stage = mountDesign({ initialDocument: stroked }, storage)
+		vi.spyOn(stage, "getPointerPosition").mockReturnValue({ x: 480, y: 360 })
+		await act(async () => {
+			stage.fire("wheel", {
+				evt: {
+					altKey: false,
+					ctrlKey: true,
+					deltaX: 0,
+					deltaY: 10_000,
+					metaKey: false,
+					preventDefault: vi.fn(),
+					shiftKey: false,
+				},
+			})
+			await Promise.resolve()
+		})
+
+		const originalPath = stage.findOne(".design-object")
+		const originalScale = originalPath.getAbsoluteScale().x
+		expect(originalPath.strokeWidth()).toBe(hairlineWidth)
+		expect(
+			originalPath.strokeWidth() * originalScale * devicePixelRatio,
+		).toBeLessThan(1)
+
+		const renderer = document.querySelector<HTMLSelectElement>(
+			'design-canvas-tile select[aria-label="Canvas renderer"]',
+		)
+		if (renderer === null)
+			throw new Error("Canvas renderer setting was not found.")
+		act(() => {
+			renderer.value = "konva-preserved"
+			renderer.dispatchEvent(new Event("change", { bubbles: true }))
+		})
+
+		const preservedPath = stage.findOne(".design-object")
+		expect(
+			preservedPath.strokeWidth() *
+				preservedPath.getAbsoluteScale().x *
+				devicePixelRatio,
+		).toBeCloseTo(1)
+		expect(preservedPath.hitStrokeWidth()).toBe(hairlineWidth)
+	})
+
 	it("follows the system canvas scheme until the Dimmer is adjusted", async () => {
 		let prefersLight = true
 		const listeners = new Set<EventListenerOrEventListenerObject>()

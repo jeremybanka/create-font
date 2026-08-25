@@ -439,12 +439,18 @@ importers:
       '@create-design/text':
         specifier: workspace:*
         version: link:../text
+      '@create-design/vello-hybrid-wasm':
+        specifier: workspace:*
+        version: link:../vello-hybrid-wasm
       '@radix-ui/react-icons':
         specifier: ^1.3.2
         version: 1.3.2(react@19.2.8)
       atom.io:
         specifier: 0.52.1
         version: 0.52.1(@typescript-eslint/parser@8.67.0(eslint@10.9.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.9.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.6)
+      canvaskit-wasm:
+        specifier: 0.41.1
+        version: 0.41.1
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -590,6 +596,15 @@ importers:
       vitest:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.9.5)(@vitest/browser-preview@4.1.11)(@vitest/coverage-v8@4.1.11)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)
+
+  packages/create-design/vello-hybrid-wasm:
+    devDependencies:
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.9(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(@voidzero-dev/vite-plus-core@0.2.9(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)(jiti@2.7.0)(yaml@2.9.0)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@25.9.5)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.11(vitest@4.1.11))(@voidzero-dev/vite-plus-core@0.2.9(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.6)
 
   packages/create-font/editor:
     dependencies:
@@ -2354,6 +2369,9 @@ packages:
     engines: {node: '>= 20'}
     hasBin: true
 
+  '@webgpu/types@0.1.21':
+    resolution: {integrity: sha512-pUrWq3V5PiSGFLeLxoGqReTZmiiXwY3jRkIG5sLLKjyqNxrwm/04b4nw7LSmGWJcKk59XOM/YRTUwOzo4MMlow==}
+
   '@yuku-codegen/binding-darwin-arm64@0.5.48':
     resolution: {integrity: sha512-yo96Oef12WzqnphInfz/eexVse3+kWgfGS5g2S3rFS3dcGn1ENW9xLFDZUP9rh+yP76DOq38wBoFi1+I9+6qBg==}
     cpu: [arm64]
@@ -2673,6 +2691,9 @@ packages:
   call-bound@1.0.4:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
+
+  canvaskit-wasm@0.41.1:
+    resolution: {integrity: sha512-gO2rNMIE0lOQ8MaarM4qNeq2zZAEknAObKP2XAKidMSAY8P5sURGdFkrx1TSdHuBFqTf5w35JqjuUzjibqkD5g==}
 
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
@@ -5570,6 +5591,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@webgpu/types@0.1.21': {}
+
   '@yuku-codegen/binding-darwin-arm64@0.5.48':
     optional: true
 
@@ -5773,6 +5796,10 @@ snapshots:
     dependencies:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
+
+  canvaskit-wasm@0.41.1:
+    dependencies:
+      '@webgpu/types': 0.1.21
 
   chai@6.2.2: {}
 

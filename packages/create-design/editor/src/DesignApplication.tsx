@@ -109,6 +109,7 @@ import {
 import { swatchCss } from "@create-design/model"
 import { canvasToDocumentPoint } from "@create-design/model"
 import { useDesignCanvasTheme } from "./design-canvas-theme.ts"
+import { CanvasKitPreviewSurface } from "./CanvasKitPreviewSurface.tsx"
 import {
 	canvasDimmerPercent,
 	canvasDimmerTokens,
@@ -119,6 +120,17 @@ import {
 	subscribeToPreferredColorScheme,
 	writeCanvasDimmerPreference,
 } from "./canvas-dimmer.ts"
+import {
+	designCanvasDisplayStrokeWidth,
+	readDesignCanvasRenderer,
+	type DesignCanvasRendererId,
+	writeDesignCanvasRenderer,
+} from "./design-renderer.ts"
+import {
+	projectDesignPreviewScene,
+	resolveCanvasKitPreviewScene,
+} from "./design-preview-scene.ts"
+import type { DesignPreviewRendererStatus } from "./design-preview-renderer.ts"
 import { designLayerUiColorCss } from "./design-layer-ui-color.ts"
 import {
 	createInitialDocument,
@@ -358,6 +370,14 @@ import type {
 	DesignTool,
 } from "./types.ts"
 import { TextEditingSurface } from "./TextEditingSurface.tsx"
+import {
+	VelloHybridSurface,
+	type VelloHybridRuntimeStatus,
+} from "./VelloHybridSurface.tsx"
+import {
+	EMPTY_VELLO_HYBRID_SCENE_PROJECTION,
+	projectVelloHybridScene,
+} from "./vello-hybrid-scene.ts"
 import {
 	createDesignTextObject,
 	DEFAULT_DESIGN_TEXT_TYPOGRAPHY,
@@ -1256,6 +1276,23 @@ type DesignApplicationContentProps = Omit<
 
 function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const { pathfinderWorkerClient, sourceSession } = props
+	const [canvasRenderer, setCanvasRenderer] = useState(() =>
+		readDesignCanvasRenderer(browserLocalStorage()),
+	)
+	const [canvasRendererStatus, setCanvasRendererStatus] =
+		useState<DesignPreviewRendererStatus>({ state: "inactive" })
+	const updateCanvasRendererStatus = useCallback(
+		(status: DesignPreviewRendererStatus) => setCanvasRendererStatus(status),
+		[],
+	)
+	const [velloRuntimeStatus, setVelloRuntimeStatus] =
+		useState<VelloHybridRuntimeStatus>({ state: "idle" })
+	const selectCanvasRenderer = (renderer: DesignCanvasRendererId): void => {
+		setCanvasRendererStatus({ state: "inactive" })
+		setVelloRuntimeStatus({ state: "idle" })
+		setCanvasRenderer(renderer)
+		writeDesignCanvasRenderer(browserLocalStorage(), renderer)
+	}
 	const [canvasDimmerPreference, setCanvasDimmerPreference] = useState(() =>
 		readCanvasDimmerPreference(browserLocalStorage()),
 	)
@@ -2377,6 +2414,10 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		[baseScale],
 	)
 	const worldScale = canvasScale(canvasView, viewOptions)
+	const canvasDevicePixelRatio =
+		typeof globalThis.devicePixelRatio === "number"
+			? globalThis.devicePixelRatio
+			: 1
 	const focusActiveArtboard = useCallback((): void => {
 		artboardWrapRef.current?.focus()
 		if (!(canvasViewport.width > 0) || !(canvasViewport.height > 0)) return
@@ -5016,6 +5057,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		selectedSwatchId,
 		selectedGuideId,
 		guidesVisible,
+		canvasRenderer,
+		setCanvasRenderer: selectCanvasRenderer,
 		snapSettings,
 		setSnapCategory: (category, enabled) =>
 			setSnapSettings((current) => ({
@@ -8665,6 +8708,79 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 	const resolvedCanvasDocument = resolvedCanvasResolution.document
 	const canvasOutputProjection = projectDesignOutput(resolvedCanvasDocument)
 	const displayedObjects = canvasOutputProjection.objects
+	const canvasKitPreviewScene = resolveCanvasKitPreviewScene(
+		canvasRenderer,
+		() => {
+			const sceneObjects = displayedObjects.map((object): DesignObject => {
+				if (object.geometry.kind !== "text") return object
+				const canonicalLayout = textService.layout(object)
+				return canonicalLayout === null ||
+					canonicalLayout.diagnostics.some(
+						(diagnostic) => diagnostic.severity === "error",
+					)
+					? object
+					: {
+							...object,
+							geometry: {
+								kind: "path",
+								fillRule: "nonzero",
+								contours: canonicalLayout.glyphs.flatMap(
+									({ contours }) => contours,
+								),
+							},
+						}
+			})
+			const maskedObjectIds = new Set(
+				canvasOutputProjection.entries.flatMap((entry) =>
+					entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
+				),
+			)
+			return projectDesignPreviewScene({
+				document: resolvedCanvasDocument,
+				artboards: canvasDocument.artboards.map((artboard) => ({
+					...artboard,
+					...(artboard.backgroundColor === undefined
+						? {}
+						: { background: artboard.backgroundColor }),
+				})),
+				objects: sceneObjects,
+				maskedObjectIds,
+			})
+		},
+	)
+	const canvasKitOwnsScene =
+		canvasRenderer === "canvaskit" &&
+		canvasKitPreviewScene.supported &&
+		canvasRendererStatus.state === "ready"
+	const canvasRendererDiagnostic =
+		canvasRenderer !== "canvaskit" || canvasRendererStatus.state === "inactive"
+			? null
+			: canvasRendererStatus.state === "loading"
+				? "Loading CanvasKit / Skia…"
+				: canvasRendererStatus.state === "fallback"
+					? `CanvasKit fallback: ${canvasRendererStatus.reason}`
+					: "CanvasKit / Skia is rendering document content."
+	const velloProjection =
+		canvasRenderer === "vello-hybrid"
+			? projectVelloHybridScene({
+					viewport: canvasViewport,
+					devicePixelRatio:
+						typeof window === "undefined" ? 1 : window.devicePixelRatio,
+					view: { x: canvasView.x, y: canvasView.y, scale: worldScale },
+					artboards: resolvedCanvasDocument.artboards,
+					objects: displayedObjects,
+					swatches: canvasOutputProjection.swatches,
+					maskedObjectIds: new Set(
+						canvasOutputProjection.entries.flatMap((entry) =>
+							entry.maskGroupIds.length === 0 ? [] : [entry.object.id],
+						),
+					),
+				})
+			: EMPTY_VELLO_HYBRID_SCENE_PROJECTION
+	const velloActive =
+		canvasRenderer === "vello-hybrid" &&
+		velloRuntimeStatus.state === "ready" &&
+		velloProjection.packet !== null
 	const derivedBlendByObjectId = new Map(
 		canvasOutputProjection.entries.flatMap((entry) =>
 			entry.source.kind === "blend"
@@ -8811,6 +8927,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 			ref={setApplicationElement}
 			data-canvas-dimmer={canvasDimmer}
 			data-canvas-dimmer-source={canvasDimmerPreference.kind}
+			data-canvas-renderer={canvasRenderer}
+			data-canvas-effective-renderer={
+				canvasKitOwnsScene
+					? "canvaskit"
+					: velloActive
+						? "vello-hybrid"
+						: "konva"
+			}
+			data-canvas-renderer-status={canvasRendererStatus.state}
+			data-canvas-renderer-state={
+				canvasRenderer === "vello-hybrid" ? velloRuntimeStatus.state : "ready"
+			}
 			style={
 				{
 					"--design-canvas-surface": dimmerTokens.surface,
@@ -8991,6 +9119,46 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 								? directSelectionDescription(directSelection)
 								: selectionDescription}
 						</span>
+						{canvasRenderer !== "canvaskit" ? null : (
+							<CanvasKitPreviewSurface
+								enabled
+								scene={canvasKitPreviewScene}
+								width={canvasViewport.width}
+								height={canvasViewport.height}
+								view={{
+									x: canvasView.x,
+									y: canvasView.y,
+									scale: worldScale,
+								}}
+								onStatus={updateCanvasRendererStatus}
+							/>
+						)}
+						{canvasRendererDiagnostic === null ? null : (
+							<renderer-status
+								role="status"
+								data-state={canvasRendererStatus.state}
+							>
+								{canvasRendererDiagnostic}
+							</renderer-status>
+						)}
+						{canvasRenderer !== "vello-hybrid" ? null : (
+							<span data-screen-reader data-vello-hybrid-status>
+								{velloRuntimeStatus.state === "fallback"
+									? `Vello Hybrid unavailable: ${velloRuntimeStatus.reason} Konva is rendering the complete scene.`
+									: velloRuntimeStatus.state === "ready"
+										? `Vello Hybrid is rendering ${velloProjection.gpuObjectIds.size} vector objects. ${velloProjection.diagnostics.length} unsupported objects remain on Konva.`
+										: "Vello Hybrid is loading; Konva remains active."}
+							</span>
+						)}
+						{canvasRenderer !== "vello-hybrid" ? null : (
+							<VelloHybridSurface
+								width={velloProjection.packet?.width ?? 1}
+								height={velloProjection.packet?.height ?? 1}
+								packetJson={velloProjection.packetJson}
+								fallbackReason={velloProjection.diagnostics[0]?.message}
+								onStatusChange={setVelloRuntimeStatus}
+							/>
+						)}
 						<div.Stage
 							width={canvasViewport.width}
 							height={canvasViewport.height}
@@ -9057,7 +9225,12 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 													height={artboard.height}
 													{...(chrome.background === undefined
 														? {}
-														: { fill: chrome.background })}
+														: {
+																fill: canvasKitOwnsScene
+																	? "rgba(0, 0, 0, 0)"
+																	: chrome.background,
+																fillEnabled: !velloActive,
+															})}
 												/>
 												<Rect
 													{...chrome.border}
@@ -9175,6 +9348,15 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 												candidate.id === object.appearance.stroke?.swatchId,
 										)
 										const strokeStyle = object.appearance.stroke
+										const displayStrokeWidth =
+											strokeStyle === undefined
+												? undefined
+												: designCanvasDisplayStrokeWidth({
+														authoredWidth: strokeStyle.width,
+														devicePixelRatio: canvasDevicePixelRatio,
+														renderer: canvasRenderer,
+														worldScale,
+													})
 										const directFillSelectable =
 											tool === "direct" &&
 											!derived &&
@@ -9182,6 +9364,8 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 											interactionObject.geometry.kind === "path" &&
 											object.appearance.fill !== undefined &&
 											fill !== undefined
+										const gpuPainted =
+											velloActive && velloProjection.gpuObjectIds.has(object.id)
 										if (object.geometry.kind === "image") {
 											if (object.hidden) return null
 											const image = canvasImages.get(object.geometry.source.id)
@@ -9358,7 +9542,11 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															)}
 															{...(fill === undefined
 																? {}
-																: { fill: textColor })}
+																: {
+																		fill: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: textColor,
+																	})}
 															fillEnabled={fill !== undefined}
 															selected={selection.includes(
 																interactionObject.id,
@@ -9416,15 +9604,22 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 															)}
 															{...(fill === undefined
 																? {}
-																: { fill: swatchCss(fill) })}
+																: {
+																		fill: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: swatchCss(fill),
+																	})}
 															fillEnabled={fill !== undefined}
 															{...(stroke === undefined ||
 															strokeStyle === undefined ||
 															strokeStyle.width === 0
 																? {}
 																: {
-																		stroke: swatchCss(stroke),
-																		strokeWidth: strokeStyle.width,
+																		stroke: canvasKitOwnsScene
+																			? "rgba(0, 0, 0, 0)"
+																			: swatchCss(stroke),
+																		strokeWidth: displayStrokeWidth,
+																		hitStrokeWidth: strokeStyle.width,
 																		lineCap: strokeStyle.cap,
 																		lineJoin: strokeStyle.join,
 																		miterLimit: strokeStyle.miterLimit,
@@ -9432,6 +9627,7 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 																		dashOffset: strokeStyle.dashOffset,
 																	})}
 															fillRule={designObjectFillRule(object)}
+															opacity={gpuPainted ? 0.001 : 1}
 															selected={
 																linked
 																	? selection.includes(interactionObject.id)
