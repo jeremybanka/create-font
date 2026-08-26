@@ -63,6 +63,6 @@
 		"vitest": "catalog:"
 	},
 	"engines": {
-		"node": "26.7.0"
+		"node": "26.8.0"
 	}
 }
