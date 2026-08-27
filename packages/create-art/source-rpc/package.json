@@ -50,7 +50,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"elysia": "1.4.29"
+		"elysia": "1.4.30"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.5",

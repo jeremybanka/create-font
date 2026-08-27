@@ -67,7 +67,7 @@
 		"@vscode/vsce": "3.9.2",
 		"@elysia/node": "1.4.6",
 		"comline": "0.5.2",
-		"elysia": "1.4.29",
+		"elysia": "1.4.30",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"rolldown": "1.2.6",
