@@ -42,7 +42,7 @@
 	"dependencies": {
 		"@create-art/source-rpc": "workspace:*",
 		"@elysiajs/eden": "1.4.9",
-		"elysia": "1.4.29"
+		"elysia": "1.4.30"
 	},
 	"devDependencies": {
 		"@trpc/server": "11.18.0",
