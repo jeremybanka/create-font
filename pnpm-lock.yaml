@@ -296,11 +296,11 @@ importers:
         specifier: ^1.3.2
         version: 1.3.2(react@19.2.8)
       konva:
-        specifier: 10.3.1
-        version: 10.3.1
+        specifier: 10.3.2
+        version: 10.3.2
       react-konva:
         specifier: 19.2.5
-        version: 19.2.5(@types/react@19.2.18)(konva@10.3.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 19.2.5(@types/react@19.2.18)(konva@10.3.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: 25.9.5
@@ -3292,8 +3292,8 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
-  konva@10.3.1:
-    resolution: {integrity: sha512-7fT/jSkL2bZZOHRBk2QVMKAUbgHoKG72W+KJtpP5YMJUZRmjgoafROgxTADsrxKOY2ZM5eKyN/x6CM9PrlFfOg==}
+  konva@10.3.2:
+    resolution: {integrity: sha512-A9GLx+Vj0PNnybjNq/St/S8utrksuSKOR8EzO2RTjA0SlmR9JipahcCXWW0vXz/9wjZCwAEtBtJFCUGe5mD/4g==}
     peerDependencies:
       canvas: ^3.0.0
       skia-canvas: ^3.0.0
@@ -6437,7 +6437,7 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
-  konva@10.3.1: {}
+  konva@10.3.2: {}
 
   lasertag@0.7.0(@types/react@19.2.18)(@typescript-eslint/parser@8.68.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.6)(preact@10.29.8)(supports-color@7.2.0):
     dependencies:
@@ -6938,11 +6938,11 @@ snapshots:
 
   react-is@17.0.2: {}
 
-  react-konva@19.2.5(@types/react@19.2.18)(konva@10.3.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+  react-konva@19.2.5(@types/react@19.2.18)(konva@10.3.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:
       '@types/react-reconciler': 0.33.0(@types/react@19.2.18)
       its-fine: 2.0.0(@types/react@19.2.18)(react@19.2.8)
-      konva: 10.3.1
+      konva: 10.3.2
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       react-reconciler: 0.33.0(react@19.2.8)
