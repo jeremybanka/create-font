@@ -59,7 +59,7 @@
 		"@create-font/target": "workspace:*",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.5",
-		"@vitejs/plugin-react": "6.1.0",
+		"@vitejs/plugin-react": "6.1.1",
 		"@typescript-eslint/parser": "8.68.0",
 		"@typescript-eslint/utils": "8.68.0",
 		"@types/node": "25.9.5",

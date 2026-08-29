@@ -48,8 +48,8 @@ importers:
         specifier: 19.2.5
         version: 19.2.5(@types/react@19.2.18)
       '@vitejs/plugin-react':
-        specifier: 6.1.0
-        version: 6.1.0(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: 6.1.1
+        version: 6.1.1(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
       agents.yaml:
         specifier: 0.2.2
         version: 0.2.2
@@ -157,8 +157,8 @@ importers:
         specifier: 8.68.0
         version: 8.68.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@vitejs/plugin-react':
-        specifier: 6.1.0
-        version: 6.1.0(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: 6.1.1
+        version: 6.1.1(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
       atom.io:
         specifier: 0.52.1
         version: 0.52.1(@typescript-eslint/parser@8.68.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.12)
@@ -272,8 +272,8 @@ importers:
         specifier: 19.2.5
         version: 19.2.5(@types/react@19.2.18)
       '@vitejs/plugin-react':
-        specifier: 6.1.0
-        version: 6.1.0(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: 6.1.1
+        version: 6.1.1(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
       atom.io:
         specifier: 0.52.1
         version: 0.52.1(@typescript-eslint/parser@8.68.0(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.9.1(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.11.12)
@@ -2134,8 +2134,8 @@ packages:
     resolution: {integrity: sha512-jIXhD0eWQ1JA6ln/5Dltyx22UxWNrw0hZmhy2rlv6m6KgF7kplHx3g0fzi09lNmTJQRR91OlemYp3xFnvDK9og==}
     engines: {node: '>=20.0.0'}
 
-  '@vitejs/plugin-react@6.1.0':
-    resolution: {integrity: sha512-qd2BzUBehkov86WFhg0JkEFEYyCLG9uPCe6qWTY/kRlss9OvJrOF2UbIWT7p+8IzZHkEu0DNGHc4HSv+JdDLsw==}
+  '@vitejs/plugin-react@6.1.1':
+    resolution: {integrity: sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@rolldown/plugin-babel': ^0.1.7 || ^0.2.0
@@ -5348,7 +5348,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-react@6.1.0(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.1.1(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: '@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0)'
