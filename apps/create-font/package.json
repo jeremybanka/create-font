@@ -72,7 +72,7 @@
 		"react-dom": "19.2.8",
 		"rolldown": "1.2.6",
 		"vscode-languageclient": "10.1.0",
-		"vscode-languageserver": "10.1.0",
+		"vscode-languageserver": "10.1.1",
 		"vscode-languageserver-textdocument": "1.0.14",
 		"vite": "catalog:",
 		"zod": "4.4.3"
