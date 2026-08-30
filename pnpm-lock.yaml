@@ -130,13 +130,13 @@ importers:
         version: 1.4.11(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
       comline:
         specifier: 0.5.2
-        version: 0.5.2(zod@4.5.1)
+        version: 0.5.2(zod@4.5.2)
       elysia:
         specifier: 1.4.30
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
     devDependencies:
       '@create-font/target':
         specifier: workspace:*
@@ -233,7 +233,7 @@ importers:
         version: 3.9.2(supports-color@7.2.0)
       comline:
         specifier: 0.5.2
-        version: 0.5.2(zod@4.5.1)
+        version: 0.5.2(zod@4.5.2)
       elysia:
         specifier: 1.4.30
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
@@ -259,8 +259,8 @@ importers:
         specifier: 1.0.14
         version: 1.0.14
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
     devDependencies:
       '@types/node':
         specifier: 25.9.5
@@ -374,8 +374,8 @@ importers:
         specifier: 1.4.30
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
     devDependencies:
       '@types/node':
         specifier: 25.9.5
@@ -549,8 +549,8 @@ importers:
         specifier: workspace:*
         version: link:../../create-art/source-format
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
     devDependencies:
       vitest:
         specifier: 4.1.11
@@ -709,8 +709,8 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@25.9.5)(@vitest/browser-preview@4.1.11)(@vitest/coverage-v8@4.1.11)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.11.15)
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
 
   packages/create-font/source:
     dependencies:
@@ -724,8 +724,8 @@ importers:
         specifier: workspace:*
         version: link:../states
       zod:
-        specifier: 4.5.1
-        version: 4.5.1
+        specifier: 4.5.2
+        version: 4.5.2
     devDependencies:
       vitest:
         specifier: 4.1.11
@@ -4272,8 +4272,8 @@ packages:
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
-  zod@4.5.1:
-    resolution: {integrity: sha512-P3GqeAEOEDqKvafVGLezbg+39YW/ze4xrD4qdS0adOY8eoI3zfjv1PQM4UwQzgT8mZKXEbqtVt8K+ZKGqkMFKg==}
+  zod@4.5.2:
+    resolution: {integrity: sha512-XkYXCol10+ba/6F/cueWV+TezUeOqXW0hdeJt5CdXjTYeAgAQg5N03RQdJ80mhfFE72+pblvYMW4wy2Qp4Qbrg==}
 
 snapshots:
 
@@ -5855,12 +5855,12 @@ snapshots:
     optionalDependencies:
       zod: 4.4.3
 
-  comline@0.5.2(zod@4.5.1):
+  comline@0.5.2(zod@4.5.2):
     dependencies:
       '@standard-schema/spec': 1.1.0
       treetrunks: 0.1.9
     optionalDependencies:
-      zod: 4.5.1
+      zod: 4.5.2
 
   commander@12.1.0: {}
 
@@ -7641,4 +7641,4 @@ snapshots:
 
   zod@4.4.3: {}
 
-  zod@4.5.1: {}
+  zod@4.5.2: {}
