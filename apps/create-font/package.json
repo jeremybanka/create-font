@@ -75,7 +75,7 @@
 		"vscode-languageserver": "10.1.1",
 		"vscode-languageserver-textdocument": "1.0.14",
 		"vite": "catalog:",
-		"zod": "4.5.2"
+		"zod": "4.5.4"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.5",
