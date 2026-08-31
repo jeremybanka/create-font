@@ -55,7 +55,7 @@ pnpm exec create-source-format fmt "${file}"
 ```
 
 Projects that also install a dprint version in the optional peer range
-`>=0.55.2 <0.57.0` may extend the published lexical configuration without
+`>=0.55.2 <0.58.0` may extend the published lexical configuration without
 copying it:
 
 ```json
