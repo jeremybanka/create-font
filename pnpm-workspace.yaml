@@ -14,8 +14,10 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - agents.yaml
   - atom.io
+  - comline
   - lasertag
   - mondrian.pdf
+  - treetrunks
 verifyDepsBeforeRun: error
 
 peerDependencyRules:

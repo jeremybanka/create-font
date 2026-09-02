@@ -53,8 +53,10 @@
 			"matchPackageNames": [
 				"agents.yaml",
 				"atom.io",
+				"comline",
 				"lasertag",
-				"mondrian.pdf"
+				"mondrian.pdf",
+				"treetrunks"
 			],
 			"minimumReleaseAge": null
 		}
