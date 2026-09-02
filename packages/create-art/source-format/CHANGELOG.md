@@ -1,5 +1,11 @@
 # @create-art/source-format
 
+## 0.2.2
+
+### Patch Changes
+
+- 31b7b49: Support dprint 0.57 while preserving the existing source-format byte contract.
+
 ## 0.2.1
 
 ### Patch Changes
