@@ -1,6 +1,6 @@
 {
 	"name": "@create-art/source-format",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "Versioned dprint formatting contract for create-art source files",
 	"license": "MPL-2.0",
 	"repository": {
