@@ -58,7 +58,7 @@
 		"happy-dom": "20.12.0",
 		"jiti": "2.7.0",
 		"lasertag": "0.8.0",
-		"treetrunks": "0.1.9",
+		"treetrunks": "0.1.11",
 		"vite": "catalog:",
 		"vitest": "catalog:"
 	},
