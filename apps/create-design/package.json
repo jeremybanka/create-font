@@ -65,7 +65,7 @@
 		"@types/node": "25.9.5",
 		"atom.io": "0.52.2",
 		"eslint": "10.9.1",
-		"happy-dom": "20.12.1",
+		"happy-dom": "20.12.2",
 		"jiti": "2.7.0",
 		"lasertag": "0.8.0",
 		"mondrian.pdf": "0.1.0",
