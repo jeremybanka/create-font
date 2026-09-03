@@ -51,7 +51,7 @@
 		"@types/node": "25.9.5",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.5",
-		"happy-dom": "20.12.1",
+		"happy-dom": "20.12.2",
 		"lasertag": "0.8.0",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
