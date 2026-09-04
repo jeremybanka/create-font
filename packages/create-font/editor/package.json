@@ -52,7 +52,7 @@
 		"@typescript-eslint/utils": "8.69.0",
 		"@vitest/coverage-v8": "catalog:",
 		"@types/react": "19.2.18",
-		"@types/react-dom": "19.2.5",
+		"@types/react-dom": "19.2.6",
 		"atom.io": "0.52.2",
 		"eslint": "10.9.1",
 		"happy-dom": "20.13.2",
