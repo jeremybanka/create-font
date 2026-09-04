@@ -82,7 +82,7 @@
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.7",
 		"@vitejs/plugin-react": "6.1.1",
-		"atom.io": "0.52.2",
+		"atom.io": "0.52.3",
 		"vitest": "catalog:"
 	},
 	"engines": {
