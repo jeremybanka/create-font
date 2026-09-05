@@ -63,7 +63,7 @@
 		"@types/react-dom": "19.2.7",
 		"@typescript-eslint/parser": "8.69.0",
 		"@typescript-eslint/utils": "8.69.0",
-		"eslint": "10.9.1",
+		"eslint": "10.10.0",
 		"happy-dom": "20.14.0",
 		"jiti": "2.7.0",
 		"lasertag": "0.8.0",
