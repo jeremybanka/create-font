@@ -63,7 +63,7 @@
 		"@typescript-eslint/parser": "8.69.0",
 		"@typescript-eslint/utils": "8.69.0",
 		"@types/node": "25.9.5",
-		"atom.io": "0.52.3",
+		"atom.io": "0.53.0",
 		"eslint": "10.9.1",
 		"happy-dom": "20.14.0",
 		"jiti": "2.7.0",
