@@ -41,7 +41,7 @@
 		"@floating-ui/dom": "^1.8.0",
 		"@radix-ui/react-icons": "^1.3.2",
 		"konva": "10.3.3",
-		"react-konva": "19.2.5"
+		"react-konva": "19.2.6"
 	},
 	"peerDependencies": {
 		"react": "^19.2.0",
