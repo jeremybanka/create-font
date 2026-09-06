@@ -1,5 +1,11 @@
 import type { SocketGuard } from "atom.io/realtime"
 import { guardSocket } from "atom.io/realtime"
+import {
+	publicAction,
+	publicParticipant,
+	publicPresence,
+	publicSnapshot,
+} from "./public-data.ts"
 
 import type {
 	ActionRejection,
@@ -75,6 +81,9 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 	) => Promise<boolean | void> | boolean | void
 	readonly deviceId: string
 	readonly participants: () => readonly CollaborationParticipant[]
+	readonly presenceContextKeys?: readonly string[]
+	/** Constructs the application's public command payload after validation. */
+	readonly projectCommand?: (command: Command) => Command
 	readonly role: CollaborationRole
 	readonly snapshot: () => ActionSnapshot<Source, Command>
 	readonly socket: CollaborationServerSocket<Source, Command>
@@ -82,6 +91,7 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 }) {
 	const seen = new Set<string>()
 	let queue = Promise.resolve()
+	const snapshot = () => publicSnapshot(options.snapshot())
 	const guards = {
 		"collaboration:action": validator(
 			(
@@ -200,11 +210,14 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 	)
 
 	socket.on(`collaboration:snapshot`, (acknowledge) => {
-		acknowledge(options.snapshot())
+		acknowledge(snapshot())
 	})
 	socket.on(`collaboration:presence`, (presence) => {
 		if (presence.deviceId !== options.deviceId) return
-		options.socket.broadcast.emit(`collaboration:presence`, presence)
+		options.socket.broadcast.emit(
+			`collaboration:presence`,
+			publicPresence(presence, options.presenceContextKeys ?? []),
+		)
 	})
 	socket.on(`collaboration:action`, (request, acknowledge) => {
 		if (options.role === `viewer`) {
@@ -212,7 +225,7 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 				code: `forbidden`,
 				message: `Viewer sessions cannot edit this workspace.`,
 				operationId: request.operationId,
-				snapshot: options.snapshot(),
+				snapshot: snapshot(),
 			}
 			options.socket.emit(`collaboration:rejected`, rejection)
 			acknowledge(false)
@@ -223,7 +236,7 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 			return
 		}
 		queue = queue.then(async () => {
-			const before = options.snapshot()
+			const before = snapshot()
 			if (
 				before.actions.some(
 					(action) => action.operationId === request.operationId,
@@ -244,7 +257,9 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 				return
 			}
 			try {
-				const applied = await options.apply(request.command, {
+				const command =
+					options.projectCommand?.(request.command) ?? request.command
+				const applied = await options.apply(command, {
 					authorDeviceId: options.deviceId,
 					baseEpoch: request.baseEpoch,
 					operationId: request.operationId,
@@ -255,28 +270,36 @@ export function provideAuthoritativeActions<Source, Command>(options: {
 					return
 				}
 				seen.add(request.operationId)
-				const confirmed: ConfirmedAction<Command> = {
+				const confirmed: ConfirmedAction<Command> = publicAction({
 					authorDeviceId: options.deviceId,
-					command: request.command,
-					epoch: options.snapshot().epoch,
+					command,
+					epoch: snapshot().epoch,
 					operationId: request.operationId,
-				}
+				})
 				options.socket.emit(`collaboration:confirmed`, confirmed)
 				options.socket.broadcast.emit(`collaboration:confirmed`, confirmed)
 				acknowledge(true)
 			} catch (error) {
 				options.socket.emit(`collaboration:rejected`, {
 					code:
-						error instanceof CollaborationActionError ? error.code : `invalid`,
-					message: error instanceof Error ? error.message : String(error),
+						error instanceof CollaborationActionError && error.code === `stale`
+							? `stale`
+							: `invalid`,
+					message:
+						error instanceof CollaborationActionError && error.code === `stale`
+							? `The workspace advanced before this edit could be saved.`
+							: `The edit could not be saved.`,
 					operationId: request.operationId,
-					snapshot: options.snapshot(),
+					snapshot: snapshot(),
 				})
 				acknowledge(false)
 			}
 		})
 	})
-	options.socket.emit(`collaboration:participants`, options.participants())
+	options.socket.emit(
+		`collaboration:participants`,
+		options.participants().map(publicParticipant),
+	)
 
 	// Socket.IO releases every listener with the socket. `guardSocket` owns the
 	// validated wrapper callbacks, so there is intentionally nothing to remove

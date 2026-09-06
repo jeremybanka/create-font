@@ -134,7 +134,11 @@ describe(`pinned LAN and loopback gateways`, () => {
 		const host = await startLanHost({
 			address: `127.0.0.2`,
 			authority,
-			identity: owner.publicIdentity,
+			identity: {
+				...owner.publicIdentity,
+				privateKey: `synthetic-host-private-key`,
+				credentials: { nested: `synthetic-host-private-key` },
+			} as typeof owner.publicIdentity,
 			internalUrl: new URL(`http://127.0.0.1:${backendPort}`),
 			port: sharedPort,
 		})
@@ -145,6 +149,17 @@ describe(`pinned LAN and loopback gateways`, () => {
 			target: new URL(host.invitation.address),
 		})
 		try {
+			const malformed = await fetch(
+				new URL(`/api/collaboration/admission`, ownerGateway.url),
+				{
+					method: `POST`,
+					headers: { "content-type": `application/json` },
+					body: `{"privateKey":"synthetic-request-secret`,
+				},
+			)
+			expect(await malformed.json()).toEqual({
+				message: `The collaboration request could not be processed.`,
+			})
 			expect(await (await fetch(ownerGateway.url)).text()).toBe(`font app`)
 			expect(
 				await requestStatus(ownerGateway.url, { host: `untrusted.example` }),
@@ -304,6 +319,10 @@ describe(`pinned LAN and loopback gateways`, () => {
 				path: CREATE_ART_REALTIME_PATH,
 				transports: [`websocket`],
 			})
+			const participantEvents: unknown[] = []
+			guestSocket.on(`collaboration:participants`, (participants) =>
+				participantEvents.push(participants),
+			)
 			const secondGuestSocket = io(guestGateway.url.href, {
 				auth: { connectionId: `gateway-test-second-tab` },
 				path: CREATE_ART_REALTIME_PATH,
@@ -358,6 +377,26 @@ describe(`pinned LAN and loopback gateways`, () => {
 					role: string
 				}
 				expect(session.role).toBe(`editor`)
+				expect(JSON.stringify(session)).not.toContain(
+					`synthetic-host-private-key`,
+				)
+				expect(JSON.stringify(session)).not.toContain(
+					host.admissions.ownerToken,
+				)
+				expect(
+					session.participants.find(
+						(participant) => participant.role === `owner`,
+					)?.identity,
+				).toEqual({
+					deviceId: owner.publicIdentity.deviceId,
+					email: owner.publicIdentity.email,
+					name: owner.publicIdentity.name,
+					publicKey: owner.publicIdentity.publicKey,
+				})
+				expect(participantEvents.length).toBeGreaterThan(0)
+				expect(JSON.stringify(participantEvents)).not.toContain(
+					`synthetic-host-private-key`,
+				)
 				expect(
 					session.participants.find(
 						(participant) =>

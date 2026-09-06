@@ -8,8 +8,10 @@ import * as tls from "node:tls"
 
 import {
 	CREATE_ART_REALTIME_PATH,
-	type CollaborationRole,
+	publicIdentity,
+	publicSnapshot,
 	type CollaborationIdentity,
+	type CollaborationRole,
 	type HostInvitation,
 	type SignedIdentityClaim,
 } from "@create-art/realtime"
@@ -27,6 +29,7 @@ import { Server as SocketIoServer } from "socket.io"
 
 import {
 	isFontDocumentCommand,
+	publicFontDocumentCommand,
 	type createFontCollaborationAuthority,
 } from "./collaboration-authority.ts"
 
@@ -182,7 +185,7 @@ function proxyHttp(
 		if (!response.headersSent)
 			json(response, 502, {
 				code: `gateway.unavailable`,
-				message: error.message,
+				message: `The collaboration service is unavailable.`,
 			})
 		else response.destroy(error)
 	})
@@ -548,7 +551,7 @@ export async function startLanHost(options: {
 							? { message: `A collaboration session is required.` }
 							: {
 									admission: `approved`,
-									identity: session.identity,
+									identity: publicIdentity(session.identity),
 									participants: admissions.participants(),
 									...(session.role === `owner`
 										? { pending: admissions.pending() }
@@ -642,9 +645,9 @@ export async function startLanHost(options: {
 					target: options.internalUrl,
 					upstreams,
 				})
-			} catch (error) {
+			} catch {
 				json(response, 400, {
-					message: error instanceof Error ? error.message : String(error),
+					message: `The collaboration request could not be processed.`,
 				})
 			}
 		},
@@ -713,6 +716,8 @@ export async function startLanHost(options: {
 				apply: options.authority.apply,
 				deviceId: session.identity.deviceId,
 				participants: admissions.participants,
+				presenceContextKeys: [`glyph`, `master`, `surface`, `textIndex`],
+				projectCommand: publicFontDocumentCommand,
 				role: session.role,
 				snapshot: options.authority.snapshot,
 				socket: socket as never,
@@ -727,7 +732,7 @@ export async function startLanHost(options: {
 		},
 	)
 	const disposeReset = options.authority.onReset((snapshot) => {
-		io.emit(`collaboration:reset`, snapshot)
+		io.emit(`collaboration:reset`, publicSnapshot(snapshot))
 	})
 	server.on(`upgrade`, (request, client, head) => {
 		if (!hasExpectedHost(request, expectedHost)) {

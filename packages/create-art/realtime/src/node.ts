@@ -1,4 +1,5 @@
 import { createHash, randomBytes, verify } from "node:crypto"
+import { publicIdentity } from "./public-data.ts"
 
 import type {
 	AdmissionRequest,
@@ -20,7 +21,7 @@ export { type CredentialStore } from "./credential-store.ts"
 function claimPayload(claim: Omit<SignedIdentityClaim, `signature`>): string {
 	return JSON.stringify({
 		audience: claim.audience,
-		identity: claim.identity,
+		identity: publicIdentity(claim.identity),
 		issuedAt: claim.issuedAt,
 		nonce: claim.nonce,
 	})
@@ -80,7 +81,26 @@ export function verifyIdentityClaim(
 }
 
 export function encodeInvitation(invitation: HostInvitation): string {
-	return Buffer.from(JSON.stringify(invitation)).toString(`base64url`)
+	if (
+		typeof invitation.address !== `string` ||
+		typeof invitation.certificateFingerprint !== `string` ||
+		typeof invitation.invitationToken !== `string` ||
+		!Number.isSafeInteger(invitation.issuedAt) ||
+		!Number.isSafeInteger(invitation.expiresAt) ||
+		invitation.protocol !== 1
+	) {
+		throw new TypeError(`Invalid create-* collaboration invitation.`)
+	}
+	return Buffer.from(
+		JSON.stringify({
+			address: invitation.address,
+			certificateFingerprint: invitation.certificateFingerprint,
+			expiresAt: invitation.expiresAt,
+			invitationToken: invitation.invitationToken,
+			issuedAt: invitation.issuedAt,
+			protocol: invitation.protocol,
+		}),
+	).toString(`base64url`)
 }
 
 export function decodeInvitation(value: string): HostInvitation {
@@ -134,7 +154,6 @@ interface ActiveSession {
 	readonly expiresAt: number | null
 	readonly identity: CollaborationIdentity
 	readonly role: CollaborationRole
-	readonly token: string
 }
 
 const secret = (): string => randomBytes(32).toString(`base64url`)
@@ -160,9 +179,8 @@ export function createAdmissionAuthority(options: {
 		connections: 0,
 		connectedAt: null,
 		expiresAt: null,
-		identity: options.owner,
+		identity: publicIdentity(options.owner),
 		role: `owner`,
-		token: ownerToken,
 	})
 	const purgeExpiredSessions = (now = Date.now()): void => {
 		for (const [token, session] of sessions) {
@@ -178,7 +196,7 @@ export function createAdmissionAuthority(options: {
 			[...sessions.values()].map((session) => ({
 				connected: session.connections > 0,
 				connectedAt: session.connectedAt,
-				identity: session.identity,
+				identity: publicIdentity(session.identity),
 				role: session.role,
 			})),
 		)
@@ -188,6 +206,7 @@ export function createAdmissionAuthority(options: {
 		invitationToken,
 		ownerToken,
 		approve(requestId: string, role: Exclude<CollaborationRole, `owner`>) {
+			if (role !== `editor` && role !== `viewer`) return null
 			const request = pending.get(requestId)
 			if (request === undefined || request.decision !== `pending`) return null
 			const token = secret()
@@ -198,9 +217,8 @@ export function createAdmissionAuthority(options: {
 					invitationExpiresAt,
 					Date.now() + GUEST_SESSION_TTL_MS,
 				),
-				identity: request.identity,
+				identity: publicIdentity(request.identity),
 				role,
-				token,
 			})
 			request.decision = `approved`
 			request.sessionToken = token
@@ -210,7 +228,15 @@ export function createAdmissionAuthority(options: {
 			if (token === undefined) return null
 			purgeExpiredSessions()
 			const session = sessions.get(token)
-			return session ?? null
+			return session === undefined
+				? null
+				: {
+						connections: session.connections,
+						connectedAt: session.connectedAt,
+						expiresAt: session.expiresAt,
+						identity: publicIdentity(session.identity),
+						role: session.role,
+					}
 		},
 		connectionClosed(token: string): void {
 			const session = sessions.get(token)
@@ -237,7 +263,7 @@ export function createAdmissionAuthority(options: {
 					.filter((request) => request.decision === `pending`)
 					.map(({ id, identity, requestedAt }) => ({
 						id,
-						identity,
+						identity: publicIdentity(identity),
 						requestedAt,
 					})),
 			)
@@ -290,7 +316,7 @@ export function createAdmissionAuthority(options: {
 			pending.set(id, {
 				decision: `pending`,
 				id,
-				identity: claim.identity,
+				identity: publicIdentity(claim.identity),
 				pollToken,
 				requestedAt: Date.now(),
 			})
