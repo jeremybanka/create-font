@@ -32,6 +32,25 @@ interface IdentityOptions {
 	readonly credentialStore?: CredentialStore
 }
 
+function readProfile(
+	options: IdentityOptions,
+): Pick<IdentityOptions, `name` | `email`> {
+	const { name, email } = options
+	if (
+		typeof name !== `string` ||
+		name.length === 0 ||
+		name.length > 256 ||
+		typeof email !== `string` ||
+		email.length === 0 ||
+		email.length > 320
+	) {
+		throw new TypeError(
+			`Device identity requires a nonempty name and email within protocol limits.`,
+		)
+	}
+	return { name, email }
+}
+
 function identityService(
 	key: KeyObject,
 	options: IdentityOptions,
@@ -122,6 +141,7 @@ async function writeFreshKey(store: CredentialStore): Promise<KeyObject> {
 export async function readOrCreateDeviceIdentity(
 	options: IdentityOptions,
 ): Promise<DeviceIdentity> {
+	const profile = readProfile(options)
 	if ((await legacyEntry(options.legacyPath)) !== null) {
 		throw new Error(
 			`An obsolete device signing key remains in configuration. It may have been disclosed by earlier multiplayer versions. Run "font identity rotate" to generate a new key in the system credential store and remove the old file.`,
@@ -130,13 +150,14 @@ export async function readOrCreateDeviceIdentity(
 	const store = options.credentialStore ?? (await createSystemCredentialStore())
 	const secret = await storedKey(store)
 	const key = secret === null ? await writeFreshKey(store) : decodeKey(secret)
-	return identityService(key, options)
+	return identityService(key, profile)
 }
 
 /** Explicit recovery: never import or retain a potentially disclosed old key. */
 export async function rotateDeviceIdentity(
 	options: IdentityOptions,
 ): Promise<DeviceIdentity> {
+	const profile = readProfile(options)
 	const legacy = await legacyEntry(options.legacyPath)
 	const store = options.credentialStore ?? (await createSystemCredentialStore())
 	// Read first to prove accessibility; a locked store is never missing state.
@@ -161,7 +182,7 @@ export async function rotateDeviceIdentity(
 			)
 		}
 	}
-	return identityService(key, options)
+	return identityService(key, profile)
 }
 
 export function signIdentityClaim(

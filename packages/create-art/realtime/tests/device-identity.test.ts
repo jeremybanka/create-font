@@ -39,6 +39,24 @@ afterEach(async () => {
 })
 
 describe(`credential-backed signing identity`, () => {
+	it(`rejects non-public profile values before reading credentials`, async () => {
+		const store = { read: vi.fn(), write: vi.fn() }
+		for (const operation of [
+			readOrCreateDeviceIdentity,
+			rotateDeviceIdentity,
+		]) {
+			await expect(
+				operation({
+					...profile,
+					name: { secret: `SYNTHETIC_NESTED_SECRET` } as unknown as string,
+					credentialStore: store,
+				}),
+			).rejects.toThrow(`name and email`)
+		}
+		expect(store.read).not.toHaveBeenCalled()
+		expect(store.write).not.toHaveBeenCalled()
+	})
+
 	it(`persists only through the provider and publishes no private material`, async () => {
 		const directory = await temporaryDirectory()
 		const store = memoryCredentialStore()
@@ -71,6 +89,14 @@ describe(`credential-backed signing identity`, () => {
 			expect(serialized).not.toContain(`PRIVATE KEY`)
 			expect(serialized).not.toContain(secret)
 		}
+	})
+
+	it(`captures public profile fields before awaiting a credential provider`, async () => {
+		const store = memoryCredentialStore()
+		const options = { ...profile, credentialStore: store }
+		const identity = readOrCreateDeviceIdentity(options)
+		options.name = { secret: `SYNTHETIC_LATE_SECRET` } as unknown as string
+		expect((await identity).publicIdentity.name).toBe(profile.name)
 	})
 
 	it(`does not replace a locked, failed or invalid credential`, async () => {
