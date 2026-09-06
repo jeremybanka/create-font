@@ -1,19 +1,4 @@
-import {
-	createHash,
-	generateKeyPairSync,
-	randomBytes,
-	sign,
-	verify,
-} from "node:crypto"
-import {
-	chmod,
-	lstat,
-	mkdir,
-	readFile,
-	rename,
-	writeFile,
-} from "node:fs/promises"
-import { dirname } from "node:path"
+import { createHash, randomBytes, verify } from "node:crypto"
 
 import type {
 	AdmissionRequest,
@@ -24,56 +9,13 @@ import type {
 	SignedIdentityClaim,
 } from "./contracts.ts"
 
-interface StoredDeviceIdentity extends CollaborationIdentity {
-	readonly privateKey: string
-}
-
-export async function readOrCreateDeviceIdentity(options: {
-	readonly email: string
-	readonly name: string
-	readonly path: string
-}): Promise<StoredDeviceIdentity> {
-	try {
-		const entry = await lstat(options.path)
-		if (!entry.isFile() || entry.isSymbolicLink()) {
-			throw new Error(`The device identity path must be a regular file.`)
-		}
-		const stored = JSON.parse(
-			await readFile(options.path, `utf8`),
-		) as StoredDeviceIdentity
-		if (
-			typeof stored.deviceId === `string` &&
-			typeof stored.privateKey === `string` &&
-			typeof stored.publicKey === `string`
-		) {
-			await chmod(options.path, 0o600)
-			return { ...stored, email: options.email, name: options.name }
-		}
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== `ENOENT`) throw error
-	}
-	const keyPair = generateKeyPairSync(`ed25519`)
-	const publicKey = keyPair.publicKey
-		.export({ format: `pem`, type: `spki` })
-		.toString()
-	const privateKey = keyPair.privateKey
-		.export({ format: `pem`, type: `pkcs8` })
-		.toString()
-	const identity: StoredDeviceIdentity = {
-		deviceId: createHash(`sha256`).update(publicKey).digest(`hex`).slice(0, 24),
-		email: options.email,
-		name: options.name,
-		privateKey,
-		publicKey,
-	}
-	await mkdir(dirname(options.path), { recursive: true })
-	const temporaryPath = `${options.path}.${process.pid}.${randomBytes(4).toString(`hex`)}`
-	await writeFile(temporaryPath, `${JSON.stringify(identity, null, 2)}\n`, {
-		mode: 0o600,
-	})
-	await rename(temporaryPath, options.path)
-	return identity
-}
+export {
+	readOrCreateDeviceIdentity,
+	rotateDeviceIdentity,
+	signIdentityClaim,
+	type DeviceIdentity,
+} from "./device-identity.ts"
+export { type CredentialStore } from "./credential-store.ts"
 
 function claimPayload(claim: Omit<SignedIdentityClaim, `signature`>): string {
 	return JSON.stringify({
@@ -82,32 +24,6 @@ function claimPayload(claim: Omit<SignedIdentityClaim, `signature`>): string {
 		issuedAt: claim.issuedAt,
 		nonce: claim.nonce,
 	})
-}
-
-export function signIdentityClaim(
-	identity: StoredDeviceIdentity,
-	challenge: Readonly<{ audience: string; nonce: string }>,
-	issuedAt = Date.now(),
-): SignedIdentityClaim {
-	const unsigned = {
-		audience: challenge.audience,
-		identity: {
-			deviceId: identity.deviceId,
-			email: identity.email,
-			name: identity.name,
-			publicKey: identity.publicKey,
-		},
-		issuedAt,
-		nonce: challenge.nonce,
-	}
-	return {
-		...unsigned,
-		signature: sign(
-			null,
-			Buffer.from(claimPayload(unsigned)),
-			identity.privateKey,
-		).toString(`base64url`),
-	}
 }
 
 export function verifyIdentityClaim(

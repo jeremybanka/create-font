@@ -11,6 +11,7 @@ import { join } from "node:path"
 
 import { CREATE_ART_REALTIME_PATH } from "@create-art/realtime"
 import { readOrCreateDeviceIdentity } from "@create-art/realtime/node"
+import { memoryCredentialStore } from "./memory-credential-store.ts"
 
 import { startLanHost, startLoopbackGateway } from "../src/lan-gateway.ts"
 
@@ -93,7 +94,7 @@ const port = await availablePort()
 const identity = await readOrCreateDeviceIdentity({
 	email: `runtime@example.test`,
 	name: `Runtime Owner`,
-	path: join(directory, `identity.json`),
+	credentialStore: memoryCredentialStore(),
 })
 const authority = {
 	apply: async () => undefined,
@@ -104,7 +105,7 @@ const authority = {
 const host = await startLanHost({
 	address: `127.0.0.2`,
 	authority,
-	identity,
+	identity: identity.publicIdentity,
 	internalUrl: new URL(`http://127.0.0.1:${backendPort}`),
 	port,
 })

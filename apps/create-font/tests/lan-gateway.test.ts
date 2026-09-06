@@ -1,13 +1,10 @@
 import * as http from "node:http"
 import * as https from "node:https"
-import { mkdtemp } from "node:fs/promises"
 import {
 	type AddressInfo,
 	connect,
 	createServer as createNetServer,
 } from "node:net"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 
 import {
 	CREATE_ART_REALTIME_PATH,
@@ -19,6 +16,7 @@ import {
 } from "@create-art/realtime/node"
 import { io } from "socket.io-client"
 import { describe, expect, it } from "vitest"
+import { memoryCredentialStore } from "./memory-credential-store.ts"
 
 import {
 	requestPinnedJson,
@@ -87,21 +85,20 @@ async function nativeUpgrade(port: number): Promise<string> {
 
 describe(`pinned LAN and loopback gateways`, () => {
 	it(`serves static assets while protecting APIs and admitting a guest`, async () => {
-		const directory = await mkdtemp(join(tmpdir(), `create-font-gateway-`))
 		const owner = await readOrCreateDeviceIdentity({
 			email: `owner@example.test`,
 			name: `Owner`,
-			path: join(directory, `owner.json`),
+			credentialStore: memoryCredentialStore(),
 		})
 		const guest = await readOrCreateDeviceIdentity({
 			email: `guest@example.test`,
 			name: `Guest`,
-			path: join(directory, `guest.json`),
+			credentialStore: memoryCredentialStore(),
 		})
 		const rejectedGuest = await readOrCreateDeviceIdentity({
 			email: `rejected@example.test`,
 			name: `Rejected Guest`,
-			path: join(directory, `rejected.json`),
+			credentialStore: memoryCredentialStore(),
 		})
 		const backend = http.createServer((request, response) => {
 			if (request.url === `/api/stream`) {
@@ -137,7 +134,7 @@ describe(`pinned LAN and loopback gateways`, () => {
 		const host = await startLanHost({
 			address: `127.0.0.2`,
 			authority,
-			identity: owner,
+			identity: owner.publicIdentity,
 			internalUrl: new URL(`http://127.0.0.1:${backendPort}`),
 			port: sharedPort,
 		})
@@ -363,7 +360,8 @@ describe(`pinned LAN and loopback gateways`, () => {
 				expect(session.role).toBe(`editor`)
 				expect(
 					session.participants.find(
-						(participant) => participant.identity.deviceId === guest.deviceId,
+						(participant) =>
+							participant.identity.deviceId === guest.publicIdentity.deviceId,
 					),
 				).toMatchObject({ connected: true, connectedAt: expect.any(Number) })
 				guestSocket.disconnect()
@@ -375,7 +373,8 @@ describe(`pinned LAN and loopback gateways`, () => {
 							)
 						).json()) as { participants: CollaborationParticipant[] }
 					).participants.find(
-						(participant) => participant.identity.deviceId === guest.deviceId,
+						(participant) =>
+							participant.identity.deviceId === guest.publicIdentity.deviceId,
 					)?.connected,
 				).toBe(true)
 				const disconnected = new Promise<void>((resolve) => {
@@ -384,7 +383,7 @@ describe(`pinned LAN and loopback gateways`, () => {
 				const revoke = await fetch(
 					new URL(`/api/collaboration/revoke`, ownerGateway.url),
 					{
-						body: JSON.stringify({ deviceId: guest.deviceId }),
+						body: JSON.stringify({ deviceId: guest.publicIdentity.deviceId }),
 						headers: { "content-type": `application/json` },
 						method: `POST`,
 					},

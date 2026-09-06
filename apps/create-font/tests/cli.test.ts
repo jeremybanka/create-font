@@ -231,6 +231,17 @@ describe(`create-font CLI`, () => {
 })
 
 describe(`font CLI`, () => {
+	it(`documents explicit credential rotation without accessing a keyring`, async () => {
+		const captured = captureIo()
+		const exitCode = await runFontCli(
+			[`node`, `font`, `identity`, `rotate`, `--help`],
+			captured.io,
+		)
+		expect(exitCode).toBe(0)
+		expect(captured.stdout.join(``)).toContain(`Replace the device signing key`)
+		expect(captured.stderr).toEqual([])
+	})
+
 	it(`renders workspace command help`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli([`node`, `font`], captured.io)

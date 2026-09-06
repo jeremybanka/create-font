@@ -3,7 +3,7 @@
 `@create-art/realtime` is the product-neutral LAN collaboration foundation for
 create-* applications. It provides typed Socket.IO action and presence
 contracts, optimistic client replay, a persist-before-confirm authoritative
-server, persistent device identities, signed identity claims, process-local
+server, credential-backed device identities, signed identity claims, process-local
 admission, and certificate-pinned invitations.
 
 The package deliberately does not define a document model. A product supplies

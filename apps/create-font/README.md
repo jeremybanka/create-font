@@ -156,6 +156,71 @@ by default, matching Git's authorship convention. Browser-only direct guest
 connections, internet relays, resumable offline editing, durable history, and
 user-centric selective undo are outside this first multiplayer release.
 
+### Device credentials and rotation
+
+Device signing keys are credentials, never configuration. On macOS and Windows,
+Create-* stores the Ed25519 private key in the OS credential store through
+`@napi-rs/keyring`. The credential service is `org.create-art.device-identity`
+and its account is `ed25519-v2`; the key is shared by Create-* applications run
+under that OS account. Git name/email remain public identity data. Application
+code receives public identity and a signing capability, with no private-key
+field. TLS keys and admission/session tokens remain process-local.
+
+Earlier multiplayer builds wrote a signing key to
+`$XDG_CONFIG_HOME/create-art/identity.json` (or
+`~/.config/create-art/identity.json` when XDG_CONFIG_HOME is unset or relative).
+That key may have been disclosed to collaborators. Startup refuses that legacy
+file. Stop all collaboration servers, then explicitly rotate:
+
+```sh
+npm exec -- font identity rotate
+```
+
+Rotation generates a fresh key, writes it to the credential provider and reads
+it back before removing the exact legacy file. It never imports the old key or
+makes a backup. If credential access or verification fails, the old file is left
+in place and collaboration stays blocked. Symlinks and files with multiple hard
+links require manual cleanup. Deletion is not guaranteed secure erasure; remove
+any old copies, temporary files or backups through your normal secret-retirement
+process. Restart servers and obtain fresh invitations afterward: running
+processes retain their old keys and sessions until stopped. Rotation also works
+when there is no legacy file.
+
+### Headless Linux credentials
+
+Linux uses libsecret's `secret-tool`, explicitly bound to the Secret Service
+backend and the default collection. Password protection and persistent storage
+are operator prerequisites: the Secret Service API does not attest them, and
+Create-* verifies successful credential readback only. We do not use the Linux backend
+of `@napi-rs/keyring` 2.0.0 because it silently falls back to a volatile kernel
+keyring when Secret Service is unavailable. No application-managed credential
+file, environment-secret, empty-password keyring or in-memory identity fallback
+is provided.
+
+Provision the service account before enabling `--share` or `font join`:
+
+1. Install `secret-tool` (Debian/Ubuntu: `libsecret-tools`; Fedora: `libsecret`)
+   and a Secret Service provider such as GNOME Keyring.
+2. Create a **password-protected persistent** collection and make it the default.
+   Arrange for the application and keyring daemon to share the service account's
+   D-Bus session (`DBUS_SESSION_BUS_ADDRESS` is a non-secret connection address).
+3. Unlock that collection through the OS login/PAM integration, an interactive
+   administrative session, or an approved external secret provider. Do not put an
+   unlock password in shell history, arguments, environment variables, unit files
+   or application configuration. Creating an empty-password keyring to avoid
+   unlocking is not a supported deployment.
+4. For unattended services, provision a secure unlock path after reboot before
+   starting collaboration. Merely starting D-Bus or enabling user lingering does
+   not unlock a keyring. If no approved unlock mechanism is available, persistent
+   multiplayer identity cannot run on that instance.
+
+Create-* never provisions an OS service or supplies its unlock password. The
+credential provider may display an unlock prompt; headless instances require a
+provisioned unlock mechanism. Missing tools, unavailable/locked stores and timed-out prompts fail with an actionable
+error, without printing provider diagnostics or credential values. Ordinary
+local editing does not access the credential provider. Tests inject synthetic
+in-memory providers and do not modify the developer's keyring.
+
 The collaboration transport is covered under both supported runtimes. Node
 uses Socket.IO's WebSocket transport; Bun uses Socket.IO's HTTP long-polling
 transport because its Node-compatible HTTPS upgrade socket cannot currently

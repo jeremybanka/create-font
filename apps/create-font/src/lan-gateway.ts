@@ -9,13 +9,13 @@ import * as tls from "node:tls"
 import {
 	CREATE_ART_REALTIME_PATH,
 	type CollaborationRole,
+	type CollaborationIdentity,
 	type HostInvitation,
 	type SignedIdentityClaim,
 } from "@create-art/realtime"
 import {
 	createAdmissionAuthority,
 	encodeInvitation,
-	type readOrCreateDeviceIdentity,
 } from "@create-art/realtime/node"
 import { provideAuthoritativeActions } from "@create-art/realtime/server"
 import type { EditorFontSource, FontDocumentCommand } from "@create-font/states"
@@ -30,7 +30,6 @@ import {
 	type createFontCollaborationAuthority,
 } from "./collaboration-authority.ts"
 
-type DeviceIdentity = Awaited<ReturnType<typeof readOrCreateDeviceIdentity>>
 type FontAuthority = Awaited<
 	ReturnType<typeof createFontCollaborationAuthority>
 >
@@ -456,7 +455,7 @@ export async function requestPinnedJson<Result>(options: {
 export async function startLanHost(options: {
 	readonly address: string
 	readonly authority: FontAuthority
-	readonly identity: DeviceIdentity
+	readonly identity: CollaborationIdentity
 	readonly internalUrl: URL
 	readonly port: number
 }) {

@@ -10,6 +10,7 @@ import { promisify } from "node:util"
 import {
 	decodeInvitation,
 	readOrCreateDeviceIdentity,
+	rotateDeviceIdentity,
 	signIdentityClaim,
 } from "@create-art/realtime/node"
 import {
@@ -20,6 +21,7 @@ import {
 	parseBooleanOption,
 	parseNumberOption,
 	parseStringOption,
+	required,
 } from "comline"
 import { z } from "zod/v4"
 
@@ -197,6 +199,7 @@ export const fontCli = cli({
 		build: optional({ $font: null }),
 		check: optional({ $font: null }),
 		dev: optional({ $font: null }),
+		identity: required({ rotate: null }),
 		join: optional({ $invitation: null }),
 		serve: optional({ $font: null }),
 		vsix: null,
@@ -209,6 +212,11 @@ export const fontCli = cli({
 		"check/$font": checkOptions,
 		dev: devOptions,
 		"dev/$font": devOptions,
+		"identity/rotate": options(
+			`Replace the device signing key and remove obsolete configuration credentials. Stop running collaboration servers first.`,
+			z.object(helpSchema),
+			helpConfig,
+		),
 		join: joinOptions,
 		"join/$invitation": joinOptions,
 		serve: devOptions,
@@ -261,16 +269,16 @@ async function gitIdentity(root: string) {
 	return { email, name }
 }
 
-async function deviceIdentity(root: string) {
+async function deviceIdentity(root: string, rotate = false) {
 	const identity = await gitIdentity(root)
 	const configuredRoot = process.env.XDG_CONFIG_HOME
 	const configRoot =
 		configuredRoot !== undefined && isAbsolute(configuredRoot)
 			? configuredRoot
 			: join(homedir(), `.config`)
-	return readOrCreateDeviceIdentity({
+	return (rotate ? rotateDeviceIdentity : readOrCreateDeviceIdentity)({
 		...identity,
-		path: join(configRoot, `create-art`, `identity.json`),
+		legacyPath: join(configRoot, `create-art`, `identity.json`),
 	})
 }
 
@@ -284,6 +292,14 @@ export async function runFontCli(
 			writeLine(io.stdout, help(fontCli.definition))
 			return 0
 		}
+		if (inputs.case === `identity/rotate`) {
+			const identity = await deviceIdentity(process.cwd(), true)
+			writeLine(
+				io.stdout,
+				`Device identity rotated to ${identity.publicIdentity.deviceId}. Any obsolete identity.json was removed without a backup. Restart all collaboration servers and obtain fresh invitations; existing processes retain their old credentials until stopped.`,
+			)
+			return 0
+		}
 		if (inputs.case === `join` || inputs.case === `join/$invitation`) {
 			const encoded = inputs.path[1]
 			if (encoded === undefined)
@@ -293,7 +309,7 @@ export async function runFontCli(
 			const target = new URL(invitation.address)
 			writeLine(
 				io.stdout,
-				`Requesting admission to ${target.host} as ${identity.name} <${identity.email}>.`,
+				`Requesting admission to ${target.host} as ${identity.publicIdentity.name} <${identity.publicIdentity.email}>.`,
 			)
 			const admissionUrl = new URL(`/api/collaboration/admission`, target)
 			const admission = await requestPinnedJson<{
@@ -320,7 +336,7 @@ export async function runFontCli(
 			installServerShutdown({ stop: gateway.stop })
 			writeLine(
 				io.stdout,
-				`Waiting for ${target.host} to admit ${identity.name} <${identity.email}>.`,
+				`Waiting for ${target.host} to admit ${identity.publicIdentity.name} <${identity.publicIdentity.email}>.`,
 			)
 			writeLine(io.stdout, `Open ${gateway.url}`)
 			openBrowser(gateway.url)
@@ -415,7 +431,7 @@ export async function runFontCli(
 				shared = await startLanHost({
 					address: hostname ?? discoverLanAddress(),
 					authority,
-					identity,
+					identity: identity.publicIdentity,
 					internalUrl: internal.url,
 					port: port ?? CREATE_FONT_CLI_DEV_PORT,
 				})

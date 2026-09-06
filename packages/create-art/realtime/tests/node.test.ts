@@ -1,8 +1,5 @@
-import { mkdtemp, readFile, stat, symlink } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-
 import { describe, expect, it, vi } from "vitest"
+import { memoryCredentialStore } from "./memory-credential-store.ts"
 
 import {
 	createAdmissionAuthority,
@@ -15,19 +12,18 @@ import {
 
 describe(`LAN identity and admission`, () => {
 	it(`persists a device key and proves the Git-facing identity`, async () => {
-		const directory = await mkdtemp(join(tmpdir(), `create-art-identity-`))
-		const path = join(directory, `identity.json`)
+		const credentialStore = memoryCredentialStore()
 		const first = await readOrCreateDeviceIdentity({
 			email: `ada@example.test`,
 			name: `Ada`,
-			path,
+			credentialStore,
 		})
 		const second = await readOrCreateDeviceIdentity({
 			email: `ada@example.test`,
 			name: `Ada`,
-			path,
+			credentialStore,
 		})
-		expect(second.deviceId).toBe(first.deviceId)
+		expect(second.publicIdentity.deviceId).toBe(first.publicIdentity.deviceId)
 		expect(
 			verifyIdentityClaim(
 				signIdentityClaim(first, {
@@ -46,22 +42,22 @@ describe(`LAN identity and admission`, () => {
 				identity: { ...claim.identity, deviceId: `forged-device` },
 			}),
 		).toBe(false)
-		expect(JSON.parse(await readFile(path, `utf8`))).toMatchObject({
-			deviceId: first.deviceId,
+		expect(first.publicIdentity).toMatchObject({
+			deviceId: first.publicIdentity.deviceId,
 			email: `ada@example.test`,
 			name: `Ada`,
 		})
-		expect((await stat(path)).mode & 0o777).toBe(0o600)
+		expect(Object.keys(first)).toEqual([`publicIdentity`, `signClaim`])
+		expect(JSON.stringify(first)).not.toContain(`PRIVATE KEY`)
 	})
 
 	it(`requires host approval each process and revokes active sessions`, async () => {
-		const directory = await mkdtemp(join(tmpdir(), `create-art-admission-`))
 		const identity = await readOrCreateDeviceIdentity({
 			email: `guest@example.test`,
 			name: `Guest`,
-			path: join(directory, `identity.json`),
+			credentialStore: memoryCredentialStore(),
 		})
-		const host = createAdmissionAuthority({ owner: identity })
+		const host = createAdmissionAuthority({ owner: identity.publicIdentity })
 		const claim = signIdentityClaim(identity, {
 			audience: host.invitationToken,
 			nonce: `invitation`,
@@ -69,7 +65,9 @@ describe(`LAN identity and admission`, () => {
 		const request = host.request(claim, host.invitationToken)
 		expect(request).not.toBeNull()
 		expect(host.request(claim, host.invitationToken)).toBeNull()
-		const otherHost = createAdmissionAuthority({ owner: identity })
+		const otherHost = createAdmissionAuthority({
+			owner: identity.publicIdentity,
+		})
 		expect(otherHost.request(claim, otherHost.invitationToken)).toBeNull()
 		if (request === null) return
 		expect(host.poll(request.id, request.pollToken)).toEqual({
@@ -78,10 +76,12 @@ describe(`LAN identity and admission`, () => {
 		const token = host.approve(request.id, `editor`)
 		expect(token).not.toBeNull()
 		expect(host.authenticate(token ?? undefined)?.role).toBe(`editor`)
-		expect(host.revoke(identity.deviceId)).toBe(true)
+		expect(host.revoke(identity.publicIdentity.deviceId)).toBe(true)
 		expect(host.authenticate(token ?? undefined)).toBeNull()
 
-		const limitedHost = createAdmissionAuthority({ owner: identity })
+		const limitedHost = createAdmissionAuthority({
+			owner: identity.publicIdentity,
+		})
 		for (let index = 0; index < 32; index += 1) {
 			expect(
 				limitedHost.request(
@@ -130,33 +130,13 @@ describe(`LAN identity and admission`, () => {
 		).toThrow(`Invalid`)
 	})
 
-	it(`refuses a symlink as the private device identity file`, async () => {
-		const directory = await mkdtemp(join(tmpdir(), `create-art-symlink-`))
-		const target = join(directory, `target.json`)
-		await readOrCreateDeviceIdentity({
-			email: `target@example.test`,
-			name: `Target`,
-			path: target,
-		})
-		const path = join(directory, `identity.json`)
-		await symlink(target, path)
-		await expect(
-			readOrCreateDeviceIdentity({
-				email: `guest@example.test`,
-				name: `Guest`,
-				path,
-			}),
-		).rejects.toThrow(`regular file`)
-	})
-
 	it(`expires guest credentials without expiring the owner`, async () => {
-		const directory = await mkdtemp(join(tmpdir(), `create-art-expiry-`))
 		const identity = await readOrCreateDeviceIdentity({
 			email: `guest@example.test`,
 			name: `Guest`,
-			path: join(directory, `identity.json`),
+			credentialStore: memoryCredentialStore(),
 		})
-		const host = createAdmissionAuthority({ owner: identity })
+		const host = createAdmissionAuthority({ owner: identity.publicIdentity })
 		const request = host.request(
 			signIdentityClaim(identity, {
 				audience: host.invitationToken,
@@ -170,7 +150,7 @@ describe(`LAN identity and admission`, () => {
 		const now = Date.now()
 		const expiredHost = createAdmissionAuthority({
 			invitationExpiresAt: now - 1,
-			owner: identity,
+			owner: identity.publicIdentity,
 		})
 		expect(
 			expiredHost.request(
