@@ -1,6 +1,6 @@
 {
 	"name": "@create-font/glyphs-app",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"description": "Glyphs.app source parsing and create-font import",
 	"license": "MPL-2.0",
 	"repository": {
