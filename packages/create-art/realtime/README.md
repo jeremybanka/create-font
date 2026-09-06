@@ -27,3 +27,24 @@ Presence coordinates belong to the product-defined document space, never to a
 browser window. Products identify that space through `context`, project the
 cursor and optional live `selectionBox` through each viewer's own viewport,
 and use the opaque `selection` identities to render product-native highlights.
+
+Public identity is a runtime boundary: `publicIdentity` copies only the device
+ID, name, email, and public key, and admission stores detached public identities.
+Never serialize a credential-store entry or authentication session wholesale.
+Only the dedicated invitation, admission-poll, and authentication exchanges may
+carry their intended recipient's temporary bearer credentials; participant and
+session-status responses never carry signing keys or session tokens.
+
+The authority projects participant, action, and snapshot envelopes onto their
+public fields and replaces thrown exception diagnostics with fixed public
+messages. Presence is reconstructed at every nested geometry boundary. Register
+the application's public `presenceContextKeys` explicitly; the default publishes
+no context fields. `projectCommand` can construct the application's public command
+payload after `validateCommand` accepts it.
+
+`Source`, `Command`, and registered presence context values are deliberately
+public application data. Their contents must come from the application's
+document schema, never from a credential store, environment, config object, or
+internal service object. This transport cannot distinguish a secret pasted into
+user-authored document text from ordinary document text. Envelope projection is
+not a substitute for validating and constructing those product-owned payloads.

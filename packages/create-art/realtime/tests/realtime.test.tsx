@@ -9,7 +9,10 @@ import type {
 	ConfirmedAction,
 } from "../src/contracts.ts"
 import { createCollaborationClient } from "../src/client.ts"
-import { provideAuthoritativeActions } from "../src/server.ts"
+import {
+	CollaborationActionError,
+	provideAuthoritativeActions,
+} from "../src/server.ts"
 
 type Command = Readonly<{ delta: number }>
 
@@ -34,15 +37,21 @@ describe(`authoritative realtime actions`, () => {
 	afterEach(async () => teardown?.())
 
 	it(`persists before broadcasting and rejects viewer or stale commands`, async () => {
+		const secretMarker = `synthetic-realtime-private-credential`
 		let epoch = 0
 		let value = 0
 		const order: string[] = []
 		const actions: ConfirmedAction<Command>[] = []
-		const snapshot = (): ActionSnapshot<number, Command> => ({
-			actions: [...actions],
-			base: 0,
-			epoch,
-		})
+		const snapshot = (): ActionSnapshot<number, Command> =>
+			({
+				actions: actions.map((action) => ({
+					...action,
+					credentials: { privateKey: secretMarker },
+				})),
+				base: 0,
+				epoch,
+				privateKey: secretMarker,
+			}) as ActionSnapshot<number, Command>
 		const test = multiClient({
 			clients: {
 				EDITOR_A: () => null,
@@ -57,7 +66,16 @@ describe(`authoritative realtime actions`, () => {
 						: `editor-b`
 				return provideAuthoritativeActions<number, Command>({
 					async apply(command, context) {
-						if (command.delta === 13) throw new Error(`Persistence failed.`)
+						if (command.delta === 13)
+							throw new Error(`Persistence failed: ${secretMarker}`)
+						if (command.delta === 14) {
+							const error = new CollaborationActionError(
+								`invalid`,
+								secretMarker,
+							)
+							Reflect.set(error, `code`, { privateKey: secretMarker })
+							throw error
+						}
 						order.push(`persist:${context.operationId}`)
 						value += command.delta
 						epoch += 1
@@ -70,6 +88,8 @@ describe(`authoritative realtime actions`, () => {
 					},
 					deviceId,
 					participants: () => [],
+					presenceContextKeys: [`document`],
+					projectCommand: (command) => ({ delta: command.delta }),
 					role: deviceId === `viewer` ? `viewer` : `editor`,
 					snapshot,
 					socket: socket as never,
@@ -93,18 +113,36 @@ describe(`authoritative realtime actions`, () => {
 			secondEditor.socket.once(`collaboration:presence`, resolve)
 		})
 		editor.socket.emit(`collaboration:presence`, {
-			context: { document: `primary` },
-			cursor: { x: 12, y: 24 },
+			privateKey: secretMarker,
+			context: { document: `primary`, credential: secretMarker },
+			cursor: { x: 12, y: 24, privateKey: secretMarker },
 			deviceId: `editor-a`,
 			gesture: `pen`,
 			selection: [`node:1`],
-			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
+			selectionBox: {
+				minX: 10,
+				minY: 20,
+				maxX: 30,
+				maxY: 40,
+				credentials: { privateKey: secretMarker },
+			},
 			ui: {
-				columns: [{ minX: 0.02, minY: 0.1, maxX: 0.25, maxY: 0.9 }],
-				cursor: { column: 0, x: 0.4, y: 0.6 },
+				privateKey: secretMarker,
+				columns: [
+					{
+						minX: 0.02,
+						minY: 0.1,
+						maxX: 0.25,
+						maxY: 0.9,
+						credentials: secretMarker,
+					},
+				],
+				cursor: { column: 0, x: 0.4, y: 0.6, credentials: secretMarker },
 			},
 		})
-		expect(await presence).toMatchObject({
+		const receivedPresence = await presence
+		expect(JSON.stringify(receivedPresence)).not.toContain(secretMarker)
+		expect(receivedPresence).toMatchObject({
 			context: { document: `primary` },
 			deviceId: `editor-a`,
 			selectionBox: { minX: 10, minY: 20, maxX: 30, maxY: 40 },
@@ -123,12 +161,18 @@ describe(`authoritative realtime actions`, () => {
 		const editorAck = new Promise<boolean>((resolve) => {
 			editor.socket.emit(
 				`collaboration:action`,
-				{ baseEpoch: 0, command: { delta: 3 }, operationId: `edit-1` },
+				{
+					baseEpoch: 0,
+					command: { delta: 3, privateKey: secretMarker },
+					operationId: `edit-1`,
+				},
 				resolve,
 			)
 		})
 		expect(await editorAck).toBe(true)
-		expect(await confirmed).toMatchObject({ epoch: 1, operationId: `edit-1` })
+		const receivedAction = await confirmed
+		expect(receivedAction).toMatchObject({ epoch: 1, operationId: `edit-1` })
+		expect(JSON.stringify(receivedAction)).not.toContain(secretMarker)
 		expect(value).toBe(3)
 		expect(order).toEqual([`persist:edit-1`, `broadcast:edit-1`])
 
@@ -160,9 +204,36 @@ describe(`authoritative realtime actions`, () => {
 			)
 		})
 		expect(await failureAck).toBe(false)
-		expect(await failure).toMatchObject({ code: `invalid` })
+		const rejected = await failure
+		expect(rejected).toMatchObject({
+			code: `invalid`,
+			message: `The edit could not be saved.`,
+		})
+		expect(JSON.stringify(rejected)).not.toContain(secretMarker)
+		const invalidCode = new Promise<unknown>((resolve) =>
+			editor.socket.once(`collaboration:rejected`, resolve),
+		)
+		editor.socket.emit(
+			`collaboration:action`,
+			{ baseEpoch: 2, command: { delta: 14 }, operationId: `fail-code` },
+			() => undefined,
+		)
+		const invalidCodeRejection = await invalidCode
+		expect(invalidCodeRejection).toMatchObject({
+			code: `invalid`,
+			message: `The edit could not be saved.`,
+		})
+		expect(JSON.stringify(invalidCodeRejection)).not.toContain(secretMarker)
 		expect(value).toBe(7)
 		expect(actions).toHaveLength(2)
+		const receivedSnapshot = await new Promise<ActionSnapshot<number, Command>>(
+			(resolve) => {
+				editor.socket.emit(`collaboration:snapshot`, resolve)
+			},
+		)
+		expect(receivedSnapshot.epoch).toBe(2)
+		expect(receivedSnapshot.actions).toHaveLength(2)
+		expect(JSON.stringify(receivedSnapshot)).not.toContain(secretMarker)
 
 		const viewerRejection = new Promise<{ code: string }>((resolve) => {
 			viewer.socket.once(`collaboration:rejected`, resolve)

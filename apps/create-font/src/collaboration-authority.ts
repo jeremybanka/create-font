@@ -157,6 +157,19 @@ export function isFontDocumentCommand(
 	)
 }
 
+/** Command input is public font-edit data; internal envelope fields never travel. */
+export function publicFontDocumentCommand(
+	command: FontDocumentCommand,
+): FontDocumentCommand {
+	if (command.type === `undoKerning` || command.type === `redoKerning`) {
+		return { type: command.type }
+	}
+	if (command.type === `undoGlyph` || command.type === `redoGlyph`) {
+		return { type: command.type, glyphId: command.glyphId }
+	}
+	return { type: command.type, input: command.input } as FontDocumentCommand
+}
+
 export async function createFontCollaborationAuthority(
 	source: CreateFontSourceService,
 ) {
