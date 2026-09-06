@@ -8,7 +8,11 @@ Consult `./agents.yaml` when working with outside dependencies.
 
 ## Package changes
 
-PRs that ship a feature or user-visible fix in an npm package must include a `.changeset/*.md` file naming every affected package and the appropriate semantic-version bump. Use a minor bump for breaking changes while the package is pre-v1; use a patch bump for features and fixes. Run `pnpm change` when authoring the changeset.
+Changesets describe the user-facing delta between releases, not all work done. Every changeset must answer: “What will the user notice about this version in comparison to the most recently released version?”
+
+Ensure user-visible package changes are covered by a `.changeset/*.md` file naming every affected package and the appropriate semantic-version bump. Update or consolidate pending changesets to describe the final released behavior; do not add separate fix changesets for features that have not shipped. Work with no user-facing release delta needs no changeset.
+
+Use a minor bump for breaking changes while the package is pre-v1; use a patch bump for features and fixes. Run `pnpm change` when authoring a new changeset.
 
 ## Secrets are not configuration
 
