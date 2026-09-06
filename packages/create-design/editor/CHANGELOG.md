@@ -1,5 +1,16 @@
 # @create-design/editor
 
+## 0.3.4
+
+### Patch Changes
+
+- @create-design/source@0.4.4
+  - @create-design/model@0.2.4
+  - @create-design/pdf@0.1.6
+  - @create-design/png@0.1.4
+  - @create-design/svg@0.1.4
+  - @create-design/text@0.0.5
+
 ## 0.3.3
 
 ### Patch Changes

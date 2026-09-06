@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/source",
-	"version": "0.4.3",
+	"version": "0.4.4",
 	"description": "Deterministic source formats for create-design documents",
 	"license": "MPL-2.0",
 	"repository": {
