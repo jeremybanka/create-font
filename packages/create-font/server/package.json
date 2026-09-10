@@ -46,7 +46,7 @@
 	},
 	"devDependencies": {
 		"@trpc/server": "11.18.0",
-		"@types/node": "25.9.5",
+		"@types/node": "25.9.6",
 		"vitest": "catalog:",
 		"zod": "4.5.4"
 	},
