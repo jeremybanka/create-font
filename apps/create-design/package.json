@@ -51,7 +51,7 @@
 		"@create-design/source": "workspace:*",
 		"@elysia/node": "1.4.6",
 		"@elysia/static": "1.4.11",
-		"comline": "0.5.4",
+		"comline": "0.6.2",
 		"elysia": "1.4.30",
 		"zod": "4.6.2"
 	},
