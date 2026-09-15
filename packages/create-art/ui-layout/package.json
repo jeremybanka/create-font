@@ -50,7 +50,7 @@
 	},
 	"dependencies": {
 		"elysia": "1.4.30",
-		"zod": "4.6.4"
+		"zod": "4.6.5"
 	},
 	"devDependencies": {
 		"@types/node": "25.9.6",
