@@ -20,7 +20,7 @@
 	"json": {
 		"associations": ["**/*.{json,jsonc}"],
 		"newLineKind": "lf",
-		"packageJson.applyConventions": false
+		"packageJson.applyConventions": true
 	},
 	"markdown": {
 		"associations": ["**/*.{md,mdx}"]

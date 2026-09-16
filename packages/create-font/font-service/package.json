@@ -2,17 +2,14 @@
 	"name": "@create-font/font-service",
 	"version": "0.0.2",
 	"description": "Runtime-portable deterministic OpenType shaping, metrics, and outline service",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-font/font-service"
 	},
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
-	"publishConfig": {
-		"access": "public"
-	},
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -42,5 +39,8 @@
 	},
 	"engines": {
 		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

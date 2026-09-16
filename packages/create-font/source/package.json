@@ -2,24 +2,14 @@
 	"name": "@create-font/source",
 	"version": "0.2.15",
 	"description": "A deterministic, versioned JSON source format for create-font editor state",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-font/source"
 	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"files": [
-		"dist/*.d.mts",
-		"dist/*.d.mts.map",
-		"dist/*.mjs",
-		"dist/*.mjs.map",
-		"src"
-	],
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -34,6 +24,13 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"files": [
+		"dist/*.d.mts",
+		"dist/*.d.mts.map",
+		"dist/*.mjs",
+		"dist/*.mjs.map",
+		"src"
+	],
 	"scripts": {
 		"build": "vp pack",
 		"dev": "vp pack --watch --no-clean",
@@ -50,5 +47,8 @@
 	},
 	"engines": {
 		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

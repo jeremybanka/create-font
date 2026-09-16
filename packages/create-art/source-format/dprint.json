@@ -18,7 +18,7 @@
 		"newLineKind": "lf",
 		"array.preferSingleLine": true,
 		"object.preferSingleLine": true,
-		"packageJson.applyConventions": false
+		"packageJson.applyConventions": true
 	},
 	"fea": {
 		"associations": ["**/*.fea"],

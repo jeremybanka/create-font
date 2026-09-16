@@ -2,25 +2,13 @@
 	"name": "create-font",
 	"version": "0.3.23",
 	"description": "Repository-local CLI and browser server for create-font font projects",
-	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "apps/create-font"
 	},
+	"license": "AGPL-3.0-or-later",
 	"type": "module",
-	"bin": {
-		"create-font": "./dist/create-font-cli.js",
-		"create-font-fea-lsp": "./dist/fea-lsp.js",
-		"font": "./dist/font-cli.js"
-	},
-	"files": [
-		"dist",
-		"src",
-		"tsconfig.json",
-		"README.md",
-		"OUTPUT-EXCEPTION.txt"
-	],
 	"exports": {
 		".": {
 			"development": "./src/server.ts",
@@ -42,6 +30,18 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"bin": {
+		"create-font": "./dist/create-font-cli.js",
+		"create-font-fea-lsp": "./dist/fea-lsp.js",
+		"font": "./dist/font-cli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"tsconfig.json",
+		"README.md",
+		"OUTPUT-EXCEPTION.txt"
+	],
 	"scripts": {
 		"build": "node ./scripts/build.ts",
 		"dev": "node ./scripts/dev.ts",
@@ -54,9 +54,9 @@
 		"test:node-server": "node ./scripts/build-development.ts && node --conditions=development --test ./tests/node-server.node.ts"
 	},
 	"dependencies": {
-		"@create-art/ui-layout": "workspace:*",
 		"@create-art/source-format": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
+		"@create-art/ui-layout": "workspace:*",
 		"@create-font/editor": "workspace:*",
 		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/glyphs-app": "workspace:*",
@@ -64,17 +64,17 @@
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
-		"@vscode/vsce": "4.0.0",
 		"@elysia/node": "1.4.6",
+		"@vscode/vsce": "4.0.0",
 		"comline": "0.5.4",
 		"elysia": "1.4.30",
 		"react": "19.3.0",
 		"react-dom": "19.3.0",
 		"rolldown": "1.2.8",
+		"vite": "catalog:",
 		"vscode-languageclient": "10.1.1",
 		"vscode-languageserver": "10.1.1",
 		"vscode-languageserver-textdocument": "1.0.14",
-		"vite": "catalog:",
 		"zod": "4.6.5"
 	},
 	"devDependencies": {

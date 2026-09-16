@@ -2,24 +2,16 @@
 	"name": "@create-art/editor",
 	"version": "0.2.1",
 	"description": "Shared editor controls, tiling, canvas, and vector interaction foundations for create-art applications",
-	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-art/editor"
 	},
-	"type": "module",
+	"license": "AGPL-3.0-or-later",
 	"sideEffects": [
 		"**/*.css"
 	],
-	"publishConfig": {
-		"access": "public"
-	},
-	"files": [
-		"dist",
-		"src",
-		"OUTPUT-EXCEPTION.txt"
-	],
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -30,6 +22,11 @@
 		"./styles.css": "./dist/editor.css",
 		"./package.json": "./package.json"
 	},
+	"files": [
+		"dist",
+		"src",
+		"OUTPUT-EXCEPTION.txt"
+	],
 	"scripts": {
 		"benchmark:runtime": "node --expose-gc ./scripts/benchmark-runtime.ts",
 		"build": "node ./scripts/build.ts",
@@ -43,10 +40,6 @@
 		"konva": "10.5.0",
 		"react-konva": "19.3.0"
 	},
-	"peerDependencies": {
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0"
-	},
 	"devDependencies": {
 		"@types/node": "26.6.1",
 		"@types/react": "19.3.0",
@@ -59,7 +52,14 @@
 		"vite-plus": "catalog:",
 		"vitest": "catalog:"
 	},
+	"peerDependencies": {
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
 	"engines": {
 		"node": "26.8.2"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

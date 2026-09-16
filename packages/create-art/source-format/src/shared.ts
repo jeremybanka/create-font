@@ -16,7 +16,7 @@ export const sourceFormatJsonConfiguration = Object.freeze({
 	...sourceFormatConfiguration,
 	"array.preferSingleLine": true,
 	"object.preferSingleLine": true,
-	"packageJson.applyConventions": false,
+	"packageJson.applyConventions": true,
 } as const)
 
 export const sourceFormatFeaConfiguration = Object.freeze({

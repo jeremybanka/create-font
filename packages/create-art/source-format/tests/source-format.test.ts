@@ -94,13 +94,19 @@ describe("create-art source formatting contract", () => {
 		expect(() => formatBrowserJson()).toThrow(/trusted Node adapter/u)
 	})
 
-	it("does not apply package.json field-order conventions", () => {
+	it("applies package.json field-order conventions", () => {
 		const formatted = formatSourceJson(
-			{ version: "1.0.0", name: "fixture" },
+			{
+				version: "1.0.0",
+				scripts: { test: "vp test" },
+				name: "fixture",
+				license: "MIT",
+				description: "A fixture package",
+			},
 			"package.json",
 		)
 		expect(formatted.indexOf('"name"')).toBeLessThan(
-			formatted.indexOf('"version"'),
+			formatted.indexOf('"description"'),
 		)
 	})
 
