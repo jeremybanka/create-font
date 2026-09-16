@@ -30,7 +30,7 @@
 		"@create-design/source": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/node": "25.9.6",
+		"@types/node": "25.9.7",
 		"vitest": "catalog:"
 	},
 	"engines": { "node": ">=22.0.0" }
