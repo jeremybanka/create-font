@@ -2,20 +2,14 @@
 	"name": "@create-design/ai",
 	"version": "0.0.6",
 	"description": "Adobe Illustrator interchange for create-design documents",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-design/ai"
 	},
-	"files": [
-		"dist",
-		"src",
-		"README.md",
-		"LICENSE"
-	],
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -24,9 +18,12 @@
 		},
 		"./package.json": "./package.json"
 	},
-	"publishConfig": {
-		"access": "public"
-	},
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"LICENSE"
+	],
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test"
@@ -40,5 +37,8 @@
 	},
 	"engines": {
 		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

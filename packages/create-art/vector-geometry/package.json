@@ -2,17 +2,14 @@
 	"name": "@create-art/vector-geometry",
 	"version": "0.0.3",
 	"description": "Deterministic, application-neutral vector geometry primitives",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-art/vector-geometry"
 	},
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
-	"publishConfig": {
-		"access": "public"
-	},
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -33,13 +30,16 @@
 		"build": "vp pack",
 		"test": "vp test"
 	},
+	"dependencies": {
+		"clipper2-ts": "2.0.1-18"
+	},
 	"devDependencies": {
 		"vitest": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"
 	},
-	"dependencies": {
-		"clipper2-ts": "2.0.1-18"
+	"publishConfig": {
+		"access": "public"
 	}
 }

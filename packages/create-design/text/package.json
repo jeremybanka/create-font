@@ -2,16 +2,14 @@
 	"name": "@create-design/text",
 	"version": "0.0.6",
 	"description": "Runtime-portable canonical text layout and outline projection for create-design",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-design/text"
 	},
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
-	"publishConfig": { "access": "public" },
-	"files": ["dist", "src", "README.md"],
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -20,6 +18,7 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"files": ["dist", "src", "README.md"],
 	"scripts": { "build": "vp pack", "test": "vp test" },
 	"dependencies": {
 		"@create-art/vector-geometry": "workspace:*",
@@ -30,5 +29,6 @@
 		"@create-font/target": "workspace:*",
 		"vitest": "catalog:"
 	},
-	"engines": { "node": ">=22.0.0" }
+	"engines": { "node": ">=22.0.0" },
+	"publishConfig": { "access": "public" }
 }

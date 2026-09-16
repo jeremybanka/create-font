@@ -2,22 +2,14 @@
 	"name": "@create-design/model",
 	"version": "0.2.5",
 	"description": "Reusable document geometry, color, and coordinate operations for create-design",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-design/model"
 	},
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
-	"publishConfig": {
-		"access": "public"
-	},
-	"files": [
-		"dist",
-		"src",
-		"README.md"
-	],
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -26,6 +18,11 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"files": [
+		"dist",
+		"src",
+		"README.md"
+	],
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test"
@@ -39,5 +36,8 @@
 	},
 	"engines": {
 		"node": ">=22.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
 	}
 }

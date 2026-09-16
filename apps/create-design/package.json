@@ -2,23 +2,13 @@
 	"name": "create-design",
 	"version": "0.3.5",
 	"description": "Create, build, validate, export, and edit create-design source projects",
-	"license": "AGPL-3.0-or-later",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "apps/create-design"
 	},
+	"license": "AGPL-3.0-or-later",
 	"type": "module",
-	"bin": {
-		"create-design": "./dist/create-design-cli.js",
-		"design": "./dist/design-cli.js"
-	},
-	"files": [
-		"dist",
-		"src",
-		"README.md",
-		"OUTPUT-EXCEPTION.txt"
-	],
 	"exports": {
 		".": {
 			"development": "./src/server.ts",
@@ -32,6 +22,16 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"bin": {
+		"create-design": "./dist/create-design-cli.js",
+		"design": "./dist/design-cli.js"
+	},
+	"files": [
+		"dist",
+		"src",
+		"README.md",
+		"OUTPUT-EXCEPTION.txt"
+	],
 	"scripts": {
 		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
@@ -39,16 +39,16 @@
 		"test": "vp test --config=./vitest.config.ts"
 	},
 	"dependencies": {
-		"@create-art/ui-layout": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
+		"@create-art/ui-layout": "workspace:*",
 		"@create-design/ai": "workspace:*",
 		"@create-design/editor": "workspace:*",
 		"@create-design/model": "workspace:*",
 		"@create-design/pdf": "workspace:*",
 		"@create-design/png": "workspace:*",
+		"@create-design/source": "workspace:*",
 		"@create-design/svg": "workspace:*",
 		"@create-design/text": "workspace:*",
-		"@create-design/source": "workspace:*",
 		"@elysia/node": "1.4.6",
 		"@elysia/static": "1.4.11",
 		"comline": "0.5.4",
@@ -57,12 +57,12 @@
 	},
 	"devDependencies": {
 		"@create-font/target": "workspace:*",
+		"@types/node": "26.6.1",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
-		"@vitejs/plugin-react": "6.1.1",
 		"@typescript-eslint/parser": "8.70.0",
 		"@typescript-eslint/utils": "8.70.0",
-		"@types/node": "26.6.1",
+		"@vitejs/plugin-react": "6.1.1",
 		"atom.io": "0.53.1",
 		"eslint": "10.10.0",
 		"happy-dom": "20.14.5",

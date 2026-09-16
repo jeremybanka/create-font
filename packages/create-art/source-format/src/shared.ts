@@ -2,7 +2,7 @@ export const SOURCE_FORMAT_CONTRACT_VERSION = 1 as const
 export const SOURCE_FORMAT_DPRINT_RANGE = ">=0.55.2 <0.58.0" as const
 /** @deprecated Use SOURCE_FORMAT_DPRINT_RANGE when checking compatibility. */
 export const SOURCE_FORMAT_DPRINT_VERSION = "0.57.4" as const
-export const SOURCE_FORMAT_JSON_PLUGIN_VERSION = "0.23.0" as const
+export const SOURCE_FORMAT_JSON_PLUGIN_VERSION = "0.24.0" as const
 export const SOURCE_FORMAT_FEA_PLUGIN_VERSION = "0.1.1" as const
 
 export const sourceFormatConfiguration = Object.freeze({
@@ -16,6 +16,7 @@ export const sourceFormatJsonConfiguration = Object.freeze({
 	...sourceFormatConfiguration,
 	"array.preferSingleLine": true,
 	"object.preferSingleLine": true,
+	"packageJson.applyConventions": true,
 } as const)
 
 export const sourceFormatFeaConfiguration = Object.freeze({

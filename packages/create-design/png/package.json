@@ -2,16 +2,14 @@
 	"name": "@create-design/png",
 	"version": "0.1.5",
 	"description": "Deterministic, runtime-portable PNG projection and export for create-design documents",
-	"license": "MPL-2.0",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jeremybanka/create-font",
 		"directory": "packages/create-design/png"
 	},
-	"type": "module",
+	"license": "MPL-2.0",
 	"sideEffects": false,
-	"publishConfig": { "access": "public" },
-	"files": ["dist", "src", "README.md"],
+	"type": "module",
 	"exports": {
 		".": {
 			"development": "./src/index.ts",
@@ -20,6 +18,7 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"files": ["dist", "src", "README.md"],
 	"scripts": {
 		"build": "vp pack",
 		"profile": "node ./scripts/profile-png-export.ts",
@@ -34,5 +33,6 @@
 		"@types/node": "26.6.1",
 		"vitest": "catalog:"
 	},
-	"engines": { "node": ">=22.0.0" }
+	"engines": { "node": ">=22.0.0" },
+	"publishConfig": { "access": "public" }
 }

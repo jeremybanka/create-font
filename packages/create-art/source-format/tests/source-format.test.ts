@@ -94,6 +94,22 @@ describe("create-art source formatting contract", () => {
 		expect(() => formatBrowserJson()).toThrow(/trusted Node adapter/u)
 	})
 
+	it("applies package.json field-order conventions", () => {
+		const formatted = formatSourceJson(
+			{
+				version: "1.0.0",
+				scripts: { test: "vp test" },
+				name: "fixture",
+				license: "MIT",
+				description: "A fixture package",
+			},
+			"package.json",
+		)
+		expect(formatted.indexOf('"name"')).toBeLessThan(
+			formatted.indexOf('"description"'),
+		)
+	})
+
 	it("formats Adobe feature text idempotently with LF", () => {
 		const formatted = formatSourceFea(
 			"feature liga {\r\n sub f i by f_i;\r\n} liga;\r\n",
