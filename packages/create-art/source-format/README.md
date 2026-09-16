@@ -7,7 +7,7 @@ an opened project cannot replace their configuration or plugin code.
 Contract version 1 pins:
 
 - `@dprint/formatter` `0.5.1`;
-- `@dprint/json` `0.23.0`; and
+- `@dprint/json` `0.24.0`; and
 - `dprint-plugin-fea` `0.1.1`.
 
 JSON uses an 80-column width, tabs with width 2, recursively sorted object

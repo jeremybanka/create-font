@@ -17,7 +17,8 @@
 		"indentWidth": 2,
 		"newLineKind": "lf",
 		"array.preferSingleLine": true,
-		"object.preferSingleLine": true
+		"object.preferSingleLine": true,
+		"packageJson.applyConventions": false
 	},
 	"fea": {
 		"associations": ["**/*.fea"],

@@ -19,7 +19,8 @@
 	},
 	"json": {
 		"associations": ["**/*.{json,jsonc}"],
-		"newLineKind": "lf"
+		"newLineKind": "lf",
+		"packageJson.applyConventions": false
 	},
 	"markdown": {
 		"associations": ["**/*.{md,mdx}"]
