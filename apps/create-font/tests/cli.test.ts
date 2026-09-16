@@ -10,9 +10,9 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { runCreateFontCli } from "../src/create-font-cli.ts"
+import { createFontCli, runCreateFontCli } from "../src/create-font-cli.ts"
 import { createFontWorkspace } from "../src/create.ts"
-import { runFontCli } from "../src/font-cli.ts"
+import { fontCli, runFontCli } from "../src/font-cli.ts"
 import { createFileSystemSourceService } from "../src/source-service.ts"
 import { discoverFontProjects } from "../src/workspace.ts"
 import { assembleEditorFontSource } from "@create-font/source"
@@ -47,6 +47,34 @@ afterEach(async () => {
 })
 
 describe(`create-font CLI`, () => {
+	it(`completes package managers and import paths`, async () => {
+		const packageManagers = await createFontCli.complete({
+			words: [`--package-manager=`],
+		})
+		expect(packageManagers.candidates.map(({ value }) => value)).toEqual([
+			`npm`,
+			`pnpm`,
+			`yarn`,
+			`bun`,
+		])
+
+		const from = await createFontCli.complete({ words: [`--from`, ``] })
+		expect(from.fileSystem).toBe(`files`)
+	})
+
+	it(`reports ignored options`, async () => {
+		const captured = captureIo()
+		const exitCode = await runCreateFontCli(
+			[`node`, `create-font`, `--unknown`, `--help`],
+			captured.io,
+		)
+
+		expect(exitCode).toBe(0)
+		expect(captured.stderr.join(``)).toContain(
+			`Unknown option "--unknown" for command "create-font".`,
+		)
+	})
+
 	it(`renders initializer help`, async () => {
 		const captured = captureIo()
 		const exitCode = await runCreateFontCli(
@@ -231,6 +259,54 @@ describe(`create-font CLI`, () => {
 })
 
 describe(`font CLI`, () => {
+	it(`completes options, formats, and workspace projects`, async () => {
+		const formats = await fontCli.complete({
+			words: [`check`, `--format=`],
+		})
+		expect(formats.candidates.map(({ value }) => value)).toEqual([
+			`stylish`,
+			`json`,
+		])
+
+		const projects = await fontCli.complete({
+			words: [`build`, `--root=../..`, `work`],
+		})
+		expect(projects.candidates).toContainEqual({
+			description: `fonts/workbench-sans`,
+			value: `workbench-sans`,
+		})
+
+		const directories = await fontCli.complete({
+			words: [`build`, `--root`, ``],
+		})
+		expect(directories.fileSystem).toBe(`directories`)
+	})
+
+	it(`serves shell completion scripts`, async () => {
+		const captured = captureIo()
+		const exitCode = await runFontCli(
+			[`node`, `font`, `completion`, `bash`],
+			captured.io,
+		)
+
+		expect(exitCode).toBe(0)
+		expect(captured.stderr).toEqual([])
+		expect(captured.stdout.join(``)).toContain(`_comline complete`)
+	})
+
+	it(`reports ignored options`, async () => {
+		const captured = captureIo()
+		const exitCode = await runFontCli(
+			[`node`, `font`, `--unknown`],
+			captured.io,
+		)
+
+		expect(exitCode).toBe(0)
+		expect(captured.stderr.join(``)).toContain(
+			`Unknown option "--unknown" for command "font".`,
+		)
+	})
+
 	it(`renders workspace command help`, async () => {
 		const captured = captureIo()
 		const exitCode = await runFontCli([`node`, `font`], captured.io)

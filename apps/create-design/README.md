@@ -73,6 +73,20 @@ are emitted with PDF RGB operators and CMYK-authored paints with native PDF
 CMYK operators. The browser editor and CLI export command consume the same
 target-specific projection, preflight, and serialization APIs.
 
+## Shell completion
+
+Both executables can install dynamic completion for Bash, Zsh, Fish, Nushell,
+or Carapace. Install the integrations you use, for example:
+
+```sh
+design completion install zsh
+create-design completion install zsh
+```
+
+Completion suggests commands, options, package managers, files and directories,
+and design projects discovered below the selected `--root`. Use `completion
+<shell>` without `install` to print a standalone integration script.
+
 ## Headless PDF export
 
 Export every artboard in document order from a validated source project:

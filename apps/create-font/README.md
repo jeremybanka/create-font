@@ -97,6 +97,20 @@ One Ctrl-C gracefully closes the workspace server.
 
 `font serve` remains an alias for `font dev`.
 
+## Shell completion
+
+Both executables can install dynamic completion for Bash, Zsh, Fish, Nushell,
+or Carapace. Install the integrations you use, for example:
+
+```sh
+font completion install zsh
+create-font completion install zsh
+```
+
+Completion suggests commands, options, package managers, files and directories,
+and font projects discovered below the selected `--root`. Use `completion
+<shell>` without `install` to print a standalone integration script.
+
 ## Adobe feature tooling
 
 `font check [name]` validates every indexed `.fea` source and its transitive

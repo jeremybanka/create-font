@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { MAX_ILLUSTRATOR_FILE_BYTES } from "@create-design/ai"
 
-import { runCreateDesignCli } from "../src/create-design-cli.ts"
+import {
+	createDesignCli,
+	runCreateDesignCli,
+} from "../src/create-design-cli.ts"
 import { createDesignWorkspace } from "../src/create.ts"
 import { discoverDesignProjects } from "../src/workspace.ts"
 import { isSafeDesignProjectId } from "../src/workspace.ts"
@@ -28,12 +31,41 @@ afterEach(async () => {
 })
 
 describe("create-design CLI", () => {
+	it("completes package managers, import paths, and shell integrations", async () => {
+		const packageManagers = await createDesignCli.complete({
+			words: ["--package-manager="],
+		})
+		expect(packageManagers.candidates.map(({ value }) => value)).toEqual([
+			"npm",
+			"pnpm",
+			"yarn",
+			"bun",
+		])
+
+		const from = await createDesignCli.complete({ words: ["--from", ""] })
+		expect(from.fileSystem).toBe("files")
+
+		let stdout = ""
+		const exitCode = await runCreateDesignCli(
+			["node", "create-design", "completion", "bash"],
+			{
+				stderr: { write: () => undefined },
+				stdout: { write: (value) => (stdout += value) },
+			},
+		)
+		expect(exitCode).toBe(0)
+		expect(stdout).toContain("_comline complete")
+	})
+
 	it("renders initializer help", async () => {
 		let stdout = ""
-		const exitCode = await runCreateDesignCli(["create-design", "--help"], {
-			stderr: { write: () => undefined },
-			stdout: { write: (value) => (stdout += value) },
-		})
+		const exitCode = await runCreateDesignCli(
+			["node", "create-design", "--help"],
+			{
+				stderr: { write: () => undefined },
+				stdout: { write: (value) => (stdout += value) },
+			},
+		)
 		expect(exitCode).toBe(0)
 		expect(stdout).toContain("Create a design workspace")
 		expect(stdout).toContain("--package-manager")
@@ -46,7 +78,7 @@ describe("create-design CLI", () => {
 		await truncate(input, MAX_ILLUSTRATOR_FILE_BYTES + 1)
 		let stderr = ""
 		const exitCode = await runCreateDesignCli(
-			["create-design", "--from", input, "--no-install"],
+			["node", "create-design", "--from", input, "--no-install"],
 			{
 				stderr: { write: (value) => (stderr += value) },
 				stdout: { write: () => undefined },
@@ -159,7 +191,7 @@ describe("create-design CLI", () => {
 	it("validates the selected package manager", async () => {
 		let stderr = ""
 		const exitCode = await runCreateDesignCli(
-			["create-design", "project", "--package-manager=unknown"],
+			["node", "create-design", "project", "--package-manager=unknown"],
 			{
 				stderr: { write: (value) => (stderr += value) },
 				stdout: { write: () => undefined },
@@ -197,7 +229,7 @@ describe("create-design CLI", () => {
 			let stdout = ""
 			let stderr = ""
 			const exitCode = await runCreateDesignCli(
-				["create-design", "--from", input, "--no-install"],
+				["node", "create-design", "--from", input, "--no-install"],
 				{
 					stderr: { write: (value) => (stderr += value) },
 					stdout: { write: (value) => (stdout += value) },
@@ -232,7 +264,14 @@ describe("create-design CLI", () => {
 		try {
 			let stderr = ""
 			const exitCode = await runCreateDesignCli(
-				["create-design", "should-not-exist", "--from", input, "--no-install"],
+				[
+					"node",
+					"create-design",
+					"should-not-exist",
+					"--from",
+					input,
+					"--no-install",
+				],
 				{
 					stderr: { write: (value) => (stderr += value) },
 					stdout: { write: () => undefined },

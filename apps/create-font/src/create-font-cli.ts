@@ -5,6 +5,7 @@ import { basename, extname, resolve } from "node:path"
 
 import {
 	cli,
+	completionResponse,
 	help,
 	options,
 	optional,
@@ -15,8 +16,8 @@ import { z } from "zod/v4"
 
 import { importGlyphsSource } from "@create-font/glyphs-app"
 
-import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
-import { createFontWorkspace, isPackageManager } from "./create.ts"
+import { type CliIo, defaultIo, writeLine, writeWarnings } from "./cli-io.ts"
+import { createFontWorkspace, packageManagers } from "./create.ts"
 import { isMainModule } from "./runtime.ts"
 
 function importProjectName(path: string): string {
@@ -59,11 +60,16 @@ const createOptions = options(
 	z.object({
 		help: z.boolean().optional(),
 		"no-install": z.boolean().optional(),
-		"package-manager": z.string().optional(),
+		"package-manager": z
+			.enum(packageManagers, {
+				error: `Package manager must be npm, pnpm, yarn, or bun.`,
+			})
+			.optional(),
 		from: z.string().optional(),
 	}),
 	{
 		help: {
+			completion: { repeatable: false },
 			description: `Show command help.`,
 			example: `--help`,
 			flag: `h`,
@@ -71,18 +77,21 @@ const createOptions = options(
 			required: false,
 		},
 		"no-install": {
+			completion: { repeatable: false },
 			description: `Do not install workspace dependencies.`,
 			example: `--no-install`,
 			parse: parseBooleanOption,
 			required: false,
 		},
 		"package-manager": {
+			completion: { repeatable: false },
 			description: `Package manager used to install a new workspace.`,
 			example: `--package-manager=pnpm`,
 			parse: parseStringOption,
 			required: false,
 		},
 		from: {
+			completion: { fileSystem: `files`, repeatable: false },
 			description: `Import a Glyphs.app .glyphs source into the new font project.`,
 			example: `--from=MyFont.glyphs`,
 			parse: parseStringOption,
@@ -99,20 +108,23 @@ export const createFontCli = cli({
 })
 
 export async function runCreateFontCli(
-	args: string[] = [`create-font`, ...process.argv.slice(2)],
+	args: string[] = process.argv,
 	io: CliIo = defaultIo,
 	cwd: string = process.cwd(),
 ): Promise<number> {
 	try {
-		const { inputs } = createFontCli(args)
+		const completion = await completionResponse(createFontCli.definition, args)
+		if (completion !== undefined) {
+			io.stdout.write(completion)
+			return 0
+		}
+		const { inputs, warnings } = createFontCli(args)
+		writeWarnings(io.stderr, warnings)
 		if (inputs.opts.help) {
 			writeLine(io.stdout, help(createFontCli.definition))
 			return 0
 		}
 		const packageManager = inputs.opts["package-manager"]
-		if (packageManager !== undefined && !isPackageManager(packageManager)) {
-			throw new Error(`Package manager must be npm, pnpm, yarn, or bun.`)
-		}
 		const importPath = inputs.opts.from
 		if (
 			importPath !== undefined &&

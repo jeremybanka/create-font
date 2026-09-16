@@ -16,7 +16,7 @@ import {
 import { afterEach, describe, expect, test } from "vitest"
 
 import type { CliIo } from "../src/cli-io.ts"
-import { runDesignCli } from "../src/design-cli.ts"
+import { designCli, runDesignCli } from "../src/design-cli.ts"
 import { initializeDesignSourceWorkspace } from "../src/source-service.ts"
 
 const temporaryRoots: string[] = []
@@ -52,7 +52,10 @@ function captureIo(): Readonly<{
 
 async function run(arguments_: readonly string[]) {
 	const capture = captureIo()
-	const exitCode = await runDesignCli(["design", ...arguments_], capture.io)
+	const exitCode = await runDesignCli(
+		["node", "design", ...arguments_],
+		capture.io,
+	)
 	return { ...capture, exitCode }
 }
 
@@ -85,6 +88,42 @@ function multipleArtboards(): DesignDocument {
 }
 
 describe("design CLI", () => {
+	test("completes formats, paths, and workspace projects", async () => {
+		const formats = await designCli.complete({
+			words: ["check", "--format="],
+		})
+		expect(formats.candidates.map(({ value }) => value)).toEqual([
+			"stylish",
+			"json",
+		])
+
+		const workspaceRoot = await temporaryRoot()
+		await initializeDesignSourceWorkspace(
+			join(workspaceRoot, "designs", "poster"),
+		)
+		const projects = await designCli.complete({
+			words: ["build", `--root=${workspaceRoot}`, "po"],
+		})
+		expect(projects.candidates).toContainEqual({
+			description: "designs/poster",
+			value: "poster",
+		})
+
+		const output = await designCli.complete({
+			words: ["export", "poster", "--output", ""],
+		})
+		expect(output.fileSystem).toBe("files")
+	})
+
+	test("reports ignored options", async () => {
+		const result = await run(["--unknown"])
+
+		expect(result.exitCode).toBe(0)
+		expect(result.stderr()).toContain(
+			'Unknown option "--unknown" for command "design".',
+		)
+	})
+
 	test("shows project command help by default", async () => {
 		const result = await run([])
 		expect(result.exitCode).toBe(0)
