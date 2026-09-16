@@ -38,7 +38,7 @@
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.1.1",
-		"agents.yaml": "0.2.2",
+		"agents.yaml": "0.2.3",
 		"create-design": "workspace:*",
 		"create-font": "workspace:*",
 		"dprint": "0.57.4",
