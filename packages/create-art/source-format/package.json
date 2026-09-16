@@ -35,7 +35,7 @@
 	"scripts": { "build": "vp pack", "test": "vp test" },
 	"dependencies": {
 		"@dprint/formatter": "0.5.1",
-		"@dprint/json": "0.23.0",
+		"@dprint/json": "0.24.0",
 		"dprint-plugin-fea": "workspace:*"
 	},
 	"devDependencies": { "@types/node": "26.6.1", "vitest": "catalog:" },
