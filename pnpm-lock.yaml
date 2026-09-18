@@ -287,8 +287,8 @@ importers:
         specifier: 1.4.11
         version: 1.4.11(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
       comline:
-        specifier: 0.8.0
-        version: 0.8.0(zod@4.6.5)
+        specifier: 0.8.1
+        version: 0.8.1(zod@4.6.5)
       elysia:
         specifier: 1.4.30
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
@@ -390,8 +390,8 @@ importers:
         specifier: 4.0.0
         version: 4.0.0(supports-color@7.2.0)
       comline:
-        specifier: 0.8.0
-        version: 0.8.0(zod@4.6.5)
+        specifier: 0.8.1
+        version: 0.8.1(zod@4.6.5)
       elysia:
         specifier: 1.4.30
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
@@ -2992,8 +2992,8 @@ packages:
       zod:
         optional: true
 
-  comline@0.8.0:
-    resolution: {integrity: sha512-Np5SpA0LnzFMWcUvgPFypzh7rf98QuzGA5IbjHNMs0UjGcjAh5twPF0QvJqg4YRkWFBHxZ13EzlUpabxBUYT+g==}
+  comline@0.8.1:
+    resolution: {integrity: sha512-FSg4FZRIC4WOlN4Kg8KPLBufj+2crxZ/ZC+Q97rP1q+kEWOBnSaVJuc1rCM/JHx2KVtHd3Jaap9lpTlYAZwdDg==}
     peerDependencies:
       arktype: ^2.1.28
       zod: ^4.2.0
@@ -4305,6 +4305,9 @@ packages:
 
   treetrunks@0.1.11:
     resolution: {integrity: sha512-3L5O5w3AGZd47pGpTNEQAfp68pSIQCeundsUZnPLPtg4TYL87qmcSJsvoqLeRUXtmL8W7JycaD3gd+i2SCYQrQ==}
+
+  treetrunks@0.1.12:
+    resolution: {integrity: sha512-x9XbZAus9Y4y7WRke6DwOrxmAxrwXNVv/wSmO9aNEfO92gu4Jau/4lmfXE1untxNle1WygPX2wriCtf+oYKMmg==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -6386,10 +6389,10 @@ snapshots:
     optionalDependencies:
       zod: 4.6.5
 
-  comline@0.8.0(zod@4.6.5):
+  comline@0.8.1(zod@4.6.5):
     dependencies:
       '@standard-schema/spec': 1.1.0
-      treetrunks: 0.1.11
+      treetrunks: 0.1.12
     optionalDependencies:
       zod: 4.6.5
 
@@ -7899,6 +7902,8 @@ snapshots:
   totalist@3.0.1: {}
 
   treetrunks@0.1.11: {}
+
+  treetrunks@0.1.12: {}
 
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
