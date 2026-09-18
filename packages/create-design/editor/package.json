@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/editor",
-	"version": "0.3.5",
+	"version": "0.3.6",
 	"description": "Browser-based vector design editor for create-design documents",
 	"repository": {
 		"type": "git",

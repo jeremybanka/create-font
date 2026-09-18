@@ -1,5 +1,11 @@
 # @create-art/source-format
 
+## 0.2.5
+
+### Patch Changes
+
+- c4f9719: Upgrade the trusted JSON formatter to @dprint/json 0.24 and apply its package.json field-order conventions.
+
 ## 0.2.4
 
 ### Patch Changes
