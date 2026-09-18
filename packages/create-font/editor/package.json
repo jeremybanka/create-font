@@ -50,7 +50,7 @@
 		"@typescript-eslint/parser": "8.70.0",
 		"@typescript-eslint/utils": "8.70.0",
 		"@vitest/coverage-v8": "catalog:",
-		"atom.io": "0.53.1",
+		"atom.io": "0.53.2",
 		"eslint": "10.10.0",
 		"happy-dom": "20.14.5",
 		"jiti": "2.7.0",
