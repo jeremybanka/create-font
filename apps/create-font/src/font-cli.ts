@@ -2,6 +2,8 @@
 
 import {
 	cli,
+	completionResponse,
+	type CompletionHints,
 	help,
 	options,
 	optional,
@@ -15,7 +17,7 @@ import { CREATE_FONT_CLI_DEV_PORT } from "../../../scripts/dev-ports.ts"
 import { installServerShutdown } from "../../../scripts/server-shutdown.ts"
 import { buildProject } from "./build.ts"
 import { checkFontProject, formatStylishCheck } from "./check.ts"
-import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
+import { type CliIo, defaultIo, writeLine, writeWarnings } from "./cli-io.ts"
 import { startCreateFontServer } from "./server.ts"
 import { createFileSystemSourceService } from "./source-service.ts"
 import { isMainModule } from "./runtime.ts"
@@ -26,9 +28,11 @@ import {
 } from "./workspace.ts"
 import { buildFeaVsix, installFeaVsix } from "./vsix.ts"
 
+const diagnosticFormats = [`stylish`, `json`] as const
 const helpSchema = { help: z.boolean().optional() }
 const helpConfig = {
 	help: {
+		completion: { repeatable: false },
 		description: `Show command help.`,
 		example: `--help`,
 		flag: `h`,
@@ -43,6 +47,7 @@ const buildOptions = options(
 	{
 		...helpConfig,
 		root: {
+			completion: { fileSystem: `directories`, repeatable: false },
 			description: `Font workspace root.`,
 			example: `--root=.`,
 			flag: `r`,
@@ -56,12 +61,17 @@ const checkOptions = options(
 	`Check a font project's Adobe feature sources without writing artifacts.`,
 	z.object({
 		...helpSchema,
-		format: z.string().optional(),
+		format: z
+			.enum(diagnosticFormats, {
+				error: `Format must be stylish or json.`,
+			})
+			.optional(),
 		root: z.string().optional(),
 	}),
 	{
 		...helpConfig,
 		format: {
+			completion: { repeatable: false },
 			description: `Diagnostic output format: stylish or json.`,
 			example: `--format=json`,
 			flag: `f`,
@@ -69,6 +79,7 @@ const checkOptions = options(
 			required: false,
 		},
 		root: {
+			completion: { fileSystem: `directories`, repeatable: false },
 			description: `Font workspace root.`,
 			example: `--root=.`,
 			flag: `r`,
@@ -89,12 +100,14 @@ const devOptions = options(
 	{
 		...helpConfig,
 		hostname: {
+			completion: { repeatable: false },
 			description: `Address to bind. Loopback is the default.`,
 			example: `--hostname=127.0.0.1`,
 			parse: parseStringOption,
 			required: false,
 		},
 		port: {
+			completion: { repeatable: false },
 			description: `TCP port. Defaults to ${CREATE_FONT_CLI_DEV_PORT}.`,
 			example: `--port=${CREATE_FONT_CLI_DEV_PORT}`,
 			flag: `p`,
@@ -102,6 +115,7 @@ const devOptions = options(
 			required: false,
 		},
 		root: {
+			completion: { fileSystem: `directories`, repeatable: false },
 			description: `Font workspace root.`,
 			example: `--root=.`,
 			flag: `r`,
@@ -122,12 +136,14 @@ const vsixOptions = options(
 	{
 		...helpConfig,
 		"build-only": {
+			completion: { repeatable: false },
 			description: `Build the universal VSIX without installing it.`,
 			example: `--build-only`,
 			parse: parseBooleanOption,
 			required: false,
 		},
 		out: {
+			completion: { fileSystem: `directories`, repeatable: false },
 			description: `Directory for the VSIX.`,
 			example: `--out=artifacts`,
 			flag: `o`,
@@ -135,6 +151,10 @@ const vsixOptions = options(
 			required: false,
 		},
 		target: {
+			completion: {
+				choices: [`code`, `code-insiders`, `codium`],
+				repeatable: false,
+			},
 			description: `VS Code-compatible editor command used for installation.`,
 			example: `--target=code-insiders`,
 			flag: `t`,
@@ -143,6 +163,17 @@ const vsixOptions = options(
 		},
 	},
 )
+
+const completeFontProjects: Exclude<
+	CompletionHints["provide"],
+	undefined
+> = async ({ options: occurrences }) => {
+	const root = occurrences.findLast(({ key }) => key === `root`)?.value
+	return (await discoverFontProjects(root || process.cwd())).map((project) => ({
+		description: project.path,
+		value: project.name,
+	}))
+}
 
 export const fontCli = cli({
 	cliName: `font`,
@@ -154,6 +185,12 @@ export const fontCli = cli({
 		serve: optional({ $font: null }),
 		vsix: null,
 	}),
+	positionalCompletions: {
+		"build/$font": { provide: completeFontProjects },
+		"check/$font": { provide: completeFontProjects },
+		"dev/$font": { provide: completeFontProjects },
+		"serve/$font": { provide: completeFontProjects },
+	},
 	routeOptions: {
 		"": options(`Show font help.`, z.object(helpSchema), helpConfig),
 		build: buildOptions,
@@ -169,11 +206,17 @@ export const fontCli = cli({
 })
 
 export async function runFontCli(
-	args: string[] = [`font`, ...process.argv.slice(2)],
+	args: string[] = process.argv,
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {
-		const { inputs } = fontCli(args)
+		const completion = await completionResponse(fontCli.definition, args)
+		if (completion !== undefined) {
+			io.stdout.write(completion)
+			return 0
+		}
+		const { inputs, warnings } = fontCli(args)
+		writeWarnings(io.stderr, warnings)
 		if (inputs.opts.help || inputs.case === ``) {
 			writeLine(io.stdout, help(fontCli.definition))
 			return 0
@@ -193,12 +236,6 @@ export async function runFontCli(
 		}
 		const project = await selectFontProject(inputs.opts.root, inputs.path[1])
 		if (inputs.case === `check` || inputs.case === `check/$font`) {
-			if (
-				inputs.opts.format !== undefined &&
-				inputs.opts.format !== `stylish` &&
-				inputs.opts.format !== `json`
-			)
-				throw new Error(`Format must be stylish or json.`)
 			const result = await checkFontProject(project.root)
 			writeLine(
 				inputs.opts.format === `json` ? io.stdout : io.stderr,

@@ -6,6 +6,8 @@ import { extname, resolve } from "node:path"
 import { SourceValidationError } from "@create-art/source-rpc"
 import {
 	cli,
+	completionResponse,
+	type CompletionHints,
 	help,
 	options,
 	optional,
@@ -19,7 +21,7 @@ import { CREATE_DESIGN_CLI_DEV_PORT } from "../../../scripts/dev-ports.ts"
 import { installServerShutdown } from "../../../scripts/server-shutdown.ts"
 import { buildDesignProject } from "./build.ts"
 import { checkDesignProject, formatStylishCheck } from "./check.ts"
-import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
+import { type CliIo, defaultIo, writeLine, writeWarnings } from "./cli-io.ts"
 import {
 	DesignPdfPreflightError,
 	DesignPdfSourceError,
@@ -40,11 +42,13 @@ import {
 	exportDesignSvg,
 	formatSvgDiagnostic,
 } from "./svg-export.ts"
-import { selectDesignProject } from "./workspace.ts"
+import { discoverDesignProjects, selectDesignProject } from "./workspace.ts"
 
+const diagnosticFormats = ["stylish", "json"] as const
 const helpSchema = { help: z.boolean().optional() }
 const helpConfig = {
 	help: {
+		completion: { repeatable: false },
 		description: "Show command help.",
 		example: "--help",
 		flag: "h",
@@ -55,6 +59,7 @@ const helpConfig = {
 
 const rootConfig = {
 	root: {
+		completion: { fileSystem: "directories", repeatable: false },
 		description: "Design workspace root.",
 		example: "--root=.",
 		flag: "r",
@@ -65,6 +70,7 @@ const rootConfig = {
 
 const artboardsConfig = {
 	artboards: {
+		completion: { choices: ["all"], repeatable: false },
 		description: 'PDF/PNG: "all" or IDs. SVG: exactly one artboard ID.',
 		example: "--artboards=artboard:page",
 		parse: parseStringOption,
@@ -74,6 +80,7 @@ const artboardsConfig = {
 
 const includeBleedConfig = {
 	"include-bleed": {
+		completion: { repeatable: false },
 		description: "Include authored bleed in PDF page media boxes.",
 		example: "--include-bleed",
 		parse: parseBooleanOption,
@@ -101,12 +108,17 @@ const checkOptions = options(
 	"Check a design project's source without writing artifacts.",
 	z.object({
 		...helpSchema,
-		format: z.string().optional(),
+		format: z
+			.enum(diagnosticFormats, {
+				error: "Format must be stylish or json.",
+			})
+			.optional(),
 		root: z.string().optional(),
 	}),
 	{
 		...helpConfig,
 		format: {
+			completion: { repeatable: false },
 			description: "Diagnostic output format: stylish or json.",
 			example: "--format=json",
 			flag: "f",
@@ -128,12 +140,14 @@ const devOptions = options(
 	{
 		...helpConfig,
 		hostname: {
+			completion: { repeatable: false },
 			description: "Address to bind. Loopback is the default.",
 			example: "--hostname=127.0.0.1",
 			parse: parseStringOption,
 			required: false,
 		},
 		port: {
+			completion: { repeatable: false },
 			description: `TCP port. Defaults to ${CREATE_DESIGN_CLI_DEV_PORT}.`,
 			example: `--port=${CREATE_DESIGN_CLI_DEV_PORT}`,
 			flag: "p",
@@ -160,12 +174,14 @@ const exportOptions = options(
 		...helpConfig,
 		...artboardsConfig,
 		background: {
+			completion: { choices: ["transparent"], repeatable: false },
 			description: 'PNG background: "transparent" or #RRGGBB.',
 			example: "--background=#ffffff",
 			parse: parseStringOption,
 			required: false,
 		},
 		force: {
+			completion: { repeatable: false },
 			description: "Atomically replace an existing output file.",
 			example: "--force",
 			parse: parseBooleanOption,
@@ -173,6 +189,7 @@ const exportOptions = options(
 		},
 		...includeBleedConfig,
 		output: {
+			completion: { fileSystem: "files", repeatable: false },
 			description: "Required .pdf, .svg, or .png output path.",
 			example: "--output=artifacts/design.pdf",
 			flag: "o",
@@ -181,6 +198,7 @@ const exportOptions = options(
 		},
 		...rootConfig,
 		scale: {
+			completion: { repeatable: false },
 			description: "PNG pixels per document unit.",
 			example: "--scale=2",
 			parse: parseNumberOption,
@@ -188,6 +206,19 @@ const exportOptions = options(
 		},
 	},
 )
+
+const completeDesignProjects: Exclude<
+	CompletionHints["provide"],
+	undefined
+> = async ({ options: occurrences }) => {
+	const root = occurrences.findLast(({ key }) => key === "root")?.value
+	return (await discoverDesignProjects(root || process.cwd())).map(
+		(project) => ({
+			description: project.path,
+			value: project.name,
+		}),
+	)
+}
 
 export const designCli = cli({
 	cliName: "design",
@@ -200,6 +231,13 @@ export const designCli = cli({
 		export: optional({ $design: null }),
 		serve: optional({ $design: null }),
 	}),
+	positionalCompletions: {
+		"build/$design": { provide: completeDesignProjects },
+		"check/$design": { provide: completeDesignProjects },
+		"dev/$design": { provide: completeDesignProjects },
+		"export/$design": { provide: completeDesignProjects },
+		"serve/$design": { provide: completeDesignProjects },
+	},
 	routeOptions: {
 		"": options("Show design help.", z.object(helpSchema), helpConfig),
 		build: buildOptions,
@@ -261,11 +299,17 @@ function writeSourceDiagnostics(
 }
 
 export async function runDesignCli(
-	args: string[] = ["design", ...process.argv.slice(2)],
+	args: string[] = process.argv,
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {
-		const { inputs } = designCli(args)
+		const completion = await completionResponse(designCli.definition, args)
+		if (completion !== undefined) {
+			io.stdout.write(completion)
+			return 0
+		}
+		const { inputs, warnings } = designCli(args)
+		writeWarnings(io.stderr, warnings)
 		if (inputs.opts.help || inputs.case === "") {
 			writeLine(io.stdout, help(designCli.definition))
 			return 0
@@ -279,12 +323,6 @@ export async function runDesignCli(
 			? undefined
 			: await selectDesignProject(inputs.opts.root, inputs.path[1])
 		if (inputs.case === "check" || inputs.case === "check/$design") {
-			if (
-				inputs.opts.format !== undefined &&
-				inputs.opts.format !== "stylish" &&
-				inputs.opts.format !== "json"
-			)
-				throw new Error("Format must be stylish or json.")
 			const result = await checkDesignProject(project!.root)
 			writeLine(
 				inputs.opts.format === "json" ? io.stdout : io.stderr,

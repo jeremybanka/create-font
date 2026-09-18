@@ -9,6 +9,7 @@ import {
 } from "@create-design/ai"
 import {
 	cli,
+	completionResponse,
 	help,
 	options,
 	optional,
@@ -17,8 +18,8 @@ import {
 } from "comline"
 import { z } from "zod/v4"
 
-import { type CliIo, defaultIo, writeLine } from "./cli-io.ts"
-import { createDesignWorkspace, isPackageManager } from "./create.ts"
+import { type CliIo, defaultIo, writeLine, writeWarnings } from "./cli-io.ts"
+import { createDesignWorkspace, packageManagers } from "./create.ts"
 import { isMainModule } from "./runtime.ts"
 
 const createOptions = options(
@@ -27,16 +28,22 @@ const createOptions = options(
 		from: z.string().optional(),
 		help: z.boolean().optional(),
 		"no-install": z.boolean().optional(),
-		"package-manager": z.string().optional(),
+		"package-manager": z
+			.enum(packageManagers, {
+				error: "Package manager must be npm, pnpm, yarn, or bun.",
+			})
+			.optional(),
 	}),
 	{
 		from: {
+			completion: { fileSystem: "files", repeatable: false },
 			description: "Import native Adobe Illustrator .ai source.",
 			example: "--from=poster.ai",
 			parse: parseStringOption,
 			required: false,
 		},
 		help: {
+			completion: { repeatable: false },
 			description: "Show command help.",
 			example: "--help",
 			flag: "h",
@@ -44,12 +51,14 @@ const createOptions = options(
 			required: false,
 		},
 		"no-install": {
+			completion: { repeatable: false },
 			description: "Do not install workspace dependencies.",
 			example: "--no-install",
 			parse: parseBooleanOption,
 			required: false,
 		},
 		"package-manager": {
+			completion: { repeatable: false },
 			description: "Package manager used to install a new workspace.",
 			example: "--package-manager=pnpm",
 			parse: parseStringOption,
@@ -100,18 +109,25 @@ async function readIllustratorFile(path: string): Promise<Uint8Array> {
 }
 
 export async function runCreateDesignCli(
-	args: string[] = ["create-design", ...process.argv.slice(2)],
+	args: string[] = process.argv,
 	io: CliIo = defaultIo,
 ): Promise<number> {
 	try {
-		const { inputs } = createDesignCli(args)
+		const completion = await completionResponse(
+			createDesignCli.definition,
+			args,
+		)
+		if (completion !== undefined) {
+			io.stdout.write(completion)
+			return 0
+		}
+		const { inputs, warnings } = createDesignCli(args)
+		writeWarnings(io.stderr, warnings)
 		if (inputs.opts.help) {
 			writeLine(io.stdout, help(createDesignCli.definition))
 			return 0
 		}
 		const packageManager = inputs.opts["package-manager"]
-		if (packageManager !== undefined && !isPackageManager(packageManager))
-			throw new Error("Package manager must be npm, pnpm, yarn, or bun.")
 		const from = inputs.opts.from
 		let imported: ReturnType<typeof importAdobeIllustrator> | undefined
 		if (from !== undefined) {
