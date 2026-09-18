@@ -1,5 +1,15 @@
 # create-font
 
+## 0.3.24
+
+### Patch Changes
+
+- 4315871: Restore CLI argument parsing with Comline 0.8, report ignored options, and add shell completion for commands, projects, paths, and enumerated values.
+- Updated dependencies [c4f9719]
+  - @create-art/source-format@0.2.5
+  - @create-font/source@0.2.16
+  - @create-font/glyphs-app@0.0.7
+
 ## 0.3.23
 
 ### Patch Changes

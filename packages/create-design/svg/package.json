@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/svg",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Headless SVG projection, serialization, preflight, and import for create-design documents",
 	"repository": {
 		"type": "git",
