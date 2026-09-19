@@ -209,8 +209,8 @@ importers:
         specifier: 6.1.1
         version: 6.1.1(@voidzero-dev/vite-plus-core@0.3.3(@types/node@25.9.5)(jiti@2.7.0)(yaml@2.9.0))
       agents.yaml:
-        specifier: 0.2.3
-        version: 0.2.3
+        specifier: 0.3.0
+        version: 0.3.0
       create-design:
         specifier: workspace:*
         version: link:apps/create-design
@@ -2749,9 +2749,9 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  agents.yaml@0.2.3:
-    resolution: {integrity: sha512-EGUb+Y9dKMV0ld0rdBUKJDnwE+TipaXxnttqXMQ8g/m5ByIbNw+ItlxMfL66OHqG0BRB9h2YUxYEAVyc3a2eCw==}
-    engines: {node: 26.8.2, pnpm: 12.4.1}
+  agents.yaml@0.3.0:
+    resolution: {integrity: sha512-PEsWyMzJSwMMm0ujK+yiX0A7Qc8GaMI1V9QZbFa1Y+L4ELYhLuT8o49uKeqeQy0NGr2jVDhi7tY7DfI/+iF05A==}
+    engines: {node: 26.9.0, pnpm: 12.4.2}
     hasBin: true
 
   ajv@6.15.0:
@@ -6172,12 +6172,15 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  agents.yaml@0.2.3:
+  agents.yaml@0.3.0:
     dependencies:
       '@clack/core': 1.5.1
       '@clack/prompts': 1.8.1
+      comline: 0.8.1(zod@4.6.5)
       yaml: 2.9.1
       zod: 4.6.5
+    transitivePeerDependencies:
+      - arktype
 
   ajv@6.15.0:
     dependencies:
