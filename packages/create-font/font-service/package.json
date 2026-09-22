@@ -31,7 +31,7 @@
 		"test": "vp test"
 	},
 	"dependencies": {
-		"harfbuzzjs": "1.6.1"
+		"harfbuzzjs": "1.6.2"
 	},
 	"devDependencies": {
 		"@create-font/target": "workspace:*",
