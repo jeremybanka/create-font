@@ -63,7 +63,7 @@
 		"eslint": "10.11.0",
 		"happy-dom": "20.14.5",
 		"jiti": "2.7.0",
-		"lasertag": "0.8.4",
+		"lasertag": "0.8.5",
 		"vite": "catalog:",
 		"vite-plus": "catalog:",
 		"vitest": "catalog:"
