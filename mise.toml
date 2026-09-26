@@ -1,5 +1,5 @@
 [tools]
-"cargo:wasm-bindgen-cli" = "0.2.128"
+"cargo:wasm-bindgen-cli" = "0.2.129"
 ni = "30.6.0"
 node = "26.10.0"
 pnpm = "12.6.0"
