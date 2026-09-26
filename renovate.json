@@ -42,6 +42,11 @@
 			]
 		},
 		{
+			"groupName": "konva",
+			"matchPackageNames": ["konva", "react-konva"],
+			"separateMajorMinor": false
+		},
+		{
 			"groupName": "changesets",
 			"matchPackageNames": ["@changesets/**", "changesets/action"]
 		},
