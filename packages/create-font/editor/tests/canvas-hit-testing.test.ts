@@ -1,5 +1,5 @@
 import type { ContourId, PointId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	circularHitRegion,
@@ -80,11 +80,17 @@ describe("canvas hit testing", () => {
 		const controls = [editorControlHitCandidates(contours)[0]!]
 		expect(
 			nearestEditorControlHit(controls, { x: 10, y: 0 }, 1)?.target,
-		).toEqual({ kind: "node", pointId: pointId("a") })
+		).toEqual({
+			kind: "node",
+			pointId: pointId("a"),
+		})
 		expect(nearestEditorControlHit(controls, { x: 10.01, y: 0 }, 1)).toBeNull()
 		expect(
 			nearestEditorControlHit(controls, { x: 5, y: 0 }, 2)?.target,
-		).toEqual({ kind: "node", pointId: pointId("a") })
+		).toEqual({
+			kind: "node",
+			pointId: pointId("a"),
+		})
 		expect(nearestEditorControlHit(controls, { x: 5.01, y: 0 }, 2)).toBeNull()
 	})
 

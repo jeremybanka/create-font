@@ -1,5 +1,5 @@
 import type { PointId } from "@create-font/states"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import { editorControlHitRadii } from "../src/canvas-hit-testing.ts"
 import {

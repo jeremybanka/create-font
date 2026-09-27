@@ -2,7 +2,7 @@ import {
 	createInitialDocument,
 	splitDesignDocument,
 } from "@create-design/source"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import { defaultDesignHierarchyScope } from "../src/design-hierarchy.ts"
 import { placeDesignLinkedArtboard } from "../src/linked-artboards.ts"

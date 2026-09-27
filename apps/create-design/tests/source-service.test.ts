@@ -8,7 +8,7 @@ import {
 	createInitialDocument,
 	defaultTextContentUnitPath,
 } from "@create-design/source"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import {
 	createDesignSourceService,
@@ -213,7 +213,9 @@ describe(`create-design source service`, () => {
 		).rejects.toMatchObject({ name: `SourceValidationError` })
 		await expect(
 			readFile(join(root, `scene/objects/orphan.txt`), `utf8`),
-		).rejects.toMatchObject({ code: `ENOENT` })
+		).rejects.toMatchObject({
+			code: `ENOENT`,
+		})
 		expect((await service.readSnapshot()).revision).toBe(before.revision)
 	})
 
@@ -222,12 +224,8 @@ describe(`create-design source service`, () => {
 		await initializeDesignSourceWorkspace(root)
 		const documentPath = join(root, `document.json`)
 		const palettePath = join(root, `palette.json`)
-		const compactDocument = `${JSON.stringify(
-			JSON.parse(await readFile(documentPath, `utf8`)),
-		)}\n`
-		const compactPalette = `${JSON.stringify(
-			JSON.parse(await readFile(palettePath, `utf8`)),
-		)}\n`
+		const compactDocument = `${JSON.stringify(JSON.parse(await readFile(documentPath, `utf8`)))}\n`
+		const compactPalette = `${JSON.stringify(JSON.parse(await readFile(palettePath, `utf8`)))}\n`
 		await writeFile(documentPath, compactDocument)
 		await writeFile(palettePath, compactPalette)
 

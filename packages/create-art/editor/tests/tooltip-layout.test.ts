@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 describe("tooltip layout", () => {
 	it("resets the browser popover inset before applying floating coordinates", async () => {

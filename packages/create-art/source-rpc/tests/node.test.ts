@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import type { JsonValue, SourceChangedEvent } from "../src/index.ts"
 import {
@@ -65,9 +65,7 @@ describe(`filesystem source service`, () => {
 		if (unit === undefined) throw new Error(`Missing project unit.`)
 		expect(snapshot).not.toHaveProperty(`assets`)
 		expect(snapshot.revision).toBe(
-			`sha256:${createHash(`sha256`)
-				.update(`${unit.path}\0${unit.revision}\n`)
-				.digest(`hex`)}`,
+			`sha256:${createHash(`sha256`).update(`${unit.path}\0${unit.revision}\n`).digest(`hex`)}`,
 		)
 	})
 

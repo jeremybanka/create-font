@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import type { PreviewRunItem } from "../src/editor-workspace.ts"
 import { layoutTextRun, textSelectionRects } from "../src/text-layout.ts"

@@ -2,7 +2,7 @@ import {
 	createInitialDocument,
 	DEFAULT_DESIGN_STROKE_STYLE,
 } from "@create-design/source"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import { resolveDesignArtboardLinks } from "../src/linked-artboards.ts"
 import { projectDesignOutput } from "../src/output.ts"

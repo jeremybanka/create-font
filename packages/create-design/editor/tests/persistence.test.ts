@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { createInitialDocument } from "../src/document.ts"
 import {
@@ -97,7 +97,10 @@ describe("create-design persistence state machine", () => {
 		})
 		expect(
 			reduceDesignPersistence(conflicted, { type: "retry" }),
-		).toMatchObject({ status: "queued", queuedRevision: 1 })
+		).toMatchObject({
+			status: "queued",
+			queuedRevision: 1,
+		})
 	})
 
 	it("preserves recoverable and invalid-source states until an explicit action", () => {
@@ -110,7 +113,10 @@ describe("create-design persistence state machine", () => {
 		}
 		const recoverable = reduceDesignPersistence(
 			createDesignPersistenceState("source:b"),
-			{ type: "recovery-found", draft },
+			{
+				type: "recovery-found",
+				draft,
+			},
 		)
 		expect(recoverable).toMatchObject({
 			status: "recoverable-draft",
@@ -119,7 +125,10 @@ describe("create-design persistence state machine", () => {
 		})
 		expect(
 			reduceDesignPersistence(recoverable, { type: "recover-draft" }),
-		).toMatchObject({ status: "dirty", durableRevision: "source:b" })
+		).toMatchObject({
+			status: "dirty",
+			durableRevision: "source:b",
+		})
 		expect(
 			reduceDesignPersistence(recoverable, { type: "discard-draft" }),
 		).toMatchObject({
@@ -156,7 +165,9 @@ describe("create-design persistence state machine", () => {
 	it("preserves local work through an external conflict until external reload wins", () => {
 		const dirty = reduceDesignPersistence(
 			createDesignPersistenceState("source:a"),
-			{ type: "edit" },
+			{
+				type: "edit",
+			},
 		)
 		const conflicted = reduceDesignPersistence(dirty, {
 			type: "external-conflict",

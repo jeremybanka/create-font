@@ -4,7 +4,7 @@ import type {
 	SourceChangeGroup,
 	SourceComparison,
 } from "@create-art/source-rpc"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import {
 	createDesignVersionControlStore,

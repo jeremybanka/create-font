@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import {
 	SourceAssetConflictError,
@@ -172,7 +172,9 @@ describe(`filesystem source assets`, () => {
 		)
 		expect(
 			JSON.parse(await readFile(join(root, `assets/index.json`), `utf8`)),
-		).toEqual({ entries: [] })
+		).toEqual({
+			entries: [],
+		})
 
 		const result = await service.writeAssets({
 			assetWrites: [
@@ -289,7 +291,9 @@ describe(`filesystem source assets`, () => {
 		).rejects.toBeInstanceOf(SourceAssetNotFoundError)
 		await expect(
 			readFile(join(root, `assets/image.bin`)),
-		).rejects.toMatchObject({ code: `ENOENT` })
+		).rejects.toMatchObject({
+			code: `ENOENT`,
+		})
 	})
 
 	test(`uses digest conditions and never exposes failed replacements`, async () => {

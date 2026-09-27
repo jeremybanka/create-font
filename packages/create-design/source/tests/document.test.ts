@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	CREATE_DESIGN_DOCUMENT_VERSION,
@@ -1178,7 +1178,9 @@ describe("complete design document codec", () => {
 		})
 		expect(
 			decodeDesignDocument({ ...legacy, version: 2, objects: legacy.objects }),
-		).toMatchObject({ ok: false })
+		).toMatchObject({
+			ok: false,
+		})
 	})
 
 	it("rejects ambiguous persisted contour and point identities", () => {

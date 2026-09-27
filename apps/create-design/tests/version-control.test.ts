@@ -18,7 +18,7 @@ import type {
 	SourceAssetService,
 	SourceService,
 } from "@create-art/source-rpc"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 
 import { createInitialDocument } from "@create-design/source"
 import { createDesignSourceService } from "../src/source-service.ts"
@@ -679,12 +679,16 @@ describe(`create-design version control`, () => {
 		await writeFile(join(designRoot, font.path), new Uint8Array(bytes.length))
 		await expect(
 			versionControl.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.repository_state` })
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+		})
 		await writeFile(join(designRoot, font.path), bytes)
 		await rm(join(designRoot, font.path))
 		await expect(
 			versionControl.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.repository_state` })
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+		})
 
 		await writeFile(join(designRoot, font.path), bytes)
 		index = await source.readUnit(`fonts/index.json`)
@@ -875,18 +879,20 @@ describe(`create-design version control`, () => {
 		)
 		await expect(
 			versionControl.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.repository_state` })
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+		})
 
 		await writeFile(join(designRoot, asset.path), bytes)
 		index = await source.readUnit(`assets/index.json`)
 		await writeFile(
 			join(designRoot, index.path),
-			`${JSON.stringify(
-				assetIndexValue([{ ...metadata, digest: `sha256:${`0`.repeat(64)}` }]),
-			)}\n`,
+			`${JSON.stringify(assetIndexValue([{ ...metadata, digest: `sha256:${`0`.repeat(64)}` }]))}\n`,
 		)
 		await expect(
 			versionControl.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.repository_state` })
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+		})
 	})
 })

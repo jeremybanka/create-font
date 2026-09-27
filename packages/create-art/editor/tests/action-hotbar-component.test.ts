@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { ActionHotbar } from "../src/ActionHotbar.tsx"
 import type { HotbarSlots } from "../src/command-assignment.ts"

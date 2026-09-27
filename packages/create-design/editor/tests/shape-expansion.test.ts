@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument, parseDesignDocument } from "../src/document.ts"
@@ -127,7 +127,9 @@ describe("live shape expansion", () => {
 		}
 		expect(
 			shapeExpansionEligibility({ ...document, objects: [live] }, [live.id]),
-		).toMatchObject({ eligible: true })
+		).toMatchObject({
+			eligible: true,
+		})
 
 		let expandedSequence = 0
 		const expanded = expandDesignShape(

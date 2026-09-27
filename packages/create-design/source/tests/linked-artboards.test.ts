@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import { createInitialDocument } from "../src/initial-document.ts"
 import { validateDesignDocument } from "../src/document.ts"
@@ -45,7 +45,10 @@ describe("linked artboard source", () => {
 		})
 		expect(
 			split.value[defaultObjectUnitPath(linked.objects[0]!.id)],
-		).toMatchObject({ version: 3, geometry: { kind: "artboard-link" } })
+		).toMatchObject({
+			version: 3,
+			geometry: { kind: "artboard-link" },
+		})
 		const previousSource = {
 			...split.value,
 			[designSourcePaths.project]: {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	activeTextareaSelectionIndex,
@@ -204,7 +204,10 @@ describe("textarea selection synchronization", () => {
 			textarea,
 			unicodeCarets,
 			1,
-			{ extend: false, preferredX: null },
+			{
+				extend: false,
+				preferredX: null,
+			},
 		)
 		expect(emptyLine).toMatchObject({ focus: 3, preferredX: 100 })
 		textarea.selectionStart = 3
@@ -213,7 +216,10 @@ describe("textarea selection synchronization", () => {
 			textarea,
 			unicodeCarets,
 			1,
-			{ extend: false, preferredX: emptyLine?.preferredX ?? null },
+			{
+				extend: false,
+				preferredX: emptyLine?.preferredX ?? null,
+			},
 		)
 		expect(finalLine).toMatchObject({ focus: 5, preferredX: 100 })
 		textarea.selectionStart = 5

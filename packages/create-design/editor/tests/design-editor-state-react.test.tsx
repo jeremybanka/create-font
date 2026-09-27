@@ -2,7 +2,7 @@
 
 import { StoreProvider, useO, useTL } from "atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 
 import {
 	createDesignEditorState,

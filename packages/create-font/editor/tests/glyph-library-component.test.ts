@@ -2,7 +2,7 @@
 
 import type { ContourId, EditorFontSource, PointId } from "@create-font/states"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 
 import { blackMasterId, makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"

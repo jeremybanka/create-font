@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {

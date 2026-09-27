@@ -1,5 +1,5 @@
 import { PdfValidationError } from "mondrian.pdf"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import { createInitialDocument } from "@create-design/source"
 import { createLivePdfCompiler } from "../src/live-pdf-compilation.ts"

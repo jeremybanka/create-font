@@ -13,7 +13,7 @@ import {
 	createInitialDocument,
 	type DesignDocument,
 } from "@create-design/source"
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vite-plus/test"
 
 import type { CliIo } from "../src/cli-io.ts"
 import { designCli, runDesignCli } from "../src/design-cli.ts"

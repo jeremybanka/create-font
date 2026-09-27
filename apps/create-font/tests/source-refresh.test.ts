@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import type { SourceProjectSnapshot } from "@create-font/server"
 
 import { createSourceSnapshotRefreshController } from "../public/source-refresh.ts"

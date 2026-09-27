@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import { createDesignBlend } from "@create-design/model"
 
 import { createDesignEditorState } from "../src/design-editor-state.ts"

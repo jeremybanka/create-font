@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import { createInitialDocument } from "../src/document.ts"
 import { createSvgDownloadManager } from "../src/svg-download.ts"

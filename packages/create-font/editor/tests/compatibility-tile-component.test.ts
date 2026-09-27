@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 
 import { CompatibilityTile } from "../src/CompatibilityTile.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
@@ -72,7 +72,10 @@ describe("CompatibilityTile", () => {
 		).toBe(true)
 		expect(
 			workspace.font.silo.getState(workspace.ui.compatibilityGhostOffset),
-		).toEqual({ x: 36, y: -20 })
+		).toEqual({
+			x: 36,
+			y: -20,
+		})
 		expect(horizontal.min).toBe("-96")
 		expect(horizontal.max).toBe("96")
 	})

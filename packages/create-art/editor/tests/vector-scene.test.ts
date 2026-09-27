@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { vectorContourPath, vectorPenSegmentPath } from "../src/vector-scene.ts"
 import { vectorCornerHandlePosition } from "../src/VectorScene.tsx"

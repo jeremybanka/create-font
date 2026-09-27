@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	appendDesignHierarchyObjects,
@@ -551,7 +551,10 @@ describe("design hierarchy commands", () => {
 		if (outer === null) throw new Error("Expected outer group.")
 		expect(
 			designSelectionUnitAtObject(outer.document, "object:coral"),
-		).toMatchObject({ id: "group:outer", objectIds: outer.selection })
+		).toMatchObject({
+			id: "group:outer",
+			objectIds: outer.selection,
+		})
 		expect(
 			designSelectionUnitAtObject(
 				outer.document,

@@ -2,7 +2,7 @@
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { createRequire } from "node:module"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import type { ContourId, PointId } from "@create-font/states"

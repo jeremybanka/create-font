@@ -3,7 +3,7 @@ import {
 	serializeVariableFont,
 	type VariableFontSource,
 } from "@create-font/target"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 import type { DesignObject, DesignTextGeometry } from "@create-design/source"
 import { makeGeometricOFont } from "../../../create-font/target/tests/fixtures/geometric-o.ts"

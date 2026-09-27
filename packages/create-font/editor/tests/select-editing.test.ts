@@ -1,5 +1,5 @@
 import type { EditorLayerNode, GlyphId, MasterId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	constrainVectorToEightRays,
@@ -149,10 +149,16 @@ describe("Select handle editing", () => {
 		expect(
 			resolveHandleEdit(node, "outgoing", { x: 1.4, y: 0.57 }, true)
 				?.storageVector,
-		).toEqual({ x: 2, y: 0 })
+		).toEqual({
+			x: 2,
+			y: 0,
+		})
 		expect(
 			resolveHandleEdit(node, "outgoing", { x: 9, y: 8 }, true)?.storageVector,
-		).toEqual({ x: 9, y: 9 })
+		).toEqual({
+			x: 9,
+			y: 9,
+		})
 	})
 
 	it("rounds one-sided storage while previewing its derived tangent length", () => {
@@ -204,10 +210,16 @@ describe("soft-node tangent slides", () => {
 		expect(perpendicular?.points[0]).toMatchObject({ x: 50, y: 50 })
 		expect(
 			resolveTangentSlide(constraint, { x: -50, y: -50 })?.points[0],
-		).toMatchObject({ x: 0, y: 0 })
+		).toMatchObject({
+			x: 0,
+			y: 0,
+		})
 		expect(
 			resolveTangentSlide(constraint, { x: 150, y: 150 })?.points[0],
-		).toMatchObject({ x: 100, y: 100 })
+		).toMatchObject({
+			x: 100,
+			y: 100,
+		})
 		expect(perpendicular?.handles).toEqual([
 			{ pointId, handle: "incoming", x: 0, y: 0 },
 			{ pointId, handle: "outgoing", x: 100, y: 100 },
@@ -239,7 +251,10 @@ describe("soft-node tangent slides", () => {
 		if (boundedConstraint === null) return
 		expect(
 			resolveTangentSlide(boundedConstraint, { x: 500, y: 20 })?.points[0],
-		).toMatchObject({ x: 200, y: 0 })
+		).toMatchObject({
+			x: 200,
+			y: 0,
+		})
 
 		const unbounded: readonly EditorLayerNode[] = [
 			{
@@ -262,7 +277,10 @@ describe("soft-node tangent slides", () => {
 		)
 		expect(
 			resolveTangentSlide(ray, { x: -100, y: 20 })?.points[0],
-		).toMatchObject({ x: -100, y: 0 })
+		).toMatchObject({
+			x: -100,
+			y: 0,
+		})
 	})
 
 	it("keeps one-sided zero endpoints bounded or on a cached open ray", () => {
@@ -291,7 +309,10 @@ describe("soft-node tangent slides", () => {
 		if (boundedConstraint === null) return
 		expect(
 			resolveTangentSlide(boundedConstraint, { x: 110, y: 40 })?.points[0],
-		).toMatchObject({ x: 110, y: 0 })
+		).toMatchObject({
+			x: 110,
+			y: 0,
+		})
 
 		const unbounded: readonly EditorLayerNode[] = [
 			{
@@ -692,7 +713,10 @@ describe("controlled multi-node Alt/Option drags", () => {
 				contours,
 				[{ kind: "node", pointId: hard }],
 				softA,
-				{ x: 1, y: 1 },
+				{
+					x: 1,
+					y: 1,
+				},
 			),
 		).toBeNull()
 	})

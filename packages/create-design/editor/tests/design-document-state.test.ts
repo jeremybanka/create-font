@@ -1,5 +1,5 @@
 import { stateExistsInStore } from "atom.io/testing"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import { createDesignEditorState } from "../src/design-editor-state.ts"
 import { createInitialDocument } from "../src/document.ts"

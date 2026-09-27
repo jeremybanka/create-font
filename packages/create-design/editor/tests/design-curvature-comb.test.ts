@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	createDesignObjectGeometryHitTest,
@@ -41,7 +41,10 @@ const pathObject = (
 const tips = (path: string): readonly { x: number; y: number }[] => {
 	const values = [
 		...path.matchAll(/[ML](-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g),
-	].map((match) => ({ x: Number(match[1]), y: Number(match[2]) }))
+	].map((match) => ({
+		x: Number(match[1]),
+		y: Number(match[2]),
+	}))
 	return values.slice(2)
 }
 

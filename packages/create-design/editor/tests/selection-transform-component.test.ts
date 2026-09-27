@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { DesignTileContent } from "../src/DesignTileContent.tsx"
 import type { DesignTileContext } from "../src/design-tile-registry.ts"

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { resolveVerticalMetricGuides } from "@create-font/states"
 
@@ -144,7 +144,10 @@ describe("canvas snapping", () => {
 	it("chooses horizontal motion for exact diagonal ties", () => {
 		expect(
 			orthogonalConstraint({ x: 100, y: 100 }, { x: 60, y: 140 }, true),
-		).toEqual({ axis: "y", value: 100 })
+		).toEqual({
+			axis: "y",
+			value: 100,
+		})
 	})
 
 	it("applies and removes Shift against the same raw candidate without moving the anchor", () => {

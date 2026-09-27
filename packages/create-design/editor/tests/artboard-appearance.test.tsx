@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 
 import { designArtboardCanvasChrome } from "../src/artboard-canvas-appearance.ts"

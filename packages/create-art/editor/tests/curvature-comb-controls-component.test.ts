@@ -3,7 +3,7 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { CurvatureCombControls } from "../src/CurvatureCombControls.tsx"
 import { isCurvatureShortcut } from "../src/curvature-comb.ts"

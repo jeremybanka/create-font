@@ -1,6 +1,6 @@
 import type { FontCompilation } from "@create-font/states"
 import { Silo } from "atom.io"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import {
 	createBrowserFontFaceManager,
@@ -103,7 +103,10 @@ describe("live font compilation", () => {
 			const release = workspace.liveFont.retain()
 			expect(
 				workspace.font.silo.getState(workspace.liveFont.compilation),
-			).toMatchObject({ status: "compiling", generation: 1 })
+			).toMatchObject({
+				status: "compiling",
+				generation: 1,
+			})
 
 			workspace.dispose()
 			workspace.dispose()
@@ -115,7 +118,10 @@ describe("live font compilation", () => {
 
 			expect(
 				workspace.font.silo.getState(workspace.liveFont.compilation),
-			).toMatchObject({ status: "compiling", generation: 1 })
+			).toMatchObject({
+				status: "compiling",
+				generation: 1,
+			})
 		} finally {
 			vi.useRealTimers()
 		}

@@ -2,7 +2,7 @@ import { EventEmitter, on } from "node:events"
 
 import { initTRPC, tracked } from "@trpc/server"
 import { createHTTPServer } from "@trpc/server/adapters/standalone"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 import { z } from "zod"
 
 import type { SourceChangedEvent } from "../src/contracts.ts"

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	dragVectorControlsWithFixedHandles,
@@ -116,7 +116,10 @@ describe("shared vector control editing", () => {
 			contour(original),
 			selection(["a"]),
 			"a",
-			{ x: 7, y: 11 },
+			{
+				x: 7,
+				y: 11,
+			},
 		)
 		const moved = result?.contours[0]?.nodes[0]
 		expect(moved).toMatchObject({ x: 17, y: 31 })

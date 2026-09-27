@@ -8,7 +8,7 @@ import {
 	createInitialDocument,
 	type DesignDocument,
 } from "@create-design/source"
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vite-plus/test"
 
 import { loadDesignLinkedArtboardResources } from "../src/linked-artboard-export.ts"
 import { exportDesignPdf } from "../src/pdf-export.ts"
@@ -124,7 +124,10 @@ describe("headless linked-artboard exports", () => {
 		temporaryPaths.push(output, svgOutput, pngOutput)
 		await expect(
 			exportDesignPdf({ root: targetRoot, output }),
-		).resolves.toMatchObject({ pages: 1, preflight: { decision: "ready" } })
+		).resolves.toMatchObject({
+			pages: 1,
+			preflight: { decision: "ready" },
+		})
 		await expect(
 			exportDesignSvg({
 				root: targetRoot,
@@ -134,7 +137,9 @@ describe("headless linked-artboard exports", () => {
 		).resolves.toMatchObject({ preflight: { decision: "ready" } })
 		await expect(
 			exportDesignPng({ root: targetRoot, output: pngOutput }),
-		).resolves.toMatchObject({ preflight: { decision: "ready" } })
+		).resolves.toMatchObject({
+			preflight: { decision: "ready" },
+		})
 	})
 
 	test("blocks a recursive workspace reference with a cycle-specific export diagnostic", async () => {

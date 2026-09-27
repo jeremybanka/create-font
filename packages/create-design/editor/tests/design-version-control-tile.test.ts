@@ -2,7 +2,7 @@
 
 import type { SourceChangeGroup } from "@create-art/source-rpc"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { DesignVersionControlTile } from "../src/DesignVersionControlTile.tsx"
 import type { DesignTileContext } from "../src/design-tile-registry.ts"

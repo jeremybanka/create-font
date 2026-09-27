@@ -1,5 +1,5 @@
 import { evaluateCubic } from "@create-art/vector-geometry"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	addDesignSegmentHandles,

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { makeDemoFont } from "../src/demo-font.ts"
 import type { MountedEditor } from "../src/browser-api.ts"

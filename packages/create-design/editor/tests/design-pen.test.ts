@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 
 import {
@@ -76,16 +76,25 @@ describe("design Pen lifecycle", () => {
 		]
 		expect(
 			resolveDesignPenProspectiveSegment(points, { x: 25.49, y: 20.49 }, 2),
-		).toEqual({ point: points[0], closesDraft: true })
+		).toEqual({
+			point: points[0],
+			closesDraft: true,
+		})
 		expect(
 			resolveDesignPenProspectiveSegment(points, { x: 25.51, y: 20.49 }, 2),
-		).toEqual({ point: { x: 26, y: 20 }, closesDraft: false })
+		).toEqual({
+			point: { x: 26, y: 20 },
+			closesDraft: false,
+		})
 	})
 
 	it("previews the same authored precision as a fractional Pen click", () => {
 		expect(
 			resolveDesignPenProspectiveSegment([], { x: 84.686, y: 112.314 }, 2),
-		).toEqual({ point: { x: 85, y: 112 }, closesDraft: false })
+		).toEqual({
+			point: { x: 85, y: 112 },
+			closesDraft: false,
+		})
 	})
 
 	it("finishes open and closed contours without changing their topology", () => {

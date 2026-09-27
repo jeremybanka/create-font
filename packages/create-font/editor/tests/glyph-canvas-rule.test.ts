@@ -3,7 +3,7 @@
 import type { EditorRuleSource, RuleId } from "@create-font/states"
 import { createRequire } from "node:module"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { aGlyphId, oGlyphId } from "../src/demo-font.ts"

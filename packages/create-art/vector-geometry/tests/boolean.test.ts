@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	booleanContours,
@@ -28,13 +28,17 @@ describe("filled-region Boolean operations", () => {
 	it("unites overlapping and disjoint regions with canonical output", () => {
 		const overlap = booleanContours(
 			[[rectangle(0, 0, 10, 10)], [rectangle(5, 0, 15, 10)]],
-			{ operation: "union" },
+			{
+				operation: "union",
+			},
 		)
 		expect(overlap).toEqual([rectangle(0, 0, 15, 10)])
 
 		const disjoint = booleanContours(
 			[[rectangle(20, 0, 30, 10)], [rectangle(0, 0, 10, 10)]],
-			{ operation: "union" },
+			{
+				operation: "union",
+			},
 		)
 		expect(disjoint).toEqual([
 			rectangle(0, 0, 10, 10),
@@ -107,7 +111,9 @@ describe("filled-region Boolean operations", () => {
 	it("is stable for tangent and self-intersecting inputs", () => {
 		const tangent = booleanContours(
 			[[rectangle(0, 0, 10, 10)], [rectangle(10, 0, 20, 10)]],
-			{ operation: "union" },
+			{
+				operation: "union",
+			},
 		)
 		expect(tangent).toEqual([rectangle(0, 0, 20, 10)])
 		expect(

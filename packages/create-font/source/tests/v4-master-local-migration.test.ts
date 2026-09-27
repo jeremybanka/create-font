@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { makeGeometricOEditorFont } from "../../states/tests/fixtures/geometric-o.ts"
 import { decodeEditorFontSource, encodeEditorFontSource } from "../src/index.ts"
