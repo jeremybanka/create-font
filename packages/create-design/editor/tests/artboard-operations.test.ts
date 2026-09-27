@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	allDesignArtboardsBounds,
@@ -40,7 +40,9 @@ describe("design artboard operations", () => {
 		const renamed = updateDesignArtboard(
 			duplicated.document,
 			"artboard:three",
-			{ name: "Packaging" },
+			{
+				name: "Packaging",
+			},
 		)
 		const reordered = reorderDesignArtboard(renamed, "artboard:three", 0)
 		expect(reordered.artboards.map(({ id }) => id)).toEqual([

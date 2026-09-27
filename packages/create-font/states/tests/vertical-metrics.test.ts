@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	matchingVerticalMetrics,
@@ -24,7 +24,11 @@ describe("vertical metric guides", () => {
 		})
 		expect(
 			guides.find((guide) => guide.id === "underlineThickness"),
-		).toMatchObject({ kind: "band", minY: -150, maxY: -100 })
+		).toMatchObject({
+			kind: "band",
+			minY: -150,
+			maxY: -100,
+		})
 	})
 
 	it("matches inclusive top and bottom overshoot boundaries", () => {

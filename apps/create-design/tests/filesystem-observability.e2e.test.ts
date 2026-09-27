@@ -11,7 +11,7 @@ import {
 } from "@create-art/source-rpc"
 import { assembleDesignDocument } from "@create-design/source"
 import { act, h, render } from "../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { DesignApplication } from "../../../packages/create-design/editor/src/DesignApplication.tsx"
 import { createDesignSourceService } from "../src/source-service.ts"

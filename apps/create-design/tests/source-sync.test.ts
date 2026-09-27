@@ -17,7 +17,7 @@ import {
 	splitDesignDocument,
 } from "@create-design/source"
 import { createDesignTextService } from "@create-design/text"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vite-plus/test"
 
 import { createInitialDocument } from "@create-design/source"
 import {
@@ -219,7 +219,9 @@ describe(`create-design source synchronization`, () => {
 		})
 		await expect(
 			readFile(join(root, `fonts/rejected.otf`)),
-		).rejects.toMatchObject({ code: `ENOENT` })
+		).rejects.toMatchObject({
+			code: `ENOENT`,
+		})
 		expect(
 			await readdir(join(root, `.create-design`, `asset-staging`)),
 		).toEqual([])
@@ -401,7 +403,10 @@ describe(`create-design source synchronization`, () => {
 	test(`does not rewrite semantically unchanged canonical units`, () => {
 		expect(
 			designSourceTransaction(initialState(), createInitialDocument()),
-		).toEqual({ removals: [], writes: [] })
+		).toEqual({
+			removals: [],
+			writes: [],
+		})
 	})
 
 	test(`atomically adds, edits, copies, renames, and deletes raw text units`, () => {

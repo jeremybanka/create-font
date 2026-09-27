@@ -1,5 +1,5 @@
 import type { GlyphId, MasterId, PointId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { makeDemoFont } from "../src/demo-font.ts"
 import {

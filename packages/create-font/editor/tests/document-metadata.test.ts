@@ -1,5 +1,5 @@
 import type { EditorFontSource } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	createFontFaviconPreview,

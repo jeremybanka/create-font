@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { DESIGN_TOOLS } from "../src/design-tools.ts"
 

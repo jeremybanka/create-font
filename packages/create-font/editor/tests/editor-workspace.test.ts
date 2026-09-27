@@ -4,7 +4,7 @@ import type {
 	GlyphId,
 	MasterId,
 } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	aGlyphId,
@@ -293,7 +293,10 @@ describe("editor workspace", () => {
 		).toEqual({ at: 1, length: 1 })
 		expect(
 			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
-		).toEqual({ at: 1, length: 1 })
+		).toEqual({
+			at: 1,
+			length: 1,
+		})
 		const revisionBeforeReplacement = workspace.font.silo.getState(
 			workspace.font.atoms.documentRevision,
 		)
@@ -367,7 +370,10 @@ describe("editor workspace", () => {
 		).toBe(false)
 		expect(
 			workspace.font.silo.inspectTimeline(workspace.font.kerningTimeline),
-		).toEqual({ at: 0, length: 0 })
+		).toEqual({
+			at: 0,
+			length: 0,
+		})
 		expect(readSnapshot()).toEqual(expected)
 	})
 
@@ -495,7 +501,10 @@ describe("editor workspace", () => {
 		const workspace = createEditorWorkspace()
 		expect(
 			workspace.font.silo.getState(workspace.ui.compatibilityGhostOffset),
-		).toEqual({ x: -12, y: 12 })
+		).toEqual({
+			x: -12,
+			y: 12,
+		})
 
 		workspace.font.silo.setState(workspace.ui.compatibilityGhostOffset, {
 			x: 24,
@@ -505,7 +514,10 @@ describe("editor workspace", () => {
 
 		expect(
 			workspace.font.silo.getState(workspace.ui.compatibilityGhostOffset),
-		).toEqual({ x: 24, y: -8 })
+		).toEqual({
+			x: 24,
+			y: -8,
+		})
 	})
 
 	it("chooses a distinct comparison master and clears layer-local selection when switching", () => {
@@ -852,7 +864,11 @@ describe("editor workspace", () => {
 		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
 		expect(
 			workspace.font.silo.getState(workspace.ui.activeKerningPair),
-		).toMatchObject({ left: aGlyphId, right: oGlyphId, value: null })
+		).toMatchObject({
+			left: aGlyphId,
+			right: oGlyphId,
+			value: null,
+		})
 		workspace.font.silo.setState(workspace.ui.textSelectionCollapsed, false)
 		expect(
 			workspace.font.silo.getState(workspace.ui.activeKerningPair),
@@ -887,7 +903,10 @@ describe("editor workspace", () => {
 		workspace.font.silo.setState(workspace.ui.caretIndex, 1)
 		expect(
 			workspace.font.silo.getState(workspace.ui.activeKerningPair),
-		).toMatchObject({ left: aGlyphId, right: oGlyphId })
+		).toMatchObject({
+			left: aGlyphId,
+			right: oGlyphId,
+		})
 
 		workspace.actions.enterGlyphEdit(0, aGlyphId)
 		expect(
@@ -897,7 +916,10 @@ describe("editor workspace", () => {
 		workspace.actions.exitGlyphEdit()
 		expect(
 			workspace.font.silo.getState(workspace.ui.activeKerningPair),
-		).toMatchObject({ left: aGlyphId, right: oGlyphId })
+		).toMatchObject({
+			left: aGlyphId,
+			right: oGlyphId,
+		})
 	})
 
 	it("enters, switches, and exits outline editing occurrences", () => {
@@ -1453,13 +1475,28 @@ describe("editor workspace", () => {
 		})
 		expect(
 			selectionScaleForDimension(bounds, "top-right", "width", 202),
-		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 1 })
+		).toEqual({
+			anchorX: 91,
+			anchorY: 80,
+			scaleX: 2,
+			scaleY: 1,
+		})
 		expect(
 			selectionScaleForDimension(bounds, "top-right", "width", 202, true),
-		).toEqual({ anchorX: 91, anchorY: 80, scaleX: 2, scaleY: 2 })
+		).toEqual({
+			anchorX: 91,
+			anchorY: 80,
+			scaleX: 2,
+			scaleY: 2,
+		})
 		expect(
 			selectionScaleForDimension(bounds, "bottom-left", "height", 50.5, true),
-		).toEqual({ anchorX: -10, anchorY: -21, scaleX: 0.5, scaleY: 0.5 })
+		).toEqual({
+			anchorX: -10,
+			anchorY: -21,
+			scaleX: 0.5,
+			scaleY: 0.5,
+		})
 	})
 
 	it("rejects undefined scaling from degenerate selection bounds", () => {
@@ -1469,7 +1506,12 @@ describe("editor workspace", () => {
 		).toBeNull()
 		expect(
 			selectionScaleForDimension(vertical, "center", "height", 60),
-		).toEqual({ anchorX: 12, anchorY: 10, scaleX: 1, scaleY: 2 })
+		).toEqual({
+			anchorX: 12,
+			anchorY: 10,
+			scaleX: 1,
+			scaleY: 2,
+		})
 		expect(
 			selectionScaleForDimension(vertical, "center", "height", 60, true),
 		).toBeNull()

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	boundsOfPoints,
@@ -117,7 +117,10 @@ describe("stroke expansion", () => {
 			).toEqual([])
 			expect(
 				windingNumber({ x: -10, y: 0 }, expanded[0]?.points ?? []),
-			).toMatchObject({ classification: "inside", winding: 1 })
+			).toMatchObject({
+				classification: "inside",
+				winding: 1,
+			})
 		},
 	)
 

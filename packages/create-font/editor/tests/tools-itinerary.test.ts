@@ -1,6 +1,6 @@
 import type { ContourId, PointId } from "@create-font/states"
 import { readFileSync } from "node:fs"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { resolveGesturePoint } from "../src/canvas-snapping.ts"
 import { oGlyphId } from "../src/demo-font.ts"
@@ -55,7 +55,10 @@ interface ToolItinerary {
 const coveredBy = (
 	file: ExistingTestReference["file"],
 	test: string,
-): ExistingTestReference => ({ file, test })
+): ExistingTestReference => ({
+	file,
+	test,
+})
 
 /**
  * Executable index of create-font's canvas-tool contract.

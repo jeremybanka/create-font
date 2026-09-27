@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import type { SourceAssetDescriptor } from "../src/assets.ts"
 import { SourceVersionControlError, type JsonValue } from "../src/contracts.ts"
@@ -353,9 +353,7 @@ describe(`Git source version control`, () => {
 		const initial = await git(root, `rev-parse`, `HEAD`)
 		await writeFile(
 			join(sourceRoot, `assets.json`),
-			`${JSON.stringify(
-				assetIndex({ ...descriptor, digest: `sha256:${`0`.repeat(64)}` }),
-			)}\n`,
+			`${JSON.stringify(assetIndex({ ...descriptor, digest: `sha256:${`0`.repeat(64)}` }))}\n`,
 		)
 		await git(root, `add`, `source/assets.json`)
 		await git(root, `commit`, `-m`, `Invalid digest`)
@@ -426,7 +424,9 @@ describe(`Git source version control`, () => {
 		const { sourceRoot, versionControl } = await fixture()
 		await expect(
 			versionControl.readComparison({ baseRef: `--help` }),
-		).rejects.toMatchObject({ code: `source.invalid_ref` })
+		).rejects.toMatchObject({
+			code: `source.invalid_ref`,
+		})
 		await writeFile(join(sourceRoot, `a.json`), `{"value":"changed"}\n`)
 		const incomplete = createSourceVersionControl(
 			sourceRoot,
@@ -444,7 +444,9 @@ describe(`Git source version control`, () => {
 		)
 		await expect(
 			incomplete.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.repository_state` })
+		).rejects.toMatchObject({
+			code: `source.repository_state`,
+		})
 	})
 
 	it(`reports an unreadable working snapshot as repository state`, async () => {
@@ -508,7 +510,9 @@ describe(`Git source version control`, () => {
 		).rejects.toBeInstanceOf(SourceVersionControlError)
 		await expect(
 			versionControl.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.snapshot_too_large` })
+		).rejects.toMatchObject({
+			code: `source.snapshot_too_large`,
+		})
 
 		const tooMany = createSourceVersionControl(
 			root,
@@ -536,6 +540,8 @@ describe(`Git source version control`, () => {
 		)
 		await expect(
 			tooMany.readComparison({ baseRef: `HEAD` }),
-		).rejects.toMatchObject({ code: `source.snapshot_too_large` })
+		).rejects.toMatchObject({
+			code: `source.snapshot_too_large`,
+		})
 	})
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	directSelectionKey,
@@ -200,7 +200,9 @@ describe("design selection", () => {
 				document.objects,
 				{ x: 25, y: 10 },
 				2,
-				{ maxDistancePixels: 4 },
+				{
+					maxDistancePixels: 4,
+				},
 			)?.kind,
 		).toBe("segment")
 		expect(
@@ -209,7 +211,10 @@ describe("design selection", () => {
 				document.objects,
 				{ x: 25, y: 10 },
 				2,
-				{ contour: true, maxDistancePixels: 4 },
+				{
+					contour: true,
+					maxDistancePixels: 4,
+				},
 			)?.kind,
 		).toBe("contour")
 	})
@@ -607,13 +612,22 @@ describe("design selection", () => {
 	it("computes directional corner drag distance in document space", () => {
 		expect(
 			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: 6, y: 8 }),
-		).toEqual({ start: 5, current: 10 })
+		).toEqual({
+			start: 5,
+			current: 10,
+		})
 		expect(
 			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: -4, y: 3 }),
-		).toEqual({ start: 5, current: 0 })
+		).toEqual({
+			start: 5,
+			current: 0,
+		})
 		expect(
 			designInwardDistances({ x: 0, y: 0 }, { x: 3, y: 4 }, { x: -3, y: -4 }),
-		).toEqual({ start: 5, current: -5 })
+		).toEqual({
+			start: 5,
+			current: -5,
+		})
 	})
 
 	it("maps the full existing corner amount onto inward handle travel", () => {

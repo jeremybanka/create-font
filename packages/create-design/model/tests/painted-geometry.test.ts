@@ -1,5 +1,5 @@
 import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	objectFillContainsPoint,

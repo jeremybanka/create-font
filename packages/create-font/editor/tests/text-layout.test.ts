@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import type { PreviewRunItem } from "../src/editor-workspace.ts"
 import { PREVIEW_SAMPLES } from "../src/preview-tile.ts"

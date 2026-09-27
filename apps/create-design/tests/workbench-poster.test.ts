@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { resolveDesignArtboardLinks } from "@create-design/model"
 import { assembleDesignDocument } from "@create-design/source"
 import { validatePdf } from "mondrian.pdf"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { createPdfIr, exportPdf } from "@create-design/pdf"
 import { exportPng } from "@create-design/png"

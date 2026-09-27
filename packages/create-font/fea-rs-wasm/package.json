@@ -36,9 +36,7 @@
 		"benchmark": "node ../../../scripts/benchmark-fea-rs-wasm.ts",
 		"test": "vp test"
 	},
-	"devDependencies": {
-		"vitest": "catalog:"
-	},
+	"devDependencies": {},
 	"engines": {
 		"node": ">=22.0.0"
 	},

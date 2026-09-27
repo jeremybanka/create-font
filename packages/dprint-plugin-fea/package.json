@@ -23,9 +23,7 @@
 	"scripts": {
 		"test": "vp test"
 	},
-	"devDependencies": {
-		"vitest": "catalog:"
-	},
+	"devDependencies": {},
 	"engines": {
 		"node": ">=22.0.0"
 	},

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	bakeDesignObject,
@@ -54,7 +54,12 @@ describe("design geometry", () => {
 	it("supports constrained, centered drawing bounds", () => {
 		expect(
 			normalizedBounds({ x: 50, y: 50 }, { x: 80, y: 70 }, true, true),
-		).toEqual({ minX: 20, minY: 20, maxX: 80, maxY: 80 })
+		).toEqual({
+			minX: 20,
+			minY: 20,
+			maxX: 80,
+			maxY: 80,
+		})
 	})
 
 	it("keeps authored live geometry unchanged across object transforms", () => {

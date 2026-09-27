@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { vectorDocumentAdapterContract } from "../../../create-art/editor/tests/vector-document-adapter.contract.ts"
 import {
@@ -362,7 +362,10 @@ describe("design object vector adapter", () => {
 		const updated = designVectorAdapter.apply(
 			created.document,
 			created.selection,
-			{ kind: "replace-object", object: moved },
+			{
+				kind: "replace-object",
+				object: moved,
+			},
 		)
 		expect(updated.ok).toBe(true)
 		if (!updated.ok) return
@@ -389,7 +392,11 @@ describe("design object vector adapter", () => {
 		const reordered = designVectorAdapter.apply(
 			styled.document,
 			styled.selection,
-			{ kind: "reorder", objectId: vector.id, toIndex: 0 },
+			{
+				kind: "reorder",
+				objectId: vector.id,
+				toIndex: 0,
+			},
 		)
 		expect(reordered.ok).toBe(true)
 		if (!reordered.ok) return
@@ -397,7 +404,10 @@ describe("design object vector adapter", () => {
 		const deleted = designVectorAdapter.apply(
 			reordered.document,
 			reordered.selection,
-			{ kind: "delete", objectIds: [vector.id] },
+			{
+				kind: "delete",
+				objectIds: [vector.id],
+			},
 		)
 		expect(deleted).toMatchObject({ ok: true, selection: [] })
 	})

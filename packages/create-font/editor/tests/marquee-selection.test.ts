@@ -1,5 +1,5 @@
 import type { PointId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	combineMarqueeSelection,
@@ -14,7 +14,11 @@ const node = (pointId: PointId): EditorSelectionTarget => ({
 const handle = (
 	pointId: PointId,
 	side: "incoming" | "outgoing",
-): EditorSelectionTarget => ({ kind: "handle", pointId, handle: side })
+): EditorSelectionTarget => ({
+	kind: "handle",
+	pointId,
+	handle: side,
+})
 
 describe("marquee selection", () => {
 	it("resolves replace, add, and Shift-first toggle modes", () => {

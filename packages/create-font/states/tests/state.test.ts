@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { createFontEditorState } from "../src/index.ts"
 import {
@@ -258,7 +258,10 @@ describe("font editor state", () => {
 		})
 		expect(
 			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
-		).toEqual({ at: 1, length: 1 })
+		).toEqual({
+			at: 1,
+			length: 1,
+		})
 		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
 			at: 1,
 			length: 1,
@@ -268,7 +271,10 @@ describe("font editor state", () => {
 		const replacementPoint = firstPoint(editor, blackMasterId)
 		expect(
 			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
-		).toEqual({ at: 0, length: 0 })
+		).toEqual({
+			at: 0,
+			length: 0,
+		})
 		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
 			at: 0,
 			length: 0,
@@ -383,7 +389,10 @@ describe("font editor state", () => {
 		expect(editor.read.editorSource()).toBe(source)
 		expect(
 			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
-		).toEqual({ at: 1, length: 1 })
+		).toEqual({
+			at: 1,
+			length: 1,
+		})
 		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
 			at: 1,
 			length: 1,
@@ -463,7 +472,10 @@ describe("font editor state", () => {
 		expect(editor.read.editorSource()).toBe(source)
 		expect(
 			editor.silo.inspectTimeline(editor.glyphHistoryTimelines, oGlyphId),
-		).toEqual({ at: 1, length: 1 })
+		).toEqual({
+			at: 1,
+			length: 1,
+		})
 		expect(editor.silo.inspectTimeline(editor.kerningTimeline)).toEqual({
 			at: 1,
 			length: 1,

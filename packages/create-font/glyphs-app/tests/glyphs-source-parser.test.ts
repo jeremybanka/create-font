@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { importGlyphsSource, lowerGlyphsSource } from "../src/index.ts"
 import { parseGlyphsSource } from "../src/parser.ts"

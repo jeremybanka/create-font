@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	formatSourceFea,
@@ -27,7 +27,10 @@ describe("create-art source formatting contract", () => {
 			peerDependenciesMeta: Record<string, { optional?: boolean }>
 		}
 		const workspacePackageJson = JSON.parse(
-			await readFile(new URL("../../../../package.json", import.meta.url), "utf8"),
+			await readFile(
+				new URL("../../../../package.json", import.meta.url),
+				"utf8",
+			),
 		) as { devDependencies: Record<string, string> }
 		expect(packageJson.dependencies.dprint).toBeUndefined()
 		expect(packageJson.peerDependencies.dprint).toBe(SOURCE_FORMAT_DPRINT_RANGE)
@@ -44,7 +47,7 @@ describe("create-art source formatting contract", () => {
 
 	it("formats golden JSON facts idempotently across line endings", () => {
 		const value = {
-			z: "Unicode café \u2028 and escaping \"\\\b\f\n\r\t",
+			z: 'Unicode café \u2028 and escaping "\\\b\f\n\r\t',
 			order: [3.141592653589793, -0, 1e-7, 1e21],
 			long: Array.from({ length: 24 }, (_, index) => index + 0.25),
 			a: { second: true, first: null },
@@ -87,7 +90,9 @@ describe("create-art source formatting contract", () => {
 		expect(formatSourceJson(JSON.parse(formatted))).toBe(formatted)
 		expect(formatted.endsWith("\n")).toBe(true)
 		expect(formatted.endsWith("\n\n")).toBe(false)
-		expect(createHash("sha256").update(formatted).digest("hex")).toHaveLength(64)
+		expect(createHash("sha256").update(formatted).digest("hex")).toHaveLength(
+			64,
+		)
 		expect(stringifySourceJson(value).indexOf('"a"')).toBeLessThan(
 			stringifySourceJson(value).indexOf('"z"'),
 		)
@@ -114,9 +119,7 @@ describe("create-art source formatting contract", () => {
 		const formatted = formatSourceFea(
 			"feature liga {\r\n sub f i by f_i;\r\n} liga;\r\n",
 		)
-		expect(formatted).toBe(
-			"feature liga {\n  sub f i by f_i;\n} liga;\n",
-		)
+		expect(formatted).toBe("feature liga {\n  sub f i by f_i;\n} liga;\n")
 		expect(formatSourceFea(formatted)).toBe(formatted)
 		expect(() => formatBrowserFea()).toThrow(/trusted Node adapter/u)
 	})

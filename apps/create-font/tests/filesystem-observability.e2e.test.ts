@@ -13,7 +13,7 @@ import type {
 } from "@create-font/editor/browser"
 import { StoreProvider } from "atom.io/react"
 import { act, h, render } from "../../../scripts/react-test-render.ts"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import {
 	applySourceSyncDelta,
@@ -194,7 +194,9 @@ describe(`create-font filesystem observability`, () => {
 		await cp(
 			resolve(import.meta.dirname, `../../../fonts/workbench-sans`),
 			root,
-			{ recursive: true },
+			{
+				recursive: true,
+			},
 		)
 		await execFileAsync(`git`, [`init`, `--quiet`], { cwd: root })
 		await execFileAsync(`git`, [`add`, `names.json`], { cwd: root })
@@ -335,7 +337,9 @@ describe(`create-font filesystem observability`, () => {
 		await cp(
 			resolve(import.meta.dirname, `../../../fonts/workbench-sans`),
 			root,
-			{ recursive: true },
+			{
+				recursive: true,
+			},
 		)
 		await execFileAsync(`git`, [`init`, `--quiet`], { cwd: root })
 		await execFileAsync(`git`, [`add`, `.`], { cwd: root })

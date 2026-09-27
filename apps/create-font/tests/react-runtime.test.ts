@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 describe(`Browser artifact boundary`, () => {
 	it(`keeps the editor implementation out of the create-font application`, async () => {

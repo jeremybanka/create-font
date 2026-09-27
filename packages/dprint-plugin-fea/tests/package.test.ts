@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
 
 describe("dprint-plugin-fea package", () => {
 	test("builds a versioned WebAssembly artifact with matching integrity", async () => {

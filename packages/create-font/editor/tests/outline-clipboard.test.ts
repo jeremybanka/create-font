@@ -1,5 +1,5 @@
 import type { PointId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import {
 	blackMasterId,
@@ -103,7 +103,10 @@ describe("outline clipboard", () => {
 		).toEqual({ ok: true, value: undefined })
 		expect(
 			parseOutlineClipboard(entries.get(OUTLINE_CLIPBOARD_MIME) ?? ""),
-		).toEqual({ ok: true, value: prepared.value.payload })
+		).toEqual({
+			ok: true,
+			value: prepared.value.payload,
+		})
 		expect(parseOutlineClipboard(entries.get("text/plain") ?? "")).toEqual({
 			ok: true,
 			value: prepared.value.payload,

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vite-plus/test"
 
 import { createPathfinderWorkerClient } from "../src/pathfinder-worker-client.ts"
 import type {

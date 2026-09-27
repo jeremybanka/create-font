@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { ingestVariableFont, type IngestFailure } from "../src/index.ts"
 import { makeGeometricOFont } from "./fixtures/geometric-o.ts"

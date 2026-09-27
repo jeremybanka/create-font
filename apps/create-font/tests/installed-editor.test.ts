@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test"
 import {
 	cp,
 	mkdir,

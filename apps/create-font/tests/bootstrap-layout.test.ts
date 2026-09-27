@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 describe("bootstrap layout contract", () => {
 	it("establishes border-box sizing before editor globals load", async () => {

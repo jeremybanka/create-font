@@ -1,5 +1,5 @@
 import type { ContourId, PointId } from "@create-font/states"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
@@ -697,7 +697,10 @@ describe("Pen gestures", () => {
 				{ pointId: "point:last", side: "last" },
 				curve,
 			),
-		).toEqual({ pointId: "point:last", handle: "outgoing" })
+		).toEqual({
+			pointId: "point:last",
+			handle: "outgoing",
+		})
 		expect(
 			penEndpointHandleBeingReplaced(
 				{ pointId: "point:last", side: "last" },

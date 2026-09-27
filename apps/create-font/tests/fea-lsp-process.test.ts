@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import { resolve } from "node:path"
 
 function message(value: unknown): string {

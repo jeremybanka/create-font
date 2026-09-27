@@ -5,7 +5,7 @@ import { Group as KonvaGroup } from "konva/lib/Group"
 import { Rect as KonvaRect } from "konva/lib/shapes/Rect"
 import type { Stage as KonvaStage } from "konva/lib/Stage"
 import { createRef } from "react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { Group, Layer, Rect, Stage, Text } from "../src/canvas-renderer.ts"

@@ -5,7 +5,7 @@ import {
 	selfIntersections,
 } from "@create-art/vector-geometry"
 import { validateDesignDocument } from "@create-design/source"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { nearestDesignObject } from "../src/design-canvas.ts"
 import { DESIGN_VECTOR_MIME, writeDesignClipboard } from "../src/clipboard.ts"
@@ -34,7 +34,11 @@ const contour = (
 	id: string,
 	points: readonly DesignPoint[],
 	closed = false,
-): DesignContour => ({ id, closed, points })
+): DesignContour => ({
+	id,
+	closed,
+	points,
+})
 
 const path = (
 	id: string,
@@ -134,7 +138,10 @@ describe("create-design path commands", () => {
 		const document = documentWith(open, locked)
 		expect(
 			designPathCommandEligibility("reverse", context(document, [])),
-		).toEqual({ eligible: false, reason: "Select one or more path contours." })
+		).toEqual({
+			eligible: false,
+			reason: "Select one or more path contours.",
+		})
 		expect(
 			designPathCommandEligibility("close", context(document, [locked.id])),
 		).toEqual({
@@ -489,7 +496,9 @@ describe("create-design path commands", () => {
 			const result = applyDesignPathCommand(
 				"simplify",
 				context(source, [`shape:${authored.id}`]),
-				{ nextId: () => `unexpected:${generated++}` },
+				{
+					nextId: () => `unexpected:${generated++}`,
+				},
 			)
 			expect(result.ok).toBe(true)
 			if (!result.ok) continue
@@ -601,7 +610,9 @@ describe("create-design path commands", () => {
 		const result = applyDesignPathCommand(
 			"simplify",
 			context(source, ["shape"], selected),
-			{ nextId: () => `unexpected:${generated++}` },
+			{
+				nextId: () => `unexpected:${generated++}`,
+			},
 		)
 		expect(result.ok).toBe(true)
 		if (!result.ok) return
@@ -687,7 +698,9 @@ describe("create-design path commands", () => {
 		const released = applyDesignPathCommand(
 			"release-compound",
 			context(made.document, ["top"]),
-			{ nextId: () => `release:${sequence++}` },
+			{
+				nextId: () => `release:${sequence++}`,
+			},
 		)
 		expect(released.ok).toBe(true)
 		if (!released.ok) return
@@ -1116,7 +1129,9 @@ describe("create-design path commands", () => {
 			return applyDesignPathCommand(
 				"pathfinder-unite",
 				context(source, [first.id, second.id]),
-				{ nextId: () => `curve:${id++}` },
+				{
+					nextId: () => `curve:${id++}`,
+				},
 			)
 		}
 		const left = run()
@@ -1294,7 +1309,9 @@ describe("create-design path commands", () => {
 			return applyDesignPathCommand(
 				"pathfinder-divide",
 				context(source, [top.id, bottom.id]),
-				{ nextId: () => `divide:${sequence++}` },
+				{
+					nextId: () => `divide:${sequence++}`,
+				},
 			)
 		}
 		const result = run()
@@ -1680,7 +1697,9 @@ describe("create-design path commands", () => {
 			const result = applyDesignPathCommand(
 				command,
 				context(source, ["first", "second"]),
-				{ nextId: () => "unused" },
+				{
+					nextId: () => "unused",
+				},
 			)
 			expect(result.ok).toBe(true)
 			if (!result.ok) return

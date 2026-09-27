@@ -1,19 +1,11 @@
-import {
-	mkdtemp,
-	readFile,
-	rm,
-	writeFile,
-} from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Writable } from "node:stream"
 
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
-import {
-	runSourceFormatCli,
-	type SourceFormatCliIo,
-} from "../src/cli.ts"
+import { runSourceFormatCli, type SourceFormatCliIo } from "../src/cli.ts"
 import {
 	formatSourceFea,
 	formatSourceJson,
@@ -79,9 +71,7 @@ describe("create-source-format CLI", () => {
 			})
 			expect(await readFile(compactPath, "utf8")).toBe(expectedJson)
 			expect(await readFile(multilinePath, "utf8")).toBe(expectedJson)
-			expect(await readFile(featurePath, "utf8")).toBe(
-				formatSourceFea(feature),
-			)
+			expect(await readFile(featurePath, "utf8")).toBe(formatSourceFea(feature))
 
 			const after = captureIo()
 			expect(await runSourceFormatCli(["check", "."], after.io, root)).toBe(0)

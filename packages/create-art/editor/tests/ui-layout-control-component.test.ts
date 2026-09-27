@@ -2,7 +2,7 @@
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import type { UiLayoutRecordV1 } from "@create-art/ui-layout"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { UiLayoutControl } from "../src/UiLayoutControl.tsx"
 
 const slots = Array.from({ length: 12 }, () => null)

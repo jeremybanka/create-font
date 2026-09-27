@@ -2,7 +2,7 @@
 
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { createRequire } from "node:module"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"

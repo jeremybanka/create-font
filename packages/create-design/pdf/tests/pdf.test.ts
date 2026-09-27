@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import { validatePdf } from "mondrian.pdf"
 import { DEFAULT_DESIGN_STROKE_STYLE } from "@create-design/source"
 import type { DesignObject, DesignSwatch } from "@create-design/source"

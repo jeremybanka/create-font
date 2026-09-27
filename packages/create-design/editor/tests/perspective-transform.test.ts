@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 import { IDENTITY_DESIGN_TRANSFORM } from "@create-design/model"
 
 import {

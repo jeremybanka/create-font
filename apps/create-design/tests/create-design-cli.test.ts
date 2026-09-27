@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 
 import { MAX_ILLUSTRATOR_FILE_BYTES } from "@create-design/ai"
 
@@ -241,7 +241,9 @@ describe("create-design CLI", () => {
 			const root = join(cwd, "Brand-Logo", "designs", "Brand-Logo")
 			const metadata = JSON.parse(
 				await readFile(join(root, "document.json"), "utf8"),
-			) as { title: string }
+			) as {
+				title: string
+			}
 			expect(metadata.title).toBe("Brand Logo")
 			const artboardIndex = JSON.parse(
 				await readFile(join(root, "artboards", "index.json"), "utf8"),
@@ -281,7 +283,9 @@ describe("create-design CLI", () => {
 			expect(stderr).toContain("ai.source.no-layers")
 			await expect(
 				readFile(join(cwd, "should-not-exist", "package.json")),
-			).rejects.toMatchObject({ code: "ENOENT" })
+			).rejects.toMatchObject({
+				code: "ENOENT",
+			})
 		} finally {
 			process.chdir(previous)
 		}

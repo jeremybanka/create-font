@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test } from "vitest"
+import { describe, expect, expectTypeOf, test } from "vite-plus/test"
 
 import { createFontEditorState } from "../../states/src/state.ts"
 import type { EditorFontSource } from "../../states/src/types.ts"

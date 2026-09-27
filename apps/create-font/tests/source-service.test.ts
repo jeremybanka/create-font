@@ -13,7 +13,7 @@ import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { promisify } from "node:util"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vite-plus/test"
 import {
 	SourceUnitConflictError,
 	SourceValidationError,

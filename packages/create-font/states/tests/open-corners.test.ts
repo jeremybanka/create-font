@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vite-plus/test"
 
 import { createFontEditorState, type EditorFontSource } from "../src/index.ts"
 import { serializeVariableFont } from "@create-font/target"
