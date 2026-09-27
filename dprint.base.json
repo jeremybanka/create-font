@@ -3,9 +3,6 @@
 	"lineWidth": 80,
 	"useTabs": true,
 	"indentWidth": 2,
-	"includes": [
-		"**/*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,mdx,css,astro,toml,yml,yaml}"
-	],
 	"excludes": [
 		"**/pnpm-lock.yaml",
 		"**/coverage/**",
