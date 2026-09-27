@@ -19,3 +19,7 @@ Use a minor bump for breaking changes while the package is pre-v1; use a patch b
 Never store secrets or credentials in project, application, or user configuration, including `.env` files and encrypted secret blobs. Configuration may identify a provider or reference a credential, but must not contain its secret value. File permissions or encryption do not make a secret configuration.
 
 Persist credentials through an OS credential store or an explicit secret-management provider. Headless instances must provision a secure provider too. If it is missing, locked, or unavailable, fail the operation that needs it with an actionable error; never fall back to an application-managed credential file or put the provider's unlock secret in configuration.
+
+## Vite Plus Upgrades
+
+Use the target release's official `vp migrate --no-interactive` for Vite Plus upgrades. Preserve the old lockfile until migration runs, and let the migrator own toolchain version alignment and supported source/configuration changes. Review its manual migration findings and run the repository's formatter and checks; do not maintain a separate dependency synchronization implementation.
