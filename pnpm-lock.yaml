@@ -339,8 +339,8 @@ importers:
         specifier: 0.8.5
         version: 0.8.5(@types/react@19.3.0)(@typescript-eslint/parser@8.70.1(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       mondrian.pdf:
-        specifier: 0.1.6
-        version: 0.1.6(vitest@5.0.1)
+        specifier: 0.1.7
+        version: 0.1.7(vitest@5.0.1)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -678,8 +678,8 @@ importers:
         specifier: workspace:*
         version: link:../text
       mondrian.pdf:
-        specifier: 0.1.6
-        version: 0.1.6(vitest@5.0.1)
+        specifier: 0.1.7
+        version: 0.1.7(vitest@5.0.1)
     devDependencies:
       '@types/node':
         specifier: 26.6.3
@@ -1467,6 +1467,14 @@ packages:
   '@napi-rs/keyring@1.3.0':
     resolution: {integrity: sha512-WrOw/bcXm0f9qHkumlT1QlArXSTWqaY9sunsDpOk+yCCorCKMxvWT/a3xko4EYHVdeZoh00yI2TydXn6eyICDA==}
     engines: {node: '>= 10'}
+
+  '@noble/ciphers@2.4.0':
+    resolution: {integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
 
   '@oxc-project/runtime@0.151.0':
     resolution: {integrity: sha512-fNuliiqGTseerW2FTbxq6UOQavKL/NvNh9K3peJZZVNi1NbM4Ehscwp3MX9nu+9bfbSfmPUEivF779XQU5exiw==}
@@ -3358,8 +3366,8 @@ packages:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
 
-  mondrian.pdf@0.1.6:
-    resolution: {integrity: sha512-hz1dCmAroKHGEBXOMXOcndKLK7DTlOR4lE7Co+E0LKjoWLT3RLyK239o6Ue5Q/A5zp4EorQUFTVr1c/rOG8/Xg==}
+  mondrian.pdf@0.1.7:
+    resolution: {integrity: sha512-4VbvhQxMkHuVxOkB23Kx2/Vgs9Uh7RpQnUuiPv3WQKL2NgD7oelft0vtRqgzvEaSf2AueJ2JlK53nBFwuIyI7Q==}
     engines: {node: '>=22.13.0'}
     peerDependencies:
       vitest: 5.0.1
@@ -4453,6 +4461,10 @@ snapshots:
       '@napi-rs/keyring-win32-arm64-msvc': 1.3.0
       '@napi-rs/keyring-win32-ia32-msvc': 1.3.0
       '@napi-rs/keyring-win32-x64-msvc': 1.3.0
+
+  '@noble/ciphers@2.4.0': {}
+
+  '@noble/hashes@2.4.0': {}
 
   '@oxc-project/runtime@0.151.0': {}
 
@@ -5784,7 +5796,7 @@ snapshots:
       buffer-image-size: 0.6.4
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.21.0
+      ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -6090,10 +6102,12 @@ snapshots:
     dependencies:
       brace-expansion: 5.0.9
 
-  mondrian.pdf@0.1.6(vitest@5.0.1):
+  mondrian.pdf@0.1.7(vitest@5.0.1):
     dependencies:
       '@embedpdf/pdfium': 2.15.1
       '@napi-rs/canvas': 1.0.9
+      '@noble/ciphers': 2.4.0
+      '@noble/hashes': 2.4.0
       fflate: 0.8.3
       pdf-lib: 1.17.1
     optionalDependencies:
