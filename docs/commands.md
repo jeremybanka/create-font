@@ -23,9 +23,11 @@ Run these commands from the repository root with `pnpm run <command>`. `mise.tom
 - `check:eslint`: `pnpm -r check:eslint`.
 - `check:fmt`: `vp run dprint-plugin-fea#build && node ./packages/create-art/source-format/src/cli.ts check fonts designs && dprint check`.
 - `check:lasertag`: `pnpm -r check:lasertag`.
-- `check:oxlint`: `vp check --no-fmt`.
+- `check:vp`: `vp check --no-fmt`.
 - `check:peers`: `pnpm peers check`.
 - `check:rustfmt`: `mise exec -- cargo fmt --all -- --check`.
+
+`check:vp` invokes the configured Vite Plus validation pipeline; `check:fmt` handles formatting separately.
 
 ## Verification
 
