@@ -36,7 +36,8 @@
 		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"dev": "node ./scripts/dev.ts",
-		"test": "vp test --config=./vitest.config.ts"
+		"test": "vp test --config=./vitest.config.ts",
+		"test:watch": "vp test watch --config=./vitest.config.ts"
 	},
 	"dependencies": {
 		"@create-art/source-rpc": "workspace:*",
