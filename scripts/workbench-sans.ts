@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path"
 import type {
 	EditorFontSource,
 	EditorGlyphSource,
+	EditorGlyphLayerSource,
 	GlyphId,
 	MasterId,
 } from "../packages/create-font/states/src/index.ts"
@@ -223,7 +224,7 @@ const punctuation: Readonly<Record<string, readonly Stroke[]>> = {
 		stroke(100, 240, 600, 240),
 		stroke(100, 470, 600, 470),
 	],
-	$: [...uppercase.S, stroke(350, -80, 350, 780)],
+	$: [...uppercase.S!, stroke(350, -80, 350, 780)],
 	"%": [
 		segment.up,
 		stroke(110, 560, 250, CAP_HEIGHT),
@@ -260,7 +261,7 @@ const punctuation: Readonly<Record<string, readonly Stroke[]>> = {
 		dot,
 	],
 	"@": [
-		...uppercase.O,
+		...uppercase.O!,
 		stroke(250, 180, 250, 500),
 		stroke(250, 500, 500, 500),
 		stroke(500, 500, 500, 180),
@@ -423,7 +424,7 @@ function glyphFromStrokes(
 	const layer = (
 		masterId: MasterId,
 		coordinates: readonly (readonly Coordinate[])[],
-	) => {
+	): EditorGlyphLayerSource => {
 		const masterPrefix = masterId === textMasterId ? "" : `${masterId}:`
 		const points = coordinates.flat()
 		return {

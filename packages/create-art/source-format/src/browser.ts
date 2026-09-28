@@ -1,3 +1,5 @@
+import type { SourceJsonValue } from "./shared.ts"
+
 export {
 	SOURCE_FORMAT_CONTRACT_VERSION,
 	SOURCE_FORMAT_DPRINT_RANGE,

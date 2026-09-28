@@ -347,7 +347,7 @@ export function lowerIllustratorSource(
 				"cyan",
 				"orange",
 			] as const
-		)[index % 8],
+		)[index % 8]!,
 		...(layer.hidden ? { hidden: true } : {}),
 		...(layer.locked ? { locked: true } : {}),
 	}))

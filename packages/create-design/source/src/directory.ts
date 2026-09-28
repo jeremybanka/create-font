@@ -154,7 +154,7 @@ const offsetLegacyArtboardFileSchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
-	.transform((file) => ({
+	.transform((file): z.infer<typeof currentArtboardFileSchema> => ({
 		...file,
 		version: 2 as const,
 		name: "Artboard 1",
@@ -168,7 +168,7 @@ const originLegacyArtboardFileSchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
-	.transform((file) => ({
+	.transform((file): z.infer<typeof currentArtboardFileSchema> => ({
 		...file,
 		version: 2 as const,
 		name: "Artboard 1",
@@ -204,7 +204,11 @@ const legacyLayerFileSchema = z
 		children: z.array(sceneChildSchema),
 	})
 	.strict()
-	.transform((layer) => ({ ...layer, version: 2 as const, name: "Artwork" }))
+	.transform((layer): z.infer<typeof currentLayerFileSchema> => ({
+		...layer,
+		version: 2 as const,
+		name: "Artwork",
+	}))
 export const layerFileSchema = z.union([
 	currentLayerFileSchema,
 	legacyLayerFileSchema,
@@ -767,6 +771,14 @@ export interface SplitDesignDocumentOptions {
 
 function objectFile(object: DesignObject, objectPath: string): ObjectFile {
 	const geometry = (() => {
+		if (object.geometry.kind === "path")
+			return {
+				...object.geometry,
+				contours: object.geometry.contours.map((contour) => ({
+					...contour,
+					points: [...contour.points],
+				})),
+			}
 		if (object.geometry.kind !== "text") return object.geometry
 		const { text: _text, ...external } = object.geometry
 		return {
@@ -786,7 +798,19 @@ function objectFile(object: DesignObject, objectPath: string): ObjectFile {
 		name: object.name,
 		geometry,
 		transform: object.transform,
-		appearance: object.appearance,
+		appearance: {
+			...(object.appearance.fill === undefined
+				? {}
+				: { fill: object.appearance.fill }),
+			...(object.appearance.stroke === undefined
+				? {}
+				: {
+						stroke: {
+							...object.appearance.stroke,
+							dashArray: [...object.appearance.stroke.dashArray],
+						},
+					}),
+		},
 		...(object.hidden === undefined ? {} : { hidden: object.hidden }),
 		...(object.locked === undefined ? {} : { locked: object.locked }),
 	}
@@ -915,7 +939,15 @@ export function splitDesignDocument(
 			guides: validated.value.guides.map((guide) => ({ ...guide })),
 			...(validated.value.blends === undefined
 				? {}
-				: { blends: validated.value.blends }),
+				: {
+						blends: validated.value.blends.map((blend) => ({
+							...blend,
+							contours: blend.contours.map((contour) => ({
+								...contour,
+								points: [...contour.points],
+							})),
+						})),
+					}),
 		} satisfies DocumentFile,
 		[designSourcePaths.palette]: {
 			format: "create-design.palette",
@@ -982,6 +1014,7 @@ export function splitDesignDocument(
 			format: "create-design.layer",
 			version: 2,
 			...layer,
+			children: [...layer.children],
 		} satisfies LayerFile
 	}
 	for (const [index, object] of validated.value.objects.entries()) {
@@ -998,6 +1031,7 @@ export function splitDesignDocument(
 				format: "create-design.group",
 				version: 1,
 				...group,
+				children: [...group.children],
 			} satisfies GroupFile
 	}
 	return success(files)
@@ -1263,7 +1297,9 @@ export function assembleDesignDocument(
 					entry.path,
 				),
 			)
-		let geometry: DesignObject["geometry"]
+		let geometry: Parameters<
+			typeof stabilizeDesignObjectIdentities
+		>[0]["geometry"]
 		if (file.geometry.kind === "text" && "contentPath" in file.geometry) {
 			const canonicalContentPath = textContentUnitPathForObjectPath(entry.path)
 			if (file.geometry.contentPath !== canonicalContentPath)
@@ -1292,7 +1328,8 @@ export function assembleDesignDocument(
 			geometry = { ...storedGeometry, text: content }
 		} else {
 			if (
-				project?.sourceVersion !== LEGACY_CREATE_DESIGN_SOURCE_VERSION &&
+				project !== null &&
+				project.sourceVersion !== LEGACY_CREATE_DESIGN_SOURCE_VERSION &&
 				project?.sourceVersion !== VERSION_TWO_CREATE_DESIGN_SOURCE_VERSION &&
 				file.geometry.kind === "text"
 			) {

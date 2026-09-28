@@ -169,7 +169,11 @@ export function preflightPdfExport(
 		target,
 		Object.freeze({
 			...PDF_PREFLIGHT_ADAPTER,
-			inspectObject({ object }) {
+			inspectObject({
+				object,
+			}: Parameters<
+				NonNullable<ExportPreflightAdapter<PdfExportTarget>["inspectObject"]>
+			>[0]) {
 				if (object.hidden) return []
 				if (object.geometry.kind === "image") {
 					const action = Object.freeze({

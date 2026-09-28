@@ -1079,7 +1079,7 @@ describe("complete design document codec", () => {
 				objects: [
 					{
 						...document.objects[0],
-						geometry: { ...document.objects[0].geometry, width: NaN },
+						geometry: { ...document.objects[0]!.geometry, width: NaN },
 					},
 					...document.objects.slice(1),
 				],
@@ -1093,7 +1093,7 @@ describe("complete design document codec", () => {
 				objects: [
 					{
 						...document.objects[0],
-						transform: { ...document.objects[0].transform, e: "43" },
+						transform: { ...document.objects[0]!.transform, e: "43" },
 					},
 					...document.objects.slice(1),
 				],
@@ -1108,7 +1108,7 @@ describe("complete design document codec", () => {
 					{
 						...document.objects[0],
 						appearance: {
-							...document.objects[0].appearance,
+							...document.objects[0]!.appearance,
 							stroke: { swatchId: "swatch:accent", width: -1 },
 						},
 					},

@@ -94,14 +94,18 @@ describe("SVG export", () => {
 				height: 80,
 			},
 		}
-		const preflight = preflightSvgExport({
+		const document = {
 			...initial,
 			objects: [link],
 			layers: initial.layers.map((layer) => ({
 				...layer,
-				children: [{ kind: "object", id: link.id }],
+				children: [{ kind: "object" as const, id: link.id }],
 			})),
-		})
+		}
+		const preflight = preflightSvgExport(document)
+		expect(() => exportSvg(document)).toThrow(
+			/Linked artboard .* must be expanded before SVG export/u,
+		)
 		expect(preflight).toMatchObject({
 			decision: "blocked",
 			summary: { errors: 1 },

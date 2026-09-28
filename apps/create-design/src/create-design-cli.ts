@@ -61,7 +61,6 @@ const createOptions = options(
 			completion: { repeatable: false },
 			description: "Package manager used to install a new workspace.",
 			example: "--package-manager=pnpm",
-			parse: parseStringOption,
 			required: false,
 		},
 	},

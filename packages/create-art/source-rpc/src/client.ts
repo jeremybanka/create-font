@@ -94,7 +94,7 @@ export function createSourceRpcClient(origin = ``) {
 		stageAsset: (
 			operationId: string,
 			descriptor: SourceAssetDescriptor,
-			bytes: BodyInit,
+			bytes: NonNullable<RequestInit["body"]>,
 		) =>
 			fetch(
 				`${base}/api/source/asset/stage?${new URLSearchParams({

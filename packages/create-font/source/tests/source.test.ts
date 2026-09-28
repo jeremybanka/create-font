@@ -479,8 +479,7 @@ describe("@create-font/source", () => {
 		]) {
 			expect(assemble(structuralOnly).ok).toBe(true)
 			expect(assemble(files).ok).toBe(true)
-			const unindexed = { ...files }
-			delete unindexed["features/index.json"]
+			const { "features/index.json": _index, ...unindexed } = files
 			const result = assemble(unindexed)
 			expect(result.ok).toBe(false)
 			if (!result.ok)

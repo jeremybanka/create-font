@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 
 import {
+	CREATE_DESIGN_DOCUMENT_VERSION,
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
@@ -65,7 +66,7 @@ const objects: readonly DesignObject[] = [
 
 const document: DesignDocument = {
 	format: "create-design.document",
-	version: 7,
+	version: CREATE_DESIGN_DOCUMENT_VERSION,
 	title: "create-design logo",
 	artboards: [
 		{
@@ -102,8 +103,8 @@ const document: DesignDocument = {
 	],
 	groups: [],
 	guides: [
-		{ id: "guide:center-x", axis: "x", value: 64 },
-		{ id: "guide:center-y", axis: "y", value: 64 },
+		{ id: "guide:center-x", a: { x: 64, y: 0 }, b: { x: 64, y: 1 } },
+		{ id: "guide:center-y", a: { x: 0, y: 64 }, b: { x: 1, y: 64 } },
 	],
 }
 

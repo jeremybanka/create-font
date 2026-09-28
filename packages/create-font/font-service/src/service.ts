@@ -338,7 +338,8 @@ export function createFontService(): FontService {
 		const bytes = owned.get(font.key)
 		if (bytes === undefined) return missingFont(font)
 		const directory = tableDirectory(bytes, font.faceIndex)
-		if (directory.value === undefined) return directory
+		if (directory.value === undefined)
+			return { diagnostics: directory.diagnostics }
 		try {
 			const blob = new HarfBuzzBlob(bytes)
 			const face = new Face(blob, font.faceIndex)
@@ -444,7 +445,7 @@ export function createFontService(): FontService {
 		}
 		counters.metrics.misses += 1
 		const parsed = parsedFont(identity)
-		if (parsed.value === undefined) return parsed
+		if (parsed.value === undefined) return { diagnostics: parsed.diagnostics }
 		const varied = fontWithVariations(parsed.value, variations)
 		const extents = varied.font.hExtents()
 		const axes = Object.entries(parsed.value.face.getAxisInfos())
@@ -494,9 +495,10 @@ export function createFontService(): FontService {
 		}
 		counters.shaping.misses += 1
 		const parsed = parsedFont(request.font)
-		if (parsed.value === undefined) return parsed
+		if (parsed.value === undefined) return { diagnostics: parsed.diagnostics }
 		const fontMetrics = metrics(request.font, request.variations)
-		if (fontMetrics.value === undefined) return fontMetrics
+		if (fontMetrics.value === undefined)
+			return { diagnostics: fontMetrics.diagnostics }
 		const varied = fontWithVariations(parsed.value, request.variations)
 		const diagnostics: FontDiagnostic[] = [...fontMetrics.diagnostics]
 		const glyphs: PositionedGlyph[] = []
@@ -619,7 +621,7 @@ export function createFontService(): FontService {
 		}
 		counters.outlines.misses += 1
 		const parsed = parsedFont(request.font)
-		if (parsed.value === undefined) return parsed
+		if (parsed.value === undefined) return { diagnostics: parsed.diagnostics }
 		if (parsed.value.outlineTable === undefined) {
 			const unsupported = diagnostic({
 				code: "font.unsupported-table",
@@ -665,7 +667,7 @@ export function createFontService(): FontService {
 			if (parsed.value === undefined) {
 				owned.delete(identity.key)
 				clearFontCaches(identity.key)
-				return parsed
+				return { diagnostics: parsed.diagnostics }
 			}
 			if (existing !== undefined && existing !== identity.key) {
 				owned.delete(existing)

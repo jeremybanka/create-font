@@ -1,3 +1,5 @@
+import { CREATE_DESIGN_DOCUMENT_VERSION } from "@create-design/source"
+
 import { describe, expect, it } from "vite-plus/test"
 import { IDENTITY_DESIGN_TRANSFORM } from "@create-design/model"
 
@@ -27,7 +29,7 @@ const documentFor = (
 	overrides: Partial<DesignDocument> = {},
 ): DesignDocument => ({
 	format: "create-design.document",
-	version: 7,
+	version: CREATE_DESIGN_DOCUMENT_VERSION,
 	title: "Perspective test",
 	artboards: [
 		{ id: "artboard:1", name: "Artboard", x: 0, y: 0, width: 400, height: 300 },

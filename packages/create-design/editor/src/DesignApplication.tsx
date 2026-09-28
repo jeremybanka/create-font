@@ -378,6 +378,7 @@ import {
 	perspectiveHandlePoint,
 	perspectiveQuadFromBounds,
 	perspectiveTransformEligibility,
+	isPerspectiveCornerHandle,
 	resolvePerspectiveCornerAcquisition,
 	resolvePerspectiveQuad,
 	type PerspectiveCornerAcquisitionState,
@@ -6760,19 +6761,18 @@ function DesignApplicationContent(props: DesignApplicationContentProps) {
 		rawCurrent: CanvasPoint,
 		modifiers = gesture.modifiers,
 	) => {
-		const cornerAcquisition =
-			gesture.handle.length === 2
-				? resolvePerspectiveCornerAcquisition(
-						gesture.cornerAcquisition,
-						gesture.sourceQuad,
-						gesture.handle,
-						{
-							x: rawCurrent.x - gesture.start.x,
-							y: rawCurrent.y - gesture.start.y,
-						},
-						modifiers.shiftKey,
-					)
-				: null
+		const cornerAcquisition = isPerspectiveCornerHandle(gesture.handle)
+			? resolvePerspectiveCornerAcquisition(
+					gesture.cornerAcquisition,
+					gesture.sourceQuad,
+					gesture.handle,
+					{
+						x: rawCurrent.x - gesture.start.x,
+						y: rawCurrent.y - gesture.start.y,
+					},
+					modifiers.shiftKey,
+				)
+			: null
 		const resolvedModifiers =
 			cornerAcquisition?.choice === null || cornerAcquisition === null
 				? modifiers

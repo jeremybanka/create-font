@@ -217,7 +217,7 @@ function centerlineRuns(
 		throw new GeometryError(
 			"INVALID_ARGUMENT",
 			"Stroke dash offset must be finite.",
-			{ dashOffset: options.dashOffset },
+			{ dashOffset: options.dashOffset ?? 0 },
 		)
 
 	let dashIndex = 0

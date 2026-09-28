@@ -1069,6 +1069,22 @@ describe("create-design directory source", () => {
 			appearance: { fill: { swatchId: "swatch:ink" } },
 		}
 		const canonical = split(appendObjects(base, textObject))
+		const missingProject = mutable(canonical)
+		delete missingProject[designSourcePaths.project]
+		missingProject[defaultObjectUnitPath(textObject.id)] = {
+			format: "create-design.object",
+			version: 1,
+			...textObject,
+		}
+		expect(assembleDesignDocument(missingProject)).toMatchObject({
+			ok: false,
+			errors: expect.arrayContaining([
+				expect.objectContaining({
+					code: "directory.missing_file",
+					unitPath: designSourcePaths.project,
+				}),
+			]),
+		})
 		const missing = structuredClone(canonical) as Record<string, unknown>
 		delete missing[defaultTextContentUnitPath(textObject.id)]
 		expect(assembleDesignDocument(missing)).toMatchObject({
@@ -1162,7 +1178,7 @@ describe("create-design directory source", () => {
 				},
 			],
 		}
-		const files = split(grouped)
+		const files = mutable(split(grouped))
 		expect(unit(files, designSourcePaths.groupIndex).entries).toHaveLength(1)
 		expect(assemble(files)).toEqual(grouped)
 	})

@@ -1,3 +1,5 @@
+import type { UiLayoutsResponse } from "../src/contracts.ts"
+
 import {
 	lstat,
 	mkdir,
@@ -41,7 +43,9 @@ describe("UI layout RPC", () => {
 		const loaded = await app.handle(
 			new Request("http://test/ui-layouts?product=create-font"),
 		)
-		expect((await loaded.json()).sources[0].layouts).toEqual([fontLayout])
+		expect(
+			((await loaded.json()) as UiLayoutsResponse).sources[0]!.layouts,
+		).toEqual([fontLayout])
 	})
 
 	it("uses the fixed Home contract through a symlinked config repository", async () => {
@@ -59,8 +63,8 @@ describe("UI layout RPC", () => {
 		const loaded = await app.handle(
 			new Request("http://test/ui-layouts?product=create-font"),
 		)
-		const loadedBody = await loaded.json()
-		expect(loadedBody.sources[0].layouts).toEqual([fontLayout])
+		const loadedBody = (await loaded.json()) as UiLayoutsResponse
+		expect(loadedBody.sources[0]!.layouts).toEqual([fontLayout])
 		const response = await app.handle(
 			new Request("http://test/ui-layouts", {
 				method: "POST",
@@ -68,7 +72,7 @@ describe("UI layout RPC", () => {
 				body: JSON.stringify({
 					product: "create-font",
 					origin: "home",
-					expectedRevision: loadedBody.sources[0].revision,
+					expectedRevision: loadedBody.sources[0]!.revision,
 					layout: { ...fontLayout, name: "RPC symlink" },
 				}),
 			}),
@@ -93,6 +97,8 @@ describe("UI layout RPC", () => {
 			new Request("http://test/ui-layouts?product=create-font"),
 		)
 		expect(response.status).toBe(500)
-		expect((await response.json()).message).toMatch(/broken symbolic link/)
+		expect(await response.json()).toMatchObject({
+			message: expect.stringMatching(/broken symbolic link/),
+		})
 	})
 })

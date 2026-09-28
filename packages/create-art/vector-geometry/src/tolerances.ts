@@ -23,12 +23,14 @@ export type GeometryErrorCode =
 
 export class GeometryError extends Error {
 	readonly code: GeometryErrorCode
-	readonly details: Readonly<Record<string, number | string>>
+	readonly details: Readonly<
+		Record<string, number | string | readonly number[]>
+	>
 
 	constructor(
 		code: GeometryErrorCode,
 		message: string,
-		details: Readonly<Record<string, number | string>> = {},
+		details: Readonly<Record<string, number | string | readonly number[]>> = {},
 	) {
 		super(message)
 		this.name = "GeometryError"

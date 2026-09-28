@@ -116,6 +116,7 @@ describe("canonical create-design text", () => {
 				verticalAlignment: "top",
 			},
 		})
+		if (area.geometry.kind !== "text") throw new Error("Expected text geometry")
 		const small = service.layout(area)
 		const large = service.layout({
 			...area,
