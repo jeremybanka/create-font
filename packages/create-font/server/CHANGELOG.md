@@ -1,5 +1,12 @@
 # @create-font/server
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/source-rpc@0.1.4
+
 ## 0.2.4
 
 ### Patch Changes

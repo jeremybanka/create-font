@@ -1,5 +1,14 @@
 # @create-font/editor
 
+## 0.9.3
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/vector-geometry@0.0.4
+  - @create-art/editor@0.2.2
+  - @create-font/states@0.7.2
+
 ## 0.9.2
 
 ### Patch Changes

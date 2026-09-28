@@ -1,5 +1,12 @@
 # @create-art/editor
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/vector-geometry@0.0.4
+
 ## 0.2.1
 
 ### Patch Changes

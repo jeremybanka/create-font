@@ -1,5 +1,14 @@
 # @create-design/pdf
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-design/source@0.4.7
+  - @create-design/model@0.2.7
+  - @create-design/text@0.0.8
+
 ## 0.1.8
 
 ### Patch Changes

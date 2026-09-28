@@ -1,5 +1,13 @@
 # @create-font/states
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/vector-geometry@0.0.4
+  - @create-font/server@0.2.5
+
 ## 0.7.1
 
 ### Patch Changes

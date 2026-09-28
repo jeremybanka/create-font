@@ -1,5 +1,20 @@
 # @create-design/editor
 
+## 0.3.7
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/source-rpc@0.1.4
+  - @create-art/vector-geometry@0.0.4
+  - @create-design/source@0.4.7
+  - @create-design/svg@0.1.7
+  - @create-art/editor@0.2.2
+  - @create-design/model@0.2.7
+  - @create-design/text@0.0.8
+  - @create-design/pdf@0.1.9
+  - @create-design/png@0.1.7
+
 ## 0.3.6
 
 ### Patch Changes

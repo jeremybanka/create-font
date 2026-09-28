@@ -1,5 +1,19 @@
 # create-font
 
+## 0.3.25
+
+### Patch Changes
+
+- d32bd8a: Update comline to 0.9.0 to remove the positional-input deprecation warning from native Nushell completion while preserving delegation to other completion providers. Native Nushell completion now requires Nushell 0.116.0 or newer. After upgrading, reinstall or regenerate existing native Nushell completion files with the updated CLI, then start a new shell.
+- Updated dependencies [ea25f19]
+  - @create-art/source-format@0.2.6
+  - @create-art/source-rpc@0.1.4
+  - @create-font/source@0.2.17
+  - @create-font/server@0.2.5
+  - @create-font/editor@0.9.3
+  - @create-font/states@0.7.2
+  - @create-font/glyphs-app@0.0.8
+
 ## 0.3.24
 
 ### Patch Changes
