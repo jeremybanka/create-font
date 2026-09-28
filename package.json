@@ -28,8 +28,7 @@
 		"release:version": "vp run --ignore-depends-on dprint-plugin-fea#build && changeset version",
 		"staged": "vp staged",
 		"test": "node --test ./scripts/dev-ports.test.ts ./scripts/dev-processes.test.ts ./scripts/server-shutdown.test.ts && mise exec -- cargo test --workspace && pnpm -r test",
-		"test:watch": "vp run -r --parallel --no-cache test:watch",
-		"verify": "pnpm run check && pnpm run test && pnpm run build && pnpm run cov"
+		"test:watch": "vp run -r --parallel --no-cache test:watch"
 	},
 	"devDependencies": {
 		"@changesets/cli": "3.0.2",
