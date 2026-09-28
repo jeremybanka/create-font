@@ -1,5 +1,13 @@
 # @create-design/model
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/vector-geometry@0.0.4
+  - @create-design/source@0.4.7
+
 ## 0.2.6
 
 ### Patch Changes

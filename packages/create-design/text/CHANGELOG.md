@@ -1,5 +1,14 @@
 # @create-design/text
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-art/vector-geometry@0.0.4
+  - @create-design/source@0.4.7
+  - @create-font/font-service@0.0.3
+
 ## 0.0.7
 
 ### Patch Changes

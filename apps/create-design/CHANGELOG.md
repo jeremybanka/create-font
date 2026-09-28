@@ -1,5 +1,21 @@
 # create-design
 
+## 0.3.7
+
+### Patch Changes
+
+- d32bd8a: Update comline to 0.9.0 to remove the positional-input deprecation warning from native Nushell completion while preserving delegation to other completion providers. Native Nushell completion now requires Nushell 0.116.0 or newer. After upgrading, reinstall or regenerate existing native Nushell completion files with the updated CLI, then start a new shell.
+- Updated dependencies [ea25f19]
+  - @create-art/source-rpc@0.1.4
+  - @create-design/source@0.4.7
+  - @create-design/svg@0.1.7
+  - @create-design/editor@0.3.7
+  - @create-design/model@0.2.7
+  - @create-design/text@0.0.8
+  - @create-design/ai@0.0.8
+  - @create-design/pdf@0.1.9
+  - @create-design/png@0.1.7
+
 ## 0.3.6
 
 ### Patch Changes

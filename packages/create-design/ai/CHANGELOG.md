@@ -1,5 +1,12 @@
 # @create-design/ai
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-design/source@0.4.7
+
 ## 0.0.7
 
 ### Patch Changes

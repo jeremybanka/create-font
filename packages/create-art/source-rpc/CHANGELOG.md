@@ -1,5 +1,13 @@
 # @create-art/source-rpc
 
+## 0.1.4
+
+### Patch Changes
+
+- ea25f19: Correct public TypeScript contracts for browser source formatting, request bodies, stroke diagnostic arrays, legacy design migration, and discriminated font outline commands.
+
+  Design directory assembly now returns a missing-file diagnostic for a missing project manifest alongside inline text. Direct SVG export reports an actionable error when a linked artboard has not been expanded.
+
 ## 0.1.3
 
 ### Patch Changes

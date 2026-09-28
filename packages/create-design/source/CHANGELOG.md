@@ -1,5 +1,15 @@
 # @create-design/source
 
+## 0.4.7
+
+### Patch Changes
+
+- ea25f19: Correct public TypeScript contracts for browser source formatting, request bodies, stroke diagnostic arrays, legacy design migration, and discriminated font outline commands.
+
+  Design directory assembly now returns a missing-file diagnostic for a missing project manifest alongside inline text. Direct SVG export reports an actionable error when a linked artboard has not been expanded.
+- Updated dependencies [ea25f19]
+  - @create-art/source-format@0.2.6
+
 ## 0.4.6
 
 ### Patch Changes

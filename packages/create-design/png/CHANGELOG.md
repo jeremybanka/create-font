@@ -1,5 +1,14 @@
 # @create-design/png
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [ea25f19]
+  - @create-design/source@0.4.7
+  - @create-design/svg@0.1.7
+  - @create-design/model@0.2.7
+
 ## 0.1.6
 
 ### Patch Changes
