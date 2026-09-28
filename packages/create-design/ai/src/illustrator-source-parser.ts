@@ -490,8 +490,9 @@ function textResourceFrom(source: string): IllustratorTextResource | undefined {
 	const end = source.indexOf("%AI11_EndTextDocument", begin)
 	if (begin < 0 || end < 0) return undefined
 	const header = source.indexOf("/AI11TextDocument", begin)
-	const firstBreak = header < 0 ? -1 : /[\r\n]/u.exec(source.slice(header))
-	if (firstBreak === null || header < 0) return undefined
+	if (header < 0) return undefined
+	const firstBreak = /[\r\n]/u.exec(source.slice(header))
+	if (firstBreak === null) return undefined
 	const payloadAt = header + firstBreak.index + firstBreak[0].length
 	const raw = source.slice(payloadAt, end)
 	const decoded = decodeAscii85(raw)
@@ -589,21 +590,19 @@ function sourceMetadata(source: string): IllustratorSourceDocument["metadata"] {
 		`(${numberPattern})\\s+(${numberPattern})\\s+/RealPoint[^\r\n]*\\(RulerOrigin\\)`,
 		"u",
 	).exec(source)
+	const title = text("Title")
+	const creator = text("Creator")
+	const creationDate = text("CreationDate")
+	const fileFormatVersion = text("AI8_CreatorVersion")
+	const buildVersion = text("AI8_CreatorBuild")
+	const colorModel = text("DocumentProcessColors")
 	return {
-		...(text("Title") === undefined ? {} : { title: text("Title") }),
-		...(text("Creator") === undefined ? {} : { creator: text("Creator") }),
-		...(text("CreationDate") === undefined
-			? {}
-			: { creationDate: text("CreationDate") }),
-		...(text("AI8_CreatorVersion") === undefined
-			? {}
-			: { fileFormatVersion: text("AI8_CreatorVersion") }),
-		...(text("AI8_CreatorBuild") === undefined
-			? {}
-			: { buildVersion: text("AI8_CreatorBuild") }),
-		...(text("DocumentProcessColors") === undefined
-			? {}
-			: { colorModel: text("DocumentProcessColors") }),
+		...(title === undefined ? {} : { title }),
+		...(creator === undefined ? {} : { creator }),
+		...(creationDate === undefined ? {} : { creationDate }),
+		...(fileFormatVersion === undefined ? {} : { fileFormatVersion }),
+		...(buildVersion === undefined ? {} : { buildVersion }),
+		...(colorModel === undefined ? {} : { colorModel }),
 		...(origin === null
 			? {}
 			: { pageOrigin: { x: Number(origin[1]), y: Number(origin[2]) } }),
@@ -611,7 +610,11 @@ function sourceMetadata(source: string): IllustratorSourceDocument["metadata"] {
 	}
 }
 
-const rgb = (r: number, g: number, b: number): IllustratorSourceColor => ({
+const rgb = (
+	r: number,
+	g: number,
+	b: number,
+): Extract<IllustratorSourceColor, { space: "rgb" }> => ({
 	space: "rgb",
 	r,
 	g,
@@ -622,7 +625,7 @@ const cmyk = (
 	m: number,
 	y: number,
 	k: number,
-): IllustratorSourceColor => ({
+): Extract<IllustratorSourceColor, { space: "cmyk" }> => ({
 	space: "cmyk",
 	c,
 	m,
@@ -676,12 +679,13 @@ export function parseIllustratorSource(
 	const statements = sourceStatements(source)
 	const textResource = textResourceFrom(source)
 	const resources = textResource === undefined ? {} : { text: textResource }
+	const bounds = sourceBounds(source)
 	const firstLayer = source.indexOf("%AI5_BeginLayer")
 	if (firstLayer < 0)
 		return {
 			format: "adobe-illustrator.source",
 			metadata: sourceMetadata(source),
-			bounds: sourceBounds(source),
+			...(bounds === undefined ? {} : { bounds }),
 			artboards: artboardsFrom(source),
 			layers: [],
 			rawSource: source,
@@ -711,7 +715,7 @@ export function parseIllustratorSource(
 		return {
 			format: "adobe-illustrator.source",
 			metadata: sourceMetadata(source),
-			bounds: sourceBounds(source),
+			...(bounds === undefined ? {} : { bounds }),
 			artboards: artboardsFrom(source),
 			layers: [],
 			rawSource: source,
@@ -1012,15 +1016,16 @@ export function parseIllustratorSource(
 					const properties = activeTextRecord.properties
 					const storyIndex = properties.StoryIndex
 					if (storyIndex !== undefined) {
+						const story = textResource?.stories.find(
+							({ index }) => index === storyIndex,
+						)
 						const text: IllustratorSourceText = {
 							kind: "text",
 							storyIndex,
 							frameIndex: properties.FrameIndex ?? 0,
 							freeUndo: properties.FreeUndo === 1,
 							fill: state.fill,
-							story: textResource?.stories.find(
-								({ index }) => index === storyIndex,
-							),
+							...(story === undefined ? {} : { story }),
 							rawProperties: properties,
 							span: { ...activeTextRecord.start, end: token.span.end },
 						}
@@ -1431,7 +1436,7 @@ export function parseIllustratorSource(
 	return {
 		format: "adobe-illustrator.source",
 		metadata: sourceMetadata(source),
-		bounds: sourceBounds(source),
+		...(bounds === undefined ? {} : { bounds }),
 		artboards: artboardsFrom(source),
 		layers: finalLayers,
 		rawSource: source,

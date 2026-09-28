@@ -75,7 +75,6 @@ const checkOptions = options(
 			description: `Diagnostic output format: stylish or json.`,
 			example: `--format=json`,
 			flag: `f`,
-			parse: parseStringOption,
 			required: false,
 		},
 		root: {

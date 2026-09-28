@@ -610,7 +610,9 @@ export function createDesignTextService(): DesignTextService {
 				{
 					source: reference.id,
 					family: reference.family,
-					faceIndex: reference.faceIndex,
+					...(reference.faceIndex === undefined
+						? {}
+						: { faceIndex: reference.faceIndex }),
 					revision: reference.revision ?? 1,
 				},
 				bytes,

@@ -151,8 +151,8 @@ describe(`target-v1 SFNT serialization`, () => {
 		for (const { tag, length } of plan.encoding.tableLengths) {
 			const record = records.get(tag)
 			expect(record?.length).toBe(length)
-			expect(record?.offset % 4).toBe(0)
-			if (record === undefined) continue
+			if (record === undefined) throw new Error(`Missing table ${tag}`)
+			expect(record.offset % 4).toBe(0)
 			const table = tableBytes(first, record)
 			if (tag === `head`) table.fill(0, 8, 12)
 			expect(checksum(table)).toBe(record.checksum)

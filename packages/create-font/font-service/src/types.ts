@@ -117,7 +117,8 @@ export interface ShapedText {
 }
 
 export type OutlineCommand =
-	| Readonly<{ type: "M" | "L"; x: number; y: number }>
+	| Readonly<{ type: "M"; x: number; y: number }>
+	| Readonly<{ type: "L"; x: number; y: number }>
 	| Readonly<{ type: "Q"; cx: number; cy: number; x: number; y: number }>
 	| Readonly<{
 			type: "C"

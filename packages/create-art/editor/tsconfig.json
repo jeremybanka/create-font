@@ -8,6 +8,6 @@
 		"moduleResolution": "Bundler",
 		"types": ["node"]
 	},
-	"include": ["css.d.ts", "lasertag.d.ts", "src", "tests"],
+	"include": ["css.d.ts", "lasertag.d.ts", "scripts", "src", "tests"],
 	"exclude": []
 }

@@ -212,13 +212,15 @@ function projectionNodes(
 					candidate.kind === "group" && candidate.group.id === groupId,
 			)
 			if (node === undefined) {
+				const clippingObject =
+					group.clippingPathId === undefined
+						? undefined
+						: objects.get(group.clippingPathId)
 				node = {
 					kind: "group",
 					group,
 					children: [],
-					...(group.clippingPathId === undefined
-						? {}
-						: { clippingObject: objects.get(group.clippingPathId) }),
+					...(clippingObject === undefined ? {} : { clippingObject }),
 				}
 				children.push(node)
 			}
@@ -376,6 +378,10 @@ function serializeObject(
 	if (object.geometry.kind === "text")
 		throw new Error(
 			`Editable text ${object.id} must be expanded before SVG export.`,
+		)
+	if (object.geometry.kind === "artboard-link")
+		throw new Error(
+			`Linked artboard ${object.id} must be expanded before SVG export.`,
 		)
 	const d = object.geometry.contours
 		.map(contourSvgPath)

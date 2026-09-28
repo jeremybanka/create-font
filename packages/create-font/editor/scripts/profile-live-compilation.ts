@@ -21,7 +21,7 @@ function waitForRevision(revision: number) {
 				const state = workspace.font.silo.getState(
 					workspace.liveFont.compilation,
 				)
-				if (state.status !== "ready" || state.revision < revision) return false
+				if (state?.status !== "ready" || state.revision < revision) return false
 				resolve(state)
 				return true
 			}

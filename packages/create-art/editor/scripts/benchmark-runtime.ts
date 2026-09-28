@@ -40,7 +40,9 @@ window.HTMLCanvasElement.prototype.getContext = function () {
 	return new Proxy(context, {
 		get: (target, key) =>
 			key in target ? target[key as keyof typeof target] : () => undefined,
-	}) as unknown as CanvasRenderingContext2D
+	}) as unknown as ReturnType<
+		typeof window.HTMLCanvasElement.prototype.getContext
+	>
 }
 
 const runtimeImportStarted = performance.now()

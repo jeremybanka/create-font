@@ -211,6 +211,9 @@ describe("Glyphs.app import", () => {
 		const editor = createFontEditorState({ key: "glyphs/open-corner-import" })
 		editor.actions.load(result.value.source)
 		const compilation = editor.read.compilation()
+		expect(compilation.stage).not.toBe("projection-failed")
+		if (compilation.stage === "projection-failed")
+			throw new Error("Imported fixture did not project.")
 		const exported = compilation.source.glyphs.find(
 			(glyph) => glyph.name === "overflowCorner",
 		)!

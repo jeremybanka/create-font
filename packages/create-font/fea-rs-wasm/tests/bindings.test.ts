@@ -32,7 +32,7 @@ describe("fea-rs WebAssembly bindings", () => {
 	test("loads the web binding from raw Wasm bytes", async () => {
 		const web =
 			(await import("../dist/web/create_font_fea_rs_wasm.js")) as WasmApi & {
-				default(input: BufferSource): Promise<unknown>
+				default(input: Uint8Array): Promise<unknown>
 			}
 		const bytes = await readFile(
 			new URL("../dist/web/create_font_fea_rs_wasm_bg.wasm", import.meta.url),

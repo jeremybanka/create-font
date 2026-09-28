@@ -183,7 +183,7 @@ describe("live PDF compilation", () => {
 		const first = compiler.getState()
 		compiler.request({
 			...document,
-			guides: [{ id: "guide:1", axis: "y", value: 30 }],
+			guides: [{ id: "guide:1", a: { x: 0, y: 30 }, b: { x: 1, y: 30 } }],
 		})
 		queue.work[1]?.run()
 		await flush()

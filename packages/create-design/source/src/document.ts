@@ -385,7 +385,10 @@ const versionOneDesignObjectSchema = z.unknown().transform((value, context) => {
 		canonical ? versionTwoDesignObjectSchema : legacyDesignObjectSchema
 	).safeParse(value)
 	if (parsed.success) return parsed.data
-	for (const issue of parsed.error.issues) context.addIssue(issue)
+	for (const issue of parsed.error.issues) {
+		const { input: _input, ...forwarded } = issue
+		context.addIssue(forwarded)
+	}
 	return z.NEVER
 })
 export const legacyGuideSchema = z
@@ -955,14 +958,20 @@ function nextStableId(base: string, reserved: ReadonlySet<string>): string {
  * reserved before generation so migration never rewrites an authored ID.
  */
 export function stabilizeDesignObjectIdentities(
-	object:
-		| z.infer<typeof designObjectSchema>
-		| z.infer<typeof previousDesignObjectSchema>
-		| z.infer<typeof versionTwoDesignObjectSchema>
-		| ReturnType<typeof migrateObjectV1>,
+	object: Omit<
+		z.infer<typeof designObjectSchema>,
+		"geometry" | "appearance"
+	> & {
+		geometry: z.infer<typeof compatibleGeometrySchema>
+		appearance:
+			| z.infer<typeof appearanceSchema>
+			| z.infer<typeof previousAppearanceSchema>
+	},
 ): DesignObject {
 	const appearance = {
-		...object.appearance,
+		...(object.appearance.fill === undefined
+			? {}
+			: { fill: object.appearance.fill }),
 		...(object.appearance.stroke === undefined
 			? {}
 			: {
@@ -984,14 +993,17 @@ export function stabilizeDesignObjectIdentities(
 			contour.points.flatMap(({ id }) => (id === undefined ? [] : [id])),
 		),
 	)
+	const { hidden, locked, ...base } = object
+	const fillRule =
+		"fillRule" in object.geometry ? object.geometry.fillRule : undefined
 	return {
-		...object,
+		...base,
+		...(hidden === undefined ? {} : { hidden }),
+		...(locked === undefined ? {} : { locked }),
 		appearance,
 		geometry: {
 			kind: "path",
-			...(object.geometry.fillRule === undefined
-				? {}
-				: { fillRule: object.geometry.fillRule }),
+			...(fillRule === undefined ? {} : { fillRule }),
 			contours: object.geometry.contours.map((contour, contourIndex) => {
 				const contourId =
 					contour.id ??
@@ -1005,7 +1017,19 @@ export function stabilizeDesignObjectIdentities(
 							point.id ??
 							nextStableId(`${contourId}:point:${pointIndex}`, reservedPoints)
 						reservedPoints.add(pointId)
-						return { ...point, id: pointId }
+						return {
+							id: pointId,
+							x: point.x,
+							y: point.y,
+							...(point.mode === undefined ? {} : { mode: point.mode }),
+							...(point.incoming === undefined
+								? {}
+								: { incoming: point.incoming }),
+							...(point.outgoing === undefined
+								? {}
+								: { outgoing: point.outgoing }),
+							...(point.corner === undefined ? {} : { corner: point.corner }),
+						}
 					}),
 				}
 			}),

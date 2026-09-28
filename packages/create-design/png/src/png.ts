@@ -261,7 +261,7 @@ export async function exportPng(
 			{ artboard, background: backgroundFor(artboard), ...dimensions, samples },
 			{
 				document,
-				signal: options.signal,
+				...(options.signal === undefined ? {} : { signal: options.signal }),
 				yieldControl: options.yieldControl ?? defaultYield,
 			},
 		)

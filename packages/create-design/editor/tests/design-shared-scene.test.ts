@@ -1764,8 +1764,8 @@ describe("create-design shared vector scene", () => {
 		if (perspective === null || canvas === null || objects.length < 2)
 			throw new Error("Perspective marquee controls were not found.")
 		act(() => perspective.click())
-		const rects = objects.map((object: { getClientRect(): DOMRect }) =>
-			object.getClientRect(),
+		const rects: DOMRect[] = objects.map(
+			(object: { getClientRect(): DOMRect }) => object.getClientRect(),
 		)
 		const start = {
 			x: Math.min(...rects.map(({ x }) => x)) - 20,
@@ -1849,8 +1849,13 @@ describe("create-design shared vector scene", () => {
 		let pointer = { x: 0, y: 0 }
 		vi.spyOn(stage, "getPointerPosition").mockImplementation(() => pointer)
 		const corners = ["nw", "ne", "se", "sw"] as const
-		const horizontalNeighbor = { nw: "ne", ne: "nw", se: "sw", sw: "se" }
-		const verticalNeighbor = { nw: "sw", ne: "se", se: "ne", sw: "nw" }
+		const horizontalNeighbor = {
+			nw: "ne",
+			ne: "nw",
+			se: "sw",
+			sw: "se",
+		} as const
+		const verticalNeighbor = { nw: "sw", ne: "se", se: "ne", sw: "nw" } as const
 		const cornerPosition = (name: (typeof corners)[number]) =>
 			stage.findOne(`.perspective-handle-${name}`).position()
 		const startGesture = (
@@ -6608,10 +6613,14 @@ describe("create-design shared vector scene", () => {
 		const directNodes = stage.find(".vector-node")
 		expect(directNodes.length).toBeGreaterThan(0)
 		expect(
-			directNodes.filter((node) => node.getClassName() === "Circle"),
+			directNodes.filter(
+				(node: { getClassName(): string }) => node.getClassName() === "Circle",
+			),
 		).toHaveLength(1)
 		expect(
-			directNodes.filter((node) => node.getClassName() === "Rect"),
+			directNodes.filter(
+				(node: { getClassName(): string }) => node.getClassName() === "Rect",
+			),
 		).toHaveLength(directNodes.length - 1)
 		const theme = readDesignCanvasTheme(
 			document.querySelector("design-application"),
@@ -7148,7 +7157,9 @@ describe("create-design shared vector scene", () => {
 		const handle = node
 			?.getParent()
 			?.find(".bezier-handle")
-			.find((candidate) => candidate.hasName("vector-handle-outgoing"))
+			.find((candidate: { hasName(name: string): boolean }) =>
+				candidate.hasName("vector-handle-outgoing"),
+			)
 		const handleTarget = handle?.getParent()?.findOne(".outline-control-helper")
 		if (
 			node === undefined ||

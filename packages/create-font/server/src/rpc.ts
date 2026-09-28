@@ -118,7 +118,13 @@ export function createFontRpc(options: CreateFontRpcOptions) {
 				}
 				sourceConnections.set(
 					ws.raw,
-					options.source.subscribe((event) => ws.send(event)),
+					options.source.subscribe((event) =>
+						ws.send({
+							...event,
+							removedPaths: [...event.removedPaths],
+							units: [...event.units],
+						}),
+					),
 				)
 			},
 			close(ws) {

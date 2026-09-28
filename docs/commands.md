@@ -28,7 +28,9 @@ Following the [mise Node.js cookbook](https://mise.jdx.dev/mise-cookbook/nodejs.
 - `check:peers`: `pnpm peers check`.
 - `check:rustfmt`: `mise exec -- cargo fmt --all -- --check`.
 
-`check:vp` invokes the configured Vite Plus validation pipeline; `check:fmt` handles formatting separately.
+`check:vp` runs Vite Plus linting and TypeScript checks; `check:fmt` handles formatting separately.
+
+`check:vp` uses the generated package declarations. Run `pnpm build` first after a fresh checkout or package API changes; the aggregate `check` command already does this. CI restores the declarations from its Build job before running Vite Plus.
 
 ## Command notes
 

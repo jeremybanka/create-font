@@ -37,6 +37,7 @@ function createClient(): FontSourceRemoteClient {
 		writeUnits: vi.fn(
 			async (input: Parameters<FontSourceRemoteClient["writeUnits"]>[0]) => ({
 				previousRevision: `manifest-1`,
+				removedPaths: [],
 				revision: `manifest-2`,
 				units: input.writes.map((write: (typeof input.writes)[number]) => ({
 					path: write.path,

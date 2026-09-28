@@ -508,6 +508,8 @@ describe("PDF export", () => {
 		expect(content).not.toContain("10 10 l\n0 0 l")
 		expect(content).not.toMatch(/(^|\n)h($|\n)/u)
 		expect(content).toMatch(/B\*$/u)
+		if (object.geometry.kind !== "path")
+			throw new Error("Expected path geometry")
 		expect(object.geometry.contours[0]?.closed).toBe(false)
 	})
 
@@ -726,7 +728,7 @@ describe("PDF export", () => {
 		const uiOnly = graph.project({
 			...document,
 			title: "Proof title",
-			guides: [{ id: "guide:1", axis: "x", value: 20 }],
+			guides: [{ id: "guide:1", a: { x: 20, y: 0 }, b: { x: 20, y: 1 } }],
 		})
 		expect(uiOnly).toBe(metadata)
 	})
@@ -803,6 +805,8 @@ describe("PDF export", () => {
 			visibleTextEnd: 1,
 			overset: false,
 			bounds: { x: 10, y: 20, width: 20, height: 20 },
+			logicalBounds: { x: 10, y: 20, width: 20, height: 20 },
+			inkBounds: { x: 10, y: 20, width: 20, height: 20 },
 		} satisfies DesignTextLayout
 		const service = { layout: () => layout } as unknown as DesignTextService
 		const swatch: DesignSwatch = {

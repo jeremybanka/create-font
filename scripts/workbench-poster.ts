@@ -6,10 +6,19 @@ import {
 	formatSourceUnit,
 	sourceUnitKindForPath,
 	splitDesignDocument,
-	type DesignContour,
+	legacyDesignDocumentSchema,
 	type DesignDocument,
 	type DesignObject,
 } from "../packages/create-design/source/src/index.ts"
+
+import {
+	legacyDesignObjectSchema,
+	previousContourSchema,
+} from "../packages/create-design/source/src/document.ts"
+
+type LegacyDesignDocument = ReturnType<typeof legacyDesignDocumentSchema.parse>
+type LegacyDesignObject = ReturnType<typeof legacyDesignObjectSchema.parse>
+type LegacyDesignContour = ReturnType<typeof previousContourSchema.parse>
 
 type Bounds = Readonly<{
 	minX: number
@@ -20,7 +29,7 @@ type Bounds = Readonly<{
 
 const ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
-function rectangle(bounds: Bounds): DesignContour {
+function rectangle(bounds: Bounds): LegacyDesignContour {
 	return {
 		closed: true,
 		points: [
@@ -32,7 +41,7 @@ function rectangle(bounds: Bounds): DesignContour {
 	}
 }
 
-function ellipse(bounds: Bounds): DesignContour {
+function ellipse(bounds: Bounds): LegacyDesignContour {
 	const centerX = (bounds.minX + bounds.maxX) / 2
 	const centerY = (bounds.minY + bounds.maxY) / 2
 	const handleX = ((bounds.maxX - bounds.minX) / 2) * ELLIPSE_KAPPA
@@ -70,7 +79,7 @@ function ellipse(bounds: Bounds): DesignContour {
 
 function polygon(
 	points: readonly (readonly [number, number])[],
-): DesignContour {
+): LegacyDesignContour {
 	return {
 		closed: true,
 		points: points.map(([x, y]) => ({ x, y })),
@@ -81,9 +90,9 @@ function object(
 	id: string,
 	name: string,
 	fillId: string,
-	contours: readonly DesignContour[],
+	contours: LegacyDesignContour[],
 	options: Readonly<{ locked?: boolean }> = {},
-): DesignObject {
+): LegacyDesignObject {
 	return {
 		id,
 		name,
@@ -93,7 +102,7 @@ function object(
 	}
 }
 
-const document: DesignDocument = {
+const document: LegacyDesignDocument = {
 	format: "create-design.document",
 	version: 1,
 	title: "Counterform No. 1",

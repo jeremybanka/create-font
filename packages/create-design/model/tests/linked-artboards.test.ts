@@ -397,6 +397,7 @@ describe("linked artboards", () => {
 			link.id,
 		)
 
+		const { backgroundColor: _background, ...transparentArtboard } = artboard
 		const transparent = resolveDesignArtboardLinks(
 			{
 				...target,
@@ -414,7 +415,7 @@ describe("linked artboards", () => {
 					revision: "r2",
 					document: {
 						...source,
-						artboards: [{ ...artboard, backgroundColor: undefined }],
+						artboards: [transparentArtboard],
 					},
 				},
 			],

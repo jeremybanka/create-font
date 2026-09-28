@@ -254,26 +254,31 @@ describe(`create-font workspace RPC`, () => {
 			readSnapshot: vi.fn(),
 			readUnit: vi.fn(),
 			writeUnit: vi.fn(),
-			writeUnits: vi.fn(async (input) => ({
-				previousRevision: `manifest-1`,
-				revision: `manifest-2`,
-				units: input.writes.map((write) => ({
-					path: write.path,
-					revision: `${write.path}-2`,
-					value: write.value,
-				})) as [
-					{
-						path: string
-						revision: string
-						value: (typeof input.writes)[number]["value"]
-					},
-					...{
-						path: string
-						revision: string
-						value: (typeof input.writes)[number]["value"]
-					}[],
-				],
-			})),
+			writeUnits: vi.fn(
+				async (
+					input: Parameters<CreateFontSourceService["writeUnits"]>[0],
+				) => ({
+					previousRevision: `manifest-1`,
+					removedPaths: [],
+					revision: `manifest-2`,
+					units: input.writes.map((write) => ({
+						path: write.path,
+						revision: `${write.path}-2`,
+						value: write.value,
+					})) as [
+						{
+							path: string
+							revision: string
+							value: (typeof input.writes)[number]["value"]
+						},
+						...{
+							path: string
+							revision: string
+							value: (typeof input.writes)[number]["value"]
+						}[],
+					],
+				}),
+			),
 		}
 		const app = createFontRpc({
 			build: vi.fn(),
@@ -305,6 +310,7 @@ describe(`create-font workspace RPC`, () => {
 		expect(await response.json()).toEqual(
 			expect.objectContaining({
 				previousRevision: `manifest-1`,
+				removedPaths: [],
 				revision: `manifest-2`,
 				units: expect.arrayContaining([
 					expect.objectContaining({ path: `names.json` }),

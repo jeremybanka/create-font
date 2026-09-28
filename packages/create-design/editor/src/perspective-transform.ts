@@ -58,6 +58,14 @@ type PerspectiveCornerHandle = Extract<
 	"nw" | "ne" | "se" | "sw"
 >
 
+export function isPerspectiveCornerHandle(
+	handle: PerspectiveHandle,
+): handle is PerspectiveCornerHandle {
+	return (
+		handle === "nw" || handle === "ne" || handle === "se" || handle === "sw"
+	)
+}
+
 export const PERSPECTIVE_BAKE_MAX_ERROR = 0.25
 const PERSPECTIVE_SAMPLE_ERROR = 0.05
 const PERSPECTIVE_REFIT_ERROR =
@@ -105,7 +113,7 @@ function constrainedDelta(
 	modifiers: PerspectiveModifiers,
 ): DesignPointLike {
 	if (!modifiers.shiftKey) return delta
-	if (handle.length === 2) {
+	if (isPerspectiveCornerHandle(handle)) {
 		const acquisition =
 			modifiers.cornerAcquisition ??
 			dominantCornerAcquisition(source, handle, delta) ??
@@ -135,7 +143,7 @@ const VERTICAL_CORNER_MATE = { nw: 3, ne: 2, se: 1, sw: 0 } as const
 function cornerSideMate(
 	handle: PerspectiveCornerHandle,
 	acquisition: PerspectiveCornerAcquisition,
-): number {
+): 0 | 1 | 2 | 3 {
 	return acquisition === "horizontal"
 		? HORIZONTAL_CORNER_MATE[handle]
 		: VERTICAL_CORNER_MATE[handle]

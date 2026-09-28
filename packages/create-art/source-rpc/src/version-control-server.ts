@@ -3,7 +3,6 @@ import { Elysia, status, t } from "elysia"
 import {
 	SourceValidationError,
 	SourceVersionControlError,
-	type CommitSourceUnitsInput,
 	type SourceValidationFailure,
 	type SourceVersionControlService,
 } from "./contracts.ts"
@@ -78,9 +77,16 @@ export function createSourceVersionControlRpc(
 					})
 				}
 				try {
-					return await options.service.commitUnits(
-						body as CommitSourceUnitsInput,
-					)
+					const [first, ...rest] = body.paths
+					if (first === undefined)
+						return status(400, {
+							code: "source.invalid_request" as const,
+							message: "At least one source path is required.",
+						})
+					return await options.service.commitUnits({
+						...body,
+						paths: [first, ...rest],
+					})
 				} catch (error) {
 					return versionControlErrorResponse(error)
 				}
