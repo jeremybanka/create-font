@@ -1,3 +1,6 @@
+[env]
+_.path = ["{{config_root}}/node_modules/.bin"]
+
 [tools]
 "cargo:wasm-bindgen-cli" = "0.2.129"
 ni = "30.6.0"
