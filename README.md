@@ -199,3 +199,7 @@ keeps local editor state, persists changed source units directly to the server,
 and consumes ordered unit deltas from the server's source event stream.
 Development does not build or watch workspace package outputs. Production and
 published consumers continue to resolve the compiled `dist` entrypoints.
+
+## Repository commands
+
+See [the command guide](docs/commands.md) for formatting, static checks, tests, coverage where available, and release commands.

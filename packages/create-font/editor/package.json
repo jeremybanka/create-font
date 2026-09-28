@@ -31,9 +31,10 @@
 		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
+		"cov": "vp test run --coverage",
 		"profile:live-font": "node --conditions=development ./scripts/profile-live-compilation.ts",
 		"test": "vp test",
-		"test:coverage": "vp test run --coverage"
+		"test:watch": "vp test watch"
 	},
 	"dependencies": {
 		"@create-art/editor": "workspace:*",

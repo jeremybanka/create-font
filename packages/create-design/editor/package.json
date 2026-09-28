@@ -37,7 +37,8 @@
 		"build": "node ./scripts/build.ts",
 		"check:eslint": "eslint \"src/**/*.{ts,tsx}\"",
 		"check:lasertag": "lasertag check \"src/**/*.module.css\"",
-		"test": "vp test"
+		"test": "vp test",
+		"test:watch": "vp test watch"
 	},
 	"dependencies": {
 		"@create-art/editor": "workspace:*",

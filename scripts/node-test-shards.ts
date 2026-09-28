@@ -117,7 +117,7 @@ const shards = {
 		{
 			kind: `package-script`,
 			package: `@create-font/editor`,
-			script: `test:coverage`,
+			script: `cov`,
 		},
 	],
 	"state-model": [{ kind: `package-tests`, packages: [`@create-font/states`] }],
@@ -206,7 +206,7 @@ function verifyShards(): void {
 		}
 		if (manifest.name === `@create-font/editor`) {
 			// Coverage executes the complete editor suite, so do not run it twice.
-			expectedSurfaces.add(`${manifest.name}:test:coverage`)
+			expectedSurfaces.add(`${manifest.name}:cov`)
 			continue
 		}
 		expectedSurfaces.add(`${manifest.name}:test`)
