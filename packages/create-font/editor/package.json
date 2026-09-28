@@ -34,7 +34,6 @@
 		"cov": "vp test run --coverage",
 		"profile:live-font": "node --conditions=development ./scripts/profile-live-compilation.ts",
 		"test": "vp test",
-		"test:coverage": "pnpm run cov",
 		"test:watch": "vp test watch"
 	},
 	"dependencies": {

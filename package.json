@@ -23,17 +23,13 @@
 		"dev:design": "pnpm --filter create-design dev",
 		"dev:font": "pnpm --filter create-font dev",
 		"fmt": "mise exec -- cargo fmt --all && vp run dprint-plugin-fea#build && node ./packages/create-art/source-format/src/cli.ts fmt fonts designs && dprint fmt",
-		"fmt:check": "pnpm run check:fmt",
 		"font": "node ./apps/create-font/src/font-cli.ts",
-		"lint": "pnpm run check:vp",
-		"release": "pnpm run release:publish",
 		"release:publish": "pnpm build && changeset publish",
 		"release:version": "vp run --ignore-depends-on dprint-plugin-fea#build && changeset version",
 		"staged": "vp staged",
 		"test": "node --test ./scripts/dev-ports.test.ts ./scripts/dev-processes.test.ts ./scripts/server-shutdown.test.ts && mise exec -- cargo test --workspace && pnpm -r test",
 		"test:watch": "vp run -r --parallel --no-cache test:watch",
-		"verify": "pnpm run check && pnpm run test && pnpm run build && pnpm run cov",
-		"version-packages": "pnpm run release:version"
+		"verify": "pnpm run check && pnpm run test && pnpm run build && pnpm run cov"
 	},
 	"devDependencies": {
 		"@changesets/cli": "3.0.2",
