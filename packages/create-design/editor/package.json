@@ -51,7 +51,7 @@
 		"@create-design/svg": "workspace:*",
 		"@create-design/text": "workspace:*",
 		"@radix-ui/react-icons": "^1.3.2",
-		"atom.io": "0.53.2",
+		"atom.io": "0.53.3",
 		"react": "19.3.0",
 		"react-dom": "19.3.0"
 	},
