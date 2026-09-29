@@ -16,7 +16,7 @@ export default defineConfig({
 				onlyBundle: [],
 			},
 			dts: {
-				entry: ["src/index.ts", "src/browser.ts", "src/cli.ts"],
+				entry: ["src/index.ts", "src/browser.ts"],
 				sourcemap: true,
 			},
 			entry: {
