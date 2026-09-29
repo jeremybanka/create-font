@@ -38,6 +38,7 @@ describe("GlyphCanvas Diff View", () => {
 						width,
 					}),
 					getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+					getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
 					measureText: () => ({ width: 0 }),
 				}
 				return new Proxy(context, {
