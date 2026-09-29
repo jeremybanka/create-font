@@ -71,11 +71,6 @@
 			"enabled": false
 		},
 		{
-			"matchPackageNames": ["vite-plus"],
-			"ignoreUnstable": false,
-			"respectLatest": false
-		},
-		{
 			"groupName": "konva",
 			"matchPackageNames": ["konva", "react-konva"],
 			"separateMajorMinor": false
