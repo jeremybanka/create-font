@@ -58,9 +58,9 @@
 		"vite": "catalog:",
 		"vite-plus": "catalog:"
 	},
-	"packageManager": "pnpm@12.6.0",
+	"packageManager": "pnpm@12.8.0",
 	"engines": {
 		"node": "26.10.0",
-		"pnpm": "12.6.0"
+		"pnpm": "12.8.0"
 	}
 }
