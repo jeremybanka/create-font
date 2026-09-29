@@ -1,6 +1,6 @@
 {
 	"name": "create-design",
-	"version": "0.3.8",
+	"version": "0.3.9",
 	"description": "Create, build, validate, export, and edit create-design source projects",
 	"repository": {
 		"type": "git",
