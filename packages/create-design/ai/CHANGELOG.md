@@ -1,5 +1,11 @@
 # @create-design/ai
 
+## 0.0.9
+
+### Patch Changes
+
+- @create-design/source@0.4.8
+
 ## 0.0.8
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @create-design/model
 
+## 0.2.8
+
+### Patch Changes
+
+- @create-design/source@0.4.8
+
 ## 0.2.7
 
 ### Patch Changes
