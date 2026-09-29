@@ -1,5 +1,12 @@
 # @create-design/editor
 
+## 0.3.9
+
+### Patch Changes
+
+- Updated dependencies [4044e8f]
+  - @create-art/editor@0.2.3
+
 ## 0.3.8
 
 ### Patch Changes

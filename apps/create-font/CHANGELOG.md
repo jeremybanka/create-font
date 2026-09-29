@@ -1,5 +1,11 @@
 # create-font
 
+## 0.3.27
+
+### Patch Changes
+
+- @create-font/editor@0.9.4
+
 ## 0.3.26
 
 ### Patch Changes

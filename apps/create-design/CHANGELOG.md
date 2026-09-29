@@ -1,5 +1,11 @@
 # create-design
 
+## 0.3.9
+
+### Patch Changes
+
+- @create-design/editor@0.3.9
+
 ## 0.3.8
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @create-art/editor
 
+## 0.2.3
+
+### Patch Changes
+
+- 4044e8f: Reduce temporary canvas-buffer memory use when rendering translucent selection overlays and shape previews in Create Font and Create Design.
+
 ## 0.2.2
 
 ### Patch Changes
