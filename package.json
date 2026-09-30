@@ -31,8 +31,8 @@
 		"test:watch": "vp run -r --parallel --no-cache test:watch"
 	},
 	"devDependencies": {
-		"@changesets/cli": "3.0.2",
-		"@changesets/config": "4.0.0",
+		"@changesets/cli": "3.0.3",
+		"@changesets/config": "4.0.1",
 		"@dprint/json": "0.25.0",
 		"@dprint/markdown": "0.24.0",
 		"@dprint/oxc": "0.42.0",
