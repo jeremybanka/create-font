@@ -351,8 +351,8 @@ importers:
         specifier: 0.8.6
         version: 0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       mondrian.pdf:
-        specifier: 0.1.8
-        version: 0.1.8(vitest@5.0.1)
+        specifier: 0.1.9
+        version: 0.1.9(vitest@5.0.1)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -690,8 +690,8 @@ importers:
         specifier: workspace:*
         version: link:../text
       mondrian.pdf:
-        specifier: 0.1.8
-        version: 0.1.8(vitest@5.0.1)
+        specifier: 0.1.9
+        version: 0.1.9(vitest@5.0.1)
     devDependencies:
       '@types/node':
         specifier: 26.6.3
@@ -3559,8 +3559,8 @@ packages:
     resolution: {integrity: sha512-Rw0vY0wBdNtm3sbANVMDUgO5Htew9xotKoqcdK/a4rW8jf5KEl6MAWGMBhjKng6gpPjX8SmO8f+65ssnxNroTw==}
     engines: {node: '>= 0.4'}
 
-  mondrian.pdf@0.1.8:
-    resolution: {integrity: sha512-KITOEFfgNn26PdrDx8qhG3kdkU+WccPgaDVX0H7tsJpqQoQuinyw7tTvCaZGa6RrN+D9sSVWRD2GAWXvruimoQ==}
+  mondrian.pdf@0.1.9:
+    resolution: {integrity: sha512-F6T2Eu+hBDHqFQ+FcX8TC8yMCFC/28oqN53Cz67XChqU7NXr9zIM4vACu5Syacg6guCfvLTH1RyCbt5/vvG6YA==}
     engines: {node: '>=22.13.0'}
     peerDependencies:
       vitest: 5.0.1
@@ -6554,7 +6554,7 @@ snapshots:
       isarray: 2.0.5
       object-inspect: 1.13.4
 
-  mondrian.pdf@0.1.8(vitest@5.0.1):
+  mondrian.pdf@0.1.9(vitest@5.0.1):
     dependencies:
       '@embedpdf/pdfium': 2.15.1
       '@napi-rs/canvas': 1.0.9
