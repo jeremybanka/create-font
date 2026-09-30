@@ -1,5 +1,11 @@
 # @create-art/source-format
 
+## 0.2.8
+
+### Patch Changes
+
+- 1b29078: Support dprint 0.58 in the optional peer range and exported compatibility metadata.
+
 ## 0.2.7
 
 ### Patch Changes

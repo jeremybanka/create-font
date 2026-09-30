@@ -1,5 +1,12 @@
 # @create-font/source
 
+## 0.2.19
+
+### Patch Changes
+
+- Updated dependencies [1b29078]
+  - @create-art/source-format@0.2.8
+
 ## 0.2.18
 
 ### Patch Changes
