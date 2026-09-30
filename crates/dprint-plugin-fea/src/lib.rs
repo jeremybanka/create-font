@@ -70,6 +70,7 @@ impl SyncPluginHandler<FormatConfig> for FeaPluginHandler {
             file_matching: FileMatchingInfo {
                 file_extensions: vec!["fea".to_owned()],
                 file_names: Vec::new(),
+                additive: false,
             },
             diagnostics,
             config: FormatConfig {
