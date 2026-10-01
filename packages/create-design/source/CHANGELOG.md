@@ -1,5 +1,12 @@
 # @create-design/source
 
+## 0.4.9
+
+### Patch Changes
+
+- Updated dependencies [1b29078]
+  - @create-art/source-format@0.2.8
+
 ## 0.4.8
 
 ### Patch Changes

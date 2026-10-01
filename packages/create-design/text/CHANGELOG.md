@@ -1,5 +1,11 @@
 # @create-design/text
 
+## 0.0.10
+
+### Patch Changes
+
+- @create-design/source@0.4.9
+
 ## 0.0.9
 
 ### Patch Changes
