@@ -55,7 +55,7 @@
 		"eslint": "10.11.0",
 		"happy-dom": "20.14.5",
 		"jiti": "2.7.0",
-		"lasertag": "0.8.6",
+		"lasertag": "0.8.7",
 		"treetrunks": "0.1.12",
 		"vite": "catalog:",
 		"vitest": "catalog:"

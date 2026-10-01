@@ -348,8 +348,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       lasertag:
-        specifier: 0.8.6
-        version: 0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
+        specifier: 0.8.7
+        version: 0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       mondrian.pdf:
         specifier: 0.1.9
         version: 0.1.9(vitest@5.0.1)
@@ -491,8 +491,8 @@ importers:
         specifier: 20.14.5
         version: 20.14.5
       lasertag:
-        specifier: 0.8.6
-        version: 0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
+        specifier: 0.8.7
+        version: 0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       react:
         specifier: 19.3.0
         version: 19.3.0
@@ -653,8 +653,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       lasertag:
-        specifier: 0.8.6
-        version: 0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
+        specifier: 0.8.7
+        version: 0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       vite:
         specifier: 'catalog:'
         version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
@@ -819,8 +819,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       lasertag:
-        specifier: 0.8.6
-        version: 0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
+        specifier: 0.8.7
+        version: 0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       treetrunks:
         specifier: 0.1.12
         version: 0.1.12
@@ -2577,44 +2577,6 @@ packages:
     resolution: {integrity: sha512-hsU18Ae8CDTR6Kgu9DYf0EbCr/a5iGL0rytQDobUcdpYOKokk8LEjVphnXkDkgpi0wYVsqrXuP0bZxJaTqdgoA==}
     engines: {node: '>= 0.4'}
 
-  atom.io@0.53.2:
-    resolution: {integrity: sha512-CLzcO/6cqryo5LnywyXFBRuZ0AZcC/1+ALAG1c+OTlIuXX/xrCPR4Nz1l68VK7nhTNyGW+la2hXdu4nsSb7SiA==}
-    peerDependencies:
-      '@floating-ui/react': '>=0.25.0'
-      '@floating-ui/react-dom': '>=2.0.0'
-      '@testing-library/react': '>=14.0.0'
-      '@types/react': ^18.0.0 || ^19.0.0
-      '@typescript-eslint/parser': '>=8.0.0'
-      eslint: '>=9.0.0'
-      happy-dom: '>=17.4.4'
-      motion: '>=11.0.0'
-      socket.io: '>=4.0.0'
-      socket.io-client: '>=4.0.0'
-      solid-js: ^1.9.0
-    peerDependenciesMeta:
-      '@floating-ui/react':
-        optional: true
-      '@floating-ui/react-dom':
-        optional: true
-      '@testing-library/react':
-        optional: true
-      '@types/react':
-        optional: true
-      '@typescript-eslint/parser':
-        optional: true
-      eslint:
-        optional: true
-      happy-dom:
-        optional: true
-      motion:
-        optional: true
-      socket.io:
-        optional: true
-      socket.io-client:
-        optional: true
-      solid-js:
-        optional: true
-
   atom.io@0.53.3:
     resolution: {integrity: sha512-WIKa/isE1HcNAB2fkY4gw+Y5PpPRb3OGxdJeeu9xAzgnKny0YKvwD+caKV/vZYhvvqwsELpRJkz7gp9PW3tewA==}
     peerDependencies:
@@ -3371,15 +3333,15 @@ packages:
       skia-canvas:
         optional: true
 
-  lasertag@0.8.6:
-    resolution: {integrity: sha512-XoG4AJwWiN1by5NbiSalo7EWLqXLyjG5LyakQkabbkMcevNKh7taeI28AWEuxk3eNTyySuin1EHpiuWko+6ANw==}
-    engines: {node: 26.10.0, pnpm: 12.6.0}
+  lasertag@0.8.7:
+    resolution: {integrity: sha512-h/969zo6bAmZ3gdFf3zY0TNU5O5e/BQKoVn9YkHwUVVu+nn+khA5JFGz8+VLlnltG3o5DaqKFUEDGM4ZerQa6Q==}
+    engines: {node: 26.10.0, pnpm: 12.8.1}
     hasBin: true
     peerDependencies:
       '@types/react': ^19.2
       eslint: ^10.4
       hono: ^4.13.8
-      preact: ^10.29
+      preact: ^10.29 || ^11.0.0
       solid-js: ^1.9
     peerDependenciesMeta:
       '@types/react':
@@ -5526,13 +5488,6 @@ snapshots:
 
   async-function@1.0.0: {}
 
-  atom.io@0.53.2(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5):
-    optionalDependencies:
-      '@types/react': 19.3.0
-      '@typescript-eslint/parser': 8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
-      eslint: 10.11.0(jiti@2.7.0)(supports-color@7.2.0)
-      happy-dom: 20.14.5
-
   atom.io@0.53.3(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5):
     optionalDependencies:
       '@types/react': 19.3.0
@@ -6369,11 +6324,11 @@ snapshots:
 
   konva@10.7.0: {}
 
-  lasertag@0.8.6(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0):
+  lasertag@0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0):
     dependencies:
       '@astrojs/compiler': 4.0.0
       '@vscode/vsce': 4.0.0(supports-color@7.2.0)
-      atom.io: 0.53.2(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)
+      atom.io: 0.53.3(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)
       comline: 0.9.0(zod@4.6.5)
       rolldown: 1.2.11
       takua: 0.2.3
