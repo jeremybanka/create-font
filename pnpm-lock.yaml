@@ -206,8 +206,8 @@ importers:
         specifier: 0.8.0
         version: 0.8.0
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -219,7 +219,7 @@ importers:
         version: 8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       agents.yaml:
         specifier: 0.3.0
         version: 0.3.0
@@ -261,10 +261,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
 
   apps/create-design:
     dependencies:
@@ -318,8 +318,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/create-font/target
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -334,7 +334,7 @@ importers:
         version: 8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       atom.io:
         specifier: 0.53.3
         version: 0.53.3(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)
@@ -361,13 +361,13 @@ importers:
         version: 19.3.0(react@19.3.0)
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   apps/create-font:
     dependencies:
@@ -424,7 +424,7 @@ importers:
         version: 1.2.12
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vscode-languageclient:
         specifier: 10.1.2
         version: 10.1.2
@@ -439,8 +439,8 @@ importers:
         version: 4.6.5
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -449,13 +449,13 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       atom.io:
         specifier: 0.53.3
         version: 0.53.3(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-art/editor:
     dependencies:
@@ -479,8 +479,8 @@ importers:
         version: 19.3.0(@types/react@19.3.0)(konva@10.7.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -501,13 +501,13 @@ importers:
         version: 19.3.0(react@19.3.0)
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-art/source-format:
     dependencies:
@@ -525,11 +525,11 @@ importers:
         version: link:../../dprint-plugin-fea
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-art/source-rpc:
     dependencies:
@@ -538,11 +538,11 @@ importers:
         version: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-art/ui-layout:
     dependencies:
@@ -554,14 +554,14 @@ importers:
         version: 4.6.5
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vite-plus:
         specifier: 'catalog:'
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-art/vector-geometry:
     dependencies:
@@ -571,7 +571,7 @@ importers:
     devDependencies:
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/ai:
     dependencies:
@@ -580,11 +580,11 @@ importers:
         version: link:../source
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/editor:
     dependencies:
@@ -629,8 +629,8 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -657,13 +657,13 @@ importers:
         version: 0.8.7(@types/react@19.3.0)(@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(happy-dom@20.14.5)(preact@10.29.8)(supports-color@7.2.0)
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vite-plus:
         specifier: 'catalog:'
-        version: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+        version: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/model:
     dependencies:
@@ -676,7 +676,7 @@ importers:
     devDependencies:
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/pdf:
     dependencies:
@@ -694,11 +694,11 @@ importers:
         version: 0.1.9(vitest@5.0.1)
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/png:
     dependencies:
@@ -713,11 +713,11 @@ importers:
         version: link:../svg
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/source:
     dependencies:
@@ -730,7 +730,7 @@ importers:
     devDependencies:
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/svg:
     dependencies:
@@ -742,11 +742,11 @@ importers:
         version: link:../source
     devDependencies:
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-design/text:
     dependencies:
@@ -765,7 +765,7 @@ importers:
         version: link:../../create-font/target
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/editor:
     dependencies:
@@ -826,10 +826,10 @@ importers:
         version: 0.1.12
       vite:
         specifier: 'catalog:'
-        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/fea-rs-wasm: {}
 
@@ -844,7 +844,7 @@ importers:
         version: link:../target
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/glyphs-app:
     dependencies:
@@ -857,7 +857,7 @@ importers:
     devDependencies:
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/server:
     dependencies:
@@ -875,11 +875,11 @@ importers:
         specifier: 11.19.0
         version: 11.19.0(typescript@7.0.2)
       '@types/node':
-        specifier: 26.6.3
-        version: 26.6.3
+        specifier: 26.6.4
+        version: 26.6.4
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -901,7 +901,7 @@ importers:
     devDependencies:
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/states:
     dependencies:
@@ -932,7 +932,7 @@ importers:
         version: 2.7.0
       vitest:
         specifier: 'catalog:'
-        version: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+        version: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   packages/create-font/target: {}
 
@@ -2059,8 +2059,8 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
-  '@types/node@26.6.3':
-    resolution: {integrity: sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==}
+  '@types/node@26.6.4':
+    resolution: {integrity: sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -2485,133 +2485,157 @@ packages:
     resolution: {integrity: sha512-jrOY5WM+AaAqkv51fHP1x28ifto4WgcZVzodLUyMU1jMWn5Sq+VciRdk/n8E0Ey5w4p4cWWE+m5GfXWOYh7Kzw==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-arm64@0.9.5':
     resolution: {integrity: sha512-4O4lkCQIzPZGjiNB1GORSI6hBECbiiSBS/APZXPvNKYH+nhY4uuqv03LNXA+SET3hoBjvr95P5rIhY8KQaQUBA==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-darwin-x64@0.9.5':
     resolution: {integrity: sha512-9EvoUO0SEhD6/d8VHdWuPerepPMSR1y84+UEgz8Un1Ope14Oe7xMvePpEQLTLovoIFZ8Zg3iZ8z8E11pZMqC3g==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-freebsd-x64@0.9.5':
     resolution: {integrity: sha512-HqT78WwgHTmp8lwujoUa9CrIortX4DdpuiVC18ZPSGvuuJf4ylpIEI6QrQEM78Zwz3muhAWAOXZ5irdiYY+AyA==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-gnu@0.9.5':
     resolution: {integrity: sha512-QJXwIW6Ms3QIawbcBIedmrmXnfdpuAOjZJ/eAABq5XTzWvSxZ7lutu9W5yIHahlaTaFnBo7ikrVMD1szLTpPUw==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm-musl@0.9.5':
     resolution: {integrity: sha512-eHbFy3IHGb+IYarrYwAo0yWSEQV3eAmEn6VrsKA6I1Wy1YPJxWqSJlV69JhqsHtJuJlljUIF3ex0y46yaKIu9w==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-gnu@0.9.5':
     resolution: {integrity: sha512-ByoJMbySTaDhjAXSu8q6Lh7HKg3YoesXpcT72aYk0Aiw4PCznmY4ybpLTq0RCvp0RIPhFm/6yECFiGBwyCC1nw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-arm64-musl@0.9.5':
     resolution: {integrity: sha512-gD9vfXIoBw1toSxhO9rgmSu/FEfy3PMznJAxVjIuH8DrWEiDKXmJO0pJKfj1Ltbe/TmtWVZR+TjISqeSIGQzMg==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-gnu@0.9.5':
     resolution: {integrity: sha512-BARvdnvqMGjOr5Iel2JH+9H5vAIE0R6H0Z2fsT02xrvmI/1ZXNB8lkuX+ZGevPhZb3zJ9WeC/R8JZstrsUOK5g==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-linux-x64-musl@0.9.5':
     resolution: {integrity: sha512-x8flcevS1fbb7ESrmpOY/pON4eInSaE/7Ktjqx2udOE2W33BNSZmJuwpyUgo54AoHNqrcaM7szqydyJn5fNvew==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-arm64@0.9.5':
     resolution: {integrity: sha512-KOL/rBatWqH4ZpCNoF8ZtSNdOJbAxBJLmk/VeRciepGROPTbPum1A9t67GpFgOU7qrkUWlPJdJ+KHKbvbmOt+w==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-codegen/binding-win32-x64@0.9.5':
     resolution: {integrity: sha512-FxENahEjWSan59Syh/us/Kf4wNq8qrJLFJ3R2N4Oiwtb6yNdz/rWLNTIoNSssnsp7IoWJdUP6o/Z8ppg7lXMcg==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-codegen is pure JavaScript since 0.14
 
   '@yuku-parser/binding-android-arm64@0.9.5':
     resolution: {integrity: sha512-A2JCFCSHfnficqYEw4Iujpx7XrkMM3UfFcgJFmYpZSo9zM4nyhmdIIE0FogSduuU60lhM0/UcfuUBXIVNBMlGQ==}
     cpu: [arm64]
     os: [android]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-arm64@0.9.5':
     resolution: {integrity: sha512-3PiyU+Eare4YuKaQ22N98/yAiROPY5o/NQJHraICzDvk4pgS+m+bgLKOvkGBRn33OnV95Vdv1Mn38b+MQHpULQ==}
     cpu: [arm64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-darwin-x64@0.9.5':
     resolution: {integrity: sha512-blFMAFI7AInI83XaiOF8cIeiRM46Nz9EfpZtZPRLbKxSA9aAr5v8aHYpmfN6NoyXxAv/10pwS4gsAuc1W6fy5Q==}
     cpu: [x64]
     os: [darwin]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-freebsd-x64@0.9.5':
     resolution: {integrity: sha512-TsNuL4qsZdO0tHp5GW43Y5fHeLPpPHA675wdcPNTcdq2ZO5AvsQWFFoiDg8CH4oBktfsQ9tdvKhjLnLYwKvp4g==}
     cpu: [x64]
     os: [freebsd]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-gnu@0.9.5':
     resolution: {integrity: sha512-b0afYK5gHeV8RdmOcqAlgM8ONsye4cax4DMnIBaoJyPMd1UTGvTbpkqQcPVdhmHlcfcGVGMV1laeVovlr/dscw==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm-musl@0.9.5':
     resolution: {integrity: sha512-fD3lKzl+r6j6n8DwiMY53qnh5DLqD8KJjCp+NbVud54Nnh3Q9Wprqss3YzyMHP3NSJk663Wlg1E1X5qOuFVFig==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-gnu@0.9.5':
     resolution: {integrity: sha512-aRU/aCphV1MWCl/lvI6NX8LgucHQ68Fx+vz7NBb/5MEr2EuzCxiPOQqeFcMdWh+2AED/p0AvAREch0c+cSnlhA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-arm64-musl@0.9.5':
     resolution: {integrity: sha512-5+Guro0l8H473YXlEjVNBRLN/IbPbJdnQh1zo0OLt49xxnON+XMJRRaEyTOTfkn9QSRg0+BhEKGR4W9Gu2uZJQ==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-gnu@0.9.5':
     resolution: {integrity: sha512-pwwSyV9q+GlvzSXlsMZBMlgk22L5bud714/vqZCdeUTivzeUVltQzUaf3IQXOGXdpc59JYTeuMCtbGquaAUoCA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-linux-x64-musl@0.9.5':
     resolution: {integrity: sha512-z18j6JN3lBHH8vzN7gG1M8fI0nlgItSfnC9PfbmUbt97iHViKfw2iA2G9fGwRMe5LyPRZBrejIlapbygPbpdaw==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-arm64@0.9.5':
     resolution: {integrity: sha512-s6Gwttb1dQvtPX6Bgkw+UPC9IO3UBDXc6Zezog8MMgvu3UfJBBB9TQqKBX/2quu0Eyh+lLSAyNlIyyecaagUPg==}
     cpu: [arm64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-parser/binding-win32-x64@0.9.5':
     resolution: {integrity: sha512-FrERt9YWatY3bJfSUdi4YWY+6iQcyo3MzCC821BxlWM5TFZEHijnpz/bknR79VHlXY/9CvXz8ZlaAGPsTtN3nw==}
     cpu: [x64]
     os: [win32]
+    deprecated: yuku-parser runs on yuku-core since 0.14
 
   '@yuku-toolchain/types@0.9.5':
     resolution: {integrity: sha512-KiuLNNgX9uNealaWAR+G3/cMXnRk9x4TY2EkYe/KIag+UPdwiA0RRf1hr1WAxzTP8KGzCTkqUdLPvqh32sEO3w==}
@@ -5125,7 +5149,7 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/node@26.6.3':
+  '@types/node@26.6.4':
     dependencies:
       undici-types: 8.9.0
 
@@ -5149,7 +5173,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 26.6.3
+      '@types/node': 26.6.4
 
   '@typescript-eslint/parser@8.71.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)':
     dependencies:
@@ -5282,34 +5306,34 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-react@6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.1.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
 
-  '@vitest/browser-preview@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)':
+  '@vitest/browser-preview@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.7(@testing-library/dom@10.4.1)
-      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)':
+  '@vitest/browser@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)':
     dependencies:
       '@blazediff/core': 1.10.0
-      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       '@vitest/ui': 5.0.1(vitest@5.0.1)
       '@vitest/utils': 5.0.1
       magic-string: 1.2.3
       pngjs: 7.0.0
       sirv: 3.0.2
       tinyrainbow: 3.1.1
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
@@ -5327,9 +5351,9 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
     optionalDependencies:
-      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
+      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
 
   '@vitest/istanbul-lib-coverage@1.0.1': {}
 
@@ -5337,14 +5361,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.1
 
-  '@vitest/mocker@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitest/mocker@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.1
       estree-walker: 3.0.3
       magic-string: 1.2.3
     optionalDependencies:
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
 
   '@vitest/pretty-format@5.0.1':
     dependencies:
@@ -5367,7 +5391,7 @@ snapshots:
       pathe: 2.0.3
       sirv: 3.0.2
       tinyrainbow: 3.1.1
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   '@vitest/utils@5.0.1':
     dependencies:
@@ -5375,7 +5399,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
-  '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)':
+  '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)':
     dependencies:
       '@oxc-project/runtime': 0.151.0
       '@oxc-project/types': 0.151.0
@@ -5385,7 +5409,7 @@ snapshots:
       yuku-codegen: 0.9.5
       yuku-parser: 0.9.5
     optionalDependencies:
-      '@types/node': 26.6.3
+      '@types/node': 26.6.4
       '@voidzero-dev/vite-plus-darwin-arm64': 1.0.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.0.0
       '@voidzero-dev/vite-plus-linux-arm64-gnu': 1.0.0
@@ -5680,7 +5704,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 26.6.3
+      '@types/node': 26.6.4
 
   bundle-name@4.1.0:
     dependencies:
@@ -6196,7 +6220,7 @@ snapshots:
 
   happy-dom@20.14.5:
     dependencies:
-      '@types/node': 26.6.3
+      '@types/node': 26.6.4
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       buffer-image-size: 0.6.4
@@ -6643,7 +6667,7 @@ snapshots:
       pdf-lib: 1.17.1
       pngjs: 7.0.0
     optionalDependencies:
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
 
   mrmime@2.0.1: {}
 
@@ -6718,7 +6742,7 @@ snapshots:
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
 
-  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)):
+  oxfmt@0.70.0(vite-plus@1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       tinypool: 2.1.2
     optionalDependencies:
@@ -6741,7 +6765,7 @@ snapshots:
       '@oxfmt/binding-win32-arm64-msvc': 0.70.0
       '@oxfmt/binding-win32-ia32-msvc': 0.70.0
       '@oxfmt/binding-win32-x64-msvc': 0.70.0
-      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+      vite-plus: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
 
   oxlint-tsgolint@7.0.2003:
     optionalDependencies:
@@ -6752,7 +6776,7 @@ snapshots:
       '@oxlint-tsgolint/win32-arm64': 7.0.2003
       '@oxlint-tsgolint/win32-x64': 7.0.2003
 
-  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)):
+  oxlint@1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)):
     optionalDependencies:
       '@oxlint/binding-android-arm-eabi': 1.85.0
       '@oxlint/binding-android-arm64': 1.85.0
@@ -6774,7 +6798,7 @@ snapshots:
       '@oxlint/binding-win32-ia32-msvc': 1.85.0
       '@oxlint/binding-win32-x64-msvc': 1.85.0
       oxlint-tsgolint: 7.0.2003
-      vite-plus: 1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
+      vite-plus: 1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0)
 
   p-limit@3.1.0:
     dependencies:
@@ -7266,22 +7290,22 @@ snapshots:
 
   version-range@4.15.0: {}
 
-  vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0):
+  vite-plus@1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
       '@oxc-project/types': 0.151.0
       '@oxlint/plugins': 1.79.0
-      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
-      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
-      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/browser': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
+      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
+      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       '@vitest/pretty-format': 5.0.1
       '@vitest/snapshot': 5.0.1
       '@vitest/spy': 5.0.1
       '@vitest/utils': 5.0.1
-      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0))
-      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.3)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0))
+      oxfmt: 0.70.0(vite-plus@1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0))
+      oxlint: 1.85.0(oxlint-tsgolint@7.0.2003)(vite-plus@1.0.0(@types/node@26.6.4)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(happy-dom@20.14.5)(jiti@2.7.0)(yaml@2.9.0))
       oxlint-tsgolint: 7.0.2003
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
-      vitest: 5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
+      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
+      vitest: 5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5)
     optionalDependencies:
       '@voidzero-dev/vite-plus-darwin-arm64': 1.0.0
       '@voidzero-dev/vite-plus-darwin-x64': 1.0.0
@@ -7320,10 +7344,10 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  vitest@5.0.1(@types/node@26.6.3)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5):
+  vitest@5.0.1(@types/node@26.6.4)(@vitest/browser-preview@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(happy-dom@20.14.5):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/mocker': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -7334,11 +7358,11 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0)'
+      vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0)'
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.6.3
-      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.3)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
+      '@types/node': 26.6.4
+      '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.4)(jiti@2.7.0)(yaml@2.9.0))(vitest@5.0.1)
       '@vitest/coverage-v8': 5.0.1(@vitest/browser@5.0.1)(vitest@5.0.1)
       '@vitest/ui': 5.0.1(vitest@5.0.1)
       happy-dom: 20.14.5
