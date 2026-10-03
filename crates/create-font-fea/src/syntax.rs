@@ -276,7 +276,7 @@ mod tests {
         let source = "include(shared/classes.fea);\n";
         let parsed = parse_fea(source);
         assert_eq!(parsed.root.source_text(), source);
-        assert!(parsed.diagnostics.is_empty());
+        assert_eq!(parsed.diagnostics, [] as [Diagnostic; 0]);
         assert!(
             serde_json::to_string(&parsed)
                 .unwrap()
