@@ -38,7 +38,7 @@
 	},
 	"dependencies": {
 		"@dprint/formatter": "0.5.1",
-		"@dprint/json": "0.25.0",
+		"@dprint/json": "0.25.1",
 		"dprint-plugin-fea": "workspace:*"
 	},
 	"devDependencies": { "@types/node": "26.6.4", "vitest": "catalog:" },
