@@ -1,5 +1,14 @@
 # create-font
 
+## 0.3.29
+
+### Patch Changes
+
+- Updated dependencies [07fd260]
+  - @create-art/source-format@0.2.9
+  - @create-font/source@0.2.20
+  - @create-font/glyphs-app@0.0.11
+
 ## 0.3.28
 
 ### Patch Changes
