@@ -65,7 +65,7 @@
 		"@typescript-eslint/utils": "8.71.0",
 		"@vitejs/plugin-react": "6.1.1",
 		"atom.io": "0.53.3",
-		"eslint": "10.11.0",
+		"eslint": "10.12.0",
 		"happy-dom": "20.14.5",
 		"jiti": "2.7.0",
 		"lasertag": "0.8.7",
