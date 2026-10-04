@@ -35,7 +35,7 @@
 		"@changesets/config": "4.0.1",
 		"@dprint/json": "0.25.1",
 		"@dprint/markdown": "0.26.0",
-		"@dprint/oxc": "0.42.0",
+		"@dprint/oxc": "0.43.0",
 		"@dprint/toml": "0.8.0",
 		"@types/node": "26.6.4",
 		"@types/react": "19.3.0",
