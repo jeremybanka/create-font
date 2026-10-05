@@ -1,5 +1,12 @@
 # @create-art/source-format
 
+## 0.2.10
+
+### Patch Changes
+
+- dec6f2b: Support dprint 0.59 and 0.60 as optional peers and report 0.60.1 as the workspace's
+  reference CLI in exported compatibility metadata.
+
 ## 0.2.9
 
 ### Patch Changes
