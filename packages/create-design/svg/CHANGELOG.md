@@ -1,5 +1,12 @@
 # @create-design/svg
 
+## 0.1.11
+
+### Patch Changes
+
+- @create-design/source@0.4.11
+  - @create-design/model@0.2.11
+
 ## 0.1.10
 
 ### Patch Changes
