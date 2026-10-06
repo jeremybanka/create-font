@@ -1,5 +1,14 @@
 # @create-art/source-format
 
+## 0.2.11
+
+### Patch Changes
+
+- 0af0a7e: Update the pinned JSON formatter to `@dprint/json` 0.25.2, which preserves
+  untouched `package.json` property order during range formatting. Report the
+  matching version through `SOURCE_FORMAT_JSON_PLUGIN_VERSION`. Canonical
+  whole-file source formatting remains unchanged.
+
 ## 0.2.10
 
 ### Patch Changes
