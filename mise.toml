@@ -5,7 +5,7 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 "cargo:wasm-bindgen-cli" = "0.2.129"
 ni = "30.6.0"
 node = "26.10.0"
-pnpm = "12.9.1"
+pnpm = "12.10.0"
 rust = { version = "1.99.0", components = ["clippy", "rustfmt"], targets = [
 	"wasm32-unknown-unknown",
 ] }
