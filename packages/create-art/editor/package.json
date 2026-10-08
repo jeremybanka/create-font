@@ -58,7 +58,7 @@
 		"react-dom": "^19.2.0"
 	},
 	"engines": {
-		"node": "26.10.0"
+		"node": "26.11.1"
 	},
 	"publishConfig": {
 		"access": "public"
