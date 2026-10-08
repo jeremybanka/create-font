@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/png",
-	"version": "0.1.12",
+	"version": "0.1.13",
 	"description": "Deterministic, runtime-portable PNG projection and export for create-design documents",
 	"repository": {
 		"type": "git",
