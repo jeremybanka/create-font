@@ -37,7 +37,7 @@
 		"test:watch": "vp test watch"
 	},
 	"dependencies": {
-		"@dprint/formatter": "0.5.1",
+		"@dprint/formatter": "0.6.0",
 		"@dprint/json": "0.25.2",
 		"dprint-plugin-fea": "workspace:*"
 	},
