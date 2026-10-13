@@ -41,7 +41,7 @@
 		"@create-art/source-format": "workspace:*",
 		"@create-font/fea-rs-wasm": "workspace:*",
 		"@create-font/states": "workspace:*",
-		"zod": "4.6.6"
+		"zod": "4.6.7"
 	},
 	"devDependencies": {
 		"vitest": "catalog:"
