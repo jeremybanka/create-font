@@ -46,7 +46,7 @@
 		"@trpc/server": "11.19.0",
 		"@types/node": "26.6.5",
 		"vitest": "catalog:",
-		"zod": "4.6.6"
+		"zod": "4.6.7"
 	},
 	"engines": {
 		"node": ">=22.0.0"
