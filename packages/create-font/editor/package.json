@@ -41,8 +41,8 @@
 		"@create-art/vector-geometry": "workspace:*",
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
-		"react": "19.3.0",
-		"react-dom": "19.3.0"
+		"react": "19.3.1",
+		"react-dom": "19.3.1"
 	},
 	"devDependencies": {
 		"@radix-ui/react-icons": "^1.3.2",

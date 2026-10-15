@@ -70,8 +70,8 @@
 		"jiti": "2.7.0",
 		"lasertag": "0.8.7",
 		"mondrian.pdf": "0.1.13",
-		"react": "19.3.0",
-		"react-dom": "19.3.0",
+		"react": "19.3.1",
+		"react-dom": "19.3.1",
 		"vite": "catalog:",
 		"vite-plus": "catalog:",
 		"vitest": "catalog:"
