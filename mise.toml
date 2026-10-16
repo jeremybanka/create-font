@@ -6,6 +6,6 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 ni = "30.6.0"
 node = "26.12.0"
 pnpm = "12.11.2"
-rust = { version = "1.99.0", components = ["clippy", "rustfmt"], targets = [
+rust = { version = "1.99.1", components = ["clippy", "rustfmt"], targets = [
 	"wasm32-unknown-unknown",
 ] }
