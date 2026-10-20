@@ -42,7 +42,7 @@
 		"dprint-plugin-fea": "workspace:*"
 	},
 	"devDependencies": { "@types/node": "26.6.5", "vitest": "catalog:" },
-	"peerDependencies": { "dprint": ">=0.55.2 <0.64.0" },
+	"peerDependencies": { "dprint": ">=0.55.2 <0.65.0" },
 	"peerDependenciesMeta": { "dprint": { "optional": true } },
 	"engines": { "node": ">=22.0.0" },
 	"publishConfig": { "access": "public" }
