@@ -51,7 +51,7 @@
 		"dprint-plugin-markup": "0.27.6",
 		"dprint-plugin-yaml": "0.6.0",
 		"eslint": "10.13.0",
-		"happy-dom": "21.0.3",
+		"happy-dom": "21.0.4",
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
 		"typescript": "7.0.2",
