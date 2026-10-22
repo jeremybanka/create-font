@@ -33,6 +33,7 @@
 	"devDependencies": {
 		"@changesets/cli": "3.0.3",
 		"@changesets/config": "4.0.1",
+		"@create-art/source-format": "workspace:*",
 		"@dprint/json": "0.25.2",
 		"@dprint/markdown": "0.27.1",
 		"@dprint/oxc": "0.47.0",
