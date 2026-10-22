@@ -1,5 +1,11 @@
 # @create-art/source-format
 
+## 0.2.14
+
+### Patch Changes
+
+- 6e58f16: Support dprint 0.64 as an optional peer and report security-patched dprint 0.64.1 as the workspace's reference CLI in exported compatibility metadata.
+
 ## 0.2.13
 
 ### Patch Changes

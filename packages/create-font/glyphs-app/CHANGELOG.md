@@ -1,5 +1,11 @@
 # @create-font/glyphs-app
 
+## 0.0.16
+
+### Patch Changes
+
+- @create-font/source@0.2.25
+
 ## 0.0.15
 
 ### Patch Changes
