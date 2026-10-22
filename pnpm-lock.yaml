@@ -193,6 +193,9 @@ importers:
       '@changesets/config':
         specifier: 4.0.1
         version: 4.0.1
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:packages/create-art/source-format
       '@dprint/json':
         specifier: 0.25.2
         version: 0.25.2
