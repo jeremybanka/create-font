@@ -1,5 +1,11 @@
 # create-font
 
+## 0.3.35
+
+### Patch Changes
+
+- ac9bd67: Improve the OpenType feature VS Code extension's language server startup, shutdown, document synchronization, and file watcher cleanup by updating the language client and server to v11.
+
 ## 0.3.34
 
 ### Patch Changes
