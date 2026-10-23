@@ -96,9 +96,14 @@
 				"comline",
 				"lasertag",
 				"mondrian.pdf",
+				"takua",
 				"treetrunks"
 			],
-			"minimumReleaseAge": null
+			"minimumReleaseAge": null,
+			"matchDatasources": [
+				"npm"
+			],
+			"description": "Exempt consumed jeremybanka packages at every version; keep aligned with pnpm-workspace.yaml"
 		}
 	]
 }
