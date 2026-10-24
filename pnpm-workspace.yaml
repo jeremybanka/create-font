@@ -23,6 +23,16 @@ minimumReleaseAgeExclude:
   - mondrian.pdf
   - takua
   - treetrunks
+  - vite-plus
+  - "@voidzero-dev/*"
+  - oxlint
+  - "@oxlint/*"
+  - oxlint-tsgolint
+  - "@oxlint-tsgolint/*"
+  - oxfmt
+  - "@oxfmt/*"
+  - vitest
+  - "@vitest/*"
 
 verifyDepsBeforeRun: error
 
@@ -38,8 +48,8 @@ peerDependencyRules:
 
 catalog:
   "@vitest/coverage-v8": 5.0.5
-  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
-  vite-plus: 1.3.0
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
   vitest: 5.0.5
 
 overrides:
