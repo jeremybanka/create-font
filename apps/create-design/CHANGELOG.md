@@ -1,5 +1,13 @@
 # create-design
 
+## 0.3.17
+
+### Patch Changes
+
+- 4170dc3: Upgrade the font and design editors to atom.io 0.54.0 and its standalone React bindings, preserving their shared state and editor interactions.
+- Updated dependencies [4170dc3]
+  - @create-design/editor@0.3.17
+
 ## 0.3.16
 
 ### Patch Changes

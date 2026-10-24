@@ -1,5 +1,13 @@
 # @create-font/glyphs-app
 
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [4170dc3]
+  - @create-font/states@0.7.3
+  - @create-font/source@0.2.26
+
 ## 0.0.16
 
 ### Patch Changes
