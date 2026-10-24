@@ -1,5 +1,12 @@
 # @create-font/source
 
+## 0.2.26
+
+### Patch Changes
+
+- Updated dependencies [4170dc3]
+  - @create-font/states@0.7.3
+
 ## 0.2.25
 
 ### Patch Changes
