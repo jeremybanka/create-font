@@ -3,7 +3,7 @@ import {
 	MagnifyingGlassIcon,
 	PlusIcon,
 } from "@radix-ui/react-icons"
-import { useO } from "atom.io/react"
+import { useO } from "@atom.io/react"
 import type * as React from "react"
 import { useEffect, useRef, useState } from "react"
 

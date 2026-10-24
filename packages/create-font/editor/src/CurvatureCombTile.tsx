@@ -1,5 +1,5 @@
 import { CurvatureCombControls } from "@create-art/editor"
-import { useI, useO } from "atom.io/react"
+import { useI, useO } from "@atom.io/react"
 
 import css from "./CurvatureCombTile.module.css"
 import type { EditorWorkspace } from "./editor-workspace.ts"

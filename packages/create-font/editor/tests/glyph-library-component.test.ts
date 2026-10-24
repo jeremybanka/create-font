@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test"
 import { blackMasterId, makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { GlyphLibrary } from "../src/GlyphLibrary.tsx"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const hosts: HTMLElement[] = []
 

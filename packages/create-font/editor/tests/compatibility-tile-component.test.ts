@@ -7,7 +7,7 @@ import { CompatibilityTile } from "../src/CompatibilityTile.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { contourSelectionTargets } from "../src/outline-selection.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const hosts: HTMLElement[] = []
 

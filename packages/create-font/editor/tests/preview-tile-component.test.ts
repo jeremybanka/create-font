@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { PreviewTile } from "../src/PreviewTile.tsx"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const hosts: HTMLElement[] = []
 

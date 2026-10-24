@@ -184,7 +184,7 @@ import {
 	isMomentaryPreviewKey,
 	shouldStartMomentaryPreview,
 } from "./momentary-preview.ts"
-import { useI, useO } from "atom.io/react"
+import { useI, useO } from "@atom.io/react"
 import { useCanvasTheme } from "./use-canvas-theme.ts"
 import { useElementSize } from "./use-element-size.ts"
 import {

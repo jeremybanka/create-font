@@ -2,7 +2,7 @@
 
 import type { GlyphId } from "@create-font/states"
 import { Silo } from "atom.io"
-import { StoreProvider, useO, useTL } from "atom.io/react"
+import { StoreProvider, useO, useTL } from "@atom.io/react"
 import { act, h, render } from "../../../../scripts/react-test-render.ts"
 import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 

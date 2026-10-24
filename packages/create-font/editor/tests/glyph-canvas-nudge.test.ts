@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,

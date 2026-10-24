@@ -12,7 +12,7 @@ import {
 	contourSelectionTargets,
 	selectionKey,
 } from "../src/outline-selection.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,

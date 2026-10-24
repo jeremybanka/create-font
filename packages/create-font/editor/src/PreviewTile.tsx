@@ -1,5 +1,5 @@
 import type { EditorAxisSource } from "@create-font/states"
-import { useO } from "atom.io/react"
+import { useO } from "@atom.io/react"
 import { useEffect, useRef, useState } from "react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"

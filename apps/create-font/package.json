@@ -79,11 +79,12 @@
 		"zod": "4.6.7"
 	},
 	"devDependencies": {
+		"@atom.io/react": "0.1.0",
 		"@types/node": "26.6.5",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.1.2",
-		"atom.io": "0.53.3",
+		"atom.io": "0.54.0",
 		"vitest": "catalog:"
 	},
 	"engines": {

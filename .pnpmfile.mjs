@@ -14,18 +14,8 @@ const needsTypescript6 = (packageJson) =>
 	TYPESCRIPT_6_CONSUMERS.has(packageJson.name) &&
 	packageJson.peerDependencies?.typescript !== undefined
 
-// The editor consumes atom.io/react through the Vite Preact-compat alias. Do not
-// install React merely to satisfy that optional adapter peer.
-const omitReactPeerForPreactCompat = (packageJson) =>
-	packageJson.name === "atom.io"
-
 export const hooks = {
 	readPackage(packageJson) {
-		if (omitReactPeerForPreactCompat(packageJson)) {
-			delete packageJson.peerDependencies?.react
-			delete packageJson.peerDependenciesMeta?.react
-		}
-
 		if (needsTypescript6(packageJson)) {
 			delete packageJson.peerDependencies.typescript
 			delete packageJson.peerDependenciesMeta?.typescript

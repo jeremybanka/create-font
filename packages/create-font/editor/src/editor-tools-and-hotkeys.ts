@@ -1,5 +1,5 @@
 import type { GlyphId, MasterId } from "@create-font/states"
-import type { TimelineMeta } from "atom.io/react"
+import type { TimelineMeta } from "@atom.io/react"
 import { useEffect } from "react"
 
 import type { EditorIconName } from "@create-art/editor"

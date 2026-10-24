@@ -1,5 +1,5 @@
 import type { EditorFontSource } from "@create-font/states"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 import { useEffect, useRef, useState } from "react"
 
 import { AppShell } from "./AppShell.tsx"

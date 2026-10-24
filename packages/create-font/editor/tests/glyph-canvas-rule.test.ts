@@ -9,7 +9,7 @@ import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { aGlyphId, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { OUTLINE_CLIPBOARD_MIME } from "../src/outline-clipboard.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,
