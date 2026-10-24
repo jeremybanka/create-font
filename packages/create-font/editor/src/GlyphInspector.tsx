@@ -1,4 +1,4 @@
-import { useO } from "atom.io/react"
+import { useO } from "@atom.io/react"
 
 import type { EditorWorkspace } from "./editor-workspace.ts"
 import css from "./GlyphInspector.module.css"

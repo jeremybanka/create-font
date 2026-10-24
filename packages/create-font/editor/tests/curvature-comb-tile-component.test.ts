@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test"
 import { CurvatureCombTile } from "../src/CurvatureCombTile.tsx"
 import { oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const hosts: HTMLElement[] = []
 

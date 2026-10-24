@@ -1,5 +1,5 @@
 import parser from "@typescript-eslint/parser"
-import atomIO from "atom.io/eslint-plugin"
+import atomIO from "@atom.io/eslint-plugin"
 import type { Linter } from "eslint"
 
 const config: Linter.Config[] = [

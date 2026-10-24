@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test"
 import { GlyphCanvas } from "../src/GlyphCanvas.tsx"
 import { makeDemoFont, oGlyphId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 import type { EditorVersionControl } from "../src/version-control.ts"
 
 const requireFromRenderer = createRequire(

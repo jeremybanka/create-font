@@ -92,6 +92,8 @@
 		{
 			"matchPackageNames": [
 				"agents.yaml",
+				"@atom.io/eslint-plugin",
+				"@atom.io/react",
 				"atom.io",
 				"comline",
 				"lasertag",

@@ -1,5 +1,5 @@
 import type { ContourId, EditorLayerNode, MasterId } from "@create-font/states"
-import { useI, useO } from "atom.io/react"
+import { useI, useO } from "@atom.io/react"
 import type * as React from "react"
 import { useRef, useState } from "react"
 

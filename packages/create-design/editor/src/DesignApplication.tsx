@@ -71,7 +71,7 @@ import type {
 	ComponentProps,
 	KeyboardEvent as ReactKeyboardEvent,
 } from "react"
-import { StoreProvider, useO, useTL } from "atom.io/react"
+import { StoreProvider, useO, useTL } from "@atom.io/react"
 
 import {
 	defaultDesignAppearance,

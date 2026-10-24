@@ -1,4 +1,4 @@
-import { useO } from "atom.io/react"
+import { useO } from "@atom.io/react"
 import type * as React from "react"
 import { useId, useState } from "react"
 

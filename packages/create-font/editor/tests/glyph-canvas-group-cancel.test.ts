@@ -10,7 +10,7 @@ import type { ContourId, PointId } from "@create-font/states"
 import { blackMasterId, oGlyphId, razorMasterId } from "../src/demo-font.ts"
 import { createEditorWorkspace } from "../src/editor-workspace.ts"
 import { contourSelectionTargets } from "../src/outline-selection.ts"
-import { StoreProvider } from "atom.io/react"
+import { StoreProvider } from "@atom.io/react"
 
 const requireFromRenderer = createRequire(
 	`${process.cwd()}/../../create-art/editor/package.json`,

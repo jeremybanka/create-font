@@ -1,5 +1,5 @@
 import { DotsHorizontalIcon, MinusIcon, PlusIcon } from "@radix-ui/react-icons"
-import { useI, useO } from "atom.io/react"
+import { useI, useO } from "@atom.io/react"
 import { useId } from "react"
 
 import { zoomCanvasView } from "./canvas-view.ts"

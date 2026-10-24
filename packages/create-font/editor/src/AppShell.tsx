@@ -1,7 +1,7 @@
 /* eslint-disable lasertag/render-tag-with-own-name -- Headless atom.io history boundaries intentionally return caller-owned controls without DOM wrappers. */
 import { MagnifyingGlassIcon } from "@radix-ui/react-icons"
 import type { GlyphId } from "@create-font/states"
-import { type TimelineMeta, useO, useTL } from "atom.io/react"
+import { type TimelineMeta, useO, useTL } from "@atom.io/react"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
