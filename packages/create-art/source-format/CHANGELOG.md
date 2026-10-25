@@ -1,5 +1,12 @@
 # @create-art/source-format
 
+## 0.2.15
+
+### Patch Changes
+
+- ee495d0: Update `SOURCE_FORMAT_DPRINT_VERSION` to report the validated dprint 0.64.3
+  reference CLI.
+
 ## 0.2.14
 
 ### Patch Changes
