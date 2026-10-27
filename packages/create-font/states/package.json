@@ -40,8 +40,8 @@
 	},
 	"devDependencies": {
 		"@atom.io/eslint-plugin": "0.1.0",
-		"@typescript-eslint/parser": "8.72.0",
-		"@typescript-eslint/utils": "8.72.0",
+		"@typescript-eslint/parser": "8.72.1",
+		"@typescript-eslint/utils": "8.72.1",
 		"eslint": "10.13.0",
 		"jiti": "2.7.0",
 		"vitest": "catalog:"
