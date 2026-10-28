@@ -148,8 +148,8 @@ export function writeDesignClipboard(
 	vectorPayload?: VectorClipboardPayload,
 ): number {
 	const selectedIds = new Set(objectIds)
-	const selected = projectDesignOutput(document).entries.flatMap(
-		({ object }) => (selectedIds.has(object.id) ? [object] : []),
+	const selected = projectDesignOutput(document).entries.flatMap(({ object }) =>
+		selectedIds.has(object.id) ? [object] : [],
 	)
 	if (selected.length === 0) return 0
 	const swatchIds = new Set(

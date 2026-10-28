@@ -538,14 +538,13 @@ export function lowerGlyphsSource(
 	)
 	let defaultMasterIndex = namedRegularIndex >= 0 ? namedRegularIndex : 0
 	if (declaredDefaults.some((value) => value !== undefined)) {
-		const matchingMasterIndices = masterCoordinates.flatMap(
-			(location, index) =>
-				declaredDefaults.every(
-					(target, axisIndex) =>
-						target === undefined || (location[axisIndex] ?? 0) === target,
-				)
-					? [index]
-					: [],
+		const matchingMasterIndices = masterCoordinates.flatMap((location, index) =>
+			declaredDefaults.every(
+				(target, axisIndex) =>
+					target === undefined || (location[axisIndex] ?? 0) === target,
+			)
+				? [index]
+				: [],
 		)
 		if (matchingMasterIndices.length === 0)
 			return {
