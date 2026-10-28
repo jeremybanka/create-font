@@ -111,24 +111,23 @@ export function tileRegistryCommands<Kind extends string, Context>(
 	registry: TileRegistry<Kind, Context>,
 	context: Context,
 ): readonly TileRegistryCommand<Kind>[] {
-	return availableTileRegistrations(registry, context).flatMap(
-		(registration) =>
-			registration.command === false
-				? []
-				: [
-						{
-							id: `workspace-tile-${registration.kind}`,
-							displayName: `Open or focus ${registration.name}`,
-							category: registration.command?.category ?? "Workspace",
-							description:
-								registration.command?.description ??
-								`Open ${registration.name}, or focus its existing tile.`,
-							icon: registration.command?.icon ?? "SquareIcon",
-							...(registration.command?.shortcut === undefined
-								? {}
-								: { shortcut: registration.command.shortcut }),
-							kind: registration.kind,
-						},
-					],
+	return availableTileRegistrations(registry, context).flatMap((registration) =>
+		registration.command === false
+			? []
+			: [
+					{
+						id: `workspace-tile-${registration.kind}`,
+						displayName: `Open or focus ${registration.name}`,
+						category: registration.command?.category ?? "Workspace",
+						description:
+							registration.command?.description ??
+							`Open ${registration.name}, or focus its existing tile.`,
+						icon: registration.command?.icon ?? "SquareIcon",
+						...(registration.command?.shortcut === undefined
+							? {}
+							: { shortcut: registration.command.shortcut }),
+						kind: registration.kind,
+					},
+				],
 	)
 }

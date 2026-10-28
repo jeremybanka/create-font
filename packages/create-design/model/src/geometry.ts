@@ -323,19 +323,18 @@ export function projectDesignObjectCornerResolutions(
 					corner === undefined ? [] : [id],
 				),
 			)
-			return lowerDesignCornerContour(projected).corners.flatMap(
-				(resolution) =>
-					authoredCornerIds.has(resolution.pointId)
-						? [
-								{
-									contourId: contour.id,
-									pointId: resolution.pointId,
-									requestedAmount: resolution.requestedAmount,
-									appliedAmount: resolution.appliedAmount,
-									clamped: resolution.clamped,
-								},
-							]
-						: [],
+			return lowerDesignCornerContour(projected).corners.flatMap((resolution) =>
+				authoredCornerIds.has(resolution.pointId)
+					? [
+							{
+								contourId: contour.id,
+								pointId: resolution.pointId,
+								requestedAmount: resolution.requestedAmount,
+								appliedAmount: resolution.appliedAmount,
+								clamped: resolution.clamped,
+							},
+						]
+					: [],
 			)
 		},
 	)

@@ -7006,9 +7006,7 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 						throw new TypeError("Cannot rejoin invalid layer nodes.")
 					const dragged = draggedResult.value
 					const target = targetResult.value
-					const reanchor = (
-						handle: Vector2 | undefined,
-					): Vector2 | undefined =>
+					const reanchor = (handle: Vector2 | undefined): Vector2 | undefined =>
 						handle === undefined
 							? undefined
 							: {
@@ -8333,11 +8331,9 @@ export function createFontEditorState(options: CreateFontEditorStateOptions) {
 					input.value > MAX_INT16)
 			)
 				throw new TypeError("Kerning values must be signed 16-bit integers.")
-			const pairs = [
-				...get(kerningAtom).filter(
-					(pair) => pair.left !== input.left || pair.right !== input.right,
-				),
-			]
+			const pairs = get(kerningAtom).filter(
+				(pair) => pair.left !== input.left || pair.right !== input.right,
+			)
 			if (input.value !== null && input.value !== 0)
 				pairs.push({ left: input.left, right: input.right, value: input.value })
 			set(kerningAtom, deepFreeze(pairs))
