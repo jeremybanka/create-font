@@ -66,7 +66,7 @@
 		"@create-font/states": "workspace:*",
 		"@create-font/target": "workspace:*",
 		"@elysia/node": "1.4.6",
-		"@vscode/vsce": "4.0.0",
+		"@vscode/vsce": "4.1.0",
 		"comline": "0.9.3",
 		"elysia": "1.4.30",
 		"react": "19.3.1",
