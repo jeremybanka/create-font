@@ -41,7 +41,7 @@
 		"test:watch": "vp test watch"
 	},
 	"dependencies": {
-		"@atom.io/react": "0.1.0",
+		"@atom.io/react": "0.2.0",
 		"@create-art/editor": "workspace:*",
 		"@create-art/source-rpc": "workspace:*",
 		"@create-art/vector-geometry": "workspace:*",
