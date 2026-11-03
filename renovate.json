@@ -24,6 +24,10 @@
 	],
 	"packageRules": [
 		{
+			"matchManagers": ["cargo"],
+			"rangeStrategy": "pin"
+		},
+		{
 			"matchPackageNames": ["jdx/mise"],
 			"matchDatasources": ["github-releases"],
 			"ignoreUnstable": true
