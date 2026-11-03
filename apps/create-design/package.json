@@ -64,7 +64,7 @@
 		"@types/react-dom": "19.3.0",
 		"@typescript-eslint/parser": "8.72.1",
 		"@typescript-eslint/utils": "8.72.1",
-		"@vitejs/plugin-react": "6.1.2",
+		"@vitejs/plugin-react": "6.2.1",
 		"atom.io": "0.54.3",
 		"eslint": "10.14.0",
 		"happy-dom": "21.0.4",
