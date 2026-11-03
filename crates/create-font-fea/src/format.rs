@@ -1,6 +1,6 @@
 use dprint_core::{
     configuration::resolve_new_line_kind,
-    formatting::{PrintItems, PrintOptions, Signal},
+    formatting::{Arena, PrintItems, PrintOptions, Signal},
 };
 use fea_rs::Kind;
 use serde::{Deserialize, Serialize};
@@ -93,7 +93,7 @@ pub fn format_fea(source: &str, config: &FormatConfig) -> Result<String, FormatE
     let tokens = collect_layout_tokens(&parsed.root);
     let newline = resolve_newline(source, config.new_line_kind);
     let output = dprint_core::formatting::format(
-        || generate_print_items(&tokens),
+        |arena| generate_print_items(arena, &tokens),
         PrintOptions {
             indent_width: config.indent_width.max(1),
             max_width: config.line_width.max(20),
@@ -192,8 +192,8 @@ fn punctuation_kind(text: &str) -> Option<Kind> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn generate_print_items(tokens: &[LayoutToken]) -> PrintItems {
-    let mut items = PrintItems::new();
+fn generate_print_items<'a>(arena: &'a Arena, tokens: &[LayoutToken]) -> PrintItems<'a> {
+    let mut items = PrintItems::new(arena);
     let mut state = LayoutState::default();
 
     for (index, token) in tokens.iter().enumerate() {
