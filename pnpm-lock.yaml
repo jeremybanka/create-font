@@ -305,8 +305,8 @@ importers:
         specifier: 1.4.6
         version: 1.4.6(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
       '@elysia/static':
-        specifier: 1.4.11
-        version: 1.4.11(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
+        specifier: 1.4.12
+        version: 1.4.12(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))
       comline:
         specifier: 0.9.3
         version: 0.9.3(zod@4.6.7)
@@ -1272,8 +1272,8 @@ packages:
     peerDependencies:
       elysia: '>= 1.4.0'
 
-  '@elysia/static@1.4.11':
-    resolution: {integrity: sha512-L3PN8V+cgz9Oz9kTow7ed3DHHCTHb9ZqZZDLxmKhrIKcFmWvjqzTm9TcMR2aLKjjls+QMSGuB7ZyaO+usIXovA==}
+  '@elysia/static@1.4.12':
+    resolution: {integrity: sha512-kJRsIxXqtgE+qSYyta+e5aXSQSMfIjmDmqw6x8sXmytcpZrulYmb5dHHc5tk3Bgcbf3zSwN17fQozFkq5CXAdw==}
     peerDependencies:
       elysia: '>= 1.4.0'
 
@@ -4687,7 +4687,7 @@ snapshots:
       elysia: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
       srvx: 0.11.22
 
-  '@elysia/static@1.4.11(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))':
+  '@elysia/static@1.4.12(elysia@1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2))':
     dependencies:
       elysia: 1.4.30(@sinclair/typebox@0.34.52)(exact-mirror@1.2.2)(file-type@22.0.1(supports-color@7.2.0))(openapi-types@12.1.3)(typescript@7.0.2)
 
