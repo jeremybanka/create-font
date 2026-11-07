@@ -197,8 +197,8 @@ importers:
         specifier: workspace:*
         version: link:packages/create-art/source-format
       '@dprint/json':
-        specifier: 0.25.2
-        version: 0.25.2
+        specifier: 0.26.0
+        version: 0.26.0
       '@dprint/markdown':
         specifier: 0.28.2
         version: 0.28.2
@@ -524,8 +524,8 @@ importers:
         specifier: 0.6.0
         version: 0.6.0
       '@dprint/json':
-        specifier: 0.25.2
-        version: 0.25.2
+        specifier: 0.26.0
+        version: 0.26.0
       dprint:
         specifier: '>=0.55.2 <0.65.0'
         version: 0.64.3
@@ -1179,8 +1179,8 @@ packages:
     cpu: [x64]
     os: [freebsd]
 
-  '@dprint/json@0.25.2':
-    resolution: {integrity: sha512-QpOGNXL3cOunsB7IBPJxlIisMhFcIeMXSAWoavJKwjJjtOZW5sDojlgn2MPYNdHVgknZeQsUqDYyhGqqN1bYuQ==}
+  '@dprint/json@0.26.0':
+    resolution: {integrity: sha512-yuesFKq2aFAx8VU1I2A3HFVMlX8ED52ZKUKGW6+WKviRFtvgkxxE7zcQ7pqTZURH/TLHj84mHaBjMOqTYR3m6Q==}
 
   '@dprint/linux-arm64-glibc@0.64.3':
     resolution: {integrity: sha512-dJQ5PS0+7COmKG0NHy11pEoCfzeL1slrGuHWS0uQmyIbBskbItFnubR9KsD1J/UfYIq62rySvAm2D+MNw7cYOA==}
@@ -4655,7 +4655,7 @@ snapshots:
   '@dprint/freebsd-x64@0.64.3':
     optional: true
 
-  '@dprint/json@0.25.2': {}
+  '@dprint/json@0.26.0': {}
 
   '@dprint/linux-arm64-glibc@0.64.3':
     optional: true
