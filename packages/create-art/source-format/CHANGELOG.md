@@ -1,5 +1,14 @@
 # @create-art/source-format
 
+## 0.2.16
+
+### Patch Changes
+
+- d1886b0: Update the pinned JSON formatter to `@dprint/json` 0.26.0, which advertises
+  range-formatting support to dprint integrations. Report the matching version
+  through `SOURCE_FORMAT_JSON_PLUGIN_VERSION` while preserving canonical
+  source formatting output.
+
 ## 0.2.15
 
 ### Patch Changes
