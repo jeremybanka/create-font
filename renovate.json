@@ -24,6 +24,10 @@
 	],
 	"packageRules": [
 		{
+			"groupName": "dprint",
+			"matchPackageNames": ["dprint", "@dprint/*", "/^dprint-plugin-/"]
+		},
+		{
 			"matchManagers": ["cargo"],
 			"rangeStrategy": "pin"
 		},
