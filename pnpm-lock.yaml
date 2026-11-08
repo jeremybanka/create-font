@@ -193,6 +193,9 @@ importers:
       '@changesets/config':
         specifier: 4.0.1
         version: 4.0.1
+      '@create-art/source-format':
+        specifier: workspace:*
+        version: link:packages/create-art/source-format
       '@dprint/json':
         specifier: 0.26.0
         version: 0.26.0
@@ -217,6 +220,12 @@ importers:
       agents.yaml:
         specifier: 0.3.0
         version: 0.3.0
+      create-design:
+        specifier: workspace:*
+        version: link:apps/create-design
+      create-font:
+        specifier: workspace:*
+        version: link:apps/create-font
       dprint:
         specifier: 0.64.3
         version: 0.64.3

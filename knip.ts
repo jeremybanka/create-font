@@ -18,6 +18,10 @@ export default {
 				"dprint-plugin-yaml",
 				// Dprint loads the locally built plugin.wasm.
 				"dprint-plugin-fea",
+				// Keep workspace CLIs available for manual contributor use.
+				"@create-art/source-format",
+				"create-design",
+				"create-font",
 			],
 		},
 		"apps/create-design": {
