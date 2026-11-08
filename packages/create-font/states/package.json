@@ -36,10 +36,10 @@
 		"@create-art/vector-geometry": "workspace:*",
 		"@create-font/server": "workspace:*",
 		"@create-font/target": "workspace:*",
-		"atom.io": "0.54.5"
+		"atom.io": "0.54.6"
 	},
 	"devDependencies": {
-		"@atom.io/eslint-plugin": "0.1.1",
+		"@atom.io/eslint-plugin": "0.1.2",
 		"@typescript-eslint/parser": "8.72.1",
 		"@typescript-eslint/utils": "8.72.1",
 		"eslint": "10.14.0",
