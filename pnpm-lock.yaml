@@ -575,8 +575,8 @@ importers:
   packages/create-art/vector-geometry:
     dependencies:
       clipper2-ts:
-        specifier: 2.0.1-18
-        version: 2.0.1-18
+        specifier: 2.0.1-19
+        version: 2.0.1-19
     devDependencies:
       vitest:
         specifier: 'catalog:'
@@ -2852,8 +2852,8 @@ packages:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
 
-  clipper2-ts@2.0.1-18:
-    resolution: {integrity: sha512-WuRO1ZHzyYTVHY78r4wVWVydvQ+1lx9qZ+DeZa/8zhvrxIgCVzElJ6lwSMGtUUKFPefhvfJsHZ5C9RNkgisCOQ==}
+  clipper2-ts@2.0.1-19:
+    resolution: {integrity: sha512-hBdoBBda/a/iLdpDckbDjEGAq5GRhHTRAv/Ys9f2oTBuixRy9uLZukG8pO5txtbf9wZTpBD3KFHuoLrEkI3r7g==}
     engines: {node: '>=14.0.0'}
 
   cockatiel@3.2.1:
@@ -5886,7 +5886,7 @@ snapshots:
 
   chai@6.3.0: {}
 
-  clipper2-ts@2.0.1-18: {}
+  clipper2-ts@2.0.1-19: {}
 
   cockatiel@3.2.1: {}
 
