@@ -52,8 +52,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "26.6.6",
-		"vite-plus": "catalog:",
-		"vitest": "catalog:"
+		"vite-plus": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"

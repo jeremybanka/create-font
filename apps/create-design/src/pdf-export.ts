@@ -75,7 +75,7 @@ export class DesignPdfPreflightError extends Error {
 	}
 }
 
-export class DesignPdfOutputExistsError extends Error {
+class DesignPdfOutputExistsError extends Error {
 	readonly output: string
 
 	constructor(output: string) {

@@ -15,7 +15,7 @@ export type BrowserSvgPreviewResource = Readonly<{
 	url: string
 }>
 
-export type ActiveSvgPreview = BrowserSvgPreviewResource &
+type ActiveSvgPreview = BrowserSvgPreviewResource &
 	Readonly<{
 		timings: LiveSvgTimings & Readonly<{ activation: number }>
 	}>

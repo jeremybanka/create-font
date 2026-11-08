@@ -64,7 +64,7 @@ export type DesignTileKind =
 	| "typography"
 	| "appearance"
 
-export type DesignCornerProfileControls = Readonly<{
+type DesignCornerProfileControls = Readonly<{
 	count: number
 	profile: "sharp" | "circular" | "squircle"
 	amount: number
@@ -399,14 +399,17 @@ export const DESIGN_TILE_REGISTRY = createTileRegistry<
 >(registrations)
 export const DEFAULT_DESIGN_TILING_LAYOUT =
 	createRegistryDefaultLayout(DESIGN_TILE_REGISTRY)
-export const OLDEST_DESIGN_TILING_STORAGE_KEY =
-	"create-design:tiling-workspace:v2"
+const OLDEST_DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v2"
+/** @internal Used by implementation tests. */
 export const LEGACY_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v3"
+/** @internal Used by implementation tests. */
 export const PREVIOUS_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v4"
+/** @internal Used by implementation tests. */
 export const RECENT_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v5"
+/** @internal Used by implementation tests. */
 export const PRE_CURVATURE_DESIGN_TILING_STORAGE_KEY =
 	"create-design:tiling-workspace:v6"
 export const DESIGN_TILING_STORAGE_KEY = "create-design:tiling-workspace:v7"

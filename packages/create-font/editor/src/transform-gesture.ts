@@ -8,7 +8,7 @@ export interface TransformResizeScale {
 	readonly scaleY: number
 }
 
-export const TRANSFORM_ROTATION_SNAP_DEGREES = 15
+const TRANSFORM_ROTATION_SNAP_DEGREES = 15
 
 export interface TransformRotation {
 	readonly pivotX: number

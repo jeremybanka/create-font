@@ -8,7 +8,7 @@ export type LiveFontDiagnostic = Readonly<{
 	stage: "projection" | "ingestion" | "serialization" | "activation"
 }>
 
-export type LiveFontTimings = Readonly<{
+type LiveFontTimings = Readonly<{
 	queueing: number
 	projectionAndIngestion: number
 	serialization: number
@@ -86,6 +86,7 @@ export interface LiveFontCompilerOptions {
  * Keep live compilation out of the input event turn and collapse a burst of
  * key-driven edits before doing the synchronous projection work.
  */
+/** @internal Used by implementation tests. */
 export const LIVE_FONT_EDIT_DEBOUNCE_MS = 250
 
 export function createLiveFontCompiler(

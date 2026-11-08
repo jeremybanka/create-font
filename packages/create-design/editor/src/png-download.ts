@@ -12,7 +12,7 @@ export interface PngDownloadEnvironment {
 	readonly revokeObjectURL: (url: string) => void
 }
 
-export function browserPngDownloadEnvironment(): PngDownloadEnvironment {
+function browserPngDownloadEnvironment(): PngDownloadEnvironment {
 	return {
 		activate(url, filename) {
 			const anchor = window.document.createElement("a")

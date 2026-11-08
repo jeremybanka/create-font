@@ -4,7 +4,7 @@ import { SourceValidationError } from "@create-art/source-rpc"
 
 import { createDesignSourceService } from "./source-service.ts"
 
-export type DesignCheckDiagnostic = Readonly<{
+type DesignCheckDiagnostic = Readonly<{
 	code: string
 	message: string
 	path: string

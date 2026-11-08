@@ -1,3 +1,4 @@
+/** @internal Used by implementation tests. */
 export { canvasToolCursor } from "@create-art/editor"
 
 export type TransformHandle =

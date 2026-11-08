@@ -14,9 +14,9 @@ import type { EditorSelectionTarget } from "./outline-selection.ts"
 
 export const OUTLINE_CLIPBOARD_MIME =
 	"application/vnd.create-font.outline+json" as const
-export const OUTLINE_CLIPBOARD_TEXT_PREFIX = "create-font-outline:" as const
-export const OUTLINE_CLIPBOARD_VERSION = 1 as const
-export const MAX_OUTLINE_CLIPBOARD_BYTES = 1_000_000
+const OUTLINE_CLIPBOARD_TEXT_PREFIX = "create-font-outline:" as const
+const OUTLINE_CLIPBOARD_VERSION = 1 as const
+const MAX_OUTLINE_CLIPBOARD_BYTES = 1_000_000
 const MAX_CONTOURS = 1_024
 const MAX_POINTS = 10_000
 
@@ -214,6 +214,7 @@ export function prepareOutlineClipboardCopy(
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function copyOutlineSelection(
 	glyph: EditorGlyphSource,
 	masterId: MasterId,
@@ -223,12 +224,14 @@ export function copyOutlineSelection(
 	return prepared.ok ? { ok: true, value: prepared.value.payload } : prepared
 }
 
+/** @internal Used by implementation tests. */
 export function serializeOutlineClipboard(
 	payload: OutlineClipboardPayload,
 ): string {
 	return JSON.stringify(payload)
 }
 
+/** @internal Used by implementation tests. */
 export function outlineClipboardPlainText(
 	payload: OutlineClipboardPayload,
 ): string {

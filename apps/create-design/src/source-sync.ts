@@ -30,10 +30,10 @@ import type {
 	DesignSourceStatus,
 } from "@create-design/editor/source-session"
 
+/** @internal Used by implementation tests. */
 export type {
 	DesignExternalSourceUpdate,
 	DesignSourceSession,
-	DesignSourceStatus,
 } from "@create-design/editor/source-session"
 
 function assemble(state: SourceSyncState): DesignExternalSourceUpdate {
@@ -101,6 +101,7 @@ function canonicalJson(value: JsonValue): string {
 		.join(`,`)}}`
 }
 
+/** @internal Used by implementation tests. */
 export function designSourceTransaction(
 	state: SourceSyncState,
 	document: DesignDocument,
@@ -166,6 +167,7 @@ type DesignSourceFontClient = Pick<
 	"readAsset"
 >
 
+/** @internal Used by implementation tests. */
 export async function loadDesignSourceFonts(
 	client: DesignSourceFontClient,
 	state: SourceSyncState,
@@ -199,7 +201,7 @@ export async function loadDesignSourceFonts(
 	)
 }
 
-export async function loadDesignSourceImages(
+async function loadDesignSourceImages(
 	client: DesignSourceFontClient,
 	state: SourceSyncState,
 	document: DesignDocument,
@@ -283,6 +285,7 @@ function fontMediaType(extension: string): string {
 	}
 }
 
+/** @internal Used by implementation tests. */
 export async function installDesignSourceFont(
 	client: DesignSourceAssetClient,
 	state: SourceSyncState,
@@ -373,6 +376,7 @@ export async function installDesignSourceFont(
 	}
 }
 
+/** @internal Used by implementation tests. */
 export async function installDesignSourceImage(
 	client: DesignSourceAssetClient,
 	state: SourceSyncState,
@@ -496,6 +500,7 @@ function websocketUrl(origin = ""): string {
 	return url.href
 }
 
+/** @internal Used by implementation tests. */
 export async function loadDesignLinkedArtboards(
 	workspace: DesignWorkspaceInventory,
 	activeProjectId: string,

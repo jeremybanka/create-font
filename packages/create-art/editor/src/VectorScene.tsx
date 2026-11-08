@@ -291,6 +291,7 @@ export function VectorControlHandles({
 }
 
 /** Zoom-invariant direct-manipulation control for one selected hard corner. */
+/** @internal Used by implementation tests. */
 export function vectorCornerHandlePosition(
 	node: VectorNode,
 	previous: VectorNode,

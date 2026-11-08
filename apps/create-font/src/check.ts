@@ -7,7 +7,7 @@ import type { FeaAnalysisDiagnostic, FeaSourceRange } from "@create-font/source"
 import { analyzeFontProjectFeatures } from "./fea-project.ts"
 import { loadEditorFontSourceDirectory } from "./source-service.ts"
 
-export type FontCheckDiagnostic = FeaAnalysisDiagnostic
+type FontCheckDiagnostic = FeaAnalysisDiagnostic
 
 export interface FontCheckResult {
 	readonly diagnostics: readonly FontCheckDiagnostic[]

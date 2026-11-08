@@ -2,6 +2,7 @@ import type { ContourId, PointId } from "@create-font/states"
 
 import type { EditorCanvasContour } from "./editor-workspace.ts"
 
+/** @internal Used by implementation tests. */
 export const ENDPOINT_JOIN_RADIUS_PX = 24
 
 export interface OpenEndpointTarget {

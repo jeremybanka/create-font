@@ -13,7 +13,7 @@ export interface VectorBounds {
 	readonly maxY: number
 }
 
-export const VECTOR_ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
+const VECTOR_ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
 const number = (value: number): string => Number(value.toFixed(3)).toString()
 
@@ -37,6 +37,7 @@ export function vectorPenSegmentPath(
 	return `${start} ${vectorSegmentCommand(from, to)}`
 }
 
+/** @internal Used by implementation tests. */
 export function vectorContourPath(contour: VectorContour): string {
 	const nodes = contour.nodes.some(({ corner }) => corner !== undefined)
 		? lowerCornerProfiles({
@@ -106,18 +107,6 @@ export function vectorObjectPath(
 	object: Pick<VectorObject, "contours">,
 ): string {
 	return object.contours.map(vectorContourPath).join(" ")
-}
-
-export function vectorBounds(
-	points: readonly VectorPoint[],
-): VectorBounds | null {
-	if (points.length === 0) return null
-	return {
-		minX: Math.min(...points.map((point) => point.x)),
-		minY: Math.min(...points.map((point) => point.y)),
-		maxX: Math.max(...points.map((point) => point.x)),
-		maxY: Math.max(...points.map((point) => point.y)),
-	}
 }
 
 export function vectorShapeNodes(

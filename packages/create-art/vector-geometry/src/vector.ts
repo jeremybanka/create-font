@@ -30,9 +30,6 @@ export const squaredLength = (point: Point): number => dot(point, point)
 
 export const length = (point: Point): number => Math.hypot(point.x, point.y)
 
-export const squaredDistance = (left: Point, right: Point): number =>
-	squaredLength(subtract(left, right))
-
 export const distance = (left: Point, right: Point): number =>
 	Math.hypot(left.x - right.x, left.y - right.y)
 

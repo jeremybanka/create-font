@@ -143,6 +143,7 @@ export function toggleDirectObjectSelection(
 	return complete ? otherObjects : [...otherObjects, ...contours]
 }
 
+/** @internal Used by implementation tests. */
 export function toggleObjectSelection(
 	selection: readonly string[],
 	objectId: string,
@@ -258,6 +259,7 @@ export function selectableObjectIds(
 	)
 }
 
+/** @internal Used by implementation tests. */
 export function selectionBounds(
 	objects: readonly DesignObject[],
 	boundsForObject: (
@@ -530,6 +532,7 @@ export function nearestDirectSelectionHit(
 			}
 }
 
+/** @internal Used by implementation tests. */
 export function nearestDirectSelectionTarget(
 	document: Pick<DesignDocument, "swatches">,
 	objects: readonly DesignObject[],

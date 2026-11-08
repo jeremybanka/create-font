@@ -19,6 +19,7 @@ export interface DesignVersionControlSession {
 	subscribeSourceChange(listener: () => void): () => void
 }
 
+/** @internal Used by implementation tests. */
 export interface DesignVersionControlStore {
 	controller(): DesignSourceReviewController
 	start(): () => void
@@ -46,6 +47,7 @@ function comparisonError(error: unknown): string {
  * keep late ref responses from replacing newer comparisons, and source events
  * refresh only the live working-source selection.
  */
+/** @internal Used by implementation tests. */
 export function createDesignVersionControlStore(
 	session: DesignVersionControlSession,
 ): DesignVersionControlStore {

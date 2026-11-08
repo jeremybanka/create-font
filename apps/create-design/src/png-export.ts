@@ -64,7 +64,7 @@ export class DesignPngPreflightError extends Error {
 	}
 }
 
-export class DesignPngOutputExistsError extends Error {
+class DesignPngOutputExistsError extends Error {
 	readonly output: string
 	constructor(output: string) {
 		super(`Output already exists: ${output}. Pass --force to replace it.`)

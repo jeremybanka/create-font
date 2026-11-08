@@ -7,7 +7,7 @@ export interface TextLayoutMetrics {
 	readonly descender: number
 }
 
-export interface PositionedGlyph {
+interface PositionedGlyph {
 	readonly item: PreviewRunGlyph
 	readonly x: number
 	readonly baseline: number
@@ -20,7 +20,7 @@ export interface CaretPosition {
 	readonly baseline: number
 }
 
-export interface TextLinePosition {
+interface TextLinePosition {
 	readonly textStart: number
 	readonly textEnd: number
 	readonly breakEnd: number

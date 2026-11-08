@@ -85,7 +85,7 @@ function intersects(
 	)
 }
 
-export function objectsIntersectingDesignArtboard(
+function objectsIntersectingDesignArtboard(
 	document: DesignDocument,
 	artboard: DesignArtboard,
 ): readonly DesignObject[] {

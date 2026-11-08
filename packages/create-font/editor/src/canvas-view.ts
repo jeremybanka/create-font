@@ -10,6 +10,7 @@ export const MAX_CANVAS_ZOOM = 10
 
 export type { CanvasView, CanvasViewport } from "@create-art/editor"
 
+/** @internal Used by implementation tests. */
 export function initialCanvasView(viewport: CanvasViewport): CanvasView | null {
 	if (
 		!Number.isFinite(viewport.width) ||

@@ -30,11 +30,7 @@ import { nodeRuntimeAdapter, type RuntimeAdapter } from "./runtime.ts"
 const PACKAGE_NAME = "create-font"
 const fontNamePattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u
 export const packageManagers = [`npm`, `pnpm`, `yarn`, `bun`] as const
-export type PackageManager = (typeof packageManagers)[number]
-
-export function isPackageManager(value: string): value is PackageManager {
-	return packageManagers.some((packageManager) => packageManager === value)
-}
+type PackageManager = (typeof packageManagers)[number]
 
 export type CreateFontWorkspaceOptions = Readonly<{
 	cwd?: string

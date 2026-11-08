@@ -16,9 +16,9 @@ export interface DesignAppearanceSummary {
 	readonly strokeStyle: DesignStrokeSummary
 }
 
-export type AppearancePropertyValue<Value> = Value | null | "mixed"
+type AppearancePropertyValue<Value> = Value | null | "mixed"
 
-export interface DesignStrokeSummary {
+interface DesignStrokeSummary {
 	readonly width: AppearancePropertyValue<number>
 	readonly cap: AppearancePropertyValue<DesignStroke["cap"]>
 	readonly join: AppearancePropertyValue<DesignStroke["join"]>
@@ -28,7 +28,7 @@ export interface DesignStrokeSummary {
 }
 
 /** The create-design authoring default for a newly enabled stroke. */
-export const DEFAULT_DESIGN_STROKE_WIDTH = 1
+const DEFAULT_DESIGN_STROKE_WIDTH = 1
 
 export function defaultDesignAppearance(
 	swatches: readonly DesignSwatch[],

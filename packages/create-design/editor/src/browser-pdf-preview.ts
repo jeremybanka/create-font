@@ -15,7 +15,7 @@ export type BrowserPdfPreviewResource = Readonly<{
 	url: string
 }>
 
-export type ActivePdfPreview = BrowserPdfPreviewResource &
+type ActivePdfPreview = BrowserPdfPreviewResource &
 	Readonly<{
 		timings: LivePdfTimings & Readonly<{ activation: number }>
 	}>

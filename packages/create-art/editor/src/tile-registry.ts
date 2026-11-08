@@ -19,7 +19,7 @@ export interface TileCommandMetadata {
 	readonly shortcut?: string
 }
 
-export interface TileRenderProps<Context, Kind extends string> {
+interface TileRenderProps<Context, Kind extends string> {
 	readonly context: Context
 	readonly tile: TileInstance<Kind>
 }
@@ -39,12 +39,6 @@ export interface TileRegistry<Kind extends string, Context> {
 	readonly registrations: readonly TileRegistration<Kind, Context>[]
 	readonly byKind: ReadonlyMap<Kind, TileRegistration<Kind, Context>>
 }
-
-export type RegistryKind<Registry> = Registry extends {
-	readonly registrations: readonly { readonly kind: infer Kind }[]
-}
-	? Extract<Kind, string>
-	: never
 
 export function createTileRegistry<
 	Kind extends string,

@@ -954,5 +954,3 @@ export function createDesignDocumentState(
 		writeDocument,
 	}
 }
-
-export type DesignDocumentState = ReturnType<typeof createDesignDocumentState>

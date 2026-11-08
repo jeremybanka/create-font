@@ -68,7 +68,7 @@ export interface PreviewRunGlyph {
 	readonly sourcePreview: GlyphPreview | null
 }
 
-export interface PreviewRunLineBreak {
+interface PreviewRunLineBreak {
 	readonly kind: "line-break"
 	readonly textStart: number
 	readonly textEnd: number

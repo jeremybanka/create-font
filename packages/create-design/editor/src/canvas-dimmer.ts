@@ -1,6 +1,9 @@
+/** @internal Used by implementation tests. */
 export const DESIGN_CANVAS_DIMMER_STORAGE_KEY = "create-design:canvas-dimmer:v1"
 
+/** @internal Used by implementation tests. */
 export const DARK_DESIGN_CANVAS_DIMMER = 17
+/** @internal Used by implementation tests. */
 export const LIGHT_DESIGN_CANVAS_DIMMER = 217
 
 export type CanvasDimmerPreference =
@@ -24,6 +27,7 @@ export function normalizeCanvasDimmer(value: unknown): number {
 	return parseCanvasDimmer(value) ?? DARK_DESIGN_CANVAS_DIMMER
 }
 
+/** @internal Used by implementation tests. */
 export function canvasDimmerHex(value: number): string {
 	const channel = normalizeCanvasDimmer(value).toString(16).padStart(2, "0")
 	return `#${channel}${channel}${channel}`

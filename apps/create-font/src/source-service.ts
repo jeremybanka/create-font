@@ -49,7 +49,7 @@ type LoadedProject = Readonly<{
 	values: FontSourceDirectoryFiles
 }>
 
-export type SourceProjectLoadTrigger =
+type SourceProjectLoadTrigger =
 	| `initialization`
 	| `read-manifest`
 	| `read-snapshot`
@@ -58,6 +58,7 @@ export type SourceProjectLoadTrigger =
 	| `watch-refresh`
 	| `write-before`
 
+/** @internal Used by implementation tests. */
 export type SourceProjectLoadDiagnostic = Readonly<{
 	assembleDuration: number
 	collectPathsDuration: number

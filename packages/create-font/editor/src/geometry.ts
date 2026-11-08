@@ -392,7 +392,7 @@ export function editorContourToPath(
 	return commands.join(" ")
 }
 
-export function editorContoursToPath(
+function editorContoursToPath(
 	contours: readonly (
 		| readonly EditorOutlineNode[]
 		| { readonly closed: boolean; readonly nodes: readonly EditorOutlineNode[] }
@@ -512,6 +512,7 @@ export function combinedEditorPathPreview(
 }
 
 /** Converts a closed TrueType quadratic contour into SVG path commands. */
+/** @internal Used by implementation tests. */
 export function contourToPath(contour: readonly OutlinePoint[]): string {
 	if (contour.length === 0) return ""
 	const expanded: OutlinePoint[] = []

@@ -101,6 +101,7 @@ export function resolvePenEndpointSide(input: {
 	throw new TypeError("The selected node is not an open contour endpoint.")
 }
 
+/** @internal Used by implementation tests. */
 export const PEN_DRAG_THRESHOLD_PIXELS = 4
 
 const canonicalZero = (value: number): number =>
@@ -110,6 +111,7 @@ const finitePoint = (point: PenPoint): boolean =>
 	Number.isFinite(point.x) && Number.isFinite(point.y)
 
 /** Resolves click versus curve from CSS-pixel movement and converts y to font space. */
+/** @internal Used by implementation tests. */
 export function resolvePenGesture(input: {
 	readonly downScreen: PenPoint
 	readonly currentScreen: PenPoint

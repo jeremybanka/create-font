@@ -1,4 +1,4 @@
-export interface ParsedPdfPageFixture {
+interface ParsedPdfPageFixture {
 	readonly bleedBox?: readonly number[]
 	readonly contents: readonly number[]
 	readonly mediaBox: readonly number[]

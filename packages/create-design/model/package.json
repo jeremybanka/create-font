@@ -32,9 +32,7 @@
 		"@create-art/vector-geometry": "workspace:*",
 		"@create-design/source": "workspace:*"
 	},
-	"devDependencies": {
-		"vitest": "catalog:"
-	},
+	"devDependencies": {},
 	"engines": {
 		"node": ">=22.0.0"
 	},

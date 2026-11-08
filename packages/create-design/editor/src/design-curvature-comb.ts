@@ -29,7 +29,7 @@ const PROBE_FACTORS = [1e-6, 4e-6, 16e-6, 64e-6, 256e-6, 1e-3]
  * intentionally falls back to the signed-curvature normal for their authored
  * segments rather than inventing a side from their implicit fill closure.
  */
-export function createDesignOuterNormalResolver(
+function createDesignOuterNormalResolver(
 	object: DesignObject,
 ): CurvatureNormalResolver {
 	const bounds = objectBounds(object)

@@ -1,3 +1,4 @@
+/** @internal Used by implementation tests. */
 export const SOURCE_SAVE_QUIET_MS = 500
 
 export interface SourcePersistenceScheduler {

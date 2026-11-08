@@ -131,6 +131,7 @@ export const DEFAULT_FONT_TILING_LAYOUT =
 	createRegistryDefaultLayout(FONT_TILE_REGISTRY)
 export const FONT_TILING_STORAGE_KEY = "create-font:tiling-workspace"
 
+/** @internal Used by implementation tests. */
 export function migrateLegacyFontLayout(
 	layout: TilingLayout,
 	version: number,

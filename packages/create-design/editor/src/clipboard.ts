@@ -30,11 +30,13 @@ import type {
 	DesignSwatch,
 } from "./types.ts"
 
+/** @internal Used by implementation tests. */
 export const DESIGN_VECTOR_MIME =
 	"application/vnd.create-design.vector+json" as const
+/** @internal Used by implementation tests. */
 export const FONT_OUTLINE_MIME =
 	"application/vnd.create-font.outline+json" as const
-export const FONT_TEXT_PREFIX = "create-font-outline:" as const
+const FONT_TEXT_PREFIX = "create-font-outline:" as const
 const MASTER_ID = "master:create-design"
 
 interface DesignClipboardPayload {
@@ -260,6 +262,7 @@ export function readDesignClipboard(
 	return object === null ? null : { objects: [object], swatches: [] }
 }
 
+/** @internal Used by implementation tests. */
 export function designObjectsToFontOutline(
 	objects: readonly DesignObject[],
 ): FontOutlinePayload {

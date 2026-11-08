@@ -5,7 +5,7 @@ import type {
 	DesignPathCommandResult,
 } from "./path-commands.ts"
 
-export const DESIGN_PARTITION_PATHFINDER_COMMANDS = [
+const DESIGN_PARTITION_PATHFINDER_COMMANDS = [
 	"pathfinder-crop",
 	"pathfinder-divide",
 	"pathfinder-merge",

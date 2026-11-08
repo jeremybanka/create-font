@@ -6,7 +6,7 @@ import type {
 	DesignSceneChild,
 } from "./types.ts"
 
-export type DesignLayerIdKind = "blend" | "group" | "layer" | "object"
+type DesignLayerIdKind = "blend" | "group" | "layer" | "object"
 export type DesignLayerIdFactory = (kind: DesignLayerIdKind) => string
 
 export type DesignLayerDeletion = Readonly<{

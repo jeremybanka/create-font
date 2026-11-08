@@ -94,6 +94,7 @@ export interface FontVectorAdapter {
 	readonly paste: (input: PasteContoursInput) => FontVectorEditResult
 }
 
+/** @internal Used by implementation tests. */
 export function projectAppliedFontIntent(
 	layer: EditorCanvasLayer,
 	intent: VectorEditIntent,
@@ -367,7 +368,7 @@ function projectFontVectorClipboard(
 	}
 }
 
-export type FontVectorEditResult =
+type FontVectorEditResult =
 	| Readonly<{ readonly ok: true }>
 	| Readonly<{ readonly ok: false; readonly error: string }>
 

@@ -95,7 +95,7 @@ export const projectFileSchema = z
 		]),
 	})
 	.strict()
-export const legacyDocumentFileSchema = z
+const legacyDocumentFileSchema = z
 	.object({
 		format: z.literal("create-design.metadata"),
 		version: z.literal(1),

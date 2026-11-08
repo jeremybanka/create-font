@@ -38,9 +38,7 @@
 		"@create-font/source": "workspace:*",
 		"@create-font/states": "workspace:*"
 	},
-	"devDependencies": {
-		"vitest": "catalog:"
-	},
+	"devDependencies": {},
 	"engines": {
 		"node": ">=22.0.0"
 	},

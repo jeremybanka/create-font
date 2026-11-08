@@ -30,13 +30,11 @@ export interface MasterScalarMatrix {
 
 type ProjectionError = Extract<ProjectionIssue, { readonly severity: "error" }>
 
-export function projectionSuccess<Value>(
-	value: Value,
-): ProjectionResult<Value> {
+function projectionSuccess<Value>(value: Value): ProjectionResult<Value> {
 	return deepFreeze({ ok: true, value: deepFreeze(value), warnings: [] })
 }
 
-export function projectionFailure<Value = never>(
+function projectionFailure<Value = never>(
 	first: ProjectionError,
 	...rest: ProjectionError[]
 ): ProjectionResult<Value> {
