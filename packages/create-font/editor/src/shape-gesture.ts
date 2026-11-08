@@ -20,11 +20,13 @@ export interface ShapeBounds {
 	readonly maxY: number
 }
 
+/** @internal Used by implementation tests. */
 export interface ShapeDragDirection {
 	readonly x: -1 | 1 | null
 	readonly y: -1 | 1 | null
 }
 
+/** @internal Used by implementation tests. */
 export interface ShapeGestureResolution {
 	readonly bounds: ShapeBounds
 	readonly direction: ShapeDragDirection
@@ -38,10 +40,12 @@ export interface ShapeGeometryPoint extends AuthoringPoint {
 	readonly outgoing?: EditorHandleVectorSource
 }
 
-export const SHAPE_DRAG_THRESHOLD_PIXELS = 4
+const SHAPE_DRAG_THRESHOLD_PIXELS = 4
+/** @internal Used by implementation tests. */
 export const ELLIPSE_KAPPA = (4 / 3) * Math.tan(Math.PI / 8)
 
 /** Keeps hover guides visible until a drag takes ownership of shape snapping. */
+/** @internal Used by implementation tests. */
 export function shapeSnapsForDisplay<T>(
 	gesture: Readonly<{ shiftKey: boolean; snaps: readonly T[] }> | null,
 	hoverSnaps: readonly T[],
@@ -60,6 +64,7 @@ const sign = (value: number): -1 | 1 | null =>
 	value < 0 ? -1 : value > 0 ? 1 : null
 
 /** Resolves raw/snap candidates into final rounded bounds for preview and commit. */
+/** @internal Used by implementation tests. */
 export function resolveShapeGesture(input: {
 	readonly anchor: AuthoringPoint
 	readonly rawCandidate: AuthoringPoint

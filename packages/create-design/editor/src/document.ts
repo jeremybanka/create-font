@@ -8,11 +8,16 @@ import type { DesignDocument } from "./types.ts"
 export { createInitialDocument } from "@create-design/source"
 
 export const DESIGN_STORAGE_KEY = "create-design:document:v5"
+/** @internal Used by implementation tests. */
 export const PREVIOUS_DESIGN_STORAGE_KEY = "create-design:document:v4"
+/** @internal Used by implementation tests. */
 export const VERSION_THREE_DESIGN_STORAGE_KEY = "create-design:document:v3"
+/** @internal Used by implementation tests. */
 export const VERSION_TWO_DESIGN_STORAGE_KEY = "create-design:document:v2"
+/** @internal Used by implementation tests. */
 export const LEGACY_DESIGN_STORAGE_KEY = "create-design:document:v1"
 
+/** @internal Used by implementation tests. */
 export function parseDesignDocument(
 	value: string | null,
 ): DesignDocument | null {

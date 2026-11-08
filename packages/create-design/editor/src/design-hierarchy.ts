@@ -179,7 +179,7 @@ export function designLayerIdForObject(
 	)
 }
 
-export function designLayerIdForGroup(
+function designLayerIdForGroup(
 	document: DesignDocument,
 	groupId: string,
 ): string | null {
@@ -606,17 +606,6 @@ function sameNode(
 	right: Pick<DesignSceneChild, "kind" | "id">,
 ): boolean {
 	return left.kind === right.kind && left.id === right.id
-}
-
-export function designHierarchyParentForNode(
-	document: DesignDocument,
-	node: DesignHierarchyNode,
-): DesignHierarchyParent | null {
-	const hierarchy = normalized(document)
-	const parent = parents(hierarchy.layers, hierarchy.groups).find((candidate) =>
-		candidate.children.some((child) => sameNode(child, node)),
-	)
-	return parent === undefined ? null : { kind: parent.kind, id: parent.id }
 }
 
 function layerForParent(

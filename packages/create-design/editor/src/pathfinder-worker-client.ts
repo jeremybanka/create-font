@@ -4,6 +4,7 @@ import type {
 	PathfinderWorkerResponse,
 } from "./pathfinder-worker-protocol.ts"
 
+/** @internal Used by implementation tests. */
 export type PathfinderWorkerOutcome = Readonly<
 	| { status: "cancelled" }
 	| {

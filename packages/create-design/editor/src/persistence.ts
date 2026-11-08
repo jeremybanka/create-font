@@ -4,9 +4,10 @@ import {
 	type DesignSourceDiagnostic,
 } from "@create-design/source"
 
+/** @internal Used by implementation tests. */
 export const DESIGN_RECOVERY_STORAGE_KEY = "create-design:recovery-draft:v1"
 
-export type DesignPersistenceStatus =
+type DesignPersistenceStatus =
 	| "saved"
 	| "dirty"
 	| "queued"

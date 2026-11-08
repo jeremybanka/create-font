@@ -10,14 +10,14 @@ import type {
 	SourceReviewEndpoint,
 } from "@create-art/editor"
 
-export type VersionControlChangeKind = SourceReviewChangeState
+type VersionControlChangeKind = SourceReviewChangeState
 
 export type VersionControlChangeUnit = SourceReviewChange &
 	Readonly<{
 		kind: "glyph" | "source"
 	}>
 
-export type VersionControlEndpoint = SourceReviewEndpoint &
+type VersionControlEndpoint = SourceReviewEndpoint &
 	Readonly<{
 		source: EditorFontSource
 	}>

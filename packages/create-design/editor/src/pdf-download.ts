@@ -18,7 +18,7 @@ export interface PdfDownloadEnvironment {
 	) => Promise<Uint8Array> | Uint8Array
 }
 
-export function browserPdfDownloadEnvironment(): PdfDownloadEnvironment {
+function browserPdfDownloadEnvironment(): PdfDownloadEnvironment {
 	return {
 		activate(url, filename) {
 			const anchor = window.document.createElement("a")

@@ -29,16 +29,16 @@ export const finiteNumberSchema = z.number().finite()
 export const positiveNumberSchema = finiteNumberSchema.positive()
 export const designObjectIdSchema = z.string().regex(/^object:.+/u)
 export const blendIdSchema = z.string().regex(/^blend:.+/u)
-export const groupIdSchema = z.string().regex(/^group:.+/u)
-export const layerIdSchema = z.string().regex(/^layer:.+/u)
+const groupIdSchema = z.string().regex(/^group:.+/u)
+const layerIdSchema = z.string().regex(/^layer:.+/u)
 export const swatchIdSchema = z.string().regex(/^swatch:.+/u)
-export const guideIdSchema = z.string().regex(/^guide:.+/u)
+const guideIdSchema = z.string().regex(/^guide:.+/u)
 export const artboardIdSchema = z.string().regex(/^artboard:.+/u)
-export const assetIdSchema = z.string().regex(/^asset:.+/u)
-export const contourIdSchema = z.string().min(1)
-export const pointIdSchema = z.string().min(1)
+const assetIdSchema = z.string().regex(/^asset:.+/u)
+const contourIdSchema = z.string().min(1)
+const pointIdSchema = z.string().min(1)
 
-export const rgbColorSchema = z
+const rgbColorSchema = z
 	.object({
 		space: z.literal("rgb"),
 		r: finiteNumberSchema.min(0).max(255),
@@ -46,7 +46,7 @@ export const rgbColorSchema = z
 		b: finiteNumberSchema.min(0).max(255),
 	})
 	.strict()
-export const cmykColorSchema = z
+const cmykColorSchema = z
 	.object({
 		space: z.literal("cmyk"),
 		c: finiteNumberSchema.min(0).max(100),
@@ -55,7 +55,7 @@ export const cmykColorSchema = z
 		k: finiteNumberSchema.min(0).max(100),
 	})
 	.strict()
-export const colorDefinitionSchema = z.discriminatedUnion("space", [
+const colorDefinitionSchema = z.discriminatedUnion("space", [
 	rgbColorSchema,
 	cmykColorSchema,
 ])
@@ -67,10 +67,10 @@ export const swatchSchema = z
 		alternate: colorDefinitionSchema.optional(),
 	})
 	.strict()
-export const vectorSchema = z
+const vectorSchema = z
 	.object({ x: finiteNumberSchema, y: finiteNumberSchema })
 	.strict()
-export const pointSchema = z
+const pointSchema = z
 	.object({
 		id: pointIdSchema,
 		x: finiteNumberSchema,
@@ -87,21 +87,21 @@ export const pointSchema = z
 			.optional(),
 	})
 	.strict()
-export const contourSchema = z
+const contourSchema = z
 	.object({
 		id: contourIdSchema,
 		closed: z.boolean(),
 		points: z.array(pointSchema),
 	})
 	.strict()
-export const previousPointSchema = pointSchema.extend({
+const previousPointSchema = pointSchema.extend({
 	id: pointIdSchema.optional(),
 })
 export const previousContourSchema = contourSchema.extend({
 	id: contourIdSchema.optional(),
 	points: z.array(previousPointSchema),
 })
-export const pathGeometrySchema = z
+const pathGeometrySchema = z
 	.object({
 		kind: z.literal("path"),
 		fillRule: z.enum(["nonzero", "evenodd"]).optional(),
@@ -114,16 +114,16 @@ const legacyPathGeometrySchema = z
 		contours: z.array(contourSchema),
 	})
 	.strict()
-export const previousPathGeometrySchema = z
+const previousPathGeometrySchema = z
 	.object({
 		kind: z.literal("path"),
 		contours: z.array(previousContourSchema),
 	})
 	.strict()
-export const compatiblePathGeometrySchema = pathGeometrySchema.extend({
+const compatiblePathGeometrySchema = pathGeometrySchema.extend({
 	contours: z.array(previousContourSchema),
 })
-export const rectangleGeometrySchema = z
+const rectangleGeometrySchema = z
 	.object({
 		kind: z.literal("rectangle"),
 		x: finiteNumberSchema,
@@ -132,7 +132,7 @@ export const rectangleGeometrySchema = z
 		height: finiteNumberSchema,
 	})
 	.strict()
-export const ellipseGeometrySchema = z
+const ellipseGeometrySchema = z
 	.object({
 		kind: z.literal("ellipse"),
 		centerX: finiteNumberSchema,
@@ -209,7 +209,7 @@ const imageSourceSchema = z.discriminatedUnion("kind", [
 		})
 		.strict(),
 ])
-export const imageGeometrySchema = z
+const imageGeometrySchema = z
 	.object({
 		kind: z.literal("image"),
 		source: imageSourceSchema,
@@ -230,7 +230,7 @@ export const linkedArtboardGeometrySchema = z
 		height: positiveNumberSchema,
 	})
 	.strict()
-export const geometrySchema = z.discriminatedUnion("kind", [
+const geometrySchema = z.discriminatedUnion("kind", [
 	pathGeometrySchema,
 	rectangleGeometrySchema,
 	ellipseGeometrySchema,
@@ -320,13 +320,13 @@ export const designObjectSchema = z
 		locked: z.boolean().optional(),
 	})
 	.strict()
-export const blendPointCorrespondenceSchema = z
+const blendPointCorrespondenceSchema = z
 	.object({
 		startPointId: pointIdSchema,
 		endPointId: pointIdSchema,
 	})
 	.strict()
-export const blendContourCorrespondenceSchema = z
+const blendContourCorrespondenceSchema = z
 	.object({
 		startContourId: contourIdSchema,
 		endContourId: contourIdSchema,
@@ -365,6 +365,7 @@ const versionFourDesignObjectSchema = designObjectSchema.extend({
 const versionSixDesignObjectSchema = designObjectSchema.extend({
 	geometry: versionSixGeometrySchema,
 })
+/** @internal Used by implementation tests. */
 export const legacyDesignObjectSchema = z
 	.object({
 		id: designObjectIdSchema,
@@ -477,7 +478,7 @@ const pageSchema = artboardSchema.omit({
 	bleed: true,
 	safeArea: true,
 })
-export const previousPageSchema = z
+const previousPageSchema = z
 	.object({
 		width: positiveNumberSchema,
 		height: positiveNumberSchema,
@@ -583,7 +584,7 @@ function issuePath(parts: readonly PropertyKey[]): string {
 				.join("")}`
 }
 
-export function documentSchemaDiagnostics(
+function documentSchemaDiagnostics(
 	error: z.ZodError,
 ): readonly DesignSourceDiagnostic[] {
 	return error.issues.map((issue) =>

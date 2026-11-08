@@ -91,7 +91,7 @@ export function assertFinitePoint(point: Point, label = "point"): void {
 	}
 }
 
-export const canonicalZero = (value: number): number =>
+const canonicalZero = (value: number): number =>
 	Object.is(value, -0) ? 0 : value
 
 export function snapCoordinate(value: number, grid: number): number {

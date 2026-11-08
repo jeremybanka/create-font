@@ -37,9 +37,9 @@ export const axisIdSchema = z.templateLiteral(["axis:", z.string()])
 export const masterIdSchema = z.templateLiteral(["master:", z.string()])
 export const instanceIdSchema = z.templateLiteral(["instance:", z.string()])
 export const glyphIdSchema = z.templateLiteral(["glyph:", z.string()])
-export const contourIdSchema = z.templateLiteral(["contour:", z.string()])
+const contourIdSchema = z.templateLiteral(["contour:", z.string()])
 export const pointIdSchema = z.templateLiteral(["point:", z.string()])
-export const ruleIdSchema = z.templateLiteral(["rule:", z.string()])
+const ruleIdSchema = z.templateLiteral(["rule:", z.string()])
 
 const locationSchema = z.record(axisIdSchema, finiteNumberSchema)
 
@@ -336,7 +336,7 @@ export const cmapEntryFileSchema = z
 	.strict()
 	.meta({ title: "create-font character mapping" })
 
-export const kerningFileSchema = z
+const kerningFileSchema = z
 	.array(
 		z
 			.object({
@@ -458,7 +458,7 @@ export type GlyphIndexFile = z.infer<typeof glyphIndexFileSchema>
 export type GlyphFile = z.infer<typeof glyphFileSchema>
 export type CmapIndexFile = z.infer<typeof cmapIndexFileSchema>
 export type CmapEntryFile = z.infer<typeof cmapEntryFileSchema>
-export type KerningFile = z.infer<typeof kerningFileSchema>
+type KerningFile = z.infer<typeof kerningFileSchema>
 export type FeatureIndexFile = z.infer<typeof featureIndexFileSchema>
 
 export type SourceUnitKind =
@@ -480,6 +480,7 @@ export type SourceUnitKind =
 	| "feature-index"
 	| "kerning"
 
+/** @internal Used by implementation tests. */
 export interface SingletonSourceUnitDescriptor<Schema extends z.ZodType> {
 	readonly cardinality: "singleton"
 	readonly kind: SourceUnitKind
@@ -487,6 +488,7 @@ export interface SingletonSourceUnitDescriptor<Schema extends z.ZodType> {
 	readonly schema: Schema
 }
 
+/** @internal Used by implementation tests. */
 export interface CollectionSourceUnitDescriptor<Schema extends z.ZodType> {
 	readonly cardinality: "collection"
 	readonly directory: string

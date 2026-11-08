@@ -2,7 +2,7 @@ import type { EditorControlHitCandidate } from "./canvas-hit-testing.ts"
 import type { PaletteCommand } from "@create-art/editor"
 import { selectionKey } from "./outline-selection.ts"
 
-export const VISUAL_DEBUG_TOGGLES = [
+const VISUAL_DEBUG_TOGGLES = [
 	{
 		id: "hit-targets",
 		displayName: "Show click targets",

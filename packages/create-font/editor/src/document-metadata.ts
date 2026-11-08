@@ -10,6 +10,7 @@ import {
 
 export type EditorViewName = "canvas" | "glyphs" | "info" | "not-found"
 
+/** @internal Used by implementation tests. */
 export const FAVICON_INK = Object.freeze({
 	dark: "#efeee8",
 	light: "#1c1b17",
@@ -31,12 +32,14 @@ function serializeFallbackFaviconSvg(
 	].join(``)
 }
 
+/** @internal Used by implementation tests. */
 export function fallbackFaviconHref(
 	preference: InferredColorPreference,
 ): string {
 	return faviconDataUrl(serializeFallbackFaviconSvg(preference))
 }
 
+/** @internal Used by implementation tests. */
 export const FALLBACK_FAVICON_HREF = fallbackFaviconHref("dark")
 
 const LOWERCASE_A_CODE_POINT = 0x61
@@ -50,6 +53,7 @@ function graphemes(value: string): readonly string[] {
 	return Array.from(value)
 }
 
+/** @internal Used by implementation tests. */
 export function normalizeCanvasTitle(value: string): string {
 	return value
 		.replace(/[\r\n\u2028\u2029]+/gu, ` · `)
@@ -60,6 +64,7 @@ export function normalizeCanvasTitle(value: string): string {
 		.replace(/^(?:·\s*)+|(?:\s*·)+$/gu, ``)
 }
 
+/** @internal Used by implementation tests. */
 export function editorDocumentTitle(
 	view: EditorViewName,
 	canvasText: string,
@@ -81,6 +86,7 @@ function escapeSvgAttribute(value: string): string {
 		.replaceAll(`'`, `&apos;`)
 }
 
+/** @internal Used by implementation tests. */
 export function serializeFaviconSvg(
 	preview: GlyphPreview,
 	preference: InferredColorPreference = "dark",
@@ -94,7 +100,7 @@ export function serializeFaviconSvg(
 	].join(``)
 }
 
-export function faviconDataUrl(svg: string): string {
+function faviconDataUrl(svg: string): string {
 	return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
@@ -111,7 +117,7 @@ export function createFontFaviconPreview(
 	return preview === null || preview.path.trim().length === 0 ? null : preview
 }
 
-export function faviconHrefForPreview(
+function faviconHrefForPreview(
 	preview: GlyphPreview | null,
 	preference: InferredColorPreference,
 ): string {
@@ -120,6 +126,7 @@ export function faviconHrefForPreview(
 		: faviconDataUrl(serializeFaviconSvg(preview, preference))
 }
 
+/** @internal Used by implementation tests. */
 export function createFontFaviconHref(
 	source: EditorFontSource,
 	preference: InferredColorPreference = "dark",
@@ -127,6 +134,7 @@ export function createFontFaviconHref(
 	return faviconHrefForPreview(createFontFaviconPreview(source), preference)
 }
 
+/** @internal Used by implementation tests. */
 export function installFavicon(documentValue: Document, href: string): void {
 	let link = documentValue.querySelector<HTMLLinkElement>(
 		`link[data-create-font-favicon]`,

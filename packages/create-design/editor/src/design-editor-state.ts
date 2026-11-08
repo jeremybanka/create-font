@@ -8,6 +8,7 @@ import {
 import { createDesignDocumentState } from "./design-document-state.ts"
 import type { DesignDocument } from "./types.ts"
 
+/** @internal Used by implementation tests. */
 export const DESIGN_HISTORY_UNDO_LIMIT = 100
 
 const retainLatestDesignUndoSteps: TimelineEffect = ({

@@ -35,8 +35,7 @@
 		"harfbuzzjs": "1.6.4"
 	},
 	"devDependencies": {
-		"@create-font/target": "workspace:*",
-		"vitest": "catalog:"
+		"@create-font/target": "workspace:*"
 	},
 	"engines": {
 		"node": ">=22.0.0"

@@ -4,7 +4,7 @@ import type {
 	DesignSourceResult,
 } from "./types.ts"
 
-export function deepFreeze<Value>(value: Value): Value {
+function deepFreeze<Value>(value: Value): Value {
 	if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
 		for (const key of Reflect.ownKeys(value))
 			deepFreeze(Reflect.get(value, key))

@@ -152,6 +152,7 @@ export function designRulerTicks(
 }
 
 /** View changes never rewrite guide coordinates. */
+/** @internal Used by implementation tests. */
 export function guideScreenPosition(
 	guide: DesignGuide,
 	view: CanvasView,

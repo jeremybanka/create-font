@@ -2,9 +2,10 @@ import { useEffect, useState } from "react"
 
 export type InferredColorPreference = "dark" | "light"
 
-export const COLOR_PREFERENCE_QUERY = "(prefers-color-scheme: light)"
-export const FALLBACK_COLOR_PREFERENCE: InferredColorPreference = "dark"
+const COLOR_PREFERENCE_QUERY = "(prefers-color-scheme: light)"
+const FALLBACK_COLOR_PREFERENCE: InferredColorPreference = "dark"
 
+/** @internal Used by implementation tests. */
 export function readInferredColorPreference(): InferredColorPreference {
 	if (
 		typeof window === "undefined" ||
@@ -15,7 +16,7 @@ export function readInferredColorPreference(): InferredColorPreference {
 	return window.matchMedia(COLOR_PREFERENCE_QUERY).matches ? "light" : "dark"
 }
 
-export function subscribeToInferredColorPreference(
+function subscribeToInferredColorPreference(
 	listener: (preference: InferredColorPreference) => void,
 ): () => void {
 	if (

@@ -33,11 +33,12 @@ import type {
 } from "./types.ts"
 
 /** Maximum geometric deviation used by Simplify Path, in document units. */
+/** @internal Used by implementation tests. */
 export const DEFAULT_PATH_SIMPLIFY_TOLERANCE = 0.25
 /** Coincidence tolerance used by cleanup and endpoint joining. */
-export const DEFAULT_PATH_CLEANUP_TOLERANCE = 1e-6
+const DEFAULT_PATH_CLEANUP_TOLERANCE = 1e-6
 /** Maximum construction deviation for Pathfinder output, in document units. */
-export const DEFAULT_PATHFINDER_TOLERANCE = 0.05
+const DEFAULT_PATHFINDER_TOLERANCE = 0.05
 
 export type DesignPathCommand =
 	| "close"
@@ -331,7 +332,7 @@ function reversePoint(point: DesignPoint): DesignPoint {
 	}
 }
 
-export function reverseDesignContour(contour: DesignContour): DesignContour {
+function reverseDesignContour(contour: DesignContour): DesignContour {
 	return { ...contour, points: contour.points.toReversed().map(reversePoint) }
 }
 
@@ -646,6 +647,7 @@ function incomingAtAnchor(
 }
 
 /** Removes only spans whose complete cubic control polygon is coincident. */
+/** @internal Used by implementation tests. */
 export function cleanupDesignContour(
 	contour: DesignContour,
 	tolerance = DEFAULT_PATH_CLEANUP_TOLERANCE,

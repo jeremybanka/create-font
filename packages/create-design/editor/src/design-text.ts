@@ -281,7 +281,7 @@ export function designTextCssFontFamily(family: string): string {
 		.replaceAll('"', '\\"')}"`
 }
 
-export function designTextInteractionBounds(
+function designTextInteractionBounds(
 	object: DesignObject & { readonly geometry: DesignTextGeometry },
 	layout: DesignTextLayout,
 ): Bounds {

@@ -17,7 +17,7 @@ export interface SvgDownloadEnvironment {
 	) => Promise<Uint8Array> | Uint8Array
 }
 
-export function browserSvgDownloadEnvironment(): SvgDownloadEnvironment {
+function browserSvgDownloadEnvironment(): SvgDownloadEnvironment {
 	return {
 		activate(url, filename) {
 			const anchor = window.document.createElement("a")

@@ -72,7 +72,6 @@
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
 		"rolldown": "1.3.0",
-		"vite": "catalog:",
 		"vscode-languageclient": "11.0.0",
 		"vscode-languageserver": "11.0.0",
 		"vscode-languageserver-textdocument": "1.0.16",
@@ -85,7 +84,7 @@
 		"@types/react-dom": "19.3.0",
 		"@vitejs/plugin-react": "6.2.1",
 		"atom.io": "0.54.6",
-		"vitest": "catalog:"
+		"vite": "catalog:"
 	},
 	"engines": {
 		"node": ">=22.0.0"

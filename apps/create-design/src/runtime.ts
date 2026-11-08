@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process"
 import { pathToFileURL } from "node:url"
 
-export type RuntimeCommandOptions = Readonly<{
+type RuntimeCommandOptions = Readonly<{
 	cwd?: string
 	stderr?: "capture" | "inherit"
 	stdout?: "capture" | "inherit"
 }>
 
-export type RuntimeCommandResult = Readonly<{
+type RuntimeCommandResult = Readonly<{
 	exitCode: number | null
 	stderr: string
 	stdout: Uint8Array

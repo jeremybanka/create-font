@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { pathToFileURL } from "node:url"
 
-export type RuntimeCommandOptions = Readonly<{
+type RuntimeCommandOptions = Readonly<{
 	cwd?: string
 	env?: NodeJS.ProcessEnv
 	input?: string
@@ -10,7 +10,7 @@ export type RuntimeCommandOptions = Readonly<{
 	timeout?: number
 }>
 
-export type RuntimeCommandResult = Readonly<{
+type RuntimeCommandResult = Readonly<{
 	exitCode: number | null
 	stderr: string
 	stdout: Uint8Array

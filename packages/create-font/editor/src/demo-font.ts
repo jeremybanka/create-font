@@ -6,13 +6,19 @@ import type {
 	PointId,
 } from "@create-font/states"
 
+/** @internal Used by implementation tests. */
 export const weightAxisId = "axis:wght" as const
+/** @internal Used by implementation tests. */
 export const razorMasterId = "master:razor" as const
+/** @internal Used by implementation tests. */
 export const blackMasterId = "master:black" as const
-export const razorInstanceId = "instance:razor" as const
-export const blackInstanceId = "instance:black" as const
+const razorInstanceId = "instance:razor" as const
+const blackInstanceId = "instance:black" as const
+/** @internal Used by implementation tests. */
 export const notdefGlyphId = "glyph:.notdef" as const
+/** @internal Used by implementation tests. */
 export const aGlyphId = "glyph:A" as const
+/** @internal Used by implementation tests. */
 export const oGlyphId = "glyph:O" as const
 
 const outerCoordinates = [

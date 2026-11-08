@@ -18,6 +18,7 @@ const fallbackTheme: DesignCanvasTheme = Object.freeze({
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: light)"
 
+/** @internal Used by implementation tests. */
 export function designCanvasThemeFromStyle(
 	styles: Pick<CSSStyleDeclaration, "getPropertyValue">,
 ): DesignCanvasTheme {
@@ -35,6 +36,7 @@ export function designCanvasThemeFromStyle(
 	})
 }
 
+/** @internal Used by implementation tests. */
 export function readDesignCanvasTheme(
 	target?: Element | null,
 ): DesignCanvasTheme {
@@ -48,6 +50,7 @@ export function readDesignCanvasTheme(
 	)
 }
 
+/** @internal Used by implementation tests. */
 export function subscribeToDesignCanvasTheme(
 	listener: (theme: DesignCanvasTheme) => void,
 	target?: Element | null,

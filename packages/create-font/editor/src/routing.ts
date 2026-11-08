@@ -1,7 +1,7 @@
 import type { Join, TreePath } from "treetrunks"
 import { isTreePath, optional } from "treetrunks"
 
-export const ROUTES = optional({
+const ROUTES = optional({
 	glyphs: null,
 	info: null,
 })

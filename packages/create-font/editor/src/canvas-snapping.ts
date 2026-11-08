@@ -9,7 +9,7 @@ export interface SnapNode {
 	readonly y: number
 }
 
-export interface ActiveAxisSnap {
+interface ActiveAxisSnap {
 	readonly axis: "x" | "y"
 	readonly kind: "node" | "metric" | "orthogonal-constraint"
 	readonly id: string
@@ -72,7 +72,7 @@ export interface DraggedPointSnapContext {
 	) => SnappedPoint | null
 }
 
-export interface ProjectionContourNode extends SnapNode {
+interface ProjectionContourNode extends SnapNode {
 	readonly incoming?: unknown
 	readonly outgoing?: unknown
 }
@@ -362,6 +362,7 @@ export function snapDraggedPoint(
 }
 
 /** Resolves a raw drag position and keeps the imperative canvas node constrained. */
+/** @internal Used by implementation tests. */
 export function snapDraggedTarget(
 	target: DragPositionTarget,
 	context: DraggedPointSnapContext,

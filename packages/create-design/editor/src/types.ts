@@ -1,24 +1,18 @@
 export type {
-	CmykColor,
 	ColorDefinition,
 	DesignAppearance,
 	DesignArtboard,
 	DesignArtboardInsets,
 	DesignBlend,
-	DesignBlendContourCorrespondence,
-	DesignBlendPointCorrespondence,
 	DesignContour,
 	DesignDocument,
-	DesignFill,
 	DesignFillRule,
 	DesignFontReference,
 	DesignGeometry,
 	DesignGuide,
 	DesignGroup,
-	DesignImageGeometry,
 	DesignImageResource,
 	DesignImageSource,
-	DesignLinkedArtboardGeometry,
 	DesignLinkedArtboardResource,
 	DesignLayer,
 	DesignLayerUiColor,
@@ -30,7 +24,6 @@ export type {
 	DesignSceneChild,
 	DesignSwatch,
 	DesignTransform,
-	RgbColor,
 } from "@create-design/source"
 
 export type DesignTool =

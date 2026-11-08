@@ -23,12 +23,13 @@ export interface BrowserFontFaceEnvironment {
 	readonly revokeObjectURL: (url: string) => void
 }
 
+/** @internal Used by implementation tests. */
 export type BrowserFontActivation = Readonly<{
 	duration: number
 	family: string
 }>
 
-export function browserFontFaceEnvironment(): BrowserFontFaceEnvironment | null {
+function browserFontFaceEnvironment(): BrowserFontFaceEnvironment | null {
 	if (
 		typeof FontFace !== "function" ||
 		typeof document === "undefined" ||
@@ -43,6 +44,7 @@ export function browserFontFaceEnvironment(): BrowserFontFaceEnvironment | null 
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function createBrowserFontFaceManager(
 	family: string,
 	environment: BrowserFontFaceEnvironment,

@@ -14,6 +14,7 @@ import type {
 	DesignPoint,
 } from "./types.ts"
 
+/** @internal Used by implementation tests. */
 export const STROKE_EXPANSION_TOLERANCES = Object.freeze({
 	/** Half of the total budget: source/round polyline construction error. */
 	flatness: 0.025,
@@ -22,7 +23,9 @@ export const STROKE_EXPANSION_TOLERANCES = Object.freeze({
 })
 
 /** Half of the 0.05 local-unit construction budget is reserved for refitting. */
+/** @internal Used by implementation tests. */
 export const STROKE_EXPANSION_REFIT_ERROR = 0.025
+/** @internal Used by implementation tests. */
 export const STROKE_EXPANSION_MAX_ERROR =
 	STROKE_EXPANSION_TOLERANCES.flatness + STROKE_EXPANSION_REFIT_ERROR
 

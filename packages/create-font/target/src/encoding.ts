@@ -87,7 +87,7 @@ export function packedDeltaSize(values: readonly number[]): number {
 	return size
 }
 
-export function getPackedVariationDataSize(variation: GlyphVariation): number {
+function getPackedVariationDataSize(variation: GlyphVariation): number {
 	const xDeltas = [
 		...variation.deltas.points.map((delta) => delta.x as number),
 		variation.deltas.phantom.left,

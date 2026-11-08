@@ -110,6 +110,7 @@ export function initialDesignCanvasView(
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function clampToPage(
 	point: CanvasPoint,
 	page: Readonly<{ x: number; y: number; width: number; height: number }>,
@@ -263,6 +264,7 @@ export interface DesignSnapScene {
 }
 
 /** Rotation is orthonormal, so only zoom changes an axis snap's pixel radius. */
+/** @internal Used by implementation tests. */
 export function designSnapThreshold(
 	thresholdPixels: number,
 	worldScale: number,
@@ -332,6 +334,7 @@ function target(
  * function: an orthonormal view transform preserves screen distance, while
  * zoom is represented by `worldScale` at ranking time.
  */
+/** @internal Used by implementation tests. */
 export function designSnapTargets(
 	sceneInput: DesignSnapScene | DesignDocument,
 	axis: "x" | "y",

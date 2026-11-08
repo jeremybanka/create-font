@@ -64,7 +64,7 @@ export class DesignSvgPreflightError extends Error {
 	}
 }
 
-export class DesignSvgOutputExistsError extends Error {
+class DesignSvgOutputExistsError extends Error {
 	readonly output: string
 
 	constructor(output: string) {

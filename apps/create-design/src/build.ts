@@ -8,7 +8,7 @@ export type BuildDesignProjectOptions = Readonly<{
 	root: string
 }>
 
-export function designBuildOutput(rootInput: string): string {
+function designBuildOutput(rootInput: string): string {
 	const root = resolve(rootInput)
 	const name = basename(root)
 	return resolve(root, "..", "..", "artifacts", name, `${name}.pdf`)

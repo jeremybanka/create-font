@@ -25,6 +25,7 @@ interface CircularHitContext<Shape> {
 }
 
 /** Creates a Konva-compatible circular hit region without visual geometry. */
+/** @internal Used by implementation tests. */
 export function circularHitRegion(
 	radius: number,
 	center: Readonly<{ x: number; y: number }> = { x: 0, y: 0 },
@@ -48,6 +49,7 @@ export interface EditorControlHit extends EditorControlHitCandidate {
 	readonly distancePx: number
 }
 
+/** @internal Used by implementation tests. */
 export interface EditorSegmentHit {
 	readonly kind: "segment"
 	readonly contourId: EditorCanvasContour["id"]
@@ -193,6 +195,7 @@ export function editorControlHitRadii(
 	return radii
 }
 
+/** @internal Used by implementation tests. */
 export function nearestEditorSegmentHit(
 	contours: readonly EditorCanvasContour[],
 	pointer: Readonly<{ x: number; y: number }>,

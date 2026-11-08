@@ -55,7 +55,7 @@ export interface Hotkey {
 	readonly mod?: boolean
 }
 
-export type ToolStatus = "active" | "disabled" | "ready"
+type ToolStatus = "active" | "disabled" | "ready"
 
 export interface ToolContext {
 	readonly workspace: EditorWorkspace
@@ -431,7 +431,7 @@ export const TOOLS = {
 	},
 } as const satisfies Record<string, Tool>
 
-export const TOOLBAR_LAYOUT = [
+const TOOLBAR_LAYOUT = [
 	[
 		TOOLS.SELECT,
 		TOOLS.PEN,
@@ -462,6 +462,7 @@ interface NavigatorWithUserAgentData {
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function isMacLike(navigatorValue: NavigatorWithUserAgentData): boolean {
 	const platform = navigatorValue.userAgentData?.platform
 	return /mac|iphone|ipad|ipod/i.test(platform ?? navigatorValue.platform)
@@ -470,7 +471,7 @@ export function isMacLike(navigatorValue: NavigatorWithUserAgentData): boolean {
 export const IS_MAC_LIKE =
 	typeof navigator === "undefined" ? false : isMacLike(navigator)
 export const MOD_KEY_LABEL = IS_MAC_LIKE ? "⌘" : "ctrl"
-export const ALT_KEY_LABEL = IS_MAC_LIKE ? "⌥" : "alt"
+const ALT_KEY_LABEL = IS_MAC_LIKE ? "⌥" : "alt"
 
 function quickLookupKey(hotkey: Hotkey): string {
 	const modifier = hotkey.mod ? "m" : "_"
@@ -498,6 +499,7 @@ interface KeyboardShortcutEvent {
 	readonly altKey: boolean
 }
 
+/** @internal Used by implementation tests. */
 export function toolForKeyboardEvent(
 	event: KeyboardShortcutEvent,
 	macLike = IS_MAC_LIKE,

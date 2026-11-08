@@ -28,14 +28,14 @@ export interface RuleContour {
 	readonly nodes: readonly EditorOutlineNode[]
 }
 
-export interface RuleEvent {
+interface RuleEvent {
 	readonly distance: number
 	readonly x: number
 	readonly y: number
 	readonly kind: "entry" | "exit"
 }
 
-export interface RuleMeasure {
+interface RuleMeasure {
 	readonly from: RuleEvent
 	readonly to: RuleEvent
 	readonly length: number

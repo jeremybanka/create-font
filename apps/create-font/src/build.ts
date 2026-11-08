@@ -19,7 +19,7 @@ import {
 import { loadEditorFontSourceDirectory } from "./source-service.ts"
 import { analyzeFontProjectFeatures } from "./fea-project.ts"
 
-export type { BuildDiagnostic, BuildResult } from "@create-font/server"
+export type { BuildResult } from "@create-font/server"
 
 function failure(
 	root: string,

@@ -240,7 +240,7 @@ const designContours = (object: VectorObject): readonly DesignContour[] =>
 		}),
 	}))
 
-export function designObjectFromVector(
+function designObjectFromVector(
 	current: DesignObject,
 	object: VectorObject,
 ): DesignObject {

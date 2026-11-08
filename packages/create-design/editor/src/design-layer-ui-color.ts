@@ -3,7 +3,7 @@ import {
 	type DesignLayerUiColor,
 } from "@create-design/source"
 
-export const DESIGN_LAYER_UI_COLOR_CSS = Object.freeze({
+const DESIGN_LAYER_UI_COLOR_CSS = Object.freeze({
 	red: "#e5484d",
 	blue: "#0091ff",
 	yellow: "#f5d90a",

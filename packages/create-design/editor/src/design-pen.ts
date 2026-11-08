@@ -9,7 +9,7 @@ import type { DesignAppearance, DesignObject, DesignPoint } from "./types.ts"
 import { IDENTITY_DESIGN_TRANSFORM } from "@create-design/model"
 
 export const DESIGN_PEN_DRAG_THRESHOLD_PIXELS = 4
-export const DESIGN_PEN_CLOSE_RADIUS_PIXELS = 10
+const DESIGN_PEN_CLOSE_RADIUS_PIXELS = 10
 export const DESIGN_VECTOR_GESTURE_POLICY = Object.freeze({
 	yAxis: "down" as const,
 	rotationSnapDegrees: 15,
@@ -19,6 +19,7 @@ export type DesignPenPoint = Omit<DesignPoint, "id"> & {
 	readonly id?: string
 }
 
+/** @internal Used by implementation tests. */
 export interface DesignPenGesture {
 	readonly anchor: DesignPenPoint
 	readonly downScreen: DesignPenPoint
@@ -50,6 +51,7 @@ export function resolveDesignPenProspectiveSegment(
 }
 
 /** Compatibility wrapper over the shared Pen gesture reducer. */
+/** @internal Used by implementation tests. */
 export function resolveDesignPenPoint(input: {
 	readonly gesture: DesignPenGesture
 	readonly current: DesignPenPoint
@@ -129,6 +131,7 @@ export function resolveDesignPenPoint(input: {
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function shouldCloseDesignPen(
 	points: readonly DesignPenPoint[],
 	point: DesignPenPoint,
@@ -138,6 +141,7 @@ export function shouldCloseDesignPen(
 	return shouldCloseVectorPen(points, point, worldScale, radiusPixels)
 }
 
+/** @internal Used by implementation tests. */
 export function finishDesignPenContour(
 	points: readonly DesignPenPoint[],
 	closed: boolean,
@@ -149,6 +153,7 @@ export function finishDesignPenContour(
 	return { closed, points }
 }
 
+/** @internal Used by implementation tests. */
 export function cancelDesignPen(): readonly DesignPenPoint[] {
 	return []
 }

@@ -55,6 +55,7 @@ export function placeDesignImage(
 	}
 }
 
+/** @internal Used by implementation tests. */
 export function updateDesignImageSource(
 	document: DesignDocument,
 	objectId: string,

@@ -45,7 +45,7 @@ export interface PerspectiveModifiers {
 	readonly cornerAcquisition?: PerspectiveCornerAcquisition
 }
 
-export type PerspectiveCornerAcquisition = "horizontal" | "vertical"
+type PerspectiveCornerAcquisition = "horizontal" | "vertical"
 
 export interface PerspectiveCornerAcquisitionState {
 	readonly choice: PerspectiveCornerAcquisition | null
@@ -66,7 +66,7 @@ export function isPerspectiveCornerHandle(
 	)
 }
 
-export const PERSPECTIVE_BAKE_MAX_ERROR = 0.25
+const PERSPECTIVE_BAKE_MAX_ERROR = 0.25
 const PERSPECTIVE_SAMPLE_ERROR = 0.05
 const PERSPECTIVE_REFIT_ERROR =
 	PERSPECTIVE_BAKE_MAX_ERROR - PERSPECTIVE_SAMPLE_ERROR
@@ -363,6 +363,7 @@ function signedCross(
 	)
 }
 
+/** @internal Used by implementation tests. */
 export function validPerspectiveQuad(quad: PerspectiveQuad): boolean {
 	if (!quad.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y)))
 		return false
