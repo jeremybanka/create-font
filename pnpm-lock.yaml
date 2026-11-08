@@ -318,8 +318,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@atom.io/eslint-plugin':
-        specifier: 0.1.1
-        version: 0.1.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+        specifier: 0.1.2
+        version: 0.1.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@create-font/target':
         specifier: workspace:*
         version: link:../../packages/create-font/target
@@ -641,8 +641,8 @@ importers:
         version: 19.3.1(react@19.3.1)
     devDependencies:
       '@atom.io/eslint-plugin':
-        specifier: 0.1.1
-        version: 0.1.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+        specifier: 0.1.2
+        version: 0.1.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@types/node':
         specifier: 26.6.6
         version: 26.6.6
@@ -804,8 +804,8 @@ importers:
         version: 19.3.1(react@19.3.1)
     devDependencies:
       '@atom.io/eslint-plugin':
-        specifier: 0.1.1
-        version: 0.1.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+        specifier: 0.1.2
+        version: 0.1.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@atom.io/react':
         specifier: 0.2.0
         version: 0.2.0(@types/react@19.3.0)(atom.io@0.54.5(happy-dom@21.0.4))(react@19.3.1)
@@ -940,8 +940,8 @@ importers:
         version: 0.54.5(happy-dom@21.0.4)
     devDependencies:
       '@atom.io/eslint-plugin':
-        specifier: 0.1.1
-        version: 0.1.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
+        specifier: 0.1.2
+        version: 0.1.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
       '@typescript-eslint/parser':
         specifier: 8.72.1
         version: 8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
@@ -967,8 +967,8 @@ packages:
   '@astrojs/compiler@4.0.0':
     resolution: {integrity: sha512-eouss7G8ygdZqHuke033VMcVw5HTZUu+PXd/h06DGDUg/jt5btPYPqh66ENWw/mU78rBrf/oeC4oqoBwMtDMNA==}
 
-  '@atom.io/eslint-plugin@0.1.1':
-    resolution: {integrity: sha512-3rGBv0k0kkgQ+mPGM+hLhcngbc21+Gep12aZTGoGIJ1yKzLlHLRyXP3n8uTmh0xCJYCDhy1Dy5BB+9fY/RTuZA==}
+  '@atom.io/eslint-plugin@0.1.2':
+    resolution: {integrity: sha512-GnN5AVJ6wZ9WvOzZD4/EJV/g2xA6NevkQI5zizZXhCCMmv/Te2EmzkhEOKUiutJZ2RRDyRLgbFCsmqfAate4og==}
     peerDependencies:
       '@typescript-eslint/parser': ^8.0.0
       eslint: ^9.0.0 || ^10.0.0
@@ -4377,7 +4377,7 @@ snapshots:
 
   '@astrojs/compiler@4.0.0': {}
 
-  '@atom.io/eslint-plugin@0.1.1(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)':
+  '@atom.io/eslint-plugin@0.1.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0))(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)':
     dependencies:
       '@typescript-eslint/parser': 8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)
       '@typescript-eslint/utils': 8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@7.0.2)
