@@ -1,0 +1,13 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"declaration": false,
+		"jsx": "preserve",
+		"jsxImportSource": "@atom.io/spa",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"types": ["node", "vite/client"]
+	},
+	"include": ["src", "tests", "*.ts"],
+	"exclude": []
+}

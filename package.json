@@ -22,6 +22,7 @@
 		"dev": "node ./scripts/dev.ts",
 		"dev:design": "pnpm --filter create-design dev",
 		"dev:font": "pnpm --filter create-font dev",
+		"dev:spa-canvas": "pnpm --filter @create-art/spa-canvas-prototype dev",
 		"fmt": "mise exec -- cargo fmt --all && vp run dprint-plugin-fea#build && node ./packages/create-art/source-format/src/cli.ts fmt fonts designs && dprint fmt",
 		"font": "node ./apps/create-font/src/font-cli.ts",
 		"release:publish": "pnpm build && changeset publish",

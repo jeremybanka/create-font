@@ -17,6 +17,7 @@ minimumReleaseAgeExclude:
   - agents.yaml
   - "@atom.io/eslint-plugin"
   - "@atom.io/react"
+  - "@atom.io/spa"
   - atom.io
   - comline
   - lasertag

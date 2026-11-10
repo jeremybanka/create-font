@@ -112,7 +112,7 @@ const shards = {
 	editor: [
 		{
 			kind: `package-tests`,
-			packages: [`@create-design/editor`],
+			packages: [`@create-art/spa-canvas-prototype`, `@create-design/editor`],
 		},
 		{
 			kind: `package-script`,

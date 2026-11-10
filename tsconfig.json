@@ -30,6 +30,7 @@
 	},
 	"include": ["**/*.ts", "*.d.ts"],
 	"exclude": [
+		"apps/spa-canvas",
 		"apps/create-design",
 		"apps/create-font",
 		"packages/create-art/editor",
