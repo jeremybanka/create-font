@@ -62,7 +62,7 @@
 		"@types/node": "26.6.6",
 		"@types/react": "19.3.0",
 		"@typescript-eslint/parser": "8.72.2",
-		"@vitejs/plugin-react": "6.2.1",
+		"@vitejs/plugin-react": "6.3.0",
 		"eslint": "10.14.0",
 		"happy-dom": "21.0.4",
 		"jiti": "2.7.0",
