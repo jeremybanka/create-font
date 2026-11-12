@@ -92,7 +92,7 @@ impl SyncPluginHandler<FormatConfig> for FeaPluginHandler {
                     .to_owned(),
             config_schema_url: String::new(),
             update_url: None,
-            supports_range_formatting: Some(false),
+            supports_range_formatting: false,
         }
     }
 
