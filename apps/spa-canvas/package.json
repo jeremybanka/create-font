@@ -1,0 +1,27 @@
+{
+	"name": "@create-art/spa-canvas-prototype",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "vp build",
+		"dev": "vp dev --host=127.0.0.1",
+		"test": "vp test",
+		"test:watch": "vp test watch"
+	},
+	"dependencies": {
+		"@atom.io/spa": "0.0.7",
+		"@create-art/vector-geometry": "workspace:*",
+		"@create-design/model": "workspace:*",
+		"@create-design/source": "workspace:*",
+		"@create-font/source": "workspace:*",
+		"@create-font/states": "workspace:*",
+		"atom.io": "0.54.7",
+		"konva": "10.9.1"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"happy-dom": "21.0.4",
+		"vite": "catalog:",
+		"vite-plus": "catalog:"
+	}
+}

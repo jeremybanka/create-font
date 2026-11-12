@@ -68,6 +68,10 @@ export default {
 				"vscode",
 			],
 		},
+		"apps/spa-canvas": {
+			// Vite assembles validated source fixtures into the production virtual module.
+			entry: ["documents.ts!"],
+		},
 		"packages/create-art/editor": {
 			entry: ["src/index.ts!", "scripts/**/*.{ts,tsx,js,mjs,cjs}"],
 			project: [
