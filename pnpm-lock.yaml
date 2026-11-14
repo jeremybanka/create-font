@@ -233,8 +233,8 @@ importers:
         specifier: workspace:*
         version: link:packages/dprint-plugin-fea
       dprint-plugin-malva:
-        specifier: 0.16.0
-        version: 0.16.0
+        specifier: 0.16.1
+        version: 0.16.1
       dprint-plugin-yaml:
         specifier: 0.6.0
         version: 0.6.0
@@ -3200,8 +3200,8 @@ packages:
     resolution: {integrity: sha512-UGGGWfSauusaVJC+8fgV+NVvBXkCTmVv7sk6nojDZZvuOUNGUy0Zk4UpHQD6EDjS0jpBwcACvH4eofvyzBcRDw==}
     hasBin: true
 
-  dprint-plugin-malva@0.16.0:
-    resolution: {integrity: sha512-cHisdhrNcBHfvTG/jgHUkVyL6zeY+C5yLO+E/UyiTbp6wzauB3d25YyPZeMlsd7M/PDT8W4Yre8jKJ/xMwthiw==}
+  dprint-plugin-malva@0.16.1:
+    resolution: {integrity: sha512-127dmuyhx/A19KBLEi6NPIPTHG6XGlmdItPkw1dFdQx+4KeXu9FQ0WYZ7VXTWm1v1AemgsraaTAQYm1j29sTAg==}
 
   dprint-plugin-yaml@0.6.0:
     resolution: {integrity: sha512-jFCM6LxutTjfiSR7BtDhbZA2OvuqYY9xksULg0vdu0nZV1hiaupvRfJHGZSiQS9aLmqMNc+5WcHpOBSwxCK7qQ==}
@@ -6484,7 +6484,7 @@ snapshots:
     dependencies:
       minimatch: 3.1.5
 
-  dprint-plugin-malva@0.16.0: {}
+  dprint-plugin-malva@0.16.1: {}
 
   dprint-plugin-yaml@0.6.0: {}
 

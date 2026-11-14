@@ -48,7 +48,7 @@
 		"create-font": "workspace:*",
 		"dprint": "0.64.3",
 		"dprint-plugin-fea": "workspace:*",
-		"dprint-plugin-malva": "0.16.0",
+		"dprint-plugin-malva": "0.16.1",
 		"dprint-plugin-yaml": "0.6.0",
 		"happy-dom": "21.0.4",
 		"knip": "6.45.1",
