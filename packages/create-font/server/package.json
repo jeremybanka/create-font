@@ -43,7 +43,7 @@
 		"elysia": "1.4.32"
 	},
 	"devDependencies": {
-		"@trpc/server": "11.28.6",
+		"@trpc/server": "11.29.4",
 		"@types/node": "26.6.6",
 		"zod": "4.6.7"
 	},
