@@ -1,6 +1,6 @@
 {
 	"name": "@create-design/pdf",
-	"version": "0.1.19",
+	"version": "0.1.20",
 	"description": "Headless PDF projection, preflight, and serialization for create-design documents",
 	"repository": {
 		"type": "git",

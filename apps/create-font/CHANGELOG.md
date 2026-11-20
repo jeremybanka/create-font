@@ -1,5 +1,15 @@
 # create-font
 
+## 0.3.39
+
+### Patch Changes
+
+- 9eb0806: Move Vite to development dependencies because it is only used to build the browser editor.
+- Updated dependencies [f198ec4]
+  - @create-art/source-format@0.2.17
+  - @create-font/source@0.2.29
+  - @create-font/glyphs-app@0.0.20
+
 ## 0.3.38
 
 ### Patch Changes
