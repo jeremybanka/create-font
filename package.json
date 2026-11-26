@@ -41,7 +41,7 @@
 		"@dprint/oxc": "0.52.0",
 		"@dprint/toml": "0.10.0",
 		"@types/node": "26.6.10",
-		"@types/react": "19.3.1",
+		"@types/react": "19.3.2",
 		"@types/react-dom": "19.3.0",
 		"agents.yaml": "0.3.0",
 		"create-design": "workspace:*",
