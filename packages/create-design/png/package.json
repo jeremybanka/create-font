@@ -35,7 +35,7 @@
 		"@create-design/svg": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/node": "26.6.10"
+		"@types/node": "26.6.11"
 	},
 	"engines": {
 		"node": ">=22.0.0"
