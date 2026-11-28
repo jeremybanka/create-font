@@ -97,7 +97,8 @@ design-application.class {
 	background: var(--paper);
 	color: var(--ink);
 
-	[data-screen-reader] {
+	span[data-screen-reader],
+	perspective-keyboard-controls[data-screen-reader] {
 		position: absolute;
 		width: 1px;
 		height: 1px;

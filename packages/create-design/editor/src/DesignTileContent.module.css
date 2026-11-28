@@ -54,21 +54,22 @@ design-tile-content.class {
 			color: var(--ink-faint);
 		}
 
-		[data-field] {
+		> blend-editor > blend-name-input > label[data-field],
+		> blend-editor > blend-endpoint > label[data-field] {
 			display: grid;
 			gap: 3px;
 			color: var(--ink-muted);
+		}
 
-			> input,
-			> select {
-				min-width: 0;
-				width: 100%;
-				padding: 5px;
-				border: 1px solid var(--line);
-				border-radius: 4px;
-				background: var(--paper);
-				color: var(--ink);
-			}
+		> blend-editor > blend-name-input > label[data-field] > input,
+		> blend-editor > blend-endpoint > label[data-field] > select {
+			min-width: 0;
+			width: 100%;
+			padding: 5px;
+			border: 1px solid var(--line);
+			border-radius: 4px;
+			background: var(--paper);
+			color: var(--ink);
 		}
 
 		> blend-editor {
@@ -202,7 +203,7 @@ design-tile-content.class {
 				padding: 5px;
 			}
 
-			input[type="color"] {
+			> label[data-field] > input[type="color"] {
 				height: 27px;
 				padding: 2px;
 			}
@@ -214,7 +215,7 @@ design-tile-content.class {
 			gap: 4px;
 		}
 
-		[data-field] {
+		label[data-field] {
 			display: grid;
 			gap: 3px;
 			color: var(--ink-muted);
@@ -733,12 +734,11 @@ design-tile-content.class {
 			color: var(--ink-faint);
 		}
 
-		> export-format-panel > [data-field] {
+		> export-format-panel > label[data-field] {
 			display: grid;
 			gap: 3px;
 			color: var(--ink-muted);
 
-			> select,
 			> input[type="file"] {
 				box-sizing: border-box;
 				min-width: 0;
@@ -1397,7 +1397,7 @@ design-tile-content.class {
 			}
 		}
 
-		[data-field] {
+		label[data-field] {
 			display: grid;
 			gap: 3px;
 			min-width: 0;
@@ -1541,7 +1541,7 @@ design-tile-content.class {
 				gap: 5px;
 			}
 
-			> typography-select-grid > [data-field]:last-child {
+			> typography-select-grid > label[data-field]:last-child {
 				grid-column: 1 / -1;
 			}
 		}
